@@ -264,6 +264,16 @@ docker compose -f setup/docker-compose.yml up -d postgres
 `docker compose` và `testkit.py` (dùng trong test bài tập) cùng đọc `setup/.env`, nên chỉ cần đổi một chỗ.
 Câu lệnh kết nối viết tay trong bài (psql, mongosh…) thì nhớ dùng cổng mới.
 
+## Lab bổ trợ: CDC và cloud
+
+- [CDC PostgreSQL → Debezium → Kafka](../tracks/data-engineer/modules/07-streaming-kafka/cdc-lab.md)
+  dùng `setup/cdc/docker-compose.yml`, cổng 55432/19094/18083, network và volume riêng.
+  `setup/.env` của stack chung không tự đổi các cổng của lab này. Nếu trùng cổng, sửa mapping lab
+  và tham số `--bootstrap` của sink tương ứng; hostname nội bộ container vẫn giữ nguyên.
+- [GCP từ Parquet tới KPI](../tracks/data-engineer/modules/11-cloud/cloud-gcp-lab.md) dùng
+  `setup/cloud-gcp/prepare.py` cho phần local và Terraform cho hạ tầng. Cloud thật là tùy chọn,
+  cần Google Cloud CLI, Terraform và quyền/tài khoản phù hợp. Không cần cài chúng để làm test offline.
+
 ## Về image MinIO
 
 MinIO đã ngừng phát hành image chính thức `minio/minio` trên Docker Hub, nên `setup/docker-compose.yml`

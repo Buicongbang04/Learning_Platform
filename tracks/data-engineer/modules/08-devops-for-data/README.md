@@ -570,7 +570,51 @@ Mẹo: test hành vi biên (rỗng, null, trùng, timezone, ký tự Unicode nh�
 **fixture** nhỏ viết tay, và với test chất lượng của chính bộ test có thể dùng **mutation testing**
 (cố tình cài bug, test phải bắt được) như bài tập intermediate 03.
 
-## 8. Tài liệu tham khảo
+## 8. Trực vận hành, rollback và khôi phục dữ liệu
+
+### Từ cảnh báo tới hành động
+
+**SLI** là số đo, ví dụ độ trễ dữ liệu. **SLO** là mục tiêu bạn đặt cho số đo đó.
+Ví dụ của lab: 99% lô xuất bản trong 15 phút kể từ lúc nguồn sẵn sàng; ghi cách tính mẫu số,
+khoảng đo và cách xử lý thời gian nguồn chưa sẵn sàng. Không gắn một ngưỡng cho mọi dataset.
+
+Runbook là hướng dẫn người trực làm theo: ảnh hưởng gì, nhìn log/metric nào, ai sở hữu, điều kiện
+dừng ghi, cách sửa và tiêu chí xác nhận phục hồi. Chỉ ghi “restart Airflow” chưa đủ.
+
+| Tình huống | Hành động đầu | Xác nhận phục hồi |
+| --- | --- | --- |
+| Nguồn không truy cập được | Kiểm endpoint, credential, timeout; giữ checkpoint | Bắt kịp dữ liệu, freshness đạt mục tiêu |
+| Job ghi nửa chừng | Dừng writer, xác định partition/run bị ảnh hưởng | Chạy lại không thiếu/trùng, đối chiếu nguồn |
+| Deploy SQL sai làm tiền tăng đôi | Chặn xuất bản, rollback code, dựng lại dữ liệu bị sai | Tổng tiền theo ngày khớp bản chuẩn |
+| Mất bảng hoặc bucket lab | Khôi phục vào nơi riêng từ backup đã kiểm | Tập khóa, tổng tiền và quyền truy cập đúng |
+
+Rollback code chỉ phục hồi cách tính; dữ liệu đã bị ghi sai còn cần tính lại hoặc restore.
+Đừng cho rằng deploy phiên bản cũ tự sửa được bảng hiện có.
+
+### Backup phải được thử restore
+
+**RPO** là lượng dữ liệu có thể chấp nhận mất, tính theo thời gian; **RTO** là thời gian mục tiêu để
+dịch vụ dùng lại được. Ví dụ lab: RPO 1 giờ, RTO 30 phút. Đây là mục tiêu thực hành tự đặt, không phải
+cam kết của hệ thống. Backup hằng ngày không đủ cho RPO 1 giờ nếu không có phần log/thay đổi bổ sung.
+
+Bắt đầu với database lab riêng: dump bằng `pg_dump` bản phù hợp, restore vào database mới bằng
+`pg_restore`, đối chiếu số dòng, khóa, tiền và quyền. Với object storage, lưu cả manifest/schema và
+định nghĩa quyền; file dữ liệu riêng lẻ có thể chưa đủ dựng lại bảng. Kiểm tra backup đọc được sau khi
+credential chính bị thu hồi. Bản backup chứa PII phải được bảo vệ theo chính sách retention và truy cập.
+
+### Diễn tập M08
+
+Tạo một lỗi sau khi đã có baseline, ghi thời điểm phát hiện và phục hồi. Nộp:
+`incident.md` (ảnh hưởng, timeline, nguyên nhân), `runbook.md`, lệnh restore dùng database lab và
+bảng đối chiếu. Đạt khi một người khác làm theo runbook có thể khôi phục mà không đoán bước còn thiếu.
+Không thử xóa hoặc stop tài nguyên dùng chung của người khác; dùng database/thư mục lab do bạn tạo.
+
+Tài liệu gốc: [PostgreSQL Backup and Restore](https://www.postgresql.org/docs/16/backup.html).
+
+Có thể bắt đầu từ [kịch bản backup/restore của lab CDC](../07-streaming-kafka/cdc-lab.md):
+lệnh dump và restore dùng container riêng của lab, khôi phục vào database mới để dễ đối chiếu.
+
+## 9. Tài liệu tham khảo
 
 - roadmap.sh, Data Engineer Roadmap: https://roadmap.sh/data-engineer
 - Docker docs, Dockerfile best practices: https://docs.docker.com/build/building/best-practices/

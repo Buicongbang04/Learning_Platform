@@ -247,3 +247,14 @@ Dùng **`_changes` feed** với tham số `since=<last_seq>` (lưu checkpoint `l
 master-master nên có thể có **conflict revision** (`conflicts=true` để thấy), cần quy tắc hoà giải hoặc giữ revision
 thắng của CouchDB; feed có thể trả lại thay đổi đã thấy nên MERGE phải idempotent; với khối lượng lớn dùng
 `feed=continuous` hoặc connector (Kafka Connect) thay vì polling.
+
+## Unit test cache-aside đạt có chứng minh Redis chịu tải tốt không?
+
+Chưa. Unit test kiểm logic hit/miss/fallback trên dữ liệu nhỏ. Cần đo trên Redis thật với workload,
+kích thước dữ liệu và số client rõ ràng; tách cache nóng/lạnh, đo p95, timeout và số lần gọi DB nguồn.
+
+## Redis ngừng hoạt động thì có luôn fallback về database không?
+
+Tùy yêu cầu và khả năng chịu tải nguồn. Nếu fallback, đặt timeout và giới hạn tải để tránh cả hệ
+đổ dồn vào DB. Với dữ liệu không có nguồn thay thế, phải báo lỗi có kiểm soát; cache không nên trở
+thành bản sao duy nhất của dữ liệu quan trọng chỉ vì lúc bình thường nó trả rất nhanh.

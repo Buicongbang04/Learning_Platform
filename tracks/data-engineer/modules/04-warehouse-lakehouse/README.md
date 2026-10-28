@@ -531,7 +531,47 @@ Một sàn thương mại điện tử cỡ Olist (vài trăm nghìn đơn/năm,
 
 Capstone milestone m04 dựng chính kiến trúc này trên MinIO + DuckDB.
 
-## 8. Tài liệu tham khảo
+## 8. Bảo trì lakehouse và thay đổi schema an toàn
+
+### Schema thay đổi không phải lúc nào cũng được tự chấp nhận
+
+| Thay đổi nguồn | Ví dụ | Xử lý trước khi cho dữ liệu vào silver |
+| --- | --- | --- |
+| Thêm cột tùy chọn | `coupon_code` | Thống nhất default/NULL, cập nhật contract và test |
+| Đổi tên cột | `price` thành `item_price` | Map tường minh; đổi tên có thể trông như xóa + thêm cột |
+| Đổi kiểu | `price` từ số sang `"R$ 10,50"` | Parse có quy tắc, quarantine giá trị không hiểu được |
+| Bỏ cột bắt buộc | Mất `order_id` | Chặn xuất bản, giữ raw để sửa và chạy lại |
+
+Schema enforcement là kiểm kiểu/cột, chưa chứng minh ý nghĩa nghiệp vụ đúng. Giá từ BRL đổi sang
+USD vẫn là số; cần contract ghi đơn vị và test đối chiếu. Chỉ bật schema merge cho thay đổi đã phê duyệt.
+
+### Nhiều file nhỏ, ghi đồng thời và time travel
+
+Mỗi phút ghi một file vài KB sẽ tạo quá nhiều lần mở file. **Compaction** gộp file nhỏ thành file lớn
+hơn mà giữ nguyên nội dung logic. Đo số file, kích thước và thời gian query trước/sau; không suy ra cứ
+file càng lớn càng tốt. Partition quá chi tiết có thể tạo rất nhiều partition chỉ có vài dòng.
+
+Hai writer cùng sửa một vùng dữ liệu có thể xung đột. Table format giúp phát hiện và kiểm soát commit;
+ứng dụng vẫn phải xử lý lỗi và retry từ snapshot mới. Không chỉnh file Parquet trực tiếp bên dưới bảng Delta.
+
+Time travel phụ thuộc việc giữ file và metadata cũ. **VACUUM/expire snapshots** có thể loại bỏ khả năng
+đọc phiên bản cũ; retention phải xét cả reader lâu, job chạy chậm và yêu cầu khôi phục.
+Time travel cùng một bucket không thay thế backup độc lập khi cả bucket hoặc quyền truy cập bị mất.
+
+### Bài thực hành mở rộng M04
+
+1. Tạo Delta version 0 có hai đơn; version 1 thêm `coupon_code` nullable bằng schema merge có chủ đích.
+2. Thử nạp `price = "không biết"` vào cột số: lưu lỗi, giữ raw và đưa dòng sai vào quarantine.
+3. Ghi một lô bằng nhiều file nhỏ; dùng công cụ compaction tương ứng phiên bản đang cài, so số file
+   và đối chiếu `COUNT(*)`, tổng tiền, tập khóa trước/sau.
+4. Mở hai writer trên bản lab, cập nhật cùng đơn; ghi kết quả xung đột hoặc thứ tự commit đã quan sát.
+5. Đọc lại version 0. Trên bản sao dùng cho thử nghiệm, mô tả phiên bản nào còn đọc được sau khi dọn file.
+   Không tắt kiểm tra retention trên dữ liệu đang học chỉ để chạy nhanh.
+
+Đạt khi có bảng số đo và bằng chứng đối chiếu. Phần khác nhau giữa Delta/Iceberg/Hudi phải ghi theo
+engine và phiên bản, không dùng chung một lệnh bảo trì cho mọi table format.
+
+## 9. Tài liệu tham khảo
 
 - Ralph Kimball, Margy Ross. *The Data Warehouse Toolkit*, 3rd ed. Wiley, 2013.
 - W. H. Inmon. *Building the Data Warehouse*, 4th ed. Wiley, 2005.

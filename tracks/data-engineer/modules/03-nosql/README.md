@@ -86,7 +86,18 @@ mới nhất thì phải hỏi nhiều replica hoặc chờ đồng bộ, tức 
 | MongoDB | PC | EC | Đọc từ primary; đọc secondary thì thành EL |
 | HBase, Bigtable | PC | EC | Mỗi region do một server phục vụ |
 | PostgreSQL + async replica | PC (primary) | EL nếu đọc replica | Replica lag |
-| Redis Cluster | PA (gần đúng) | EL | Replication bất đồng bộ, có thể mất ghi khi failover |
+| Redis Cluster | Không gắn nhãn PA/PC đơn giản | Ưu tiên độ trễ thấp qua replication bất đồng bộ | Phía thiểu số ngừng nhận ghi sau timeout; có thể mất ghi khi failover |
+
+**Hiểu Redis Cluster qua ví dụ**: cụm có 3 master, mỗi master có replica. Khi mạng tách cụm
+thành hai phía, phía chỉ liên lạc được với 1 master là phía **thiểu số**. Sau thời gian phát
+hiện sự cố (`NODE_TIMEOUT`), phía này ngừng nhận ghi. Phía có 2 master có thể khôi phục phục vụ
+nếu có replica phù hợp để thay master bị mất liên lạc.
+
+Vì vậy, không nên nhớ Redis Cluster là “AP: bên nào cũng tiếp tục ghi”. Cũng không nên suy ra
+nó bảo đảm dữ liệu mới nhất như một hệ CP mạnh: master có thể báo ghi thành công trước khi
+replica nhận được dữ liệu. Nếu master hỏng lúc đó, replica được chọn thay thế có thể thiếu lần ghi ấy.
+
+Xem [đặc tả Redis Cluster](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/).
 
 ### Consistency models (từ mạnh tới yếu)
 
@@ -550,7 +561,42 @@ Data Engineer hiếm khi thiết kế DB vận hành một mình, nhưng phải:
    đọc (một phần của Reverse ETL, module 09).
 4. Hiểu trade-off để không biến NoSQL thành nơi chạy báo cáo ad-hoc.
 
-## 8. Tài liệu tham khảo
+## 8. Đo hiệu quả và thử lỗi thay vì chỉ chọn tên database
+
+### Học sâu một luồng đọc/ghi
+
+Chọn MongoDB cho reviews và Redis cho cache sản phẩm. Tạo cùng một workload: đọc theo mã, tìm
+review theo đơn và tính điểm trung bình. Ghi số bản ghi, dung lượng, số client, số lần chạy và độ trễ
+p50/p95. p95 = 95% request nhanh hơn hoặc bằng mốc đó; một lần chạy nhanh chưa nói lên cả workload.
+
+Với MongoDB, dùng `explain("executionStats")` so số document/key đã xét trước và sau khi tạo index.
+Index hữu ích nếu giảm lượng dữ liệu phải xét cho truy vấn mục tiêu; đổi lại tốn RAM, đĩa và chi phí ghi.
+Mô phỏng bằng mongomock giúp kiểm logic, nhưng không chứng minh hiệu năng của MongoDB thật.
+
+### Cache hỏng thì ứng dụng phản ứng thế nào?
+
+| Sự cố | Quyết định cần viết rõ | Bằng chứng |
+| --- | --- | --- |
+| Redis không truy cập được | Có đọc DB gốc không? Timeout bao lâu? | Request vẫn đúng, độ trễ trong giới hạn bạn đặt |
+| Nhiều key hết hạn cùng lúc | TTL jitter, giới hạn truy vấn DB gốc | Đo số lần gọi nguồn khi nhiều client đọc |
+| Sản phẩm vừa đổi giá | Xóa cache sau ghi hoặc cơ chế cập nhật đã chọn | Mô tả khoảng thời gian có thể thấy giá cũ |
+| Cache đầy | Eviction policy, giới hạn kích thước | Quan sát eviction, không coi cache là bản duy nhất |
+| Nhiều client cùng cache miss | Khóa ngắn/coalescing hoặc cho phép tải có giới hạn | Không dồn hàng nghìn truy vấn giống nhau vào DB |
+
+Không lấy số đo từ các bài test giả lập làm kết luận về hệ phân tán. Thử timeout bằng client timeout
+cụ thể; mô tả rõ hệ thống giữ tính đúng hay giữ khả dụng trong từng tình huống.
+
+### Giới hạn partition và replica
+
+Với Cassandra, một partition chứa toàn bộ đơn của một seller trong nhiều năm có thể lớn dần không
+giới hạn. Cân nhắc khóa `(seller_id, year_month)`; đổi lại truy vấn nhiều tháng phải đọc nhiều partition.
+Tính trước số dòng × kích thước dòng/partition và kiểm bằng dữ liệu có một seller lớn bất thường.
+
+**Bài thực hành mở rộng M03**: chạy workload MongoDB trước/sau index; dừng Redis của lab rồi gọi
+lại cache-aside. Nộp bảng số đo và mô tả fallback. Đạt khi kết quả vẫn đúng, timeout hữu hạn và
+có giải thích đánh đổi. Replica set/failover cần lab nhiều node riêng; một container không kiểm được điều đó.
+
+## 9. Tài liệu tham khảo
 
 - roadmap.sh, Data Engineer roadmap: https://roadmap.sh/data-engineer
 - Martin Kleppmann, *Designing Data-Intensive Applications* (O'Reilly, 2017), chương 2, 5, 9.

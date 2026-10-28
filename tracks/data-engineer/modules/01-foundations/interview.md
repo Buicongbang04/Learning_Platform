@@ -222,3 +222,15 @@ lượt like ưu tiên A.
   thời gian), alert; chạy bằng Airflow với retry và SLA.
 - **Bảo mật**: token trong secret manager, không log dữ liệu nhạy cảm.
 - **Code**: Git, PR, test với dữ liệu mẫu và mock API, CI.
+
+## Vì sao mã zip và số tiền không nên được đọc như mọi số khác?
+
+Zip là định danh: "01000" khác "1000" ở cách biểu diễn cần giữ, không dùng để cộng/trừ.
+Tiền cần độ chính xác theo đơn vị đã thống nhất: dùng Decimal hoặc số nguyên cents; chỉ đổi sang
+float khi đã hiểu giới hạn. Kiểm giá hữu hạn để NaN/Infinity không lọt vào phép tổng.
+
+## Một context manager có luôn đóng connection database không?
+
+Không. Phải đọc contract của đối tượng. Với sqlite3, with connection quản commit/rollback nhưng
+không tự đóng connection. Có thể dùng contextlib.closing cho vòng đời và with con cho transaction.
+Test cả nhánh exception để chắc rollback và tài nguyên được giải phóng.

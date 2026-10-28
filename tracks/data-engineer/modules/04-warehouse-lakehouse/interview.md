@@ -211,3 +211,15 @@ Chọn khi tải nhỏ hoặc thất thường, đội ít người, cần lên 
 Không chọn (hoặc chuyển sang capacity/reserved, cluster) khi tải lớn và đều (trả theo byte quét/invocation đắt
 hơn), job chạy lâu hoặc cần nhiều bộ nhớ (Lambda 15 phút), cần độ trễ ổn định không cold start, hoặc muốn tránh
 lock-in. Luôn đặt guardrail chi phí: quota, `maximum_bytes_billed`, cảnh báo ngân sách, partition/cluster bảng.
+
+## Vì sao VACUUM có thể làm mất khả năng time travel?
+
+Version cũ cần cả metadata và file dữ liệu còn giữ. Khi dọn file không còn được phiên bản hiện tại
+tham chiếu, một số version cũ có thể không đọc được nữa. Chọn retention theo reader/job và yêu cầu
+khôi phục, thử trên bản sao; time travel trong cùng bucket chưa thay thế backup độc lập.
+
+## Thêm cột và đổi đơn vị tiền có giống nhau về schema evolution không?
+
+Không. Thêm cột tùy chọn có thể tương thích nếu consumer xử lý được NULL/default.
+Đổi BRL thành cents có thể giữ cùng kiểu số nhưng thay ngữ nghĩa 100 lần.
+Cần version contract, test nghiệp vụ và kế hoạch consumer migration, không chỉ bật schema merge.

@@ -1,14 +1,32 @@
 # Lộ trình Data Engineer
 
 Lộ trình tự học Data Engineer bám theo [roadmap.sh/data-engineer](https://roadmap.sh/data-engineer),
-thiết kế cho người đã có nền **Data Analyst / Data Scientist**: bạn đã biết SQL, pandas, thống kê
-cơ bản; giờ cần học cách **xây và vận hành hệ thống dữ liệu** chứ không chỉ phân tích dữ liệu.
+thiết kế cho người muốn học cách **xây và vận hành hệ thống dữ liệu**. Nếu đã có nền
+Data Analyst / Data Scientist (SQL, pandas), bạn có thể đi thẳng vào phần chính. Nếu mới hoàn toàn,
+bắt đầu từ phần 0 của module 01 và bài nhập môn Python/SQL rồi mới học generator, window function.
 
 Lộ trình gồm 11 module. Mỗi module có lý thuyết (`README.md`), câu hỏi phỏng vấn (`interview.md`),
-bài tập 3 mức Basic → Intermediate → Advanced có test tự chấm, và một milestone của dự án capstone
+bài tập 3 mức Basic → Intermediate → Advanced (91 bài, bài lập trình có test tự chấm), cùng milestone của dự án capstone
 [Olist Data Platform](capstone/README.md).
 
 Cài đặt môi trường: xem [`setup/SETUP.md`](../../setup/SETUP.md). Dữ liệu: [`data/README.md`](../../data/README.md).
+
+## Phần bổ sung: từ biết khái niệm tới tự vận hành
+
+Mỗi module có thêm tình huống thực hành mở rộng: dữ liệu đến muộn, nguồn đổi schema, đo hiệu năng,
+phân quyền, ngắt job và khôi phục. Các tình huống có kết quả nộp/tiêu chí đối chiếu; không phải tất cả
+đều được chấm tự động. Giữ log và số đo thực tế, không chỉ đánh dấu đã đọc.
+
+| Điểm bắt đầu | Học và kiểm chứng |
+| --- | --- |
+| Chưa biết Python/SQL | [Phần 0 module 01](modules/01-foundations/README.md), [bài nhập môn](modules/01-foundations/exercises/basic/00-order-basics/README.md) |
+| Muốn hiểu CDC | [Bài sink offline](modules/07-streaming-kafka/exercises/intermediate/04-cdc-sink/README.md) → [lab PostgreSQL/Debezium/Kafka](modules/07-streaming-kafka/cdc-lab.md) |
+| Muốn biết xử lý sự cố | Phần thực hành mở rộng module 05–08, thu thập runbook và bằng chứng khôi phục |
+| Muốn thử cloud | [Lab GCP](modules/11-cloud/cloud-gcp-lab.md); cần tự chọn chạy cloud thật, có thể phát sinh phí |
+| Muốn tự đánh giá | [M12: bài xây dựng độc lập](capstone/milestones/m12-independent-build.md), làm sau phần local M01–M10; cloud là tùy chọn |
+
+Test đạt chứng minh các hành vi được test ở phạm vi bài, chưa chứng minh chịu được mọi sự cố hoặc tải
+production. Tiêu chí hoàn thành là tự giải thích được quyết định, tự dựng lại hệ thống và đối chiếu dữ liệu.
 
 ## Sơ đồ lộ trình
 
@@ -129,7 +147,7 @@ nâng cao) và dồn thời gian cho 02, 04, 05, 07 — bốn module được h�
 | Containers (Docker, Kubernetes), CI/CD, Infrastructure as Code (Terraform), Monitoring, Testing | 08 |
 | Data Serving, Data Analytics, BI tools (Tableau, Power BI, Metabase), Reverse ETL | 09 |
 | Data Security (AuthN/AuthZ, Encryption, Tokenization, Masking), Data Quality, Lineage, Governance, GDPR | 10 |
-| Cloud Computing (AWS, GCP, Azure) | Lồng trong 04, 05, 08: mỗi công cụ local đều chỉ ra bản tương đương trên cloud |
+| Cloud Computing (AWS, GCP, Azure) | 11: kiến trúc, IAM, mạng, FinOps; lab GCP và milestone M11 tùy chọn |
 
 Lưu ý: lộ trình chạy toàn bộ trên máy local bằng Docker (MinIO thay S3/GCS, DuckDB/PostgreSQL thay
 BigQuery/Snowflake) để học miễn phí. Khái niệm chuyển thẳng sang cloud được; khi phỏng vấn hãy

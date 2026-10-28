@@ -20,6 +20,72 @@ flowchart LR
     C -->|replication, partition| F[Hệ phân tán]
 ```
 
+## 0. Bắt đầu từ đâu nếu bạn chưa biết Python và SQL?
+
+Phần này dành cho người mới hoàn toàn. Nếu đã tự viết được một hàm Python và truy vấn `JOIN`,
+bạn có thể dùng bài kiểm tra cuối phần để quyết định có cần học lại hay không.
+
+**Pipeline** là chuỗi bước đưa dữ liệu từ nguồn tới nơi sử dụng. Ví dụ: đọc CSV đơn hàng → đổi
+chuỗi giá thành số → loại dòng lỗi → tính tiền hàng theo ngày → lưu bảng cho dashboard.
+Data Engineer phải làm cho chuỗi này chạy đúng, chạy lại được và báo rõ khi có lỗi.
+
+| Thứ tự | Học gì | Tự kiểm tra bằng việc gì? |
+| --- | --- | --- |
+| 1 | Terminal, đường dẫn tương đối/tuyệt đối, thư mục làm việc | Từ gốc repo chạy `uv run python --version` và tìm `data/README.md` |
+| 2 | Python: biến, chuỗi, số, `list`, `dict`, `None` | Biểu diễn một đơn hàng bằng `dict` và đọc trường `order_id` |
+| 3 | `if`, `for`, hàm, `return`, exception | Viết hàm tính tiền hàng; dữ liệu không hợp lệ báo `ValueError` |
+| 4 | Đọc CSV và chuyển kiểu | Đọc `"100.50"` thành `Decimal`, giữ mã zip `"01000"` là chuỗi |
+| 5 | SQL: `SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `NULL` | Đếm đơn và tính tiền hàng theo khách, giữ cả khách chưa có đơn |
+| 6 | Test và sửa lỗi | Chạy bài [làm sạch đơn hàng nhập môn](exercises/basic/00-order-basics/README.md), đọc assertion khi test fail |
+
+Ví dụ Python chạy được:
+
+```python
+from decimal import Decimal
+
+def item_total(row: dict) -> Decimal:
+    price = Decimal(row["price"])
+    quantity = int(row["quantity"])
+    if price < 0 or quantity <= 0:
+        raise ValueError("Giá không được âm, số lượng phải dương")
+    return price * quantity
+
+assert item_total({"price": "10.50", "quantity": "2"}) == Decimal("21.00")
+```
+
+Ví dụ này có trường `quantity` để luyện Python. Trong CSV `order_items` Olist, mỗi dòng đã là
+một đơn vị sản phẩm: mua 2 cái tương ứng 2 dòng, không có cột `quantity` sẵn.
+
+Ví dụ SQL chạy trong Python, không cần Docker:
+
+```python
+import sqlite3
+
+con = sqlite3.connect(":memory:")
+con.executescript("""
+CREATE TABLE customers (customer_id TEXT PRIMARY KEY);
+CREATE TABLE orders (order_id TEXT PRIMARY KEY, customer_id TEXT, amount INTEGER);
+INSERT INTO customers VALUES ('c1'), ('c2');
+INSERT INTO orders VALUES ('o1', 'c1', 100), ('o2', 'c1', 50);
+""")
+rows = con.execute("""
+SELECT c.customer_id, COUNT(o.order_id), COALESCE(SUM(o.amount), 0)
+FROM customers c LEFT JOIN orders o USING (customer_id)
+GROUP BY c.customer_id ORDER BY c.customer_id
+""").fetchall()
+assert rows == [('c1', 2, 150), ('c2', 0, 0)]
+con.close()
+```
+
+`LEFT JOIN` giữ khách c2 dù chưa có đơn. `COUNT(o.order_id)` chỉ đếm đơn có thật;
+`COUNT(*)` lại đếm cả dòng khách c2 sau join. `COALESCE` đổi tổng `NULL` thành 0 theo quy ước
+“chưa có đơn thì chưa có tiền hàng”. Điều kiện `IS NULL` dùng kiểm tra thiếu giá trị; `= NULL` không làm việc đó.
+
+**Điều kiện chuyển tiếp**: giải thích được vì sao một đơn nhiều item tạo nhiều dòng sau join,
+tự viết hai ví dụ trên và qua bài nhập môn. Sau đó học generator và window function ở phần tiếp theo.
+Tài liệu gốc: [Python Tutorial](https://docs.python.org/3/tutorial/),
+[PostgreSQL Tutorial](https://www.postgresql.org/docs/16/tutorial.html).
+
 ## 1. Python cho Data Engineering
 
 ### 1.1. Từ notebook sang code production
@@ -174,6 +240,41 @@ backfill), nên mọi bước ghi phải idempotent: dùng `INSERT ... ON CONFLI
 hoặc xoá-rồi-ghi theo partition (`DELETE WHERE date = :d; INSERT ...`) trong một transaction, hoặc
 ghi ra file tạm rồi `rename` (atomic trên cùng filesystem).
 
+### 1.7. Tổ chức mã, cấu hình và đóng tài nguyên
+
+Một script ngắn có thể ở một file. Khi có nhiều bước, tách theo trách nhiệm: `extract.py` đọc nguồn,
+`transform.py` làm sạch, `load.py` ghi đích, `cli.py` nhận tham số. Đặt chúng trong package có
+`__init__.py`; chạy từ gốc bằng `uv run python -m ten_package.cli` để tránh phụ thuộc thư mục hiện tại.
+`pyproject.toml` khai báo dependency; lockfile giữ phiên bản để máy khác dựng lại môi trường.
+
+Tham số ngày chạy truyền qua CLI; endpoint và secret đọc từ môi trường. Nếu thiếu biến bắt buộc,
+dừng sớm với thông báo rõ; không dùng mật khẩu production làm giá trị mặc định.
+Chỉ bắt lỗi mà bạn có cách xử lý. Gặp CSV sai schema thì báo lỗi dữ liệu, không retry vô hạn như lỗi mạng.
+
+```python
+from contextlib import closing
+import sqlite3
+
+with closing(sqlite3.connect(":memory:")) as con:
+    with con:  # commit khi thành công, rollback khi có exception
+        con.execute("CREATE TABLE orders (order_id TEXT PRIMARY KEY)")
+        con.execute("INSERT INTO orders VALUES (?)", ("o1",))
+# closing đóng connection; `with con` của sqlite3 riêng lẻ không đóng nó.
+```
+
+**Ngày giờ và tiền**: dùng `Decimal` cho tính tiền cần chính xác; phân biệt chuỗi ngày với thời điểm.
+`2026-01-01 00:30` ở Việt Nam là `2025-12-31 17:30 UTC`, nên nhóm theo ngày phải chọn múi giờ nghiệp vụ.
+CSV Olist có timestamp không kèm offset; cần xác nhận múi giờ nguồn trước khi chuyển đổi.
+Không gắn UTC vào giờ địa phương chỉ để làm hết lỗi kiểu dữ liệu.
+
+```python
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+local = datetime(2026, 1, 1, 0, 30, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+assert local.astimezone(timezone.utc).isoformat() == "2025-12-31T17:30:00+00:00"
+```
+
 ## 2. SQL nâng cao: window function, CTE, đệ quy
 
 ### 2.1. Thứ tự thực thi logic
@@ -231,13 +332,15 @@ FROM (
 ) t
 WHERE rnk <= 3;
 
--- Doanh thu theo ngày + luỹ kế tháng + trung bình trượt 7 ngày
+-- daily_revenue: một dòng cho mỗi ngày có dữ liệu
+-- Luỹ kế tháng + trung bình của tối đa 7 dòng gần nhất
 SELECT
     order_date,
     revenue,
     SUM(revenue) OVER (PARTITION BY date_trunc('month', order_date) ORDER BY order_date) AS mtd,
     AVG(revenue) OVER (ORDER BY order_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS ma7
-FROM daily_revenue;
+FROM daily_revenue
+ORDER BY order_date;
 
 -- Số ngày giữa hai đơn liên tiếp của cùng khách
 SELECT customer_unique_id, order_purchase_timestamp,
@@ -247,12 +350,47 @@ SELECT customer_unique_id, order_purchase_timestamp,
 FROM orders JOIN customers USING (customer_id);
 ```
 
-**Bẫy frame mặc định**: khi có `ORDER BY` mà không ghi frame, mặc định là
-`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. Vì vậy `LAST_VALUE(x) OVER (ORDER BY t)` trả về
-chính dòng hiện tại, không phải dòng cuối. Ghi rõ
-`ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` khi cần cả nhóm. `RANGE` gộp các dòng có
-cùng giá trị `ORDER BY` (peer) nên running total với ngày trùng sẽ "nhảy" một lần; `ROWS` thì tính
-từng dòng.
+**Phân biệt 7 dòng với 7 ngày**: `ROWS BETWEEN 6 PRECEDING AND CURRENT ROW` lấy dòng hiện tại
+và tối đa 6 dòng đứng trước. SQL đếm dòng, không kiểm tra các ngày có liền nhau không.
+Nếu bảng chỉ có ngày 01/01 và 20/01, phép tính ở ngày 20/01 vẫn lấy cả hai dòng dù chúng cách nhau 19 ngày.
+
+Để `ma7` là trung bình theo **7 ngày lịch**, bảng đầu vào cần đúng một dòng cho mỗi ngày liên tục.
+Nếu ngày không có đơn nghĩa là doanh thu bằng 0, hãy tạo đủ dãy ngày (date spine, xem phần CTE đệ quy),
+`LEFT JOIN` doanh thu vào dãy đó và điền 0 cho ngày không có đơn, rồi mới tính window.
+Không tự điền 0 nếu thiếu ngày do pipeline chưa nạp dữ liệu: “chưa biết doanh thu” khác “không có doanh thu”.
+Ở đầu dãy, chưa đủ 7 ngày thì `AVG` chỉ tính trên số dòng hiện có; muốn cửa sổ đầu tiên đủ 7 ngày,
+cần nạp thêm 6 ngày trước khoảng báo cáo và chỉ lọc ngày báo cáo **sau khi** tính window.
+
+**Hiểu `LAST_VALUE` qua khung tính toán (frame)**: hàm lấy giá trị ở dòng cuối **trong frame**,
+không tự lấy dòng cuối của toàn bộ nhóm. Khi có `ORDER BY` mà không ghi frame, mặc định là
+`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`: từ đầu nhóm tới hết các dòng đồng hạng
+(cùng giá trị sắp xếp) với dòng đang xét.
+
+Ví dụ dưới có hai dòng cùng `t = 1`. Thêm `id` vào thứ tự sắp xếp giúp xác định rõ dòng nào đứng sau:
+
+```sql
+WITH sample(id, t, x) AS (
+    VALUES (1, 1, 'A'), (2, 1, 'B'), (3, 2, 'C')
+)
+SELECT id, t, x,
+       LAST_VALUE(x) OVER (ORDER BY t) AS last_default,
+       LAST_VALUE(x) OVER (
+           ORDER BY t, id
+           ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS last_whole_group
+FROM sample
+ORDER BY t, id;
+```
+
+`last_default` ở hai dòng `t = 1` lấy cùng một giá trị trong nhóm đồng hạng,
+nhưng không xác định chắc là A hay B vì `ORDER BY t` chưa phân biệt thứ tự hai dòng.
+`last_whole_group` luôn là C: frame bao trùm cả nhóm và `(t, id)` xác định rõ thứ tự.
+Nếu có `PARTITION BY`, frame áp dụng riêng trong từng nhóm đó.
+
+Nếu `t` không trùng, `LAST_VALUE(x) OVER (ORDER BY t)` mới trả về `x` của chính dòng đang xét.
+Tương tự, running total dùng `RANGE` mặc định cho các dòng đồng hạng cùng một tổng;
+dùng `ROWS` và thứ tự đủ để phân biệt các dòng khi muốn cộng lần lượt từng dòng.
+Xem [tài liệu PostgreSQL về window function](https://www.postgresql.org/docs/current/functions-window.html).
 
 **Khử trùng lặp** là ứng dụng kinh điển trong pipeline (bản ghi CDC đến nhiều lần):
 

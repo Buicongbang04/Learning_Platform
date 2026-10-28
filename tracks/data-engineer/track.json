@@ -4,14 +4,14 @@
   "icon": "database",
   "status": "active",
   "order": 1,
-  "description": "11 module, bài tập Basic → Advanced và một dự án capstone trên dữ liệu thương mại điện tử Olist.",
+  "description": "11 module, 91 bài tập Basic → Advanced, lab CDC, thực hành vận hành và capstone có đánh giá độc lập trên dữ liệu Olist.",
   "source": "https://roadmap.sh/data-engineer",
   "modules": [
     {
       "id": "01-foundations",
       "title": "Nền tảng kỹ thuật",
-      "summary": "Python cho data, SQL nâng cao, Linux & Bash, Git, networking và distributed systems căn bản.",
-      "topics": ["Python", "SQL nâng cao", "Linux & Bash", "Git", "Networking", "Distributed Systems"]
+      "summary": "Nhập môn Python/SQL tùy chọn; Python cho data, SQL nâng cao, Linux, Git, networking và hệ phân tán.",
+      "topics": ["Python", "SQL nâng cao", "Linux & Bash", "Git", "Networking", "Distributed Systems", "Ngày giờ & tiền"]
     },
     {
       "id": "02-data-modeling",
@@ -34,8 +34,8 @@
     {
       "id": "05-batch-pipelines",
       "title": "Batch Pipelines: ETL/ELT với Airflow, dbt và Prefect",
-      "summary": "Thiết kế pipeline idempotent, orchestration bằng Airflow, transform bằng dbt.",
-      "topics": ["ETL vs ELT", "Airflow", "dbt", "Prefect", "Idempotency"]
+      "summary": "Pipeline idempotent, incremental/CDC, orchestration, schema drift và backfill an toàn.",
+      "topics": ["ETL vs ELT", "Airflow", "dbt", "Prefect", "Idempotency", "CDC", "Backfill"]
     },
     {
       "id": "06-spark-big-data",
@@ -46,14 +46,14 @@
     {
       "id": "07-streaming-kafka",
       "title": "Streaming với Kafka",
-      "summary": "Messaging, sync và async, Kafka topic/partition/consumer group, delivery semantics.",
-      "topics": ["Messages vs Streams", "Kafka", "RabbitMQ", "Exactly-once"]
+      "summary": "Kafka, event time và delivery semantics; CDC PostgreSQL/Debezium, replay và khôi phục sink.",
+      "topics": ["Messages vs Streams", "Kafka", "RabbitMQ", "Exactly-once", "CDC / Debezium", "Recovery"]
     },
     {
       "id": "08-devops-for-data",
       "title": "DevOps cho Data",
-      "summary": "Docker, Kubernetes, CI/CD, Infrastructure as Code với Terraform, monitoring và testing.",
-      "topics": ["Docker", "Kubernetes", "CI/CD", "Terraform", "Monitoring", "Testing"]
+      "summary": "Docker, Kubernetes, CI/CD, Terraform, monitoring, testing, runbook và backup/restore.",
+      "topics": ["Docker", "Kubernetes", "CI/CD", "Terraform", "Monitoring", "Testing", "Backup / Restore"]
     },
     {
       "id": "09-serving-bi",
@@ -88,7 +88,8 @@
       { "id": "m08", "title": "CI/CD và hạ tầng bằng Terraform", "after": "08-devops-for-data", "doc": "capstone/milestones/m08-cicd-terraform.md" },
       { "id": "m09", "title": "Dashboard vận hành trên Metabase", "after": "09-serving-bi", "doc": "capstone/milestones/m09-dashboard.md" },
       { "id": "m10", "title": "Data quality, lineage, masking PII", "after": "10-security-governance", "doc": "capstone/milestones/m10-governance.md" },
-      { "id": "m11", "title": "Đưa nền tảng lên cloud (tuỳ chọn, free tier)", "after": "11-cloud", "doc": "capstone/milestones/m11-cloud-deploy.md" }
+      { "id": "m11", "title": "Đưa nền tảng lên cloud (tuỳ chọn, free tier)", "after": "11-cloud", "doc": "capstone/milestones/m11-cloud-deploy.md" },
+      { "id": "m12", "title": "Đánh giá độc lập: thiết kế, vận hành và khôi phục", "after": "11-cloud", "doc": "capstone/milestones/m12-independent-build.md" }
     ]
   }
 }

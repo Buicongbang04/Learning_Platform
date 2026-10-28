@@ -239,3 +239,15 @@ Class lạnh đắt hơn khi:
 
 Không chắc mẫu truy cập thì dùng S3 Intelligent-Tiering hoặc GCS Autoclass, và gộp file nhỏ trước
 khi chuyển.
+
+## Budget alert có ngăn tài khoản phát sinh thêm chi phí không?
+
+Không nên coi alert là trần chi tiêu tự động. Nó báo theo cấu hình và có thể có độ trễ.
+Cần inventory, giới hạn truy vấn/tài nguyên phù hợp và dọn tài nguyên lab; kiểm billing sau đó.
+Ghi giá và giả định ở thời điểm làm, không hứa lab luôn miễn phí.
+
+## Vì sao phải thử quyền BI bằng đúng danh tính BI?
+
+Owner thường có quyền rộng nên truy vấn thành công bằng owner không chứng minh least privilege.
+Thử BI đọc bảng được phép, đọc raw bị cấm và ghi bảng bị từ chối; kiểm quyền kế thừa nếu kết quả
+trái dự kiến. Môi trường local giả lập không tự chứng minh IAM cloud thật.

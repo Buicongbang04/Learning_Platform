@@ -4,8 +4,9 @@ Dự án capstone xuyên suốt lộ trình Data Engineer. Bạn xây một nề
 sàn thương mại điện tử Brazil (bộ dữ liệu Olist): từ nạp dữ liệu thô, mô hình hoá, lakehouse,
 orchestration, xử lý batch lớn, streaming thời gian thực, CI/CD, dashboard cho tới governance.
 
-Mỗi module kết thúc bằng một **milestone**. Milestone sau dùng lại kết quả của milestone trước, nên
-làm xong cả 10 bạn có một repo portfolio chạy được từ đầu đến cuối bằng vài lệnh.
+Mỗi module kết thúc bằng một **milestone**. M01–M10 xây nền tảng local, M11 thử cloud tùy chọn;
+M12 là bài đánh giá độc lập để tự thiết kế và xử lý sự cố. Milestone sau dùng lại kết quả trước,
+giúp bạn xây portfolio có thể dựng lại và kiểm chứng từ đầu đến cuối.
 
 ## Mục tiêu dự án
 
@@ -88,6 +89,8 @@ flowchart TD
     M8 --> M9
     M9 --> M10[M10 Governance]
     M8 -.-> M11[M11 Lên cloud, tuỳ chọn]
+    M10 --> M12[M12 Đánh giá độc lập]
+    M11 -.-> M12
 ```
 
 | Milestone | Sau module | Dùng lại | Tạo ra |
@@ -103,6 +106,10 @@ flowchart TD
 | [M09](milestones/m09-dashboard.md) | 09 Serving & BI | `dw`, gold, `order_status_live` | dashboard Metabase, app Streamlit |
 | [M10](milestones/m10-governance.md) | 10 Security & Governance | toàn bộ | data quality check, lineage, masking PII, role |
 | [M11](milestones/m11-cloud-deploy.md) (tuỳ chọn) | 11 Cloud | M04, M08 | lake + warehouse trên free tier một cloud, hoặc LocalStack/MinIO |
+| [M12](milestones/m12-independent-build.md) | Sau phần local M01–M10; có thể đọc sau module 11 | kiến thức toàn lộ trình | bài thiết kế độc lập, sự cố, khôi phục và rubric |
+
+Lab bổ trợ: [CDC thật](../modules/07-streaming-kafka/cdc-lab.md),
+[GCP từ Parquet tới KPI](../modules/11-cloud/cloud-gcp-lab.md).
 
 ## Cấu trúc code
 

@@ -546,7 +546,50 @@ def build_daily_revenue(spark, orders_path, items_path, out_path):
         .partitionBy("year", "month").parquet(out_path)
 ```
 
-## 8. Tài liệu tham khảo
+## 8. Điều tra job chậm và phục hồi sau lỗi
+
+### Tách lỗi driver với executor
+
+Driver lập kế hoạch và điều phối; executor chạy task. `collect()` gom toàn bộ dữ liệu về driver:
+tăng RAM executor không sửa được lỗi driver hết bộ nhớ. Executor có thể thiếu RAM vì partition quá
+lớn, join lệch, cache nhiều hoặc Python worker cần bộ nhớ ngoài JVM.
+
+| Dấu hiệu | Kiểm tra tiếp | Thử thay đổi có đo đạc |
+| --- | --- | --- |
+| Một vài task lâu hơn hẳn | Key lệch, kích thước partition | Tách hot key, salting hoặc AQE |
+| Shuffle/spill lớn | Join, groupBy, sort trong plan | Lọc/chọn cột sớm, đổi join nếu có cơ sở |
+| Driver chết khi lấy kết quả | `collect`, `toPandas`, kết quả quá lớn | Ghi ra đích, chỉ lấy mẫu nhỏ |
+| Rất nhiều task rất ngắn | Nhiều file nhỏ, quá nhiều partition | Gộp file/điều chỉnh partition |
+| Executor bị kill | Log executor, memory overhead, giới hạn container | Giảm dữ liệu/task hoặc điều chỉnh tài nguyên đúng chỗ |
+
+### Lưu bằng chứng để xem sau khi job tắt
+
+Tạo thư mục event log trước khi chạy, ví dụ `mkdir -p /tmp/olist-spark-events`, rồi thêm vào
+SparkSession builder, trước `getOrCreate()`:
+
+```python
+.config("spark.eventLog.enabled", "true") \
+.config("spark.eventLog.dir", "file:///tmp/olist-spark-events")
+```
+
+Đây là đoạn cấu hình nối vào builder, không phải script Python độc lập. Spark UI thường ở cổng 4040
+khi ứng dụng chạy; event log cho phép History Server xem lại sau đó. Trên cluster, dùng nơi lưu chung
+mà driver/History Server có quyền truy cập. Xem [hướng dẫn Spark 3.5](https://spark.apache.org/docs/3.5.7/monitoring.html).
+
+### Bài thực hành mở rộng M06
+
+Chạy bài tối ưu seller trên dữ liệu có một seller chiếm phần lớn item, lưu input seed và cấu hình.
+So cùng đầu vào, cùng tài nguyên, cùng hành vi ghi; chạy vài lần và ghi riêng lần đọc lạnh với lần có cache.
+
+Nộp bảng trước/sau gồm: thời gian, số task, thời gian task lớn nhất/trung vị, shuffle read/write,
+spill và số dòng/tổng tiền output. Đạt khi kết quả nghiệp vụ không đổi và giải thích được nguyên nhân cải thiện.
+
+Sau đó ngắt job lúc đang ghi **thư mục lab**, chạy lại cùng partition. Reader chỉ được thấy output
+đã xuất bản hoàn chỉnh; dùng staging + manifest hoặc giao dịch table format phù hợp. Giải thích
+tệp tạm nào có thể dọn, căn cứ nào cho biết writer đã chết. Local nhiều thread chưa chứng minh được
+khả năng phục hồi khi mất một máy; phần cluster cần môi trường nhiều worker riêng.
+
+## 9. Tài liệu tham khảo
 
 - Apache Spark, *Spark SQL, DataFrames and Datasets Guide*: https://spark.apache.org/docs/3.5.0/sql-programming-guide.html
 - Apache Spark, *Performance Tuning* (AQE, join hints, caching): https://spark.apache.org/docs/3.5.0/sql-performance-tuning.html

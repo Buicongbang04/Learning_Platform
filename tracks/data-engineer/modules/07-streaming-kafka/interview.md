@@ -173,3 +173,15 @@ Gợi ý câu trả lời theo lớp:
 
 Nêu rõ đánh đổi: độ trễ dashboard vs độ đầy đủ (lateness), chi phí vận hành Flink vs dùng dịch vụ
 managed, exactly-once bằng sink idempotent thay vì transaction phân tán.
+
+## Crash sau DB commit nhưng trước Kafka commit có làm mất dữ liệu không?
+
+Record có thể được đọc lại. Nếu dữ liệu và checkpoint sink cùng transaction, lần đọc lại nhận ra
+record đã xử lý và không ghi trùng. Consumer chỉ commit offset kế tiếp của record đã hoàn tất.
+Xem bài CDC sink; giả định ordering/topic generation phải được giữ rõ.
+
+## Có thể replay từ earliest để dựng mọi bảng trong mọi trường hợp không?
+
+Không. Earliest là record sớm nhất còn được giữ, có thể thiếu lịch sử ban đầu.
+Dựng bảng mới bằng group mới, kiểm retention và bản nền/snapshot, đối chiếu rồi mới chuyển người đọc.
+Không reset consumer đang phục vụ rồi để record cũ ghi đè trạng thái mới.

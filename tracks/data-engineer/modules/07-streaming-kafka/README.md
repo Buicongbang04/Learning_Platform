@@ -550,7 +550,46 @@ per-message ack** thì RabbitMQ. Đang trên AWS và chỉ cần tách service �
 - **Lambda vs Kappa**: Lambda chạy song song batch + stream rồi gộp; Kappa chỉ dùng stream và
   replay khi cần tính lại. Lakehouse + streaming ngày nay nghiêng về Kappa.
 
-## 9. Tài liệu tham khảo
+## 9. CDC, phát lại và khôi phục consumer
+
+### Ba loại tiến độ khác nhau
+
+Nguồn PostgreSQL có vị trí trong WAL; connector có source offset; consumer sink có Kafka offset theo
+partition. Chúng thuộc các hệ khác nhau. Commit Kafka offset không tự ghi nhận một transaction SQL.
+
+Bắt đầu bằng [bài CDC sink có test offline](exercises/intermediate/04-cdc-sink/README.md), rồi
+[lab CDC thật](cdc-lab.md). Đơn ban đầu tạo event snapshot; thao tác INSERT/UPDATE/DELETE tạo event
+thay đổi. Consumer phải xử lý cả record có value NULL (tombstone) thay vì coi đó là JSON hỏng.
+
+### Phát lại an toàn
+
+Replay là đọc lại record cũ. Reset offset của consumer đang ghi vào bảng phục vụ có thể khiến trạng
+thái mới bị thay bằng trạng thái cũ. Cách dễ kiểm soát: consumer group mới → bảng đích mới → đọc từ
+đầu lịch sử còn giữ → so với nguồn → chuyển người đọc sau khi bắt kịp.
+
+Nếu chỉ một phần lịch sử còn trong Kafka, không thể dựng toàn bộ trạng thái bằng replay từ earliest.
+Cần snapshot/bản nền phù hợp rồi nối phần thay đổi tiếp sau. Viết rõ điều kiện retention của lab.
+
+### DLQ và schema
+
+DLQ giữ event lỗi kèm topic, partition, offset, lý do và phiên bản schema; hạn chế PII.
+Muốn đưa lại vào xử lý: sửa nguyên nhân, chạy thử trên mẫu, giữ định danh nguồn để dedup, kiểm soát tốc độ
+và đối chiếu kết quả. DLQ không phải nơi bỏ dữ liệu vĩnh viễn rồi vẫn báo pipeline đầy đủ.
+
+Thêm field tùy chọn khác với đổi kiểu field bắt buộc. Thử consumer phiên bản cũ đọc event mới và ngược lại;
+chọn chính sách compatibility theo contract, không chỉ theo việc JSON parse được.
+
+### State và checkpoint
+
+Checkpoint lưu tiến độ/state của processor, khác consumer offset đơn lẻ. Dừng rồi khởi động lại phải
+dùng cùng checkpoint tương thích. Đổi phép aggregate hoặc schema state có thể cần kế hoạch migration,
+bảng đích mới và replay; không xóa checkpoint theo thói quen khi ứng dụng báo lỗi.
+
+**Bài thực hành mở rộng M07**: tạo snapshot hai đơn, update một đơn, delete đơn còn lại, ngắt
+consumer sau DB commit nhưng trước Kafka commit, rồi chạy lại. Đạt khi bảng đích khớp nguồn và
+không đếm trùng. Thêm một event sai schema vào luồng lab, sửa và đưa lại từ DLQ với audit rõ ràng.
+
+## 10. Tài liệu tham khảo
 
 - Apache Kafka Documentation: https://kafka.apache.org/documentation/
 - Confluent Developer, Kafka 101 và các khoá học: https://developer.confluent.io/courses/

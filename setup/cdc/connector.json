@@ -1,0 +1,21 @@
+{
+  "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+  "tasks.max": "1",
+  "database.hostname": "postgres",
+  "database.port": "5432",
+  "database.user": "de",
+  "database.password": "de",
+  "database.dbname": "cdc_lab",
+  "topic.prefix": "olist_cdc",
+  "plugin.name": "pgoutput",
+  "slot.name": "olist_cdc_slot",
+  "publication.name": "olist_cdc_publication",
+  "publication.autocreate.mode": "filtered",
+  "table.include.list": "public.orders",
+  "snapshot.mode": "initial",
+  "tombstones.on.delete": "true",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false"
+}

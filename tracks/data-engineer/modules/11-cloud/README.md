@@ -531,7 +531,37 @@ Lock-in không phải lúc nào cũng xấu: dịch vụ native thường rẻ v
 5. Những thứ hay "quên tắt": NAT gateway, cluster EMR/Dataproc/Redshift provisioned, Synapse dedicated
    pool, Composer/MWAA environment, Elastic IP không gắn máy, snapshot cũ.
 
-## 9. Tài liệu tham khảo
+## 9. Triển khai một luồng hoàn chỉnh và kiểm chứng sau triển khai
+
+### Chọn một cloud và một luồng nhỏ
+
+Đừng bắt đầu bằng cách dựng toàn bộ bảng dịch vụ tương đương. Chọn một luồng: raw → transform →
+bảng KPI → truy vấn. [M11](../../capstone/milestones/m11-cloud-deploy.md) giữ ba lựa chọn;
+[hướng dẫn GCP](cloud-gcp-lab.md) cung cấp đường đi cụ thể từ Parquet local tới Cloud Storage/BigQuery.
+Phần local mô phỏng giúp hiểu code; phần cloud thật cần tài khoản, quyền và kiểm tra billing riêng.
+
+### Chia môi trường và danh tính
+
+Dev/prod dùng tài nguyên và danh tính tách biệt, cấu hình truyền từ bên ngoài.
+Danh tính triển khai được tạo tài nguyên; danh tính pipeline chỉ có quyền dữ liệu/job cần thiết;
+danh tính BI chỉ đọc bảng được phép. Kiểm thử bằng danh tính đó, không dùng owner để chứng minh least privilege.
+
+### Các bước xác nhận sau triển khai
+
+1. Nạp một batch nhỏ, kiểm số dòng, tập khóa, tổng tiền và múi giờ nghiệp vụ.
+2. Chạy lại cùng batch, xác nhận không nhân đôi; làm rõ write-truncate theo toàn bảng khác overwrite partition.
+3. Tạo lỗi có kiểm soát: thiếu quyền ghi hoặc schema sai; xác nhận job fail rõ ràng và bảng đã xuất bản còn dùng được.
+4. Thu thập job ID, log, thời gian chạy, lượng dữ liệu quét, credential được sử dụng; che định danh nhạy cảm khi chia sẻ.
+5. Kiểm quyền BI không đọc raw/PII, không ghi bảng; thử một truy vấn được phép và một thao tác bị từ chối.
+6. Ghi tài nguyên nào do Terraform quản, tài nguyên nào tạo bởi load/query; dọn theo inventory và kiểm tra billing sau đó.
+
+Budget alert là cảnh báo, **không phải trần chi tiêu tự động**. Không hứa “chắc chắn miễn phí” chỉ vì dữ liệu
+nhỏ hoặc có free tier. Ước tính dựa trên region, dịch vụ, dung lượng và tần suất tại thời điểm làm lab.
+
+**Đạt M11** khi người khác dựng lại được luồng từ README, số liệu khớp local, quyền bị giới hạn đúng
+và có bằng chứng dọn tài nguyên. Nếu dùng local, ghi rõ đây là mô phỏng; không ghi đã triển khai cloud thật.
+
+## 10. Tài liệu tham khảo
 
 - roadmap.sh, Data Engineer Roadmap (nhánh Cloud Computing): https://roadmap.sh/data-engineer
 - AWS, Shared Responsibility Model: https://aws.amazon.com/compliance/shared-responsibility-model/

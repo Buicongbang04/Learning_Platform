@@ -737,7 +737,50 @@ trên Oracle/SQL Server vì tốn core license, hãy extract ra lakehouse.
 4. Cho phân tích: chọn grain, xây star schema, quyết định SCD cho từng thuộc tính.
 5. Đo bằng `EXPLAIN ANALYZE` trên dữ liệu có kích thước thật, rồi mới tối ưu.
 
-## 8. Tài liệu tham khảo
+## 8. Dữ liệu đến muộn, sửa lịch sử và chẩn đoán database
+
+### Fact đến trước dimension
+
+Đơn hàng đã tới warehouse nhưng thông tin sản phẩm chưa tới: nếu dùng inner join, đơn sẽ biến mất
+khỏi báo cáo. Giữ fact với một **unknown member** (ví dụ `product_key = 0`), ghi lý do và đưa vào
+danh sách cần xử lý lại. Khi dimension tới, tra lại đúng surrogate key rồi cập nhật fact.
+
+Phân biệt hai trường hợp:
+
+| Trường hợp | Cách xử lý |
+| --- | --- |
+| Chưa biết sản phẩm là ai | Unknown member và hàng đợi xử lý lại |
+| Đã biết mã sản phẩm nhưng thiếu thuộc tính | Có thể tạo inferred member: dòng tạm có mã thật và thuộc tính chưa biết |
+| Có dimension nhưng chưa có phiên bản đúng ngày đơn | Đưa vào kiểm tra lịch sử; không mặc định lấy phiên bản hiện tại |
+
+Ví dụ: seller chuyển từ SP sang RJ ngày 01/03, đơn mua ngày 20/02 tới chậm vào 05/03.
+Fact phải tra phiên bản SP theo **ngày mua**, dù lúc nạp dữ liệu seller đang ở RJ.
+Nếu nhận thông báo muộn rằng seller thực ra chuyển ngày 15/02, cần sửa khoảng hiệu lực SCD2 và
+tra lại các fact bị ảnh hưởng. Kiểm tra mỗi natural key chỉ có một phiên bản hợp lệ tại một thời điểm;
+không có khoảng hiệu lực chồng nhau. Dùng khoảng nửa mở `[valid_from, valid_to)` để tránh trùng ngày biên.
+
+### Khi nghiệp vụ thay đổi
+
+Viết quyết định trước khi sửa bảng: grain có đổi không, báo cáo cũ có phải tính lại không, và ai
+phê duyệt con số. Đổi từ “đơn đã giao” sang “mọi đơn chưa hủy” là thay định nghĩa metric, không chỉ đổi SQL.
+Thử migration trên bản sao, đối chiếu số dòng và tiền theo ngày, rồi mới chuyển người dùng sang bảng mới.
+
+### Truy vấn chậm và deadlock
+
+Đi theo chuỗi bằng chứng: truy vấn nào chậm → plan gì → đọc bao nhiêu dòng → có chờ lock không.
+`EXPLAIN (ANALYZE, BUFFERS)` **thực thi câu lệnh**; với UPDATE/DELETE chỉ thử trên dữ liệu lab
+hoặc trong transaction có chủ đích rollback. So actual rows với estimated rows để phát hiện thống kê lệch.
+
+Deadlock là vòng chờ: transaction A khóa đơn rồi seller, B khóa seller rồi đơn.
+Database hủy một transaction để phá vòng. Giảm nguy cơ bằng thứ tự khóa thống nhất, transaction ngắn;
+retry toàn bộ transaction bị hủy với số lần hữu hạn. Không retry riêng câu SQL cuối nếu các câu trước đã rollback.
+
+**Bài thực hành mở rộng M02**: thêm một fact trước dimension, rồi bổ sung dimension và sửa một mốc
+SCD2 trong quá khứ. Nộp truy vấn chứng minh không mất đơn, tổng tiền giữ nguyên, không chồng phiên bản.
+Trong database lab riêng, tạo hai phiên khóa ngược thứ tự, lưu lỗi deadlock và cách sửa.
+Đạt khi giải thích được vì sao cách sửa ngăn vòng chờ, không chỉ “chạy lại thì hết lỗi”.
+
+## 9. Tài liệu tham khảo
 
 - Ralph Kimball, Margy Ross — *The Data Warehouse Toolkit*, 3rd ed. (Wiley, 2013). Kinh điển về dimensional modeling.
 - Kimball Group — Dimensional Modeling Techniques: https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/

@@ -190,3 +190,15 @@ duyệt mục đích. Về kỹ thuật: tag riêng **content** và **metadata**
 theo purpose (ABAC), log mọi truy cập; ưu tiên pseudonymize và lọc PII trước khi đưa vào tập train; có quy trình
 xử lý yêu cầu từ cơ quan pháp luật (warrant cho nội dung, subpoena cho metadata). Đồng thời kiểm tra luật bang
 (CCPA/CPRA) và GDPR nếu có người dùng EU.
+
+## Đổi khóa HMAC định danh ảnh hưởng gì tới các bảng?
+
+Token của cùng đối tượng đổi theo khóa. Nếu chỉ đổi ở một bảng, các phép join có thể gãy.
+Cần phiên bản khóa, mapping/migration cho bảng liên quan, thời gian chuyển và kiểm chứng, đồng thời
+hạn chế quyền truy cập thông tin liên kết định danh cũ/mới.
+
+## Producer đổi BRL sang cents mà schema vẫn hợp lệ thì ai phát hiện?
+
+Contract và kiểm tra nghiệp vụ phải nêu đơn vị; owner/steward cùng producer/consumer phê duyệt thay đổi.
+Quality gate nên bắt thay đổi chưa hỗ trợ qua đối chiếu/baseline phù hợp. JSON hợp lệ chỉ chứng minh
+cấu trúc, không bảo đảm ý nghĩa dữ liệu còn đúng.

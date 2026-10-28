@@ -169,7 +169,29 @@ Tên cột giữ nguyên bộ gốc, kể cả lỗi chính tả `lenght`.
 | `price` | decimal(10,2) | Giá item, BRL |
 | `freight_value` | decimal(10,2) | Phí vận chuyển phân bổ cho item, BRL |
 
-Grain: một dòng = một đơn vị sản phẩm trong một đơn. Doanh thu đơn = `sum(price + freight_value)`.
+**Grain** là ý nghĩa của một dòng dữ liệu. Ở đây, một dòng = một đơn vị sản phẩm trong một đơn.
+Ví dụ khách mua 2 chiếc áo giống nhau thì có 2 dòng, mỗi dòng có giá và phần phí vận chuyển riêng.
+
+Khi cộng tiền theo `order_id`, cần phân biệt ba con số:
+
+| Con số | Công thức | Ý nghĩa |
+| --- | --- | --- |
+| Tiền hàng (`revenue` trong bài tập dùng `price`) | `SUM(price)` | Giá trị sản phẩm, chưa cộng vận chuyển |
+| Phí vận chuyển (`freight`) | `SUM(freight_value)` | Tổng phí vận chuyển của các item |
+| Tổng tiền hàng và vận chuyển | `SUM(price + freight_value)` | Dùng để đối chiếu với tổng thanh toán của đơn |
+
+Ví dụ một đơn có 2 item, giá lần lượt 100 và 50 BRL, phí vận chuyển lần lượt 10 và 5 BRL:
+tiền hàng = **150**, phí vận chuyển = **15**, tổng tiền hàng và vận chuyển = **165 BRL**.
+Nếu khách trả 40 BRL bằng voucher và 125 BRL bằng thẻ, tổng `payment_value` cũng là 165 BRL.
+
+Trong các bài tập định nghĩa `revenue = SUM(price)`, hãy dùng **150**, không dùng 165.
+Các ví dụ dùng `SUM(payment_value)` đang đo **tổng thanh toán**, gồm cả phần vận chuyển.
+Đây là những chỉ số khác nhau; khi so sánh, cần thống nhất cả trạng thái đơn được tính và khoảng ngày.
+Các chỉ số luyện tập này chưa phải doanh thu kế toán hay doanh thu phí dịch vụ của riêng sàn Olist.
+
+**Tránh cộng trùng khi join**: một đơn có nhiều item và nhiều dòng payment. Hãy cộng item theo đơn,
+cộng payment theo đơn trong hai truy vấn riêng, rồi mới join hai kết quả bằng `order_id`.
+Nếu join trực tiếp hai bảng chi tiết, 2 item × 2 payment sẽ tạo 4 dòng và có thể làm tổng tiền bị nhân lên.
 
 ### `olist_order_payments_dataset.csv`: order_payments
 

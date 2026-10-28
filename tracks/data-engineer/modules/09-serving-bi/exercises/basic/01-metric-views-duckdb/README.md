@@ -37,6 +37,17 @@ chạy `starter/metrics.sql`. Viết lại thân 4 view (giữ nguyên tên view
 
 View 2 và 3 phải dựng trên `fct_order_items`, không lặp lại logic lọc trạng thái.
 
+**Quy ước tiền trong bài này**: `revenue` là **tiền hàng**, chỉ cộng `price`, chưa cộng
+`freight_value`. Ví dụ một đơn có 2 item giá 100 và 50 BRL, phí vận chuyển tổng cộng 15 BRL:
+`orders = 1`, `revenue = 150`, `aov = 150 / 1 = 150 BRL/đơn`.
+Tổng tiền hàng và vận chuyển là 165 BRL, nhưng đó là một chỉ số khác.
+AOV (Average Order Value) ở đây là **tiền hàng trung bình trên mỗi đơn**; đếm đơn bằng
+`COUNT(DISTINCT order_id)`, vì một đơn có thể có nhiều dòng item.
+
+View 2 và 3 tính các đơn còn lại sau khi bỏ `canceled` và `unavailable`, kể cả đơn chưa giao.
+View 4 chỉ tính đơn `delivered` để đo giao trễ. Khi đối chiếu với bài khác chỉ tính đơn đã giao,
+cần thống nhất điều kiện lọc trước; hai tổng khác nhau chưa chắc là lỗi SQL.
+
 ## Tiêu chí đạt
 
 - `fct_order_items` có 7 dòng, không có đơn `o4` (canceled).

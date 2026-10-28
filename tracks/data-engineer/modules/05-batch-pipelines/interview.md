@@ -213,3 +213,15 @@ Một câu trả lời có cấu trúc:
 
 Điểm mấu chốt người phỏng vấn muốn nghe: idempotency và giữ raw data là thứ làm việc sửa sai này
 khả thi và rẻ.
+
+## Vì sao max_active_runs chưa ngăn mọi xung đột backfill?
+
+Nó giới hạn run của DAG tương ứng, không điều phối mọi writer từ DAG/công cụ khác.
+Nếu cùng ghi một partition, cần cơ chế chung như khóa theo dataset/partition hoặc staging theo run
+rồi publish có kiểm soát. Thử chạy đồng thời và đối chiếu dữ liệu sau khi một writer bị ngắt.
+
+## Nguồn đổi kiểu dữ liệu thì retry có giải quyết được không?
+
+Không nếu nguyên nhân là contract không tương thích. Giữ raw, ngừng publish phần lỗi, báo owner,
+sửa mapping/contract/test, rồi chạy lại phạm vi bị ảnh hưởng. Retry hữu hạn phù hợp lỗi tạm thời
+như mạng; retry vô hạn cùng một dòng sai chỉ trì hoãn việc phát hiện mất freshness.

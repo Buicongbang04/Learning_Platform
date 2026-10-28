@@ -220,3 +220,15 @@ distributed SQL). Nếu tải nặng là truy vấn phân tích thì đúng hư�
   PostgreSQL logical replication; mỗi hệ cần quyền và cấu hình riêng từ DBA.
 - **Licensing và tải**: extract từ replica, tránh truy vấn nặng trên Oracle/SQL Server (tính license theo core);
   Aurora tương thích MySQL/PG nên dùng connector tương ứng, có zero-ETL sang Redshift.
+
+## Fact tới trước dimension có nên bị loại bỏ không?
+
+Nếu loại bằng inner join, báo cáo thiếu đơn và tiền. Có thể dùng unknown/inferred member, ghi
+danh sách cần xử lý lại, rồi sửa surrogate key khi dimension tới. Với SCD2 phải tra theo thời điểm
+nghiệp vụ, không mặc định dùng phiên bản đang current ở ngày nạp.
+
+## Deadlock khác truy vấn chậm thế nào?
+
+Deadlock là vòng chờ tài nguyên giữa các transaction; database phải hủy một transaction.
+Truy vấn chậm có thể do đọc nhiều dữ liệu hoặc chờ lock mà chưa tạo vòng.
+Xem log/plan/lock, thống nhất thứ tự khóa và retry toàn transaction đã rollback với giới hạn.

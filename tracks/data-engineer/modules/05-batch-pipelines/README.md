@@ -585,7 +585,47 @@ bảng **quarantine** (dead-letter) kèm lý do, và dừng pipeline nếu tỉ 
 Chiến lược **write-audit-publish**: ghi vào bảng tạm → chạy kiểm tra → chỉ khi đạt mới swap/publish
 sang bảng người dùng đọc.
 
-## 8. Tài liệu tham khảo
+## 8. Nguồn thay đổi, nhiều pipeline và backfill đồng thời
+
+### CDC là một luồng cần kiểm chứng
+
+Watermark hỏi “bản ghi nào có thời gian sửa lớn hơn mốc đã lưu?”. Log-based CDC đọc lịch sử thay đổi
+của database, nên lấy được cả xóa. Học theo hai bước:
+[bài áp dụng CDC vào bảng đích](../07-streaming-kafka/exercises/intermediate/04-cdc-sink/README.md)
+để hiểu logic; sau đó chạy [lab PostgreSQL → Debezium → Kafka](../07-streaming-kafka/cdc-lab.md).
+Lab có lệnh tạo/sửa/xóa đơn và consumer ghi đích, không dùng producer giả để thay cho CDC.
+
+### Chia trách nhiệm giữa các pipeline
+
+Pipeline raw xuất bản một partition kèm `run_id`, ngày nghiệp vụ, số dòng, tổng kiểm tra và trạng thái
+`published`. Pipeline mart chỉ đọc bản đã xuất bản; file vừa xuất hiện chưa có nghĩa writer đã ghi xong.
+Một manifest hoặc bản ghi trạng thái giúp phân biệt “đang ghi” với “sẵn sàng đọc”.
+
+Nếu raw thất bại, downstream phải chờ hoặc fail rõ ràng. Không chạy mart với dữ liệu cũ rồi báo thành công.
+Khi dữ liệu nguồn tới muộn, xác định partition và bảng phụ thuộc cần tính lại, không mặc định chạy lại mọi thứ.
+
+### Backfill không được ghi đè lẫn nhau với job thường ngày
+
+Giả sử job thường ngày đang ghi 10/03, backfill cũng gồm 10/03. Hai job có thể đều DELETE rồi INSERT,
+gây dữ liệu trộn hoặc mất. `max_active_runs` của một DAG không khóa writer thuộc DAG hoặc công cụ khác.
+
+Chọn một cơ chế: khóa theo dataset + partition, hàng đợi một writer, hoặc dựng staging riêng theo
+`run_id` rồi xuất bản bằng một thao tác có kiểm soát. Mọi writer cùng đích phải tuân thủ cơ chế đó.
+Khi job chết, khóa phải có cách thu hồi an toàn; không xóa khóa còn được writer sống giữ.
+
+### Runbook khi nguồn đổi schema
+
+1. Giữ raw gốc, ghi schema quan sát được và ngày bắt đầu thay đổi.
+2. Phân loại: thêm cột hợp lệ, đổi kiểu cần chuyển đổi, hay thiếu cột bắt buộc.
+3. Dừng xuất bản phần lỗi; cảnh báo người sở hữu nguồn và dataset.
+4. Sửa contract, transform và test trên bản sao; đối chiếu các ngày bị ảnh hưởng.
+5. Chạy lại đúng partition, cập nhật trạng thái xuất bản, rồi cho downstream chạy tiếp.
+
+**Bài thực hành mở rộng M05**: cố ý đổi `payment_value` thành chuỗi có ký hiệu tiền và tạo hai lần
+chạy cùng ngày. Nộp log chứng minh chỉ một writer xuất bản, dòng lỗi không đi vào mart, chạy lại sau
+khi sửa khớp full rebuild. Ghi người xử lý, phạm vi dữ liệu và điều kiện cho pipeline chạy lại.
+
+## 9. Tài liệu tham khảo
 
 - roadmap.sh, Data Engineer: <https://roadmap.sh/data-engineer>
 - Apache Airflow docs, Core Concepts: <https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/index.html>

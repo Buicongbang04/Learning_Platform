@@ -14,12 +14,17 @@ trong README portfolio, đúng thứ nhà tuyển dụng hỏi: "bạn đã làm
 
 ## Việc cần làm
 
+Nếu chọn GCP, dùng [hướng dẫn từng bước](../../modules/11-cloud/cloud-gcp-lab.md) và mẫu
+`setup/cloud-gcp/`: chuẩn bị Parquet local → tạo bucket/dataset/danh tính bằng Terraform → load và
+transform BigQuery → đối chiếu KPI → thử quyền BI → dọn tài nguyên. Mẫu chỉ cho dữ liệu giả của lab;
+cloud thật cần tài khoản/billing và chưa được chứng minh miễn phí bằng việc chạy local.
+
 1. **Chuẩn bị tài khoản an toàn** (làm trước mọi thứ):
    - Bật MFA cho tài khoản root/owner, không tạo access key cho root.
    - Tạo **budget alert 5 USD** (AWS Budgets / Azure Cost Management / GCP Budgets) gửi email ở 50%, 80%, 100%.
    - Chọn **một region** và chỉ làm ở đó. Ghi lại region trong `project/infra/cloud/README.md`.
    - Đăng nhập CLI bằng SSO/`gcloud auth application-default login`/`az login`; không lưu access key trong repo.
-2. **Chọn đường đi rẻ nhất** (gợi ý, đều nằm trong free tier/credit nếu dữ liệu nhỏ):
+2. **Chọn đường đi nhỏ, dễ kiểm soát chi phí** (kiểm điều kiện free tier/credit tại thời điểm làm):
 
    | Cloud | Lake | Biến đổi | Truy vấn |
    | --- | --- | --- | --- |

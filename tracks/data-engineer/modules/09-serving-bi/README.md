@@ -482,7 +482,38 @@ def call_with_retry(fn, *args, max_retries=5, base=0.5, sleep=time.sleep):
 
 Bạn sẽ dựng một job hoàn chỉnh như vậy với "CRM giả" ở bài intermediate/02.
 
-## 8. Tài liệu tham khảo
+## 8. Kiểm chứng metric, tốc độ và quyền của người dùng thật
+
+### Định nghĩa metric cũng cần phiên bản
+
+Mỗi metric có tên, công thức, grain, đơn vị, ngày nghiệp vụ, trạng thái được tính, owner và ngày
+có hiệu lực. Ví dụ `item_revenue_v1` chỉ tính tiền hàng đơn delivered theo ngày mua.
+Nếu đổi sang mọi đơn chưa hủy, tạo phiên bản hoặc thông báo migration; đừng âm thầm sửa dashboard
+khi người dùng đang so sánh với tháng trước.
+
+Dựng bộ dữ liệu chuẩn có đơn nhiều item, nhiều payment, đơn hủy, ngày không có đơn và đơn thiếu
+ngày giao. Ghi kết quả kỳ vọng do người học tính tay, rồi đối chiếu SQL/API/dashboard trên cùng phạm vi.
+Với tỷ lệ giao trễ, thống nhất cách xử lý đơn delivered nhưng thiếu ngày giao: báo riêng hay loại khỏi
+mẫu số. Không để SQL vô tình coi “chưa biết” là “giao đúng hạn”.
+
+### Đo tải và cache
+
+Ghi query, số client, số request, khoảng thời gian, p50/p95, tỷ lệ lỗi, cache hit rate và freshness.
+Tách lần chạy cache lạnh khỏi cache nóng. Một dashboard trả nhanh nhưng dùng dữ liệu hết hạn vẫn
+không đạt yêu cầu. Benchmark trên dữ liệu giả chỉ áp dụng cho quy mô và môi trường đã đo.
+
+### Phân quyền phải đi tới tầng thực thi
+
+Hai tài khoản seller A/B phải chỉ thấy dữ liệu của mình qua cả dashboard lẫn API. Filter có thể sửa
+trên URL không thay thế quyền ở backend/database. Nếu cache dùng chung, cache key phải phân biệt
+phạm vi quyền hiệu lực, tenant và phiên bản dữ liệu; nếu không seller A có thể nhận kết quả của B.
+
+**Bài thực hành mở rộng M09**: dùng ít nhất hai danh tính, thử cả truy vấn hợp lệ và truy vấn cố
+đọc seller khác. Chạy tải trên endpoint local bằng một số client hữu hạn, đặt timeout, ghi log lỗi.
+Đạt khi không lộ dữ liệu chéo, metric khớp bộ chuẩn và độ trễ/freshness đạt mục tiêu bạn đã công bố.
+Nộp thêm kế hoạch đổi metric v1 → v2: báo người dùng, đối chiếu, ngày chuyển và cách quay lại.
+
+## 9. Tài liệu tham khảo
 
 - Joe Reis, Matt Housley. *Fundamentals of Data Engineering*, chương 9 "Serving Data for Analytics, Machine
   Learning, and Reverse ETL". O'Reilly, 2022.

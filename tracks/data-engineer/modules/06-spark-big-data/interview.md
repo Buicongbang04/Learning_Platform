@@ -183,3 +183,15 @@ cardinality cao, streaming ghi micro-batch, 200 shuffle partition × nhiều th�
 Xử lý: `repartition` theo cột partition trước khi ghi, `coalesce` khi ghi ít dữ liệu,
 `spark.sql.files.maxRecordsPerFile`, chạy job compaction định kỳ (Delta `OPTIMIZE`), chọn cột partition
 thô hơn (tháng thay vì giờ).
+
+## Tăng RAM executor có sửa lỗi driver chết khi collect không?
+
+Không xử lý nguyên nhân đó. collect/toPandas đưa dữ liệu về driver; phải hạn chế kết quả lấy về,
+ghi phân tán hoặc aggregate trước. Phân biệt log driver và executor, đo partition/shuffle/spill
+rồi mới quyết định điều chỉnh tài nguyên ở đâu.
+
+## Job đã tắt thì xem lại Spark UI bằng cách nào?
+
+Bật event log trước khi chạy và lưu ở nơi History Server đọc được. Event log không được bật
+thì không thể mặc định dựng lại mọi chi tiết UI sau sự cố. Khi benchmark, lưu cả cấu hình/input và
+kết quả đối chiếu; một ảnh thời gian nhanh hơn chưa chứng minh tối ưu đúng.

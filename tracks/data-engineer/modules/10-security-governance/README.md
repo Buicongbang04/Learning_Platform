@@ -486,7 +486,45 @@ thu thập, làm sạch, kiểm tra bias, tính đại diện, và tài liệu k
 | PCI DSS | Dữ liệu thẻ thanh toán | Tokenization, mã hoá, thu hẹp scope |
 | HIPAA | Dữ liệu y tế (Mỹ) | Encryption, access control, audit, de-identification |
 
-## 8. Tài liệu tham khảo
+## 8. Vận hành quyền, secret và data contract
+
+### Ai chịu trách nhiệm khi dữ liệu sai?
+
+Mỗi dataset cần **owner** chịu trách nhiệm quyết định nghiệp vụ, **steward** giữ định nghĩa/chất
+lượng và người vận hành pipeline. Trong nhóm nhỏ một người có thể giữ nhiều vai trò, nhưng đầu mối
+phải rõ. Catalog tối thiểu ghi: mục đích, grain, PII, owner, consumer, nguồn, freshness, retention
+và cách liên hệ khi contract thay đổi.
+
+### Thay đổi contract có quy trình
+
+Ví dụ backend đổi `payment_value` từ BRL sang centavos: kiểu dữ liệu vẫn là số nhưng ý nghĩa thay
+đổi 100 lần. Contract phải nêu đơn vị, khóa, trường bắt buộc và quy tắc nghiệp vụ.
+Producer đề xuất phiên bản → xác định consumer bị ảnh hưởng → test hai phiên bản trên mẫu →
+chọn thời gian chuyển → theo dõi và giữ phương án quay lại. Field bị bỏ hoặc đổi ý nghĩa cần đánh
+giá tương thích; không chỉ kiểm JSON Schema.
+
+### Secret và key có vòng đời
+
+Không in secret vào log/DLQ. Nạp secret từ nơi quản lý cấu hình bí mật của môi trường chạy; dùng
+credential ngắn hạn khi có thể. Rotation cần chứng minh job tiếp tục đọc/ghi được và credential cũ
+không còn dùng được sau thời gian chuyển.
+
+Với dữ liệu đã mã hóa, lưu phiên bản key đi kèm ciphertext; giữ key cũ cho dữ liệu còn cần giải mã,
+hoặc mã hóa lại trước khi thu hồi. Với HMAC định danh, đổi key làm token đổi: phải cập nhật bảng
+liên quan và khả năng join, không thay biến môi trường rồi giả định mọi bảng vẫn nối được.
+
+### Rà soát quyền và bằng chứng
+
+Lập ma trận danh tính × dataset × read/write/admin, thử quyền cho phép lẫn quyền bị từ chối.
+Log audit ghi ai làm gì, lúc nào, với mục đích nào; hạn chế dữ liệu nhạy cảm trong chính audit.
+Khi người dùng đổi nhóm hoặc nghỉ việc, thu hồi quyền và kiểm lại credential đang tồn tại.
+
+**Bài thực hành mở rộng M10**: thay một secret DB của lab, test trước/trong/sau chuyển; lập hai
+phiên bản contract đổi đơn vị tiền và chứng minh quality gate chặn bản chưa được hỗ trợ.
+Nộp owner catalog, ma trận quyền, audit đã che dữ liệu nhạy cảm và kế hoạch rollback.
+Đạt khi quyền cũ bị thu hồi, pipeline dùng quyền mới và không có secret trong repo/log.
+
+## 9. Tài liệu tham khảo
 
 - roadmap.sh, Data Engineer: https://roadmap.sh/data-engineer
 - OWASP, Authentication và Authorization Cheat Sheets: https://cheatsheetseries.owasp.org/

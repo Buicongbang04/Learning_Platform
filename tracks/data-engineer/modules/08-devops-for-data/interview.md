@@ -192,3 +192,14 @@ song trên cùng input, so sánh output (data diff) trước khi chuyển hẳn 
    upsert) để retry an toàn.
 7. Giám sát freshness, volume, duration, error rate; Sentry cho exception; alert có runbook.
 8. Rollback: deploy lại image tag cũ (revert commit trong GitOps).
+
+## Rollback code có tự sửa dữ liệu đã bị phiên bản lỗi ghi sai không?
+
+Không. Nó chỉ đưa cách xử lý về phiên bản trước. Cần xác định partition bị ảnh hưởng, dựng lại hoặc
+restore dữ liệu, kiểm tập khóa/tổng tiền và cho downstream cập nhật. Runbook phải mô tả cả code lẫn data.
+
+## Backup thành công đã đủ chứng minh đạt RPO/RTO chưa?
+
+Chưa. Phải thử restore, đo mất bao nhiêu khoảng dữ liệu và mất bao lâu tới lúc người dùng dùng lại.
+RPO là mục tiêu lượng dữ liệu có thể mất theo thời gian; RTO là mục tiêu thời gian phục hồi.
+Kiểm cả schema, quyền và dependency; file backup tồn tại chưa chứng minh nó đọc được.

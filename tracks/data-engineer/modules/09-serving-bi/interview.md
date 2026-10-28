@@ -201,3 +201,14 @@ Lakehouse/Warehouse: raw → staging → marts (dbt)
 serving có test reconcile và freshness; API có AuthZ theo seller và cache có version; Reverse ETL chỉ đẩy field
 cần thiết và tôn trọng consent; lineage để biết thay đổi model ảnh hưởng dashboard/API/CRM nào; chi phí kiểm soát
 bằng pre-aggregation và cache.
+
+## Cache key chỉ có câu SQL có đủ khi mỗi seller có quyền khác nhau không?
+
+Chưa chắc. Kết quả còn phụ thuộc tenant, danh tính/phạm vi quyền và phiên bản dữ liệu.
+Nếu dùng chung key sai, người sau có thể nhận dữ liệu của người trước. Kiểm quyền ở backend/database
+và test hai danh tính đọc chéo; filter trên giao diện không thay thế phân quyền.
+
+## Đổi metric từ đơn đã giao sang mọi đơn chưa hủy có chỉ cần sửa WHERE không?
+
+SQL là một phần. Cần định nghĩa phiên bản, thông báo consumer, chọn ngày hiệu lực, đối chiếu v1/v2
+và giữ cách kiểm lại lịch sử. Nếu âm thầm thay WHERE, dashboard có thể thay nghĩa dù tên cột vẫn như cũ.
