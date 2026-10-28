@@ -87,6 +87,7 @@ flowchart TD
     M7 --> M9[M09 Dashboard Metabase]
     M8 --> M9
     M9 --> M10[M10 Governance]
+    M8 -.-> M11[M11 Lên cloud, tuỳ chọn]
 ```
 
 | Milestone | Sau module | Dùng lại | Tạo ra |
@@ -101,6 +102,7 @@ flowchart TD
 | [M08](milestones/m08-cicd-terraform.md) | 08 DevOps | toàn bộ code | GitHub Actions, Terraform tạo bucket/user MinIO |
 | [M09](milestones/m09-dashboard.md) | 09 Serving & BI | `dw`, gold, `order_status_live` | dashboard Metabase, app Streamlit |
 | [M10](milestones/m10-governance.md) | 10 Security & Governance | toàn bộ | data quality check, lineage, masking PII, role |
+| [M11](milestones/m11-cloud-deploy.md) (tuỳ chọn) | 11 Cloud | M04, M08 | lake + warehouse trên free tier một cloud, hoặc LocalStack/MinIO |
 
 ## Cấu trúc code
 

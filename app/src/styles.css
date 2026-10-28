@@ -268,11 +268,16 @@ body {
   color: var(--muted);
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
 }
 .prose-md td {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border);
   text-wrap: pretty;
+  min-width: 8rem;
+}
+.prose-md td:first-child {
+  min-width: 6rem;
 }
 .prose-md hr {
   border: 0;

@@ -227,3 +227,23 @@ Hai truy vấn khác nhau nên tách store theo vai trò:
 Nguồn chung là topic Kafka `order-events`; mọi consumer idempotent (khoá là `order_id + event_time + type`).
 Cần nêu đánh đổi: dữ liệu trùng lặp ở nhiều store, độ trễ đồng bộ, chi phí vận hành nhiều hệ thống so với giữ
 PostgreSQL + partitioning nếu khối lượng nhỏ hơn dự kiến.
+
+## Azure Cosmos DB có năm consistency level. Bạn chọn mức nào cho giỏ hàng và cho bảng xếp hạng sản phẩm? Vì sao?
+
+- **Giỏ hàng**: **Session** (mặc định). Người dùng phải thấy ngay món vừa thêm (read-your-writes) và không thấy
+  giỏ "lùi" về trạng thái cũ (monotonic reads), nhưng không cần người khác thấy tức thì. Strong là thừa và làm
+  tăng độ trễ ghi khi có nhiều region.
+- **Bảng xếp hạng sản phẩm**: **Eventual** hoặc **Consistent prefix**. Chậm vài giây không sao; consistent prefix
+  tránh thấy cập nhật sai thứ tự. Rẻ RU nhất.
+- Nêu thêm: **Bounded staleness** khi nghiệp vụ cần biết trễ tối đa (vd. tồn kho hiển thị trễ không quá 5 giây);
+  **Strong** chỉ khi thật sự cần linearizable (số dư, đặt chỗ duy nhất) và chấp nhận chi phí. Ánh xạ về lý thuyết:
+  đây chính là phổ consistency model và đánh đổi EL/EC của PACELC.
+
+## Nguồn dữ liệu là CouchDB (app mobile offline-first). Bạn nạp tăng dần vào lakehouse thế nào?
+
+Dùng **`_changes` feed** với tham số `since=<last_seq>` (lưu checkpoint `last_seq` sau mỗi lần nạp thành công),
+`include_docs=true` để lấy document. Ghi vào bronze dạng append (giữ `_id`, `_rev`, `seq`), rồi silver **MERGE theo
+`_id`**, lấy revision mới nhất; document có `_deleted: true` thì xoá mềm/xoá ở silver. Lưu ý: replication
+master-master nên có thể có **conflict revision** (`conflicts=true` để thấy), cần quy tắc hoà giải hoặc giữ revision
+thắng của CouchDB; feed có thể trả lại thay đổi đã thấy nên MERGE phải idempotent; với khối lượng lớn dùng
+`feed=continuous` hoặc connector (Kafka Connect) thay vì polling.

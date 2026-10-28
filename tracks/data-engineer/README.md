@@ -4,7 +4,7 @@ Lộ trình tự học Data Engineer bám theo [roadmap.sh/data-engineer](https:
 thiết kế cho người đã có nền **Data Analyst / Data Scientist**: bạn đã biết SQL, pandas, thống kê
 cơ bản; giờ cần học cách **xây và vận hành hệ thống dữ liệu** chứ không chỉ phân tích dữ liệu.
 
-Lộ trình gồm 10 module. Mỗi module có lý thuyết (`README.md`), câu hỏi phỏng vấn (`interview.md`),
+Lộ trình gồm 11 module. Mỗi module có lý thuyết (`README.md`), câu hỏi phỏng vấn (`interview.md`),
 bài tập 3 mức Basic → Intermediate → Advanced có test tự chấm, và một milestone của dự án capstone
 [Olist Data Platform](capstone/README.md).
 
@@ -25,18 +25,21 @@ flowchart TD
     M07 --> M09[09 Data Serving & BI]
     M08 --> M09
     M09 --> M10[10 Security<br/>& Governance]
+    M08 --> M11[11 Cloud cho DE<br/>AWS, Azure, GCP]
+    M04 -.-> M11
 
     M03 -. tuỳ chọn, học song song .-> M05
 
     classDef core fill:#dbeafe,stroke:#2563eb
     classDef branch fill:#fef3c7,stroke:#d97706
     class M01,M02,M04,M05,M07,M09,M10 core
-    class M03,M06,M08 branch
+    class M03,M06,M08,M11 branch
 ```
 
 **Xanh** là trục chính, nên học theo thứ tự. **Vàng** là nhánh có thể học song song hoặc lùi lại
 nếu gấp: NoSQL (03) ít gặp hơn trong phỏng vấn DE junior so với SQL/warehouse; Spark (06) và
-DevOps (08) quan trọng nhưng không chặn việc học Airflow/Kafka.
+DevOps (08) quan trọng nhưng không chặn việc học Airflow/Kafka. Cloud (11) học sau 08 vì dùng lại Terraform,
+nhưng nên học trước khi đi phỏng vấn: hầu hết vị trí DE làm trên AWS, Azure hoặc GCP.
 
 ## Các module
 
@@ -52,6 +55,7 @@ DevOps (08) quan trọng nhưng không chặn việc học Airflow/Kafka.
 | 08 | DevOps cho Data | Đóng gói, tự động hoá, hạ tầng như code | Docker, Kubernetes, CI/CD, Terraform, monitoring, testing | tuỳ bài |
 | 09 | Data Serving & BI | Đưa dữ liệu tới người dùng cuối | Semantic layer, Metabase, Streamlit, Reverse ETL | `postgres`, `metabase` |
 | 10 | Security & Governance | Dữ liệu đúng, an toàn, tuân thủ | AuthN/AuthZ, encryption, masking, data quality, lineage, GDPR/LGPD | `postgres` |
+| 11 | Cloud cho Data Engineer | Chọn và ghép dịch vụ cloud cho data platform, kiểm soát chi phí | Dịch vụ tương đương AWS/Azure/GCP, IAM, VPC, FinOps, S3 bằng boto3 | `localstack` hoặc `minio` |
 
 Bật dịch vụ theo module: `docker compose -f setup/docker-compose.yml up -d <tên dịch vụ>`.
 Tắt khi học xong để tiết kiệm RAM: `docker compose -f setup/docker-compose.yml down`.

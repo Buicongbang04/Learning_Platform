@@ -54,6 +54,7 @@ SERVICES = {
     "kafka": ("KAFKA_HOST", "localhost", "KAFKA_PORT", 9094),
     "metabase": ("METABASE_HOST", "localhost", "METABASE_PORT", 3000),
     "airflow": ("AIRFLOW_HOST", "localhost", "AIRFLOW_PORT", 8080),
+    "localstack": ("LOCALSTACK_HOST", "localhost", "LOCALSTACK_PORT", 4566),
 }
 
 def _port(name: str) -> int:
@@ -67,6 +68,7 @@ NEO4J_URI = os.environ.get("NEO4J_URI", f"bolt://localhost:{_port('neo4j')}")
 NEO4J_AUTH = ("neo4j", os.environ.get("NEO4J_PASSWORD", "password123"))
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", f"http://localhost:{_port('minio')}")
 MINIO_AUTH = ("minioadmin", "minioadmin")
+LOCALSTACK_ENDPOINT = os.environ.get("LOCALSTACK_ENDPOINT", f"http://localhost:{_port('localstack')}")
 KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "localhost:9094")
 
 

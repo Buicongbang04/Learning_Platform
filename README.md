@@ -50,8 +50,8 @@ Tiến độ lưu ở `progress.json` ở gốc repo. Commit tệp này để gi
 | --- | --- |
 | `app/` | Web app học tập (Vite, React, TypeScript, Tailwind v4) |
 | `tracks/` | Nội dung theo track. Quy ước ở [CONTENT_SPEC.md](CONTENT_SPEC.md) |
-| `tracks/data-engineer/` | 10 module, 81 bài tập, capstone Olist Data Platform |
-| `setup/` | Docker Compose cho Postgres, MongoDB, Redis, Cassandra, Neo4j, MinIO, Kafka, Metabase, Airflow |
+| `tracks/data-engineer/` | 11 module, 89 bài tập, capstone Olist Data Platform |
+| `setup/` | Docker Compose cho Postgres, MongoDB, Redis, Cassandra, Neo4j, MinIO, Kafka, Metabase, LocalStack, Airflow |
 | `data/` | Sinh dữ liệu Olist giả lập, tải bộ thật, giả lập event streaming |
 | `testkit.py` | Tiện ích test dùng chung cho mọi bài tập |
 | `progress.json` | Tiến độ học (app tự tạo) |

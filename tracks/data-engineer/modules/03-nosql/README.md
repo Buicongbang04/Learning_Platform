@@ -18,13 +18,14 @@ bảo của RDBMS để đổi lấy throughput và availability.
 
 | Họ | Mô hình dữ liệu | Đại diện | Mạnh ở | Yếu ở |
 | --- | --- | --- | --- | --- |
-| Document | Document JSON/BSON lồng nhau, gom theo collection | MongoDB, Couchbase, Firestore | Schema linh hoạt, đọc cả aggregate một lần | JOIN nhiều collection, transaction đa document (có nhưng đắt) |
+| Document | Document JSON/BSON lồng nhau, gom theo collection | MongoDB, Couchbase, CouchDB, Firestore | Schema linh hoạt, đọc cả aggregate một lần | JOIN nhiều collection, transaction đa document (có nhưng đắt) |
 | Wide-column | Bảng với partition key + clustering key, mỗi partition là một dãy hàng có thứ tự | Cassandra, ScyllaDB, HBase, Bigtable | Ghi cực nhanh, scale tuyến tính, multi-DC | Truy vấn phải biết trước, không JOIN, không aggregate tự do |
 | Key-value | Map `key -> value` (value có thể là cấu trúc) | Redis, DynamoDB, Memcached, etcd | Độ trễ dưới mili giây, cache, counter, session | Không truy vấn theo giá trị, dữ liệu thường nằm trong RAM |
 | Graph | Node, relationship, property | Neo4j, Amazon Neptune, TigerGraph | Đi quan hệ nhiều bước (friends-of-friends, gợi ý, fraud) | Aggregate trên toàn tập dữ liệu, scale ngang khó |
 
 Ngoài ra có **search engine** (Elasticsearch/OpenSearch: inverted index, full-text, log analytics),
 **time-series** (InfluxDB, TimescaleDB) và **vector database** (pgvector, Milvus) — thường được xếp gần NoSQL.
+Một số dịch vụ là **multi-model**, một engine phục vụ nhiều họ qua các API khác nhau (Azure Cosmos DB, xem phần 2).
 
 ### Dấu hiệu nên cân nhắc NoSQL
 
@@ -129,6 +130,23 @@ NoSQL kiểu AP thường được mô tả là **BASE**: Basically Available, S
 với ACID của RDBMS. Ranh giới ngày càng mờ: MongoDB có transaction đa document (từ 4.0), DynamoDB có
 `TransactWriteItems`, Cassandra có lightweight transaction (`IF NOT EXISTS`, dùng Paxos, đắt).
 
+### Ví dụ: năm consistency level của Azure Cosmos DB
+
+**Azure Cosmos DB** là database managed, phân tán toàn cầu, **multi-model**: cùng một engine nhưng có nhiều API
+(NoSQL/document, MongoDB, Cassandra, Gremlin cho graph, Table cho key-value, và PostgreSQL qua Citus). Điểm đáng
+học là nó biến phổ consistency ở trên thành năm mức chọn được theo account (ghi đè được theo request):
+
+| Level | Đảm bảo | Đánh đổi |
+| --- | --- | --- |
+| Strong | Linearizable, đọc luôn thấy bản mới nhất | Độ trễ ghi cao (chờ nhiều region), throughput đọc thấp nhất |
+| Bounded staleness | Đọc trễ tối đa K phiên bản hoặc T giây | Gần strong, phù hợp ứng dụng đa region cần biết trễ tối đa |
+| Session (mặc định) | Read-your-writes, monotonic reads trong một session | Cân bằng tốt nhất cho phần lớn ứng dụng |
+| Consistent prefix | Không bao giờ thấy ghi sai thứ tự | Có thể đọc cũ |
+| Eventual | Chỉ hội tụ cuối cùng | Rẻ và nhanh nhất |
+
+Với DE: tính tiền theo **Request Unit (RU/s)**, mức consistency mạnh hơn tốn RU hơn khi đọc; partition key chọn
+như DynamoDB; lấy dữ liệu ra phân tích bằng **change feed** (CDC) hoặc analytical store/mirroring sang Fabric.
+
 ## 3. Document store: MongoDB
 
 ### Mô hình
@@ -219,6 +237,15 @@ db.sessions.create_index("created_at", expireAfterSeconds=3600)  # TTL index
   đều, và có mặt trong phần lớn truy vấn (nếu không, query phải scatter-gather tới mọi shard). Tránh key tăng
   dần đơn điệu (ObjectId, timestamp) với range sharding vì mọi ghi dồn vào một shard ("hot shard"); dùng
   hashed sharding hoặc compound key.
+
+### CouchDB: document store hướng replication
+
+**Apache CouchDB** cũng lưu JSON document nhưng triết lý khác MongoDB: API là **HTTP/REST** thuần, truy vấn qua
+view MapReduce hoặc Mango query, mỗi document có `_rev` (MVCC, ghi phải gửi đúng revision hiện tại). Điểm nổi bật là
+**replication master-master giữa mọi node**, kể cả thiết bị offline: PouchDB trong trình duyệt/mobile sync hai chiều
+với CouchDB khi có mạng (offline-first). Xung đột không bị chặn mà được lưu lại, chọn một revision "thắng" xác định,
+ứng dụng tự hoà giải. Với DE, nguồn CouchDB được lấy ra qua **`_changes` feed** (giống CDC, có `since` sequence để
+nạp tăng dần); cần xử lý document đã xoá (`_deleted: true`) và các revision xung đột.
 
 ## 4. Wide-column store: Cassandra
 
@@ -465,6 +492,14 @@ graph, network/IT dependency, lineage dữ liệu. Thư viện **Graph Data Scie
 similarity. Hạn chế: aggregate toàn cục và scale ghi ngang kém hơn; với analytics lớn, thường xuất dữ liệu ra
 Spark GraphFrames hoặc dùng warehouse.
 
+### Graph managed: Amazon Neptune
+
+**Amazon Neptune** là graph database managed của AWS, hỗ trợ cả **property graph** (truy vấn bằng Gremlin hoặc
+openCypher) lẫn **RDF** (SPARQL, cho knowledge graph/ontology). Storage tự sao chép 6 bản qua 3 AZ, tối đa 15 read
+replica; có Neptune Serverless và Neptune Analytics (đồ thị in-memory cho thuật toán). Khi nào chọn thay Neo4j: đã ở
+AWS, không muốn tự vận hành cluster, cần RDF. Nạp dữ liệu số lượng lớn bằng **bulk loader** đọc CSV/RDF từ S3 (DE
+thường xuất node/edge từ lakehouse ra S3 rồi gọi loader); lấy thay đổi ra bằng **Neptune Streams**.
+
 ## 7. Chọn database theo bài toán
 
 ### Search engine: Elasticsearch / OpenSearch
@@ -530,6 +565,9 @@ Data Engineer hiếm khi thiết kế DB vận hành một mình, nhưng phải:
 - Redis docs, Data types: https://redis.io/docs/latest/develop/data-types/
 - Redis, Caching patterns: https://redis.io/solutions/caching/
 - Neo4j Cypher Manual: https://neo4j.com/docs/cypher-manual/current/
+- Azure Cosmos DB, Consistency levels: https://learn.microsoft.com/en-us/azure/cosmos-db/consistency-levels
+- Apache CouchDB docs, Replication: https://docs.couchdb.org/en/stable/replication/intro.html
+- Amazon Neptune User Guide: https://docs.aws.amazon.com/neptune/latest/userguide/intro.html
 - Google, Bigtable paper: https://research.google/pubs/bigtable-a-distributed-storage-system-for-structured-data/
 - Amazon, Dynamo paper: https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf
 - AWS DynamoDB, Best practices for designing and architecting: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html

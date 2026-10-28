@@ -196,3 +196,18 @@ người dùng (BI vận hành hằng ngày, DS dự báo giao hàng trễ), đ�
 
 Nêu đánh đổi: lakehouse rẻ và mở nhưng tự vận hành nhiều hơn; warehouse managed nhanh triển khai nhưng chi phí và
 lock-in cao hơn. Với đội nhỏ, bắt đầu đơn giản và để ngỏ đường nâng cấp.
+
+## "Metadata-first architecture" là gì? Vì sao nó quan trọng với lakehouse nhiều engine?
+
+Là thiết kế nền tảng quanh lớp metadata (catalog, schema, snapshot, thống kê, quyền, lineage) thay vì quanh một
+engine. Dữ liệu là tệp mở (Parquet + Iceberg/Delta) trên object storage; Spark, Trino, Snowflake, DuckDB đều đọc qua
+cùng catalog (Iceberg REST/Polaris, Unity Catalog, Glue). Lợi ích: đổi hoặc thêm engine không phải copy dữ liệu,
+quyền và lineage định nghĩa một lần, pipeline/test sinh tự động từ metadata. Đánh đổi: catalog thành điểm trọng
+yếu cần HA và backup, và metadata phải được giữ đúng (owner, mô tả, contract) nếu không lợi ích mất hết.
+
+## Khi nào bạn chọn kiến trúc serverless (Lambda/Athena/BigQuery) và khi nào không?
+
+Chọn khi tải nhỏ hoặc thất thường, đội ít người, cần lên nhanh: trả theo dùng, co về 0, không vận hành cluster.
+Không chọn (hoặc chuyển sang capacity/reserved, cluster) khi tải lớn và đều (trả theo byte quét/invocation đắt
+hơn), job chạy lâu hoặc cần nhiều bộ nhớ (Lambda 15 phút), cần độ trễ ổn định không cold start, hoặc muốn tránh
+lock-in. Luôn đặt guardrail chi phí: quota, `maximum_bytes_billed`, cảnh báo ngân sách, partition/cluster bảng.

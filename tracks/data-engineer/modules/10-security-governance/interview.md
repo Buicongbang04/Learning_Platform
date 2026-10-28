@@ -172,3 +172,21 @@ Nói ngắn: mọi thứ module này dạy (quality, lineage, catalog) trở th�
 4. **Khắc phục gốc**: vì sao job ghi ra bucket public? Thêm guardrail như IaC policy (OPA/Conftest, AWS SCP
    cấm public bucket), PII scan cho bucket, least privilege cho job export.
 5. **Postmortem** không đổ lỗi, có action item đo được.
+
+## Data interoperability nghĩa là gì trong một data platform? Bạn đảm bảo nó bằng những gì?
+
+Dữ liệu và metadata trao đổi được giữa hệ thống, engine, team mà không phải viết lại hay convert tay. Các lớp:
+**định dạng mở** (Parquet/Avro, Iceberg/Delta) để nhiều engine đọc chung; **schema registry** với luật tương thích
+cho stream; **data contract** máy đọc được, kiểm tra trong CI; **metadata/lineage mở** (OpenLineage, Iceberg REST
+catalog); **API chuẩn** (JDBC/ODBC, Arrow Flight/ADBC, Delta Sharing, OpenAPI); **chuẩn ngữ nghĩa** (ISO 8601 UTC,
+ISO 4217, ISO 3166). Phép thử: đổi engine hoặc thêm consumer mới có buộc phải viết lại pipeline không.
+
+## Công ty Mỹ muốn dùng toàn bộ log chat CSKH để train model và phân tích marketing. ECPA đặt ra vấn đề gì cho DE?
+
+Chat là **nội dung liên lạc điện tử**: Wiretap Act cấm chặn bắt khi đang truyền, Stored Communications Act cấm
+provider tuỳ tiện tiết lộ nội dung đã lưu. Dùng cho mục đích mới cần cơ sở rõ: **consent** trong terms of service
+(lưu ý bang yêu cầu mọi bên đồng ý) hoặc nằm trong **provider exception** (vận hành dịch vụ), nên pháp chế phải
+duyệt mục đích. Về kỹ thuật: tag riêng **content** và **metadata** trong catalog; giới hạn truy cập bảng nội dung
+theo purpose (ABAC), log mọi truy cập; ưu tiên pseudonymize và lọc PII trước khi đưa vào tập train; có quy trình
+xử lý yêu cầu từ cơ quan pháp luật (warrant cho nội dung, subpoena cho metadata). Đồng thời kiểm tra luật bang
+(CCPA/CPRA) và GDPR nếu có người dùng EU.

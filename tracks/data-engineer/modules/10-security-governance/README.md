@@ -411,6 +411,14 @@ platform hiện đại nghĩa là:
   tương thích.
 - **Chuẩn ngữ nghĩa**: định nghĩa chung cho mã quốc gia (ISO 3166), tiền tệ (ISO 4217), thời gian
   (ISO 8601, UTC). Không chuẩn hoá thì join giữa domain là cơn ác mộng.
+- **Data contract** (phần 5, module 05): schema + ngữ nghĩa + SLA được viết thành tệp máy đọc được (Data Contract
+  Specification, ODCS) và kiểm tra trong CI, để producer và consumer khác team vẫn khớp nhau khi hệ thống thay đổi.
+- **API và giao thức chuẩn** để trao đổi thay vì export tay: SQL qua JDBC/ODBC, **Arrow Flight / ADBC** cho dữ liệu
+  cột tốc độ cao, **Delta Sharing** / Iceberg REST cho chia sẻ bảng giữa tổ chức, OpenAPI cho REST, CloudEvents
+  cho sự kiện. Ngành đặc thù có chuẩn riêng: HL7 FHIR (y tế), ISO 20022 (thanh toán).
+
+Kiểm tra nhanh: nếu ngày mai đổi engine hoặc thêm một consumer mới, có phải viết lại pipeline/convert dữ liệu
+không? Nếu có, đó là chỗ thiếu interoperability.
 
 ## 7. Quy định: GDPR, ECPA, EU AI Act (góc nhìn Data Engineer)
 
@@ -443,6 +451,21 @@ truyền (Wiretap Act) và khi lưu trữ (Stored Communications Act). Với DE:
 đọc, chia sẻ nội dung liên lạc của người dùng (vd. chat CSKH, email) ngoài phạm vi cho phép; cơ quan
 nhà nước muốn truy cập cần quy trình pháp lý. Thực tế: dữ liệu nội dung tin nhắn cần phân loại riêng,
 giới hạn truy cập chặt, log mọi truy cập, và có quy trình xử lý yêu cầu từ cơ quan pháp luật.
+
+ECPA gồm ba phần (title):
+
+| Phần | Bảo vệ | Ý nghĩa với pipeline |
+| --- | --- | --- |
+| Title I, **Wiretap Act** | Chặn bắt nội dung **đang truyền** (nghe lén, đọc gói tin, ghi lại chat realtime) | Không capture nội dung tin nhắn/cuộc gọi nếu không có consent hoặc ngoại lệ hợp lệ; cẩn thận với log payload đầy đủ, packet capture, session replay |
+| Title II, **Stored Communications Act (SCA)** | Nội dung **đã lưu** ở nhà cung cấp dịch vụ (email, tin nhắn trong hộp thư) | Provider không được tự ý tiết lộ nội dung cho bên thứ ba; cơ quan nhà nước cần warrant (nội dung) hoặc subpoena/court order (metadata, thông tin thuê bao) |
+| Title III, **Pen Register Act** | **Metadata** liên lạc: ai gọi ai, lúc nào (không có nội dung) | Bảng log kết nối/sự kiện liên lạc vẫn là dữ liệu nhạy cảm, không phải "chỉ là metadata" |
+
+Hai điểm DE hay gặp: (1) ECPA phân biệt **nội dung** (content) và **metadata** (non-content), mức bảo vệ khác nhau,
+nên catalog cần tag riêng hai loại và áp policy khác nhau; (2) có ngoại lệ **consent** (một bên đồng ý, một số bang
+như California yêu cầu mọi bên) và **provider exception** (nhà cung cấp được truy cập để vận hành, bảo vệ dịch vụ),
+vì vậy terms of service và mục đích sử dụng phải được ghi rõ, và việc dùng nội dung chat để train model hay phân
+tích marketing cần pháp chế duyệt. ECPA là luật liên bang cũ; ở Mỹ còn có luật bang (CCPA/CPRA của California) và
+luật ngành (HIPAA, GLBA) chồng lên.
 
 ### EU AI Act (có hiệu lực từ 2024, áp dụng dần 2025–2027)
 
@@ -481,6 +504,8 @@ thu thập, làm sạch, kiểm tra bias, tính đại diện, và tài liệu k
 - DataHub: https://datahubproject.io/ · OpenMetadata: https://open-metadata.org/ · Unity Catalog: https://www.unitycatalog.io/
 - GDPR full text: https://gdpr-info.eu/ · Art. 17 Right to erasure: https://gdpr-info.eu/art-17-gdpr/
 - ECPA (US DOJ): https://bja.ojp.gov/program/it/privacy-civil-liberties/authorities/statutes/1285
+- Open Data Contract Standard (Bitol): https://bitol-io.github.io/open-data-contract-standard/
+- Apache Arrow ADBC: https://arrow.apache.org/adbc/ và Delta Sharing protocol: https://delta.io/sharing/
 - EU AI Act (bản chính thức): https://eur-lex.europa.eu/eli/reg/2024/1689/oj · tóm tắt: https://artificialintelligenceact.eu/
 - Sách: *Data Governance: The Definitive Guide* (Eryurek et al., O'Reilly, 2021)
 - Sách: *Fundamentals of Data Engineering* (Reis & Housley, O'Reilly, 2022), chương Security & Privacy

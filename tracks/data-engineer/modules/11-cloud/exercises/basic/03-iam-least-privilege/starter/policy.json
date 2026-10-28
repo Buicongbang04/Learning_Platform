@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "_TODO": [
+    "TODO 1: GetObject chỉ trên olist-lake/raw/*",
+    "TODO 2: PutObject chỉ trên olist-lake/curated/*, bắt buộc s3:x-amz-server-side-encryption = aws:kms",
+    "TODO 3: ListBucket trên ARN bucket, condition StringLike s3:prefix raw/* hoặc curated/*",
+    "TODO 4: Deny s3:* khi aws:SecureTransport = false; xoá khoá _TODO khi xong"
+  ],
+  "Statement": [
+    {
+      "Sid": "TooBroad",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "*"
+    }
+  ]
+}

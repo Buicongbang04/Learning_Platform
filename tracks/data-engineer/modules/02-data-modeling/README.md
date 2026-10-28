@@ -690,6 +690,45 @@ SELECT query, calls, round(total_exec_time) AS total_ms, round(mean_exec_time, 1
 FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 5;
 ```
 
+### Scale một RDBMS: vertical, read replica, sharding
+
+Khi một PostgreSQL không theo kịp tải, có hai hướng (khái niệm chung ở module 06, cơ chế replication/partitioning
+ở module 01 phần 6):
+
+- **Vertical scaling (scale up)**: máy to hơn (CPU, RAM, disk IOPS). Rẻ nhất về công sức, không đổi code, nên làm
+  trước; trần là cỡ máy lớn nhất của cloud và chi phí tăng phi tuyến, vẫn là một điểm hỏng.
+- **Horizontal scaling (scale out)**: thêm máy. Với RDBMS có hai bậc:
+  1. **Read replica**: primary nhận ghi, stream WAL sang các replica chỉ đọc. Giải quyết tải **đọc** (dashboard,
+     API đọc, và đặc biệt là **job extract của DE**: luôn kéo dữ liệu từ replica để không làm nặng primary). Đánh
+     đổi: replication lag, đọc có thể cũ vài giây; ghi vẫn dồn vào một máy.
+  2. **Sharding**: chia dữ liệu theo shard key (vd. `customer_id`) ra nhiều primary. Giải quyết tải **ghi** và kích
+     thước dữ liệu, nhưng JOIN/transaction xuyên shard khó, đổi shard key rất đắt. Làm bằng code ứng dụng hoặc
+     công cụ (Citus cho PostgreSQL, Vitess cho MySQL), hoặc chuyển sang distributed SQL (CockroachDB, YugabyteDB,
+     Spanner).
+
+Thứ tự thực tế: tối ưu truy vấn/index → scale up → read replica (+ cache) → partitioning trong một máy → sharding.
+Phần lớn workload OLTP không cần tới bước cuối; workload phân tích thì nên chuyển sang warehouse (module 04).
+
+### PostgreSQL và các RDBMS khác
+
+Track dùng PostgreSQL, nhưng ở công ty bạn sẽ gặp các hệ sau làm **nguồn** cho pipeline. Mô hình quan hệ, SQL
+chuẩn, index B-tree, ACID là như nhau; khác biệt nằm ở dialect, cơ chế CDC và giấy phép.
+
+| RDBMS | Thường gặp ở | Khác biệt đáng chú ý cho DE |
+| --- | --- | --- |
+| **MySQL** (Oracle sở hữu, GPL + bản thương mại) | Web/startup, LAMP, nhiều hệ e-commerce | Engine InnoDB; dialect: `AUTO_INCREMENT`, backtick, `ON DUPLICATE KEY UPDATE` thay cho `ON CONFLICT`, `utf8` cũ chỉ 3 byte (dùng `utf8mb4`); CDC đọc **binlog** (cần `binlog_format=ROW`) |
+| **MariaDB** | Fork của MySQL (2009), mặc định trên nhiều distro Linux | Gần tương thích MySQL nhưng đã tách dần (GTID khác, JSON là alias của LONGTEXT); GPL thuần; connector CDC phải ghi rõ là MariaDB |
+| **Amazon Aurora** | Hệ trên AWS cần HA | Không phải engine mới mà là MySQL/PostgreSQL **tương thích** chạy trên storage phân tán (6 bản qua 3 AZ); tới 15 replica lag thấp, Aurora Serverless; zero-ETL sang Redshift; chỉ có trên AWS |
+| **Oracle Database** | Ngân hàng, viễn thông, ERP lớn | Licensing đắt theo core, nhiều tính năng (partitioning, RAC) là option trả thêm; dialect PL/SQL, `NUMBER`, `VARCHAR2`, chuỗi rỗng = NULL, `DATE` có cả giờ; CDC qua LogMiner/GoldenGate |
+| **Microsoft SQL Server** | Doanh nghiệp dùng hệ Microsoft, .NET, Azure | Dialect T-SQL: `TOP`, `IDENTITY`, `[tên]`, `MERGE`; CDC/Change Tracking có sẵn (bật theo bảng); license theo core/edition, Azure SQL là bản managed |
+| **PostgreSQL** (giấy phép PostgreSQL, tự do) | Mặc định cho dự án mới, nhiều extension | Kiểu dữ liệu phong phú (JSONB, array, range), `ON CONFLICT`, logical replication; nhiều hệ "tương thích PG" (Aurora, AlloyDB, Neon, Redshift dựa trên PG cũ) |
+
+Hệ quả cho DE: (1) không copy SQL nguyên xi giữa các hệ, đặc biệt upsert, phân trang, hàm ngày giờ và cách xử lý
+NULL/chuỗi rỗng; (2) kiểm tra kiểu dữ liệu khi map sang warehouse (`NUMBER` không precision của Oracle,
+`DATETIME` không timezone của MySQL/SQL Server); (3) CDC cần quyền và cấu hình riêng từng hệ (binlog, LogMiner,
+SQL Server CDC), thường phải xin DBA bật; (4) licensing ảnh hưởng kiến trúc: tránh chạy truy vấn phân tích nặng
+trên Oracle/SQL Server vì tốn core license, hãy extract ra lakehouse.
+
 ### Quy trình thiết kế schema gọn
 
 1. Liệt kê truy vấn/quy trình nghiệp vụ chính (OLTP: các màn hình, API; OLAP: các câu hỏi KPI).
@@ -707,6 +746,12 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 5;
 - PostgreSQL Documentation — Transaction Isolation: https://www.postgresql.org/docs/current/transaction-iso.html
 - PostgreSQL Documentation — Using EXPLAIN: https://www.postgresql.org/docs/current/using-explain.html
 - PostgreSQL Documentation — Table Partitioning: https://www.postgresql.org/docs/current/ddl-partitioning.html
+- PostgreSQL Documentation — High Availability, Load Balancing, and Replication: https://www.postgresql.org/docs/current/high-availability.html
+- MySQL Reference Manual — The Binary Log: https://dev.mysql.com/doc/refman/8.4/en/binary-log.html
+- MariaDB — Incompatibilities and feature differences with MySQL: https://mariadb.com/kb/en/mariadb-vs-mysql-compatibility/
+- Amazon Aurora User Guide: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_AuroraOverview.html
+- Oracle Database SQL Language Reference: https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/
+- Microsoft — Change data capture (SQL Server): https://learn.microsoft.com/en-us/sql/relational-databases/track-changes/about-change-data-capture-sql-server
 - Markus Winand — *Use The Index, Luke!*: https://use-the-index-luke.com/
 - SQLite — EXPLAIN QUERY PLAN: https://www.sqlite.org/eqp.html và Query Planner: https://www.sqlite.org/queryplanner.html
 - DuckDB Documentation — Indexes và constraints: https://duckdb.org/docs/stable/sql/indexes

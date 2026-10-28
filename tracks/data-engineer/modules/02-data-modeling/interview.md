@@ -200,3 +200,23 @@ theo tháng, kiểm tra chất lượng (delivered_date ≥ purchase_date), và 
 4. Đo lại, kiểm tra tác động lên ghi (thêm index làm chậm INSERT).
 5. Nếu bản chất là phân tích quét lớn, câu trả lời dài hạn là đưa sang warehouse/columnar
    (DuckDB, BigQuery, ClickHouse) thay vì cố ép OLTP.
+
+## PostgreSQL của ứng dụng bị quá tải. Bạn scale theo thứ tự nào? Read replica và sharding giải quyết vấn đề gì khác nhau?
+
+Trước hết đo: tải đọc hay ghi, truy vấn nào nặng (`pg_stat_statements`). Thứ tự hợp lý: tối ưu truy vấn/index →
+**vertical scaling** (máy to hơn, đơn giản, không đổi code) → **read replica** + cache → partitioning trong một máy →
+**sharding**. Read replica chỉ giảm tải **đọc** (dashboard, API đọc, job extract của DE), ghi vẫn ở một primary và
+có replication lag nên đọc có thể cũ. Sharding chia dữ liệu ra nhiều primary nên giảm tải **ghi** và kích thước,
+nhưng JOIN/transaction xuyên shard khó, chọn sai shard key gây hot shard và đổi lại rất đắt (Citus, Vitess, hoặc
+distributed SQL). Nếu tải nặng là truy vấn phân tích thì đúng hướng là đưa sang warehouse, không phải scale OLTP.
+
+## Bạn cần migrate pipeline extract từ MySQL/SQL Server/Oracle sang lakehouse. Những khác biệt nào giữa các RDBMS dễ gây lỗi?
+
+- **Dialect**: upsert (`ON DUPLICATE KEY UPDATE` / `MERGE` / `ON CONFLICT`), phân trang (`LIMIT` / `TOP` /
+  `FETCH FIRST`), hàm ngày giờ, quoting (backtick, `[ ]`, `" "`).
+- **Kiểu dữ liệu**: Oracle `NUMBER` không precision, `DATE` có giờ, chuỗi rỗng là NULL; MySQL `DATETIME` và SQL
+  Server `datetime` không timezone; `utf8` 3 byte của MySQL làm hỏng emoji. Cần map kiểu tường minh và test.
+- **CDC**: MySQL/MariaDB đọc binlog (`ROW` format), Oracle qua LogMiner/GoldenGate, SQL Server bật CDC theo bảng,
+  PostgreSQL logical replication; mỗi hệ cần quyền và cấu hình riêng từ DBA.
+- **Licensing và tải**: extract từ replica, tránh truy vấn nặng trên Oracle/SQL Server (tính license theo core);
+  Aurora tương thích MySQL/PG nên dùng connector tương ứng, có zero-ETL sang Redshift.

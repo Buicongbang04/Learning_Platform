@@ -187,3 +187,4 @@ Mỗi milestone gồm: `# Tiêu đề`, `## Mục tiêu`, `## Việc cần làm`
 | kafka | 9094 (từ máy host) | không |
 | airflow | 8080 | `airflow` / `airflow` |
 | metabase | 3000 | tạo lúc mở lần đầu |
+| localstack | 4566 (giả lập AWS: s3, iam, sts) | access key `test` / `test` |

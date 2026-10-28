@@ -81,6 +81,7 @@ docker compose -f setup/docker-compose.yml --profile all down -v
 | `lake` | minio |
 | `stream` | kafka |
 | `bi` | metabase, postgres |
+| `cloud` | localstack |
 | `all` | tất cả |
 
 Thông số kết nối:
@@ -93,6 +94,7 @@ Thông số kết nối:
 | cassandra | `localhost:9042` | không |
 | neo4j | `bolt://localhost:7687`, web http://localhost:7474 | `neo4j` / `password123` |
 | minio | S3 API `http://localhost:9000`, console http://localhost:9001 | `minioadmin` / `minioadmin` |
+| localstack | `http://localhost:4566` (endpoint chung cho mọi API AWS giả lập) | key bất kỳ, vd. `test` / `test`, region `us-east-1` |
 | kafka | `localhost:9094` (container khác dùng `kafka:9092`) | không |
 | metabase | http://localhost:3000 | tạo tài khoản lúc mở lần đầu. Kết nối Postgres bằng host `postgres`, cổng 5432 |
 | airflow | http://localhost:8080 | `airflow` / `airflow` (xem `setup/airflow/README.md`) |
@@ -118,6 +120,7 @@ docker compose -f setup/airflow/docker-compose.yml down
 | 08 DevOps | tuỳ bài | Terraform cài riêng (mục 6) |
 | 09 Serving & BI | postgres, metabase | Streamlit chạy local |
 | 10 Security & Governance | postgres | |
+| 11 Cloud | localstack hoặc minio (tuỳ chọn) | Phần lớn bài là hàm thuần/Terraform, không cần Docker. Bài S3 chạy offline bằng `moto` nếu có, không cần tài khoản cloud |
 | Capstone | theo milestone | Xem `tracks/data-engineer/capstone/README.md` |
 
 Bật đúng cái cần, tắt khi học xong module: tiết kiệm RAM đáng kể (Cassandra + Neo4j + Metabase mỗi cái ~1–1.5 GB).
@@ -260,3 +263,10 @@ docker compose -f setup/docker-compose.yml up -d postgres
 
 `docker compose` và `testkit.py` (dùng trong test bài tập) cùng đọc `setup/.env`, nên chỉ cần đổi một chỗ.
 Câu lệnh kết nối viết tay trong bài (psql, mongosh…) thì nhớ dùng cổng mới.
+
+## Về image MinIO
+
+MinIO đã ngừng phát hành image chính thức `minio/minio` trên Docker Hub, nên `setup/docker-compose.yml`
+dùng `pgsty/minio` — bản build cộng đồng (dự án Pigsty) từ cùng mã nguồn MinIO, API S3 và lệnh `mc` giữ nguyên.
+Đây là image bên thứ ba: muốn tự chủ hoàn toàn thì build image từ mã nguồn MinIO, hoặc thay bằng một
+S3 tương thích khác (vd. LocalStack, service `localstack` trong compose) rồi đổi `MINIO_ENDPOINT`.

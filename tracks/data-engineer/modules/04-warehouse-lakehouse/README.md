@@ -378,6 +378,9 @@ print(duckdb.sql("SELECT order_status, count(*) FROM orders GROUP BY 1"))
 
 Xu hướng hiện nay là hội tụ: Iceberg được hầu hết cloud warehouse hỗ trợ native, Databricks mua Tabular (công ty của
 những người tạo Iceberg), Delta UniForm ghi kèm metadata Iceberg, Apache XTable chuyển đổi giữa ba định dạng.
+Phía Hudi, **Onehouse** (công ty của những người tạo Hudi) bán lakehouse managed: ingest liên tục từ CDC/Kafka vào
+bảng Hudi trên bucket của khách, tự chạy compaction/clustering/cleaning, và nhờ XTable (do Onehouse khởi xướng)
+xuất cùng bảng dưới dạng Delta và Iceberg để Databricks, Snowflake, BigQuery cùng đọc.
 Với người mới: hiểu một định dạng thật kỹ (bài tập dùng Delta qua `deltalake`) là chuyển sang định dạng khác rất nhanh.
 
 ### Warehouse vs lake vs lakehouse
@@ -487,6 +490,35 @@ làm data) thì một lakehouse tập trung đơn giản hơn nhiều.
 | Di chuyển dữ liệu | Copy về một nơi | Mỗi domain tự lưu, chia sẻ qua platform | Hạn chế, ưu tiên ảo hoá | Gom về hub rồi phân phối |
 | Hợp với | Công ty nhỏ–vừa | Tổ chức lớn, nhiều domain trưởng thành | Môi trường hybrid, nhiều hệ legacy | Đồng bộ master data giữa hệ thống |
 
+Data mart (phần 2) cũng thuộc nhóm "Other Data Architectures" trên roadmap.sh, cùng hai mục dưới đây.
+
+### Metadata-first architecture
+
+**Metadata-first** nghĩa là thiết kế nền tảng quanh **lớp metadata** (catalog, schema, lineage, quyền, thống kê
+bảng) thay vì quanh một engine cụ thể. Storage chỉ là tệp mở trên object storage; mọi thứ "biết" về dữ liệu nằm
+trong catalog, và engine nào cũng hỏi catalog trước khi đọc/ghi. Ví dụ: Iceberg REST catalog / Polaris, Unity
+Catalog, AWS Glue Data Catalog; open table format chính là metadata (snapshot, manifest, thống kê cột) đi kèm dữ
+liệu. Hệ quả: đổi engine (Spark → Trino → Snowflake) không phải di chuyển dữ liệu; quyền và lineage định nghĩa một
+lần ở catalog; pipeline có thể sinh tự động từ metadata (bảng cấu hình nguồn → job ingest, contract → test). Đây
+cũng là nền của data fabric (metadata chủ động) và của "federated governance" trong data mesh. Đánh đổi: catalog
+thành thành phần trọng yếu (hỏng catalog là hỏng cả nền tảng) và cần kỷ luật giữ metadata đúng (module 10).
+
+### Serverless options
+
+Kiến trúc **serverless** ghép các dịch vụ không phải quản lý máy, tính tiền theo lượng dùng và tự co về 0:
+query engine (BigQuery, Athena, Redshift Serverless, Snowflake với auto-suspend, MotherDuck), xử lý (AWS Lambda,
+Cloud Functions/Cloud Run, Glue, Dataproc Serverless, Databricks serverless), stream (Kinesis, Pub/Sub), điều phối
+(Step Functions, Cloud Workflows, MWAA). Một pipeline nhỏ điển hình: file rơi vào S3 → event kích hoạt Lambda
+chuyển thành Parquet → Glue Catalog → truy vấn bằng Athena. Hợp với tải **thất thường hoặc nhỏ**, đội ít người,
+cần lên nhanh. Đánh đổi: chi phí khó dự đoán khi tải lớn và đều (lúc đó capacity/reserved rẻ hơn), giới hạn thời
+gian chạy và bộ nhớ (Lambda tối đa 15 phút), cold start, lock-in vào API của từng cloud, khó chạy thử cục bộ.
+
+| Kiến trúc | Trọng tâm | Khi nào nghĩ tới |
+| --- | --- | --- |
+| Data mart | Tập con theo phòng ban/chủ đề | Luôn có, là lớp phục vụ BI |
+| Metadata-first | Catalog là trung tâm, engine thay được | Nhiều engine trên cùng dữ liệu, cần governance thống nhất |
+| Serverless | Không quản lý hạ tầng, trả theo dùng | Tải nhỏ/thất thường, đội nhỏ |
+
 ### Chọn kiến trúc: ví dụ Olist
 
 Một sàn thương mại điện tử cỡ Olist (vài trăm nghìn đơn/năm, đội data 3–5 người) nên bắt đầu đơn giản:
@@ -518,4 +550,7 @@ Capstone milestone m04 dựng chính kiến trúc này trên MinIO + DuckDB.
 - Snowflake. *Micro-partitions & data clustering*. https://docs.snowflake.com/en/user-guide/tables-clustering-micropartitions
 - Amazon Redshift. *Working with sort keys / distribution styles*. https://docs.aws.amazon.com/redshift/latest/dg/t_Sorting_data.html
 - Zhamak Dehghani. *Data Mesh Principles and Logical Architecture*. https://martinfowler.com/articles/data-mesh-principles.html
+- Onehouse: https://www.onehouse.ai/ và Apache XTable: https://xtable.apache.org/
+- Apache Iceberg REST catalog spec: https://iceberg.apache.org/rest-catalog-spec/
+- AWS. *Serverless data analytics pipeline reference architecture*: https://aws.amazon.com/blogs/big-data/aws-serverless-data-analytics-pipeline-reference-architecture/
 - roadmap.sh Data Engineer: https://roadmap.sh/data-engineer

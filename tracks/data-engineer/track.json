@@ -4,7 +4,7 @@
   "icon": "database",
   "status": "active",
   "order": 1,
-  "description": "10 module, bài tập Basic → Advanced và một dự án capstone trên dữ liệu thương mại điện tử Olist.",
+  "description": "11 module, bài tập Basic → Advanced và một dự án capstone trên dữ liệu thương mại điện tử Olist.",
   "source": "https://roadmap.sh/data-engineer",
   "modules": [
     {
@@ -66,6 +66,12 @@
       "title": "Security & Governance",
       "summary": "AuthN/AuthZ, encryption, tokenization, masking, data quality, lineage và quy định GDPR.",
       "topics": ["Encryption", "Masking", "Data Quality", "Lineage", "GDPR"]
+    },
+    {
+      "id": "11-cloud",
+      "title": "Cloud cho Data Engineer",
+      "summary": "Kiến trúc cloud, dịch vụ compute, storage, database, ETL và warehouse tương đương trên AWS, Azure, GCP; IAM, mạng và chi phí.",
+      "topics": ["Cloud Architectures", "AWS", "Azure", "Google Cloud", "IAM", "FinOps"]
     }
   ],
   "capstone": {
@@ -81,7 +87,8 @@
       { "id": "m07", "title": "Order events thời gian thực qua Kafka", "after": "07-streaming-kafka", "doc": "capstone/milestones/m07-kafka.md" },
       { "id": "m08", "title": "CI/CD và hạ tầng bằng Terraform", "after": "08-devops-for-data", "doc": "capstone/milestones/m08-cicd-terraform.md" },
       { "id": "m09", "title": "Dashboard vận hành trên Metabase", "after": "09-serving-bi", "doc": "capstone/milestones/m09-dashboard.md" },
-      { "id": "m10", "title": "Data quality, lineage, masking PII", "after": "10-security-governance", "doc": "capstone/milestones/m10-governance.md" }
+      { "id": "m10", "title": "Data quality, lineage, masking PII", "after": "10-security-governance", "doc": "capstone/milestones/m10-governance.md" },
+      { "id": "m11", "title": "Đưa nền tảng lên cloud (tuỳ chọn, free tier)", "after": "11-cloud", "doc": "capstone/milestones/m11-cloud-deploy.md" }
     ]
   }
 }
