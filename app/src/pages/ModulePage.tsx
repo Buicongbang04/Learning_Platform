@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowRight, ChevronDown, FolderOpen, Play } from "lucide-react";
+import { useParams, useSearchParams } from "react-router-dom";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import { findTrack, loadMarkdown, splitSections, type Module, type Section } from "../content";
 import { moduleStats, useProgress } from "../progress";
 import { Crumbs, Shell } from "../components/Shell";
 import { ExerciseList, Notes } from "../components/shared";
 import { Markdown } from "../components/Markdown";
-import { button, card, Checkbox, cx, ErrorBlock, LoadingBlock, PageHeader, useCopy } from "../components/ui";
-import { exerciseLink, moduleLink, trackLink } from "../links";
+import { button, card, Checkbox, cx, ErrorBlock, LoadingBlock, PageHeader } from "../components/ui";
+import { trackLink } from "../links";
 import { NotFound } from "./NotFound";
 
 const TABS = [
@@ -89,15 +89,12 @@ export function ModulePage() {
   const module = track?.modules.find((item) => item.id === moduleId);
   const api = useProgress();
   const interview = useInterview(module ?? ({ dir: "" } as Module));
-  const { copied, copy } = useCopy();
 
   if (!track || !module) return <NotFound />;
 
   const header = <div className="min-w-0 flex-1"><Crumbs items={[{ to: trackLink(track.id), label: track.name }]} /></div>;
   const progress = api.of(track.id);
   const stats = moduleStats(module, progress);
-  const fresh = !stats.started;
-  const nextExercise = module.exercises.find((exercise) => !progress.exercises[exercise.key]);
   const readSet = new Set(progress.sections[module.id] ?? []);
   const tab = (TABS.some((item) => item.id === params.get("tab")) ? params.get("tab") : "ly-thuyet") as TabId;
   const defaultSlug = module.sections.find((section) => !readSet.has(section.slug))?.slug ?? module.sections[0]?.slug;
@@ -117,20 +114,6 @@ export function ModulePage() {
         </>
       }
       description={module.summary}
-      actions={
-        <>
-          <button type="button" className={button.outline} onClick={() => copy(module.dir)} title={module.dir}>
-            <FolderOpen className="size-4 shrink-0" aria-hidden />
-            {copied ? "Đã chép" : "Chép đường dẫn"}
-          </button>
-          {nextExercise && (
-            <Link to={fresh ? moduleLink(track.id, module.id) : exerciseLink(track.id, nextExercise)} className={button.primary}>
-              <Play className="size-4 shrink-0" aria-hidden />
-              {fresh ? "Bắt đầu" : "Làm bài tiếp"}
-            </Link>
-          )}
-        </>
-      }
     />
   );
 
@@ -154,7 +137,7 @@ export function ModulePage() {
 
   return (
     <Shell header={header}>
-      <div className="max-w-[1600px]">
+      <div>
         {pageHeader}
         <div className="mb-5">
           <div className="scrollbar-clean overflow-x-auto">
@@ -184,8 +167,8 @@ export function ModulePage() {
             {tab === "ly-thuyet" &&
               (active ? (
                 <section className={`${card} p-5 sm:p-8`}>
-                  {activeIndex === 0 && module.intro && <Markdown className="mb-6 max-w-[72ch] text-muted">{module.intro}</Markdown>}
-                  <article className="max-w-[72ch]">
+                  {activeIndex === 0 && module.intro && <Markdown className="mb-6 text-muted">{module.intro}</Markdown>}
+                  <article>
                     <h2 className="mb-2 text-lg font-semibold text-balance">{active.title}</h2>
                     <Markdown>{active.body}</Markdown>
                   </article>
@@ -256,7 +239,7 @@ export function ModulePage() {
                         <ChevronDown className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
                       </summary>
                       <div className="px-5 pb-5 sm:pl-14">
-                        <Markdown className="max-w-[72ch]">{question.body}</Markdown>
+                        <Markdown>{question.body}</Markdown>
                       </div>
                     </details>
                   ))}

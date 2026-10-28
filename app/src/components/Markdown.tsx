@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cx } from "./ui";
+import { CodeBlock } from "../code/CodeBlock";
 
 let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
 
@@ -87,10 +88,12 @@ export function Mermaid({ code }: { code: string }) {
   return <div ref={ref} className="mermaid-box" role="img" aria-label="Sơ đồ" />;
 }
 
+type HastNode = { type: string; value?: string; tagName?: string; properties?: Record<string, unknown>; children?: HastNode[] };
+
+const textOf = (node: HastNode): string => node.value ?? (node.children ?? []).map(textOf).join("");
+
 const components: Components = {
   code({ className, children, ...props }) {
-    const language = /language-(\w+)/.exec(className ?? "")?.[1];
-    if (language === "mermaid") return <Mermaid code={String(children).trim()} />;
     return (
       <code className={className} {...props}>
         {children}
@@ -98,10 +101,19 @@ const components: Components = {
     );
   },
   pre({ children, node }) {
-    const child = node?.children[0];
-    const isMermaid = child && "properties" in child && String((child.properties?.className as string[] | undefined)?.[0] ?? "") === "language-mermaid";
-    if (isMermaid) return <>{children}</>;
-    return <pre>{children}</pre>;
+    const child = node?.children[0] as HastNode | undefined;
+    if (!child || child.tagName !== "code") return <pre>{children}</pre>;
+    const language = /^language-(.+)$/.exec(String((child.properties?.className as string[] | undefined)?.[0] ?? ""))?.[1];
+    const code = textOf(child).replace(/\n$/, "");
+    if (language === "mermaid") return <Mermaid code={code.trim()} />;
+    return <CodeBlock code={code} language={language} />;
+  },
+  table({ children }) {
+    return (
+      <div className="table-wrap" tabIndex={0}>
+        <table>{children}</table>
+      </div>
+    );
   },
   a({ href, children }) {
     const external = href?.startsWith("http");

@@ -1,4 +1,5 @@
-import { icons, type LucideProps } from "lucide-react";
+import type { LucideProps } from "lucide-react";
+import trackIcons, { fallback } from "virtual:track-icons";
 import { useState, type ReactNode } from "react";
 import { Check, Copy, RotateCw } from "lucide-react";
 
@@ -7,9 +8,9 @@ export const cx = (...parts: (string | false | null | undefined)[]) => parts.fil
 /* Bốn dạng nút (button.md). Hover và focus bàn phím cùng một nền. */
 export const button = {
   primary:
-    "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground outline-hidden transition-colors hover:bg-primary-hover focus-visible:bg-primary-hover",
+    "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground outline-hidden transition-colors hover:bg-primary-hover focus-visible:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60",
   outline:
-    "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-foreground outline-hidden transition-colors hover:bg-button-hover focus-visible:bg-button-hover",
+    "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-foreground outline-hidden transition-colors hover:bg-button-hover focus-visible:bg-button-hover disabled:cursor-not-allowed disabled:opacity-60",
   ghost:
     "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-muted outline-hidden transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:bg-foreground/5 focus-visible:text-foreground",
   icon: "inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted outline-hidden transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:bg-foreground/5 focus-visible:text-foreground",
@@ -25,8 +26,7 @@ export const card = "rounded-2xl border border-border bg-surface";
 
 /** Icon lucide theo tên kebab-case trong track.json. */
 export function Icon({ name, ...props }: { name: string } & LucideProps) {
-  const pascal = name.replace(/(^|-)([a-z0-9])/g, (_, __, char: string) => char.toUpperCase()) as keyof typeof icons;
-  const Component = icons[pascal] ?? icons.BookOpen;
+  const Component = trackIcons[name] ?? fallback;
   return <Component aria-hidden {...props} />;
 }
 
@@ -106,7 +106,7 @@ export function PageHeader({ title, description, actions, kicker }: { title: Rea
       <div className="min-w-0 flex-1">
         {kicker}
         <h1 className={cx("text-xl font-semibold text-balance", kicker ? "mt-2" : "")}>{title}</h1>
-        {description && <p className="mt-1 max-w-[55ch] text-sm text-pretty text-muted">{description}</p>}
+        {description && <p className="mt-1 text-sm text-pretty text-muted">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
     </header>

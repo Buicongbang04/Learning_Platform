@@ -4,6 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { workspaceApi } from "./server/workspace";
+import { trackIcons } from "./server/trackIcons";
 
 const repoRoot = resolve(__dirname, "..");
 const progressFile = resolve(repoRoot, "progress.json");
@@ -56,10 +58,10 @@ function progressApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), progressApi()],
+  plugins: [react(), tailwindcss(), progressApi(), workspaceApi(repoRoot), trackIcons(repoRoot, __dirname)],
   server: {
     port: 5173,
     fs: { allow: [repoRoot] },
-    watch: { ignored: ["**/.venv/**", "**/data/raw/**", "**/progress.json"] },
+    watch: { ignored: ["**/.venv/**", "**/data/raw/**", "**/progress.json", "**/starter/**", "**/__pycache__/**"] },
   },
 });

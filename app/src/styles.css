@@ -41,6 +41,18 @@
   --neutral: #52525c;
   --code-bg: #f4f4f6;
   --radius: 0.75rem;
+
+  --code-frame: #fafafb;
+  --code-gutter: #a1a1aa;
+  --tok-keyword: #cf222e;
+  --tok-string: #0a3069;
+  --tok-number: #0550ae;
+  --tok-comment: #6e7781;
+  --tok-function: #8250df;
+  --tok-type: #953800;
+  --tok-property: #0550ae;
+  --tok-operator: #cf222e;
+  --tok-meta: #116329;
 }
 
 .dark {
@@ -75,6 +87,18 @@
   --neutral-bg: rgb(113 113 123 / 0.15);
   --neutral: #9f9fa9;
   --code-bg: rgb(255 255 255 / 0.04);
+
+  --code-frame: #0b0d15;
+  --code-gutter: #4b5263;
+  --tok-keyword: #ff7b72;
+  --tok-string: #a5d6ff;
+  --tok-number: #79c0ff;
+  --tok-comment: #8b949e;
+  --tok-function: #d2a8ff;
+  --tok-type: #ffa657;
+  --tok-property: #79c0ff;
+  --tok-operator: #ff7b72;
+  --tok-meta: #7ee787;
 }
 /* ===== HẾT KHỐI ĐỔI THƯƠNG HIỆU ===== */
 
@@ -106,6 +130,7 @@
   --color-neutral-bg: var(--neutral-bg);
   --color-error-text: var(--error-text);
   --color-code: var(--code-bg);
+  --color-code-frame: var(--code-frame);
   --border-color-focus: var(--border-focus);
   --ring-color-focus: var(--ring-focus);
   --shadow-popover: var(--elevation-popover);
@@ -253,13 +278,19 @@ body {
   background: none;
   padding: 0;
 }
-.prose-md table {
-  display: block;
+.prose-md .table-wrap {
   overflow-x: auto;
+  margin: 0.75rem 0;
+}
+.prose-md .table-wrap:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+.prose-md table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
-  margin: 0.75rem 0;
   overflow-wrap: normal;
 }
 .prose-md th {
@@ -300,6 +331,90 @@ body {
 .mermaid-box .node.now .nodeLabel p {
   color: var(--primary-foreground) !important;
   font-weight: 500;
+}
+
+.code-frame {
+  margin: 0.75rem 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.75rem;
+  background: var(--code-frame);
+  overflow: hidden;
+}
+.prose-md .code-frame pre {
+  margin: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0.875rem 1rem;
+}
+.code-frame pre.numbered {
+  counter-reset: line;
+  padding-left: 0;
+}
+.code-frame pre.numbered .code-line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3rem;
+  padding-right: 1rem;
+  text-align: right;
+  color: var(--code-gutter);
+  user-select: none;
+}
+.prose-md .code-frame pre:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.tok-keyword,
+.tok-bool,
+.tok-atom {
+  color: var(--tok-keyword);
+}
+.tok-operator {
+  color: var(--tok-operator);
+}
+.tok-string,
+.tok-string2,
+.tok-literal,
+.tok-url {
+  color: var(--tok-string);
+}
+.tok-number {
+  color: var(--tok-number);
+}
+.tok-comment {
+  color: var(--tok-comment);
+  font-style: italic;
+}
+.tok-variableName.tok-definition,
+.tok-variableName2,
+.tok-macroName {
+  color: var(--tok-function);
+}
+.tok-typeName,
+.tok-className,
+.tok-namespace {
+  color: var(--tok-type);
+}
+.tok-propertyName,
+.tok-labelName {
+  color: var(--tok-property);
+}
+.tok-meta,
+.tok-heading,
+.tok-inserted {
+  color: var(--tok-meta);
+}
+.tok-heading,
+.tok-strong {
+  font-weight: 600;
+}
+.tok-emphasis {
+  font-style: italic;
+}
+.tok-deleted,
+.tok-invalid {
+  color: var(--error-text);
 }
 
 /* Panel trượt điều hướng ở màn hẹp. */

@@ -105,7 +105,7 @@ export function Crumbs({ items }: { items: { to: string; label: string }[] }) {
   );
 }
 
-export function Shell({ header, children }: { header: ReactNode; children: ReactNode }) {
+export function Shell({ header, children, fill = false }: { header: ReactNode; children: ReactNode; fill?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
 
@@ -117,7 +117,7 @@ export function Shell({ header, children }: { header: ReactNode; children: React
   }, []);
 
   return (
-    <div className="flex min-h-screen" data-menu-open={menuOpen ? "" : undefined}>
+    <div className={cx("flex min-h-screen", fill && "lg:h-screen lg:overflow-hidden")} data-menu-open={menuOpen ? "" : undefined}>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-surface lg:flex">
         <Sidebar />
       </aside>
@@ -135,7 +135,7 @@ export function Shell({ header, children }: { header: ReactNode; children: React
           </button>
           {header}
         </header>
-        <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</main>
+        <main className={cx("flex-1", fill ? "p-3 sm:p-4 lg:min-h-0" : "px-4 py-5 sm:px-6 sm:py-6")}>{children}</main>
       </div>
     </div>
   );

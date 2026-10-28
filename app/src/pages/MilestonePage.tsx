@@ -44,7 +44,7 @@ export function MilestonePage() {
 
   return (
     <Shell header={<div className="min-w-0 flex-1"><Crumbs items={[{ to: trackLink(track.id), label: track.name }]} /></div>}>
-      <div className="max-w-[1600px]">
+      <div>
         <PageHeader
           kicker={
             <p className="text-xs text-muted tabular-nums">
@@ -71,7 +71,7 @@ export function MilestonePage() {
           <section className={`${card} p-5 sm:p-6`}>
             {doc.status === "loading" && <LoadingBlock text="Đang tải milestone…" />}
             {doc.status === "missing" && <ErrorBlock title="Chưa có tài liệu cho milestone này" reason={milestone.doc} />}
-            {doc.status === "ready" && <Markdown className="max-w-[72ch]">{doc.body}</Markdown>}
+            {doc.status === "ready" && <Markdown>{doc.body}</Markdown>}
           </section>
           <div className="flex flex-col gap-5 lg:sticky lg:top-6 lg:self-start">
             {api.status === "ready" && <Notes trackId={track.id} noteKey={`capstone/${milestone.id}`} />}

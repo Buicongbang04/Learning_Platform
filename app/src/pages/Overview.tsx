@@ -183,7 +183,7 @@ export function Overview() {
         </section>
       )}
       {progress.status === "ready" && (
-        <div className="flex max-w-[1600px] flex-col gap-5">
+        <div className="flex flex-col gap-5">
           {focus && <NextUp track={focus} />}
           <StatRow tracks={active} />
           <TrackGrid />
