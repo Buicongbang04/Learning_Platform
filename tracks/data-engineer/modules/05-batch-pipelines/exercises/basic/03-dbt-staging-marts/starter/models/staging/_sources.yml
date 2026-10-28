@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: olist
+    description: Dữ liệu thô do bước EL nạp vào schema raw của DuckDB.
+    schema: raw
+    tables:
+      - name: orders
+      - name: customers
+      - name: payments

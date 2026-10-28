@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_USER: de
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: olist
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U de -d olist"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  loader:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://de:${POSTGRES_PASSWORD}@postgres:5432/olist
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

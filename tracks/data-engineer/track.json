@@ -1,0 +1,87 @@
+{
+  "id": "data-engineer",
+  "name": "Data Engineer",
+  "icon": "database",
+  "status": "active",
+  "order": 1,
+  "description": "10 module, bài tập Basic → Advanced và một dự án capstone trên dữ liệu thương mại điện tử Olist.",
+  "source": "https://roadmap.sh/data-engineer",
+  "modules": [
+    {
+      "id": "01-foundations",
+      "title": "Nền tảng kỹ thuật",
+      "summary": "Python cho data, SQL nâng cao, Linux & Bash, Git, networking và distributed systems căn bản.",
+      "topics": ["Python", "SQL nâng cao", "Linux & Bash", "Git", "Networking", "Distributed Systems"]
+    },
+    {
+      "id": "02-data-modeling",
+      "title": "Data Modeling & Relational DB",
+      "summary": "Chuẩn hoá, star và snowflake schema, SCD, index, transaction trên PostgreSQL.",
+      "topics": ["Normalization", "Star / Snowflake", "SCD", "Indexing", "Transactions", "PostgreSQL"]
+    },
+    {
+      "id": "03-nosql",
+      "title": "NoSQL",
+      "summary": "Khi nào bỏ bảng quan hệ, và chọn document, wide-column, key-value hay graph cho từng bài toán.",
+      "topics": ["CAP", "MongoDB", "Cassandra", "Redis", "Neo4j"]
+    },
+    {
+      "id": "04-warehouse-lakehouse",
+      "title": "Data Warehouse & Lakehouse",
+      "summary": "OLAP, kiến trúc warehouse, data lake, lakehouse với Parquet/Delta, data mart và data mesh.",
+      "topics": ["OLAP", "BigQuery / Snowflake", "DuckDB", "Delta Lake", "Data Mesh"]
+    },
+    {
+      "id": "05-batch-pipelines",
+      "title": "Batch Pipelines: ETL/ELT với Airflow, dbt và Prefect",
+      "summary": "Thiết kế pipeline idempotent, orchestration bằng Airflow, transform bằng dbt.",
+      "topics": ["ETL vs ELT", "Airflow", "dbt", "Prefect", "Idempotency"]
+    },
+    {
+      "id": "06-spark-big-data",
+      "title": "Spark & Big Data",
+      "summary": "Cluster computing, Hadoop ecosystem, Spark DataFrame, partition, shuffle và tối ưu job.",
+      "topics": ["Cluster computing", "Apache Spark", "HDFS", "YARN", "MapReduce"]
+    },
+    {
+      "id": "07-streaming-kafka",
+      "title": "Streaming với Kafka",
+      "summary": "Messaging, sync và async, Kafka topic/partition/consumer group, delivery semantics.",
+      "topics": ["Messages vs Streams", "Kafka", "RabbitMQ", "Exactly-once"]
+    },
+    {
+      "id": "08-devops-for-data",
+      "title": "DevOps cho Data",
+      "summary": "Docker, Kubernetes, CI/CD, Infrastructure as Code với Terraform, monitoring và testing.",
+      "topics": ["Docker", "Kubernetes", "CI/CD", "Terraform", "Monitoring", "Testing"]
+    },
+    {
+      "id": "09-serving-bi",
+      "title": "Data Serving & BI",
+      "summary": "Phục vụ dữ liệu cho phân tích, dashboard BI, Streamlit và Reverse ETL.",
+      "topics": ["Data Analytics", "Metabase", "Streamlit", "Reverse ETL"]
+    },
+    {
+      "id": "10-security-governance",
+      "title": "Security & Governance",
+      "summary": "AuthN/AuthZ, encryption, tokenization, masking, data quality, lineage và quy định GDPR.",
+      "topics": ["Encryption", "Masking", "Data Quality", "Lineage", "GDPR"]
+    }
+  ],
+  "capstone": {
+    "title": "Olist Data Platform",
+    "readme": "capstone/README.md",
+    "milestones": [
+      { "id": "m01", "title": "Nạp dữ liệu Olist vào PostgreSQL", "after": "01-foundations", "doc": "capstone/milestones/m01-ingest-postgres.md" },
+      { "id": "m02", "title": "Star schema cho đơn hàng và vận chuyển", "after": "02-data-modeling", "doc": "capstone/milestones/m02-star-schema.md" },
+      { "id": "m03", "title": "Cache sản phẩm bằng Redis, review vào MongoDB", "after": "03-nosql", "doc": "capstone/milestones/m03-nosql.md" },
+      { "id": "m04", "title": "Lakehouse trên MinIO + DuckDB", "after": "04-warehouse-lakehouse", "doc": "capstone/milestones/m04-lakehouse.md" },
+      { "id": "m05", "title": "Orchestrate bằng Airflow + dbt", "after": "05-batch-pipelines", "doc": "capstone/milestones/m05-airflow-dbt.md" },
+      { "id": "m06", "title": "Xử lý batch lớn bằng Spark", "after": "06-spark-big-data", "doc": "capstone/milestones/m06-spark.md" },
+      { "id": "m07", "title": "Order events thời gian thực qua Kafka", "after": "07-streaming-kafka", "doc": "capstone/milestones/m07-kafka.md" },
+      { "id": "m08", "title": "CI/CD và hạ tầng bằng Terraform", "after": "08-devops-for-data", "doc": "capstone/milestones/m08-cicd-terraform.md" },
+      { "id": "m09", "title": "Dashboard vận hành trên Metabase", "after": "09-serving-bi", "doc": "capstone/milestones/m09-dashboard.md" },
+      { "id": "m10", "title": "Data quality, lineage, masking PII", "after": "10-security-governance", "doc": "capstone/milestones/m10-governance.md" }
+    ]
+  }
+}

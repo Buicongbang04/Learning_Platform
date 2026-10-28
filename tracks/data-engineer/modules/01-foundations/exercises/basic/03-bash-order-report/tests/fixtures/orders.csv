@@ -1,0 +1,12 @@
+order_id,customer_id,order_status,order_purchase_timestamp
+o1,c1,delivered,2018-01-02 10:00:00
+o2,c2,shipped,2018-01-03 09:30:00
+o3,c1,delivered,2018-02-10 15:45:00
+o4,c3,canceled,2018-02-11 08:00:00
+o5,c4,delivered,2018-03-01 12:00:00
+o6,c5,invoiced,2018-03-02 12:00:00
+o7,c6,delivered,2018-03-03 12:00:00
+
+o8,c7,shipped,2018-03-04 12:00:00
+o9,c8,delivered,2018-03-05 12:00:00
+

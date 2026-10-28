@@ -1,0 +1,17 @@
+# TODO: tách thành các job unit -> integration -> build -> deploy staging -> deploy production
+name: pipeline
+
+on:
+  push:
+
+jobs:
+  all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -r requirements.txt
+      - run: pytest
+      # TODO: integration test với Postgres service container
+      # TODO: build & push image tag theo github.sha, chỉ trên main
+      - run: docker build -t olist-pipelines:latest .
+      # TODO: deploy staging rồi production với environment

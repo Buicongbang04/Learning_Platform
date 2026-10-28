@@ -1,0 +1,1 @@
+# TODO: loại .git, __pycache__, .venv, data (và .env, *.pyc) khỏi build context

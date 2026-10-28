@@ -1,0 +1,16 @@
+name: ci
+
+# TODO 1: chạy khi push lên main và khi có pull_request
+on:
+  workflow_dispatch:
+
+# TODO 2: giới hạn quyền GITHUB_TOKEN: contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # TODO 3: thêm timeout-minutes (<= 30)
+    steps:
+      # TODO 4: checkout code bằng actions/checkout@v4
+      # TODO 5: cài Python "3.12" bằng actions/setup-python@v5, bật cache pip
+      - run: echo "TODO 6: cài requirements.txt rồi chạy pytest"

@@ -1,0 +1,7 @@
+{
+  "id": "data-science",
+  "name": "Data Science",
+  "icon": "flask-conical",
+  "status": "soon",
+  "order": 3
+}

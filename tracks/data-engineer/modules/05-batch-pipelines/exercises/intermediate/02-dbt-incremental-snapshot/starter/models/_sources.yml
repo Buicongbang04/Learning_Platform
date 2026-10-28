@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: olist
+    schema: raw
+    tables:
+      - name: orders
+        description: "order_id, customer_id, order_status, amount, updated_at (chuỗi)"
+      - name: customers
+        description: "customer_id, customer_city, customer_state, updated_at (chuỗi)"

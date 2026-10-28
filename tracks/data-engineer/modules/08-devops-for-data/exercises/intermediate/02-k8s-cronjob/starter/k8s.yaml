@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: olist-ingest-config
+  namespace: data
+data:
+  TARGET_SCHEMA: staging
+  # TODO 1: BATCH_SIZE phải là chuỗi
+  BATCH_SIZE: 5000
+---
+# TODO 2: Secret olist-db (Opaque) dùng stringData chứa DB_PASSWORD
+apiVersion: v1
+kind: Secret
+metadata:
+  name: olist-db
+  namespace: data
+type: Opaque
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: olist-ingest
+  namespace: data
+spec:
+  schedule: "0 * * * *"
+  # TODO 3: không cho chạy chồng (concurrencyPolicy)
+  jobTemplate:
+    spec:
+      # TODO 4: backoffLimit từ 1 tới 5
+      template:
+        spec:
+          restartPolicy: Never
+          # TODO 5: securityContext runAsNonRoot
+          containers:
+            - name: ingest
+              # TODO 6: không dùng latest
+              image: ghcr.io/acme/olist-ingest:latest
+              # TODO 7: envFrom ConfigMap + Secret, resources requests/limits

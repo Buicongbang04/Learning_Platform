@@ -1,0 +1,17 @@
+services:
+  postgres:
+    # TODO 1: pin phiên bản image
+    image: postgres
+    environment:
+      POSTGRES_USER: de
+      # TODO 2: không hardcode mật khẩu, dùng ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: de
+      POSTGRES_DB: olist
+    # TODO 3: thêm healthcheck pg_isready và named volume cho /var/lib/postgresql/data
+  loader:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://de:de@localhost:5432/olist
+    # TODO 4: chờ postgres healthy; kết nối tới host "postgres"
+    depends_on:
+      - postgres

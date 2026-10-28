@@ -1,0 +1,32 @@
+{
+  "name": "learning-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "^1.63.0",
+    "mermaid": "11",
+    "react": "19",
+    "react-dom": "19",
+    "react-markdown": "10",
+    "react-router-dom": "7",
+    "remark-gfm": "4",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4",
+    "@types/node": "^26.6.5",
+    "@types/react": "19",
+    "@types/react-dom": "19",
+    "@vitejs/plugin-react": "4",
+    "tailwindcss": "4",
+    "typescript": "5",
+    "vite": "6"
+  }
+}

@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: stg_customers
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+
+  - name: stg_orders
+    description: Đơn hàng đã làm sạch, mỗi order_id một dòng.
+    columns:
+      - name: order_id
+        # TODO: test unique và not_null
+      - name: order_status
+        # TODO: test accepted_values với các giá trị delivered, shipped, canceled, invoiced, processing
+      - name: customer_id
+        # TODO: test relationships tới ref('stg_customers'), cột customer_id
+
+  - name: stg_payments
+    columns:
+      - name: order_id
+        data_tests: [not_null]

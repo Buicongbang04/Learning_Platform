@@ -1,0 +1,14 @@
+name: olist_basic
+version: "1.0.0"
+config-version: 2
+profile: olist
+
+model-paths: ["models"]
+
+models:
+  olist_basic:
+    staging:
+      +materialized: view
+    marts:
+      # TODO: marts phải là bảng thật (table), không phải view
+      +materialized: view

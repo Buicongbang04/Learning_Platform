@@ -1,0 +1,113 @@
+# Airflow 2.10 (LocalExecutor + Postgres riêng) cho module 05 và capstone.
+#
+#   docker compose -f setup/airflow/docker-compose.yml up -d      # lần đầu chờ ~1-2 phút
+#   mở http://localhost:8080  (airflow / airflow)
+#   docker compose -f setup/airflow/docker-compose.yml down       # tắt
+#
+# DAG được đọc từ tracks/data-engineer/capstone/project/dags.
+# Muốn chạy thêm DAG của module 05 (hoặc thư mục khác), đặt biến EXTRA_DAGS_DIR
+# (đường dẫn tuyệt đối hoặc tương đối với thư mục setup/airflow/):
+#   EXTRA_DAGS_DIR=$PWD/tracks/data-engineer/modules/05-batch-pipelines/exercises \
+#     docker compose -f setup/airflow/docker-compose.yml up -d
+# Thư mục đó hiện trong Airflow ở /opt/airflow/dags/extra.
+
+name: de-airflow
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.10.5-python3.12
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__FERNET_KEY: ""
+    AIRFLOW__WEBSERVER__SECRET_KEY: de-learning-local-only
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 30
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    # Kết nối tới dịch vụ dùng chung (setup/docker-compose.yml) đang publish cổng trên máy host.
+    AIRFLOW_CONN_OLIST_POSTGRES: postgresql://de:de@host.docker.internal:5432/de
+    OLIST_DATA_DIR: /opt/airflow/data
+    MINIO_ENDPOINT: http://host.docker.internal:9000
+    KAFKA_BOOTSTRAP: host.docker.internal:9094
+    # Thư viện thêm cho DAG (chỉ dùng khi học; production nên build image riêng).
+    _PIP_ADDITIONAL_REQUIREMENTS: ${AIRFLOW_EXTRA_PIP:-pandas duckdb dbt-core dbt-duckdb dbt-postgres}
+  volumes:
+    - ../../tracks/data-engineer/capstone/project/dags:/opt/airflow/dags
+    - ${EXTRA_DAGS_DIR:-./extra_dags}:/opt/airflow/dags/extra
+    - ../../tracks/data-engineer/capstone/project:/opt/airflow/project
+    - ../../data:/opt/airflow/data
+    - airflow_logs:/opt/airflow/logs
+  user: "${AIRFLOW_UID:-50000}:0"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on: &airflow-depends
+    airflow-db:
+      condition: service_healthy
+
+services:
+  airflow-db:
+    image: postgres:16.9
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create --username airflow --password airflow \
+          --firstname Data --lastname Engineer --role Admin --email airflow@example.com || true
+    environment:
+      <<: *airflow-env
+      _PIP_ADDITIONAL_REQUIREMENTS: ""
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "-s", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-depends
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "-s", "http://localhost:8974/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    environment:
+      <<: *airflow-env
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-depends
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  airflow_db_data:
+  airflow_logs:

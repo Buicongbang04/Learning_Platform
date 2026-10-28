@@ -1,0 +1,13 @@
+# Data contract cho file orders_<ds>.csv do team checkout xuất mỗi ngày.
+# Định dạng do bài tập quy ước:
+#   columns.<tên>: { type: string|number|timestamp, required: bool, unique: bool,
+#                    enum: [..], min: số }
+dataset: olist.orders
+owner: team-checkout
+columns:
+  order_id: { type: string, required: true }
+  # TODO: order_id phải unique trong một file
+  # TODO: customer_id bắt buộc
+  # TODO: order_status thuộc created, approved, shipped, delivered, canceled
+  # TODO: amount là number >= 0
+  # TODO: order_purchase_timestamp là timestamp bắt buộc
