@@ -22,7 +22,8 @@ tiếng Anh. Làm bài trong VS Code, app học tập chạy local (`app/`).
   1. dữ liệu sạch thật (lưu ra tệp, vd. Parquet),
   2. insight có số liệu cụ thể từ chính bộ dữ liệu,
   3. biểu đồ minh hoạ, vẽ bằng code ngay trong notebook,
-  4. báo cáo ngắn về bộ dữ liệu (mô tả, các bước làm sạch, insight, giới hạn).
+  4. ~~báo cáo ngắn về bộ dữ liệu~~ (đã thay bằng trắc nghiệm trong app, xem spec `2026-10-29-notebook-panel-quiz-design.md`;
+     không còn `report.md` với các heading Bộ dữ liệu / Làm sạch / Insight / Giới hạn).
 - Capstone cuối track là **dự án hoàn chỉnh trên dữ liệu thật, có dashboard xem trên trình duyệt**.
 
 **Ngoài phạm vi**
@@ -33,7 +34,7 @@ tiếng Anh. Làm bài trong VS Code, app học tập chạy local (`app/`).
 - MLOps sâu: để cho track `mlops`. Ở đây chỉ một phần "Data cho ML".
 
 **Điều cấm (làm vậy là hỏng dù chạy được)**
-- Bài dữ liệu thật mà làm xong không có dữ liệu sạch, insight, biểu đồ, báo cáo.
+- Bài dữ liệu thật mà làm xong không có dữ liệu sạch, insight, biểu đồ, trắc nghiệm bài học (trước đây là báo cáo).
 - Bài "dữ liệu thật" nhưng nhạt: không cho thấy điều gì thú vị về bộ dữ liệu.
 - Module 00 chỉ toàn lý thuyết chung chung, không có thực hành thu thập dữ liệu thật.
 - Test cần mạng hay cần bộ dữ liệu đầy đủ mới chạy: phần dùng dữ liệu thật phải tự skip khi chưa tải.
@@ -126,7 +127,7 @@ Generation (Sources of Data: Database, APIs, Logs, Mobile Apps, IoT; Data Collec
     tham chiếu viết sẵn; nguồn người học tự ghi (stream) thì test tính tham chiếu bằng hàm lời giải
     trên chính tệp đã ghi. Danh mục `download_dataset.py` ghi rõ mốc đã ghim;
   - biểu đồ: notebook có tạo figure (không chấm thẩm mỹ);
-  - báo cáo: có đủ các mục bắt buộc; phần nhận xét định tính đối chiếu bằng rubric trong `SOLUTION.md`.
+  - ~~báo cáo~~ đã thay bằng trắc nghiệm: `quiz.yaml` + `quiz-answers.yaml` (câu dữ liệu có đáp án cố định trên dữ liệu ghim), kiểm bằng `tests/test_quiz_files.py`; test của bài không còn chấm `report.md`.
   - Phần dùng dữ liệu thật tự skip khi bộ chưa tải; phần logic có thêm test trên fixture nhỏ để
     luôn chạy được offline.
 - Dữ liệu stream trực tiếp (EventStreams) không tái lập được: notebook ghi một đoạn stream ra tệp

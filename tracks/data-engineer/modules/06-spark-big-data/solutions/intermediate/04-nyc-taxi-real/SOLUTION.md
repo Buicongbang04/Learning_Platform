@@ -1,7 +1,7 @@
 # Lời giải: Spark trên NYC Yellow Taxi 2019
 
-Lời giải đầy đủ là `nyc_taxi.ipynb` (chạy cả notebook khoảng 2 phút trên máy 16 nhân, 31 GB RAM), báo cáo mẫu
-là `report.md`.
+Lời giải đầy đủ là `nyc_taxi.ipynb` (chạy cả notebook khoảng 2 phút trên máy 16 nhân, 31 GB RAM). Báo cáo bài học
+là phần trắc nghiệm trong app.
 
 ## Cách làm
 
@@ -55,11 +55,3 @@ là `report.md`.
 | `airport_summary` | 6 418 240 chuyến, share 0,077, cước 40,07 vs 11,01 |
 | Dữ liệu sạch | 365 thư mục `pickup_date=`, 365 tệp, 1,48 GB (Snappy; gốc 1,24 GB GZIP) |
 | Tháng 2 một mình (test ghi) | 6 966 272 chuyến sạch, 86 thư mục ngày |
-
-## Rubric cho báo cáo
-
-| Mức | Bộ dữ liệu | Làm sạch | Insight | Giới hạn |
-| --- | --- | --- | --- | --- |
-| Đạt | Nguồn, giấy phép, số chuyến, số tệp/GB | Số chuyến loại theo từng lý do | 3 con số đúng (giờ cao điểm, tip thẻ vs tiền mặt, sân bay hoặc borough) | 1 giới hạn |
-| Tốt | Thêm: một row group mỗi tệp và hệ quả cho song song | Thêm: vì sao không dedup, nơi ghi, số tệp, chuyến trễ tháng | Nhận ra tip tiền mặt là lỗi thu thập, không phải hành vi; có kết quả đo ở mục 5 | Chỉ Yellow Taxi, ngưỡng là tuỳ chọn |
-| Xuất sắc | | Đề xuất bảng quarantine, so sánh nén Snappy vs GZIP/zstd | Chỉ ra tối ưu lớn nhất là layout (partition pruning), giải thích bằng plan | Nêu dữ liệu cần thêm để trả lời (FHV, tip tiền mặt khảo sát) |

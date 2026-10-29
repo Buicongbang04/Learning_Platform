@@ -359,7 +359,7 @@ def test_real_insights_match_reference(nb):
     assert got["edits_per_min"] == pytest.approx(ref["edits"] / ref["duration_min"])
 
 
-# ---------- biểu đồ và báo cáo ----------
+# ---------- biểu đồ ----------
 
 def test_notebook_draws_charts():
     book = nbformat.read(ex.path("hybrid_wikimedia.ipynb"), as_version=4)
@@ -367,12 +367,3 @@ def test_notebook_draws_charts():
              and re.search(r"plt\.|\.plot\(|\.bar\(|\.barh\(|\.hist\(|\.imshow\(", "\n".join(
                  line for line in c.source.splitlines() if not line.lstrip().startswith("#")))]
     assert len(plots) >= 3, "Cần ít nhất 3 cell explore vẽ biểu đồ"
-
-
-def test_report_sections_and_numbers():
-    text = ex.read("report.md")
-    assert "TODO" not in text, "Điền hết các mục TODO trong report.md"
-    for heading in ("## Bộ dữ liệu", "## Làm sạch", "## Insight", "## Giới hạn"):
-        assert heading in text
-    insight = text.split("## Insight", 1)[1].split("\n## ", 1)[0]
-    assert len(re.findall(r"\d[\d.,]*", insight)) >= 4, "Mục Insight cần số liệu cụ thể"

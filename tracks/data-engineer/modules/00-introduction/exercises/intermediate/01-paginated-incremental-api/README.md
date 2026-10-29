@@ -5,8 +5,6 @@ services: []
 files:
   - path: starter/earthquakes.ipynb
     note: 6 hàm TODO + 2 biểu đồ; fetch_json có sẵn; cell explore gọi API thật
-  - path: starter/report.md
-    note: Báo cáo 4 mục, đang là TODO
   - path: tests/test_earthquakes.py
     note: Không sửa; dùng server USGS giả, không gọi mạng
 run:
@@ -37,7 +35,8 @@ Mở `starter/earthquakes.ipynb`, làm lần lượt (đặc tả chi tiết tro
 5. `insights(df)`: 14 con số, gồm độ trễ cập nhật và hệ số b của luật Gutenberg–Richter.
 6. `write_clean(df, out_dir)`: ghi đè `data/clean/usgs-earthquakes/events.parquet`.
 7. Chạy cell `explore: thu thập` (lần đầu ~7 request; chạy lại cell là một lượt incremental), vẽ ít nhất
-   2 biểu đồ, viết `starter/report.md`, trả lời câu hỏi về watermark.
+   2 biểu đồ.
+8. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook.
 
 ## Tiêu chí đạt
 
@@ -46,7 +45,6 @@ Mở `starter/earthquakes.ipynb`, làm lần lượt (đặc tả chi tiết tro
 - Trên dữ liệu thật: ~6 400 trận, `id` không trùng; trận lớn nhất M7.5 Noto (Nhật) ngày 2024-01-01; tháng 4 nhiều
   trận nhất; hơn 95% bản ghi được sửa sau hơn 30 ngày; b trong khoảng 1,0–1,3.
 - `write_clean` gọi hai lần vẫn đúng số dòng. Ít nhất 2 cell `explore` vẽ biểu đồ.
-- `report.md` đủ 4 mục, không còn TODO, Insight có số và trả lời câu hỏi watermark.
 
 ## Gợi ý
 

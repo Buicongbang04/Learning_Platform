@@ -5,8 +5,6 @@ services: []
 files:
   - path: starter/air_quality.ipynb
     note: 6 hàm TODO + 2 biểu đồ
-  - path: starter/report.md
-    note: Báo cáo 4 mục, đang là TODO
   - path: tests/test_air_quality.py
     note: Không sửa
 run:
@@ -36,14 +34,14 @@ Mở `starter/air_quality.ipynb`, làm lần lượt:
    giờ CO cao/thấp nhất, ngày thường vs cuối tuần, tháng sạch nhất).
 6. `write_clean(df, out_dir)`: ghi đè `data/clean/air-quality-uci/hourly.parquet`.
 7. Ít nhất 2 biểu đồ trong cell `explore` (CO theo giờ; bản đồ nhiệt tỉ lệ thiếu theo tháng).
-8. `starter/report.md`: 4 mục **Bộ dữ liệu**, **Làm sạch**, **Insight** (có số), **Giới hạn**.
+8. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook.
 
 ## Tiêu chí đạt
 
 - Test trên fixture nhỏ (luôn chạy) pass: đọc đúng dấu phẩy thập phân, `-200` thành null nhưng `-1,5 °C` giữ nguyên, bỏ giờ trùng.
 - Trên bộ thật: 9 357 dòng liên tục từng giờ; `nmhc_gt` thiếu ~90%; 366 giờ mất kết nối, đợt dài nhất 76 giờ từ 2005-02-08 17:00; CO đỉnh sáng lúc 9h, đỉnh chiều lúc 19h; cuối tuần thấp hơn ~30%.
 - `write_clean` gọi hai lần vẫn đúng số dòng.
-- Notebook có ít nhất 2 cell `explore` vẽ biểu đồ; `report.md` đủ 4 mục, không còn TODO, Insight có số.
+- Notebook có ít nhất 2 cell `explore` vẽ biểu đồ.
 
 ## Gợi ý
 

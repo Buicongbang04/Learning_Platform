@@ -35,11 +35,3 @@
 | `last_request` | 1995-07-28 13:32:25 |
 | `max_gap_minutes`, `max_gap_start` | 22,1, 1995-07-13 19:48:59 |
 | `top_bytes_host_type` | com |
-
-## Rubric cho báo cáo
-
-| Mức | Bộ dữ liệu | Làm sạch | Insight | Giới hạn |
-| --- | --- | --- | --- | --- |
-| Đạt | Nguồn, kích thước, khoảng thời gian | Nêu số dòng hỏng và cách xử lý `-`, múi giờ | 3 con số đúng | 1 giới hạn |
-| Tốt | Thêm: log dừng 28/07 | Thêm: vì sao không dedup, cỡ Parquet | Nối ngày đỉnh với STS-70, khoảng lặng cùng ngày | Host không phải người dùng (proxy) |
-| Xuất sắc | | Đưa ra ngưỡng cảnh báo tỉ lệ reject | Đề xuất hành động (sửa link WinVN, chuẩn bị tải ngày phóng) | Nêu điều cần thêm để trả lời câu hỏi (user agent, referrer) |

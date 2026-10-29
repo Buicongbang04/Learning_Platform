@@ -33,11 +33,3 @@ từ tệp. Đây cũng là bằng chứng nguồn đã trả gì vào thời đ
 | `max_temp` (`max_temp_date`) | 36,1 (2023-05-06) | 39,8 (2023-05-17) |
 | `hot_days` | 7 | 47 |
 | `rainy_days` | 220 | 151 |
-
-## Rubric cho báo cáo
-
-| Mức | Bộ dữ liệu | Làm sạch | Insight | Giới hạn |
-| --- | --- | --- | --- | --- |
-| Đạt | API, tham số ghim, giấy phép | Response thô lưu ở đâu | 3 con số đúng | 1 giới hạn |
-| Tốt | Nêu ô lưới thật API trả về | Vì sao lưu thô trước khi parse | So sánh hai thành phố, giải thích tháng 4 ở TP.HCM | ERA5 không phải trạm đo |
-| Xuất sắc | Ước lượng số request nếu mở rộng 63 tỉnh × 30 năm | Đề xuất chia request theo năm khi mở rộng | Nối insight với quyết định (vd. lịch bảo trì ngoài trời) | Một năm El Niño không đại diện |

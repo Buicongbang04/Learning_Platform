@@ -5,8 +5,6 @@ services: []
 files:
   - path: starter/nyc_taxi.ipynb
     note: 8 hàm TODO + cell đo tối ưu
-  - path: starter/report.md
-    note: Báo cáo 4 mục, đang là TODO
   - path: tests/test_nyc_taxi_real.py
     note: Không sửa
 run:
@@ -38,7 +36,7 @@ Mở `starter/nyc_taxi.ipynb` (nút **Mở trong VS Code**), làm lần lượt:
 4. `peak_hours`, `tip_by_payment`, `tip_rate_by_borough` (broadcast bảng zone), `airport_summary`.
 5. Chạy ba cell đo ở mục 5 (broadcast vs sort-merge join, small files, partition pruning), ghi lại thời gian.
 6. Vẽ ít nhất 2 biểu đồ trong các cell `explore` (lý do loại, đường cầu theo giờ, tip theo borough).
-7. Viết `starter/report.md`: 4 mục **Bộ dữ liệu**, **Làm sạch**, **Insight** (có số), **Giới hạn**.
+7. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook.
 
 Cả notebook chạy khoảng 1,5–2 phút trên máy 16 nhân, 31 GB RAM, nên bài dùng đủ 12 tháng. Máy yếu hơn
 có thể tạm cắt `MONTHS` ở cell đầu khi thử, nhưng test trên bộ thật luôn chạy đủ 12 tháng (khoảng 1,5 phút;
@@ -53,7 +51,6 @@ chạy chung với test của bài khác thì JVM đã có heap 1 GB, test tự 
 - Trên bộ thật: 84 598 444 chuyến gốc, khoảng 83,38 triệu chuyến sạch; giờ cao điểm là 18h với khoảng
   5,48 triệu chuyến; tip chuyến thẻ khoảng 22,8% tiền cước, tiền mặt gần 0.
 - Notebook có ít nhất 2 cell `explore` vẽ biểu đồ.
-- `report.md` đủ 4 mục, không còn TODO, mục Insight có ít nhất 3 con số.
 
 ## Gợi ý
 

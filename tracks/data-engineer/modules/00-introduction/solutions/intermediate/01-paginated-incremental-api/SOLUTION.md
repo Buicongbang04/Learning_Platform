@@ -35,11 +35,3 @@ Watermark theo `time` coi tháng 1 là "đã xong" và bỏ lỡ mọi bản s�
 | `gutenberg_richter_b` | 1,13 |
 
 Test dùng dung sai (±1% số trận, ±1 trận M7) vì catalog còn được sửa.
-
-## Rubric cho báo cáo
-
-| Mức | Bộ dữ liệu | Làm sạch | Insight | Giới hạn |
-| --- | --- | --- | --- | --- |
-| Đạt | API, tham số, số trang | Upsert theo `id` | 3 con số đúng | 1 giới hạn |
-| Tốt | Số request mỗi lượt | Giải thích vì sao lượt 2 lấy lại bản ghi ở watermark | Watermark theo `updated` có số liệu chứng minh; nối tháng 4 với Hoa Liên | `region` thô, catalog còn sửa |
-| Xuất sắc | | Đề xuất lookback (lùi watermark vài phút) để chống lệch đồng hồ | Ước lượng chi phí full vs incremental khi lưu 10 năm | Thang magnitude trộn lẫn |

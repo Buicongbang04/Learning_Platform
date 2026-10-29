@@ -5,8 +5,6 @@ services: []
 files:
   - path: starter/web_logs.ipynb
     note: 5 hàm TODO + 2 biểu đồ
-  - path: starter/report.md
-    note: Báo cáo 4 mục, đang là TODO
   - path: tests/test_web_logs.py
     note: Không sửa
 run:
@@ -37,8 +35,7 @@ Mở `starter/web_logs.ipynb` (nút **Mở trong VS Code**), làm lần lượt:
    Tính theo giờ địa phương của server (`America/New_York`).
 4. `write_clean(df, out_dir)`: ghi đè `data/clean/nasa-http-logs/requests.parquet`; chạy lại không nhân đôi.
 5. Vẽ ít nhất 2 biểu đồ trong các cell `explore`: request theo ngày, và nhịp theo giờ ngày thường vs cuối tuần.
-6. Viết `starter/report.md`: 4 mục **Bộ dữ liệu**, **Làm sạch**, **Insight** (có số), **Giới hạn**.
-   Tìm hiểu xem ngày đỉnh trùng với sự kiện gì của NASA.
+6. Tìm hiểu xem ngày đỉnh trùng với sự kiện gì của NASA. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook.
 
 ## Tiêu chí đạt
 
@@ -46,7 +43,6 @@ Mở `starter/web_logs.ipynb` (nút **Mở trong VS Code**), làm lần lượt:
 - Trên bộ thật: khoảng 1,89 triệu request đọc được, dưới 50 dòng hỏng; ngày đỉnh là 13/07/1995 với khoảng 134 nghìn request; log dừng lúc 1995-07-28 13:32:25.
 - `write_clean` gọi hai lần vẫn ra đúng số dòng.
 - Notebook có ít nhất 2 cell `explore` vẽ biểu đồ.
-- `report.md` đủ 4 mục, không còn TODO, mục Insight có ít nhất 3 con số.
 
 ## Gợi ý
 

@@ -5,8 +5,6 @@ services: []
 files:
   - path: starter/weather.ipynb
     note: 7 hàm TODO + 2 biểu đồ; cell explore gọi API thật
-  - path: starter/report.md
-    note: Báo cáo 4 mục, đang là TODO
   - path: tests/test_weather.py
     note: Không sửa; test không gọi mạng
 run:
@@ -40,7 +38,8 @@ Mở `starter/weather.ipynb`, làm lần lượt:
    ngày nóng nhất, số ngày ≥ 35 °C, số ngày mưa.
 6. `write_clean(df, out_dir)`: ghi đè `data/clean/open-meteo/daily.parquet`.
 7. Chạy cell `explore: thu thập` (2 request thật; không cần lệnh tải riêng, notebook chính là bộ thu thập),
-   vẽ ít nhất 2 biểu đồ, viết `starter/report.md`.
+   vẽ ít nhất 2 biểu đồ.
+8. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook.
 
 
 ## Tiêu chí đạt
@@ -50,7 +49,6 @@ Mở `starter/weather.ipynb`, làm lần lượt:
 - Trên dữ liệu đã thu thập: mỗi thành phố đủ 365 ngày; biên độ nhiệt TP.HCM ~3,3 °C, Hà Nội ~13,6 °C;
   tháng nóng nhất TP.HCM là tháng 4, Hà Nội tháng 7; hơn 80% lượng mưa rơi trong tháng 5–10.
 - `write_clean` gọi hai lần vẫn đúng số dòng. Ít nhất 2 cell `explore` vẽ biểu đồ.
-- `report.md` đủ 4 mục, không còn TODO, Insight có số.
 
 ## Gợi ý
 

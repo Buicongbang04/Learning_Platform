@@ -5,8 +5,6 @@ services: []
 files:
   - path: starter/source_profile.ipynb
     note: 7 hàm TODO + 2 biểu đồ; hàm nạp dữ liệu có sẵn
-  - path: starter/report.md
-    note: Báo cáo 4 mục kèm khuyến nghị thu thập, đang là TODO
   - path: tests/test_source_profile.py
     note: Không sửa
 run:
@@ -36,8 +34,7 @@ Mở `starter/source_profile.ipynb`, viết:
 4. `yearly_volume_gb(rows_per_day, bytes_per_row)`: ngoại suy một năm.
 5. `compare(profiles)` và `write_clean(table, out_dir)`: bảng so sánh, ghi `data/clean/source-profiles/profiles.parquet`.
 6. Chạy các cell `explore`, vẽ ít nhất 2 biểu đồ (velocity trục log; byte mỗi dòng).
-7. `starter/report.md`: 4 mục; mục **Insight** có số và một khuyến nghị thu thập cho mỗi nguồn
-   (batch/streaming, pull/push, full/incremental theo khoá nào, cảnh báo gì).
+7. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook. Câu hỏi gồm khuyến nghị thu thập cho từng nguồn (batch/streaming, pull/push, full/incremental, cảnh báo).
 
 ## Tiêu chí đạt
 
@@ -46,7 +43,7 @@ Mở `starter/source_profile.ipynb`, viết:
 - Trên dữ liệu thật: log NASA ~68 600 dòng/ngày, khoảng lặng dài nhất 1 326 giây lúc 1995-07-13 23:48:59 UTC,
   835 dòng trùng hoàn toàn; IoT đúng 24 dòng/ngày, 16 701 ô `-200`, `NMHC(GT)` thiếu ~90%; CSV IoT ~84 byte/dòng
   và Parquet nhỏ hơn ít nhất 2 lần.
-- Ít nhất 2 cell `explore` vẽ biểu đồ; `report.md` đủ 4 mục, không còn TODO, Insight có số.
+- Ít nhất 2 cell `explore` vẽ biểu đồ.
 
 ## Gợi ý
 

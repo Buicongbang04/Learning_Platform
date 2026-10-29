@@ -2,7 +2,7 @@
 
 Bài advanced không có đáp án duy nhất: số liệu phụ thuộc lúc bạn ghi, và câu hỏi Lambda/Kappa cần lập
 luận chứ không có một câu đúng. Dưới đây là hướng làm, các quyết định thiết kế, rubric, code tham chiếu
-(đã chạy qua toàn bộ test) và một báo cáo mẫu trên một lần ghi thật.
+(đã chạy qua toàn bộ test). Báo cáo bài học là phần trắc nghiệm trong app.
 
 ## Hướng làm
 
@@ -56,8 +56,8 @@ luận chứ không có một câu đúng. Dưới đây là hướng làm, các
 | Parse và làm sạch | 15 | Dòng hỏng/canary không làm sập; dedup theo `meta.id`, giữ bản đầu; UTC; kiểu đúng; `write_clean` idempotent |
 | Stream | 20 | Một lượt theo thứ tự đến; watermark trước khi cập nhật; dedup có TTL; state có giới hạn; stats đúng |
 | Batch và đối soát | 15 | Cùng định nghĩa với stream; outer join theo khoá, điền 0; giải thích được mỗi loại `diff` |
-| Insight và biểu đồ | 15 | Ít nhất 3 biểu đồ đọc được (có nhãn trục, tiêu đề); số liệu trong báo cáo khớp notebook; có chọn `allowed_lateness` dựa trên số đo |
-| Báo cáo và lập luận thiết kế | 15 | Đủ 4 mục; nêu giới hạn (thời lượng ghi, phút bị cắt, cờ bot); chọn Lambda hoặc Kappa có lý do gắn với retention của nguồn |
+| Insight và biểu đồ | 15 | Ít nhất 3 biểu đồ đọc được (có nhãn trục, tiêu đề); số liệu khớp notebook; có chọn `allowed_lateness` dựa trên số đo |
+| Lập luận thiết kế | 15 | Nêu giới hạn (thời lượng ghi, phút bị cắt, cờ bot); chọn Lambda hoặc Kappa có lý do gắn với retention của nguồn |
 
 Trừ điểm: dedup theo `event.id`; window theo `received_at`; đếm `categorize` ở một phía mà không ở phía
 kia; `record` không có timeout (treo mãi khi mạng đứt); ghi thẳng vào `.jsonl` để lại tệp dở khi bị ngắt.
@@ -408,46 +408,3 @@ ax.set_title("Stream (allowed_lateness=10s) và batch theo phút")
 plt.tight_layout()
 plt.show()
 ```
-
-## Báo cáo mẫu
-
-Trên một lần ghi 5 phút ngày 29/10/2026 (số của bạn sẽ khác, cách lập luận thì tương tự):
-
-### Bộ dữ liệu
-
-Luồng `recentchange` của Wikimedia EventStreams (`https://stream.wikimedia.org/v2/stream/recentchange`),
-nội dung theo giấy phép của từng wiki (phần lớn CC BY-SA), metadata sửa đổi công khai. Ghi một lần
-ngày 29/10/2026 từ 06:52:43 tới 06:57:42 UTC (4,98 phút), 1 tệp `20261029T065242Z.jsonl`, 11.884 dòng,
-18,4 MB, không phải nối lại lần nào. Mỗi dòng là `{"received_at", "event"}`: `received_at` là ingestion
-time do ta gắn, `event.timestamp` là event time (giây Unix, lúc sửa đổi xảy ra), `event.meta.id` là UUID
-của event.
-
-### Làm sạch
-
-0 dòng hỏng, 0 canary, 0 bản trùng theo `meta.id`. Vẫn dedup vì
-EventStreams là at-least-once: khi nối lại bằng `Last-Event-ID` hoặc ghi chồng hai đoạn thì trùng là
-bình thường. Không dedup theo `event.id` (id dòng recent change) vì mỗi wiki có dãy id riêng, hai wiki có
-thể trùng số. Thời gian về UTC, `bot` kiểu bool, `len_delta` cho phép thiếu (categorize/log không có
-`length`). Dữ liệu sạch ở `data/clean/wikimedia-recentchange/recentchange.parquet`: 0,8 MB so với 18,4 MB
-raw (bỏ `parsedcomment`, URL, nén cột).
-
-### Insight
-
-- Khoảng 1.134 sửa đổi mỗi phút (5.651 edit/new trong 4,98 phút); các phút trọn vẹn ổn định 1.103–1.151.
-  Gần một nửa luồng (5.435/11.884 event, 45,7%) là `categorize`, không phải sửa nội dung.
-- Bot chiếm 48,7% sửa đổi. Có wiki gần như toàn bot: `zhwikisource` 99,8% (540 sửa đổi), `cewiki` 100% (256).
-- Wiki sôi động nhất là `wikidatawiki` với 1.830 sửa đổi (32%), tiếp theo `commonswiki` 1.342 và `enwiki` 565.
-  Wikidata cũng là nơi người sửa nhiều nhất (1.475 sửa đổi của người, bot chỉ 19%).
-- Độ trễ từ lúc sửa tới lúc ta nhận: p50 1,9 giây, p95 6,2 giây, max 52,9 giây. Với `allowed_lateness = 10`
-  giây, stream bỏ 4/5.651 sửa đổi (0,07%); lateness 0 giây bỏ 60 (1,06%); từ 30 giây trở lên không bỏ event nào.
-- Đối soát (lateness 10 giây): 4/331 cặp (phút, wiki) lệch, mỗi cặp thiếu đúng 1, tổng lệch 4 = số event trễ.
-  Không cặp nào dư vì không có bản trùng.
-
-### Giới hạn
-
-Năm phút buổi sáng giờ châu Âu không đại diện cho cả ngày hay cả tuần; phút đầu (06:52) và phút cuối
-(06:57) chỉ ghi được một phần, kể cả event có event time trước lúc bắt đầu ghi 13 giây. Cờ `bot` là cờ
-tài khoản, công cụ bán tự động do người chạy vẫn tính là người. `timestamp` làm tròn xuống giây nên lag
-lệch tối đa 1 giây. Với nguồn này tôi chọn Kappa có lớp raw: stream cho dashboard, còn tệp raw JSONL là
-nguồn để tính lại khi đổi logic (EventStreams chỉ giữ 7–31 ngày lịch sử nên phải tự giữ raw). Lambda chỉ
-đáng khi cần số "chốt" hằng ngày khớp tuyệt đối, và khi đó batch cũng chỉ đọc lại chính lớp raw này.

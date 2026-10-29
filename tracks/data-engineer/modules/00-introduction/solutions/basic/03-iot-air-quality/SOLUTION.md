@@ -22,7 +22,7 @@
 - Thay `-200` bằng null **trước** mọi phép tính: trung bình CO thô (còn `-200`) là số âm vô nghĩa.
 - Phân biệt "mất kết nối" (cả 5 cảm biến null cùng lúc) với "một máy đo hỏng" (chỉ cột GT null):
   hai loại sự cố cần hai cảnh báo khác nhau trong hệ thống IoT thật.
-- Không nội suy: báo cáo nói rõ thiếu ở đâu. Nội suy là quyết định của người dùng dữ liệu, không phải của ingest.
+- Không nội suy: phần Insight nói rõ thiếu ở đâu. Nội suy là quyết định của người dùng dữ liệu, không phải của ingest.
 
 ## Con số tham chiếu (bộ thật)
 
@@ -35,11 +35,3 @@
 | `co_peak_hour`, `co_morning_peak_hour`, `co_trough_hour` | 19, 9, 5 |
 | `co_weekday_mean`, `co_weekend_mean`, `weekend_drop_pct` | 2,36, 1,65, 29,9 |
 | `lowest_co_month` | 2004-08 |
-
-## Rubric cho báo cáo
-
-| Mức | Bộ dữ liệu | Làm sạch | Insight | Giới hạn |
-| --- | --- | --- | --- | --- |
-| Đạt | Nguồn, giấy phép, số dòng, khoảng thời gian | `-200` → null, tỉ lệ thiếu | 3 con số đúng (giờ đỉnh, cuối tuần, tháng 8) | 1 giới hạn |
-| Tốt | Phân biệt cảm biến rẻ và ground truth | Thiếu có cấu trúc: NMHC chết, đợt mất kết nối | Giải thích bằng giao thông, Ferragosto | Múi giờ/DST, thiếu không ngẫu nhiên |
-| Xuất sắc | | Đề xuất cảnh báo cho hệ thống IoT (tỉ lệ `-200`, đợt mất kết nối > N giờ) | Nhận ra bước nhảy NOx có thể do thiết bị, đề xuất hỏi chủ nguồn | |

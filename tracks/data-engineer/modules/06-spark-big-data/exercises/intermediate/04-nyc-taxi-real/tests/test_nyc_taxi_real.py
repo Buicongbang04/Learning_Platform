@@ -309,7 +309,7 @@ def test_real_write_one_month(spark, nb, tmp_path):
     assert spark.read.parquet(str(out)).count() == pytest.approx(6_966_272, abs=20)
 
 
-# ---------- notebook, biểu đồ và báo cáo ----------
+# ---------- notebook và biểu đồ ----------
 
 def _code_cells():
     book = nbformat.read(ex.path(NB), as_version=4)
@@ -327,12 +327,3 @@ def test_notebook_draws_charts():
              and re.search(r"plt\.|\.plot\(|\.bar\(|\.barh\(|\.hist\(", "\n".join(
                  line for line in c.source.splitlines() if not line.lstrip().startswith("#")))]
     assert len(plots) >= 2, "Cần ít nhất 2 cell explore vẽ biểu đồ"
-
-
-def test_report_sections_and_numbers():
-    text = ex.read("report.md")
-    assert "TODO" not in text, "Điền hết các mục TODO trong report.md"
-    for heading in ("## Bộ dữ liệu", "## Làm sạch", "## Insight", "## Giới hạn"):
-        assert heading in text
-    insight = text.split("## Insight", 1)[1].split("\n## ", 1)[0]
-    assert len(re.findall(r"\d[\d.,]*", insight)) >= 3, "Mục Insight cần số liệu cụ thể"

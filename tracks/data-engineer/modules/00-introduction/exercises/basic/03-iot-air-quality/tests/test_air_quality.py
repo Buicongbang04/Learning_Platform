@@ -149,7 +149,7 @@ def test_real_monthly_profile(nb):
     assert m.loc["2004-11", "nox_gt"] > 3 * m.loc["2004-06", "nox_gt"]
 
 
-# ---------- biểu đồ và báo cáo ----------
+# ---------- biểu đồ ----------
 
 def test_notebook_draws_charts():
     book = nbformat.read(ex.path("air_quality.ipynb"), as_version=4)
@@ -157,12 +157,3 @@ def test_notebook_draws_charts():
              and re.search(r"plt\.|\.plot\(|\.bar\(|\.hist\(|imshow\(", "\n".join(
                  line for line in c.source.splitlines() if not line.lstrip().startswith("#")))]
     assert len(plots) >= 2, "Cần ít nhất 2 cell explore vẽ biểu đồ"
-
-
-def test_report_sections_and_numbers():
-    text = ex.read("report.md")
-    assert "TODO" not in text, "Điền hết các mục TODO trong report.md"
-    for heading in ("## Bộ dữ liệu", "## Làm sạch", "## Insight", "## Giới hạn"):
-        assert heading in text
-    insight = text.split("## Insight", 1)[1].split("\n## ", 1)[0]
-    assert len(re.findall(r"\d[\d.,]*", insight)) >= 3, "Mục Insight cần số liệu cụ thể"

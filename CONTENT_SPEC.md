@@ -196,7 +196,28 @@ Các bài notebook dữ liệu thật của track DE (module 00, capstone Bướ
 - Cell đầu đưa gốc repo vào `sys.path` rồi gọi `ensure("<tên>")` từ `data/download_dataset.py`
   (tải atomic, không tải lại khi đã có `data/raw/<tên>/`).
 - Cell đọc dữ liệu thật, vẽ, in là cell `explore`; chỉ cell định nghĩa hàm/hằng có tên cố định mới được chấm.
-- Mỗi bài có 4 sản phẩm, `report.md` dùng đúng các heading `Bộ dữ liệu`, `Làm sạch`, `Insight`, `Giới hạn`.
+- Mỗi bài có 4 sản phẩm: dữ liệu sạch, insight có số, biểu đồ, và **trắc nghiệm bài học** (thay cho báo cáo `report.md`,
+  không còn `starter/report.md`; README chỉ nhắc "làm phần trắc nghiệm trong app sau khi chạy notebook").
+- Trắc nghiệm gồm `exercises/<level>/<slug>/quiz.yaml` (câu hỏi) và `solutions/<level>/<slug>/quiz-answers.yaml`
+  (đáp án, app chỉ đọc sau khi nộp). Bài không có `quiz.yaml` thì không hiện card trắc nghiệm.
+
+  ```yaml
+  # quiz.yaml
+  questions:
+    - id: peak-day            # duy nhất trong bài
+      kind: data              # data (số liệu từ bộ dữ liệu) | knowledge (kiến thức, khái niệm)
+      type: single            # single (đúng một đáp án) | multi (>= 1 đáp án)
+      prompt: "Ngày nào trong tháng 7/1995 có nhiều request nhất?"
+      options:                # >= 2 lựa chọn
+        - { id: a, text: "1/7" }
+        - { id: b, text: "13/7" }
+  # quiz-answers.yaml
+  peak-day: [b]
+  ```
+
+  Ban đầu mỗi bài 5-8 câu, chia đôi kiến thức / dữ liệu khi có thể. Câu `data` phải có đáp án cố định trên
+  dữ liệu đã ghim; bài dùng dữ liệu không tái lập (vd. stream người học tự ghi) chỉ có câu `knowledge`.
+  `tests/test_quiz_files.py` kiểm định dạng (id duy nhất, mỗi câu có đáp án thuộc lựa chọn, `single` đúng một đáp án).
 - Test trên dữ liệu thật tự skip khi chưa tải (hoặc thiếu mạng); test còn lại chạy trên dữ liệu nhỏ sinh trong test.
 
 ### Lời giải: `solutions/<level>/<NN-slug>/`

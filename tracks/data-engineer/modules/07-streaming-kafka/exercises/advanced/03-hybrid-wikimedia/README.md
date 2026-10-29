@@ -5,8 +5,6 @@ services: []
 files:
   - path: starter/hybrid_wikimedia.ipynb
     note: 9 hàm TODO + 3 biểu đồ; cell explore ghi 5 phút stream thật
-  - path: starter/report.md
-    note: Báo cáo 4 mục, đang là TODO
   - path: tests/test_hybrid_wikimedia.py
     note: Không sửa
 run:
@@ -41,7 +39,7 @@ Mở `starter/hybrid_wikimedia.ipynb` (nút **Mở trong VS Code**), sửa email
 6. `insights(df, stats)`: sửa đổi mỗi phút, tỉ lệ bot, wiki sôi động nhất, độ trễ p50/p95/max...
 7. Ít nhất 3 biểu đồ trong cell `explore` (sửa đổi mỗi phút bot vs người, top wiki, độ trễ và tỉ lệ late theo `allowed_lateness`).
 8. `write_clean(df, out_dir)`: ghi đè `data/clean/wikimedia-recentchange/recentchange.parquet`.
-9. Viết `starter/report.md`: 4 mục **Bộ dữ liệu**, **Làm sạch**, **Insight** (có số), **Giới hạn**, kèm lựa chọn Lambda/Kappa.
+9. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook. Câu hỏi có cả lựa chọn Lambda/Kappa.
 
 Lý thuyết nền: README module 07, mục 6 (watermark, dedup, và các phần batch/stream/hybrid, Lambda vs
 Kappa, đối soát).
@@ -56,7 +54,6 @@ Kappa, đối soát).
   lateness 0 thì `tổng diff == late`. Ghi ít nhất 2 phút.
 - `write_clean` gọi hai lần vẫn đúng số dòng.
 - Notebook có ít nhất 3 cell `explore` vẽ biểu đồ.
-- `report.md` đủ 4 mục, không còn TODO, mục Insight có ít nhất 4 con số; phần lập luận chấm theo rubric trong `SOLUTION.md`.
 
 ## Gợi ý
 

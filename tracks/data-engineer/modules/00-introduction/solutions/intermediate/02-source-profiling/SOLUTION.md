@@ -30,11 +30,3 @@ nhỏ chạy trên mẫu thật. Con số làm cho cuộc tranh luận "có cầ
 | `compression_ratio` (zstd) | 13,7 | 3,0 |
 
 USGS (nếu đã thu thập 2 lượt): 6 398 dòng thô, `duplicate_keys = 1`, nén ×31.
-
-## Rubric cho báo cáo
-
-| Mức | Bộ dữ liệu | Làm sạch | Insight | Giới hạn |
-| --- | --- | --- | --- | --- |
-| Đạt | Liệt kê nguồn, số bản ghi | Định nghĩa "thiếu", khoá trùng | Bảng số cho ≥ 2 nguồn | 1 giới hạn |
-| Tốt | | Lý do không dedup log | Khuyến nghị thu thập từng nguồn có lý do bằng số | Velocity trung bình che đỉnh |
-| Xuất sắc | | | Phân biệt cảnh báo theo cột vs mất kết nối; incremental theo `updated` cho USGS; kết luận "không cần streaming" có số | Thiếu thông tin late data |
