@@ -18,9 +18,9 @@ questions:
   prompt: Vì sao `LogisticRegression()` mặc định của scikit-learn cho propensity khác `statsmodels.Logit`?
   options:
   - id: a
-    text: Dùng link probit thay vì logit
+    text: Dùng link probit thay vì logit cho xác suất
   - id: b
-    text: Bỏ hằng số (intercept)
+    text: Bỏ hằng số (intercept) khỏi mô hình logit
   - id: c
     text: Có regularization L2 mặc định (`C=1.0`)
   - id: d
@@ -31,13 +31,13 @@ questions:
   prompt: Mô hình propensity gần như tách hẳn hai nhóm (AUC gần 1). Điều đó nói gì?
   options:
   - id: a
-    text: Mô hình tốt, ước lượng đáng tin hơn
+    text: Mô hình propensity tốt, nên ước lượng IPW đáng tin hơn
   - id: b
     text: Không còn confounding
   - id: c
     text: Nên thêm biến để AUC đạt 1
   - id: d
-    text: 'Overlap kém: ước lượng dựa vào rất ít người control và nhạy với đặc tả'
+    text: 'Overlap kém: ước lượng dựa vào rất ít người control'
 - id: trimming
   kind: knowledge
   type: multi

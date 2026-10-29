@@ -5,13 +5,13 @@ questions:
   prompt: Vì sao loss logistic (chưa có L2) là hàm lồi?
   options:
   - id: a
-    text: Vì sigmoid là hàm lồi
+    text: Vì sigmoid là hàm lồi trên toàn trục số nên loss cũng lồi
   - id: b
-    text: Vì loss luôn dương
+    text: Vì loss luôn dương và tiến về 0 khi dự đoán đúng hết
   - id: c
-    text: Vì Hessian $$\frac1n X^\top \mathrm{diag}(p(1-p))X$$ nửa xác định dương, do $$p(1-p) > 0$$
+    text: Vì Hessian $$X^\top \mathrm{diag}(p(1-p))X / n$$ nửa xác định dương
   - id: d
-    text: Vì gradient bằng 0 tại $$w = 0$$
+    text: Vì gradient bằng 0 tại $$w = 0$$ và Hessian tại đó dương
 - id: scale-feature
   kind: knowledge
   type: single
@@ -20,11 +20,11 @@ questions:
   - id: a
     text: Gradient descent chậm đi nhiều, Newton gần như không đổi
   - id: b
-    text: Cả hai chậm đi khoảng 10 lần
+    text: Cả hai chậm đi khoảng 10 lần, vì bài toán bị co giãn như nhau
   - id: c
-    text: Newton chậm đi, gradient descent không đổi
+    text: Newton chậm đi nhiều, còn gradient descent gần như không đổi
   - id: d
-    text: Cả hai không đổi vì optimum là một
+    text: Cả hai không đổi, vì optimum chỉ đổi thang theo feature
 - id: separable
   kind: knowledge
   type: multi
@@ -44,7 +44,7 @@ questions:
   prompt: '`LogisticRegression(C=C)` tương đương cực tiểu loss **trung bình** cộng $$\frac{\lambda}{2}\lVert w\rVert^2$$ với $$\lambda$$ bằng?'
   options:
   - id: a
-    text: $$C$$
+    text: $$1/(2C)$$
   - id: b
     text: $$1/C$$
   - id: c

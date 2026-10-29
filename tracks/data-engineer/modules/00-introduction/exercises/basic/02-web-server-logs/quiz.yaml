@@ -5,11 +5,11 @@ questions:
   prompt: Trong access log, hai dòng giống hệt nhau (cùng host, giây, đường dẫn, status, bytes) có nên loại trùng không?
   options:
   - id: a
-    text: Có, vì dòng trùng chắc chắn là lỗi ghi log
+    text: Có, vì hai dòng giống hệt nhau chắc chắn là lỗi ghi log lặp lại của web server
   - id: b
-    text: Không, vì mỗi dòng là một request thật; hai request cùng giây vẫn có thể xảy ra
+    text: Không, mỗi dòng là một request thật; hai request cùng giây vẫn xảy ra được
   - id: c
-    text: Có, để số request khớp với số host duy nhất
+    text: Có, để số request khớp với số host duy nhất trong cùng một giây
 - id: bad-lines
   kind: knowledge
   type: multi
@@ -42,11 +42,11 @@ questions:
   prompt: Có thể coi số `host` duy nhất là số người dùng không?
   options:
   - id: a
-    text: Có, mỗi host là một máy của một người
+    text: Có, mỗi host là một máy tính, và mỗi máy tính thuộc về đúng một người dùng
   - id: b
     text: Không, một host proxy (vd. AOL) có thể đại diện cho rất nhiều người
   - id: c
-    text: Có, nếu đã loại các host dạng IP
+    text: Có, nếu đã loại các host dạng địa chỉ IP và chỉ giữ lại các tên miền thật
 - id: peak-day
   kind: data
   type: single

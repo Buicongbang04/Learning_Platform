@@ -18,11 +18,11 @@ questions:
   prompt: Câu hỏi là tác động của logistics lên review. Phân tầng theo số ngày giao có vấn đề gì?
   options:
   - id: a
-    text: 'Số ngày giao là mediator: phân tầng chặn đúng con đường đang muốn đo'
+    text: 'Số ngày giao là mediator: phân tầng chặn chính con đường cần đo'
   - id: b
     text: Không có vấn đề gì
   - id: c
-    text: Số ngày giao là confounder nên bắt buộc phải phân tầng
+    text: Số ngày giao là confounder, nên bắt buộc phải phân tầng theo nó
   - id: d
     text: Có quá nhiều tầng
 - id: bool-loc
@@ -31,13 +31,13 @@ questions:
   prompt: 'Tầng kiểu bool (`late`): vì sao dùng `reindex` thay `.loc[strata]`?'
   options:
   - id: a
-    text: '`reindex` nhanh hơn'
+    text: '`reindex` nhanh hơn `.loc` nhiều lần trên bảng lớn có nhiều tầng'
   - id: b
     text: '`.loc` không nhận list'
   - id: c
-    text: '`.loc[[False, True]]` bị hiểu là mask, chọn sai dòng mà không báo lỗi'
+    text: '`.loc[[False, True]]` thành mask, chọn sai dòng mà không báo lỗi'
   - id: d
-    text: '`reindex` tự chuẩn hoá trọng số'
+    text: '`reindex` tự chuẩn hoá lại trọng số khi một tầng bị thiếu'
 - id: bins
   kind: knowledge
   type: single

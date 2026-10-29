@@ -5,13 +5,13 @@ questions:
   prompt: Vì sao lọc `Open == 1` trước khi tính doanh số trung bình mỗi ngày?
   options:
   - id: a
-    text: Để giảm số dòng cho nhanh
+    text: Để giảm số dòng cho nhanh, vì ngày đóng cửa chiếm khoảng 1/7 dữ liệu gốc
   - id: b
-    text: Ngày đóng cửa (Sales = 0) làm cửa hàng sửa chữa trông như giảm doanh số và số ngày Chủ nhật trong cửa sổ gây nhiễu
+    text: Ngày đóng cửa (Sales = 0) kéo trung bình xuống, giả như doanh số sụt
   - id: c
-    text: Vì ngày đóng cửa không có trong `train.csv`
+    text: Vì ngày đóng cửa không có trong `train.csv`, nên ghép lại sẽ ra NaN
   - id: d
-    text: Để tăng tương quan giữa cửa hàng
+    text: Để tăng tương quan giữa các cửa hàng trước khi tính trung bình theo ngày
 - id: cuped-theta
   kind: knowledge
   type: single

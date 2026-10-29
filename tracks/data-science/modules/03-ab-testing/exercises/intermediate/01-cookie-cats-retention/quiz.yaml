@@ -5,11 +5,11 @@ questions:
   prompt: Phát hiện SRM. Nên làm gì?
   options:
   - id: a
-    text: Lấy mẫu lại cho hai nhóm bằng nhau rồi phân tích
+    text: Lấy mẫu lại cho hai nhóm bằng nhau rồi phân tích như bình thường
   - id: b
-    text: Bỏ qua vì p-value của metric đã rất nhỏ
+    text: Bỏ qua vì p-value của metric chính đã rất nhỏ, SRM không đổi kết luận
   - id: c
-    text: Chuyển sang t-test
+    text: Chuyển sang t-test vì không cần cỡ nhóm bằng nhau
   - id: d
     text: Tìm nguyên nhân; chưa tin kết quả cho tới khi giải thích được
 - id: resample
@@ -31,13 +31,13 @@ questions:
   prompt: Chọn metric quyết định (OEC) cho thí nghiệm gate thế nào?
   options:
   - id: a
-    text: Chọn metric có p-value nhỏ nhất sau khi xem kết quả
+    text: Metric có p-value nhỏ nhất, chọn sau khi xem kết quả
   - id: b
     text: '`retention_7`, định trước khi nhìn dữ liệu, vì gần giá trị dài hạn hơn'
   - id: c
-    text: '`retention_1`, vì có nhiều người quay lại hơn'
+    text: '`retention_1`, vì nhiều người quay lại hơn nên có power cao hơn'
   - id: d
-    text: Trung bình `sum_gamerounds`
+    text: Trung bình `sum_gamerounds`, vì đo mức tương tác liên tục
 - id: not-measured
   kind: knowledge
   type: multi

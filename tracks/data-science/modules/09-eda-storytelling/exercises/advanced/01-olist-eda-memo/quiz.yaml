@@ -5,9 +5,9 @@ questions:
   prompt: Phần mix gần bằng toàn bộ thay đổi nghĩa là?
   options:
   - id: a
-    text: Đơn trễ bị chấm tệ hơn trước
+    text: Đơn trễ bị chấm tệ hơn trước, nên tỉ lệ trong từng nhóm tăng
   - id: b
-    text: Giao trễ chắc chắn gây ra review xấu
+    text: Giao trễ chắc chắn là nguyên nhân gây ra phần tăng review xấu
   - id: c
     text: Nếu tỉ lệ đơn trễ không đổi, review xấu gần như không tăng
   - id: d
@@ -22,7 +22,7 @@ questions:
   - id: b
     text: AP có dịch vụ tốt nhất
   - id: c
-    text: Nên nhân rộng mô hình của AP
+    text: Nên nhân rộng cách vận hành của AP sang các bang khác
   - id: d
     text: Bỏ AP vì là outlier
 - id: immature
@@ -33,7 +33,7 @@ questions:
   - id: a
     text: Đơn đó bị huỷ
   - id: b
-    text: 'Tháng chưa chín: nhiều đơn chưa giao xong hoặc chưa có review'
+    text: 'Tháng chưa chín: nhiều đơn chưa giao xong hoặc chưa review'
   - id: c
     text: Olist đổi định nghĩa review
   - id: d
@@ -44,9 +44,9 @@ questions:
   prompt: Tiêu đề memo nào đúng tinh thần bài?
   options:
   - id: a
-    text: Phân tích review Olist
+    text: Phân tích review xấu của Olist theo tháng, bang và seller
   - id: b
-    text: Tôi đã làm sạch 9 bảng và phân tích review
+    text: Tôi đã làm sạch 9 bảng và phân tích review xấu theo từng tháng
   - id: c
     text: EDA quý 1/2018
   - id: d

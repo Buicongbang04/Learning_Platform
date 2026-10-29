@@ -5,13 +5,13 @@ questions:
   prompt: Vì sao không có accuracy hay AUC cho uplift của **từng** khách?
   options:
   - id: a
-    text: 'Không ai vừa nhận vừa không nhận email: uplift cá nhân không quan sát được'
+    text: Không ai vừa nhận vừa không nhận email; uplift cá nhân không đo được
   - id: b
-    text: Vì outcome là nhị phân
+    text: Vì outcome là nhị phân, mà AUC chỉ dùng được cho outcome liên tục
   - id: c
-    text: Vì dữ liệu mất cân bằng
+    text: 'Vì dữ liệu mất cân bằng: chỉ khoảng 15% khách có visit, AUC bị lệch'
   - id: d
-    text: Vì T-learner không có `predict_proba`
+    text: Vì T-learner không có `predict_proba` cho từng khách
 - id: qini-train
   kind: knowledge
   type: single
@@ -35,22 +35,22 @@ questions:
   - id: b
     text: Hồi quy outcome lên treatment
   - id: c
-    text: Hai mô hình riêng cho treated và control, $$\hat\tau(x) = \hat\mu_1(x) - \hat\mu_0(x)$$
+    text: Hai mô hình riêng cho treated và control, lấy hiệu hai dự đoán
   - id: d
-    text: Xếp hạng khách theo xác suất visit
+    text: Xếp hạng khách theo xác suất visit dự đoán từ một mô hình phân loại
 - id: why-eval
   kind: knowledge
   type: single
   prompt: Vì sao so uplift theo nhóm top-k% trên Hillstrom là phép kiểm tra hợp lệ?
   options:
   - id: a
-    text: Vì có hơn 40 nghìn khách
+    text: Vì có hơn 40 nghìn khách nên mỗi nhóm top-k% đủ lớn để bỏ qua nhiễu
   - id: b
-    text: Vì `visit` ít nhiễu hơn `spend`
+    text: Vì `visit` ít nhiễu hơn `spend`, nên uplift theo nhóm ổn định qua các lần chia train/test
   - id: c
-    text: Vì Qini không cần nhóm control
+    text: Vì Qini không cần nhóm control, chỉ cần outcome của khách được gửi email
   - id: d
-    text: Vì xếp hạng chỉ dùng đặc điểm trước thí nghiệm, trong mỗi nhóm treatment vẫn ngẫu nhiên
+    text: Xếp hạng chỉ dùng đặc điểm trước thí nghiệm, nên trong mỗi nhóm vẫn còn random
 - id: womens0
   kind: data
   type: single

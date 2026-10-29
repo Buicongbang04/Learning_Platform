@@ -33,11 +33,11 @@ questions:
   - id: a
     text: Tỉ số luôn dương nên dễ vẽ
   - id: b
-    text: RMSPE sau không tính được cho bang placebo
+    text: RMSPE sau không tính được cho bang placebo vì không có can thiệp thật
   - id: c
-    text: Để p-value nhỏ hơn
+    text: Để p-value của California nhỏ hơn, dễ đạt mức ý nghĩa 5% hơn
   - id: d
-    text: Gap lớn sau can thiệp chỉ đáng tin khi khớp tốt trước can thiệp; tỉ số gói cả hai ý
+    text: Gap sau chỉ đáng tin khi khớp tốt trước; tỉ số gói cả hai ý
 - id: not-use
   kind: knowledge
   type: multi
@@ -51,10 +51,10 @@ questions:
     text: Can thiệp cấp bang, nhiều bang donor, chuỗi trước dài
   - id: d
     text: Donor cũng chịu ảnh hưởng của can thiệp (spillover)
-- id: second-donor
+- id: top-donor
   kind: data
   type: single
-  prompt: Donor có trọng số lớn **thứ hai** của California là?
+  prompt: Donor có trọng số lớn nhất của California là?
   options:
   - id: a
     text: Nevada

@@ -5,13 +5,13 @@ questions:
   prompt: Vì sao nhìn kết quả nhiều lần và dừng ở lần đầu p < 0.05 làm false positive tăng?
   options:
   - id: a
-    text: Dữ liệu mỗi ngày bị ghi lỗi nhiều hơn
+    text: Dữ liệu những ngày sau bị ghi lỗi nhiều hơn
   - id: b
-    text: Dưới H0 chuỗi z là random walk; xác suất vượt ±1.96 ở **ít nhất một** lần nhìn lớn hơn 5%
+    text: Dưới H0, z đi như random walk; vượt ±1.96 ở **ít nhất một** lần nhìn dễ hơn 5%
   - id: c
-    text: p-value luôn giảm dần khi n tăng
+    text: p-value luôn giảm dần khi n tăng, nên sớm muộn cũng xuống dưới 0.05
   - id: d
-    text: Power giảm khi nhìn nhiều lần
+    text: Power giảm khi nhìn nhiều lần, nên kết quả dương dễ là giả hơn
 - id: vs-independent
   kind: knowledge
   type: single
@@ -20,11 +20,11 @@ questions:
   - id: a
     text: Thấp hơn, vì các lần nhìn tương quan (dùng chung dữ liệu cũ)
   - id: b
-    text: Bằng đúng
+    text: Bằng đúng, vì mỗi lần nhìn là một kiểm định 5%
   - id: c
-    text: Cao hơn, vì các lần nhìn tương quan
+    text: Cao hơn hẳn, vì các lần nhìn tương quan (dùng chung dữ liệu cũ)
   - id: d
-    text: Luôn bằng 5% nếu K cố định từ trước
+    text: Luôn bằng đúng 5% nếu K và lịch nhìn được cố định từ trước khi chạy
 - id: fpr-10
   kind: knowledge
   type: single
@@ -33,9 +33,9 @@ questions:
   - id: a
     text: 5%
   - id: b
-    text: 10%
+    text: 9–10%
   - id: c
-    text: 40%
+    text: 40–41%
   - id: d
     text: 18–19%
 - id: obf-first
@@ -70,10 +70,10 @@ questions:
   prompt: Cái giá của thiết kế O'Brien-Fleming với K = 5 so với nhìn một lần?
   options:
   - id: a
-    text: False positive tăng lên khoảng 8%
+    text: False positive tăng lên khoảng 8% vì nhìn tới năm lần
   - id: b
-    text: Biên cuối 2.04 > 1.96 nên cần thêm vài phần trăm mẫu để giữ power
+    text: Biên cuối 2.04 > 1.96, nên cần thêm vài % mẫu
   - id: c
-    text: Không bao giờ dừng sớm được
+    text: Không bao giờ dừng sớm được vì biên lần đầu quá cao
   - id: d
-    text: Phải gấp đôi cỡ mẫu
+    text: Phải gấp đôi cỡ mẫu để giữ được power như thiết kế một lần

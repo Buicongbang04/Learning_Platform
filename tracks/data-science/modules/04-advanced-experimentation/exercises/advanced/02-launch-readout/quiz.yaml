@@ -5,20 +5,20 @@ questions:
   prompt: Vì sao xem tác động theo **ngày phơi nhiễm** thay vì ngày lịch?
   options:
   - id: a
-    text: User vào rải rác; theo ngày lịch, các ngày cuối trộn user mới (đang hào hứng) với user đã quen, che mất xu hướng
+    text: Theo ngày lịch, ngày cuối trộn user mới (còn hào hứng) với user đã quen, che xu hướng
   - id: b
-    text: Ngày lịch có ít dữ liệu hơn
+    text: Ngày lịch có ít dữ liệu ở các ngày đầu và cuối, nên SE lớn và đường tác động rất khó đọc
   - id: c
-    text: Ngày phơi nhiễm luôn cho SE nhỏ hơn
+    text: Ngày phơi nhiễm luôn cho SE nhỏ hơn vì mỗi ngày có đủ mọi user
   - id: d
-    text: Để mỗi user chỉ có một dòng
+    text: Để mỗi user chỉ có một dòng, tránh đếm trùng giữa các ngày lịch
 - id: primacy
   kind: knowledge
   type: single
   prompt: Primacy effect là gì?
   options:
   - id: a
-    text: Tác động lớn ngày đầu rồi giảm dần vì cái mới hết hấp dẫn
+    text: Tác động lớn mấy ngày đầu rồi giảm dần vì cái mới hết hấp dẫn
   - id: b
     text: User quen giao diện cũ nên ban đầu phản ứng tệ, sau đó tác động tăng dần
   - id: c
@@ -31,9 +31,9 @@ questions:
   prompt: Nhóm A có p < 0.05, nhóm B có p = 0.3. Kết luận được tác động khác nhau giữa hai nhóm không?
   options:
   - id: a
-    text: Có, vì một nhóm có ý nghĩa, nhóm kia không
+    text: Có, vì một nhóm có ý nghĩa thống kê, nhóm kia thì không
   - id: b
-    text: Có, nếu cỡ hai nhóm bằng nhau
+    text: Có, nếu cỡ hai nhóm bằng nhau và cùng thời gian chạy
   - id: c
     text: Không; phải kiểm định tương tác `treat × segment`
   - id: d

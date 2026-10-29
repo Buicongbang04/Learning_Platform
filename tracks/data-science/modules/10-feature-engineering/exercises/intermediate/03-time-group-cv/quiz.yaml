@@ -9,9 +9,9 @@ questions:
   - id: b
     text: Báo lỗi
   - id: c
-    text: 'Chỉ chia theo thứ tự dòng: fold test có thể nằm trước train'
+    text: 'Chỉ chia theo thứ tự dòng: test có thể nằm trước train'
   - id: d
-    text: Kết quả giống KFold có shuffle
+    text: Kết quả giống KFold có shuffle, với cùng `random_state`
 - id: groupkfold
   kind: knowledge
   type: single
@@ -22,20 +22,20 @@ questions:
   - id: b
     text: Khi model phục vụ khách mới và một khách có nhiều dòng
   - id: c
-    text: Khi có drift theo thời gian
+    text: Khi có drift theo thời gian và nhiều giai đoạn khác nhau
   - id: d
-    text: Khi số fold lớn hơn 5
+    text: Khi số fold lớn hơn 5, khiến mỗi fold test chỉ còn rất ít dòng
 - id: time-not-fix
   kind: knowledge
   type: single
   prompt: 'Mô phỏng mỗi khách 10 dòng rải đều theo thời gian: chia theo thời gian có chữa rò rỉ theo khách không?'
   options:
   - id: a
-    text: 'Không: khách có dòng ở mọi giai đoạn nên vẫn nằm cả ở train lẫn test'
+    text: 'Không: mỗi khách có dòng ở mọi giai đoạn, nằm cả ở train lẫn test'
   - id: b
-    text: Có, vì train luôn trước test
+    text: Có, vì train luôn nằm trước test nên không thấy dòng tương lai của khách
   - id: c
-    text: Có, nếu `gap` > 0
+    text: Có, nếu đặt `gap` đủ lớn giữa phần train và phần test của mỗi fold
   - id: d
     text: Có, nếu số fold đủ lớn
 - id: gap
@@ -50,7 +50,7 @@ questions:
   - id: c
     text: Khi model quá lớn
   - id: d
-    text: 'Khi nhãn cần thời gian mới có: đơn cuối fold train có thể chưa có nhãn ở thời điểm thật'
+    text: Khi nhãn cần thời gian mới có, đơn cuối fold train có thể chưa có nhãn
 - id: fold-bad
   kind: data
   type: single

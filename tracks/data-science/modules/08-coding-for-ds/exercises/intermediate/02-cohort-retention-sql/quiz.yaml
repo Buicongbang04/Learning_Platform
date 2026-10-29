@@ -7,7 +7,7 @@ questions:
   - id: a
     text: '`customer_id` có nhiều giá trị null'
   - id: b
-    text: Mỗi đơn có một `customer_id` mới, nên mọi khách trông như chỉ mua một lần
+    text: Mỗi đơn có `customer_id` mới, nên mọi khách trông như mua một lần
   - id: c
     text: '`customer_unique_id` là khoá của bảng orders'
   - id: d
@@ -31,11 +31,11 @@ questions:
   prompt: Vì sao retention trung bình dùng trọng số theo cỡ cohort?
   options:
   - id: a
-    text: Cohort rất nhỏ (vd. 1 khách) kéo trung bình cộng thô lệch vô lý
+    text: Cohort rất nhỏ (vd. 1 khách) kéo trung bình thô lệch vô lý
   - id: b
-    text: Để kết quả luôn nhỏ hơn
+    text: Để kết quả luôn nhỏ hơn, gần với tỉ lệ khách mua lại toàn bộ
   - id: c
-    text: Vì SQL chỉ tính được tổng
+    text: Vì SQL chỉ tính được tổng, không tính được trung bình của tỉ lệ
   - id: d
     text: Để bỏ được các ô NaN
 - id: count-once

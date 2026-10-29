@@ -5,13 +5,13 @@ questions:
   prompt: 'Join 83 triệu chuyến với bảng zone 265 dòng: vì sao broadcast join nhanh hơn sort-merge?'
   options:
   - id: a
-    text: Bảng nhỏ được gửi nguyên tới mọi executor nên không phải shuffle bảng lớn
+    text: Bảng nhỏ được gửi tới mọi executor nên không phải shuffle bảng lớn
   - id: b
-    text: Broadcast sắp xếp trước cả hai bảng nên merge nhanh hơn
+    text: Broadcast sắp xếp trước cả hai bảng theo khoá nên bước merge nhanh hơn
   - id: c
-    text: Broadcast cache bảng lớn vào bộ nhớ driver
+    text: Broadcast cache bảng lớn vào bộ nhớ driver để join không phải đọc lại đĩa
   - id: d
-    text: Broadcast bỏ qua các dòng không khớp khoá trước khi đọc
+    text: Broadcast bỏ qua các dòng không khớp khoá ngay từ lúc đọc tệp Parquet
 - id: one-file-per-day
   kind: knowledge
   type: single
@@ -24,20 +24,20 @@ questions:
   - id: c
     text: '`repartition("pickup_date")`'
   - id: d
-    text: Không cần gì, Spark tự gom
+    text: Không cần gì, Spark tự gom theo partition
 - id: pruning
   kind: knowledge
   type: single
   prompt: Đọc chuyến ngày 2019-07-04 từ dữ liệu đã partition nhanh hơn hẳn đọc từ tệp gốc chủ yếu vì?
   options:
   - id: a
-    text: Dữ liệu partition được nén zstd
+    text: Dữ liệu sau partition được nén zstd nên đọc ít byte hơn
   - id: b
-    text: 'Partition pruning: chỉ đọc thư mục `pickup_date=2019-07-04`'
+    text: 'Partition pruning: chỉ đọc một thư mục ngày'
   - id: c
-    text: Spark cache sẵn lần đọc trước
+    text: Spark cache sẵn kết quả của lần đọc trước trong bộ nhớ
   - id: d
-    text: Broadcast bảng zone
+    text: Broadcast bảng zone nên không còn bước shuffle khi đọc
 - id: wide-ops
   kind: knowledge
   type: multi

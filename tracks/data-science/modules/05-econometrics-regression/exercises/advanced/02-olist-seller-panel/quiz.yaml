@@ -18,13 +18,13 @@ questions:
   prompt: Month fixed effects loại được gì?
   options:
   - id: a
-    text: Cú sốc chung mọi seller trong cùng tháng (Black Friday, đợt trễ 02–03/2018)
+    text: Cú sốc chung mọi seller trong cùng tháng (Black Friday, 02–03/2018)
   - id: b
-    text: Đặc tính cố định của seller
+    text: Đặc tính cố định của seller (kho, quy mô, danh mục bán chính, vùng)
   - id: c
-    text: Sai số đo lường của `late_rate`
+    text: Sai số đo lường của `late_rate` ở tháng có ít đơn
   - id: d
-    text: 'Selection: chỉ seller tồn tại đủ lâu'
+    text: 'Selection: chỉ seller tồn tại đủ lâu mới vào mẫu phân tích'
 - id: filter-order
   kind: knowledge
   type: single
@@ -33,11 +33,11 @@ questions:
   - id: a
     text: Để chạy nhanh hơn
   - id: b
-    text: Thứ tự không ảnh hưởng kết quả
+    text: Thứ tự không ảnh hưởng kết quả vì hai bộ lọc giao hoán
   - id: c
     text: Làm ngược lại giữ cả seller chỉ còn 1–2 ô đủ đơn
   - id: d
-    text: Để giữ nhiều seller nhỏ hơn
+    text: Để giữ được nhiều seller nhỏ hơn trong mẫu phân tích
 - id: not-causal
   kind: knowledge
   type: multi

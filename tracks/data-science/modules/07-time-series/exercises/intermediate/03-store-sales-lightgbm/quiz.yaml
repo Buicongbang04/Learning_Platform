@@ -5,11 +5,11 @@ questions:
   prompt: Vì sao baseline "cùng thứ tuần trước" thua xa?
   options:
   - id: a
-    text: Rossmann không có mùa vụ tuần
+    text: Rossmann không có mùa vụ tuần, nên tuần trước không mang thông tin gì
   - id: b
-    text: Tuần trước thường có trạng thái khuyến mãi ngược với tuần cần dự báo
+    text: Tuần trước thường có trạng thái khuyến mãi ngược với tuần dự báo
   - id: c
-    text: Baseline không xử lý ngày đóng cửa
+    text: Baseline không xử lý ngày đóng cửa nên dự báo doanh thu cho cả Chủ nhật
   - id: d
     text: RMSPE phạt dự báo thấp nặng hơn
 - id: promo-ok
@@ -20,7 +20,7 @@ questions:
   - id: a
     text: Lịch khuyến mãi được lên trước, biết tại thời điểm dự báo
   - id: b
-    text: '`Promo` không tương quan với `Sales`'
+    text: '`Promo` không tương quan với `Sales` nên không thể gây leakage'
   - id: c
     text: LightGBM tự loại leakage
   - id: d
@@ -37,7 +37,7 @@ questions:
   - id: c
     text: Vì ngày đóng cửa có `lag_1` bằng 0
   - id: d
-    text: Để dự báo ngày thứ 30 của horizon, ta không có doanh thu của ngày thứ 29
+    text: Dự báo ngày thứ 30 của horizon thì chưa có doanh thu ngày thứ 29
 - id: customers
   kind: knowledge
   type: multi

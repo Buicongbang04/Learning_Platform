@@ -5,13 +5,13 @@ questions:
   prompt: LLN và CLT nói gì?
   options:
   - id: a
-    text: 'LLN: trung bình mẫu tiến tới $$\mu$$; CLT: phân phối của trung bình mẫu xấp xỉ chuẩn, độ lệch chuẩn $$\sigma/\sqrt{n}$$'
+    text: 'LLN: trung bình mẫu tiến tới $$\mu$$; CLT: trung bình mẫu xấp xỉ chuẩn, SD $$\sigma/\sqrt{n}$$'
   - id: b
-    text: 'LLN: mẫu lớn thì dữ liệu có phân phối chuẩn; CLT: trung bình mẫu tiến tới $$\mu$$'
+    text: 'LLN: mẫu lớn thì chính dữ liệu gốc có phân phối chuẩn; CLT: trung bình mẫu tiến tới $$\mu$$'
   - id: c
     text: 'LLN: variance mẫu tiến tới 0; CLT: dữ liệu gốc xấp xỉ chuẩn khi n ≥ 30'
   - id: d
-    text: CLT bảo đảm khoảng t 95% đạt đúng 95% khi n ≥ 30
+    text: CLT bảo đảm khoảng t 95% đạt đúng 95% khi n ≥ 30, với mọi phân phối gốc
 - id: se-mean
   kind: knowledge
   type: single
@@ -24,20 +24,20 @@ questions:
   - id: c
     text: $$\sigma / \sqrt{n}$$
   - id: d
-    text: $$\sigma^2 / n$$
+    text: $$\sigma^2 / \sqrt{n}$$
 - id: miss-direction
   kind: knowledge
   type: single
   prompt: 'Mẫu nhỏ từ phân phối lệch phải: khoảng t 95% trượt chủ yếu theo kiểu nào?'
   options:
   - id: a
-    text: Trượt đều hai phía
+    text: Trượt đều cả hai phía, vì khoảng t luôn đối xứng quanh mean của mẫu
   - id: b
-    text: Khoảng nằm hẳn trên $$\mu$$ (mẫu trúng đơn lớn)
+    text: 'Khoảng nằm hẳn trên $$\mu$$ (mẫu trúng vài đơn lớn: mean cao và s lớn)'
   - id: c
-    text: Hầu như không trượt
+    text: Hầu như không trượt, vì t đã tính tới mẫu nhỏ
   - id: d
-    text: 'Khoảng nằm hẳn dưới $$\mu$$ (mẫu không có đơn lớn: mean thấp và s nhỏ)'
+    text: 'Khoảng nằm hẳn dưới $$\mu$$ (mẫu thiếu đơn lớn: mean thấp, s nhỏ)'
 - id: skewed-metric
   kind: knowledge
   type: multi

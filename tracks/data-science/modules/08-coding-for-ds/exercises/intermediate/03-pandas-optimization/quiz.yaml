@@ -20,11 +20,11 @@ questions:
   - id: a
     text: '`False`'
   - id: b
-    text: '`True`'
+    text: '`True`, vì không review thường là khách không hài lòng'
   - id: c
     text: NaN, để không tính vào mẫu số
   - id: d
-    text: '0.5'
+    text: 0.5, coi như chưa biết tốt hay xấu
 - id: validate
   kind: knowledge
   type: single
@@ -44,13 +44,13 @@ questions:
   prompt: Vì sao đổi `order_id` sang `category` không giúp giảm bộ nhớ?
   options:
   - id: a
-    text: '`category` chỉ dùng cho số'
+    text: '`category` chỉ dùng cho cột số'
   - id: b
     text: pandas không nén chuỗi
   - id: c
     text: '`order_id` có null'
   - id: d
-    text: 'Giá trị gần như duy nhất mỗi dòng: vẫn phải lưu mọi chuỗi, cộng thêm mã'
+    text: 'Giá trị gần như duy nhất: vẫn lưu mọi chuỗi, cộng thêm mã'
 - id: top-seller
   kind: data
   type: single
@@ -93,7 +93,7 @@ questions:
 - id: items-mem
   kind: data
   type: single
-  prompt: Bộ nhớ (deep) của `order_items` trước → sau `optimize_dtypes`?
+  prompt: Bộ nhớ (deep) của `order_items` trước → sau `optimize_dtypes` (với phiên bản pandas của dự án)?
   options:
   - id: a
     text: 17.4 MB → 15.8 MB

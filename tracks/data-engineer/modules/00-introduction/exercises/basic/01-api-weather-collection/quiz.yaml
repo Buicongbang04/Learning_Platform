@@ -5,13 +5,13 @@ questions:
   prompt: Vì sao `collect` lưu **nguyên response** vào `data/raw/open-meteo/` trước khi parse?
   options:
   - id: a
-    text: Để giảm dung lượng lưu trữ so với Parquet
+    text: Để giảm dung lượng lưu trữ, vì JSON thô nhỏ hơn bảng Parquet đã parse
   - id: b
-    text: Vì Open-Meteo yêu cầu lưu lại response
+    text: Vì điều khoản của Open-Meteo yêu cầu lưu lại nguyên response mỗi lần gọi
   - id: c
     text: Để khi logic parse sai thì sửa và chạy lại từ tệp thô, không gọi lại API
   - id: d
-    text: Để test chạy nhanh hơn nhờ bỏ qua bước `clean`
+    text: Để test chạy nhanh hơn nhờ bỏ qua bước `clean` khi đã có tệp thô
 - id: retry-which
   kind: knowledge
   type: multi
@@ -46,11 +46,11 @@ questions:
   prompt: Số liệu `model=era5` mà Open-Meteo trả về là gì?
   options:
   - id: a
-    text: Số đo trực tiếp của trạm khí tượng gần toạ độ nhất
+    text: Số đo trực tiếp của trạm khí tượng mặt đất gần toạ độ nhất
   - id: b
-    text: Dự báo thời tiết được lưu lại hằng ngày
+    text: Bản dự báo hằng ngày được lưu lại, chưa đối chiếu số đo
   - id: c
-    text: Ảnh vệ tinh đã đổi thành nhiệt độ bề mặt
+    text: Ảnh vệ tinh hồng ngoại đã quy đổi thành nhiệt độ bề mặt
   - id: d
     text: Dữ liệu tái phân tích trên lưới ~25 km (ô lưới gần toạ độ nhất)
 - id: hanoi-amplitude

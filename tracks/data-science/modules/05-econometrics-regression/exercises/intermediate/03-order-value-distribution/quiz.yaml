@@ -7,9 +7,9 @@ questions:
   - id: a
     text: $$\hat\mu = \log(\bar x)$$, $$\hat\sigma = \log(s_x)$$
   - id: b
-    text: $$\hat\mu$$ = trung bình $$\log x$$, $$\hat\sigma$$ = độ lệch chuẩn $$\log x$$ chia n
+    text: $$\hat\mu, \hat\sigma$$ = mean và SD (chia n) của $$\log x$$
   - id: c
-    text: $$\hat\mu$$ = median $$x$$, $$\hat\sigma$$ = IQR / 1.35
+    text: $$\hat\mu$$ = median của $$x$$, $$\hat\sigma$$ = IQR / 1.35
   - id: d
     text: $$\hat\mu = \bar x$$, $$\hat\sigma = s_x$$
 - id: ks-n
@@ -18,13 +18,13 @@ questions:
   prompt: 'KS cho lognormal: trên 96 470 đơn p ≈ 1e-57, trên 500 đơn p = 0.78. Đọc đúng là?'
   options:
   - id: a
-    text: Lognormal sai trên toàn bộ nhưng đúng trên 500 đơn
+    text: Lognormal sai trên toàn bộ dữ liệu nhưng lại đúng trên mẫu con 500 đơn ngẫu nhiên
   - id: b
-    text: Phải dùng 500 đơn vì p-value lớn hơn đáng tin hơn
+    text: Nên dùng kết quả 500 đơn vì p-value lớn hơn thì đáng tin hơn khi kiểm định
   - id: c
-    text: p-value phụ thuộc chủ yếu vào n; dùng KS statistic để xếp hạng, QQ-plot và đại lượng nghiệp vụ để quyết định
+    text: p-value chủ yếu theo n; xếp hạng bằng KS statistic, quyết định bằng QQ-plot
   - id: d
-    text: KS không dùng được cho phân phối liên tục
+    text: KS không dùng được cho phân phối liên tục như lognormal
 - id: tails
   kind: knowledge
   type: single
@@ -33,7 +33,7 @@ questions:
   - id: a
     text: Gamma có đuôi mũ, nhẹ hơn nhiều so với đuôi lognormal
   - id: b
-    text: Gamma có đuôi nặng hơn lognormal
+    text: Gamma có đuôi nặng hơn lognormal khi hai bên cùng mean
   - id: c
     text: Hai đuôi như nhau khi cùng mean
   - id: d

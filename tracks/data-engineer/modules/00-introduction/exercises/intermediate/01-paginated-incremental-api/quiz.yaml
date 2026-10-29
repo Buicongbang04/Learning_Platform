@@ -5,24 +5,24 @@ questions:
   prompt: Vì sao watermark incremental phải theo `updated` chứ không theo `time`?
   options:
   - id: a
-    text: Vì `time` không có trong response JSON
+    text: Vì `time` không có trong response JSON, chỉ `updated` được trả về cùng mỗi trận
   - id: b
-    text: Vì `updated` luôn tăng đều theo `time`
+    text: Vì `updated` luôn tăng đều theo `time`, nên lọc theo `updated` gọn hơn mà không mất gì
   - id: c
-    text: Vì trận đã xảy ra từ lâu vẫn bị sửa (độ lớn, vị trí); lọc theo `time` sẽ bỏ sót bản sửa
+    text: Vì trận cũ vẫn bị sửa (độ lớn, vị trí); lọc theo `time` sẽ bỏ sót bản sửa
   - id: d
-    text: Vì USGS không cho lọc theo `time`
+    text: Vì USGS không cho lọc theo `time` khi phân trang bằng `offset`
 - id: state-when
   kind: knowledge
   type: single
   prompt: '`state.json` (watermark) nên được ghi khi nào?'
   options:
   - id: a
-    text: Trước khi gọi trang đầu tiên
+    text: Trước khi gọi trang đầu tiên, để đánh dấu lượt chạy
   - id: b
     text: Sau mỗi trang ghi xong
   - id: c
-    text: Khi gặp lỗi, để lượt sau chạy tiếp
+    text: Khi gặp lỗi, để lượt sau chạy tiếp từ chỗ hỏng
   - id: d
     text: Chỉ khi mọi trang của lượt chạy đã ghi xong
 - id: pagination-stop
@@ -33,11 +33,11 @@ questions:
   - id: a
     text: Khi trang trả về ít bản ghi hơn `page_size`
   - id: b
-    text: Khi server trả 404
+    text: Khi server trả 404 cho `offset` vượt quá dữ liệu
   - id: c
-    text: Sau đúng 7 trang
+    text: Sau đúng 7 trang, vì mỗi ngày có tối đa 7 trang
   - id: d
-    text: Khi `offset` vượt 10 000
+    text: Khi `offset` vượt 10 000 bản ghi đã đọc
 - id: merge-runs
   kind: knowledge
   type: single

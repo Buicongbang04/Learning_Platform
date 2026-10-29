@@ -31,26 +31,26 @@ questions:
   prompt: Vì sao báo cáo SE cluster theo `seller_id`?
   options:
   - id: a
-    text: Vì residual có heteroskedasticity
+    text: Vì residual có heteroskedasticity theo quy mô seller
   - id: b
-    text: Vì residual của cùng một seller tương quan (đóng gói, kho, hợp đồng vận chuyển)
+    text: Vì residual của cùng seller tương quan (kho, đóng gói, hợp đồng ship)
   - id: c
-    text: Vì cluster SE luôn nhỏ hơn SE cổ điển
+    text: Vì cluster SE luôn nhỏ hơn SE cổ điển nên CI chặt hơn
   - id: d
-    text: Vì mỗi seller chỉ có một đơn
+    text: Vì mỗi seller chỉ có một đơn trong mỗi tháng
 - id: retransform
   kind: knowledge
   type: single
   prompt: Dự đoán ngược $$e^{\widehat{\log y}}$$ về BRL là ước lượng của?
   options:
   - id: a
-    text: Median phí ship (cần hiệu chỉnh smearing nếu muốn mean)
+    text: Median phí ship (muốn mean thì cần smearing)
   - id: b
-    text: Mean phí ship
+    text: Mean phí ship, vì phép exp giữ nguyên kỳ vọng
   - id: c
-    text: Mode phí ship
+    text: Mode phí ship, điểm cao nhất của mật độ lognormal
   - id: d
-    text: Percentile 90
+    text: Percentile 90 của phí ship dự đoán
 - id: n-orders
   kind: data
   type: single

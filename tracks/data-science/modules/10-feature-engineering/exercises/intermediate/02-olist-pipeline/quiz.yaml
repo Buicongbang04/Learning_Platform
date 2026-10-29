@@ -5,11 +5,11 @@ questions:
   prompt: '`delay_days` (giao thực tế − ngày hẹn) có phải leakage không?'
   options:
   - id: a
-    text: Có, vì dùng ngày giao thực tế
+    text: Có, vì dùng ngày giao thực tế, thứ không biết được lúc khách đặt hàng
   - id: b
-    text: Có, vì tương quan mạnh với nhãn
+    text: Có, vì tương quan mạnh với nhãn nên chắc chắn chứa thông tin từ review
   - id: c
-    text: Không, vì ta dự đoán lúc đơn vừa giao; sẽ là leakage nếu dự đoán lúc mua
+    text: Không, vì ta dự đoán lúc đơn vừa giao; lúc mua thì mới là leakage
   - id: d
     text: Không bao giờ là leakage
 - id: passthrough
@@ -22,7 +22,7 @@ questions:
   - id: b
     text: Nó làm chậm pipeline
   - id: c
-    text: Nó không chạy với `TargetEncoder`
+    text: Nó không chạy được khi trong pipeline có `TargetEncoder`
   - id: d
     text: Nó bỏ các cột số
 - id: optimistic
@@ -46,11 +46,11 @@ questions:
   - id: a
     text: Là chuỗi
   - id: b
-    text: Mỗi giá trị chỉ xuất hiện một lần, không tổng quát hoá được
+    text: Mỗi giá trị xuất hiện một lần, không tổng quát hoá được
   - id: c
     text: Có null
   - id: d
-    text: Là leakage của review
+    text: Là leakage, vì `order_id` được tạo cùng lúc với review
 - id: val-size
   kind: data
   type: single

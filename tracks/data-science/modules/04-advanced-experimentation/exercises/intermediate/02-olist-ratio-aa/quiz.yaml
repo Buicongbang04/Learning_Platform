@@ -5,13 +5,13 @@ questions:
   prompt: 'Random theo khách nhưng chạy Welch trên **từng sản phẩm**: sai ở đâu?'
   options:
   - id: a
-    text: Sản phẩm của cùng một khách tương quan; coi như độc lập làm SE quá nhỏ
+    text: Sản phẩm của cùng khách tương quan; coi độc lập làm SE quá nhỏ
   - id: b
-    text: Giá sản phẩm không phân phối chuẩn
+    text: Giá sản phẩm không phân phối chuẩn nên Welch cho p-value sai
   - id: c
-    text: Welch cần hai nhóm cùng cỡ
+    text: Welch cần hai nhóm cùng cỡ, mà số sản phẩm mỗi nhánh khác nhau
   - id: d
-    text: SE quá lớn nên mất power
+    text: SE quá lớn vì mỗi khách đóng góp nhiều dòng, nên mất power
 - id: delta-var
   kind: knowledge
   type: single
@@ -24,7 +24,7 @@ questions:
   - id: c
     text: $$\frac{1}{n\bar N^2}\left(\mathrm{Var}(Y) - 2R\,\mathrm{Cov}(Y, N) + R^2\mathrm{Var}(N)\right)$$
   - id: d
-    text: $$\frac{\mathrm{Var}(Y)}{n\bar Y^2}$$
+    text: $$\frac{1}{n\bar N^2}\left(\mathrm{Var}(Y) + 2R\,\mathrm{Cov}(Y, N) + R^2\mathrm{Var}(N)\right)$$
 - id: hash
   kind: knowledge
   type: multi
@@ -44,13 +44,13 @@ questions:
   prompt: Chạy A/A hàng nghìn lần trên dữ liệu thật để làm gì?
   options:
   - id: a
-    text: Đo tác động thật của thay đổi
+    text: Đo tác động thật của thay đổi trên dữ liệu lịch sử
   - id: b
     text: Kiểm phương pháp có báo nhầm đúng mức α không
   - id: c
     text: Tăng power
   - id: d
-    text: Tìm salt cho kết quả đẹp nhất
+    text: Tìm salt cho kết quả đẹp nhất trước khi chạy thật
 - id: aov
   kind: data
   type: single

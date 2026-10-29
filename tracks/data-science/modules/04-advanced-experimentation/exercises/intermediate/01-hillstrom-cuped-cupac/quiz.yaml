@@ -5,9 +5,9 @@ questions:
   prompt: Covariate dùng cho CUPED phải thoả điều gì?
   options:
   - id: a
-    text: Tương quan với việc gán nhóm
+    text: Tương quan mạnh với việc gán nhóm treatment/control
   - id: b
-    text: Đo trong lúc thí nghiệm chạy
+    text: Đo trong lúc thí nghiệm chạy, để bắt được biến động mới
   - id: c
     text: Có trước khi gán nhóm, không bị treatment ảnh hưởng
   - id: d
@@ -18,13 +18,13 @@ questions:
   prompt: Vì sao CUPAC dùng dự đoán **out-of-fold** (cross-fitting)?
   options:
   - id: a
-    text: Để model chạy nhanh hơn
+    text: Để model chạy nhanh hơn, vì mỗi fold chỉ train trên một phần dữ liệu
   - id: b
-    text: Để dự đoán của một dòng không dùng outcome của chính dòng đó (tránh rò rỉ)
+    text: Để dự đoán của một dòng không dùng outcome của chính nó (rò rỉ)
   - id: c
-    text: Để tăng $$R^2$$ trên dữ liệu train
+    text: Để tăng $$R^2$$ trên dữ liệu train, nhờ đó giảm variance nhiều hơn
   - id: d
-    text: Để cân bằng hai nhánh
+    text: Để cân bằng hai nhánh về số dòng trong mỗi fold huấn luyện
 - id: no-bias
   kind: knowledge
   type: single
@@ -33,7 +33,7 @@ questions:
   - id: a
     text: Không làm lệch, chỉ thu hẹp CI
   - id: b
-    text: Làm tác động lớn hơn
+    text: Làm tác động lớn hơn vì SE nhỏ hơn
   - id: c
     text: Kéo tác động về 0
   - id: d
@@ -48,7 +48,7 @@ questions:
   - id: b
     text: Mã vùng (`zip_code`)
   - id: c
-    text: Một feature nhân khẩu học bất kỳ
+    text: Một feature nhân khẩu học bất kỳ có sẵn trong bảng
   - id: d
     text: Chính metric đó, của cùng đơn vị, ở kỳ trước
 - id: cuped-vr

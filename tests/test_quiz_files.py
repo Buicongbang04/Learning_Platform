@@ -100,3 +100,44 @@ def test_validator_accepts_good(tmp_path):
 def test_validator_rejects_bad(tmp_path, quiz, answers, needle):
     errs = validate(make(tmp_path, quiz, answers))
     assert any(needle in e for e in errs), errs
+
+
+def longest_answer_problems(quiz: Path) -> list[str]:
+    """Đáp án đúng không được hay là lựa chọn dài nhất (người học đoán được mà không cần biết bài).
+
+    Xét câu single có >= 3 lựa chọn: số câu có đáp án dài nhất hẳn (theo số ký tự) tối đa max(1, n // 3).
+    """
+    questions = yaml.safe_load(quiz.read_text(encoding="utf-8"))["questions"]
+    key = yaml.safe_load(answers_path(quiz).read_text(encoding="utf-8"))
+    eligible = [q for q in questions if q["type"] == "single" and len(q["options"]) >= 3]
+    longest = []
+    for q in eligible:
+        lengths = {o["id"]: len(str(o["text"])) for o in q["options"]}
+        correct = key[q["id"]][0]
+        if lengths[correct] > max(n for oid, n in lengths.items() if oid != correct):
+            longest.append(q["id"])
+    limit = max(1, len(eligible) // 3)
+    if len(longest) > limit:
+        return [f"{len(longest)}/{len(eligible)} câu single có đáp án dài nhất (tối đa {limit}): {', '.join(longest)}"]
+    return []
+
+
+@pytest.mark.parametrize("quiz", QUIZZES, ids=lambda p: p.parent.name)
+def test_correct_option_not_usually_longest(quiz):
+    assert longest_answer_problems(quiz) == []
+
+
+def test_longest_answer_guard_rejects(tmp_path):
+    def q(i: int) -> str:
+        return (f"  - {{id: q{i}, kind: knowledge, type: single, prompt: p, options: "
+                f"[{{id: a, text: ngắn}}, {{id: b, text: đáp án đúng dài hơn hẳn}}, {{id: c, text: cũng ngắn}}]}}\n")
+    quiz = "questions:\n" + "".join(q(i) for i in range(6))
+    answers = "".join(f"q{i}: [b]\n" for i in range(6))
+    path = make(tmp_path, quiz, answers)
+    assert validate(path) == []
+    errs = longest_answer_problems(path)
+    assert errs and "6/6" in errs[0] and "tối đa 2" in errs[0]
+    # còn trong giới hạn: chỉ 2 trên 6 câu có đáp án dài nhất
+    shorter = "".join(f"q{i}: [{'b' if i < 2 else 'a'}]\n" for i in range(6))
+    (tmp_path / "solutions" / "basic" / "x" / "quiz-answers.yaml").write_text(shorter, encoding="utf-8")
+    assert longest_answer_problems(path) == []

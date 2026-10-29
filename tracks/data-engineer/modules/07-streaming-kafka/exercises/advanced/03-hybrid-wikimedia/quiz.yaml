@@ -31,13 +31,13 @@ questions:
   prompt: Tumbling window 60 s, `allowed_lateness = 10 s`. `max_event_time` đã thấy là 12:01:25, rồi một event có event time 12:00:58 đến. Kết quả?
   options:
   - id: a
-    text: Được cộng vào window 12:00
+    text: Được cộng vào window 12:00, vì trễ chưa quá 60 s
   - id: b
     text: Bị tính là late (window 12:00 đã đóng)
   - id: c
-    text: Được cộng vào window 12:01
+    text: Được cộng vào window 12:01, window đang mở
   - id: d
-    text: Bị coi là bản trùng
+    text: Bị coi là bản trùng và loại bỏ
 - id: last-event-id
   kind: knowledge
   type: single
@@ -46,18 +46,18 @@ questions:
   - id: a
     text: 'At-least-once: không mất nhưng có thể trùng'
   - id: b
-    text: Exactly-once
+    text: Exactly-once nhờ server nhớ vị trí đọc
   - id: c
     text: 'At-most-once: không trùng nhưng có thể mất'
   - id: d
-    text: Không đảm bảo gì
+    text: Không đảm bảo gì nếu mạng chập chờn
 - id: negative-diff
   kind: knowledge
   type: single
   prompt: Đối soát thấy `diff = batch - stream < 0` ở một window. Nguyên nhân khả dĩ nhất?
   options:
   - id: a
-    text: Event trễ quá `allowed_lateness`
+    text: Event trễ quá `allowed_lateness` bị stream bỏ qua
   - id: b
     text: Batch chạy trên dữ liệu chưa đủ
   - id: c
@@ -83,13 +83,13 @@ questions:
   prompt: EventStreams chỉ giữ lịch sử để replay ~7–31 ngày. Muốn chọn Kappa và tính lại được lịch sử dài cần gì?
   options:
   - id: a
-    text: Replay trực tiếp từ EventStreams mỗi lần đổi logic
+    text: Replay trực tiếp từ EventStreams mỗi lần đổi logic, kể cả dữ liệu cũ hơn 31 ngày
   - id: b
-    text: Tăng `allowed_lateness` lên 31 ngày
+    text: Tăng `allowed_lateness` lên 31 ngày để job giữ toàn bộ state của mọi window
   - id: c
-    text: Bắt buộc chuyển sang Lambda, Kappa không làm được
+    text: Bắt buộc chuyển sang Lambda, vì Kappa không tính lại lịch sử dài được
   - id: d
-    text: Tự giữ lớp raw (JSONL, topic retention dài, bảng Iceberg/Delta) rồi replay từ đó
+    text: Tự giữ lớp raw (JSONL, topic retention dài, Iceberg/Delta) rồi replay từ đó
 - id: lambda-when
   kind: knowledge
   type: multi

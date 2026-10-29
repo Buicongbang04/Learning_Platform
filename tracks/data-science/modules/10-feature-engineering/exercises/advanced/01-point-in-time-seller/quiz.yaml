@@ -31,24 +31,24 @@ questions:
   prompt: '`allow_exact_matches=False` trong `pd.merge_asof` đảm bảo điều gì?'
   options:
   - id: a
-    text: Bỏ seller mới
+    text: Bỏ các seller mới chưa có review nào trước thời điểm dự đoán
   - id: b
-    text: Chỉ lấy event của cùng seller
+    text: Chỉ lấy event của cùng seller, không lẫn seller khác
   - id: c
-    text: Sắp lại thứ tự dòng
+    text: Sắp lại kết quả về đúng thứ tự dòng ban đầu của bảng đầu vào
   - id: d
-    text: 'So sánh chặt: nhãn đến đúng lúc dự đoán không được dùng'
+    text: 'So sánh chặt: nhãn đến đúng lúc dự đoán thì không dùng'
 - id: pit-vs-te
   kind: knowledge
   type: single
   prompt: Vì sao lịch sử point-in-time hơn target encoding trên test?
   options:
   - id: a
-    text: Nó tiếp tục cập nhật trong giai đoạn test; target encoding đóng băng ở dữ liệu train
+    text: Nó tiếp tục cập nhật trong giai đoạn test; target encoding thì đóng băng
   - id: b
     text: Nó dùng smoothing
   - id: c
-    text: Nó thấy nhãn của đơn test
+    text: Nó thấy nhãn của chính các đơn test, nên điểm test cao hơn một cách giả tạo
   - id: d
     text: Nó có nhiều cột hơn
 - id: own-share

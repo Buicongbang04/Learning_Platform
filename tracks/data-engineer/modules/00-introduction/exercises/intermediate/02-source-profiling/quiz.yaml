@@ -5,26 +5,26 @@ questions:
   prompt: Khuyến nghị thu thập hợp lý cho **log web NASA** (append-only, ~68 600 dòng/ngày)?
   options:
   - id: a
-    text: Streaming từng request qua Kafka vì velocity cao nhất
+    text: Streaming từng request qua Kafka, vì velocity của log cao nhất
   - id: b
-    text: Batch theo giờ, đọc phần log mới (incremental), cảnh báo khi tỉ lệ dòng hỏng tăng
+    text: Batch theo giờ, đọc phần log mới (incremental), cảnh báo khi dòng hỏng tăng
   - id: c
-    text: Tải lại toàn bộ tệp log mỗi giờ (full)
+    text: Tải lại toàn bộ tệp log mỗi giờ (full) để chắc chắn không sót dòng nào
   - id: d
-    text: Pull qua API phân trang mỗi phút
+    text: Pull qua API phân trang mỗi phút, watermark theo timestamp request
 - id: rec-iot
   kind: knowledge
   type: single
   prompt: Khuyến nghị thu thập hợp lý cho **cảm biến IoT** (1 dòng/giờ mỗi trạm)?
   options:
   - id: a
-    text: Pull full toàn bộ lịch sử từ thiết bị mỗi đêm
+    text: Pull full toàn bộ lịch sử từ thiết bị mỗi đêm rồi ghi đè bảng đích
   - id: b
-    text: Streaming từng số đo với độ trễ mili giây
+    text: Streaming từng số đo qua Kafka với độ trễ mili giây
   - id: c
-    text: Push qua MQTT gom micro-batch, khoá `(sensor_id, ts)`, cảnh báo sentinel và mất kết nối
+    text: Push qua MQTT gom micro-batch, khoá `(sensor_id, ts)`, cảnh báo sentinel, mất kết nối
   - id: d
-    text: Gọi API phân trang theo `updated`
+    text: Gọi API phân trang theo `updated`, upsert theo `sensor_id`
 - id: rec-usgs
   kind: knowledge
   type: single
@@ -33,37 +33,37 @@ questions:
   - id: a
     text: Pull hằng đêm, incremental theo `updated`, upsert theo `id`
   - id: b
-    text: Pull hằng đêm, incremental theo `time`, append
+    text: Pull hằng đêm, incremental theo `time`, append thêm dòng mới
   - id: c
-    text: Push qua webhook, dedup theo `(time, place)`
+    text: Push qua webhook của USGS khi có trận mới, dedup theo `(time, place)`
   - id: d
-    text: Full reload cả năm mỗi giờ
+    text: Full reload cả năm mỗi giờ, ghi đè toàn bộ bảng
 - id: rec-weather
   kind: knowledge
   type: single
   prompt: Khuyến nghị thu thập hợp lý cho **Open-Meteo** (2 dòng/ngày, ~28 KB/năm)?
   options:
   - id: a
-    text: Streaming qua Kafka để có số trong vài giây
+    text: Streaming qua Kafka để có số liệu thời tiết mới trong vài giây
   - id: b
-    text: Push từ Open-Meteo về qua webhook
+    text: Push từ Open-Meteo về qua webhook mỗi khi có số liệu mới
   - id: c
-    text: Spark job phân tán vì dữ liệu dạng JSON
+    text: Spark job phân tán vì dữ liệu dạng JSON lồng nhau cần xử lý song song
   - id: d
-    text: Pull batch hằng ngày; dữ liệu nhỏ đến mức tải lại cả khoảng ngày cũng rẻ
+    text: Pull batch hằng ngày; dữ liệu nhỏ, tải lại cả khoảng ngày cũng rẻ
 - id: need-streaming
   kind: knowledge
   type: single
   prompt: Theo số đo của bài, nguồn nào **bắt buộc** phải streaming?
   options:
   - id: a
-    text: Log NASA, vì nhiều dòng nhất
+    text: Log NASA, vì nhiều dòng nhất và được ghi liên tục suốt cả ngày
   - id: b
     text: 'Không nguồn nào: chưa có yêu cầu latency bằng con số'
   - id: c
-    text: IoT, vì là cảm biến
+    text: IoT, vì là cảm biến gửi số đo liên tục theo giờ
   - id: d
-    text: USGS, vì động đất cần cảnh báo
+    text: USGS, vì động đất cần cảnh báo cho người dân trong vài giây
 - id: nasa-rows-per-day
   kind: data
   type: single

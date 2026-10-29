@@ -5,11 +5,11 @@ questions:
   prompt: Mẫu số của MASE ở mỗi origin trong backtest lấy từ đâu?
   options:
   - id: a
-    text: MAE seasonal naive trên toàn chuỗi
+    text: MAE seasonal naive một bước trên toàn chuỗi, gồm cả phần test
   - id: b
-    text: MAE seasonal naive một bước (lag m) trên phần train của origin đó
+    text: MAE seasonal naive một bước trên phần train của origin đó
   - id: c
-    text: Độ lệch chuẩn của phần test
+    text: Độ lệch chuẩn của chuỗi thật trong phần test của origin đó
   - id: d
     text: MAE của SARIMA trên phần train
 - id: fill-zero
@@ -44,9 +44,9 @@ questions:
   prompt: Vì sao không kết luận từ một lần chia train/test?
   options:
   - id: a
-    text: MASE dao động mạnh giữa các origin; một origin có thể cho kết luận ngược
+    text: MASE dao động mạnh giữa các origin, có origin cho kết luận ngược
   - id: b
-    text: SARIMA cần nhiều dữ liệu hơn
+    text: SARIMA cần nhiều dữ liệu hơn một lần chia, nếu không sẽ không hội tụ
   - id: c
     text: MASE không tính được trên một lần chia
   - id: d

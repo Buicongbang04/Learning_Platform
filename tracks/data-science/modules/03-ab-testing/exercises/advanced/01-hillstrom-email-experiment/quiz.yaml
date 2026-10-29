@@ -5,26 +5,26 @@ questions:
   prompt: Vì sao không nên so "chi tiêu trung bình **của người mua**" giữa các nhánh?
   options:
   - id: a
-    text: Vì `spend` lệch phải
+    text: Vì `spend` lệch phải nên trung bình không ổn định
   - id: b
-    text: Vì email thay đổi *ai* mua, nên hai nhóm người mua không còn so sánh được
+    text: 'Vì email thay đổi *ai* mua: hai nhóm người mua hết so sánh được'
   - id: c
-    text: Vì quá ít người mua để tính trung bình
+    text: Vì quá ít người mua để tính trung bình có ý nghĩa thống kê
   - id: d
-    text: Vì phải log `spend` trước
+    text: Vì phải log `spend` trước rồi mới so được giữa các nhánh
 - id: holm
   kind: knowledge
   type: single
   prompt: Holm so với Bonferroni?
   options:
   - id: a
-    text: Holm kiểm soát FDR, Bonferroni kiểm soát FWER
+    text: Holm kiểm soát FDR như Benjamini–Hochberg, Bonferroni kiểm soát FWER
   - id: b
-    text: Holm bảo thủ hơn Bonferroni
+    text: Holm bảo thủ hơn Bonferroni, nên luôn bác bỏ ít giả thuyết hơn hoặc bằng
   - id: c
     text: Cùng kiểm soát FWER; Holm bác bỏ ít nhất mọi thứ Bonferroni bác bỏ
   - id: d
-    text: Holm chỉ đúng khi các kiểm định độc lập
+    text: Holm chỉ đúng khi các kiểm định độc lập với nhau
 - id: binary-welch
   kind: knowledge
   type: single

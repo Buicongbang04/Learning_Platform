@@ -5,7 +5,7 @@ questions:
   prompt: Loại CI nào cho median **không** có nhiễu Monte Carlo (đổi seed không đổi kết quả)?
   options:
   - id: a
-    text: Bootstrap percentile
+    text: Bootstrap percentile với 10 000 lần resample
   - id: b
     text: CI chính xác từ thống kê thứ tự
   - id: c
@@ -20,9 +20,9 @@ questions:
   - id: a
     text: CLT áp cho median
   - id: b
-    text: Phân phối t với n − 1 bậc tự do
+    text: Phân phối t với n − 1 bậc tự do quanh median mẫu
   - id: c
-    text: Số quan sát dưới median thật có phân phối $$\mathrm{Binomial}(n, 0.5)$$
+    text: Số quan sát dưới median thật ~ $$\mathrm{Binomial}(n, 0.5)$$
   - id: d
     text: Số quan sát dưới median thật có phân phối Poisson
 - id: clustered
@@ -31,13 +31,13 @@ questions:
   prompt: Nhiều đơn đến từ cùng một khách. Resample từng đơn độc lập thì CI bootstrap?
   options:
   - id: a
-    text: Quá hẹp; nên resample theo khách (cluster) hoặc block bootstrap
+    text: Quá hẹp; nên resample theo khách hoặc theo block
   - id: b
-    text: Quá rộng; nên resample từng đơn nhiều lần hơn
+    text: Quá rộng; nên resample từng đơn với nhiều vòng bootstrap hơn
   - id: c
-    text: Không bị ảnh hưởng
+    text: Không bị ảnh hưởng, vì bootstrap không giả định phân phối
   - id: d
-    text: Lệch tâm nhưng độ rộng đúng
+    text: Lệch tâm về phía khách mua nhiều, nhưng độ rộng vẫn đúng
 - id: boot-fails
   kind: knowledge
   type: multi

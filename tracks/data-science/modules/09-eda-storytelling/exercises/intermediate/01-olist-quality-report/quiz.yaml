@@ -11,16 +11,16 @@ questions:
   - id: c
     text: Đơn `delivered`
   - id: d
-    text: Đơn có review
+    text: Đơn có review trả lời
 - id: severity
   kind: knowledge
   type: single
   prompt: Severity của một kiểm tra nên dựa vào?
   options:
   - id: a
-    text: Số dòng lỗi
+    text: Số dòng lỗi tuyệt đối trong bảng
   - id: b
-    text: Tỉ lệ lỗi
+    text: Tỉ lệ lỗi so với tổng số dòng của bảng
   - id: c
     text: Tác động lên phân tích phía sau
   - id: d
@@ -35,9 +35,9 @@ questions:
   - id: b
     text: Dùng inner join
   - id: c
-    text: '`drop_duplicates` sau khi ghép'
+    text: '`drop_duplicates` toàn bộ dòng sau khi ghép'
   - id: d
-    text: Chỉ lấy payment đầu tiên của đơn
+    text: Chỉ lấy payment đầu tiên của mỗi đơn
 - id: freight-zero
   kind: knowledge
   type: single

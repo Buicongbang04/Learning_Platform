@@ -18,39 +18,39 @@ questions:
   prompt: Bảng chỉ gồm đơn **có review**. Đó là vấn đề gì?
   options:
   - id: a
-    text: Confounder chưa đo
+    text: 'Confounder chưa đo: vùng xa vừa gây trễ vừa ít review'
   - id: b
-    text: Mediator
+    text: 'Mediator: review là bước nằm giữa giao trễ và điểm số'
   - id: c
-    text: 'Điều kiện trên collider: việc có review phụ thuộc cả giao trễ lẫn trải nghiệm'
+    text: 'Collider: việc có review phụ thuộc cả giao trễ lẫn trải nghiệm'
   - id: d
-    text: Không có vấn đề, vì đơn không review không có nhãn
+    text: Không có vấn đề, vì đơn không review vốn không có nhãn để học
 - id: e-value
   kind: knowledge
   type: single
   prompt: E-value khoảng 11 nghĩa là?
   options:
   - id: a
-    text: Tác động thật gấp 11 lần tác động quan sát
+    text: Tác động thật gấp 11 lần tác động quan sát được sau khi đã điều chỉnh mọi confounder
   - id: b
-    text: Một confounder chưa đo phải liên hệ với cả trễ lẫn review xấu mạnh cỡ RR 11 mới kéo tác động về 0
+    text: Confounder chưa đo phải gắn với cả trễ lẫn review xấu cỡ RR 11 mới xoá được tác động
   - id: c
-    text: Cần ít nhất 11 confounder để giải thích kết quả
+    text: Cần ít nhất 11 confounder chưa đo, mỗi biến đủ mạnh, mới giải thích hết kết quả quan sát
   - id: d
-    text: p-value nhỏ hơn 1/11
+    text: p-value nhỏ hơn 1/11 nên kết quả có ý nghĩa
 - id: lpm
   kind: knowledge
   type: single
   prompt: Trong `bad_review ~ late + covariate` (linear probability model), hệ số của `late` là 0.444. Nghĩa là?
   options:
   - id: a
-    text: Odds review xấu của đơn trễ gấp 0.444 lần
+    text: Giữ nguyên covariate, odds review xấu của đơn trễ gấp 0.444 lần đơn đúng hẹn
   - id: b
-    text: 44.4% đơn trễ có review xấu
+    text: 44.4% đơn trễ có review xấu, sau khi đã điều chỉnh covariate
   - id: c
-    text: Review xấu làm khả năng trễ tăng 44.4%
+    text: Review xấu làm khả năng giao trễ tăng 44.4% khi giữ nguyên mọi covariate khác
   - id: d
-    text: Giữ nguyên covariate, xác suất review xấu của đơn trễ cao hơn 44.4 điểm phần trăm
+    text: Giữ nguyên covariate, xác suất review xấu của đơn trễ cao hơn 44.4 điểm %
 - id: late-7d
   kind: data
   type: single

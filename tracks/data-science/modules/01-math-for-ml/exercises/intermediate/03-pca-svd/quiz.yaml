@@ -33,11 +33,11 @@ questions:
   - id: a
     text: Bị chi phối bởi feature có variance lớn nhất
   - id: b
-    text: Giống hệt PC1 khi có chuẩn hoá
+    text: Giống hệt PC1 khi có chuẩn hoá, vì PCA bất biến theo thang
   - id: c
     text: Giải thích tỉ lệ variance nhỏ hơn
   - id: d
-    text: Trực giao với feature có variance lớn nhất
+    text: Trực giao với feature có variance lớn nhất trong dữ liệu
 - id: when-not
   kind: knowledge
   type: multi

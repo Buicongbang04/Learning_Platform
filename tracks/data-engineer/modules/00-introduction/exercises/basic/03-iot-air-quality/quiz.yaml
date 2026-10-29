@@ -33,11 +33,11 @@ questions:
   - id: a
     text: Một máy đo riêng lẻ hỏng/ngừng, không phải mất kết nối
   - id: b
-    text: Mất kết nối của cả trạm
+    text: Mất kết nối của cả trạm, nên mọi cột của giờ đó đều không tin được
   - id: c
-    text: Giờ bị trùng cần loại
+    text: Giờ bị trùng, cần loại bản ghi thừa trước khi tính trung bình
   - id: d
-    text: Lệch đồng hồ thiết bị
+    text: Lệch đồng hồ thiết bị làm số đo rơi sang giờ bên cạnh
 - id: drift
   kind: knowledge
   type: single
