@@ -15,13 +15,15 @@ trễ**, cập nhật bảng trạng thái đơn gần thời gian thực trong 
      --bootstrap-server localhost:9092 --create --topic olist.order-events --partitions 3 --replication-factor 1
    ```
 
-2. Chạy producer giả lập (key = `order_id` để mọi event của một đơn vào cùng partition):
+2. Chạy producer giả lập (key = `order_id` để mọi event của một đơn vào cùng partition). `--orders-csv data/raw`
+   lấy `order_id`/`customer_id` từ Olist thật, nên event join được với `raw`/`dw` đã nạp ở M01–M02; luồng event
+   vẫn là giả lập (Olist không công bố event), ghi rõ điều này trong README:
 
    ```bash
-   uv run python data/simulate_events.py --kafka --bootstrap localhost:9094 --topic olist.order-events --rate 20 --dup-rate 0.05 --late-rate 0.05
+   uv run python data/simulate_events.py --kafka --bootstrap localhost:9094 --topic olist.order-events --rate 20 --dup-rate 0.05 --late-rate 0.05 --orders-csv data/raw
    ```
 
-   Xem trước dữ liệu: `uv run python data/simulate_events.py --count 20 --stdout`.
+   Xem trước dữ liệu: `uv run python data/simulate_events.py --count 20 --stdout --orders-csv data/raw`.
 3. Viết consumer `project/streaming/order_status_consumer.py` (`kafka-python-ng`):
    - `group_id="order-status"`, `enable_auto_commit=False`, commit offset **sau khi** ghi DB
      thành công (at-least-once).

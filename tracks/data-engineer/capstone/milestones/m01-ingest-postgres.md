@@ -2,24 +2,30 @@
 
 ## Mục tiêu
 
-Viết một script Python nạp 9 tệp CSV Olist vào schema `raw` của PostgreSQL. Script phải
+Viết một script Python nạp 9 tệp CSV Olist **thật** vào schema `raw` của PostgreSQL. Script phải
 **idempotent** (chạy lại không nhân đôi dữ liệu), có log, có kiểm tra số dòng, và chạy được bằng
 một lệnh. Đây là nền cho mọi milestone sau.
 
 ## Việc cần làm
 
-1. Sinh dữ liệu và bật Postgres:
+1. Tải Olist thật (bỏ qua nếu đã có `data/raw/olist_orders_dataset.csv`) và bật Postgres:
 
    ```bash
-   uv run python data/generate_olist.py --orders 50000
+   uv run python data/download_olist.py
    docker compose -f setup/docker-compose.yml up -d postgres
    ```
+
+   Không có Kaggle token: `uv run python data/generate_olist.py --out data/raw/olist_synthetic` rồi dùng
+   `--data-dir data/raw/olist_synthetic` ở bước 6. Nên làm Bước 0 trong [README capstone](../README.md)
+   (notebook khám phá) trước: bạn sẽ biết cột nào thiếu, zip phải là chuỗi, `customer_id` khác `customer_unique_id`.
 
 2. Viết DDL `project/models/raw/00_raw_schema.sql`: `CREATE SCHEMA IF NOT EXISTS raw;` và 9 bảng
    (`raw.customers`, `raw.geolocation`, `raw.orders`, `raw.order_items`, `raw.order_payments`,
    `raw.order_reviews`, `raw.products`, `raw.sellers`, `raw.product_category_name_translation`)
-   với kiểu dữ liệu đúng (timestamp cho cột ngày, numeric(10,2) cho tiền) và primary key
-   (`order_items` dùng khoá ghép `(order_id, order_item_id)`).
+   với kiểu dữ liệu đúng (timestamp cho cột ngày, numeric(10,2) cho tiền, `text` cho zip để giữ số 0 đầu) và
+   primary key (`order_items` dùng khoá ghép `(order_id, order_item_id)`). Bộ thật không cho phép mọi khoá
+   bạn nghĩ là có: `order_reviews.review_id` **không** duy nhất (814 id dùng lại cho nhiều đơn), `geolocation`
+   không có khoá tự nhiên. Ghi lựa chọn của bạn (khoá ghép, khoá thay thế) vào DDL.
 3. Hoàn thiện `project/ingestion/load_postgres.py`:
    - Đọc từng CSV trong `data/raw/` (tham số `--data-dir`).
    - Nạp bằng `COPY` (psycopg 3 `cursor.copy`) vào bảng tạm, rồi `INSERT ... ON CONFLICT DO UPDATE`
@@ -29,7 +35,7 @@ một lệnh. Đây là nền cho mọi milestone sau.
 4. Viết `project/tests/test_ingestion.py`: test hàm đọc CSV/ép kiểu không cần Docker; test nạp thật
    dùng `ex.require_service`-style skip (`testkit.service_up("postgres")`).
 5. Viết 5 câu SQL kiểm tra trong `project/models/raw/checks.sql`: số đơn theo `order_status`,
-   số `order_items` mồ côi (không có order), đơn `delivered` thiếu `order_delivered_customer_date`,
+   số `order_items` mồ côi (không có order), đơn `delivered` thiếu `order_delivered_customer_date` (bộ thật: 8),
    tổng `payment_value` so với tổng `price + freight_value`, top 5 bang theo số khách.
 6. Chạy:
 
@@ -49,7 +55,8 @@ một lệnh. Đây là nền cho mọi milestone sau.
 
 ## Tiêu chí đạt
 
-- [ ] Nạp đủ 9 bảng, số dòng mỗi bảng khớp số dòng CSV.
+- [ ] Nạp đủ 9 bảng của bộ thật, số dòng mỗi bảng khớp số dòng CSV (vd. `raw.orders` 99 441, `raw.order_items` 112 650,
+  `raw.geolocation` 1 000 163).
 - [ ] Chạy script lần thứ hai: số dòng không đổi, không lỗi duplicate key.
 - [ ] Mọi bảng có primary key; kiểu ngày là `timestamp`, kiểu tiền là `numeric`.
 - [ ] Nếu một bảng lỗi giữa chừng, bảng đó không bị nạp dở (transaction rollback).

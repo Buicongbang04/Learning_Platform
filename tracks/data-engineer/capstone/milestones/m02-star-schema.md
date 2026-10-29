@@ -12,7 +12,8 @@ hỏi doanh thu, giao hàng và review. Áp dụng Slowly Changing Dimension typ
 2. Vẽ ERD mermaid trong `DESIGN.md`, tối thiểu:
    - `dw.fact_order_items` (measure: `price`, `freight_value`; FK: `date_key`, `customer_key`,
      `seller_key`, `product_key`; degenerate dimension `order_id`, `order_status`).
-   - `dw.fact_deliveries` (grain: một đơn; `estimated_days`, `actual_days`, `is_late`).
+   - `dw.fact_deliveries` (grain: một đơn; `estimated_days`, `actual_days`, `is_late`; dùng lại định nghĩa
+     `is_late` của notebook khám phá).
    - `dw.dim_date`, `dw.dim_customer`, `dw.dim_product` (kèm tên danh mục tiếng Anh),
      `dw.dim_seller` (SCD2: `valid_from`, `valid_to`, `is_current`).
 3. Viết DDL `project/models/dw/01_dw_schema.sql` với surrogate key (`bigint generated always as identity`)
@@ -49,4 +50,5 @@ hỏi doanh thu, giao hàng và review. Áp dụng Slowly Changing Dimension typ
 - [ ] `dim_seller` giữ lịch sử: mỗi `seller_id` có đúng một dòng `is_current = true`.
 - [ ] Chạy lại script nạp không làm thay đổi số dòng khi dữ liệu nguồn không đổi.
 - [ ] Đơn huỷ và đơn thiếu ngày giao được xử lý rõ ràng (không làm sai `is_late`).
-- [ ] 4 truy vấn phân tích chạy dưới 1 giây với 50k đơn.
+- [ ] `fact_deliveries` cho tỉ lệ trễ khớp notebook khám phá (6,77% trên 96 470 đơn đã giao, nếu cùng định nghĩa trễ theo ngày lịch).
+- [ ] 4 truy vấn phân tích chạy dưới 1 giây trên bộ Olist thật (~99 nghìn đơn, 112 nghìn item).

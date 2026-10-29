@@ -26,7 +26,7 @@ backfill được. Chuyển phần transform `raw → dw` sang dbt để có tes
 
    ```mermaid
    flowchart LR
-       A[generate/ingest CSV] --> B[load_postgres]
+       A[kiểm tra CSV Olist] --> B[load_postgres]
        B --> C[dbt build]
        B --> D[to_bronze]
        D --> E[to_silver]

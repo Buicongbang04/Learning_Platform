@@ -16,8 +16,10 @@ trong README portfolio, đúng thứ nhà tuyển dụng hỏi: "bạn đã làm
 
 Nếu chọn GCP, dùng [hướng dẫn từng bước](../../modules/11-cloud/cloud-gcp-lab.md) và mẫu
 `setup/cloud-gcp/`: chuẩn bị Parquet local → tạo bucket/dataset/danh tính bằng Terraform → load và
-transform BigQuery → đối chiếu KPI → thử quyền BI → dọn tài nguyên. Mẫu chỉ cho dữ liệu giả của lab;
-cloud thật cần tài khoản/billing và chưa được chứng minh miễn phí bằng việc chạy local.
+transform BigQuery → đối chiếu KPI → thử quyền BI → dọn tài nguyên. Lab viết cho dữ liệu giả; ở milestone
+này chạy bước chuẩn bị với Olist thật: `uv run python setup/cloud-gcp/prepare.py --raw data/raw --out /tmp/olist-gcp`
+(96 478 đơn đã giao, Parquet ~3,5 MB). Cloud thật cần tài khoản/billing và chưa được chứng minh miễn phí bằng việc
+chạy local.
 
 1. **Chuẩn bị tài khoản an toàn** (làm trước mọi thứ):
    - Bật MFA cho tài khoản root/owner, không tạo access key cho root.
@@ -42,7 +44,8 @@ cloud thật cần tài khoản/billing và chưa được chứng minh miễn p
      `bronze/`, ghi `silver/` và `gold/`; một danh tính chỉ đọc `gold/` cho BI.
    - Dataset/database warehouse (BigQuery dataset, Glue database + Athena workgroup có giới hạn byte quét).
    - Tag/label `project=olist`, `env=learn`, `owner=<tên bạn>` cho mọi resource.
-4. **Nạp và biến đổi**: dùng **dữ liệu giả lập nhỏ** (`generate_olist.py --orders 5000`), ghi
+4. **Nạp và biến đổi**: dùng **Olist thật** (`data/raw/`, ~120 MB CSV, vài chục MB Parquet: với lượng này chi phí
+   lưu trữ và truy vấn trong free tier gần như bằng 0, vẫn kiểm lại giá tại thời điểm làm), ghi
    Parquet theo partition `year=/month=/` vào `bronze/`, chạy biến đổi ra `silver/` và `gold/`
    (code M04/M06 chỉ đổi endpoint và credential), tạo external table hoặc load vào warehouse.
 5. **Truy vấn và đo chi phí**: chạy 3 truy vấn KPI (doanh thu theo bang/tháng, tỉ lệ giao trễ theo

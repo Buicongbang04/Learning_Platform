@@ -37,7 +37,9 @@ user, policy MinIO; schema Postgres) được khai báo bằng code và dựng l
 5. **Monitoring tối thiểu**: DAG Airflow gửi log/callback khi fail; ghi số dòng mỗi lần chạy vào
    bảng `ops.pipeline_runs` để theo dõi xu hướng.
 6. Tạo `project/Makefile` (hoặc `justfile`) với các lệnh: `make up`, `make data`, `make ingest`,
-   `make dbt`, `make test`, `make down`.
+   `make dbt`, `make test`, `make down`. `make data` tải bộ thật (`uv run python data/download_olist.py`,
+   `uv run python data/download_dataset.py nyc-tlc`), bỏ qua tệp đã có; thiếu Kaggle token thì báo rõ và gợi ý
+   `uv run python data/generate_olist.py --out data/raw/olist_synthetic`. CI dùng bộ giả lập nhỏ, không tải dữ liệu thật.
 
 ## Kết quả nộp
 
