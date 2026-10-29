@@ -572,13 +572,13 @@ Mỗi cloud có công cụ declarative riêng, không cần quản state vì clo
 | --- | --- | --- | --- |
 | AWS | CloudFormation | YAML/JSON (stack) | CDK sinh ra CloudFormation; rollback tự động khi stack lỗi |
 | Azure | ARM template, **Bicep** | JSON, Bicep DSL | Bicep là cú pháp gọn hơn, biên dịch ra ARM |
-| GCP | **Cloud Deployment Manager** | YAML + template Jinja2/Python | Tạo "deployment" gồm nhiều resource GCP |
-| GCP | **Infrastructure Manager** | Terraform | Dịch vụ chạy Terraform được Google quản lý (state, log) |
+| GCP | **Cloud Deployment Manager** | YAML + template Jinja2/Python | **Đã ngừng hỗ trợ 31/3/2026**: không tạo/sửa deployment được nữa, chỉ còn gặp ở cấu hình cũ cần migrate |
+| GCP | **Infrastructure Manager** | Terraform | Thay thế Deployment Manager: dịch vụ chạy Terraform được Google quản lý (state, log) |
 
-Ví dụ Deployment Manager tạo bucket cho dữ liệu raw:
+Đọc hiểu cấu hình Deployment Manager cũ để migrate (không chạy được nữa). Ví dụ một bucket cho dữ liệu raw:
 
 ```yaml
-# config.yaml, chạy: gcloud deployment-manager deployments create olist-raw --config config.yaml
+# config.yaml cũ của Deployment Manager: chỉ để đọc khi migrate, dịch vụ đã ngừng từ 31/3/2026
 resources:
   - name: olist-raw-dev
     type: storage.v1.bucket
@@ -588,8 +588,12 @@ resources:
       iamConfiguration: { uniformBucketLevelAccess: { enabled: true } }
 ```
 
-Google đã thông báo ngừng hỗ trợ Deployment Manager (mốc 31/3/2026) và khuyên chuyển sang Infrastructure
-Manager hoặc Terraform; bạn vẫn có thể gặp nó ở hạ tầng GCP cũ và cần đọc hiểu để migrate. Chọn công cụ
+Deployment Manager đã ngừng hỗ trợ từ 31/3/2026: dịch vụ và các lệnh `gcloud deployment-manager` không còn
+dùng được. Resource nó từng tạo (bucket, VM, dataset) vẫn chạy bình thường, nhưng phải quản bằng công cụ khác.
+Nếu gặp repo GCP cũ còn các tệp `config.yaml`/template Jinja như trên, việc của bạn là đọc hiểu rồi migrate:
+viết lại thành Terraform (`google_storage_bucket` cho ví dụ trên), dùng `terraform import` để nhận các resource
+đang chạy vào state mà không tạo lại, kiểm `terraform plan` không còn diff, rồi chạy bằng Infrastructure Manager
+(Terraform do Google quản lý) hoặc Terraform/OpenTofu thường. Chọn công cụ
 native khi tổ chức chỉ dùng một cloud và muốn hỗ trợ chính hãng; chọn Terraform/OpenTofu khi đa cloud, hoặc
 cần quản cả tài nguyên ngoài cloud (Snowflake, Datadog, GitHub, Kafka topic) bằng cùng một công cụ, điều
 rất thường gặp ở data platform.
@@ -888,7 +892,7 @@ lệnh dump và restore dùng container riêng của lab, khôi phục vào data
 - Terraform docs: https://developer.hashicorp.com/terraform/docs
 - Terraform, Module structure và module sources: https://developer.hashicorp.com/terraform/language/modules
 - Terragrunt docs: https://terragrunt.gruntwork.io/docs/
-- Google Cloud Deployment Manager: https://cloud.google.com/deployment-manager/docs
+- Google Cloud Deployment Manager, thông báo ngừng hỗ trợ: https://docs.cloud.google.com/deployment-manager/docs/deprecations
 - Google Cloud Infrastructure Manager: https://cloud.google.com/infrastructure-manager/docs
 - Azure Bicep: https://learn.microsoft.com/azure/azure-resource-manager/bicep/overview
 - OpenTofu docs: https://opentofu.org/docs/
