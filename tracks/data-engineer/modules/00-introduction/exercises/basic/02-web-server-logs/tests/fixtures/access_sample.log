@@ -1,0 +1,12 @@
+alpha.example.com - - [03/Jul/1995:23:59:58 -0400] "GET /shuttle/countdown/ HTTP/1.0" 200 3985
+192.0.2.10 - - [04/Jul/1995:00:00:01 -0400] "GET /images/logo.gif HTTP/1.0" 304 0
+192.0.2.10 - - [04/Jul/1995:00:00:01 -0400] "GET /images/logo.gif HTTP/1.0" 304 0
+beta.nasa.gov - - [04/Jul/1995:00:10:00 -0400] "GET /missing.html HTTP/1.0" 404 -
+gamma.uni.edu - - [04/Jul/1995:00:10:05 -0400] "GET /history/apollo/ HTTP/1.0" 200 6245
+gamma.uni.edu - - [04/Jul/1995:00:40:05 -0400] "GET /missing.html HTTP/1.0" 404 -
+delta.example.com - - [04/Jul/1995:00:41:00 -0400] "GET /old/page.html" 200 1204
+epsilon - - [08/Jul/1995:12:00:00 -0400] "POST /cgi-bin/form HTTP/1.0" 200 512
+zeta.example.com - - [08/Jul/1995:12:00:30 -0400] "GET /images/" HTTP/1.0" 404 -
+this line is garbage and has no timestamp
+eta.example.com - - [08/Jul/1995:12:01:00 -0400] "" 400 -
+theta.exa
