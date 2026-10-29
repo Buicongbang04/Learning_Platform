@@ -203,3 +203,29 @@ restore dữ liệu, kiểm tập khóa/tổng tiền và cho downstream cập n
 Chưa. Phải thử restore, đo mất bao nhiêu khoảng dữ liệu và mất bao lâu tới lúc người dùng dùng lại.
 RPO là mục tiêu lượng dữ liệu có thể mất theo thời gian; RTO là mục tiêu thời gian phục hồi.
 Kiểm cả schema, quyền và dependency; file backup tồn tại chưa chứng minh nó đọc được.
+
+## API serving dữ liệu sắp ra mắt cho đối tác. Bạn load test nó thế nào và đọc kết quả ra sao?
+
+1. **Viết SLO trước**: vd. ở 50 request/giây, p95 không quá 300 ms, lỗi dưới 0,1%. Không có SLO thì không
+   biết kết quả "đạt" hay không.
+2. **Kịch bản giống thật**: trộn tham số theo access log (endpoint, khoảng ngày, seller), tách chạy cache
+   lạnh và cache nóng, có xác thực. Bắn tải từ máy khác máy chạy API.
+3. **Chạy theo bậc**: tăng dần tải (ramp-up) tới gấp 2–3 lần mục tiêu để biết điểm gãy, rồi một lần soak
+   vài giờ ở mức mục tiêu để thấy rò bộ nhớ hay connection pool cạn.
+4. **Đọc kết quả**: xem error rate trước (lỗi 400/500 trả nhanh làm latency đẹp giả), rồi p95/p99 chứ không
+   phải trung bình; không lấy trung bình các p95 của nhiều máy, phải gộp mẫu rồi tính lại. Đối chiếu với
+   metric phía server (CPU, số kết nối DB, cache hit rate) để biết nút cổ chai ở đâu.
+5. **Tự động hoá**: một load test ngắn (k6 với `thresholds`) chạy trên staging sau mỗi deploy, vi phạm SLO
+   thì fail pipeline.
+
+## Terraform workspace, thư mục theo môi trường hay Terragrunt: bạn chọn gì để quản dev/staging/prod?
+
+Mặc định chọn **thư mục theo môi trường** (`envs/dev`, `envs/staging`, `envs/prod`), mỗi thư mục gọi cùng
+các module đã ghim phiên bản, có backend state riêng và tốt nhất nằm ở tài khoản/project cloud riêng. Lý do:
+nhìn cây thư mục là biết đang apply vào đâu, phân quyền CI theo thư mục được (chỉ pipeline prod có role
+prod), và nâng module cho dev trước rồi mới prod.
+
+Workspace hợp cho môi trường tạm giống hệt nhau (môi trường theo PR), nhưng dễ apply nhầm và dùng chung
+backend nên khó tách quyền. Terragrunt đáng thêm khi có nhiều môi trường nhân nhiều region và phần lặp
+(backend, provider) bắt đầu gây lỗi chép tay. Dù chọn cách nào: cùng code, khác biến; secret lấy từ secret
+manager; mọi thay đổi đi qua `plan` trong PR.

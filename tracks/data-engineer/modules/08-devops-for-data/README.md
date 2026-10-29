@@ -344,6 +344,78 @@ nguồn sự thật duy nhất, mọi thay đổi có lịch sử và review.
 - **Data diff**: so sánh output của nhánh mới với production trước khi merge.
 - **Deploy DAG**: Airflow đọc DAG từ thư mục; CD là đồng bộ thư mục DAG + image task.
 
+### 4.4. GitLab CI, CircleCI và ArgoCD trong thực tế
+
+Ba công cụ trong bảng 4.2 giải cùng bài toán với GitHub Actions nhưng khác chỗ đặt cấu hình và mô hình
+chạy. Cùng pipeline "lint → test → build image → deploy" viết bằng từng công cụ:
+
+**GitLab CI** (`.gitlab-ci.yml`): job gom theo `stages`, chạy trên **runner** (shared của gitlab.com hoặc
+runner tự host trong mạng công ty, đọc được database nội bộ mà không mở firewall). Registry, environments,
+review app và quét bảo mật có sẵn trong cùng sản phẩm.
+
+```yaml
+stages: [test, build, deploy]
+
+test:
+  stage: test
+  image: python:3.12-slim
+  services: [postgres:16]
+  variables: { POSTGRES_USER: de, POSTGRES_PASSWORD: de, POSTGRES_DB: de }
+  script:
+    - pip install -r requirements.txt
+    - ruff check . && pytest -q
+
+build:
+  stage: build
+  image: docker:27
+  services: [docker:27-dind]
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"' }]
+
+deploy_prod:
+  stage: deploy
+  environment: production
+  when: manual                       # bước duyệt tay trước production
+  script: ./deploy.sh $CI_COMMIT_SHA
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"' }]
+```
+
+**CircleCI** (`.circleci/config.yml`): SaaS chuyên CI, mạnh ở tốc độ (cache layer Docker, chia test song
+song theo thời gian chạy bằng `circleci tests split`), chọn cỡ máy bằng `resource_class`, và **orbs** là gói
+cấu hình dùng lại (vd. orb `aws-ecr` để build/push image trong vài dòng). Hợp khi bộ test lớn và thời gian CI
+là vấn đề, còn code có thể ở GitHub hay Bitbucket.
+
+**ArgoCD** chỉ làm phần CD cho Kubernetes theo GitOps. CI (bất kỳ công cụ nào ở trên) build image rồi sửa
+tag trong repo manifest; ArgoCD thấy Git đổi và tự đồng bộ cluster:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: olist-ingest, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/data-platform-manifests
+    path: apps/olist-ingest/overlays/prod      # Kustomize overlay của môi trường prod
+    targetRevision: main
+  destination: { server: https://kubernetes.default.svc, namespace: data-jobs }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }   # ai sửa tay trên cluster sẽ bị đưa về đúng Git
+```
+
+Chọn thế nào:
+
+| Tình huống | Chọn |
+| --- | --- |
+| Code trên GitHub, đội nhỏ, deploy lên Airflow/VM/cloud function | GitHub Actions |
+| Công ty dùng GitLab tự host, cần runner trong mạng nội bộ | GitLab CI |
+| Bộ test chạy lâu, cần song song hoá và cache mạnh | CircleCI |
+| Job dữ liệu chạy trên Kubernetes, nhiều môi trường, cần audit mọi thay đổi | CI bất kỳ + ArgoCD (hoặc Flux) |
+
+Không chọn hai công cụ CI cho cùng một repo. Kết hợp hợp lý duy nhất là một CI + một công cụ GitOps cho CD.
+
 ## 5. Infrastructure as Code (IaC)
 
 Tạo bucket bằng tay trên console thì nhanh lần đầu, nhưng không review được, không lặp lại được
@@ -446,6 +518,82 @@ DataLakeStack(app, "olist-staging", env_name="staging")
 app.synth()
 ```
 
+### 5.4. Declarative, imperative và reusability trong thực tế
+
+Ranh giới ở 5.1 không tuyệt đối. **Pulumi** và **AWS CDK** cho viết bằng Python/TypeScript (vòng lặp,
+hàm, class: phong cách imperative), nhưng kết quả vẫn là một mô tả trạng thái mong muốn mà engine so diff
+rồi áp dụng; tức là imperative ở cách viết, declarative ở cách chạy. Ngược lại, **Ansible** viết YAML trông
+như declarative nhưng chạy tuần tự từng task, idempotent hay không tuỳ module. Câu hỏi đúng không phải
+"YAML hay Python" mà là: công cụ có giữ **state** và tính **diff** trước khi thay đổi không? Có thì xem trước
+được (`plan`, `cdk diff`, `pulumi preview`) và phát hiện drift.
+
+Dùng script imperative (boto3, `gcloud`, `aws cli`) cho việc một lần hoặc thao tác vận hành (xoay key, chạy
+backfill), không dùng để dựng hạ tầng lâu dài.
+
+**Reusability** đến từ module có giao diện rõ ràng. Một module `data_lake` tốt nhận vài biến (tên dự án,
+môi trường, số ngày giữ dữ liệu), tự áp chuẩn bắt buộc (mã hoá, chặn public, tag, lifecycle) và trả output
+(tên bucket, ARN):
+
+```hcl
+module "data_lake" {
+  source         = "git::https://github.com/your-org/tf-modules.git//data_lake?ref=v1.4.0"
+  project        = "olist"
+  environment    = var.environment
+  raw_retention_days = 90
+}
+
+output "raw_bucket" { value = module.data_lake.raw_bucket_name }
+```
+
+Ghim phiên bản module (`ref=v1.4.0`) để nâng cấp module không âm thầm đổi hạ tầng production. Module nên
+nhỏ và làm một việc; module "làm cả platform" với 80 biến thì không ai dám sửa.
+
+### 5.5. Environment management
+
+Mục tiêu: dev, staging, prod **cùng code**, khác **biến** và khác **state**, để thứ đã thử ở staging chính
+là thứ lên prod.
+
+| Cách | Cấu trúc | Ưu | Nhược |
+| --- | --- | --- | --- |
+| Thư mục theo môi trường | `envs/dev/main.tf`, `envs/prod/main.tf` cùng gọi module, mỗi thư mục một backend | Rõ ràng, prod tách hẳn, phân quyền theo thư mục | Lặp vài dòng gọi module |
+| Terraform workspace | Một thư mục, `terraform workspace select prod` | Ít file | Dễ apply nhầm môi trường, cùng backend nên khó tách quyền |
+| Terragrunt | `terragrunt.hcl` mỗi môi trường kế thừa cấu hình chung | DRY cho nhiều môi trường/region | Thêm một công cụ phải học |
+
+Thực tế phổ biến: thư mục theo môi trường, mỗi môi trường **một tài khoản/project cloud riêng** (dev không
+thể chạm prod kể cả khi lỗi cấu hình), biến trong `*.tfvars`, secret lấy từ secret manager chứ không nằm
+trong tfvars. Thay đổi đi theo thứ tự: PR chạy `plan` cho cả ba môi trường, merge thì apply dev, staging,
+rồi prod sau khi duyệt.
+
+### 5.6. Công cụ IaC native của cloud: CloudFormation, ARM/Bicep, Google Deployment Manager
+
+Mỗi cloud có công cụ declarative riêng, không cần quản state vì cloud giữ hộ:
+
+| Cloud | Công cụ | Định dạng | Ghi chú |
+| --- | --- | --- | --- |
+| AWS | CloudFormation | YAML/JSON (stack) | CDK sinh ra CloudFormation; rollback tự động khi stack lỗi |
+| Azure | ARM template, **Bicep** | JSON, Bicep DSL | Bicep là cú pháp gọn hơn, biên dịch ra ARM |
+| GCP | **Cloud Deployment Manager** | YAML + template Jinja2/Python | Tạo "deployment" gồm nhiều resource GCP |
+| GCP | **Infrastructure Manager** | Terraform | Dịch vụ chạy Terraform được Google quản lý (state, log) |
+
+Ví dụ Deployment Manager tạo bucket cho dữ liệu raw:
+
+```yaml
+# config.yaml, chạy: gcloud deployment-manager deployments create olist-raw --config config.yaml
+resources:
+  - name: olist-raw-dev
+    type: storage.v1.bucket
+    properties:
+      location: ASIA-SOUTHEAST1
+      versioning: { enabled: true }
+      iamConfiguration: { uniformBucketLevelAccess: { enabled: true } }
+```
+
+Google đã thông báo ngừng hỗ trợ Deployment Manager (mốc 31/3/2026) và khuyên chuyển sang Infrastructure
+Manager hoặc Terraform; bạn vẫn có thể gặp nó ở hạ tầng GCP cũ và cần đọc hiểu để migrate. Chọn công cụ
+native khi tổ chức chỉ dùng một cloud và muốn hỗ trợ chính hãng; chọn Terraform/OpenTofu khi đa cloud, hoặc
+cần quản cả tài nguyên ngoài cloud (Snowflake, Datadog, GitHub, Kafka topic) bằng cùng một công cụ, điều
+rất thường gặp ở data platform.
+
 ## 6. Monitoring và observability cho pipeline
 
 Ba trụ cột của observability: **metrics** (số liệu theo thời gian), **logs** (sự kiện chi tiết),
@@ -519,6 +667,50 @@ một time series riêng, hàng triệu series sẽ làm sập Prometheus.
 Nguyên tắc cảnh báo: cảnh báo theo **triệu chứng người dùng thấy** (dữ liệu trễ, thiếu), có
 **runbook** đi kèm, tránh alert fatigue (quá nhiều cảnh báo vô nghĩa khiến người trực bỏ qua).
 
+### 6.4. Datadog, Sentry, New Relic: chọn thế nào
+
+Ba công cụ thương mại này hay bị gộp chung là "monitoring" nhưng trả lời câu hỏi khác nhau:
+
+- **Sentry** trả lời "**code nào vừa ném exception, lần đầu khi nào, ảnh hưởng bao nhiêu lần chạy?**". Nó gom
+  các exception giống nhau thành một issue, kèm stack trace, biến cục bộ, release/commit gây lỗi. Không thay
+  được metric: job chạy "thành công" nhưng nạp 0 dòng thì Sentry im lặng.
+- **Datadog** là nền tảng gộp metrics, logs, traces (APM), dashboard, alert, và có sản phẩm riêng cho
+  pipeline (Data Jobs Monitoring cho Spark/Databricks/Airflow, Data Streams Monitoring cho độ trễ Kafka).
+  Agent cài trên host/K8s tự thu thập; tính phí theo host, theo GB log, theo số custom metric.
+- **New Relic** cùng nhóm với Datadog (full-stack observability), mạnh truyền thống về APM, tính phí theo
+  lượng dữ liệu nạp và số user, có gói miễn phí 100 GB/tháng nên hợp để học và đội nhỏ.
+
+| Tiêu chí | Prometheus + Grafana | Datadog | New Relic | Sentry |
+| --- | --- | --- | --- | --- |
+| Loại | Metrics OSS tự host | Observability SaaS | Observability SaaS | Error tracking (SaaS hoặc tự host) |
+| Mạnh nhất ở | Metric K8s, chi phí thấp | Một nơi cho mọi tín hiệu, tích hợp sẵn 800+ | APM, truy vấn NRQL | Exception theo release |
+| Chi phí | Công vận hành | Cao, tăng theo host/log/metric | Theo GB nạp + user | Theo số event lỗi |
+| Bẫy | Tự lo HA, lưu trữ dài hạn | Hoá đơn tăng vọt vì log/metric cardinality cao | Như Datadog | Gửi cả lỗi kỳ vọng làm loãng issue |
+
+Cách kết hợp phổ biến cho một đội data: **Sentry** cho exception của job Python + **một** nền tảng metric
+(Prometheus/Grafana nếu đã có K8s và người vận hành, Datadog/New Relic nếu muốn mua dịch vụ) + data quality
+check (Great Expectations, Soda, dbt test) cho chính dữ liệu. Instrument bằng **OpenTelemetry** khi có thể
+để đổi nhà cung cấp không phải sửa code.
+
+Gắn Sentry vào job batch chỉ vài dòng; đặt `release` bằng git SHA để biết lỗi xuất hiện từ phiên bản nào:
+
+```python
+import os
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn=os.environ["SENTRY_DSN"],
+    environment=os.environ.get("ENV", "dev"),
+    release=os.environ.get("GIT_SHA"),
+    traces_sample_rate=0.0,          # job batch: chỉ cần lỗi, không cần trace
+)
+
+def main(run_date: str) -> None:
+    sentry_sdk.set_tag("pipeline", "olist_ingest")
+    sentry_sdk.set_tag("run_date", run_date)   # lọc lỗi theo ngày chạy khi backfill
+    ...
+```
+
 ## 7. Testing cho pipeline dữ liệu
 
 ```mermaid
@@ -569,6 +761,73 @@ def test_load_is_idempotent():
 Mẹo: test hành vi biên (rỗng, null, trùng, timezone, ký tự Unicode như "São Paulo"), dùng
 **fixture** nhỏ viết tay, và với test chất lượng của chính bộ test có thể dùng **mutation testing**
 (cố tình cài bug, test phải bắt được) như bài tập intermediate 03.
+
+### 7.1. Functional, smoke, load và A/B testing: làm thế nào
+
+Bảng trên nói mỗi loại test kiểm gì; phần này nói cách làm cụ thể cho pipeline dữ liệu và data API.
+
+**Functional test** viết theo quy tắc nghiệp vụ, đọc như đặc tả: "cho dữ liệu X, khi chạy pipeline, thì
+Y". Nguồn của nó là định nghĩa metric đã thống nhất với stakeholder, không phải cách code đang làm.
+
+```python
+def test_monthly_revenue_excludes_canceled_orders(run_pipeline):
+    # Given: 2 đơn delivered (100 + 50) và 1 đơn canceled (999) trong tháng 2018-08
+    orders = [("o1", "delivered", "2018-08-02", 100.0), ("o2", "delivered", "2018-08-20", 50.0),
+              ("o3", "canceled", "2018-08-21", 999.0)]
+    # When
+    mart = run_pipeline(orders)
+    # Then
+    assert mart["2018-08"]["revenue"] == 150.0
+```
+
+**Smoke test** chạy ngay sau deploy, trên môi trường thật, dưới một phút, chỉ hỏi "có sống không": image
+khởi động, kết nối được database/bucket bằng credential của môi trường đó, bảng đích có dữ liệu ngày gần
+nhất, API trả 200 ở `/health` và một truy vấn mẫu. Fail thì rollback ngay, không chờ người dùng báo.
+
+```bash
+set -euo pipefail
+curl -fsS --max-time 5 "$API_URL/health"
+rows=$(psql "$DSN" -tAc "SELECT count(*) FROM mart.fct_orders WHERE order_date >= current_date - 1")
+[ "$rows" -gt 0 ] || { echo "Smoke test: fct_orders không có dữ liệu mới"; exit 1; }
+```
+
+**Load / performance test** có hai dạng với DE:
+
+- **Volume test cho batch**: chạy job trên dữ liệu gấp 3–10 lần hiện tại (sinh bằng Faker hoặc nhân bản
+  có đổi khoá), đo thời gian, RAM peak, số file output, chi phí. Trả lời "năm sau dữ liệu gấp đôi thì job
+  còn kịp trong cửa sổ 2 giờ không".
+- **Load test cho serving** (API, dashboard, warehouse dưới truy vấn đồng thời): bắn N request với C client
+  đồng thời, đo **p50/p95/p99 latency**, **throughput**, **error rate**, rồi so với **SLO** đã công bố
+  (vd. p95 không quá 300 ms, lỗi dưới 0,1% ở 50 request/giây). Tách cache lạnh với cache nóng.
+
+```mermaid
+flowchart LR
+    G[Load generator<br/>C client đồng thời] -->|N request| API[Serving API]
+    API --> C[(Cache)]
+    API --> W[(Warehouse / DuckDB)]
+    G --> R[Kết quả từng request<br/>status, latency]
+    R --> S[Tổng hợp<br/>p50, p95, throughput, error rate]
+    S --> D{So với SLO}
+    D -->|đạt| OK[Cho deploy tiếp]
+    D -->|vi phạm| FAIL[Fail pipeline CI/CD]
+```
+
+Công cụ: **k6** (kịch bản JavaScript, khai báo ngưỡng SLO bằng `thresholds`, chạy trong CI), **Locust**
+(kịch bản Python), **Vegeta**/**wrk** (CLI). Bài intermediate 04 tự viết một load generator nhỏ bằng
+`httpx` + `asyncio` và chạy nó trên API metric của module 09 để hiểu các con số này được tính ra sao.
+Hai lỗi đọc kết quả hay gặp: lấy trung bình các p95 (percentile không cộng trung bình được) và chỉ nhìn
+latency mà bỏ qua error rate (lỗi 400 trả rất nhanh làm latency "đẹp").
+
+**A/B testing** với DE có hai nghĩa:
+
+1. **Thử nghiệm trên người dùng** (thuật toán gợi ý, giao diện): DE chịu trách nhiệm phần dữ liệu. Gán nhóm
+   ổn định theo người dùng (`hash64(experiment_id + ":" + user_id) % 100 < 50` với hàm băm tất định,
+   cùng ý tưởng hash partitioning ở module 01; không dùng `hash()` của Python vì nó đổi mỗi tiến trình), ghi log **exposure** (ai thấy phiên bản nào, lúc nào) tách khỏi log hành vi, kiểm tra
+   **sample ratio mismatch** (chia 50/50 mà dữ liệu ra 47/53 nghĩa là pipeline mất sự kiện của một nhóm),
+   và dựng bảng metric theo nhóm để analyst chạy kiểm định.
+2. **Thay pipeline mới bằng cách chạy song song** (shadow / parallel run): pipeline cũ vẫn phục vụ, pipeline
+   mới ghi vào schema riêng trên cùng input; mỗi ngày so số dòng, tổng tiền, tập khoá (data diff). Chỉ chuyển
+   khi khớp trong vài chu kỳ liên tiếp, kể cả ngày cuối tháng và ngày có dữ liệu đến muộn.
 
 ## 8. Trực vận hành, rollback và khôi phục dữ liệu
 
@@ -627,10 +886,22 @@ lệnh dump và restore dùng container riêng của lab, khôi phục vào data
 - CircleCI docs: https://circleci.com/docs/
 - Argo CD docs: https://argo-cd.readthedocs.io/
 - Terraform docs: https://developer.hashicorp.com/terraform/docs
+- Terraform, Module structure và module sources: https://developer.hashicorp.com/terraform/language/modules
+- Terragrunt docs: https://terragrunt.gruntwork.io/docs/
+- Google Cloud Deployment Manager: https://cloud.google.com/deployment-manager/docs
+- Google Cloud Infrastructure Manager: https://cloud.google.com/infrastructure-manager/docs
+- Azure Bicep: https://learn.microsoft.com/azure/azure-resource-manager/bicep/overview
 - OpenTofu docs: https://opentofu.org/docs/
 - AWS CDK Developer Guide: https://docs.aws.amazon.com/cdk/v2/guide/home.html
 - Prometheus, exposition formats: https://prometheus.io/docs/instrumenting/exposition_formats/
 - Prometheus, naming best practices: https://prometheus.io/docs/practices/naming/
 - Google SRE Book, chương Monitoring Distributed Systems: https://sre.google/sre-book/monitoring-distributed-systems/
+- Sentry Python SDK: https://docs.sentry.io/platforms/python/
+- Datadog Data Jobs Monitoring: https://docs.datadoghq.com/data_jobs/
+- New Relic docs: https://docs.newrelic.com/
+- OpenTelemetry docs: https://opentelemetry.io/docs/
+- Grafana k6 docs, thresholds: https://grafana.com/docs/k6/latest/using-k6/thresholds/
+- Locust docs: https://docs.locust.io/
+- Ron Kohavi, Diane Tang, Ya Xu, *Trustworthy Online Controlled Experiments* (Cambridge, 2020), chương về sample ratio mismatch.
 - Sách: Joe Reis & Matt Housley, *Fundamentals of Data Engineering* (O'Reilly, 2022), chương về undercurrents (DataOps).
 - Sách: Kief Morris, *Infrastructure as Code* (O'Reilly, 2nd ed., 2020).
