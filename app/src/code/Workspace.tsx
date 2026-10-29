@@ -37,7 +37,7 @@ function lineClass(line: string) {
   return "";
 }
 
-const RunOutput = memo(function RunOutput({ output }: { output: string }) {
+export const RunOutput = memo(function RunOutput({ output }: { output: string }) {
   return (
     <pre className="px-4 py-3 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap">
       {output.split("\n").map((line, index) => (
@@ -49,7 +49,34 @@ const RunOutput = memo(function RunOutput({ output }: { output: string }) {
   );
 });
 
-function OpenInVsCode({ path, className }: { path: string; className?: string }) {
+/** Dòng tóm tắt một lần chạy: biểu tượng + kết luận + thời gian. */
+export function RunSummary({ result }: { result: RunResult }) {
+  const outcome = verdict(result);
+  const tone = TONES[outcome.tone];
+  return (
+    <span className={cx("inline-flex min-w-0 items-center gap-1.5 truncate text-sm", tone.className)}>
+      <tone.Icon className="size-4 shrink-0" aria-hidden />
+      {outcome.text}
+      <span className="text-muted tabular-nums">· {(result.durationMs / 1000).toFixed(1)}s</span>
+    </span>
+  );
+}
+
+/** Dải mời đánh dấu xong khi lần chạy test vừa rồi đạt hết. */
+export function PassedBanner({ result, onMarkDone, text = "Code của bạn đã qua toàn bộ test." }: { result: RunResult; onMarkDone: () => void; text?: string }) {
+  if (result.kind !== "test" || verdict(result).tone !== "pass") return null;
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-b border-border-strong bg-success-bg px-4 py-2.5">
+      <p className="min-w-0 flex-1 text-sm text-success">{text}</p>
+      <button type="button" className={button.primary} onClick={onMarkDone}>
+        <Check className="size-4 shrink-0" aria-hidden />
+        Đánh dấu xong
+      </button>
+    </div>
+  );
+}
+
+export function OpenInVsCode({ path, className, showLabel = false }: { path: string; className?: string; showLabel?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const open = async () => {
     setError(null);
@@ -64,7 +91,7 @@ function OpenInVsCode({ path, className }: { path: string; className?: string })
     <>
       <button type="button" className={cx(button.outline, className)} onClick={() => void open()} title={`Mở ${path} trong VS Code`}>
         <ExternalLink className="size-4 shrink-0" aria-hidden />
-        <span className="hidden sm:inline">Mở trong VS Code</span>
+        <span className={showLabel ? undefined : "hidden sm:inline"}>Mở trong VS Code</span>
       </button>
       {error && (
         <span role="alert" className="max-w-64 truncate text-xs text-error-text" title={error}>
@@ -92,8 +119,6 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
 
   const file = ws.files.find((item) => item.path === active) ?? ws.files[0];
   const result = ws.result;
-  const outcome = result && verdict(result);
-  const tone = outcome && TONES[outcome.tone];
   const runnable = file.editable && file.path.endsWith(".py") && HAS_MAIN.test(ws.contentOf(file.path));
   const services = exercise.services.filter((service) => service !== "airflow");
 
@@ -163,13 +188,7 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
         <div className="flex h-12 shrink-0 items-center gap-2 px-3">
           <SquareTerminal className="size-4 shrink-0 text-muted" aria-hidden />
           <h2 className="text-sm font-medium">Kết quả</h2>
-          {result && outcome && tone && !ws.running && (
-            <span className={cx("inline-flex min-w-0 items-center gap-1.5 truncate text-sm", tone.className)}>
-              <tone.Icon className="size-4 shrink-0" aria-hidden />
-              {outcome.text}
-              <span className="text-muted tabular-nums">· {(result.durationMs / 1000).toFixed(1)}s</span>
-            </span>
-          )}
+          {result && !ws.running && <RunSummary result={result} />}
           <span className="flex-1" />
           {result && !ws.running && (
             <button type="button" className={button.icon} aria-label="Xoá kết quả" onClick={ws.clearResult}>
@@ -189,15 +208,7 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto border-t border-border-strong bg-code-frame" aria-live="polite" aria-busy={Boolean(ws.running) || undefined}>
-          {result && outcome?.tone === "pass" && result.kind === "test" && !done && (
-            <div className="flex flex-wrap items-center gap-3 border-b border-border-strong bg-success-bg px-4 py-2.5">
-              <p className="min-w-0 flex-1 text-sm text-success">Code của bạn đã qua toàn bộ test.</p>
-              <button type="button" className={button.primary} onClick={onMarkDone}>
-                <Check className="size-4 shrink-0" aria-hidden />
-                Đánh dấu xong
-              </button>
-            </div>
-          )}
+          {result && !done && <PassedBanner result={result} onMarkDone={onMarkDone} />}
           {result ? (
             <RunOutput output={result.output} />
           ) : (

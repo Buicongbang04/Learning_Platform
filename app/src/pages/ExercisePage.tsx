@@ -8,6 +8,7 @@ import { ExerciseList, Notes } from "../components/shared";
 import { Markdown } from "../components/Markdown";
 import { badge, button, card, CodeLine, cx, ErrorBlock, LoadingBlock } from "../components/ui";
 import { Workspace } from "../code/Workspace";
+import { isNotebookExercise, NotebookPanel } from "../code/NotebookPanel";
 import { useSplit } from "../code/useSplit";
 import { exerciseLink, moduleLink, trackLink } from "../links";
 import { NotFound } from "./NotFound";
@@ -257,9 +258,15 @@ export function ExercisePage() {
         <div {...split.handleProps} aria-label="Kéo để đổi độ rộng hai khung" className="group relative hidden w-3 shrink-0 cursor-col-resize outline-hidden lg:block">
           <div className="absolute inset-y-6 left-1/2 w-1 -translate-x-1/2 rounded-full transition-colors group-hover:bg-primary group-focus-visible:bg-primary group-data-dragging:bg-primary" />
         </div>
-        <section aria-label="Code" className={cx(card, "h-[85vh] min-w-0 overflow-hidden lg:h-auto lg:flex-1", split.dragging && "select-none")}>
-          <Workspace key={exercise.key} exercise={exercise} done={done} onMarkDone={() => setDone(true)} />
-        </section>
+        {isNotebookExercise(exercise) ? (
+          <section aria-label="Làm bài" className={cx("min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto", split.dragging && "select-none")}>
+            <NotebookPanel key={exercise.key} exercise={exercise} trackId={track.id} done={done} onMarkDone={() => setDone(true)} />
+          </section>
+        ) : (
+          <section aria-label="Code" className={cx(card, "h-[85vh] min-w-0 overflow-hidden lg:h-auto lg:flex-1", split.dragging && "select-none")}>
+            <Workspace key={exercise.key} exercise={exercise} done={done} onMarkDone={() => setDone(true)} />
+          </section>
+        )}
       </div>
     </Shell>
   );
