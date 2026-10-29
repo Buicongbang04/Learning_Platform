@@ -40,7 +40,7 @@ luận chứ không có một câu đúng. Dưới đây là hướng làm, các
   bỏ 0,07% sửa đổi, 30 giây không bỏ event nào. Dashboard chấp nhận chậm thêm 30 giây thì đầy đủ.
 - **`dedup_ttl`** phải ≥ khoảng cách lớn nhất giữa hai bản trùng: với nguồn này là thời gian một lần nối lại
   (cỡ giây tới phút). TTL quá ngắn gây lỗi kiểu "tổng khớp, window sai" (test `test_short_dedup_ttl_hides_errors_in_totals`).
-- **Lambda hay Kappa cho nguồn này**: EventStreams chỉ giữ để replay vài ngày, nên "Kappa thuần" (replay
+- **Lambda hay Kappa cho nguồn này**: EventStreams chỉ giữ lịch sử để replay khoảng 7–31 ngày tuỳ stream, nên "Kappa thuần" (replay
   từ nguồn) không đủ để tính lại lịch sử dài: phải tự giữ lớp raw (tệp JSONL ở đây, ngoài đời là topic
   Kafka retention dài hoặc bảng Iceberg/Delta). Có lớp raw rồi thì Kappa (một code path, tính lại bằng
   replay raw) đơn giản hơn. Lambda đáng khi cần số chốt theo ngày khớp tuyệt đối và đội chấp nhận giữ hai
@@ -448,5 +448,5 @@ Năm phút buổi sáng giờ châu Âu không đại diện cho cả ngày hay 
 (06:57) chỉ ghi được một phần, kể cả event có event time trước lúc bắt đầu ghi 13 giây. Cờ `bot` là cờ
 tài khoản, công cụ bán tự động do người chạy vẫn tính là người. `timestamp` làm tròn xuống giây nên lag
 lệch tối đa 1 giây. Với nguồn này tôi chọn Kappa có lớp raw: stream cho dashboard, còn tệp raw JSONL là
-nguồn để tính lại khi đổi logic (EventStreams chỉ cho replay vài ngày nên phải tự giữ raw). Lambda chỉ
+nguồn để tính lại khi đổi logic (EventStreams chỉ giữ 7–31 ngày lịch sử nên phải tự giữ raw). Lambda chỉ
 đáng khi cần số "chốt" hằng ngày khớp tuyệt đối, và khi đó batch cũng chỉ đọc lại chính lớp raw này.
