@@ -258,3 +258,15 @@ kích thước dữ liệu và số client rõ ràng; tách cache nóng/lạnh, 
 Tùy yêu cầu và khả năng chịu tải nguồn. Nếu fallback, đặt timeout và giới hạn tải để tránh cả hệ
 đổ dồn vào DB. Với dữ liệu không có nguồn thay thế, phải báo lỗi có kiểm soát; cache không nên trở
 thành bản sao duy nhất của dữ liệu quan trọng chỉ vì lúc bình thường nó trả rất nhanh.
+
+## Memcached hay Redis cho lớp cache của API serving? Khi nào Memcached vẫn là lựa chọn đúng?
+
+Memcached chỉ là cache key → blob trong RAM, đa luồng, không persistence, không replication; client tự băm
+key sang các server. Redis có cấu trúc dữ liệu (hash, sorted set, HyperLogLog, stream), Lua script,
+persistence và replication/cluster.
+
+Với API serving mới, chọn **Redis** (hoặc Valkey): ngoài cache-aside còn cần rate limit theo client, counter,
+dedup, lock chống cache stampede, đều là lệnh có sẵn. Memcached vẫn đúng khi bài toán **chỉ** là cache-aside
+cho object đồng cỡ, lưu lượng đọc rất lớn trên máy nhiều core, mất cache chấp nhận được, và đội đã vận hành
+nó ở quy mô lớn (Facebook với mcrouter). Dù chọn gì, cache không phải nguồn sự thật: phải dựng lại được từ
+warehouse/DB, và cần TTL + invalidation rõ ràng.

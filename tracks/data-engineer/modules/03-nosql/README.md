@@ -441,6 +441,42 @@ def allow(r, client_id: str, limit: int = 10, window: int = 60) -> bool:
     return count <= limit
 ```
 
+### Memcached vs Redis
+
+**Memcached** (2003, sinh ra để cache cho LiveJournal, sau đó Facebook dùng ở quy mô hàng nghìn máy) là
+cache key-value thuần trong RAM: key là chuỗi, value là blob byte (tối đa 1 MB mặc định), lệnh chỉ có
+`get`, `set`, `delete`, `incr`, `cas`. Không persistence, không replication, không cấu trúc dữ liệu. Server
+đa luồng, quản lý bộ nhớ bằng **slab allocator** (chia RAM thành các lớp kích thước cố định). Phân tán hoàn
+toàn ở phía client: thư viện client băm key (consistent hashing) để chọn server, các server không biết nhau.
+
+| | Memcached | Redis |
+| --- | --- | --- |
+| Kiểu value | Blob byte | String, hash, list, set, sorted set, stream, HyperLogLog, JSON... |
+| Luồng xử lý | Đa luồng, tận dụng nhiều core trên một máy | Lệnh chạy một luồng (I/O đa luồng từ 6.0); scale bằng nhiều shard |
+| Persistence | Không: restart là mất hết | RDB snapshot, AOF |
+| Replication, failover | Không có sẵn | Replica, Sentinel, Redis Cluster |
+| Phân tán | Client tự băm key sang server | Redis Cluster 16384 hash slot, hoặc client/proxy |
+| Thao tác nguyên tử phức tạp | `incr`, `cas` | Lua script, transaction `MULTI`, `INCR` trên field hash |
+| Pub/sub, queue | Không | Pub/sub, Stream, consumer group |
+| Bộ nhớ cho object nhỏ đồng cỡ | Rất hiệu quả (slab) | Overhead mỗi key cao hơn |
+
+**Khi nào chọn Memcached**: chỉ cần cache-aside thuần (kết quả truy vấn, HTML render, session có thể mất),
+object đồng cỡ, lưu lượng đọc rất cao trên máy nhiều core, và muốn vận hành đơn giản: mất một node chỉ là
+cache miss tăng tạm thời. Các hệ thống lớn đã có sẵn đội vận hành Memcached (Facebook mcrouter, Wikipedia)
+vẫn giữ nó.
+
+**Khi nào chọn Redis**: cần bất cứ thứ gì ngoài get/set: counter theo thời gian, leaderboard, rate limit
+(phần trên), dedup bằng set, đếm unique bằng HyperLogLog, queue nhẹ, distributed lock, hoặc cần dữ liệu còn
+sau restart. Với hệ thống mới, Redis (hoặc fork mã nguồn mở **Valkey**, ra đời sau khi Redis đổi giấy phép
+năm 2024) là lựa chọn mặc định vì một công cụ làm được cả cache lẫn các use case trên.
+
+Góc nhìn DE: cả hai đều là **cache**, không phải nơi lưu sự thật. Dữ liệu trong đó phải dựng lại được từ
+warehouse/OLTP. Khi serving layer (module 09) cần "feature/aggregate tra theo key trong vài ms", Redis hay
+DynamoDB thường được chọn; Memcached chỉ hợp nếu giá trị là blob tính sẵn và mất được.
+
+Trên cloud: AWS ElastiCache có cả hai engine (Memcached, Redis/Valkey); GCP Memorystore cũng có cả hai;
+Azure Cache for Redis chỉ có Redis.
+
 ## 6. Graph database: Neo4j
 
 ### Property graph
@@ -610,6 +646,9 @@ có giải thích đánh đổi. Replica set/failover cần lab nhiều node ri�
 - DataStax, About deletes and tombstones: https://docs.datastax.com/en/cassandra-oss/3.x/cassandra/dml/dmlAboutDeletes.html
 - Redis docs, Data types: https://redis.io/docs/latest/develop/data-types/
 - Redis, Caching patterns: https://redis.io/solutions/caching/
+- Memcached wiki, Overview và slab allocator: https://github.com/memcached/memcached/wiki
+- Nishtala et al. (2013), *Scaling Memcache at Facebook*: https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala
+- Valkey docs: https://valkey.io/docs/
 - Neo4j Cypher Manual: https://neo4j.com/docs/cypher-manual/current/
 - Azure Cosmos DB, Consistency levels: https://learn.microsoft.com/en-us/azure/cosmos-db/consistency-levels
 - Apache CouchDB docs, Replication: https://docs.couchdb.org/en/stable/replication/intro.html
