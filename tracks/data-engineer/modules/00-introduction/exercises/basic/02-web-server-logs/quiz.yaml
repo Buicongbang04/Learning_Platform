@@ -1,0 +1,34 @@
+questions:
+  - id: q1
+    kind: knowledge
+    type: single
+    prompt: Trong access log, hai dòng giống hệt nhau (cùng host, giây, đường dẫn, status, bytes) có nên loại trùng không?
+    options:
+      - id: a
+        text: Có, vì dòng trùng chắc chắn là lỗi ghi log
+      - id: b
+        text: Không, vì mỗi dòng là một request thật; hai request cùng giây vẫn có thể xảy ra
+      - id: c
+        text: Có, để số request khớp với số host duy nhất
+  - id: q2
+    kind: data
+    type: single
+    prompt: Ngày nào có nhiều request nhất trong tháng 7/1995 của bộ NASA?
+    options:
+      - id: a
+        text: 1995-07-04
+      - id: b
+        text: 1995-07-13
+      - id: c
+        text: 1995-07-28
+  - id: q3
+    kind: knowledge
+    type: multi
+    prompt: Những việc nào đúng khi parse log lớn có dòng hỏng?
+    options:
+      - id: a
+        text: Đọc streaming từng dòng thay vì nạp cả tệp
+      - id: b
+        text: Dòng không parse được thì tách riêng vào rejected thay vì làm sập pipeline
+      - id: c
+        text: Bỏ im lặng dòng hỏng, không cần đếm

@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { workspaceApi } from "./server/workspace";
+import { quizApi } from "./server/quiz";
 import { trackIcons } from "./server/trackIcons";
 
 const repoRoot = resolve(__dirname, "..");
@@ -58,7 +59,7 @@ function progressApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), progressApi(), workspaceApi(repoRoot), trackIcons(repoRoot, __dirname)],
+  plugins: [react(), tailwindcss(), progressApi(), workspaceApi(repoRoot), quizApi(repoRoot), trackIcons(repoRoot, __dirname)],
   server: {
     port: 5173,
     fs: { allow: [repoRoot] },
