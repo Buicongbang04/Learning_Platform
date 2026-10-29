@@ -17,8 +17,8 @@ run:
 ## Mục tiêu
 
 Đi từ model tới **quyết định có ràng buộc**: chọn ngưỡng theo chi phí khi năng lực CSKH có hạn, ước lượng khoản
-tiết kiệm kèm độ không chắc chắn, phân tích độ nhạy, và viết đề xuất mà quản lý có thể duyệt. Đây cũng là
-milestone ML của capstone.
+tiết kiệm kèm độ không chắc chắn, phân tích độ nhạy, và viết đề xuất mà quản lý có thể duyệt. Bài này cung cấp
+`capacity_threshold` và `bootstrap_saving` cho M03 của capstone; model capstone dự đoán sớm hơn, lúc giao cho đơn vị vận chuyển.
 
 ## Đề bài
 

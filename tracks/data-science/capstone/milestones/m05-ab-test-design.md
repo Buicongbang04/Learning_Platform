@@ -30,8 +30,11 @@ trên. Sau M03, quay lại thay bằng số thật của model.
    - Dự đoán hoàn hảo: chỉ đơn sẽ trễ (cận trên của baseline, không đạt được trong thực tế).
    - Sau M03: top k% điểm của model lúc giao vận chuyển.
 
-   Nhìn số đơn của luật theo tháng. Ngày hẹn giao của Olist đổi chính sách giữa chừng: tổng thể của
-   bạn có ổn định không, và thí nghiệm nên chạy trong giai đoạn nào?
+   Nhìn số đơn của luật theo tháng. Từ 06/2018 ngày hẹn giao rút ngắn (trung vị số ngày hứa giao của
+   đơn mua tháng 6, 7, 8 là 27 → 19 → 13 ngày; nguyên nhân chưa rõ, không phải do đơn chưa giao xong:
+   97.5% đơn mua tháng 8 đã giao). Tổng thể của luật vì thế không ổn định. Ghi rõ thí nghiệm chạy trong
+   giai đoạn nào, và chọn một trong hai: bỏ 07–08/2018 khỏi phần tính baseline, hoặc chuẩn hoá số ngày
+   còn lại theo số ngày hứa giao (ví dụ còn dưới 20% thời gian hứa).
 3. **Đơn vị random**: theo đơn hay theo `customer_unique_id`, random lúc nào, hash nhất quán ra sao
    (dùng lại `hash_assign` của `modules/04-advanced-experimentation/exercises/intermediate/02-olist-ratio-aa`).
    Đếm số khách có nhiều hơn một đơn bị gắn cờ để đánh giá rủi ro nhiễm chéo.
@@ -39,7 +42,7 @@ trên. Sau M03, quay lại thay bằng số thật của model.
    chi phí voucher, khối lượng liên hệ CSKH, tỉ lệ huỷ / trả hàng), metric chẩn đoán. Bàn về selection:
    tin nhắn có thể làm thay đổi **ai** để lại review. Đề xuất cách tính OEC trên **mọi** đơn được random.
 5. **Tác động kỳ vọng phải hợp lý.** Tin nhắn không làm đơn hết trễ. Giả sử nó chỉ giúp đơn thật sự trễ
-   và giảm xác suất review xấu của chúng $$\Delta$$ điểm (module 15 dùng $$\Delta = 0.15$$), thì tác động
+   và giảm xác suất review xấu của chúng $$\Delta$$ điểm (lấy $$\Delta = 0.15$$, giả định cho bài này; module 15 sau này dùng cùng giá trị), thì tác động
    lên tổng thể chỉ là $$\Delta$$ nhân tỉ lệ trễ trong tổng thể. Đừng dùng ATT +44 điểm của M04 làm tác
    động của tin nhắn.
 6. **Power, cỡ mẫu, thời lượng** cho từng kịch bản, $$\alpha = 0.05$$ hai phía, power 0.8, dùng hàm cỡ mẫu
@@ -69,9 +72,10 @@ Số tham chiếu (Olist thật, giai đoạn 06/2017 – 07/2018 trừ khi ghi 
 | --- | --- |
 | Đơn giao xong mỗi tuần | trung vị khoảng 1 259 |
 | Đơn trễ mỗi tuần | trung vị 61, tuần tệ nhất 565 |
-| Luật "còn dưới 5 ngày": tổng thể | khoảng 900 đơn (1.1%), trung vị 9 đơn mỗi tuần, phân vị 90 khoảng 30 |
-| Luật "còn dưới 5 ngày": review xấu / trễ | 40.5% / 64% |
-| Luật "còn dưới 5 ngày" chỉ riêng 08/2018 | 1 195 đơn (ngày hẹn đổi chính sách) |
+| Luật "còn dưới 5 ngày", 06/2017 – 07/2018: tổng thể | khoảng 900 đơn (1.1%); theo 61 tuần trọn (thứ Hai – Chủ nhật, theo ngày mua) trung vị 9 đơn mỗi tuần, phân vị 10 là 2, phân vị 90 là 24 |
+| Luật "còn dưới 5 ngày", 06/2017 – 07/2018: review xấu / trễ | 40.5% / 64% |
+| Luật "còn dưới 5 ngày" chỉ riêng 08/2018 | 1 195 đơn (ngày hẹn rút ngắn từ 06/2018, nguyên nhân chưa rõ) |
+| Luật "còn dưới 5 ngày", 06/2017 – 08/2018 (gồm tháng 8) | khoảng 2 100 đơn, review xấu 25%, trễ 51% |
 | Dự đoán hoàn hảo (đơn trễ) | review xấu 56.9%, 61 đơn mỗi tuần |
 | Luật, $$\Delta = 0.15$$ trên đơn trễ | tác động khoảng 9.5 điểm, khoảng 390 đơn mỗi nhóm, gần 90 tuần |
 | Dự đoán hoàn hảo, $$\Delta = 0.15$$ | 171 đơn mỗi nhóm, khoảng 6 tuần |
@@ -87,6 +91,7 @@ Số tham chiếu (Olist thật, giai đoạn 06/2017 – 07/2018 trừ khi ghi 
 
 - [ ] Baseline đúng: 12.8% review xấu, 8.1% trễ, review xấu ở đơn trễ trên 50%, traffic gần đây khoảng 1 259 đơn mỗi tuần.
 - [ ] Tổng thể chỉ dùng thông tin có tới lúc giao vận chuyển; baseline là của **tổng thể đó**, không phải 12.8%.
+- [ ] Kế hoạch ghi rõ giai đoạn tính baseline và chạy thí nghiệm, và hoặc bỏ 07–08/2018, hoặc chuẩn hoá số ngày còn lại theo số ngày hứa giao.
 - [ ] Tác động kỳ vọng được suy ra từ cơ chế (chỉ đơn thật sự trễ được giúp), không lấy ATT của M04.
 - [ ] Bảng power có ít nhất hai kịch bản tổng thể, có thời lượng, và kết luận thẳng khi không khả thi.
 - [ ] CUPED/CUPAC: covariate có trước lúc random, fit trên giai đoạn trước thí nghiệm, mức giảm variance đo trên dữ liệu thật.

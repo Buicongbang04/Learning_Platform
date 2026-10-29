@@ -15,7 +15,9 @@ với stakeholder (mục 7). Hai bài là bản thu nhỏ của milestone này:
 ("còn dưới 5 ngày tới ngày hẹn lúc giao vận chuyển") **ngang model về tiền**, và kể cả chính sách tốt nhất
 cũng chỉ đáng khoảng 100 R$ mỗi tuần với giả định đang dùng. Capstone của bạn dự đoán review xấu, không
 phải trễ, nên kết quả có thể khác: hãy để số của bạn quyết định. Nhưng memo phải đặt model cạnh luật
-không ML, và nếu giá trị nhỏ thì nói thẳng. "Ra mắt luật trước, model phải thắng luật trên holdout mới
+không ML, và nếu giá trị nhỏ thì nói thẳng. Không trích khoảng cách "model gấp đôi luật" tính gộp trên
+test: nó chủ yếu do tháng 8/2018, khi ngày hứa giao rút ngắn và luật chọn gần 19% đơn. Chỉ dùng so sánh
+tách giai đoạn của M03 (04–07/2018 và 08/2018), ở cùng k. "Ra mắt luật trước, model phải thắng luật trên holdout mới
 được thay" hoặc "chạy thí nghiệm nhỏ để đo giá trị thật trước khi đầu tư" là khuyến nghị tốt khi dữ liệu
 nói vậy.
 
@@ -76,7 +78,7 @@ tiếp theo tương xứng.
 
 - [ ] Câu đầu của memo là một hành động, không phải một metric model.
 - [ ] Mọi con số trong memo có trong `NUMBERS.md` và truy được về notebook.
-- [ ] Model được đặt cạnh luật không ML về tiền; kết luận đi theo số, kể cả khi luật thắng hoặc ngang.
+- [ ] Model được đặt cạnh luật không ML về tiền, theo so sánh tách giai đoạn của M03; kết luận đi theo số, kể cả khi luật thắng hoặc ngang.
 - [ ] Ba kịch bản có R$ mỗi tuần; giả định nhạy nhất được chỉ ra bằng tornado; có điểm hoà vốn bằng lời.
 - [ ] Memo tách bạch tác động của giao trễ (M04) với tác động chưa biết của tin nhắn (cần M05).
 - [ ] Nếu thí nghiệm M05 không khả thi ở quy mô hiện tại, memo nói thẳng và đề xuất phương án thay thế cụ thể.

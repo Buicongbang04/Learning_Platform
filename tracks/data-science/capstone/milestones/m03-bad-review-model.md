@@ -34,6 +34,12 @@ hàng. Giá phải trả: model yếu hơn rõ rệt so với model lúc vừa g
    - cùng model ở thời điểm `"purchase"` (cận dưới),
    - cùng model ở thời điểm `"delivered"` (cận trên, không dùng được cho can thiệp trước khi giao),
    - luật không ML "còn dưới 5 ngày tới ngày hẹn lúc giao vận chuyển", so ở **cùng số đơn được chọn**.
+
+   So luật với model **tách hai giai đoạn** của test: đơn mua 04–07/2018 và đơn mua 08/2018. Từ 06/2018
+   số ngày hứa giao rút ngắn mạnh (trung vị 27 → 19 → 13 ngày cho đơn mua tháng 6, 7, 8; nguyên nhân chưa
+   rõ), nên luật chọn rất ít đơn ở giai đoạn đầu và rất nhiều đơn ở tháng 8. Trong mỗi giai đoạn, chọn
+   top k của model với k bằng số đơn luật chọn ở **chính giai đoạn đó**. Con số gộp cả test trộn hai chế
+   độ khác nhau và không được dùng để kết luận.
 5. **Calibration** (reliability curve, Brier) trên validation; hiệu chỉnh nếu cần. Giải thích vì sao
    PR-AUC và precision đổi mạnh giữa validation (18.0% review xấu) và test (10.4%).
 6. **Chính sách cảnh báo**: dùng `capacity_threshold` và `bootstrap_saving` từ bài
@@ -57,9 +63,18 @@ trừ lịch sử seller; bản cài đặt của người soạn):
 | Lúc giao vận chuyển | 0.631 | 0.222 | 0.342 |
 | Lúc vừa giao (thêm `delivery_days`, `late_days`) | 0.693 | 0.341 | 0.543 |
 
-Tỉ lệ review xấu trên test là 10.4%. Luật "còn dưới 5 ngày" chọn 4.9% đơn test với precision 0.171;
-model lúc giao vận chuyển ở cùng số đơn có precision 0.341. Trong nhóm top 5% của model, chỉ khoảng 18%
-đơn thật sự trễ. Ghi nhớ con số cuối: nó quyết định can thiệp "báo ngày giao mới" tác động được tới bao
+Tỉ lệ review xấu trên test là 10.4%. Luật và model ở cùng k, tách theo giai đoạn:
+
+| Giai đoạn mua | Đơn | Review xấu | Luật chọn | Precision luật (tỉ lệ trễ) | Precision model cùng k (tỉ lệ trễ) |
+| --- | --- | --- | --- | --- | --- |
+| 04–07/2018 | 25 664 | 10.6% | 397 (1.5%) | 0.277 (48.9%) | 0.489 (25.4%) |
+| 08/2018 | 6 330 | 9.5% | 1 186 (18.7%) | 0.136 (40.1%) | 0.208 (20.2%) |
+
+Gộp cả test, luật chọn 1 583 đơn (4.9%) với precision 0.171 và model cùng k đạt 0.341. Nhưng 1 186 trong
+1 583 đơn đó là đơn mua tháng 8, nơi precision của luật gần bằng tỉ lệ nền. **Đừng trích "model gấp đôi
+luật" từ con số gộp**: hãy so trong từng giai đoạn. Ở 04–07/2018, model vẫn hơn luật về review xấu,
+nhưng luật bắt được nhiều đơn thật sự trễ hơn, tức nhiều đơn mà tin nhắn "báo ngày giao mới" có thể giúp.
+Trong nhóm top 5% của model trên cả test, chỉ khoảng 18% đơn thật sự trễ. Ghi nhớ con số cuối: nó quyết định can thiệp "báo ngày giao mới" tác động được tới bao
 nhiêu đơn.
 
 ## Kết quả nộp
@@ -75,7 +90,7 @@ nhiêu đơn.
 - [ ] Feature lúc giao vận chuyển không chứa thông tin sau thời điểm đó; có test chứng minh.
 - [ ] Chia theo thời gian đúng mốc; số đơn train / validation / test là 43 362 / 20 468 / 31 994.
 - [ ] Bảng ba thời điểm có trên test; nói được giá của việc dự đoán sớm hơn (ROC-AUC, PR-AUC, precision).
-- [ ] Model được so với luật không ML ở cùng số đơn được chọn; kết luận theo số, không theo kỳ vọng.
+- [ ] Model được so với luật không ML ở cùng số đơn được chọn, tách 04–07/2018 và 08/2018; không kết luận từ con số gộp.
 - [ ] PR-AUC luôn được đọc cạnh tỉ lệ dương của tập tương ứng.
 - [ ] Ngưỡng chọn trên validation, báo cáo trên test, có khoảng tin cậy bootstrap cho khoản tiết kiệm.
 - [ ] `MODEL_CARD.md` nêu rõ thời điểm dự đoán, giới hạn và việc model **không** được dùng.

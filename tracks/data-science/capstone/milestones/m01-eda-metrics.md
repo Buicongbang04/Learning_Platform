@@ -42,7 +42,7 @@ làm bài đó, bạn dùng lại `order_table`, `rate_by`, `decompose_change` v
    Kiểm tra Simpson khi so bang hoặc danh mục. Chọn 2–3 biểu đồ, mỗi biểu đồ có tiêu đề là kết luận.
 7. **`reports/MEMO_EDA.md`** theo khung SCQA (Situation, Complication, Question, Answer), 250–700 từ,
    tiêu đề là kết luận có con số, có mục Giới hạn nói rõ phân tích này **chưa phải nhân quả** và bước
-   tiếp theo (M04).
+   tiếp theo để chắc chắn hơn (phân tích nhân quả ở M04, nếu bạn đã làm thì dẫn kết quả của nó).
 
 Số tham chiếu để tự kiểm (Olist thật, bản cài đặt của người soạn):
 
@@ -70,4 +70,4 @@ Số tham chiếu để tự kiểm (Olist thật, bản cài đặt của ngư�
 - [ ] Mỗi metric trong `METRICS.md` có đủ tử số, mẫu số, mốc thời gian, cửa sổ chín và cách xử lý đơn không review.
 - [ ] Quy tắc "tháng chín" dựa trên phân phối đo được, không phải con số đoán.
 - [ ] Biểu đồ theo bang có khoảng tin cậy; nhóm nhỏ không được trình bày như kết luận chắc chắn.
-- [ ] Memo có tiêu đề là kết luận có số, nói được rằng gần như toàn bộ mức tăng đầu 2018 đến từ tỉ trọng đơn trễ (mix), và ghi rõ đây là tương quan.
+- [ ] Memo có tiêu đề là kết luận có số, nói được rằng gần như toàn bộ mức tăng đầu 2018 đến từ tỉ trọng đơn trễ (mix), và ghi rõ đây là tương quan (nếu đã làm M04, dẫn kết quả nhân quả ở đó).
