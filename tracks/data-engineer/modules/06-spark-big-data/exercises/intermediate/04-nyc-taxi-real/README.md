@@ -41,7 +41,8 @@ Mở `starter/nyc_taxi.ipynb` (nút **Mở trong VS Code**), làm lần lượt:
 7. Viết `starter/report.md`: 4 mục **Bộ dữ liệu**, **Làm sạch**, **Insight** (có số), **Giới hạn**.
 
 Cả notebook chạy khoảng 1,5–2 phút trên máy 16 nhân, 31 GB RAM, nên bài dùng đủ 12 tháng. Máy yếu hơn
-có thể tạm cắt `MONTHS` ở cell đầu khi thử, nhưng test trên bộ thật luôn chạy đủ 12 tháng.
+có thể tạm cắt `MONTHS` ở cell đầu khi thử, nhưng test trên bộ thật luôn chạy đủ 12 tháng (khoảng 1,5 phút,
+cần heap JVM 4 GB; chạy chung với test của bài khác thì JVM đã khởi động với 1 GB và các test này tự skip).
 
 ## Tiêu chí đạt
 
