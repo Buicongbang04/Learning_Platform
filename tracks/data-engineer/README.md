@@ -5,9 +5,9 @@ thiết kế cho người muốn học cách **xây và vận hành hệ thống
 Data Analyst / Data Scientist (SQL, pandas), bạn có thể đi thẳng vào phần chính. Nếu mới hoàn toàn,
 bắt đầu từ phần 0 của module 01 và bài nhập môn Python/SQL rồi mới học generator, window function.
 
-Lộ trình gồm 11 module. Mỗi module có lý thuyết (`README.md`), câu hỏi phỏng vấn (`interview.md`),
-bài tập 3 mức Basic → Intermediate → Advanced (91 bài, bài lập trình có test tự chấm), cùng milestone của dự án capstone
-[Olist Data Platform](capstone/README.md).
+Lộ trình gồm 12 module (00–11). Mỗi module có lý thuyết (`README.md`), câu hỏi phỏng vấn (`interview.md`),
+bài tập 3 mức Basic → Intermediate → Advanced (102 bài, bài lập trình có test tự chấm), cùng milestone của dự án capstone
+[Olist Data Platform](capstone/README.md), xây trên hai nguồn dữ liệu thật: Olist (xương sống) và NYC TLC (cho Spark ở M06).
 
 Cài đặt môi trường: xem [`setup/SETUP.md`](../../setup/SETUP.md). Dữ liệu: [`data/README.md`](../../data/README.md).
 
@@ -32,6 +32,7 @@ production. Tiêu chí hoàn thành là tự giải thích được quyết đ�
 
 ```mermaid
 flowchart TD
+    M00[00 Giới thiệu<br/>vòng đời DE, nguồn dữ liệu] --> M01
     M01[01 Nền tảng kỹ thuật<br/>Python, SQL, Linux, Git] --> M02[02 Data Modeling<br/>& PostgreSQL]
     M02 --> M03[03 NoSQL<br/>Mongo, Cassandra, Redis, Neo4j]
     M02 --> M04[04 Warehouse<br/>& Lakehouse]
@@ -48,9 +49,16 @@ flowchart TD
 
     M03 -. tuỳ chọn, học song song .-> M05
 
+    subgraph Capstone[Capstone: hai nguồn dữ liệu thật]
+        OL[Olist<br/>M01-M05, M07, M09-M11]
+        TLC[NYC TLC<br/>M06 Spark, M09]
+    end
+    M01 -.-> OL
+    M06 -.-> TLC
+
     classDef core fill:#dbeafe,stroke:#2563eb
     classDef branch fill:#fef3c7,stroke:#d97706
-    class M01,M02,M04,M05,M07,M09,M10 core
+    class M00,M01,M02,M04,M05,M07,M09,M10 core
     class M03,M06,M08,M11 branch
 ```
 
@@ -63,6 +71,7 @@ nhưng nên học trước khi đi phỏng vấn: hầu hết vị trí DE làm 
 
 | # | Module | Mục tiêu | Kỹ năng chính | Dịch vụ Docker |
 | --- | --- | --- | --- | --- |
+| 00 | Giới thiệu & vòng đời DE | Hiểu DE khác DS/DA ở đâu, vòng đời và nguồn dữ liệu thật; thu thập từ API, log, IoT | Vòng đời DE, undercurrents, thu thập dữ liệu, chọn công nghệ | không (cần mạng cho bài API) |
 | 01 | Nền tảng kỹ thuật | Viết code data "production-grade" và hiểu hệ phân tán ở mức khái niệm | Python (typing, packaging, logging), SQL nâng cao (window, CTE), Bash, Git, networking, distributed systems | không |
 | 02 | Data Modeling & Relational DB | Thiết kế schema OLTP và star schema, tối ưu truy vấn | Normalization, star/snowflake, SCD, index, transaction, isolation level | `postgres` |
 | 03 | NoSQL | Chọn kho dữ liệu đúng bài toán, model theo truy vấn | CAP, document, wide-column, key-value, graph | `mongo`, `cassandra`, `redis`, `neo4j` |

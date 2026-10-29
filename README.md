@@ -11,7 +11,7 @@ flowchart LR
     T["tracks/&lt;track&gt;/<br/>track.json, modules, capstone"]
     P["progress.json<br/>tiến độ của bạn"]
     S["setup/<br/>docker-compose"]
-    D["data/<br/>dữ liệu Olist giả lập"]
+    D["data/<br/>Olist, NYC TLC, bộ thật khác"]
   end
   A["app/ (Vite + React)"] -- đọc nội dung --> T
   A -- ghi tiến độ --> P
@@ -50,7 +50,7 @@ Tiến độ lưu ở `progress.json` ở gốc repo. Commit tệp này để gi
 | --- | --- |
 | `app/` | Web app học tập (Vite, React, TypeScript, Tailwind v4) |
 | `tracks/` | Nội dung theo track. Quy ước ở [CONTENT_SPEC.md](CONTENT_SPEC.md) |
-| `tracks/data-engineer/` | 11 module, 91 bài tập, capstone Olist Data Platform và đánh giá độc lập |
+| `tracks/data-engineer/` | 12 module (00–11), 102 bài tập, capstone Olist Data Platform và đánh giá độc lập |
 | `setup/` | Docker Compose cho Postgres, MongoDB, Redis, Cassandra, Neo4j, MinIO, Kafka, Metabase, LocalStack, Airflow |
 | `data/` | Sinh dữ liệu Olist giả lập, tải bộ thật, giả lập event streaming |
 | `testkit.py` | Tiện ích test dùng chung cho mọi bài tập |

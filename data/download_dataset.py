@@ -150,8 +150,11 @@ def main(argv: list[str] | None = None) -> None:
         for key, ds in DATASETS.items():
             print(f"{key:12} {ds.about}\n{'':12} {ds.homepage}")
         return
-    for path in download(args.name, args.out or RAW / args.name):
-        print(f"  {path}")
+    if args.out:
+        for path in download(args.name, args.out):
+            print(f"  {path}")
+    else:
+        print(f"  {ensure(args.name)}")
 
 
 if __name__ == "__main__":

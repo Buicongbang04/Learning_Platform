@@ -187,6 +187,17 @@ Dùng khi bài là phân tích / modeling, như cách Data Scientist làm việc
   Test trên dữ liệu thật kiểm so với con số đã biết; mọi test còn lại dùng dữ liệu nhỏ sinh trong test.
 - Không commit mẫu trích từ bộ có giấy phép chưa rõ.
 
+### Notebook dữ liệu thật của track Data Engineer
+
+Các bài module 00 và capstone (Bước 0) làm việc trên dữ liệu thật, không chỉ chấm hàm. Quy ước thêm
+(phần chung xem ở trên):
+
+- Cell đầu đưa gốc repo vào `sys.path` rồi gọi `ensure("<tên>")` từ `data/download_dataset.py`
+  (tải atomic, không tải lại khi đã có `data/raw/<tên>/`).
+- Cell đọc dữ liệu thật, vẽ, in là cell `explore`; chỉ cell định nghĩa hàm/hằng có tên cố định mới được chấm.
+- Mỗi bài có 4 sản phẩm, `report.md` dùng đúng các heading `Bộ dữ liệu`, `Làm sạch`, `Insight`, `Giới hạn`.
+- Test trên dữ liệu thật tự skip khi chưa tải (hoặc thiếu mạng); test còn lại chạy trên dữ liệu nhỏ sinh trong test.
+
 ### Lời giải: `solutions/<level>/<NN-slug>/`
 
 - **Basic và Intermediate**: `SOLUTION.md` giải thích cách làm và vì sao, cộng các tệp lời giải

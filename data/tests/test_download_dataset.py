@@ -23,6 +23,22 @@ def test_ensure_skips_download_when_present(tmp_path, monkeypatch):
     assert dd.ensure("nyc-tlc") == tmp_path / "nyc-tlc"
 
 
+def test_cli_without_out_uses_ensure(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(dd, "ensure", lambda name: calls.append(name) or tmp_path / name)
+    monkeypatch.setattr(dd, "download", lambda *a, **k: pytest.fail("không được gọi download trực tiếp"))
+    dd.main(["nyc-tlc"])
+    assert calls == ["nyc-tlc"]
+
+
+def test_cli_with_out_downloads_directly(tmp_path, monkeypatch):
+    got = []
+    monkeypatch.setattr(dd, "download", lambda name, out: got.append((name, out)) or [out / "x"])
+    monkeypatch.setattr(dd, "ensure", lambda name: pytest.fail("không được gọi ensure"))
+    dd.main(["nyc-tlc", "--out", str(tmp_path)])
+    assert got == [("nyc-tlc", tmp_path)]
+
+
 def test_ensure_atomic_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(dd, "RAW", tmp_path)
 

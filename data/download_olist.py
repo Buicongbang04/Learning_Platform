@@ -1,7 +1,8 @@
-"""Tải bộ Brazilian E-Commerce Public Dataset by Olist thật từ Kaggle (TUỲ CHỌN).
+"""Tải bộ Brazilian E-Commerce Public Dataset by Olist thật từ Kaggle.
 
-Không bắt buộc: mọi bài tập và capstone chạy được với dữ liệu giả từ data/generate_olist.py
-(cùng tên tệp, cùng cột). Dùng bộ thật khi muốn số liệu "đời thực" cho portfolio.
+Đây là dữ liệu mặc định của capstone: số liệu trong báo cáo và dashboard phải lấy từ bộ thật.
+Phương án dự phòng khi chưa có Kaggle token: dữ liệu giả cùng tên tệp, cùng cột, tạo bằng
+    uv run python data/generate_olist.py --out data/raw/olist_synthetic
 
 Chuẩn bị Kaggle API token (một lần):
   1. Đăng nhập https://www.kaggle.com -> Settings -> API -> "Generate New Token".

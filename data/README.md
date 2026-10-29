@@ -6,16 +6,15 @@ tệp và cùng cột, nên code viết cho cách này chạy được với cá
 
 | Cách | Lệnh | Ghi chú |
 | --- | --- | --- |
-| Dữ liệu giả (mặc định) | `uv run python data/generate_olist.py` | 50 000 đơn, seed cố định, không cần mạng. `--orders N`, `--out DIR`, `--seed S` |
-| Bộ thật từ Kaggle | `uv run python data/download_olist.py` | Cần Kaggle token (`KAGGLE_API_TOKEN` trong `setup/.env`), xem đầu tệp script |
+| Bộ thật từ Kaggle (mặc định cho capstone) | `uv run python data/download_olist.py` | Cần Kaggle token (`KAGGLE_API_TOKEN` trong `setup/.env`), xem đầu tệp script |
+| Dữ liệu giả (dự phòng, test, M12) | `uv run python data/generate_olist.py --out data/raw/olist_synthetic` | 50 000 đơn, seed cố định, không cần mạng. `--orders N`, `--out DIR`, `--seed S` |
 | Event streaming | `uv run python data/simulate_events.py --count 20 --stdout` | JSON lines ra stdout, tệp (`--out`) hoặc Kafka (`--kafka`) |
 
 Dữ liệu ghi vào `data/raw/` (đã nằm trong `.gitignore`, không commit).
 
 ```bash
-uv run python data/generate_olist.py                        # data/raw/, 50k đơn, ~3 giây
+uv run python data/generate_olist.py --out data/raw/olist_synthetic   # 50k đơn, ~3 giây
 uv run python data/generate_olist.py --orders 2000 --out /tmp/olist_small
-uv run python data/generate_olist.py --orders 500000 --out data/raw_big   # cho module Spark
 ```
 
 ## Ca biên có chủ đích
@@ -305,6 +304,7 @@ Hai nguồn API của module 00 không nằm trong danh mục vì việc thu th�
 | Thư mục | API | Giấy phép | Mốc ghim | Bài |
 | --- | --- | --- | --- | --- |
 | `data/raw/open-meteo/` | [Open-Meteo Historical Weather](https://open-meteo.com/en/docs/historical-weather-api), không cần key | CC BY 4.0 | TP.HCM (10.82, 106.63), Hà Nội (21.03, 105.85), 2023-01-01..2023-12-31, theo ngày, `models=era5` | 00 basic 01 |
+| `data/raw/wikimedia-recentchange/*.jsonl` | [Wikimedia EventStreams `recentchange`](https://stream.wikimedia.org/v2/stream/recentchange), SSE, không cần key | CC0 (dữ liệu sự kiện) | Người học tự ghi từ luồng trực tiếp (không có bản tải sẵn, mỗi lần ghi ra tệp `.jsonl` riêng) | 07 advanced 03 |
 | `data/raw/usgs-earthquakes/` | [USGS FDSN Event](https://earthquake.usgs.gov/fdsnws/event/1/), không cần key | Public domain | M ≥ 4.5 toàn cầu, 2024-01-01..2025-01-01, `run-NNN/page-NNN.json` + `state.json` | 00 intermediate 01 |
 
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép

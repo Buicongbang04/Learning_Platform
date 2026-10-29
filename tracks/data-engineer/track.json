@@ -4,7 +4,7 @@
   "icon": "database",
   "status": "active",
   "order": 1,
-  "description": "11 module, 91 bài tập Basic → Advanced, lab CDC, thực hành vận hành và capstone có đánh giá độc lập trên dữ liệu Olist.",
+  "description": "12 module (từ module 00 giới thiệu), 102 bài tập Basic → Advanced, lab CDC, thực hành vận hành và capstone có đánh giá độc lập trên dữ liệu thật Olist và NYC TLC.",
   "source": "https://roadmap.sh/data-engineer",
   "modules": [
     {
@@ -89,7 +89,7 @@
       { "id": "m03", "title": "Cache sản phẩm bằng Redis, review vào MongoDB", "after": "03-nosql", "doc": "capstone/milestones/m03-nosql.md" },
       { "id": "m04", "title": "Lakehouse trên MinIO + DuckDB", "after": "04-warehouse-lakehouse", "doc": "capstone/milestones/m04-lakehouse.md" },
       { "id": "m05", "title": "Orchestrate bằng Airflow + dbt", "after": "05-batch-pipelines", "doc": "capstone/milestones/m05-airflow-dbt.md" },
-      { "id": "m06", "title": "Xử lý batch lớn bằng Spark", "after": "06-spark-big-data", "doc": "capstone/milestones/m06-spark.md" },
+      { "id": "m06", "title": "Xử lý batch lớn bằng Spark trên NYC TLC", "after": "06-spark-big-data", "doc": "capstone/milestones/m06-spark.md" },
       { "id": "m07", "title": "Order events thời gian thực qua Kafka", "after": "07-streaming-kafka", "doc": "capstone/milestones/m07-kafka.md" },
       { "id": "m08", "title": "CI/CD và hạ tầng bằng Terraform", "after": "08-devops-for-data", "doc": "capstone/milestones/m08-cicd-terraform.md" },
       { "id": "m09", "title": "Dashboard vận hành trên Metabase", "after": "09-serving-bi", "doc": "capstone/milestones/m09-dashboard.md" },
