@@ -103,3 +103,57 @@ def test_dataset_skips_when_missing():
     ex = Exercise(str(Path(__file__).parent / "fixtures/nb_exercise/exercises/basic/01-demo/tests/locate.py"))
     with pytest.raises(pytest.skip.Exception, match="download_dataset.py khong-co"):
         ex.dataset("khong-co")
+
+
+def _url_dataset(dd, ref, files):
+    return dd.Dataset("url", ref, files, license="x", homepage="x")
+
+
+def test_url_base_dir_downloads_each_name(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-dir", _url_dataset(dd, "http://h/d/", ["a.csv", "b.csv"]))
+    asked = []
+    monkeypatch.setattr(dd, "_get", lambda url: asked.append(url) or url.encode())
+    out = tmp_path / "out"
+    paths = dd.download("t-dir", out)
+    assert asked == ["http://h/d/a.csv", "http://h/d/b.csv"]
+    assert paths == [out / "a.csv", out / "b.csv"]
+    assert (out / "b.csv").read_bytes() == b"http://h/d/b.csv"
+
+
+def _zip_bytes(members):
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in members:
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_zip_extracts_only_requested_and_ignores_shadows(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-zip", _url_dataset(dd, "http://h/x.zip", ["ratings.csv"]))
+    blob = _zip_bytes([
+        ("ml-latest-small/ratings.csv", b"REAL"),
+        ("__MACOSX/ml-latest-small/ratings.csv", b"SHADOW"),
+        ("__MACOSX/._ratings.csv", b"SHADOW2"),
+        ("../evil.csv", b"EVIL"),
+        ("ml-latest-small/other.csv", b"OTHER"),
+    ])
+    monkeypatch.setattr(dd, "_get", lambda url: blob)
+    out = tmp_path / "sub" / "out"
+    paths = dd.download("t-zip", out)
+    assert paths == [out / "ratings.csv"]
+    assert (out / "ratings.csv").read_bytes() == b"REAL"
+    assert sorted(p.name for p in out.iterdir()) == ["ratings.csv"]
+    assert not (tmp_path / "evil.csv").exists() and not (tmp_path / "sub" / "evil.csv").exists()
+
+
+def test_zip_missing_member_names_it(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-zip2", _url_dataset(dd, "http://h/x.zip", ["nope.csv"]))
+    monkeypatch.setattr(dd, "_get", lambda url: _zip_bytes([("d/a.csv", b"1")]))
+    with pytest.raises(SystemExit, match="nope.csv"):
+        dd.download("t-zip2", tmp_path)

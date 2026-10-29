@@ -20,7 +20,7 @@ import io
 import sys
 import zipfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import requests
@@ -132,7 +132,14 @@ def download(name: str, out: Path) -> list[Path]:
         out.mkdir(parents=True, exist_ok=True)
         if ds.ref.endswith(".zip"):
             with zipfile.ZipFile(io.BytesIO(_get(ds.ref))) as zf:
-                members = {Path(n).name: n for n in zf.namelist() if not n.endswith("/")}
+                members: dict[str, str] = {}
+                for n in zf.namelist():  # bỏ thư mục, __MACOSX và "._*"; trùng tên thì lấy đường dẫn nông nhất
+                    parts = PurePosixPath(n).parts
+                    if n.endswith("/") or "__MACOSX" in parts or parts[-1].startswith("._"):
+                        continue
+                    base = parts[-1]
+                    if base not in members or len(parts) < len(PurePosixPath(members[base]).parts):
+                        members[base] = n
                 missing = [f for f in ds.files if f not in members]
                 if missing:
                     raise SystemExit(f"{ds.ref} thiếu {missing}. Có: {sorted(members)}")
