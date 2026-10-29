@@ -1,0 +1,73 @@
+questions:
+  - id: peak-month
+    kind: data
+    type: single
+    prompt: "Theo `monthly_revenue`, tháng nào có doanh thu cao nhất trong sheet `Year 2010-2011`?"
+    options:
+      - { id: a, text: "12/2010" }
+      - { id: b, text: "09/2011" }
+      - { id: c, text: "10/2011" }
+      - { id: d, text: "11/2011" }
+  - id: uk-share
+    kind: data
+    type: single
+    prompt: "Theo `country_share`, United Kingdom chiếm bao nhiêu phần trăm doanh thu?"
+    options:
+      - { id: a, text: "Khoảng 55%" }
+      - { id: b, text: "Khoảng 70%" }
+      - { id: c, text: "Khoảng 85%" }
+      - { id: d, text: "Khoảng 95%" }
+  - id: other-share
+    kind: data
+    type: single
+    prompt: "Với `country_share(tx, top=5)`, dòng `Other` (mọi nước ngoài top 5) chiếm bao nhiêu doanh thu?"
+    options:
+      - { id: a, text: "Khoảng 1%" }
+      - { id: b, text: "Khoảng 6%" }
+      - { id: c, text: "Khoảng 15%" }
+      - { id: d, text: "Khoảng 25%" }
+  - id: dec-2011-days
+    kind: data
+    type: single
+    prompt: "Theo `month_coverage`, tháng 12/2011 có bao nhiêu ngày có giao dịch?"
+    options:
+      - { id: a, text: "8 ngày" }
+      - { id: b, text: "9 ngày" }
+      - { id: c, text: "20 ngày" }
+      - { id: d, text: "26 ngày" }
+  - id: no-trading-day
+    kind: data
+    type: single
+    prompt: "Một tháng đủ của cửa hàng chỉ có khoảng 26 ngày giao dịch. Thứ nào trong tuần không bao giờ có giao dịch?"
+    options:
+      - { id: a, text: "Thứ Hai" }
+      - { id: b, text: "Thứ Sáu" }
+      - { id: c, text: "Thứ Bảy" }
+      - { id: d, text: "Chủ nhật" }
+  - id: shortest-full-month
+    kind: data
+    type: single
+    prompt: "Ngoài tháng 12/2011, tháng nào có ít ngày giao dịch nhất?"
+    options:
+      - { id: a, text: "12/2010" }
+      - { id: b, text: "01/2011" }
+      - { id: c, text: "02/2011" }
+      - { id: d, text: "04/2011" }
+  - id: dec-per-day
+    kind: data
+    type: single
+    prompt: "Tính doanh thu mỗi ngày giao dịch. Tháng 12/2011 so với tháng 11/2011 thay đổi khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Giảm khoảng 58%" }
+      - { id: b, text: "Giảm khoảng 10%" }
+      - { id: c, text: "Tăng khoảng 5%" }
+      - { id: d, text: "Tăng khoảng 38%" }
+  - id: ceo-chart
+    kind: knowledge
+    type: single
+    prompt: "Chart doanh thu theo tháng cho CEO. Xử lý điểm tháng 12/2011 thế nào?"
+    options:
+      - { id: a, text: "Xoá hẳn tháng 12/2011 khỏi chart, không cần ghi chú gì" }
+      - { id: b, text: "Giữ nguyên điểm như các tháng khác cho đúng số liệu gốc" }
+      - { id: c, text: "Nét đứt, chú thích dữ liệu tới 9/12, kèm số so công bằng" }
+      - { id: d, text: "Nhân doanh thu 9 ngày với 31/9 để ước cả tháng và vẽ liền" }
