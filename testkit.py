@@ -160,6 +160,14 @@ class Exercise:
         return _load(path, _unique_name(path), lambda module: exec(code, module.__dict__))
 
     @staticmethod
+    def dataset(name: str) -> Path:
+        """Thư mục bộ dữ liệu thật `data/raw/<name>/`; skip test nếu chưa tải."""
+        path = ROOT / "data" / "raw" / name
+        if not path.is_dir() or not any(path.iterdir()):
+            pytest.skip(f"Chưa tải bộ {name}. Chạy: uv run python data/download_dataset.py {name}")
+        return path
+
+    @staticmethod
     def require_service(name: str) -> None:
         if not service_up(name):
             pytest.skip(
