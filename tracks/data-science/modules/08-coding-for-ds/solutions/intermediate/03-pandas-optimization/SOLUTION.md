@@ -24,7 +24,7 @@ nặng gấp 3 lần đơn 1 món. Chi tiết thứ hai: `bad` phải là NaN ch
   đo; `assert_frame_equal` xác nhận cùng kết quả (2 970 seller, tổng doanh thu 13 220 248.93).
 - Test 1 triệu món: bản nhanh vài giây; bản `iterrows` vượt mốc 20 giây (đo khi viết bài: bản chậm
   mất 6.2 giây cho chỉ 100 nghìn món). Một bản lai chỉ dùng `apply(axis=1)` cho cột `late` mất khoảng
-  10–12 giây, sát giới hạn: vì vậy test còn kiểm mã nguồn không chứa `apply`.
+  10–12 giây, sát giới hạn: vì vậy test còn đọc cây cú pháp của hàm và từ chối mọi lời gọi `.iterrows()`, `.itertuples()`, `.apply()`.
 
 ## optimize_dtypes
 

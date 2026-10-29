@@ -336,7 +336,7 @@ Các bẫy khác ứng viên hay mắc:
 | Bẫy | Ví dụ | Cách đúng |
 | --- | --- | --- |
 | `NOT IN` với subquery có NULL | `WHERE id NOT IN (SELECT x FROM t)`; chỉ một `x` NULL là kết quả rỗng | `NOT EXISTS` hoặc `LEFT JOIN ... WHERE t.x IS NULL` |
-| Chia số nguyên | `SUM(late) / COUNT(*)` ra 0 ở PostgreSQL | `AVG(late::INT)` hoặc ép `::DOUBLE` |
+| Chia số nguyên | `SUM(late::INT) / COUNT(*)` ra 0 ở PostgreSQL | `AVG(late::INT)` hoặc ép `::DOUBLE` |
 | `COUNT(*)` sau `LEFT JOIN` | Đếm cả dòng không khớp (NULL) | `COUNT(cột_bên_phải)` hoặc `COUNT(DISTINCT ...)` |
 | `WHERE` trên bảng bên phải của `LEFT JOIN` | Biến `LEFT JOIN` thành `INNER JOIN` | Đưa điều kiện vào `ON` |
 | `BETWEEN` với timestamp | `BETWEEN '2018-01-01' AND '2018-01-31'` bỏ mất ngày 31 sau 00:00 | Khoảng nửa mở `>= '2018-01-01' AND < '2018-02-01'` |
@@ -554,8 +554,9 @@ for name, s in [("object", status.astype(object)), ("str", status), ("category",
 Cột `order_status` (8 giá trị trên 99 441 dòng): `object` 5.77 MB, `str` 1.69 MB, `category` 0.10 MB.
 Downcast số nguyên (`pd.to_numeric(..., downcast="integer")`) và chỉ đọc cột cần (`usecols`) là hai
 cách rẻ nhất tiếp theo. Đánh đổi của `category`: thêm giá trị mới hoặc nối hai cột category có tập
-giá trị khác nhau sẽ ép về `object`/`str`; `groupby` trên category mặc định liệt kê cả nhóm rỗng
-(dùng `observed=True`).
+giá trị khác nhau sẽ ép về `object`/`str`. `groupby` trên cột category: pandas 2 mặc định
+`observed=False` (liệt kê cả nhóm rỗng, kèm cảnh báo), từ pandas 3 mặc định `observed=True` (chỉ nhóm có
+dữ liệu); code phải chạy trên cả hai phiên bản thì truyền `observed=` tường minh.
 
 ### Ba thói quen tránh sai
 
@@ -593,11 +594,13 @@ plan = (items.join(done, on="order_id")
              .group_by("seller_id")
              .agg(revenue=pl.col("price").sum(), late_rate=pl.col("late").mean(), n_items=pl.len())
              .sort("revenue", descending=True))
-print("PROJECT 3/7 COLUMNS" in plan.explain())       # chỉ đọc 3 trên 7 cột của order_items
+print(plan.explain())               # kế hoạch đã tối ưu, đọc từ dưới lên
 print(plan.collect().head(3))
 ```
 
-`explain()` cho thấy polars chỉ đọc 3 trên 7 cột của `order_items`: bạn không phải tự viết `usecols`.
+Trong kế hoạch in ra, tìm dòng ngay dưới `Csv SCAN [...olist_order_items_dataset.csv]`: polars 2.1
+ghi `PROJECT 3/7 COLUMNS`, tức chỉ đọc 3 trên 7 cột của `order_items` (cách ghi có thể khác giữa các
+phiên bản, ý nghĩa thì không). Bạn không phải tự viết `usecols`.
 
 ### Đo trên Olist: pandas, polars, DuckDB
 

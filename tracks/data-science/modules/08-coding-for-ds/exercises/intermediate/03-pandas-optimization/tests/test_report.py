@@ -1,5 +1,7 @@
+import ast
 import inspect
 import signal
+import textwrap
 from contextlib import contextmanager
 
 import numpy as np
@@ -126,11 +128,23 @@ def test_fast_does_not_modify_inputs(nb):
         pd.testing.assert_frame_equal(before, after)
 
 
+BANNED_CALLS = {"iterrows", "itertuples", "apply"}
+
+
+def row_wise_calls(func) -> list[str]:
+    """Tên các lời gọi `.iterrows()`, `.itertuples()`, `.apply()` trong thân hàm (bỏ qua chú thích, docstring)."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    return sorted({
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in BANNED_CALLS
+    })
+
+
 def test_fast_has_no_row_wise_python(nb):
     nb.fast_seller_report(ORDERS, ITEMS, REVIEWS)          # phải chạy được trước đã
-    source = inspect.getsource(nb.fast_seller_report)
-    for banned in ["iterrows", "itertuples", ".apply(", "axis=1"]:
-        assert banned not in source, f"fast_seller_report còn dùng {banned}: hãy thay bằng thao tác theo cột"
+    found = row_wise_calls(nb.fast_seller_report)
+    assert not found, f"fast_seller_report còn gọi {found}: hãy thay bằng thao tác theo cột"
 
 
 def test_fast_on_one_million_items(nb):

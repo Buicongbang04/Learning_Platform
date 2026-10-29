@@ -25,6 +25,7 @@ def min_daily_capacity(weights: Sequence[int], days: int) -> int:
     """Sức chứa nhỏ nhất mỗi ngày để giao hết các kiện theo đúng thứ tự trong tối đa `days` ngày.
 
     Mỗi ngày chất kiện theo thứ tự cho tới khi kiện tiếp theo làm vượt sức chứa thì sang ngày mới.
+    weights khác rỗng, mọi phần tử dương; days >= 1.
     Yêu cầu O(n log(sum(weights))).
     """
     # TODO: hàm "giao kịp với capacity c không?" là đơn điệu theo c -> binary search trên c,

@@ -27,7 +27,7 @@ Trong `starter/windows.py`:
    `values` không âm.
 3. `min_daily_capacity(weights, days)`: sức chứa nhỏ nhất mỗi ngày để giao hết các kiện **theo đúng
    thứ tự** trong tối đa `days` ngày. Mỗi ngày chất kiện theo thứ tự cho tới khi kiện tiếp theo làm vượt
-   sức chứa thì sang ngày mới.
+   sức chứa thì sang ngày mới. `weights` khác rỗng, mọi phần tử dương, `days >= 1`.
 
 ## Tiêu chí đạt
 

@@ -34,7 +34,8 @@ bảng điểm mỗi seller gồm `n_orders`, `revenue`, `late_rate`, `review_sc
 ## Tiêu chí đạt
 
 - `fast_seller_report` khớp `slow_seller_report` trên dữ liệu tay và 3 bộ dữ liệu ngẫu nhiên.
-- Mã của `fast_seller_report` không chứa `iterrows`, `itertuples`, `.apply(`, `axis=1`.
+- `fast_seller_report` không gọi `.iterrows()`, `.itertuples()` hay `.apply()` (test đọc cây cú pháp của hàm;
+  chú thích, docstring và `axis=1` trong `pd.concat`, `drop`, `max`... không bị tính).
 - Chạy xong 1 000 000 món hàng (800 000 đơn) trong 20 giây; bản `iterrows` cần vài phút.
 - `optimize_dtypes` đúng kiểu từng cột, không đổi giá trị, giảm bộ nhớ ít nhất 25% trên dữ liệu test.
 - Trên Olist thật: 2 970 seller, tổng `n_orders` 97 811, tổng `revenue` 13 220 248.93.
