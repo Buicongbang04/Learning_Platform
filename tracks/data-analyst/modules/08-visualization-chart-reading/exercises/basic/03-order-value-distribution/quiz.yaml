@@ -1,0 +1,64 @@
+questions:
+  - id: mean-vs-median
+    kind: data
+    type: single
+    prompt: "Giá trị hoá đơn hợp lệ của sheet `Year 2009-2010`: mean và median là bao nhiêu (GBP)?"
+    options:
+      - { id: a, text: "mean 301, median 492" }
+      - { id: b, text: "mean 492, median 301" }
+      - { id: c, text: "mean 534, median 304" }
+      - { id: d, text: "mean 921, median 492" }
+  - id: share-above-mean
+    kind: data
+    type: single
+    prompt: "Bao nhiêu phần trăm hoá đơn có giá trị lớn hơn mean?"
+    options:
+      - { id: a, text: "Khoảng 5%" }
+      - { id: b, text: "Khoảng 25%" }
+      - { id: c, text: "Khoảng 50%" }
+      - { id: d, text: "Khoảng 64%" }
+  - id: top1-revenue
+    kind: data
+    type: single
+    prompt: "1% hoá đơn lớn nhất (giá trị từ p99 trở lên) đóng góp bao nhiêu phần trăm tổng doanh thu?"
+    options:
+      - { id: a, text: "Khoảng 1%" }
+      - { id: b, text: "Khoảng 5%" }
+      - { id: c, text: "Khoảng 17%" }
+      - { id: d, text: "Khoảng 45%" }
+  - id: ecdf-cliff
+    kind: data
+    type: single
+    prompt: "ECDF có một đoạn dốc đứng; phóng to bằng bin 10 GBP thì số hoá đơn mỗi bin tăng gấp đôi ngay phía trên mức nào?"
+    options:
+      - { id: a, text: "100 GBP" }
+      - { id: b, text: "200 GBP" }
+      - { id: c, text: "300 GBP" }
+      - { id: d, text: "1 000 GBP" }
+  - id: linear-hist
+    kind: knowledge
+    type: single
+    prompt: "Histogram trục tuyến tính, 50 bin đều, gần như chỉ có một cột cao ở đầu. Vì sao?"
+    options:
+      - { id: a, text: "Bin rộng khoảng 1 000 GBP vì max gần 50 000, nên 9/10 hoá đơn dồn vào bin đầu" }
+      - { id: b, text: "Có quá nhiều hoá đơn bằng 0 GBP vì chưa bỏ các hoá đơn huỷ khỏi dữ liệu" }
+      - { id: c, text: "50 bin là quá ít; tăng lên 5 000 bin thì sẽ thấy rõ hình dạng phân phối" }
+      - { id: d, text: "matplotlib tự gộp các bin có ít hơn 1% số quan sát vào cột đầu tiên" }
+  - id: tail-chart
+    kind: knowledge
+    type: single
+    prompt: "Head of Sales cần một chart thấy được cả khối hoá đơn điển hình lẫn đuôi đơn sỉ. Chọn chart nào?"
+    options:
+      - { id: a, text: "Bar giá trị trung bình của hoá đơn theo từng tháng" }
+      - { id: b, text: "Histogram bin log, trục x log, đánh dấu median" }
+      - { id: c, text: "Histogram trục tuyến tính, cắt bỏ hoá đơn trên p99" }
+      - { id: d, text: "Pie tỉ trọng doanh thu của 5 nhóm giá trị hoá đơn" }
+  - id: typical-value
+    kind: knowledge
+    type: single
+    prompt: "Head of Sales hỏi \"một hoá đơn điển hình đáng bao nhiêu?\". Bạn báo con số nào?"
+    options:
+      - { id: a, text: "Mean, vì nó tính đến mọi hoá đơn kể cả đơn sỉ" }
+      - { id: b, text: "Mean sau khi bỏ 1% hoá đơn lớn nhất ra ngoài" }
+      - { id: c, text: "Median, kèm khoảng p25–p75 và ghi chú về mean" }
+      - { id: d, text: "Max, vì đó là hoá đơn mà đội sales nên nhắm tới" }
