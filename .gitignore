@@ -12,6 +12,7 @@ app/dist/
 # Dữ liệu sinh ra (data/generate_olist.py, data/download_olist.py)
 data/raw/
 data/raw_*/
+data/clean/
 
 # Artefact của DuckDB, Spark, dbt
 *.duckdb

@@ -289,6 +289,19 @@ uv run python data/download_dataset.py cookie-cats
 | `ab-data` | A/B test landing page, 294 478 dòng, có dòng gán nhóm sai | [Kaggle](https://www.kaggle.com/datasets/zhangluyuan/ab-testing) | Không ghi rõ | 03 |
 | `hillstrom` | Thí nghiệm email ngẫu nhiên 3 nhánh, 64 000 khách: visit, conversion, spend | [MineThatData](https://blog.minethatdata.com/2008/03/minethatdata-e-mail-analytics-and-data.html) | Công bố cho học tập (2008) | 03, 04 |
 
+### Bộ dữ liệu thật cho track Data Engineer
+
+`download_dataset.py` cũng phục vụ track Data Engineer. Bài gọi `ensure("<tên>")` (tải vào thư mục tạm rồi
+đổi tên, nên không bao giờ để lại thư mục dở). Dữ liệu người học làm sạch ghi vào `data/clean/<tên>/` (không commit).
+
+| Tên | Nội dung | Nguồn | Giấy phép | Kích thước | Mốc ghim |
+| --- | --- | --- | --- | --- | --- |
+| `nyc-tlc` | Chuyến Yellow Taxi NYC (Parquet) + `taxi_zone_lookup.csv`, dùng cho Spark | [TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) | Dữ liệu mở NYC | ~1,2 GB | 12 tháng 2019-01..2019-12 |
+| `nasa-http-logs` | Access log HTTP NASA KSC, ~1,9 triệu request (Common Log) | [ITA](https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html) | Dùng tự do | ~20 MB (gz) | Tháng 7/1995 (`NASA_access_log_Jul95.gz`) |
+| `air-quality-uci` | Cảm biến khí thật ở Ý, 9 357 dòng theo giờ, -200 là giá trị thiếu | [UCI #360](https://archive.ics.uci.edu/dataset/360/air+quality) | CC BY 4.0 | ~1,5 MB (zip) | Bản UCI id 360 (03/2004-04/2005) |
+
+`open-meteo-archive` là API nên không nằm trong danh mục: bài tự gọi.
+
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
 không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.
 
