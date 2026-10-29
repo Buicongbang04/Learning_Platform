@@ -68,6 +68,12 @@ với business. Hai nhánh đầu học song song được; module 08 có thể 
 | 14 | MLOps cho DS | MLOps | MLflow, đóng gói, serve FastAPI, monitoring, ONNX |
 | 15 | ML System Design & Business | mở rộng | Đóng khung bài toán, metric, system design, trình bày |
 
+## Dự án capstone
+
+Sau khi học xong các module liên quan, làm dự án xuyên suốt **Olist Customer Experience** (7 milestone,
+mỗi milestone gắn với một mốc module: EDA sau module 09, forecasting sau 07, model sau 11, causal sau 06,
+A/B test sau 04, MLflow + FastAPI sau 14, memo sau 15). Xem [`capstone/README.md`](capstone/README.md).
+
 ## Ngoài phạm vi track này
 
 - **MLOps chuyên sâu** (CI/CD cho model, drift monitoring đầy đủ, feature store): track MLOps.
@@ -81,7 +87,9 @@ với business. Hai nhánh đầu học song song được; module 08 có thể 
 1. Môi trường Python: `uv sync` ở gốc repo (xem [`setup/SETUP.md`](../../setup/SETUP.md)).
 2. Kaggle token: tạo ở Kaggle → Settings → API → "Generate New Token", ghi vào `setup/.env`:
    `KAGGLE_API_TOKEN=KGAT_...`
-3. Dữ liệu thật: track này ưu tiên dữ liệu thật, mỗi bộ dữ liệu có insight và cái "bẩn" riêng.
+3. GPU/CUDA (tùy chọn): mặc định dự án cài torch bản CPU, đủ chạy mọi bài. Cách chuyển sang bản CUDA
+   và chọn CPU hay GPU nằm ở [module 13, mục 7](modules/13-deep-learning/README.md#7-chọn-cpu-hay-gpu-và-vận-hành-training).
+4. Dữ liệu thật: track này ưu tiên dữ liệu thật, mỗi bộ dữ liệu có insight và cái "bẩn" riêng.
    Danh sách bộ và lệnh tải ở [`data/README.md`](../../data/README.md):
 
    ```bash
