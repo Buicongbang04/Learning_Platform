@@ -1,0 +1,8 @@
+unsqueeze: [c]
+pixel-mean: [b]
+eval-mode: [b]
+cnn-params: [c]
+gap: [d]
+linear-params: [a]
+test-select: [b]
+worst-class: [d]

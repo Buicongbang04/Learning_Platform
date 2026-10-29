@@ -1,0 +1,105 @@
+questions:
+- id: no-kfold
+  kind: knowledge
+  type: single
+  prompt: Vì sao không dùng KFold ngẫu nhiên để tạo dự đoán OOF ở bài này?
+  options:
+  - id: a
+    text: KFold không trả `predict_proba` cho các dòng của khối đầu tiên
+  - id: b
+    text: KFold tạo ra quá ít dòng OOF nên meta-model không đủ dữ liệu
+  - id: c
+    text: Model được học cả tương lai, OOF lạc quan, trọng số meta sai
+  - id: d
+    text: KFold làm logistic tầng 1 không hội tụ trên dữ liệu thời gian
+- id: nan-rows
+  kind: data
+  type: single
+  prompt: 'Với `MODELS` có sẵn trong notebook, dev 63 830 đơn, 4 fold mở rộng: bao nhiêu dòng OOF là NaN?'
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: 12 766
+  - id: c
+    text: 15 958
+  - id: d
+    text: 31 994
+- id: no-sklearn
+  kind: knowledge
+  type: single
+  prompt: Vì sao không dùng `StackingClassifier(cv=TimeSeriesSplit(...))` của sklearn?
+  options:
+  - id: a
+    text: '`StackingClassifier` không nhận LightGBM làm model tầng 1'
+  - id: b
+    text: sklearn đòi `cv` là một phân hoạch, mà khối đầu không có OOF
+  - id: c
+    text: '`TimeSeriesSplit` xáo thứ tự dòng trước khi chia nên vẫn rò rỉ'
+  - id: d
+    text: '`StackingClassifier` bắt buộc meta-model là random forest'
+- id: last-block
+  kind: data
+  type: single
+  prompt: Khối cuối cùng (fold 3 dự đoán) bắt đầu từ đơn mua trong tháng nào?
+  options:
+  - id: a
+    text: 2017-12
+  - id: b
+    text: 2018-01
+  - id: c
+    text: 2018-02
+  - id: d
+    text: 2018-03
+- id: logit
+  kind: knowledge
+  type: single
+  prompt: Vì sao meta-model học trên logit của xác suất OOF, sau khi kẹp p vào [eps, 1 − eps]?
+  options:
+  - id: a
+    text: Logit hợp thang tuyến tính của logistic; kẹp để không ra vô cực
+  - id: b
+    text: Logit làm các model tầng 1 bớt tương quan nên meta-model ổn định hơn
+  - id: c
+    text: Kẹp p để meta-model không bao giờ dự đoán đúng 0 hoặc 1 trên test
+  - id: d
+    text: Logit chuẩn hoá mỗi cột về trung bình 0, độ lệch chuẩn 1
+- id: oof-corr
+  kind: data
+  type: single
+  prompt: Tương quan giữa dự đoán OOF của logistic và LightGBM (hai model có sẵn) là bao nhiêu?
+  options:
+  - id: a
+    text: '0.62'
+  - id: b
+    text: '0.75'
+  - id: c
+    text: '0.90'
+  - id: d
+    text: '0.98'
+- id: ci-zero
+  kind: knowledge
+  type: single
+  prompt: CI 95% bootstrap của chênh lệch AUC (stacking − LightGBM) là [−0.004, +0.002]. Khuyến nghị hợp lý?
+  options:
+  - id: a
+    text: Dùng stacking vì ensemble luôn ít nhất bằng model đơn tốt nhất
+  - id: b
+    text: Thêm model tầng 1 tới khi CI nằm hẳn trên 0 rồi mới quyết định
+  - id: c
+    text: Bootstrap thêm 10 000 lần để CI hẹp lại rồi chọn stacking
+  - id: d
+    text: Dùng LightGBM đơn; chênh lệch không phân biệt được với 0
+- id: best-auc
+  kind: data
+  type: single
+  prompt: Trên test, với hai model có sẵn, cách nào có AUC cao nhất?
+  options:
+  - id: a
+    text: Logistic
+  - id: b
+    text: LightGBM
+  - id: c
+    text: Trung bình đơn giản hai model
+  - id: d
+    text: Stacking (meta logistic)

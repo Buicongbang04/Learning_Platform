@@ -1,0 +1,105 @@
+questions:
+- id: tfidf-wins
+  kind: knowledge
+  type: single
+  prompt: TF-IDF + logistic regression thắng túi embedding ở bài này. Vì sao điều đó bình thường?
+  options:
+  - id: a
+    text: Embedding không xử lý được từ tiếng Bồ Đào Nha có dấu
+  - id: b
+    text: Văn bản ngắn, tín hiệu nằm ở từ khoá, dữ liệu ít
+  - id: c
+    text: TF-IDF được fit trên cả train lẫn test nên có lợi thế
+  - id: d
+    text: Early stopping dừng quá sớm ở epoch 2 nên model chưa học xong
+- id: val-bad
+  kind: data
+  type: single
+  prompt: Tỉ lệ review xấu trong validation (Q1/2018, chỉ review có lời bình) là bao nhiêu?
+  options:
+  - id: a
+    text: 21.9%
+  - id: b
+    text: 32.1%
+  - id: c
+    text: 20.6%
+  - id: d
+    text: 18.0%
+- id: neighbors
+  kind: knowledge
+  type: single
+  prompt: Hàng xóm gần nhất của "pessimo" trong embedding gần như ngẫu nhiên. Vì sao?
+  options:
+  - id: a
+    text: dim 32 quá nhỏ nên mọi từ bị nén vào gần cùng một điểm
+  - id: b
+    text: '`nearest_words` dùng tích vô hướng nên từ hiếm luôn đứng đầu'
+  - id: c
+    text: Model chỉ cần một hướng để phân loại, các hướng khác tự do
+  - id: d
+    text: Từ "pessimo" hiếm trong train nên embedding chưa được cập nhật
+- id: median-words
+  kind: data
+  type: single
+  prompt: Số từ trung vị (tách theo khoảng trắng) của một lời bình là bao nhiêu?
+  options:
+  - id: a
+    text: '9'
+  - id: b
+    text: '11'
+  - id: c
+    text: '16'
+  - id: d
+    text: '45'
+- id: bce
+  kind: knowledge
+  type: single
+  prompt: Vì sao dùng `BCEWithLogitsLoss` thay vì `sigmoid` rồi `BCELoss`?
+  options:
+  - id: a
+    text: Nó tự cân bằng lớp theo tỉ lệ review xấu
+  - id: b
+    text: '`BCELoss` không chạy được với `EmbeddingBag`'
+  - id: c
+    text: Nó cho gradient lớn hơn nên hội tụ nhanh hơn
+  - id: d
+    text: Ổn định số hơn khi logits rất lớn hay rất âm
+- id: unk-test
+  kind: data
+  type: single
+  prompt: Tỉ lệ token `<unk>` trên test (vocabulary train, `min_freq=2`) là bao nhiêu?
+  options:
+  - id: a
+    text: 0.4%
+  - id: b
+    text: 3.8%
+  - id: c
+    text: 4.0%
+  - id: d
+    text: 12.0%
+- id: leaks
+  kind: knowledge
+  type: multi
+  prompt: Lỗi nào làm kết quả lạc quan hoặc che mất dịch chuyển phân phối?
+  options:
+  - id: a
+    text: Dựng vocabulary chỉ từ tập train
+  - id: b
+    text: Fit vocabulary hay TF-IDF trên toàn bộ dữ liệu
+  - id: c
+    text: Chia ngẫu nhiên thay vì theo ngày mua
+  - id: d
+    text: Cho từ lạ ở validation thành `<unk>`
+- id: tfidf-pr
+  kind: data
+  type: single
+  prompt: PR-AUC trên test của TF-IDF + logistic regression (C = 4) là bao nhiêu?
+  options:
+  - id: a
+    text: '0.765'
+  - id: b
+    text: '0.863'
+  - id: c
+    text: '0.806'
+  - id: d
+    text: '0.950'

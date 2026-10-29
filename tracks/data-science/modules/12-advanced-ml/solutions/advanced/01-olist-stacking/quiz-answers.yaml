@@ -1,0 +1,8 @@
+no-kfold: [c]
+nan-rows: [b]
+no-sklearn: [b]
+last-block: [c]
+logit: [a]
+oof-corr: [c]
+ci-zero: [d]
+best-auc: [c]

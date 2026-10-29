@@ -1,0 +1,105 @@
+questions:
+- id: test-valid
+  kind: knowledge
+  type: single
+  prompt: Vì sao không được đưa test vào `valid_sets`, dù chỉ để xem cho tiện?
+  options:
+  - id: a
+    text: LightGBM sẽ gộp test vào dữ liệu train khi dựng bin cho histogram
+  - id: b
+    text: Callback dừng theo mọi tập trong đó, nên test góp phần chọn số cây
+  - id: c
+    text: '`lgb.train` báo lỗi khi `valid_sets` có hơn một tập dữ liệu'
+  - id: d
+    text: Logloss trên test làm chậm quá trình train lên gấp đôi
+- id: best-it
+  kind: data
+  type: single
+  prompt: Early stopping với `PARAMS` (lr 0.05, patience 50) dừng ở `best_iteration` bao nhiêu?
+  options:
+  - id: a
+    text: '44'
+  - id: b
+    text: '117'
+  - id: c
+    text: '261'
+  - id: d
+    text: '1000'
+- id: logloss-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao early stopping theo dõi `binary_logloss` thay vì AUC?
+  options:
+  - id: a
+    text: AUC không tính được trên validation có nhãn mất cân bằng
+  - id: b
+    text: Logloss luôn dừng sớm hơn AUC nên tiết kiệm thời gian train
+  - id: c
+    text: LightGBM chỉ hỗ trợ early stopping với metric dạng loss
+  - id: d
+    text: Logloss mượt hơn và đo được cả chất lượng xác suất dự đoán
+- id: lr002
+  kind: data
+  type: single
+  prompt: Trong `lr_sweep`, learning rate 0.02 dừng ở bao nhiêu cây?
+  options:
+  - id: a
+    text: '117'
+  - id: b
+    text: '234'
+  - id: c
+    text: '261'
+  - id: d
+    text: '585'
+- id: fixed-trees
+  kind: knowledge
+  type: single
+  prompt: So hai learning rate với **cùng** số cây cố định 100 rồi kết luận "lr nhỏ tệ hơn". Sai ở đâu?
+  options:
+  - id: a
+    text: lr nhỏ chưa đủ cây để hội tụ; phải so ở số cây tối ưu của từng lr
+  - id: b
+    text: Với lr nhỏ, LightGBM tự tăng `num_leaves` nên hai model khác độ phức tạp
+  - id: c
+    text: Phải so bằng AUC trên test thay vì logloss validation mới công bằng
+  - id: d
+    text: Learning rate không ảnh hưởng chất lượng, chỉ ảnh hưởng tốc độ train
+- id: low-late
+  kind: data
+  type: single
+  prompt: Trong các tháng 2017-06 tới 2018-08, tháng nào có tỉ lệ đơn trễ (`is_late`) thấp nhất?
+  options:
+  - id: a
+    text: 2017-08
+  - id: b
+    text: 2017-07
+  - id: c
+    text: 2018-06
+  - id: d
+    text: 2018-07
+- id: refit
+  kind: knowledge
+  type: single
+  prompt: Đã chọn `best_iteration` = N trên validation. Khi train lại trên train + validation, cách hợp lý?
+  options:
+  - id: a
+    text: Chạy lại early stopping với test trong `valid_sets` để chọn số cây
+  - id: b
+    text: Không train lại; thêm validation luôn làm model overfit hơn
+  - id: c
+    text: Dùng khoảng N cây, có thể tăng nhẹ theo lượng dữ liệu thêm vào
+  - id: d
+    text: Dùng 2000 cây vì nhiều dữ liệu hơn thì không thể overfit
+- id: gain2
+  kind: data
+  type: single
+  prompt: Theo gain của model early stopping, feature nào đứng thứ 2 (sau `days_vs_estimate`)?
+  options:
+  - id: a
+    text: '`is_late`'
+  - id: b
+    text: '`n_items`'
+  - id: c
+    text: '`product_category_name`'
+  - id: d
+    text: '`delivery_days`'

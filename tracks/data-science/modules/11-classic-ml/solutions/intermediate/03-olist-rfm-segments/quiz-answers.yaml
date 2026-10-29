@@ -1,0 +1,8 @@
+unique-id: [b]
+max-freq: [b]
+raw-kmeans: [d]
+k2-size: [b]
+k2-useless: [c]
+recent-recency: [a]
+stable-labels: [d]
+pc1: [b]

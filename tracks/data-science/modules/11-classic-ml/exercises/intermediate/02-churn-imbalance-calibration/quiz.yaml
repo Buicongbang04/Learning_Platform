@@ -1,0 +1,105 @@
+questions:
+- id: auc-same
+  kind: knowledge
+  type: single
+  prompt: Vì sao prior correction, Platt và isotonic gần như không đổi ROC-AUC?
+  options:
+  - id: a
+    text: Cả ba là hàm đơn điệu của score nên giữ nguyên thứ hạng
+  - id: b
+    text: Cả ba học trên tập calibration nên không chạm tới tập test
+  - id: c
+    text: ROC-AUC chỉ tính trên các khách có xác suất lớn hơn 0.5
+  - id: d
+    text: Cả ba chỉ đổi xác suất lớp churn, lớp còn lại giữ nguyên
+- id: two-year
+  kind: data
+  type: single
+  prompt: Tỉ lệ churn của khách có hợp đồng `Two year` là bao nhiêu?
+  options:
+  - id: a
+    text: 11.3%
+  - id: b
+    text: 26.5%
+  - id: c
+    text: 42.7%
+  - id: d
+    text: 2.8%
+- id: threshold
+  kind: knowledge
+  type: single
+  prompt: Model `class_weight="balanced"` (train_rate 0.5), tỉ lệ churn thật khoảng 0.265. Ngưỡng 0.5 trên xác suất thô ứng với ngưỡng nào trên xác suất đã prior-correct?
+  options:
+  - id: a
+    text: '0.5'
+  - id: b
+    text: khoảng 0.36
+  - id: c
+    text: khoảng 0.265
+  - id: d
+    text: khoảng 0.735
+- id: mean-p
+  kind: data
+  type: single
+  prompt: Trên test (1 409 khách), xác suất dự đoán trung bình của logistic `class_weight="balanced"` là bao nhiêu?
+  options:
+  - id: a
+    text: '0.270'
+  - id: b
+    text: '0.419'
+  - id: c
+    text: '0.500'
+  - id: d
+    text: '0.265'
+- id: platt-when
+  kind: knowledge
+  type: single
+  prompt: Khi nào nên chọn Platt (sigmoid) thay vì isotonic?
+  options:
+  - id: a
+    text: Khi cần giữ thứ hạng, vì isotonic có thể đảo thứ hạng các score
+  - id: b
+    text: Khi model gốc là cây, vì isotonic chỉ dùng được cho logistic
+  - id: c
+    text: Khi tập calibration nhỏ hoặc lệch có dạng co giãn đơn giản
+  - id: d
+    text: Khi tập calibration lớn, vì sigmoid cần nhiều dữ liệu để hội tụ
+- id: best-fix
+  kind: data
+  type: single
+  prompt: 'Sửa xác suất của logistic balanced: cách nào cho ECE thấp nhất trên test?'
+  options:
+  - id: a
+    text: Sigmoid (Platt)
+  - id: b
+    text: Isotonic
+  - id: c
+    text: Prior correction
+  - id: d
+    text: Để nguyên xác suất thô
+- id: mistakes
+  kind: knowledge
+  type: multi
+  prompt: Cách làm nào sai?
+  options:
+  - id: a
+    text: Calibrate trên chính tập train
+  - id: b
+    text: Resample hoặc SMOTE trước khi chia train/test
+  - id: c
+    text: Calibrate trên tập calibration riêng, chấm trên test
+  - id: d
+    text: Isotonic với `out_of_bounds="clip"`
+- id: forest-iso
+  kind: data
+  type: single
+  prompt: Recalibrate forest **không** balanced (ECE thô 0.017) bằng isotonic, ECE trên test thành khoảng?
+  options:
+  - id: a
+    text: '0.008'
+  - id: b
+    text: '0.017'
+  - id: c
+    text: '0.032'
+  - id: d
+    text: '0.143'

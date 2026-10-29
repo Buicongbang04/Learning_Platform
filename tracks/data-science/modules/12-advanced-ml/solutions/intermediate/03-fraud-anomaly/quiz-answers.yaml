@@ -1,0 +1,8 @@
+roc-misleads: [b]
+median-amount: [b]
+sign: [d]
+iso-p100: [c]
+contamination: [a]
+pca-r500: [d]
+mistakes: [a, b, c]
+pca-dirty: [b]

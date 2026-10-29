@@ -1,0 +1,105 @@
+questions:
+- id: leak
+  kind: knowledge
+  type: multi
+  prompt: 'Model lúc đặt hàng (`purchase`): những feature nào là leak?'
+  options:
+  - id: a
+    text: '`handling_days`'
+  - id: b
+    text: '`promised_days`'
+  - id: c
+    text: '`remaining_days`'
+  - id: d
+    text: '`same_state`'
+- id: test-prev
+  kind: data
+  type: single
+  prompt: Tỉ lệ đơn trễ trong tập test (04–08/2018) là bao nhiêu?
+  options:
+  - id: a
+    text: 6.0%
+  - id: b
+    text: 6.6%
+  - id: c
+    text: 8.1%
+  - id: d
+    text: 14.6%
+- id: prauc-drop
+  kind: knowledge
+  type: single
+  prompt: 'PR-AUC của model lúc đặt hàng: validation 0.274, test 0.120. Đọc thế nào?'
+  options:
+  - id: a
+    text: Model overfit validation nên test tụt hơn một nửa
+  - id: b
+    text: Chủ yếu do prevalence giảm, lift so với nền gần như không đổi
+  - id: c
+    text: Test có ít đơn hơn nên PR-AUC kém ổn định hơn validation
+  - id: d
+    text: PR-AUC không so được giữa hai tập vì khác số đơn
+- id: after-promise
+  kind: data
+  type: single
+  prompt: Bao nhiêu đơn trên test được giao cho vận chuyển **sau** ngày hẹn (`remaining_days < 0`)?
+  options:
+  - id: a
+    text: '100'
+  - id: b
+    text: '226'
+  - id: c
+    text: '974'
+  - id: d
+    text: 1 596
+- id: p100
+  kind: knowledge
+  type: single
+  prompt: precision@100 của model lúc giao vận chuyển gần 1. Đó có phải dấu hiệu model giỏi?
+  options:
+  - id: a
+    text: Có, vì 100 cảnh báo đầu đều trúng, model phân biệt rất tốt
+  - id: b
+    text: Không, vì precision@100 luôn gần 1 với mọi model có AUC trên 0.8
+  - id: c
+    text: Không hẳn, top đó là đơn giao vận chuyển sau ngày hẹn
+  - id: d
+    text: Có, nhưng chỉ khi tỉ lệ trễ trên test bằng tỉ lệ trễ trên train
+- id: aug-share
+  kind: data
+  type: single
+  prompt: Luật "còn dưới 5 ngày" chọn 1 596 đơn test. Bao nhiêu trong số đó là đơn mua tháng 08/2018?
+  options:
+  - id: a
+    text: '401'
+  - id: b
+    text: '798'
+  - id: c
+    text: 1 195
+  - id: d
+    text: 1 596
+- id: launch
+  kind: knowledge
+  type: single
+  prompt: Luật "còn dưới 5 ngày" ngang model trên số gộp, nhưng hai giai đoạn cho kết luận ngược nhau. Nên làm gì?
+  options:
+  - id: a
+    text: Ra mắt luật trước, model phải thắng luật ở từng giai đoạn
+  - id: b
+    text: Ra mắt model vì model dùng nhiều feature hơn nên bền hơn
+  - id: c
+    text: Gộp luật và model bằng trung bình điểm rồi ra mắt cả hai
+  - id: d
+    text: Chọn top k tốt nhất trên test rồi báo cáo giá trị trên chính test
+- id: handling-median
+  kind: data
+  type: single
+  prompt: Trung vị `handling_days` (từ lúc mua tới lúc giao cho vận chuyển) trên toàn bảng là bao nhiêu ngày?
+  options:
+  - id: a
+    text: '0.9'
+  - id: b
+    text: '2.2'
+  - id: c
+    text: '3.2'
+  - id: d
+    text: '5.0'

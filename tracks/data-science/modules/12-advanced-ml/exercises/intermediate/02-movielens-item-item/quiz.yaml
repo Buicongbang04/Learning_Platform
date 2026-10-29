@@ -1,0 +1,105 @@
+questions:
+- id: no-dense
+  kind: knowledge
+  type: single
+  prompt: Vì sao không tạo ma trận độ giống item × item đầy đủ?
+  options:
+  - id: a
+    text: Cosine giữa hai phim không xác định khi chúng không có user chung nào
+  - id: b
+    text: Tốn bộ nhớ theo bình phương số phim, mà mỗi user chỉ cần một vector điểm
+  - id: c
+    text: Ma trận dày cho top-k khác với cách tính bằng ma trận thưa
+  - id: d
+    text: Ma trận độ giống đầy đủ làm lộ lịch sử của user test vào train
+- id: one-rating
+  kind: data
+  type: single
+  prompt: Trên toàn bộ dữ liệu, bao nhiêu phim chỉ có đúng 1 rating?
+  options:
+  - id: a
+    text: '610'
+  - id: b
+    text: 3 446
+  - id: c
+    text: 8 230
+  - id: d
+    text: 1 213
+- id: beat-pop
+  kind: knowledge
+  type: single
+  prompt: Một hệ thống gợi ý mới không thắng được popularity baseline offline. Kết luận hợp lý?
+  options:
+  - id: a
+    text: Chưa nên đưa lên production, baseline đó rẻ hơn nhiều
+  - id: b
+    text: Vẫn nên đưa lên vì model cá nhân hoá luôn tốt hơn khi chạy online
+  - id: c
+    text: Đổi metric sang coverage, vì popularity luôn thua về coverage
+  - id: d
+    text: Bỏ precision@k vì metric này luôn thiên vị phim phổ biến
+- id: top10
+  kind: data
+  type: single
+  prompt: 10% phim nhiều rating nhất chiếm khoảng bao nhiêu phần trăm tổng số rating?
+  options:
+  - id: a
+    text: 10%
+  - id: b
+    text: 35%
+  - id: c
+    text: 60%
+  - id: d
+    text: 80%
+- id: random-split
+  kind: knowledge
+  type: single
+  prompt: Chia train/test ngẫu nhiên theo dòng thay vì theo thời gian của từng user thì sao?
+  options:
+  - id: a
+    text: Precision thấp hơn thật vì test có nhiều phim cũ hơn
+  - id: b
+    text: Không đổi gì, vì rating không phụ thuộc thời gian
+  - id: c
+    text: Precision cao giả tạo vì model được xem trước tương lai
+  - id: d
+    text: Item-item không chạy được vì có user không có trong train
+- id: pop-coverage
+  kind: data
+  type: single
+  prompt: Coverage (số phim khác nhau trong mọi danh sách top-10) của popularity là bao nhiêu?
+  options:
+  - id: a
+    text: '10'
+  - id: b
+    text: '98'
+  - id: c
+    text: '473'
+  - id: d
+    text: '610'
+- id: cold-start
+  kind: knowledge
+  type: multi
+  prompt: Chiến lược nào hợp lý cho user mới chưa có lịch sử?
+  options:
+  - id: a
+    text: Popularity theo ngữ cảnh (vùng, thời gian)
+  - id: b
+    text: Item-item trên lịch sử rỗng của user
+  - id: c
+    text: Hỏi sở thích lúc đăng ký (onboarding)
+  - id: d
+    text: Gợi ý các phim ít rating nhất để khám phá
+- id: liked
+  kind: data
+  type: single
+  prompt: 'Chỉ tính là trúng khi user chấm ≥ 4 sao: precision@10 của hai cách so với nhau thế nào?'
+  options:
+  - id: a
+    text: Item-item hơn khoảng 30% tương đối
+  - id: b
+    text: Popularity hơn khoảng 30% tương đối
+  - id: c
+    text: Gần ngang nhau, cùng khoảng 0.06
+  - id: d
+    text: Cả hai đều trên 0.09

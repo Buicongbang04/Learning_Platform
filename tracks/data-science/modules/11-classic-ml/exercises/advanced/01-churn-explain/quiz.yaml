@@ -1,0 +1,105 @@
+questions:
+- id: perm-raw
+  kind: knowledge
+  type: single
+  prompt: Vì sao permutation importance nên hoán vị cột **thô** (trước one-hot) thay vì từng cột one-hot?
+  options:
+  - id: a
+    text: Hoán vị từng cột one-hot tạo ra khách có hai loại hợp đồng cùng lúc
+  - id: b
+    text: Cột one-hot là biến nhị phân nên hoán vị không làm đổi ROC-AUC
+  - id: c
+    text: Pipeline của sklearn từ chối dữ liệu đã hoán vị theo từng cột one-hot
+  - id: d
+    text: Hoán vị cột thô chạy nhanh hơn nên kết quả ít nhiễu hơn
+- id: mdi-top
+  kind: data
+  type: single
+  prompt: Theo MDI (`feature_importances_` trên các cột sau one-hot) của random forest trong notebook, cột nào đứng đầu?
+  options:
+  - id: a
+    text: '`cat__Contract_Month-to-month`'
+  - id: b
+    text: '`num__TotalCharges`'
+  - id: c
+    text: '`num__tenure`'
+  - id: d
+    text: '`num__MonthlyCharges`'
+- id: drop-total
+  kind: knowledge
+  type: single
+  prompt: '`TotalCharges` tương quan mạnh với `tenure`. Bỏ `TotalCharges` rồi train lại, điều gì thường xảy ra?'
+  options:
+  - id: a
+    text: ROC-AUC giảm mạnh vì mất feature đứng thứ 4 theo permutation
+  - id: b
+    text: ROC-AUC gần như không đổi, importance của `tenure` tăng lên
+  - id: c
+    text: Importance của `tenure` giảm vì không còn feature đi kèm bổ trợ
+  - id: d
+    text: Permutation importance của mọi feature còn lại giữ nguyên
+- id: corr
+  kind: data
+  type: single
+  prompt: Hệ số tương quan Pearson giữa `tenure` và `TotalCharges` trên 7 043 khách là bao nhiêu?
+  options:
+  - id: a
+    text: '0.25'
+  - id: b
+    text: '0.65'
+  - id: c
+    text: '0.83'
+  - id: d
+    text: '0.95'
+- id: causal
+  kind: knowledge
+  type: single
+  prompt: 'Đội retention hỏi: chuyển khách sang hợp đồng 1 năm thì churn giảm bao nhiêu? Cách trả lời đúng?'
+  options:
+  - id: a
+    text: Lấy SHAP trung bình của `Contract` nhân với số khách hợp đồng tháng
+  - id: b
+    text: Đổi `Contract` của khách trong test rồi xem xác suất model đổi bao nhiêu
+  - id: c
+    text: Lấy chênh lệch tỉ lệ churn giữa hai nhóm hợp đồng (42.7% − 11.3%)
+  - id: d
+    text: Chạy thí nghiệm ngẫu nhiên với ưu đãi đổi hợp đồng
+- id: shap-second
+  kind: data
+  type: single
+  prompt: Xếp biến gốc theo trung bình |SHAP| (lớp churn, cả tập test, đã gộp one-hot bằng `group_shap`). Biến nào đứng thứ 2?
+  options:
+  - id: a
+    text: '`tenure`'
+  - id: b
+    text: '`InternetService`'
+  - id: c
+    text: '`OnlineSecurity`'
+  - id: d
+    text: '`TotalCharges`'
+- id: mdi-differs
+  kind: knowledge
+  type: multi
+  prompt: Vì sao MDI có thể xếp hạng khác permutation importance tính trên test?
+  options:
+  - id: a
+    text: MDI tính trên dữ liệu train mà cây đã thấy
+  - id: b
+    text: MDI thiên vị feature số có nhiều giá trị khác nhau
+  - id: c
+    text: MDI tính riêng cho từng cột one-hot, không gộp theo biến gốc
+  - id: d
+    text: MDI đo tác động nhân quả, permutation chỉ đo tương quan
+- id: tenure-after
+  kind: data
+  type: single
+  prompt: Permutation importance (giảm ROC-AUC trên test, `n_repeats=10`, `seed=0`) của `tenure` khoảng 0.024. Bỏ `TotalCharges` và train lại cùng cấu hình, importance của `tenure` thành khoảng?
+  options:
+  - id: a
+    text: '0.012'
+  - id: b
+    text: '0.024'
+  - id: c
+    text: '0.048'
+  - id: d
+    text: '0.065'

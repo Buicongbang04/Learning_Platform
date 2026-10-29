@@ -1,0 +1,8 @@
+tree-logloss: [a]
+best-pr: [d]
+pr-random: [b]
+best-roc: [a]
+brier: [b]
+val-late: [b]
+pre-delivery: [a, c]
+test-auc: [c]

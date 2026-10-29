@@ -1,0 +1,105 @@
+questions:
+- id: unique-id
+  kind: knowledge
+  type: single
+  prompt: Vì sao khách phải là `customer_unique_id` chứ không phải `customer_id`?
+  options:
+  - id: a
+    text: '`customer_id` chứa thông tin bang nên k-means thiên về vùng địa lý'
+  - id: b
+    text: Mỗi đơn có `customer_id` riêng, nên frequency của mọi khách bằng 1
+  - id: c
+    text: '`customer_unique_id` đã được Olist ẩn danh nên an toàn hơn khi dùng'
+  - id: d
+    text: '`customer_id` trùng nhau giữa đơn huỷ và đơn giao xong'
+- id: max-freq
+  kind: data
+  type: single
+  prompt: Khách mua nhiều nhất có bao nhiêu đơn giao xong (mua trước snapshot 2018-09-01)?
+  options:
+  - id: a
+    text: '7'
+  - id: b
+    text: '15'
+  - id: c
+    text: '17'
+  - id: d
+    text: '24'
+- id: raw-kmeans
+  kind: knowledge
+  type: single
+  prompt: Chạy k-means trên RFM thô (không log, không chuẩn hoá), cụm sẽ chia chủ yếu theo gì?
+  options:
+  - id: a
+    text: Theo `recency`, vì nó trải dài tới hơn 700 ngày
+  - id: b
+    text: Theo `frequency`, vì đó là chiều tách khách rõ nhất
+  - id: c
+    text: Đều theo cả ba chiều, vì k-means tự chuẩn hoá khoảng cách
+  - id: d
+    text: Theo `monetary`, vì nó có thang đo lớn nhất
+- id: k2-size
+  kind: data
+  type: single
+  prompt: Với k = 2 (sau `prepare_features`, seed 0), cụm nhỏ có bao nhiêu khách?
+  options:
+  - id: a
+    text: '799'
+  - id: b
+    text: 2 801
+  - id: c
+    text: 16 615
+  - id: d
+    text: 6 446
+- id: k2-useless
+  kind: knowledge
+  type: single
+  prompt: Silhouette cao nhất ở k = 2. Vì sao vẫn không chọn k = 2?
+  options:
+  - id: a
+    text: Silhouette luôn cao nhất ở k = 2 với mọi bộ dữ liệu nên vô nghĩa
+  - id: b
+    text: Silhouette tính trên mẫu 10 000 điểm nên giá trị ở k = 2 không đáng tin
+  - id: c
+    text: Nó chỉ tách khách mua một lần khỏi khách mua lại
+  - id: d
+    text: Với k = 2, k-means không hội tụ khi `n_init=3`
+- id: recent-recency
+  kind: data
+  type: single
+  prompt: Với k = 4, cụm "mới mua" (recency thấp nhất) có recency trung vị bao nhiêu ngày?
+  options:
+  - id: a
+    text: '40'
+  - id: b
+    text: '131'
+  - id: c
+    text: '201'
+  - id: d
+    text: '221'
+- id: stable-labels
+  kind: knowledge
+  type: single
+  prompt: Đội CRM dùng nhãn cụm hằng tháng, nhưng đổi seed thì số thứ tự cụm có thể đổi. Cách giữ nhãn ổn định?
+  options:
+  - id: a
+    text: Fit lại k-means mỗi tháng với cùng một seed cố định
+  - id: b
+    text: Tăng `n_init` lên 100 để k-means luôn cho cùng thứ tự cụm
+  - id: c
+    text: Chuyển sang DBSCAN vì DBSCAN không cần chọn số cụm
+  - id: d
+    text: Cố định tâm cụm từ một lần fit, gán khách mới vào tâm gần nhất
+- id: pc1
+  kind: data
+  type: single
+  prompt: 'PCA trên ba chiều RFM đã chuẩn hoá: PC1 giải thích bao nhiêu phần phương sai?'
+  options:
+  - id: a
+    text: 33.3%
+  - id: b
+    text: 38.9%
+  - id: c
+    text: 72.2%
+  - id: d
+    text: 27.8%

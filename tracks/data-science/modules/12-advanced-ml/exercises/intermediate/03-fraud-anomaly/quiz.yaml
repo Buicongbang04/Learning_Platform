@@ -1,0 +1,105 @@
+questions:
+- id: roc-misleads
+  kind: knowledge
+  type: single
+  prompt: Isolation forest có ROC-AUC 0.956 nhưng AP chỉ 0.13. Vì sao ROC-AUC gây hiểu lầm ở đây?
+  options:
+  - id: a
+    text: ROC-AUC chỉ tính trên lớp dương nên bỏ qua 140 nghìn giao dịch thường
+  - id: b
+    text: FPR nhỏ trên 140 nghìn giao dịch thường vẫn là hàng nghìn báo động sai
+  - id: c
+    text: ROC-AUC bị thổi phồng vì isolation forest không dùng nhãn khi học
+  - id: d
+    text: ROC-AUC tính trên train còn AP tính trên ngày thứ hai
+- id: median-amount
+  kind: data
+  type: single
+  prompt: Trung vị `Amount` của các giao dịch gian lận là bao nhiêu?
+  options:
+  - id: a
+    text: '1.00'
+  - id: b
+    text: '9.25'
+  - id: c
+    text: '22.00'
+  - id: d
+    text: '122.21'
+- id: sign
+  kind: knowledge
+  type: single
+  prompt: Quên đổi dấu `score_samples` của `IsolationForest` thì sao?
+  options:
+  - id: a
+    text: Không sao, vì AP và ROC-AUC không phụ thuộc chiều của điểm số
+  - id: b
+    text: Model báo lỗi vì `score_samples` chỉ nhận giá trị dương
+  - id: c
+    text: AP không đổi nhưng precision@100 giảm về đúng tỉ lệ nền
+  - id: d
+    text: ROC-AUC tụt dưới 0.5 và AP về gần 0
+- id: iso-p100
+  kind: data
+  type: single
+  prompt: precision@100 của isolation forest (seed 0) trên ngày thứ hai là bao nhiêu?
+  options:
+  - id: a
+    text: '0.08'
+  - id: b
+    text: '0.13'
+  - id: c
+    text: '0.26'
+  - id: d
+    text: '0.38'
+- id: contamination
+  kind: knowledge
+  type: single
+  prompt: Vì sao PCA học trên mọi giao dịch train cho AP thấp hơn hẳn PCA học trên giao dịch sạch?
+  options:
+  - id: a
+    text: Thành phần chính học luôn hình dạng gian lận nên dựng lại chúng tốt
+  - id: b
+    text: Thêm 281 dòng làm PCA chậm hội tụ và chọn sai số thành phần
+  - id: c
+    text: Chuẩn hoá trên dữ liệu có gian lận làm mọi điểm số bằng nhau
+  - id: d
+    text: Gian lận làm phương sai giảm nên sai số dựng lại của mọi giao dịch tăng
+- id: pca-r500
+  kind: data
+  type: single
+  prompt: recall@500 của PCA học trên giao dịch sạch là bao nhiêu?
+  options:
+  - id: a
+    text: '0.180'
+  - id: b
+    text: '0.299'
+  - id: c
+    text: '0.222'
+  - id: d
+    text: '0.526'
+- id: mistakes
+  kind: knowledge
+  type: multi
+  prompt: Cách làm nào sai?
+  options:
+  - id: a
+    text: Fit `StandardScaler` và PCA trên tập test
+  - id: b
+    text: Chia train/test ngẫu nhiên thay vì theo ngày
+  - id: c
+    text: Dùng `predict` (−1/1) với `contamination` thay cho điểm liên tục
+  - id: d
+    text: Báo precision/recall tại ngân sách cảnh báo kèm AP
+- id: pca-dirty
+  kind: data
+  type: single
+  prompt: AP của PCA học trên mọi giao dịch train (lẫn gian lận) là bao nhiêu?
+  options:
+  - id: a
+    text: '0.004'
+  - id: b
+    text: '0.041'
+  - id: c
+    text: '0.130'
+  - id: d
+    text: '0.209'

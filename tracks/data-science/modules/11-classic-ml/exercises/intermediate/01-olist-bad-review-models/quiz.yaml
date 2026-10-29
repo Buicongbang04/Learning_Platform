@@ -1,0 +1,105 @@
+questions:
+- id: tree-logloss
+  kind: knowledge
+  type: single
+  prompt: Cây đầy đủ (`tree_full`) có ROC-AUC validation 0.648 nhưng log loss trên 7. Vì sao log loss tệ hẳn?
+  options:
+  - id: a
+    text: Lá thuần nhất cho xác suất đúng 0 hoặc 1, đoán sai ở đó bị phạt cực nặng
+  - id: b
+    text: Log loss tính trên cả tập train nên cộng dồn lỗi của mọi lá khác nhau
+  - id: c
+    text: Cây không có `predict_proba` nên sklearn dùng nhãn 0/1 chia cho số lá
+  - id: d
+    text: Validation có nhiều review xấu hơn train nên mọi model đều có log loss cao
+- id: best-pr
+  kind: data
+  type: single
+  prompt: 'Bảng so sánh trên validation: model nào có PR-AUC cao nhất?'
+  options:
+  - id: a
+    text: '`logistic`'
+  - id: b
+    text: '`tree_depth5`'
+  - id: c
+    text: '`knn_50`'
+  - id: d
+    text: '`random_forest`'
+- id: pr-random
+  kind: knowledge
+  type: single
+  prompt: PR-AUC (average precision) của một model chấm điểm ngẫu nhiên xấp xỉ bằng gì?
+  options:
+  - id: a
+    text: 0.5, giống ROC-AUC của model ngẫu nhiên
+  - id: b
+    text: Tỉ lệ dương của chính tập đang chấm điểm
+  - id: c
+    text: Tỉ lệ dương của tập train mà model đã học
+  - id: d
+    text: 0, vì model không xếp hạng được gì cả
+- id: best-roc
+  kind: data
+  type: single
+  prompt: 'Còn ROC-AUC trên validation: model nào cao nhất?'
+  options:
+  - id: a
+    text: '`tree_depth5`'
+  - id: b
+    text: '`random_forest`'
+  - id: c
+    text: '`logistic`'
+  - id: d
+    text: '`knn_50`'
+- id: brier
+  kind: knowledge
+  type: single
+  prompt: Từ validation sang test, Brier của random forest giảm (0.099 → 0.081) trong khi ROC-AUC giảm mạnh. Đọc thế nào?
+  options:
+  - id: a
+    text: Model calibrated tốt hơn trên test nên ưu tiên Brier hơn ROC-AUC
+  - id: b
+    text: Brier phụ thuộc tỉ lệ nền, mà test ít review xấu hơn
+  - id: c
+    text: Brier chỉ đo các đơn bị dự đoán dương, test có ít đơn đó hơn
+  - id: d
+    text: ROC-AUC trên test bị tính sai vì test có ít đơn giao trễ hơn
+- id: val-late
+  kind: data
+  type: single
+  prompt: Tỉ lệ đơn giao trễ (`late_days > 0`) trong validation (Q1/2018) là bao nhiêu?
+  options:
+  - id: a
+    text: 6.5%
+  - id: b
+    text: 14.4%
+  - id: c
+    text: 5.9%
+  - id: d
+    text: 18.0%
+- id: pre-delivery
+  kind: knowledge
+  type: multi
+  prompt: Muốn dự đoán **trước khi** giao (lúc giao cho hãng vận chuyển), những feature nào trong 8 feature phải bỏ?
+  options:
+  - id: a
+    text: '`delivery_days`'
+  - id: b
+    text: '`estimated_days`'
+  - id: c
+    text: '`late_days`'
+  - id: d
+    text: '`max_installments`'
+- id: test-auc
+  kind: data
+  type: single
+  prompt: ROC-AUC trên test của random forest (fit trên train) là bao nhiêu?
+  options:
+  - id: a
+    text: '0.806'
+  - id: b
+    text: '0.737'
+  - id: c
+    text: '0.686'
+  - id: d
+    text: '0.611'

@@ -1,0 +1,105 @@
+questions:
+- id: proba-fn
+  kind: knowledge
+  type: single
+  prompt: Vì sao log model với `pyfunc_predict_fn="predict_proba"`?
+  options:
+  - id: a
+    text: '`predict_proba` nhanh hơn `predict` khi nạp qua pyfunc'
+  - id: b
+    text: Mặc định pyfunc gọi `predict`, trả nhãn 0/1 với ngưỡng 0.5
+  - id: c
+    text: Signature chỉ suy được khi đầu ra là ma trận xác suất
+  - id: d
+    text: MLflow 3 đã bỏ hẳn hàm `predict` cho các model scikit-learn
+- id: champion-c
+  kind: data
+  type: single
+  prompt: Trong 4 run, giá trị C nào có `val_auc` cao nhất (trở thành champion)?
+  options:
+  - id: a
+    text: '0.01'
+  - id: b
+    text: '0.1'
+  - id: c
+    text: '1.0'
+  - id: d
+    text: '10.0'
+- id: alias
+  kind: knowledge
+  type: single
+  prompt: Vì sao service nạp `models:/<tên>@champion` thay vì `models:/<tên>/3`?
+  options:
+  - id: a
+    text: Nạp theo số version không kiểm signature của đầu vào
+  - id: b
+    text: Alias luôn trỏ tới version mới nhất được đăng ký
+  - id: c
+    text: Đổi model chỉ là chuyển alias, service không phải sửa
+  - id: d
+    text: Số version bị xoá khi có version mới hơn được đăng ký
+- id: test-auc
+  kind: data
+  type: single
+  prompt: AUC trên test của model champion (nạp theo alias) là bao nhiêu?
+  options:
+  - id: a
+    text: '0.800'
+  - id: b
+    text: '0.717'
+  - id: c
+    text: '0.707'
+  - id: d
+    text: '0.693'
+- id: sig-50
+  kind: knowledge
+  type: single
+  prompt: Suy signature trên 50 dòng đầu thay vì cả tập train thì rủi ro gì?
+  options:
+  - id: a
+    text: Signature thiếu các cột phân loại chưa xuất hiện trong 50 dòng
+  - id: b
+    text: Cột hiếm khi thiếu thành required, request có null bị từ chối
+  - id: c
+    text: Model bị train lại trên 50 dòng đó khi nạp qua pyfunc
+  - id: d
+    text: Signature lưu cả 50 dòng nên lộ dữ liệu khách hàng
+- id: optional
+  kind: data
+  type: multi
+  prompt: 'Signature suy trên cả tập train: những cột nào được đánh dấu *optional*?'
+  options:
+  - id: a
+    text: '`delay_days`'
+  - id: b
+    text: '`approve_hours`'
+  - id: c
+    text: '`customer_state`'
+  - id: d
+    text: '`payment_installments`'
+- id: refit-run
+  kind: knowledge
+  type: single
+  prompt: Sau khi chọn C, bạn fit lại trên train + validation. Ghi vào MLflow thế nào?
+  options:
+  - id: a
+    text: Ghi đè model vào run đã dùng để chọn C, giữ nguyên `val_auc` cũ
+  - id: b
+    text: Không cần ghi, vì C đã có trong run cũ và pipeline không đổi
+  - id: c
+    text: Đăng ký run chọn C, rồi deploy model train lại ngoài MLflow
+  - id: d
+    text: Một run mới có tag ghi khoảng dữ liệu, metric đi kèm là AUC test
+- id: auc-spread
+  kind: data
+  type: single
+  prompt: '`val_auc` của C tốt nhất và tệ nhất trong 4 run chênh nhau khoảng bao nhiêu?'
+  options:
+  - id: a
+    text: '0.0002'
+  - id: b
+    text: '0.0015'
+  - id: c
+    text: '0.0150'
+  - id: d
+    text: '0.1000'

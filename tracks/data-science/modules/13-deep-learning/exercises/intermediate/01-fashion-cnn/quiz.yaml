@@ -1,0 +1,105 @@
+questions:
+- id: unsqueeze
+  kind: knowledge
+  type: single
+  prompt: Quên `unsqueeze(1)`, đưa tensor `(N, 28, 28)` vào `Conv2d(1, 32, 3)` thì sao?
+  options:
+  - id: a
+    text: PyTorch tự thêm chiều kênh nên vẫn chạy nhưng chậm hơn
+  - id: b
+    text: Model chạy được nhưng mỗi dòng pixel bị coi là một ảnh riêng
+  - id: c
+    text: Bị hiểu là một ảnh không batch có N kênh, lỗi báo sai số kênh
+  - id: d
+    text: Lỗi báo thiếu chiều batch và gợi ý gọi `unsqueeze(0)`
+- id: pixel-mean
+  kind: data
+  type: single
+  prompt: Mean pixel (sau khi chia 255) của 50 000 ảnh train là bao nhiêu?
+  options:
+  - id: a
+    text: '0.1307'
+  - id: b
+    text: '0.2855'
+  - id: c
+    text: '0.3528'
+  - id: d
+    text: '0.5000'
+- id: eval-mode
+  kind: knowledge
+  type: single
+  prompt: Đánh giá model khi nó còn ở chế độ train thì sao?
+  options:
+  - id: a
+    text: Gradient được tính và trọng số bị cập nhật trong lúc dự đoán
+  - id: b
+    text: Dropout vẫn bật nên accuracy thấp hơn và đổi mỗi lần chạy
+  - id: c
+    text: Kết quả giống hệt chế độ eval vì model không có BatchNorm
+  - id: d
+    text: PyTorch báo lỗi khi gọi model trong `torch.no_grad()`
+- id: cnn-params
+  kind: data
+  type: single
+  prompt: '`count_params(build_cnn(28, 10))` trả bao nhiêu?'
+  options:
+  - id: a
+    text: 235 146
+  - id: b
+    text: 18 816
+  - id: c
+    text: 421 642
+  - id: d
+    text: 28 426
+- id: gap
+  kind: knowledge
+  type: single
+  prompt: Thay `Flatten` bằng `AdaptiveAvgPool2d(1)` thì sao?
+  options:
+  - id: a
+    text: Số tham số tăng vì phải thêm một tầng Linear mới
+  - id: b
+    text: Accuracy chắc chắn tăng vì model có ít tham số hơn
+  - id: c
+    text: Không đổi gì, vì pooling không có tham số train được
+  - id: d
+    text: Số tham số giảm mạnh, đổi lại mất thông tin vị trí
+- id: linear-params
+  kind: data
+  type: single
+  prompt: Trong CNN đó, tầng `Linear` ngay sau `Flatten` có bao nhiêu tham số?
+  options:
+  - id: a
+    text: 401 536
+  - id: b
+    text: 18 496
+  - id: c
+    text: 200 960
+  - id: d
+    text: 1 290
+- id: test-select
+  kind: knowledge
+  type: single
+  prompt: Chọn số epoch và kiến trúc theo test accuracy thì sai ở đâu?
+  options:
+  - id: a
+    text: Test có phân phối lớp khác train nên chọn sai số epoch
+  - id: b
+    text: Con số test bị lạc quan, không còn là ước lượng khách quan
+  - id: c
+    text: Test quá nhỏ (10 000 ảnh) để đo accuracy theo từng lớp
+  - id: d
+    text: Không sai, miễn là chỉ chọn số epoch chứ không chọn kiến trúc
+- id: worst-class
+  kind: data
+  type: single
+  prompt: Sau 5 epoch (seed 0), lớp nào CNN đoán đúng ít nhất trên test?
+  options:
+  - id: a
+    text: Pullover
+  - id: b
+    text: T-shirt/top
+  - id: c
+    text: Coat
+  - id: d
+    text: Shirt

@@ -1,0 +1,8 @@
+no-dense: [b]
+one-rating: [b]
+beat-pop: [a]
+top10: [c]
+random-split: [c]
+pop-coverage: [b]
+cold-start: [a, c]
+liked: [c]

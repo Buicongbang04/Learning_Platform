@@ -1,0 +1,105 @@
+questions:
+- id: june
+  kind: knowledge
+  type: single
+  prompt: Tháng 6/2018 có PSI `delay_days` 0.65 (major), nguyên nhân là gần như không đơn nào trễ. Xử lý hợp lý?
+  options:
+  - id: a
+    text: Không retrain chỉ vì cảnh báo này; drift có lợi cho khách
+  - id: b
+    text: Retrain ngay trên dữ liệu tháng 6 để model theo kịp phân phối mới
+  - id: c
+    text: Tắt model cho tới khi PSI của `delay_days` về dưới 0.1
+  - id: d
+    text: Bỏ `delay_days` khỏi model vì feature này không ổn định
+- id: promised-max
+  kind: data
+  type: single
+  prompt: Tháng nào có PSI `promised_days` lớn nhất?
+  options:
+  - id: a
+    text: 2018-03
+  - id: b
+    text: 2018-06
+  - id: c
+    text: 2018-07
+  - id: d
+    text: 2018-08
+- id: cancel-out
+  kind: knowledge
+  type: single
+  prompt: '`delay_days` ổn định trên cả giai đoạn test (PSI 0.073), nhưng có tháng PSI 0.65. Vì sao?'
+  options:
+  - id: a
+    text: PSI theo tháng dùng ít bin hơn nên luôn cho giá trị cao hơn
+  - id: b
+    text: Các tháng trôi theo chiều ngược nhau, gộp lại thì triệt tiêu
+  - id: c
+    text: Giai đoạn test có nhiều đơn hơn từng tháng nên PSI tự nhỏ lại
+  - id: d
+    text: '`delay_days` có NaN ở các tháng gần đây nên PSI bị thổi phồng'
+- id: n-alerts
+  kind: data
+  type: single
+  prompt: '`alerts(monthly)` với 5 feature trong `watch`, ngưỡng 0.25: có bao nhiêu cặp (tháng, feature)?'
+  options:
+  - id: a
+    text: '8'
+  - id: b
+    text: '11'
+  - id: c
+    text: '14'
+  - id: d
+    text: '17'
+- id: mix-shift
+  kind: knowledge
+  type: single
+  prompt: AUC toàn cục tháng 6–8 thấp hơn tháng 2–3, nhưng AUC trong nhóm đơn đúng hẹn gần như không đổi. Đây là gì?
+  options:
+  - id: a
+    text: 'Concept drift: quan hệ feature–nhãn đã đổi'
+  - id: b
+    text: Label leakage trong tháng 2–3
+  - id: c
+    text: 'Mix shift: tổ hợp đơn trễ/đúng hẹn đổi'
+  - id: d
+    text: Lỗi pipeline dữ liệu xảy ra trong các tháng 6–8
+- id: score-psi
+  kind: data
+  type: single
+  prompt: Tháng nào có PSI của score (prediction drift) lớn nhất?
+  options:
+  - id: a
+    text: 2018-03
+  - id: b
+    text: 2018-06
+  - id: c
+    text: 2018-08
+  - id: d
+    text: 2018-02
+- id: label-delay
+  kind: knowledge
+  type: single
+  prompt: Review về sau khi giao khoảng 2 ngày (trung vị). Hệ quả cho monitoring?
+  options:
+  - id: a
+    text: Phải tạm dừng chấm điểm trong 2 ngày đầu sau mỗi lần giao hàng xong
+  - id: b
+    text: PSI của feature cũng không tính được cho tới khi nhãn về đủ
+  - id: c
+    text: AUC tính ngay được vì nhãn đã có lúc đơn được giao
+  - id: d
+    text: AUC đến trễ; trong lúc chờ, PSI feature và score là tín hiệu sớm
+- id: freight-median
+  kind: data
+  type: single
+  prompt: Trung vị `freight` mỗi đơn trên test (2018-04 tới 2018-08) là bao nhiêu BRL?
+  options:
+  - id: a
+    text: '16.6'
+  - id: b
+    text: '18.4'
+  - id: c
+    text: '20.5'
+  - id: d
+    text: '14.9'
