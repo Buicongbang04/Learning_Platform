@@ -51,7 +51,7 @@ chuỗi với PyTorch cùng trọng số.
 - `Linear(1000, 500, rng)`: `W` shape `(1000, 500)`, std lệch $$\sqrt{2/1000}$$ dưới 2%, `b` toàn 0; cùng
   seed cho cùng `W`.
 - Gradient check từng layer (`dx`, `dW`, `db` của `Linear`; `dx` của `ReLU`; `dlogits` của
-  `SoftmaxCrossEntropy`) đạt `rel < 1e-6`.
+  `SoftmaxCrossEntropy`) đạt `rel < 1e-6`; `ReLU.backward` cho gradient 0 tại đúng `x = 0`.
 - Gọi `forward`/`backward` hai lần liền cho `dW` như nhau (gán, không cộng dồn).
 - Cả chuỗi `Linear → ReLU → Linear → SoftmaxCrossEntropy`: gradient của `W1, b1, W2, b2` và của `X` đạt
   `rel < 1e-6` so với sai phân.

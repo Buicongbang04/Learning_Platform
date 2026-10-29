@@ -24,6 +24,8 @@ def test_relative_error_formula(gc):
     # max|a-b| = 1, max|a| + max|b| = 2 + 3 = 5
     assert gc.relative_error(a, b) == pytest.approx(0.2)
     assert isinstance(gc.relative_error(a, b), float)
+    # phần tử lớn nhất nằm ở hai vị trí khác nhau: mẫu số là max|a| + max|b| = 6, không phải max(|a| + |b|) = 3
+    assert gc.relative_error(np.array([3.0, 0.0]), np.array([0.0, 3.0])) == pytest.approx(0.5)
 
 
 def test_relative_error_is_scale_free_and_safe_at_zero(gc):

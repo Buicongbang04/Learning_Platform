@@ -99,6 +99,12 @@ def test_relu_forward_backward(L):
     assert rel(dx, num_grad(f, x)) < 1e-6
 
 
+def test_relu_grad_at_zero_is_zero(L):
+    relu = L.ReLU()
+    relu.forward(np.array([[0.0, 1.0]]))
+    np.testing.assert_array_equal(relu.backward(np.array([[5.0, 5.0]])), [[0.0, 5.0]])
+
+
 def test_softmax_ce_loss_and_gradcheck(L):
     rng = np.random.default_rng(5)
     ce = L.SoftmaxCrossEntropy()

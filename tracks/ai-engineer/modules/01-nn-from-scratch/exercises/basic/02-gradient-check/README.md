@@ -35,7 +35,7 @@ Chỉ dùng numpy trong `gradcheck.py`.
 
 ## Tiêu chí đạt
 
-- `relative_error([1, 2], [1, 3]) == 0.2`; không đổi khi nhân cả hai mảng với cùng một hằng; hai mảng toàn 0 cho 0.
+- `relative_error([1, 2], [1, 3]) == 0.2`, `relative_error([3, 0], [0, 3]) == 0.5`; không đổi khi nhân cả hai mảng với cùng một hằng; hai mảng toàn 0 cho 0.
 - Gradient số của $$\sum x^3$$ (x shape `(3, 4)`) và của log-sum-exp khớp gradient giải tích (và
   `torch.autograd`) với `rel < 1e-7`.
 - `x` không đổi từng bit sau khi gọi `numerical_grad`.
@@ -53,7 +53,6 @@ bẫy "quên sửa lại tham số".
 
 ### Gợi ý 2
 
-Trong vòng lặp, sửa `x` tại chỗ rồi gọi `f(x)` (không cần copy cả mảng mỗi lần). Đừng dịch và khôi
-phục bằng chuỗi cộng trừ (`+= eps`, `-= 2 * eps`, `+= eps`): mỗi phép làm tròn một lần nên chưa chắc trả
-đúng số cũ. Lưu giá trị gốc vào một biến trước khi dịch và gán lại đúng giá trị đó, kể cả khi `f` ném
-lỗi (`try`/`finally`).
+Sửa `x` tại chỗ rồi gọi `f(x)` là đủ, không cần copy cả mảng mỗi lần. Khi đó bạn chịu trách nhiệm trả
+`x` về **đúng từng bit**: số thực dấu phẩy động làm tròn sau mỗi phép cộng trừ, nên dịch đi rồi dịch
+ngược lại chưa chắc ra số cũ. Nghĩ xem cách nào chắc chắn trả về đúng giá trị ban đầu.
