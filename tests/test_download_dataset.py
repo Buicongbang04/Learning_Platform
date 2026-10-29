@@ -1,5 +1,7 @@
 import importlib.util
+import io
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -122,9 +124,6 @@ def test_url_base_dir_downloads_each_name(monkeypatch, tmp_path):
 
 
 def _zip_bytes(members):
-    import io
-    import zipfile
-
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in members:

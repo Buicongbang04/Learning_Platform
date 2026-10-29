@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
-from testkit import Exercise
+from testkit import ROOT, Exercise
 
 ex = Exercise(__file__)
 
@@ -99,6 +99,7 @@ def test_summarize(nb):
 def test_real_olist(nb):
     orders = pd.read_csv(_olist_path())
     y = nb.daily_orders(orders)
+    # Chuỗi 2017-01-09 → 2018-08-19 (mục 1 của README): 588 ngày, 97 845 đơn mọi trạng thái
     assert len(y) == 588 and y.sum() == 97845
     assert y.idxmax() == pd.Timestamp("2017-11-24") and y.max() == 1176
     table = nb.backtest_mase(y, {"seasonal_naive": nb.seasonal_naive, "sarima": nb.sarima_forecast}, CUTOFFS)
@@ -108,8 +109,7 @@ def test_real_olist(nb):
 
 
 def _olist_path():
-    from testkit import ROOT
     path = ROOT / "data" / "raw" / "olist_orders_dataset.csv"
     if not path.exists():
-        pytest.skip("Chưa có Olist thật. Chạy: uv run python data/download_olist.py")
+        pytest.skip("Chưa tải Olist thật: uv run python data/download_olist.py")
     return path

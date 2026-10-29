@@ -113,7 +113,7 @@ def test_empirical_interval_is_calibrated_on_stable_series(iv, seed):
 def test_real_olist(iv):
     path = ROOT / "data" / "raw" / "olist_orders_dataset.csv"
     if not path.exists():
-        pytest.skip("Chưa có Olist thật. Chạy: uv run python data/download_olist.py")
+        pytest.skip("Chưa tải Olist thật: uv run python data/download_olist.py")
     ts = pd.to_datetime(pd.read_csv(path, usecols=["order_purchase_timestamp"]).order_purchase_timestamp)
     y = ts.dt.normalize().value_counts().reindex(pd.date_range("2017-01-09", "2018-08-19"), fill_value=0).astype(float)
     calib = pd.date_range("2017-06-04", "2018-02-18", freq="7D")
