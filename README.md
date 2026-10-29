@@ -39,6 +39,7 @@ Hướng dẫn cài đặt đầy đủ và xử lý sự cố: [setup/SETUP.md]
 1. Mở app, bấm **Tiếp tục** ở thẻ Học tiếp. App luôn chỉ ra phần lý thuyết hoặc bài tập kế tiếp.
 2. Đọc từng phần lý thuyết, đánh dấu đã đọc.
 3. Làm bài tập trong VSCode: sửa các tệp trong `starter/`, chạy lệnh test app đưa cho, rồi bấm **Đánh dấu xong**.
+   Bài notebook hiện 2 thẻ: mở trong VSCode kèm lệnh chạy test, và trắc nghiệm bài học (tùy chọn) có điểm và đáp án sau khi nộp.
 4. Kẹt thì mở **Gợi ý**, sau cùng mới xem **Lời giải**. Kiểm tra lời giải mẫu: `SOLUTION=1 uv run pytest <thư mục bài> -q`.
 5. Xong module thì làm milestone capstone tương ứng và ôn tab **Phỏng vấn**.
 
