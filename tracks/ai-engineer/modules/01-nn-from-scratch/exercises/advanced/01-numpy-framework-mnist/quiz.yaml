@@ -1,0 +1,92 @@
+questions:
+- id: majority-baseline
+  kind: data
+  type: single
+  prompt: Luôn đoán lớp xuất hiện nhiều nhất trong 10 000 ảnh test MNIST thì được accuracy bao nhiêu?
+  options:
+  - id: a
+    text: '0.1000'
+  - id: b
+    text: '0.1135'
+  - id: c
+    text: '0.0892'
+  - id: d
+    text: '0.1032'
+- id: ablation-gap
+  kind: data
+  type: single
+  prompt: MLP 784-512-256-10, AdamW + cosine, 10 epoch. Bỏ BatchNorm hoặc bỏ dropout làm test accuracy đổi cỡ nào?
+  options:
+  - id: a
+    text: Dưới 0.3 điểm, cỡ chênh lệch giữa hai seed
+  - id: b
+    text: Giảm 2 tới 3 điểm, BatchNorm là thứ quyết định
+  - id: c
+    text: Tăng 1 điểm vì model nhỏ không cần regularize
+  - id: d
+    text: Model không hội tụ, loss đứng ở ln 10 = 2.30
+- id: param-count
+  kind: knowledge
+  type: single
+  prompt: MLP 784-512-256-10 có BatchNorm sau hai tầng ẩn có bao nhiêu tham số học được?
+  options:
+  - id: a
+    text: '535 040'
+  - id: b
+    text: '537 354'
+  - id: c
+    text: '538 890'
+  - id: d
+    text: '269 322'
+- id: snapshot-buffers
+  kind: knowledge
+  type: single
+  prompt: EarlyStopping chỉ chụp các Param (W, b, gamma, beta), không chụp running mean/var. Sau khi nạp lại thì sao?
+  options:
+  - id: a
+    text: Không sao, running stats tự tính lại khi gọi evaluate
+  - id: b
+    text: Running stats epoch cuối lệch trọng số tốt nhất
+  - id: c
+    text: numpy báo lỗi shape khi nạp lại vào BatchNorm
+  - id: d
+    text: Chỉ dropout bị ảnh hưởng, BatchNorm vẫn đúng
+- id: batch-dependent
+  kind: knowledge
+  type: single
+  prompt: '`evaluate` cho 0.963 khi chạy cả 300 ảnh nhưng 0.797 khi chạy từng nhóm 5 ảnh. Nguyên nhân hay gặp nhất?'
+  options:
+  - id: a
+    text: Batch nhỏ làm float32 cộng sai số nhiều hơn
+  - id: b
+    text: Model đang overfit nên nhạy với kích thước batch
+  - id: c
+    text: Model chưa chuyển eval, BatchNorm dùng thống kê batch
+  - id: d
+    text: Softmax không trừ max nên batch nhỏ bị tràn số
+- id: decay-which
+  kind: knowledge
+  type: single
+  prompt: Trong framework, AdamW nên áp weight decay cho tham số nào?
+  options:
+  - id: a
+    text: Mọi Param, kể cả bias và gamma, beta của BN
+  - id: b
+    text: Chỉ ma trận W, không bias hay gamma, beta
+  - id: c
+    text: Chỉ bias, vì W đã có BatchNorm giữ cỡ
+  - id: d
+    text: Chỉ gamma và beta của BatchNorm
+- id: select-on-test
+  kind: knowledge
+  type: single
+  prompt: Chọn epoch dừng và cấu hình ablation theo test accuracy thay vì val accuracy thì sao?
+  options:
+  - id: a
+    text: Không sao, test và val cùng phân phối
+  - id: b
+    text: Model học thêm từ tập test nên tốt hơn
+  - id: c
+    text: Số test báo cáo bị lạc quan, mất ước lượng sạch
+  - id: d
+    text: Early stopping dừng quá sớm vì test nhỏ hơn val
