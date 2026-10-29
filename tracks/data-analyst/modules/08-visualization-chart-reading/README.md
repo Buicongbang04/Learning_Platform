@@ -409,7 +409,7 @@ ax.annotate("Tháng 12: mới có dữ liệu tới 9/12", xy=(partial.index[-1]
 ax.set_ylim(0, None)
 ax.set_ylabel("triệu GBP")
 ax.spines[["top", "right"]].set_visible(False)
-ax.set_title("Doanh thu 1–9/12/2011 cao hơn cùng kỳ năm trước 46%; tháng 12 chưa kết thúc", loc="left", fontsize=11)
+ax.set_title("Tháng 12 chưa kết thúc: 9 ngày đầu cao hơn cùng kỳ năm trước", loc="left", fontsize=11)
 fig.tight_layout()
 fig.savefig(OUT / "retail_partial_month.png", dpi=100)
 plt.close(fig)
@@ -420,8 +420,11 @@ print(f"giá trị hoá đơn: mean {inv.mean():.0f}, median {inv.median():.0f},
 ```
 
 Kết quả: MoM ngây thơ **−57.7%**; nhưng 9 ngày đầu tháng 12/2011 đạt 638 811 GBP, **cao hơn 45.6%**
-cùng 9 ngày năm 2010 và cao hơn 9 ngày đầu tháng 11/2011 (454 238 GBP). Câu chuyện đúng là "tháng
-12 đang chạy tốt hơn năm ngoái", ngược hẳn câu chuyện của chart ngây thơ.
+cùng 9 ngày năm 2010 và cao hơn 9 ngày đầu tháng 11/2011 (454 238 GBP). Hướng đúng là "tháng 12 đang
+chạy tốt hơn năm ngoái", ngược hẳn câu chuyện của chart ngây thơ. Nhưng **chưa nên báo con số 45.6%**:
+đây là doanh thu gộp, và hoá đơn lớn nhất của bộ dữ liệu (168 470 GBP, in ở dòng dưới) nằm trong 9 ngày
+này, một mình chiếm phần lớn mức chênh. Trước khi báo con số, kiểm outlier và kiểm hoá đơn đó có bị huỷ
+ngay sau đó không; làm vậy thì mức tăng thực nhỏ hơn nhiều. Bài Advanced 01 đào tiếp chuyện này.
 
 Cùng dữ liệu, giá trị hoá đơn có mean 534 GBP nhưng median 304 GBP, max 168 470 GBP: một bar "giá trị
 hoá đơn trung bình theo quốc gia" sẽ bị vài đơn sỉ quyết định. Với phân phối đuôi dài, vẽ histogram
@@ -436,7 +439,7 @@ Tiêu đề chart là câu người đọc nhớ nếu họ chỉ đọc một d
 | Tiêu đề mô tả (yếu) | Tiêu đề insight (mạnh) |
 | --- | --- |
 | Lượt thuê theo giờ | Ngày làm việc có hai đỉnh đi làm 8h và 17h; cuối tuần đông buổi trưa |
-| Doanh thu theo tháng | Doanh thu 1–9/12 cao hơn cùng kỳ 46%; tháng 12 chưa kết thúc |
+| Doanh thu theo tháng | Tháng 12 chưa kết thúc: 9 ngày đầu cao hơn cùng kỳ năm trước |
 | Funnel khách hàng | 1/3 khách không quay lại lần 2: bước mất nhiều khách nhất về số tuyệt đối |
 
 Headline insight có ba phần: **cái gì** (metric), **bao nhiêu** (con số), **so với gì** (tham

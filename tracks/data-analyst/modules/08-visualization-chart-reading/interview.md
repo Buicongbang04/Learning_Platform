@@ -70,7 +70,9 @@ Không trả lời nguyên nhân trước khi kiểm tra chart. Theo thứ tự:
 
 1. **Kỳ chưa đủ dữ liệu?** Phổ biến nhất. Ví dụ thật: Online Retail II kết thúc 9/12/2011; doanh thu
    tháng 12 so với tháng 11 là −57.7%, nhưng tháng 12 mới có 9 ngày. So cùng ngày 1–9: cao hơn cùng
-   kỳ năm trước **45.6%** và cao hơn 1–9/11 40.6%. Câu chuyện đảo ngược hoàn toàn.
+   kỳ năm trước **45.6%** và cao hơn 1–9/11 40.6%. Câu chuyện đảo ngược hoàn toàn. Nhưng đó là
+   doanh thu gộp: một hoá đơn 168 470 GBP trong 9 ngày này chiếm phần lớn mức chênh, nên trước khi
+   báo con số phải kiểm outlier và đơn bị huỷ ngay sau đó (mức tăng thực nhỏ hơn nhiều, xem bước 2).
 2. **Định nghĩa và dữ liệu**: pipeline có trễ hoặc lỗi không (số đơn ngày hôm qua bằng 0?), có đổi
    định nghĩa doanh thu (net vs gross, đã trừ hoàn hàng chưa), đổi múi giờ, có nguồn dữ liệu nào
    ngừng đổ về?
@@ -80,7 +82,8 @@ Không trả lời nguyên nhân trước khi kiểm tra chart. Theo thứ tự:
    tìm phần đóng góp; tách số đơn × giá trị mỗi đơn.
 
 Trả lời CEO ngắn, có mốc thời gian: "Tháng 12 mới có 9 ngày nên chart đang so 9 ngày với 30 ngày.
-So cùng 9 ngày năm ngoái, doanh thu cao hơn 46%. Em đã sửa chart để đánh dấu kỳ dở dang." Sau đó
+So cùng 9 ngày năm ngoái, doanh thu vẫn cao hơn; em đang kiểm một đơn rất lớn trong kỳ trước khi chốt
+con số. Em đã sửa chart để đánh dấu kỳ dở dang." Sau đó
 sửa nguồn gốc: dashboard nên ẩn hoặc đánh dấu nét đứt kỳ chưa kết thúc, và mặc định so cùng số ngày.
 
 ## Case: chart kết quả A/B test trong slide của đồng nghiệp đã cắt trục y. Bạn làm gì?
@@ -232,7 +235,7 @@ tiêu đề; nếu tiêu đề là "Doanh thu theo tháng", họ phải tự di�
 
 - Yếu: "Lượt thuê theo giờ". Mạnh: "Ngày làm việc có hai đỉnh đi làm 8h và 17h; cuối tuần đông
   buổi trưa".
-- Yếu: "Doanh thu theo tháng". Mạnh: "Doanh thu 1–9/12 cao hơn cùng kỳ 46%; tháng 12 chưa kết thúc".
+- Yếu: "Doanh thu theo tháng". Mạnh: "Tháng 12 chưa kết thúc: 9 ngày đầu cao hơn cùng kỳ năm trước".
 
 Cấu trúc: metric + con số + so với gì. Phụ đề ghi phạm vi, bộ lọc, nguồn. Rủi ro: headline biến thành
 quảng cáo nếu nói mạnh hơn dữ liệu; nếu bằng chứng yếu, headline phải nói vậy ("chưa đủ dữ liệu để
