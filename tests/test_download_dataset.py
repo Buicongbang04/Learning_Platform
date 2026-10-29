@@ -190,7 +190,7 @@ def test_hf_download_calls_hub(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dd, "hf_hub_download", fake)
     out = tmp_path / "out"
-    assert dd.download("t-hf", out) == [out / "a.json"]
-    assert (out / "a.json").read_text() == "{}"
+    assert dd.download("t-hf", out) == [out / "sub" / "a.json"]
+    assert (out / "sub" / "a.json").read_text() == "{}"
     assert calls[0]["repo_id"] == "o/r" and calls[0]["filename"] == "sub/a.json"
     assert calls[0]["repo_type"] == "dataset" and calls[0]["token"] == "hf_x"

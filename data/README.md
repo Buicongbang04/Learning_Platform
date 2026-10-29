@@ -325,13 +325,15 @@ Nguồn `hf` tải qua `huggingface_hub` (repo loại dataset) và giữ tên t�
 | Tên | Nội dung | Nguồn | Giấy phép | Ghi chú |
 | --- | --- | --- | --- | --- |
 | `mnist` | 60 000 ảnh train + 10 000 ảnh test, 28x28, 4 tệp idx `.gz` | [LeCun](https://yann.lecun.com/exdb/mnist/) (mirror S3 của torchvision) | CC BY-SA 3.0 | Đã kiểm header: train 60 000, test 10 000, ảnh 28x28 |
-| `zalo-legal` | Corpus pháp luật + câu hỏi có nhãn điều luật (Zalo AI Challenge 2021) | [nntoan209/ZaloLegal](https://huggingface.co/datasets/nntoan209/ZaloLegal) (mirror bên thứ ba) | Chỉ dùng học tập/nghiên cứu | Chưa tải được: xem dưới |
+| `zalo-legal` | Truy hồi văn bản pháp luật (Zalo AI Challenge 2021): corpus điều luật, câu hỏi, qrels | [GreenNode/zalo-ai-legal-text-retrieval-vn](https://huggingface.co/datasets/GreenNode/zalo-ai-legal-text-retrieval-vn) (mirror bên thứ ba) | MIT (thẻ HF); dữ liệu gốc dùng học tập/nghiên cứu | Tải ẩn danh được, giữ đường dẫn con `qrels/` |
 
-Trạng thái `zalo-legal` (2026-10-29): repo `nntoan209/ZaloLegal` trả "Repository Not Found" (HTTP 401 trên API khi
-chưa đăng nhập), nghĩa là repo bị xoá, đổi tên hoặc private; chưa có số luật/điều/câu hỏi thật và chưa xác nhận được
-cấu trúc `legal_corpus.json` / `train_question_answer.json`. Cần chọn lại nguồn (ví dụ bản công khai
-`GreenNode/zalo-ai-legal-text-retrieval-vn`, MIT: `corpus.jsonl` 61 425 điều, `queries.jsonl` 3 298 câu hỏi,
-`qrels/train.jsonl` 2 505 + `qrels/test.jsonl` 793 cặp) rồi cập nhật mục này. Không commit mẫu của bộ này (giấy phép chưa rõ).
+Cấu trúc thật của `zalo-legal` (đã kiểm khi tải, 2026-10-29), tất cả là JSONL (mỗi dòng một object):
+
+- `corpus.jsonl`: 61 425 điều luật, `{_id, title, text}`. `_id` = `<số hiệu văn bản>+<số điều>`, ví dụ `01/2009/tt-bnn+1`; `title` kiểu `"Điều 1. Phạm vi áp dụng"`. Có 3 271 văn bản (law_id) khác nhau (tách `_id` ở dấu `+` cuối).
+- `queries.jsonl`: 3 298 câu hỏi, `{_id, text}`.
+- `qrels/train.jsonl`: 2 505 cặp (2 432 câu hỏi); `qrels/test.jsonl`: 793 cặp (788 câu hỏi). Mỗi dòng `{query-id, corpus-id, score}` với `score` = 1; `corpus-id` trỏ tới `_id` trong corpus.
+
+Không có `legal_corpus.json` lồng `articles` như dự kiến ban đầu; repo `nntoan209/ZaloLegal` không còn truy cập được. Không commit mẫu của bộ này.
 
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
 không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.

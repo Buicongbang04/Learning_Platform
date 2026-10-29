@@ -143,10 +143,11 @@ DATASETS: dict[str, Dataset] = {
         about="Chữ số viết tay 28x28: 60 000 ảnh train + 10 000 ảnh test (định dạng idx, gz)",
     ),
     "zalo-legal": Dataset(
-        "hf", "nntoan209/ZaloLegal", ["legal_corpus.json", "train_question_answer.json"],
-        license="Dữ liệu cuộc thi Zalo AI Challenge 2021 (Legal Text Retrieval), chỉ dùng học tập/nghiên cứu; đây là bản mirror bên thứ ba trên Hugging Face",
-        homepage="https://huggingface.co/datasets/nntoan209/ZaloLegal",
-        about="Văn bản pháp luật Việt Nam (luật, điều) + câu hỏi có nhãn điều luật liên quan",
+        "hf", "GreenNode/zalo-ai-legal-text-retrieval-vn",
+        ["corpus.jsonl", "queries.jsonl", "qrels/train.jsonl", "qrels/test.jsonl"],
+        license="MIT (theo thẻ Hugging Face); bản mirror bên thứ ba của dữ liệu Zalo AI Challenge 2021 (Legal Text Retrieval), dùng học tập/nghiên cứu",
+        homepage="https://huggingface.co/datasets/GreenNode/zalo-ai-legal-text-retrieval-vn",
+        about="Truy hồi văn bản pháp luật Việt Nam: corpus các điều luật, câu hỏi và qrels (điều luật liên quan)",
         needs_token=False,
     ),
 }
@@ -230,7 +231,8 @@ def download(name: str, out: Path) -> list[Path]:
         written = []
         for f in ds.files:
             cached = hf_hub_download(repo_id=ds.ref, filename=f, repo_type="dataset", token=token)
-            target = out / PurePosixPath(f).name
+            target = out / f  # giữ đường dẫn con (qrels/train.jsonl và qrels/test.jsonl khác tên nhưng cùng cấp)
+            target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(cached, target)
             written.append(target)
         return written
