@@ -146,6 +146,115 @@ Cluster manager khác cho Spark: **Standalone**, **Kubernetes** (phổ biến nh
 (đã deprecated). Bên trong một ứng dụng Spark cũng có scheduler riêng (`spark.scheduler.mode` = FIFO
 hoặc FAIR) để chia executor giữa các job chạy song song trong cùng SparkSession.
 
+### Kiến trúc distributed file system: HDFS, GFS và object storage
+
+Mọi distributed file system (DFS) giải cùng một bài: giữ tệp lớn hơn một ổ đĩa, đọc song song từ nhiều máy,
+và không mất dữ liệu khi máy hỏng. Thiết kế kinh điển từ **Google File System** (GFS, 2003), HDFS là bản mã
+nguồn mở của nó:
+
+- **Tách metadata khỏi dữ liệu**: một master (NameNode) giữ cây thư mục và bản đồ block → máy; các máy dữ
+  liệu (DataNode) giữ block. Client hỏi master vị trí một lần rồi đọc thẳng từ DataNode, nên master không
+  thành nút cổ chai băng thông.
+- **Block lớn** (64–128 MB) để metadata ít và đọc tuần tự nhanh; đổi lại tệp nhỏ rất tốn kém.
+- **Replication theo rack**: bản 1 ở máy ghi, bản 2 và 3 ở một rack khác, chịu được mất cả một rack.
+- **Heartbeat**: DataNode báo sống mỗi vài giây; mất heartbeat thì NameNode tự sao lại các block thiếu bản.
+
+Ghi một block trong HDFS đi theo **pipeline**: client gửi tới DataNode 1, DataNode 1 chuyển tiếp sang 2,
+2 sang 3, xác nhận đi ngược lại. Client chỉ tốn băng thông cho một bản.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant NN as NameNode
+    participant D1 as DataNode 1
+    participant D2 as DataNode 2 (rack khác)
+    participant D3 as DataNode 3 (rack khác)
+    C->>NN: create /lake/orders/part-0.parquet
+    NN-->>C: block b1 ghi vào D1, D2, D3
+    C->>D1: gửi dữ liệu b1
+    D1->>D2: chuyển tiếp
+    D2->>D3: chuyển tiếp
+    D3-->>D2: ack
+    D2-->>D1: ack
+    D1-->>C: ack
+    C->>NN: complete (block b1 đã đủ 3 bản)
+```
+
+| | HDFS | Object storage (S3, GCS, ADLS, MinIO) |
+| --- | --- | --- |
+| Mô hình | File system có thư mục thật, rename atomic | Key → object; "thư mục" chỉ là tiền tố |
+| Data locality | Có: task chạy trên máy giữ block | Không: mọi đọc đi qua mạng |
+| Scale metadata | Giới hạn bởi RAM NameNode (cỡ trăm triệu file) | Gần như không giới hạn |
+| Chi phí | Mua máy + đĩa, replication 3 lần, công vận hành | Trả theo GB/tháng và theo request, không vận hành |
+| Compute và storage | Gắn chặt: thêm đĩa phải thêm máy | Tách rời: tắt cluster Spark khi không chạy |
+| Điểm yếu | Small files, NameNode HA | Rename/list chậm và không atomic, chi phí request |
+
+Năm 2026, hạ tầng mới gần như luôn chọn object storage + table format (Delta, Iceberg) vì tách compute khỏi
+storage rẻ hơn nhiều. HDFS còn gặp ở cluster on-premise (ngân hàng, viễn thông) và ở nơi cần data locality
+cho băng thông cực lớn. Các DFS khác bạn có thể gặp: **Ceph** (vừa object vừa block vừa file, tự host),
+**Alluxio** (lớp cache phân tán đặt trước S3/HDFS), **JuiceFS** (POSIX trên object storage).
+
+### Job scheduling: FIFO, Fair và Capacity trong thực tế
+
+Bảng ở phần YARN tóm tắt ba scheduler; ví dụ dưới cho thấy khác biệt. Cluster có 100 vcore, ba đội:
+**etl** (job đêm lớn), **bi** (truy vấn ad-hoc nhỏ, cần nhanh), **ds** (huấn luyện model).
+
+- **FIFO**: job ETL 2 giờ nộp lúc 01:00 chiếm đủ 100 core; truy vấn 30 giây của analyst nộp lúc 01:05 chờ
+  tới 03:00. Chỉ chấp nhận được khi cluster của một người.
+- **Capacity** (mặc định của YARN ở Hadoop 3, Cloudera): chia queue theo % bảo đảm, vd. etl 60%, bi 25%,
+  ds 15%. Queue rảnh thì queue khác mượn tới `maximum-capacity`; khi chủ cần lại, tài nguyên được trả (chờ
+  container xong, hoặc **preemption** giết container mượn). Hợp với tổ chức nhiều đội cần cam kết "ít nhất
+  bao nhiêu" để lập kế hoạch SLA.
+- **Fair**: chia đều theo thời gian giữa các job đang chạy (có trọng số và min share theo queue). Job nhỏ
+  vừa nộp được chia phần ngay, nên truy vấn ad-hoc xong nhanh dù job lớn đang chạy. Hợp cluster dùng chung
+  có nhiều job ngắn tương tác.
+
+```xml
+<!-- capacity-scheduler.xml: ba queue con của root -->
+<property><name>yarn.scheduler.capacity.root.queues</name><value>etl,bi,ds</value></property>
+<property><name>yarn.scheduler.capacity.root.etl.capacity</name><value>60</value></property>
+<property><name>yarn.scheduler.capacity.root.bi.capacity</name><value>25</value></property>
+<property><name>yarn.scheduler.capacity.root.bi.maximum-capacity</name><value>60</value></property>
+<property><name>yarn.scheduler.capacity.root.ds.capacity</name><value>15</value></property>
+```
+
+Job Spark chọn queue bằng `spark-submit --queue bi`. Hai tầng scheduling cần phân biệt: **cluster
+scheduler** (YARN/Kubernetes) chia tài nguyên giữa các *ứng dụng*; `spark.scheduler.mode=FAIR` chia executor
+giữa các *job trong cùng một SparkSession* (vd. một Spark Thrift Server phục vụ nhiều người). Thêm vào đó,
+**dynamic allocation** (`spark.dynamicAllocation.enabled`) cho ứng dụng trả executor rảnh về cluster thay vì
+giữ suốt đời.
+
+Đừng nhầm với **workflow scheduler** (Airflow, Dagster, cron): chúng quyết định *khi nào* và *theo thứ tự
+nào* chạy job; cluster scheduler quyết định job đó được *bao nhiêu tài nguyên* khi đã chạy.
+
+### Cluster manager: YARN, Kubernetes hay Standalone
+
+Spark không tự quản máy; nó xin executor từ một cluster manager.
+
+| | Standalone | YARN | Kubernetes |
+| --- | --- | --- | --- |
+| Là gì | Master/worker có sẵn trong Spark | Resource manager của Hadoop | Orchestrator container đa dụng |
+| Cách chạy executor | Tiến trình JVM trên worker | Container YARN (CPU + RAM) trên NodeManager | Pod, image Docker tự build |
+| Chia sẻ đa đội | Yếu (không queue) | Mạnh: Capacity/Fair queue, preemption | Namespace + ResourceQuota; queue cần thêm Volcano/YuniKorn/Kueue |
+| Data locality | Nếu đặt cạnh HDFS | Có với HDFS | Không (thường đọc S3/GCS) |
+| Cô lập phụ thuộc | Chung môi trường máy | Chung (hoặc Docker trên YARN) | Mỗi job một image, phiên bản Python/thư viện riêng |
+| Hợp khi | Thử nghiệm, cluster nhỏ dành riêng | Đã có Hadoop on-prem | Hạ tầng mới, cloud, đã chạy mọi thứ khác trên K8s |
+
+Ngoài ba lựa chọn tự vận hành, phần lớn đội dùng **dịch vụ managed** để khỏi lo cluster manager: Databricks,
+AWS EMR (EMR trên EC2 dùng YARN, EMR on EKS dùng Kubernetes, EMR Serverless), Google Dataproc (YARN, có bản
+Serverless). Mesos từng là lựa chọn thứ tư nhưng đã deprecated từ Spark 3.2.
+
+Trên Kubernetes, nên dùng **Spark Operator** (khai báo `SparkApplication` bằng YAML, hợp GitOps ở module 08)
+thay vì gọi `spark-submit --master k8s://...` bằng tay:
+
+```bash
+spark-submit --master k8s://https://k8s-api:6443 --deploy-mode cluster \
+  --conf spark.kubernetes.container.image=registry/olist-spark:1.4.0 \
+  --conf spark.kubernetes.namespace=data-jobs \
+  --conf spark.executor.instances=4 --conf spark.executor.memory=4g \
+  local:///opt/jobs/revenue_by_state.py --date 2018-08-01
+```
+
 ## 3. Kiến trúc Spark: driver, executor, DAG, stage, task
 
 ```mermaid
@@ -598,6 +707,12 @@ khả năng phục hồi khi mất một máy; phần cluster cần môi trườ
 - PySpark API reference: https://spark.apache.org/docs/3.5.0/api/python/reference/index.html
 - Apache Hadoop, *HDFS Architecture*: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html
 - Apache Hadoop, *YARN Architecture*: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/YARN.html
+- Apache Hadoop, *Capacity Scheduler*: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/CapacityScheduler.html
+- Apache Hadoop, *Fair Scheduler*: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/FairScheduler.html
+- Ghemawat, Gobioff, Leung (2003), *The Google File System*: https://research.google/pubs/the-google-file-system/
+- Apache Spark, *Running Spark on Kubernetes*: https://spark.apache.org/docs/3.5.0/running-on-kubernetes.html
+- Apache Spark, *Job Scheduling* (dynamic allocation, FAIR pool): https://spark.apache.org/docs/3.5.0/job-scheduling.html
+- Kubeflow Spark Operator: https://github.com/kubeflow/spark-operator
 - Dean & Ghemawat (2004), *MapReduce: Simplified Data Processing on Large Clusters*: https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/
 - Zaharia et al. (2012), *Resilient Distributed Datasets*: https://www.usenix.org/conference/nsdi12/technical-sessions/presentation/zaharia
 - Chambers & Zaharia, *Spark: The Definitive Guide* (O'Reilly, 2018).

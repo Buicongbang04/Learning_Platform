@@ -195,3 +195,27 @@ rồi mới quyết định điều chỉnh tài nguyên ở đâu.
 Bật event log trước khi chạy và lưu ở nơi History Server đọc được. Event log không được bật
 thì không thể mặc định dựng lại mọi chi tiết UI sau sự cố. Khi benchmark, lưu cả cấu hình/input và
 kết quả đối chiếu; một ảnh thời gian nhanh hơn chưa chứng minh tối ưu đúng.
+
+## Cluster Spark dùng chung cho đội ETL và đội BI: truy vấn ad-hoc của analyst phải chờ job đêm. Bạn sửa thế nào?
+
+Nguyên nhân thường là scheduler FIFO hoặc một queue chung: job ETL lớn chiếm hết executor. Cách sửa theo tầng:
+
+1. **Tách queue** (YARN Capacity Scheduler): vd. `etl` 60%, `bi` 25% với `maximum-capacity` cao để mượn khi
+   rảnh, bật preemption để `bi` lấy lại phần bảo đảm trong vài chục giây. Job nộp bằng `--queue`. Trên
+   Kubernetes: namespace + ResourceQuota, và scheduler có queue như YuniKorn/Volcano/Kueue.
+2. **Dynamic allocation** cho job ETL để trả executor rảnh thay vì giữ suốt đời.
+3. Nếu analyst đi qua một Spark Thrift Server chung, đặt `spark.scheduler.mode=FAIR` với pool riêng để
+   các truy vấn trong cùng ứng dụng không xếp hàng FIFO.
+4. Xa hơn: tách hẳn compute (cluster ETL theo lịch, SQL warehouse/serverless riêng cho BI), điều dễ làm khi
+   dữ liệu nằm trên object storage thay vì HDFS gắn với cluster.
+
+## So sánh HDFS và S3 làm tầng lưu trữ cho Spark. Vì sao hạ tầng mới ít chọn HDFS?
+
+HDFS là file system thật: rename atomic, data locality (task chạy trên máy giữ block), nhưng metadata nằm
+trong RAM NameNode (sợ small files), replication 3 lần trên đĩa của chính cluster, và compute gắn chặt với
+storage: muốn thêm dung lượng phải thêm máy, tắt cluster là mất chỗ đọc dữ liệu.
+
+S3/GCS/ADLS là object storage: gần như vô hạn, trả theo GB, không vận hành, tách compute khỏi storage nên
+tắt cluster khi không chạy job. Đổi lại không có locality, list và rename chậm, không atomic. Table format
+(Delta, Iceberg) bù đúng các điểm yếu đó bằng transaction log. Vì chi phí và tính linh hoạt, hạ tầng mới
+chọn object storage; HDFS còn ở cluster on-premise có sẵn hoặc nơi cần băng thông đọc cục bộ cực lớn.
