@@ -36,3 +36,6 @@ logs/
 .idea/
 .vscode/
 setup/.env
+
+# Git worktree của các phiên làm việc
+.claude/worktrees/
