@@ -11,6 +11,7 @@ Trong test:
     from testkit import Exercise
     ex = Exercise(__file__)
     transform = ex.module("transform.py")   # import starter/transform.py (hoặc lời giải)
+    analysis = ex.notebook("analysis.ipynb") # chạy code cell (trừ cell tag `explore`), dùng như module
     sql = ex.read("query.sql")              # đọc tệp văn bản
     ex.require_service("postgres")          # skip nếu dịch vụ Docker chưa chạy
 """
@@ -87,6 +88,27 @@ def service_up(name: str, timeout: float = 0.5) -> bool:
         return False
 
 
+def _unique_name(path: Path) -> str:
+    return "ex_" + "_".join(path.relative_to(ROOT).with_suffix("").parts).replace("-", "_")
+
+
+def _load(path: Path, unique: str, execute, spec=None) -> ModuleType:
+    if unique in sys.modules:
+        return sys.modules[unique]
+    module = importlib.util.module_from_spec(spec) if spec else ModuleType(unique)
+    module.__file__ = str(path)
+    sys.path.insert(0, str(path.parent))
+    try:
+        sys.modules[unique] = module
+        execute(module)
+    except BaseException:
+        del sys.modules[unique]
+        raise
+    finally:
+        sys.path.remove(str(path.parent))
+    return module
+
+
 class Exercise:
     """Một bài tập, xác định từ đường dẫn tệp test đang chạy."""
 
@@ -115,18 +137,27 @@ class Exercise:
 
     def module(self, name: str) -> ModuleType:
         path = self.path(name)
-        unique = "ex_" + "_".join(path.relative_to(ROOT).with_suffix("").parts).replace("-", "_")
-        if unique in sys.modules:
-            return sys.modules[unique]
-        spec = importlib.util.spec_from_file_location(unique, path)
-        module = importlib.util.module_from_spec(spec)
-        sys.path.insert(0, str(path.parent))
-        try:
-            sys.modules[unique] = module
-            spec.loader.exec_module(module)
-        finally:
-            sys.path.remove(str(path.parent))
-        return module
+        spec = importlib.util.spec_from_file_location(_unique_name(path), path)
+        return _load(path, spec.name, lambda module: spec.loader.exec_module(module), spec)
+
+    def notebook(self, name: str) -> ModuleType:
+        """Chạy các code cell của notebook (trừ cell gắn tag `explore`) rồi trả về như một module.
+
+        Dòng magic (`%...`) và shell (`!...`) bị bỏ qua; output đã lưu trong notebook không ảnh hưởng.
+        """
+        import nbformat
+
+        path = self.path(name)
+        book = nbformat.read(path, as_version=4)
+        lines = []
+        for cell in book.cells:
+            if cell.cell_type != "code" or "explore" in cell.get("metadata", {}).get("tags", []):
+                continue
+            lines += [line for line in cell.source.splitlines() if not line.lstrip().startswith(("%", "!"))]
+            lines.append("")
+        os.environ.setdefault("MPLBACKEND", "Agg")
+        code = compile("\n".join(lines), str(path), "exec")
+        return _load(path, _unique_name(path), lambda module: exec(code, module.__dict__))
 
     @staticmethod
     def require_service(name: str) -> None:
