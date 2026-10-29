@@ -317,6 +317,22 @@ Ba nguồn dưới đây (hai API và một luồng SSE) không nằm trong danh
 | `data/raw/wikimedia-recentchange/*.jsonl` | [Wikimedia EventStreams `recentchange`](https://stream.wikimedia.org/v2/stream/recentchange), SSE, không cần key | CC0 (dữ liệu sự kiện) | Người học tự ghi từ luồng trực tiếp (không có bản tải sẵn, mỗi lần ghi ra tệp `.jsonl` riêng) | 07 advanced 03 |
 | `data/raw/usgs-earthquakes/` | [USGS FDSN Event](https://earthquake.usgs.gov/fdsnws/event/1/), không cần key | Public domain | M ≥ 4.5 toàn cầu, 2024-01-01..2025-01-01, `run-NNN/page-NNN.json` + `state.json` | 00 intermediate 01 |
 
+### Bộ dữ liệu cho track AI Engineer
+
+Nguồn `hf` tải qua `huggingface_hub` (repo loại dataset) và giữ tên tệp. Bộ nào đánh dấu `needs_token` thì cần
+`HF_TOKEN=hf_...` trong `setup/.env` (tạo token loại Read tại https://huggingface.co/settings/tokens).
+
+| Tên | Nội dung | Nguồn | Giấy phép | Ghi chú |
+| --- | --- | --- | --- | --- |
+| `mnist` | 60 000 ảnh train + 10 000 ảnh test, 28x28, 4 tệp idx `.gz` | [LeCun](https://yann.lecun.com/exdb/mnist/) (mirror S3 của torchvision) | CC BY-SA 3.0 | Đã kiểm header: train 60 000, test 10 000, ảnh 28x28 |
+| `zalo-legal` | Corpus pháp luật + câu hỏi có nhãn điều luật (Zalo AI Challenge 2021) | [nntoan209/ZaloLegal](https://huggingface.co/datasets/nntoan209/ZaloLegal) (mirror bên thứ ba) | Chỉ dùng học tập/nghiên cứu | Chưa tải được: xem dưới |
+
+Trạng thái `zalo-legal` (2026-10-29): repo `nntoan209/ZaloLegal` trả "Repository Not Found" (HTTP 401 trên API khi
+chưa đăng nhập), nghĩa là repo bị xoá, đổi tên hoặc private; chưa có số luật/điều/câu hỏi thật và chưa xác nhận được
+cấu trúc `legal_corpus.json` / `train_question_answer.json`. Cần chọn lại nguồn (ví dụ bản công khai
+`GreenNode/zalo-ai-legal-text-retrieval-vn`, MIT: `corpus.jsonl` 61 425 điều, `queries.jsonl` 3 298 câu hỏi,
+`qrels/train.jsonl` 2 505 + `qrels/test.jsonl` 793 cặp) rồi cập nhật mục này. Không commit mẫu của bộ này (giấy phép chưa rõ).
+
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
 không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.
 

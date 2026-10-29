@@ -34,9 +34,9 @@ def no_kaggle_env(monkeypatch, tmp_path):
 
 def test_registry_entries_complete():
     dd = load("download_dataset")
-    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud"} <= set(dd.DATASETS)
+    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud", "mnist", "zalo-legal"} <= set(dd.DATASETS)
     for ds in dd.DATASETS.values():
-        assert ds.source in ("kaggle", "url")
+        assert ds.source in ("kaggle", "url", "hf")
         assert ds.ref and ds.files and ds.license and ds.homepage
 
 
@@ -156,3 +156,41 @@ def test_zip_missing_member_names_it(monkeypatch, tmp_path):
     monkeypatch.setattr(dd, "_get", lambda url: _zip_bytes([("d/a.csv", b"1")]))
     with pytest.raises(SystemExit, match="nope.csv"):
         dd.download("t-zip2", tmp_path)
+
+
+def _hf_dataset(dd, needs_token):
+    return dd.Dataset("hf", "o/r", ["sub/a.json"], license="x", homepage="x", needs_token=needs_token)
+
+
+def test_hf_dataset_requires_token_exits_cleanly(monkeypatch, tmp_path, capsys):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-hf", _hf_dataset(dd, True))
+    monkeypatch.setenv("HF_TOKEN", "")
+    monkeypatch.delenv("HF_TOKEN")
+    monkeypatch.setattr(dd, "ENV_FILE", tmp_path / "none")
+    with pytest.raises(SystemExit) as exc:
+        dd.main(["t-hf", "--out", str(tmp_path / "out")])
+    assert exc.value.code not in (0, None)
+    msg = str(exc.value.code)
+    assert "HF_TOKEN" in msg and "https://huggingface.co/settings/tokens" in msg
+
+
+def test_hf_download_calls_hub(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-hf", _hf_dataset(dd, False))
+    monkeypatch.setenv("HF_TOKEN", "hf_x")
+    cached = tmp_path / "cache" / "a.json"
+    cached.parent.mkdir()
+    cached.write_text("{}")
+    calls = []
+
+    def fake(**kw):
+        calls.append(kw)
+        return str(cached)
+
+    monkeypatch.setattr(dd, "hf_hub_download", fake)
+    out = tmp_path / "out"
+    assert dd.download("t-hf", out) == [out / "a.json"]
+    assert (out / "a.json").read_text() == "{}"
+    assert calls[0]["repo_id"] == "o/r" and calls[0]["filename"] == "sub/a.json"
+    assert calls[0]["repo_type"] == "dataset" and calls[0]["token"] == "hf_x"

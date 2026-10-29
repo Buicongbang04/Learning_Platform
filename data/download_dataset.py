@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import random
 import shutil
 import sys
@@ -26,22 +27,24 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import requests
+from huggingface_hub import hf_hub_download
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from download_olist import ENV_FILE, ensure_kaggle_credentials, kaggle_download  # noqa: E402
+from download_olist import ENV_FILE, _from_env_file, ensure_kaggle_credentials, kaggle_download  # noqa: E402
 
 RAW = Path(__file__).resolve().parent / "raw"
 
 
 @dataclass(frozen=True)
 class Dataset:
-    source: Literal["kaggle", "url"]
-    ref: str | tuple[str, ...]  # "owner/slug" trên Kaggle, URL (xem download()), hoặc tuple nhiều URL
+    source: Literal["kaggle", "url", "hf"]
+    ref: str | tuple[str, ...]  # "owner/slug" trên Kaggle hay Hugging Face (repo dataset), URL (xem download()), hoặc tuple nhiều URL
     files: list[str]    # tệp cần giữ (URL một tệp: tên lưu xuống; URL thư mục "/" hay .zip: tên tệp bên trong;
                         # tuple URL: tên lưu xuống, cùng độ dài với ref)
     license: str
     homepage: str
     about: str = ""
+    needs_token: bool = False  # chỉ dùng cho source="hf": bắt buộc có HF_TOKEN
 
 
 DATASETS: dict[str, Dataset] = {
@@ -132,6 +135,20 @@ DATASETS: dict[str, Dataset] = {
         homepage="https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud",
         about="284 807 giao dịch thẻ (2 ngày, châu Âu 2013), 492 gian lận (0,17%); V1-V28 là PCA, Time, Amount, Class",
     ),
+    "mnist": Dataset(
+        "url", "https://ossci-datasets.s3.amazonaws.com/mnist/",
+        ["train-images-idx3-ubyte.gz", "train-labels-idx1-ubyte.gz", "t10k-images-idx3-ubyte.gz", "t10k-labels-idx1-ubyte.gz"],
+        license="CC BY-SA 3.0 (Yann LeCun & Corinna Cortes); bản mirror S3 mà torchvision dùng",
+        homepage="https://yann.lecun.com/exdb/mnist/",
+        about="Chữ số viết tay 28x28: 60 000 ảnh train + 10 000 ảnh test (định dạng idx, gz)",
+    ),
+    "zalo-legal": Dataset(
+        "hf", "nntoan209/ZaloLegal", ["legal_corpus.json", "train_question_answer.json"],
+        license="Dữ liệu cuộc thi Zalo AI Challenge 2021 (Legal Text Retrieval), chỉ dùng học tập/nghiên cứu; đây là bản mirror bên thứ ba trên Hugging Face",
+        homepage="https://huggingface.co/datasets/nntoan209/ZaloLegal",
+        about="Văn bản pháp luật Việt Nam (luật, điều) + câu hỏi có nhãn điều luật liên quan",
+        needs_token=False,
+    ),
 }
 
 
@@ -139,6 +156,13 @@ def _no_token() -> SystemExit:
     return SystemExit(
         "Chưa có Kaggle token. Thêm KAGGLE_API_TOKEN=KGAT_... vào setup/.env "
         "(hướng dẫn ở đầu tệp data/download_olist.py)."
+    )
+
+
+def _no_hf_token() -> SystemExit:
+    return SystemExit(
+        "Bộ này cần Hugging Face token. Tạo token loại Read tại https://huggingface.co/settings/tokens "
+        "rồi thêm HF_TOKEN=hf_... vào setup/.env."
     )
 
 
@@ -197,6 +221,19 @@ def download(name: str, out: Path) -> list[Path]:
         target = out / ds.files[0]
         target.write_bytes(_get(ds.ref))
         return [target]
+
+    if ds.source == "hf":
+        token = os.environ.get("HF_TOKEN") or _from_env_file(ENV_FILE, "HF_TOKEN")
+        if ds.needs_token and not token:
+            raise _no_hf_token()
+        out.mkdir(parents=True, exist_ok=True)
+        written = []
+        for f in ds.files:
+            cached = hf_hub_download(repo_id=ds.ref, filename=f, repo_type="dataset", token=token)
+            target = out / PurePosixPath(f).name
+            shutil.copyfile(cached, target)
+            written.append(target)
+        return written
 
     if not ensure_kaggle_credentials(env_file=ENV_FILE):
         raise _no_token()
