@@ -185,3 +185,34 @@ Xem bài CDC sink; giả định ordering/topic generation phải được giữ
 Không. Earliest là record sớm nhất còn được giữ, có thể thiếu lịch sử ban đầu.
 Dựng bảng mới bằng group mới, kiểm retention và bản nền/snapshot, đối chiếu rồi mới chuyển người đọc.
 Không reset consumer đang phục vụ rồi để record cũ ghi đè trạng thái mới.
+
+## Lambda và Kappa khác nhau thế nào? Với dashboard "sửa đổi mỗi phút theo wiki" từ Wikimedia EventStreams, bạn chọn kiến trúc nào?
+
+Lambda có hai đường: batch layer định kỳ tính lại toàn bộ từ raw bất biến (đúng), speed layer stream bù
+phần mới (nhanh, có thể sai), serving gộp hai view. Cái giá là hai code path cho cùng một logic, dễ lệch
+định nghĩa. Kappa chỉ có một stream job; muốn tính lại thì chạy job phiên bản mới replay từ đầu log, ghi
+bảng mới rồi chuyển người đọc. Điều kiện của Kappa là log giữ đủ lâu và engine chạy được cả backfill.
+
+Với EventStreams: nguồn chỉ giữ lịch sử 7–31 ngày, nên dù chọn gì cũng phải tự ghi lớp raw (topic Kafka
+retention dài hoặc bảng bronze Iceberg/Delta). Có raw rồi thì chọn Kappa có lớp raw: một stream job (event
+time theo `timestamp`, tumbling 1 phút, watermark khoảng 30 giây vì p95 độ trễ chỉ vài giây, dedup theo
+`meta.id` có TTL), tính lại bằng replay bronze. Chỉ chọn Lambda nếu cần số chốt hằng ngày khớp tuyệt đối
+với một hệ khác và logic batch khác hẳn logic stream. Nêu rõ: chọn lateness dựa trên phân phối độ trễ đo
+được, và lớp raw là điều kiện của cả hai kiến trúc.
+
+## Số đếm từ stream job và từ batch job đêm lệch nhau. Bạn đối soát và tìm nguyên nhân thế nào?
+
+Đối soát theo khoá, không theo tổng: outer join `(window_start, dimension)`, điền 0 bên thiếu,
+`diff = batch - stream`. Tổng có thể khớp trong khi từng window sai (thiếu ở window này, dư ở window kia).
+
+Đọc dấu của `diff`:
+
+- `diff > 0` (stream thiếu): event trễ hơn `allowed_lateness` bị bỏ. Kiểm tra bằng số late ở side output;
+  nếu khớp `diff` thì tăng lateness hoặc cho batch ghi đè số tạm.
+- `diff < 0` (stream dư): trùng do at-least-once mà dedup không bắt: TTL ngắn hơn khoảng cách hai bản trùng,
+  restart mất state dedup, hoặc dedup sai khoá (id của bảng nguồn thay vì UUID của event).
+- Lệch dịch giữa các window: định nghĩa window khác (processing time vs event time, múi giờ).
+- Lệch đều mọi window: định nghĩa nghiệp vụ khác giữa hai code path (lọc loại event khác, xử lý null khác).
+
+Sau đó đặt ngưỡng cảnh báo (vd. lệch quá 0,5% trên một window đã chốt), cho batch upsert đè số tạm của
+khoảng đã chốt, và đưa logic chung vào một hàm/SQL dùng cho cả hai phía để bỏ hẳn nguồn lệch thứ tư.

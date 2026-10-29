@@ -483,6 +483,103 @@ gmv.writeStream.outputMode("append").format("console").start()
 At-least-once nghĩa là trùng là chuyện bình thường. Dedup theo `event_id` cần nhớ các id đã thấy,
 nhưng không thể nhớ mãi: giữ trong một khoảng TTL (vd. 1 giờ, hoặc tới watermark) rồi xoá.
 
+### Batch, streaming, hybrid và realtime: bốn chế độ ingestion
+
+Module 05 có bảng tóm tắt; ở đây đi sâu hơn, vì khác biệt thật nằm ở **dữ liệu có bị chặn hay không** và
+**khi nào kết quả được coi là xong**, không chỉ ở độ trễ.
+
+| Chế độ | Dữ liệu đầu vào | Kết quả "xong" khi | Độ trễ điển hình | Đúng/sai | Ví dụ trên Olist |
+| --- | --- | --- | --- | --- | --- |
+| **Batch** | Bị chặn (bounded): file hôm qua, bảng snapshot | Job chạy xong | Phút tới ngày | Đúng trên dữ liệu đã có, chạy lại cho cùng kết quả | `fct_orders` dựng lại mỗi đêm |
+| **Streaming** | Không bị chặn (unbounded), đến liên tục | Watermark vượt cuối window | Giây | Gần đúng: event trễ quá lateness bị bỏ, trùng nếu dedup hở | GMV mỗi phút theo bang |
+| **Hybrid** | Cùng một nguồn, hai đường xử lý | Stream cho số tạm, batch chốt số | Giây (tạm) + giờ (chốt) | Số tạm có thể lệch, số chốt đúng | Dashboard trong ngày từ stream, báo cáo tài chính từ batch đêm |
+| **Realtime** (theo nghĩa hẹp) | Từng event, quyết định ngay | Ngay khi event đến | Mili giây | Không có "sửa sau": quyết định đã thực hiện | Chặn giao dịch gian lận khi thanh toán |
+
+Hai điều hay bị nhầm:
+
+- **"Realtime" trong dashboard thường chỉ là near-realtime** (giây tới phút). Realtime đúng nghĩa là hệ
+  phản ứng trên từng event (fraud, tồn kho, giá), thường là service chứ không phải pipeline phân tích.
+- **Micro-batch** (Spark Structured Streaming mặc định) vẫn là streaming về ngữ nghĩa: dữ liệu không bị chặn,
+  có watermark; chỉ khác cách thực thi (gom vài giây một lần).
+
+Câu hỏi để chọn: *người dùng làm gì khác đi nếu số đến sớm hơn?* Không ai làm gì khác thì batch. Có hành
+động trong vài giây thì streaming. Cần cả nhanh lẫn số chốt khớp sổ sách thì hybrid.
+
+### Lambda vs Kappa
+
+Cả hai đều trả lời câu hỏi của hybrid: *làm sao vừa có số nhanh, vừa tính lại được khi số sai hoặc logic đổi?*
+
+Lambda:
+
+```mermaid
+flowchart TB
+    S1[(Nguồn)] --> R1[(Raw bất biến)]
+    S1 --> SP1[Speed layer: stream<br/>số tạm, giây]
+    R1 --> B1[Batch layer: tính lại<br/>toàn bộ, giờ]
+    SP1 --> V1[Serving: gộp batch view<br/>+ realtime view]
+    B1 --> V1
+```
+
+Kappa:
+
+```mermaid
+flowchart TB
+    S2[(Nguồn)] --> L2[(Log giữ lâu:<br/>Kafka / bảng Iceberg)]
+    L2 --> SP2[Stream job v1]
+    SP2 --> V2[Serving]
+    L2 -. replay từ đầu .-> SP3[Stream job v2]
+    SP3 -. xong thì chuyển người đọc .-> V2
+```
+
+- **Lambda** (Nathan Marz): raw bất biến là nguồn sự thật; **batch layer** định kỳ tính lại toàn bộ
+  (đúng), **speed layer** stream bù phần chưa được batch xử lý (nhanh, có thể sai); serving gộp hai view.
+  Điểm yếu kinh điển: **hai code path** cho cùng một logic (SQL batch và code Flink), dễ lệch định nghĩa,
+  mọi thay đổi phải làm hai lần.
+- **Kappa** (Jay Kreps): chỉ một stream job. Muốn tính lại thì chạy job phiên bản mới **replay từ đầu
+  log**, ghi ra bảng mới, xong thì chuyển người đọc sang. Điều kiện: log giữ đủ lâu (retention dài, tiered
+  storage, hoặc bảng lakehouse đọc được như stream) và engine xử lý được cả backfill lẫn realtime.
+
+| | Lambda | Kappa |
+| --- | --- | --- |
+| Số code path | Hai (batch + stream) | Một |
+| Tính lại lịch sử | Batch đọc raw | Replay log |
+| Yêu cầu lưu trữ | Raw trên lake | Log/bảng giữ lâu, replay được |
+| Hợp khi | Số chốt phải khớp tuyệt đối (tài chính, đối soát với hệ nguồn), logic batch phức tạp (join lớn, ML) | Logic giống nhau ở mọi độ trễ, đội muốn một codebase, nguồn giữ lâu được |
+| Rủi ro | Lệch định nghĩa giữa hai phía | Replay lâu và tốn khi lịch sử dài; state lớn |
+
+Ngày nay ranh giới mờ dần: lakehouse (Delta, Iceberg) cho phép **cùng một bảng** vừa đọc batch vừa đọc
+stream, và Spark/Flink chạy **cùng một code** ở cả hai chế độ. Kiến trúc phổ biến là "Kappa có lớp raw":
+stream ghi thẳng bảng bronze, các bảng sau tính bằng cùng logic, tính lại bằng cách replay bronze.
+
+### Đối soát kết quả stream với batch (reconciliation)
+
+Chạy hybrid thì **phải đo** số tạm lệch số chốt bao nhiêu, nếu không sẽ không biết stream có đang sai âm thầm.
+Lệch có nguồn gốc rõ ràng:
+
+| Nguyên nhân | Stream so với batch | Cách nhận ra |
+| --- | --- | --- |
+| Event trễ quá `allowed_lateness` | Thiếu | Đếm late (side output); `diff > 0` ở window cũ |
+| Trùng do at-least-once mà dedup không bắt (tắt dedup, TTL ngắn, restart mất state) | Dư | `diff < 0`; đếm trùng theo `event_id` trong raw |
+| Định nghĩa window khác (event time vs processing time, múi giờ, biên window) | Dịch chuyển giữa các window | Tổng gần khớp nhưng từng window lệch |
+| Định nghĩa nghiệp vụ khác (lọc khác, xử lý null khác) | Lệch có hệ thống | Lệch đều mọi window |
+| Batch chạy trên dữ liệu chưa đầy đủ | Batch thiếu | Batch chạy trước khi nguồn đóng ngày |
+
+Cách đối soát:
+
+1. **Cùng khoá, cùng định nghĩa**: `(window_start, dimension)`, cùng bộ lọc, cùng event time. Tốt nhất là chung
+   một hàm/SQL được gọi từ cả hai phía.
+2. **Outer join theo khoá**, điền 0 bên thiếu, tính `diff = batch - stream` và `diff / batch`. So **từng khoá**,
+   không chỉ tổng: thiếu ở window này và dư ở window kia có thể triệt tiêu nhau.
+3. **Ngưỡng và cảnh báo**: lệch dưới 0,5% là bình thường với lateness đang chọn; vượt thì alert. Lệch âm
+   (stream dư) gần như luôn là lỗi dedup hoặc state, đáng điều tra ngay.
+4. **Batch ghi đè số tạm** của khoảng đã chốt (upsert theo khoá), người dùng thấy số được "sửa" sau.
+5. Dùng chính số đo để chỉnh: phân phối độ trễ (`received_at - event_time`) cho biết `allowed_lateness`
+   cần bao nhiêu để mất dưới 1%; số trùng cho biết `dedup_ttl` tối thiểu.
+
+Bài [advanced/03-hybrid-wikimedia](exercises/advanced/03-hybrid-wikimedia/README.md) làm đủ vòng này trên
+luồng sửa đổi thật của Wikipedia (Wikimedia EventStreams): ghi raw, stream và batch trên cùng tệp, đối soát,
+rồi chọn lateness dựa trên độ trễ đo được.
+
 ## 7. RabbitMQ, AWS SQS/SNS, Kinesis: chọn công cụ nào
 
 ### RabbitMQ
@@ -603,4 +700,8 @@ không đếm trùng. Thêm một event sai schema vào luồng lab, sửa và �
 - Spark Structured Streaming Programming Guide: https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html
 - RabbitMQ Tutorials: https://www.rabbitmq.com/tutorials
 - AWS SQS Developer Guide: https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/ và SNS: https://docs.aws.amazon.com/sns/latest/dg/
+- Nathan Marz, James Warren, *Big Data: Principles and best practices of scalable realtime data systems* (Lambda Architecture), Manning.
+- Jay Kreps, "Questioning the Lambda Architecture": https://www.oreilly.com/radar/questioning-the-lambda-architecture/
+- Wikimedia EventStreams: https://wikitech.wikimedia.org/wiki/Event_Platform/EventStreams_HTTP_Service
+- WHATWG HTML Standard, Server-sent events: https://html.spec.whatwg.org/multipage/server-sent-events.html
 - roadmap.sh Data Engineer: https://roadmap.sh/data-engineer
