@@ -22,11 +22,12 @@ cụm cho đội CRM, và biết đánh giá khi nào phân cụm không phải 
 
 Mở `starter/rfm.ipynb`. Khách là `customer_unique_id`; đơn giao xong như định nghĩa chung; snapshot 2018-09-01.
 
-1. `rfm_table(orders, customers, payments, snapshot)`: index `customer_unique_id`, cột `recency` (ngày trọn),
+1. `rfm_table(orders, customers, payments, snapshot)`: index `customer_unique_id`, cột `recency` (số ngày trọn,
+   làm tròn xuống: `(snapshot − lần mua cuối).days`, mua lúc 10:00 ngày 2018-08-01 cho 30),
    `frequency` (số đơn), `monetary` (tổng `payment_value`, đơn không có payment tính 0).
 2. `prepare_features(rfm)`: `log1p` rồi chuẩn hoá.
 3. `fit_kmeans(X, k, seed)`: `KMeans(n_clusters=k, n_init=10, random_state=seed)`.
-4. `silhouette_by_k(X, ks, seed, sample_size=10_000)`.
+4. `silhouette_by_k(X, ks, seed, sample_size=10_000, n_init=3)`.
 5. `segment_profile(rfm, labels)`: `n`, `share`, `recency_median`, `frequency_mean`, `repeat_rate`,
    `monetary_median` theo cụm.
 6. Chạy các cell `explore` (k-means không scale, silhouette theo k, hồ sơ cụm k = 2 và k = 4, PCA để vẽ, DBSCAN)

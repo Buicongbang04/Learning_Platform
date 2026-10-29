@@ -1,6 +1,6 @@
 # Lời giải: phân khúc khách Olist bằng RFM và k-means
 
-Notebook lời giải: `rfm.ipynb` (chạy được toàn bộ khi đã tải Olist; phần silhouette khoảng 20 giây).
+Notebook lời giải: `rfm.ipynb` (chạy được toàn bộ khi đã tải Olist; cả notebook khoảng 20 giây).
 
 ## Dữ liệu
 
@@ -16,7 +16,7 @@ có thang lớn nhất. Sau `log1p` + chuẩn hoá, ba chiều được đối x
 
 | k | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| silhouette | 0.718 | 0.409 | 0.394 | 0.359 | 0.352 | 0.354 | 0.345 |
+| silhouette (`n_init=3`) | 0.718 | 0.409 | 0.393 | 0.359 | 0.352 | 0.344 | 0.345 |
 
 k = 2 tách 2 801 khách mua nhiều lần khỏi 90 549 khách mua một lần: một dòng `frequency > 1` làm được, k-means
 không thêm gì. Silhouette đo độ tách hình học, không đo giá trị kinh doanh.

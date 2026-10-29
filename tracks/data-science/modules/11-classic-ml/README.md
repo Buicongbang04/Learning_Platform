@@ -5,8 +5,8 @@ xấu, giao dịch gian lận, phân khúc khách hàng. Ở đó, logistic regr
 và k-means vẫn là công cụ chính, và cái phân biệt một DS senior không phải là biết nhiều thuật toán mà là
 **đặt bài toán đúng, đo đúng, chọn ngưỡng theo tiền, tin được xác suất, và giải thích được model**.
 
-Module dùng ba bộ dữ liệu thật: **Olist** (dự đoán review 1–2 sao, và phân khúc khách theo RFM),
-**Telco Customer Churn** (7 043 khách của một nhà mạng). Tải dữ liệu:
+Module dùng hai bộ dữ liệu thật cho ba bài toán: **Olist** (dự đoán review 1–2 sao, và phân khúc khách theo
+RFM) và **Telco Customer Churn** (7 043 khách của một nhà mạng: churn, calibration, giải thích model). Tải dữ liệu:
 
 ```bash
 uv run python data/download_olist.py
@@ -515,9 +515,9 @@ print(len(rfm), "khách; mua từ 2 đơn:", round((rfm.frequency > 1).mean(), 3
 
 X = StandardScaler().fit_transform(np.log1p(rfm[["recency", "frequency", "monetary"]]))
 for k in [2, 3, 4, 5]:
-    labels = KMeans(k, n_init=10, random_state=0).fit_predict(X)
+    labels = KMeans(k, n_init=3, random_state=0).fit_predict(X)
     print(k, round(silhouette_score(X, labels, sample_size=10_000, random_state=0), 3))
-labels = KMeans(4, n_init=10, random_state=0).fit_predict(X)
+labels = KMeans(4, n_init=3, random_state=0).fit_predict(X)
 print(rfm.groupby(labels).agg(n=("recency", "size"), recency=("recency", "median"),
                               frequency=("frequency", "mean"), monetary=("monetary", "median")).round(1))
 ```
@@ -529,9 +529,9 @@ có ý nghĩa cho CRM:
 | Cụm (k = 4) | Số khách | Recency trung vị (ngày) | Monetary trung vị (R$) | Đọc là |
 | --- | --- | --- | --- | --- |
 | Khách quay lại | 2 801 | 201 | 225.6 | Mọi khách mua từ 2 đơn trở lên; đáng chăm sóc nhất |
-| Mới mua | 16 615 | 40 | 104.4 | Còn "nóng": thời điểm tốt để khuyến khích đơn thứ hai |
-| Lâu rồi, chi nhiều | 31 920 | 258 | 199.7 | Win-back có chọn lọc |
-| Lâu rồi, chi ít | 42 014 | 273 | 65.9 | Chi phí giữ chân có thể lớn hơn giá trị |
+| Mới mua | 16 648 | 40 | 104.5 | Còn "nóng": thời điểm tốt để khuyến khích đơn thứ hai |
+| Lâu rồi, chi nhiều | 32 092 | 259 | 199.0 | Win-back có chọn lọc |
+| Lâu rồi, chi ít | 41 809 | 273 | 65.7 | Chi phí giữ chân có thể lớn hơn giá trị |
 
 Bài học senior: với 97% khách mua một lần, chữ F trong RFM gần như hằng số, và phân cụm chủ yếu chia theo R
 và M. Phân cụm là công cụ **khám phá và giao tiếp**; nếu câu hỏi thật là "ai sẽ quay lại", đó là bài toán
@@ -649,6 +649,9 @@ print(pd.DataFrame(np.abs(sv), columns=names).T.groupby(owner).sum().T.mean()
 | 3 | InternetService 0.0213 | TotalCharges 0.117 | tenure |
 | 4 | TotalCharges 0.0137 | MonthlyCharges 0.076 | OnlineSecurity |
 | 5 | PaymentMethod 0.0035 | OnlineSecurity_No 0.064 | TechSupport |
+
+Số permutation ở đây (sklearn, 10 lần lặp) và SHAP (500 khách) hơi khác bảng trong SOLUTION của bài Advanced 01
+(hàm tự cài, SHAP trên cả tập test) vì khác cách cài và cỡ mẫu; thứ hạng giống nhau.
 
 Đọc bảng như một senior:
 

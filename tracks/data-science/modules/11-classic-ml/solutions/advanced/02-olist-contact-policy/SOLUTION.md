@@ -9,10 +9,10 @@ Với thiệt hại L = 30, chi phí gọi c = 5, xác suất cứu được s:
 
 $$
 C_{TP} = c + (1 - s)L, \quad C_{FP} = c, \quad C_{FN} = L, \quad C_{TN} = 0,
-\qquad t^* = \frac{c}{c + sL}
+\qquad t^* = \frac{c}{sL}
 $$
 
-s = 0.5 cho $$t^* = 1/3$$; s = 0.3 cho $$t^* = 5/9 \approx 0.556$$. Gọi chỉ đáng khi xác suất review xấu đủ
+Công thức chỉ có nghĩa khi $$sL > c$$; nếu không thì không gọi ai. s = 0.5 cho $$t^* = 1/3$$; s = 0.3 cho $$t^* = 5/9 \approx 0.556$$. Gọi chỉ đáng khi xác suất review xấu đủ
 cao để phần thiệt hại kỳ vọng tránh được ($$p\,s\,L$$) lớn hơn chi phí gọi.
 
 ## Kết quả tham chiếu
