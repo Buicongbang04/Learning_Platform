@@ -28,8 +28,8 @@ Quy tắc xuyên suốt:
   LangGraph, multimodal, safety, evaluation, system design. Bám roadmap.sh, kết thúc bằng capstone
   [Trợ lý pháp luật tiếng Việt](capstone/README.md).
 
-Phần B cần tối thiểu module 00 và 02 (PyTorch để dùng Hugging Face), module 05 được khuyên học trước nhưng không bắt
-buộc. Ai muốn đi nhanh tới ứng dụng: học **00, 01, 02, 04, 05** rồi sang phần B, quay lại 03, 06, 07, 08 sau. Mỗi module có lý thuyết (`README.md`),
+Phần B cần tối thiểu module 00 và 02 (PyTorch để dùng Hugging Face); module 05 được khuyên học trước, và
+module 14 và 15 cần học 05 trước. Ai muốn đi nhanh tới ứng dụng: học **00, 01, 02, 04, 05** rồi sang phần B, quay lại 03, 06, 07, 08 sau. Mỗi module có lý thuyết (`README.md`),
 `interview.md` và bài tập 3 mức Basic, Intermediate, Advanced có test tự chấm.
 
 ## Sơ đồ phụ thuộc
@@ -97,7 +97,7 @@ flowchart TD
 | 09 | LLM & model mở | Pre-trained Models (Benefits, Limitations, Capabilities/Context Length, Cut-off Dates), Popular AI Models (Claude, Gemini, Azure AI, SageMaker, Mistral, Cohere, Replicate), OpenAI Models, Open vs Closed Source, Popular Open Source Models, Hugging Face (Tasks, Hub, Models), Inference SDK, Transformers.js, Ollama (Models, SDK) | Chọn model, Hub, inference, sampling |
 | 10 | Quantization ★ | mở rộng | GPTQ, AWQ, GGUF, bitsandbytes, đo VRAM |
 | 11 | LLM API & Prompting | Open AI Platform, OpenAI API, Chat Completions API, Writing Prompts, Maximum Tokens, Token Counting, Managing Tokens, Pricing Considerations, Open AI Playground, Prompt Engineering, Common Terminology | Token, chi phí, prompt, structured output |
-| 12 | Embeddings & Vector DB | What are Embeddings, Use Cases (Semantic Search, Data Classification, Recommendation, Anomaly Detection), OpenAI Embeddings API/Models, Sentence Transformers, Open-Source Embeddings, Vector Databases (Chroma, Pinecone, Weaviate, FAISS, LanceDB, Qdrant, Supabase, MongoDB Atlas), Indexing Embeddings, Similarity Search | Semantic search, indexing, vector DB |
+| 12 | Embeddings & Vector DB | What are Embeddings, Use Cases (Semantic Search, Data Classification, Recommendation, Anomaly Detection), OpenAI Embeddings API/Models, Sentence Transformers, Models on Hugging Face, Open-Source Embeddings, Vector Databases (Chroma, Pinecone, Weaviate, FAISS, LanceDB, Qdrant, Supabase, MongoDB Atlas), Indexing Embeddings, Similarity Search | Semantic search, indexing, vector DB |
 | 13 | RAG | RAG & Implementation: RAG Usecases, Implementing RAG (Chunking, Embedding, Vector Database, Retrieval, Generation), Ways of Implementing RAG (Using SDKs Directly; LangChain, LlamaIndex trình bày ở 17), RAG Alternative | Chunking, hybrid, reranking, trích dẫn, eval |
 | 14 | Fine-tuning LLM | Fine-tuning, RAG vs Fine-tuning | SFT, LoRA/QLoRA, DPO |
 | 15 | Reasoning Models ★ | mở rộng | CoT, test-time compute, GRPO, distillation |
