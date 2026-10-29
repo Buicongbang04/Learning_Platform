@@ -33,7 +33,7 @@ theo 10 decile doanh số tháng trước giảm 85.9%, còn CUPED với chính 
 | Lợi thêm | Cân bằng chính xác; lợi rõ khi **ít đơn vị** (vài chục cửa hàng, thành phố) | Gần như bằng stratified sampling khi n lớn |
 | Đổi tầng | Phải chạy lại | Thử được nhiều cách, nhưng phải định trước để tránh "chọn tầng cho p đẹp" |
 
-Bài báo của Netflix (Xie và Aurisset, KDD 2016) so sánh hai cách trên dữ liệu thật và đi tới kết
+Bài báo của Netflix (Xie và Aurisset, KDD 2016, mục 6) so sánh hai cách trên dữ liệu thật và đi tới kết
 luận cùng hướng: với lượng user lớn, điều chỉnh sau khi gán (post-stratification, CUPED) cho lợi
 ích tương đương mà đơn giản hơn nhiều. Stratified sampling đáng công khi số đơn vị nhỏ, như thí
 nghiệm theo cửa hàng ở bài Advanced 01.

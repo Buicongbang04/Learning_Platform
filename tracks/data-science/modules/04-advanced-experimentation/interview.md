@@ -38,8 +38,9 @@ Không được bỏ họ: bỏ user mới làm đổi tổng thể, và nếu t
 - Dùng covariate thay thế có sẵn cho mọi user (nguồn traffic, thiết bị, quốc gia), thường yếu hơn
   nhiều.
 
-Tỉ lệ user mới càng cao thì lợi ích càng giảm. Netflix báo cáo variance reduction kém hẳn ở user mới
-vì không tìm được covariate tương quan mạnh.
+Tỉ lệ user mới càng cao thì lợi ích càng giảm. Bài của Netflix (Xie và Aurisset 2016, mục 5.2.1)
+ghi nhận mức giảm variance ở user mới rất thấp với mọi metric và mọi kỹ thuật, vì lúc gán nhóm
+không có covariate nào tương quan mạnh với metric (tương quan Pearson chỉ 0.2–0.4).
 
 ## CUPAC khác CUPED thế nào? Rủi ro lớn nhất là gì?
 
@@ -60,7 +61,7 @@ thí nghiệm thiếu power.
 ## Stratified sampling hay post-stratification? Khi nào chọn cái nào?
 
 Cả hai loại bỏ variance giữa các tầng. Với mẫu lớn, lý thuyết cho thấy chúng giảm variance như nhau;
-Netflix kiểm trên dữ liệu thật và khuyên dùng kỹ thuật **sau khi gán** (post-stratification, CUPED)
+Netflix (Xie và Aurisset 2016, mục 6) kiểm trên dữ liệu thật và khuyên dùng kỹ thuật **sau khi gán** (post-stratification, CUPED)
 vì stratified sampling theo thời gian thực cần hệ thống hàng đợi phức tạp và thực tế cho kết quả kém
 hơn.
 

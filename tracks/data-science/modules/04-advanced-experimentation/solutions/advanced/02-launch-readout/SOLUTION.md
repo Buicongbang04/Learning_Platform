@@ -9,6 +9,11 @@ Bài Advanced không có đáp án duy nhất. Dưới đây là hướng làm, 
   nhóm. Bỏ ngày phơi nhiễm thiếu một nhánh; để `se` là `NaN` khi một nhánh chỉ có một dòng.
 - `novelty_slope`: lọc `se` hữu hạn và dương, WLS bằng công thức đóng. Điểm ở ngày phơi nhiễm cao
   có ít user (chỉ user vào sớm), `se` lớn, nên tự nhận trọng số nhỏ.
+  Giới hạn cần nói rõ: SE của độ dốc coi tác động ở các ngày phơi nhiễm là **độc lập**, nhưng cùng
+  một user xuất hiện ở nhiều ngày phơi nhiễm (user có mức đọc cao kéo cả chuỗi ngày của họ lên), nên
+  các điểm tương quan với nhau và SE này thường quá nhỏ. Với tín hiệu mạnh như ở đây kết luận không
+  đổi; khi p-value sát ngưỡng, dùng SE theo user: bootstrap theo user (resample user rồi tính lại cả
+  đường tác động và độ dốc), hoặc hồi quy trên dữ liệu user-ngày với SE cluster theo `user_id`.
 - `user_level` + `interaction_test`: Welch trong từng nhóm để báo cáo, OLS `treat * C(segment)` với
   HC1 và Wald test chung cho các hệ số `treat:` để kiểm định khác biệt.
 

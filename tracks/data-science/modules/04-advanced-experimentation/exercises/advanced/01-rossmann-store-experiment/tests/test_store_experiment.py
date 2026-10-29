@@ -71,6 +71,35 @@ def test_cuped_and_poststrat_shrink_se(nb, panel_small):
     assert abs(cuped["diff"]) < 3 * cuped["se"]
 
 
+def test_cuped_and_poststrat_values(nb):
+    # Panel 60 cửa hàng tính tay: y ≈ 0.5 · pre (theta khác 1), 10 decile mỗi decile 6 cửa hàng,
+    # số treatment trong mỗi decile khác nhau (2, 3 hoặc 4) để trọng số tầng có ý nghĩa.
+    rng = np.random.default_rng(5)
+    pre = np.arange(1.0, 61.0) * 100
+    y = 0.5 * pre + rng.normal(0, 30, 60)
+    panel = pd.DataFrame({"pre": pre, "y": y}, index=pd.Index(np.arange(1, 61), name="Store"))
+    pattern = {2: [1, 1, 0, 0, 0, 0], 3: [1, 1, 1, 0, 0, 0], 4: [1, 1, 1, 1, 0, 0]}
+    n_treat = [2, 3, 4, 2, 3, 4, 2, 3, 4, 3]
+    treat = np.concatenate([pattern[k] for k in n_treat]).astype(bool)
+
+    theta = np.cov(y, pre)[0, 1] / np.var(pre, ddof=1)
+    adj = y - theta * (pre - pre.mean())
+    cuped = nb.estimate(panel, treat, "cuped")
+    assert cuped["diff"] == pytest.approx(adj[treat].mean() - adj[~treat].mean())
+    assert cuped["se"] == pytest.approx(np.sqrt(adj[treat].var(ddof=1) / treat.sum()
+                                                + adj[~treat].var(ddof=1) / (~treat).sum()))
+
+    strata = np.repeat(np.arange(10), 6)        # đúng bằng 10 decile của pre
+    diff = var = 0.0
+    for k in range(10):
+        yt, yc = y[(strata == k) & treat], y[(strata == k) & ~treat]
+        diff += 0.1 * (yt.mean() - yc.mean())   # w_k = N_k / N = 6 / 60
+        var += 0.01 * (yt.var(ddof=1) / len(yt) + yc.var(ddof=1) / len(yc))
+    post = nb.estimate(panel, treat, "poststrat")
+    assert post["diff"] == pytest.approx(diff)
+    assert post["se"] == pytest.approx(np.sqrt(var))
+
+
 def test_power_study(nb, panel_small):
     aa = nb.power_study(panel_small, lift=0.0, method="cuped", n_sims=400, seed=0)
     assert 0.02 <= aa <= 0.09

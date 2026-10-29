@@ -79,9 +79,12 @@ def test_switchback_estimate_hand_example(sb):
     out = sb.switchback_estimate(periods, burn_in=0)
     assert out["n_used"] == 8
     assert out["diff"] == pytest.approx(np.mean([0.20, 0.12, 0.14, 0.50, 0.16]) - np.mean([0.30, 0.10, 0.12]))
+    t0, c0 = [0.20, 0.12, 0.14, 0.50, 0.16], [0.30, 0.10, 0.12]
+    assert out["se"] == pytest.approx(np.sqrt(np.var(t0, ddof=1) / 5 + np.var(c0, ddof=1) / 3))
     burned = sb.switchback_estimate(periods, burn_in=1)   # bỏ period 0, 3, 6
     assert burned["n_used"] == 5
     assert burned["diff"] == pytest.approx(np.mean([0.12, 0.14, 0.16]) - np.mean([0.10, 0.12]))
+    assert burned["se"] == pytest.approx(np.sqrt(np.var([0.12, 0.14, 0.16], ddof=1) / 3 + np.var([0.10, 0.12], ddof=1) / 2))
     shuffled = sb.switchback_estimate(periods.sample(frac=1, random_state=0), burn_in=1)
     assert shuffled["diff"] == pytest.approx(burned["diff"])   # không phụ thuộc thứ tự dòng
 

@@ -122,17 +122,21 @@ tiêu một năm" để dự đoán "có ghé website trong hai tuần không").
 
 ### Thực tế triển khai
 
-Bài viết của Booking.com về CUPED (xem tài liệu tham khảo) bàn về những chỗ khó khi đưa CUPED lên
-platform; ba điểm quan trọng nhất:
+Ba chỗ khó thường gặp khi đưa CUPED lên một experimentation platform:
 
 - **User không có dữ liệu trước thí nghiệm** (user mới, cookie mới): không bỏ họ khỏi phân tích
-  (làm đổi tổng thể). Điền covariate bằng một hằng số và thêm biến chỉ báo "không có lịch sử", hoặc
-  để $$X = 0$$ cho họ, tương đương điều chỉnh riêng nhóm có lịch sử. Tỉ lệ user mới càng cao, lợi ích
-  càng giảm: Netflix báo cáo điều tương tự với user mới.
+  (làm đổi tổng thể). Điền covariate bằng một hằng số (0 hoặc trung bình) **và** thêm biến chỉ báo
+  "không có lịch sử" vào hồi quy. Có cả hai thì mới tương đương điều chỉnh riêng nhóm có lịch sử,
+  nhóm mới giữ nguyên; chỉ đặt $$X = 0$$ mà không có biến chỉ báo thì $$\theta$$ bị ước lượng trên
+  hỗn hợp hai nhóm và user mới bị "điều chỉnh" theo một quan hệ không áp dụng cho họ. Tỉ lệ user mới
+  càng cao, lợi ích càng giảm. Netflix ghi nhận đúng điều này (Xie và Aurisset 2016, mục 5.2.1): với
+  user mới, mức giảm variance rất thấp ở mọi metric và mọi kỹ thuật, vì lúc gán nhóm không có
+  covariate nào tương quan mạnh với metric (tương quan Pearson chỉ 0.2–0.4).
 - **Cửa sổ trước thí nghiệm**: thường bằng thời lượng thí nghiệm. Tuyệt đối không chồng lên ngày
   bật thí nghiệm, kể cả một ngày.
 - **Mỗi metric một covariate**: covariate tốt nhất cho "số phiên" là "số phiên kỳ trước", cho
-  "doanh thu" là "doanh thu kỳ trước". Platform tính sẵn cặp này cho mọi metric.
+  "doanh thu" là "doanh thu kỳ trước". Vì vậy pipeline metric nên tính sẵn giá trị kỳ trước cho mọi
+  metric và mọi đơn vị.
 
 Lỗi hay gặp: dùng covariate đo **sau** khi bắt đầu thí nghiệm. Covariate chứa tác động, CUPED trừ
 mất tác động (bài Basic 01 có test minh hoạ đúng lỗi này).
@@ -179,7 +183,7 @@ LightGBM học trên đơn mua trước 2018-01-01, áp lên đơn giao xong mua
 
 Hai con số này nói rằng thí nghiệm 27 tuần của module 03 (chính xác là 26.9 tuần) chỉ rút xuống
 khoảng 26.3 tuần dù dùng ML. Lý do chung
-với Hillstrom và với nhận xét của Netflix về user mới: 97% khách Olist chỉ mua một lần, không có
+với Hillstrom, và với kết quả của Netflix cho user mới nêu ở mục 2: 97% khách Olist chỉ mua một lần, không có
 "chính metric đó ở kỳ trước" để khai thác, và giao trễ chủ yếu do những gì xảy ra **sau** khi đặt
 hàng. Hệ số $$\theta$$ của CUPAC ở đây chỉ khoảng 0.46 (giao trễ) và 0.60 (review xấu) thay vì gần 1:
 model huấn luyện trên 2017 dự đoán lệch cho 2018, một dấu hiệu distribution shift. CUPAC vẫn không
@@ -203,7 +207,7 @@ $$
 \hat\tau_{\text{post}} = \sum_k \frac{N_k}{N}\left(\bar y_{T,k} - \bar y_{C,k}\right)
 $$
 
-Cả hai loại bỏ phần variance **giữa** các tầng. Bài của Netflix (Xie và Aurisset, KDD 2016) so sánh
+Cả hai loại bỏ phần variance **giữa** các tầng. Bài của Netflix (Xie và Aurisset, KDD 2016, mục 5.2 và 6) so sánh
 stratified sampling, post-stratification và CUPED trên dữ liệu thật: về lý thuyết chúng giảm
 variance như nhau khi mẫu lớn, nhưng stratified sampling khi gán user theo thời gian thực cần hệ
 thống hàng đợi phức tạp và trong thực tế cho kết quả kém hơn. Khuyến nghị của họ: với thí nghiệm
