@@ -280,3 +280,11 @@ MinIO đã ngừng phát hành image chính thức `minio/minio` trên Docker Hu
 dùng `pgsty/minio` — bản build cộng đồng (dự án Pigsty) từ cùng mã nguồn MinIO, API S3 và lệnh `mc` giữ nguyên.
 Đây là image bên thứ ba: muốn tự chủ hoàn toàn thì build image từ mã nguồn MinIO, hoặc thay bằng một
 S3 tương thích khác (vd. LocalStack, service `localstack` trong compose) rồi đổi `MINIO_ENDPOINT`.
+
+## Mở notebook trong VS Code
+
+Nút "Mở trong VS Code" trên trang bài tập chạy lệnh `code <đường dẫn>` để mở notebook (`.ipynb`) hoặc thư mục bài.
+
+1. Cài [VS Code](https://code.visualstudio.com/) và extension **Jupyter** (`ms-toolsai.jupyter`).
+2. Đảm bảo lệnh `code` có trong PATH: mở VS Code, `Ctrl+Shift+P` → "Shell Command: Install 'code' command in PATH" (Linux/macOS cài từ gói chính thức thường đã có sẵn). Kiểm tra bằng `code --version`.
+3. Trong notebook, bấm **Select Kernel** → **Python Environments** → chọn `.venv` ở gốc repo (`uv sync` tạo ra; `ipykernel` đã nằm trong dependencies).

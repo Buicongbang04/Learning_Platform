@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { Check, CircleAlert, CircleCheck, CircleX, FileCode, LoaderCircle, Lock, Play, RotateCcw, SquareTerminal, X } from "lucide-react";
+import { Check, CircleAlert, CircleCheck, CircleX, ExternalLink, FileCode, LoaderCircle, Lock, Play, RotateCcw, SquareTerminal, X } from "lucide-react";
 import type { Exercise } from "../content";
 import { button, CodeLine, cx, ErrorBlock, LoadingBlock } from "../components/ui";
 import { CodeEditor } from "./CodeEditor";
@@ -48,6 +48,32 @@ const RunOutput = memo(function RunOutput({ output }: { output: string }) {
     </pre>
   );
 });
+
+export function OpenInVsCode({ path, className }: { path: string; className?: string }) {
+  const [error, setError] = useState<string | null>(null);
+  const open = async () => {
+    setError(null);
+    try {
+      const response = await fetch("/api/workspace/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) });
+      if (!response.ok) setError(((await response.json().catch(() => null)) as { error?: string } | null)?.error ?? "Không mở được VS Code");
+    } catch {
+      setError("Không kết nối được server của app");
+    }
+  };
+  return (
+    <>
+      <button type="button" className={cx(button.outline, className)} onClick={() => void open()} title={`Mở ${path} trong VS Code`}>
+        <ExternalLink className="size-4 shrink-0" aria-hidden />
+        <span className="hidden sm:inline">Mở trong VS Code</span>
+      </button>
+      {error && (
+        <span role="alert" className="max-w-64 truncate text-xs text-error-text" title={error}>
+          {error}
+        </span>
+      )}
+    </>
+  );
+}
 
 export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; done: boolean; onMarkDone: () => void }) {
   const ws = useWorkspace(exercise.dir);
@@ -99,6 +125,7 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
         <span className={cx("shrink-0 px-2 text-xs", ws.saveState === "error" ? "text-error-text" : "text-muted")} role="status" title={ws.saveState === "error" ? ws.error : undefined}>
           {file.editable ? SAVE_LABEL[ws.saveState] : "Chỉ đọc"}
         </span>
+        {file.path.endsWith(".ipynb") && <OpenInVsCode path={`${exercise.dir}/${file.path}`} className="min-h-8 shrink-0 px-3 py-1" />}
         {file.editable && (
           <button
             type="button"

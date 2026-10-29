@@ -131,6 +131,26 @@ export function workspaceApi(repoRoot: string): Plugin {
     if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(415, "Cần Content-Type application/json");
   };
 
+  const openInVsCode = (path: unknown, send: (status: number, data: unknown) => void) => {
+    if (typeof path !== "string" || !path || path.includes("\0")) throw new HttpError(400, "Đường dẫn không hợp lệ");
+    const root = resolve(repoRoot);
+    const full = resolve(root, path);
+    if (full !== root && !full.startsWith(root + sep)) throw new HttpError(400, "Đường dẫn nằm ngoài repo");
+    if (!existsSync(full)) throw new HttpError(400, "Tệp hoặc thư mục không tồn tại");
+    return new Promise<void>((done) => {
+      const child = spawn("code", [full], { cwd: repoRoot, detached: true, stdio: "ignore" });
+      child.once("error", () => {
+        send(500, { error: "Không chạy được lệnh `code`. Cài VS Code và bật lệnh `code` trong PATH (xem setup/SETUP.md)." });
+        done();
+      });
+      child.once("spawn", () => {
+        child.unref();
+        send(200, { ok: true });
+        done();
+      });
+    });
+  };
+
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (!url.pathname.startsWith("/api/workspace/")) return next();
@@ -146,6 +166,8 @@ export function workspaceApi(repoRoot: string): Plugin {
       if (req.method !== "POST") return send(405, { error: "Phương thức không được hỗ trợ" });
       assertSameOrigin(req);
       const body = await readBody(req);
+
+      if (url.pathname === "/api/workspace/open") return await openInVsCode(body.path, send);
       const root = exerciseRoot(body.dir);
 
       if (url.pathname === "/api/workspace/save") {
