@@ -87,14 +87,14 @@ sửa nguồn gốc: dashboard nên ẩn hoặc đánh dấu nét đứt kỳ ch
 
 Kiểm tra trước, góp ý sau, và góp ý riêng chứ không trong họp lớn:
 
-1. Đọc số thật: conversion A 4.0%, B 4.2%, trục từ 3.9% làm B trông gấp ba A. Hiệu ứng thật là
-   +0.2 điểm phần trăm (+5% tương đối).
+1. Đọc số thật trên chart (ví dụ giả định, không phải dữ liệu thật): conversion A 4.0%, B 4.2%,
+   trục từ 3.9% làm B trông gấp ba A. Hiệu ứng thật là +0.2 điểm phần trăm (+5% tương đối).
 2. Câu hỏi quan trọng hơn trục: **khoảng tin cậy** của chênh lệch là bao nhiêu, có đủ mẫu chưa,
    test đã chạy đủ chu kỳ tuần chưa, có kiểm sample ratio mismatch chưa. Chart bar của hai tỉ lệ
    không có error bar thì không cho biết khác biệt có thật không.
 3. Đề xuất chart thay: một điểm ước lượng chênh lệch (B − A) với khoảng tin cậy 95% và đường 0,
-   hoặc bar từ 0 kèm error bar. Headline: "B tăng conversion 0.2 điểm % (CI 95%: −0.1 tới +0.5),
-   chưa đủ bằng chứng để ship".
+   hoặc bar từ 0 kèm error bar. Headline (tiếp ví dụ giả định): "B tăng conversion 0.2 điểm %
+   (CI 95%: −0.1 tới +0.5), chưa đủ bằng chứng để ship".
 
 Lý do phải sửa dù không cố ý: người ra quyết định nhớ **hình**, không nhớ nhãn trục. Một chart phóng
 đại có thể dẫn tới ship một thay đổi không có tác dụng.
@@ -102,14 +102,17 @@ Lý do phải sửa dù không cố ý: người ra quyết định nhớ **hìn
 ## Case: bạn trình bày funnel cho PM. Bạn vẽ và nói thế nào?
 
 - **Chart**: bar ngang theo thứ tự các bước, bước đầu trên cùng; mỗi bar ghi số tuyệt đối, % so với
-  bước đầu và % so với bước trước. % so bước trước chỉ ra **bước rơi lớn nhất**, % so bước đầu cho
-  thấy quy mô.
+  bước đầu và % so với bước trước. Phân biệt **rơi tuyệt đối** (số người mất ở mỗi bước, cho
+  biết cải thiện bước nào chạm nhiều người nhất) với **rơi tương đối** (% so bước trước, cho biết
+  bước nào chuyển đổi kém nhất); hai cách có thể chỉ ra hai bước khác nhau.
 - **Định nghĩa**: funnel theo **cohort** (người vào bước 1 trong tuần X, bao nhiêu người tới bước 2
   trong N ngày) hay **tích luỹ** (đếm mỗi bước trong cả kỳ)? Funnel tích luỹ bị lệch vì người vào cuối
   kỳ chưa kịp đi tiếp. Có bắt buộc đi đúng thứ tự không? Đếm user hay session?
 - **Headline** gắn với hành động: ví dụ funnel quay lại mua trên Online Retail II: 4 338 khách, 65.6%
-  mua từ đơn thứ 2, 46.3% từ đơn thứ 3, 25.7% từ đơn thứ 5. "Một phần ba khách không quay lại lần 2:
-  đây là bước rơi lớn nhất, nên ưu tiên email/ưu đãi sau đơn đầu."
+  mua từ đơn thứ 2, 46.3% từ đơn thứ 3, 25.7% từ đơn thứ 5, 9.0% từ đơn thứ 10. Về số tuyệt
+  đối, bước 1 → 2 mất nhiều khách nhất (1 493 khách); về tỉ lệ so bước trước, bước ≥ 5 → ≥ 10 rơi
+  mạnh nhất (chỉ 35% đi tiếp), nhưng bước đó gộp năm lần mua nên không so ngang được. Headline: "1 493
+  khách (34%) không quay lại lần 2, bước mất nhiều khách nhất: ưu tiên email/ưu đãi sau đơn đầu."
 - **Breakdown**: một funnel gộp che khác biệt giữa kênh/thiết bị; small multiples funnel theo kênh
   thường là slide thứ hai.
 - **So sánh**: kèm funnel kỳ trước hoặc benchmark; tỉ lệ một mình không biết tốt hay xấu.
@@ -120,7 +123,7 @@ Xu hướng trong từng nhóm ngược với xu hướng khi gộp các nhóm, 
 giữa hai bên đang so. Ví dụ kinh điển: bệnh viện A tỉ lệ tử vong cao hơn B tổng thể, nhưng thấp hơn
 B ở cả ca nhẹ lẫn ca nặng, vì A nhận nhiều ca nặng hơn.
 
-Dạng liên tục trên Bike Sharing: gộp hai năm, nhiệt độ tương quan +0.63 với lượt thuê/ngày, nhưng
+Hiện tượng tương tự Simpson (confounding) trên Bike Sharing: gộp hai năm, nhiệt độ tương quan +0.63 với lượt thuê/ngày, nhưng
 trong mùa hè 2012 tương quan là −0.33. Đường xu hướng gộp chủ yếu so mùa đông với mùa hè; trong mùa
 hè, nóng thêm làm giảm lượt thuê.
 

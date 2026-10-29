@@ -98,8 +98,11 @@ flowchart TD
 
 ### Tám loại chart của roadmap trên Bike Sharing
 
-Đoạn code dưới vẽ đủ tám loại trong một figure để bạn thấy mỗi chart trả lời câu hỏi nào. Funnel
-không có sẵn trong matplotlib: nó là bar ngang có thứ tự, đảo trục y để bước đầu nằm trên cùng.
+Đoạn code dưới vẽ đủ tám loại trong một figure để bạn thấy mỗi chart trả lời câu hỏi nào. Bike
+Sharing không có các bước tuần tự, nên panel funnel dùng funnel mua lặp lại thật trên Online Retail
+II (khách có ít nhất 1, 2, 3, 5, 10 hoá đơn trong năm). Đoạn code đọc sheet `Year 2010-2011` một lần
+(khoảng 20–60 giây vì là xlsx) và các đoạn sau dùng lại biến `sales`. Funnel không có sẵn trong
+matplotlib: nó là bar ngang có thứ tự, đảo trục y để bước đầu nằm trên cùng.
 
 ```python
 import os
@@ -129,6 +132,14 @@ monthly = day.set_index("dteday")[["casual", "registered", "cnt"]].resample("MS"
 heat = hour.pivot_table(index="weekday", columns="hr", values="cnt", aggfunc="mean")
 heat.index = WEEKDAY
 
+RETAIL = ensure("online-retail-ii")
+raw = pd.read_excel(RETAIL / "online_retail_II.xlsx", sheet_name="Year 2010-2011")
+raw["Invoice"] = raw["Invoice"].astype(str)
+sales = raw[~raw.Invoice.str.startswith("C") & (raw.Quantity > 0) & (raw.Price > 0)].copy()  # bỏ đơn huỷ, dòng điều chỉnh
+sales["revenue"] = sales.Quantity * sales.Price
+cust = sales.dropna(subset=["Customer ID"]).groupby("Customer ID").Invoice.nunique()
+funnel = pd.Series({f"≥ {k} đơn": int((cust >= k).sum()) for k in [1, 2, 3, 5, 10]})
+
 fig, axes = plt.subplots(2, 4, figsize=(20, 9))
 ax = axes.flat
 ax[0].bar(WEEKDAY, by_wd.values, color="#9aa5b1")
@@ -147,10 +158,9 @@ sns.heatmap(heat, ax=ax[5], cmap="viridis", cbar_kws={"label": "lượt/giờ"})
 ax[5].set_title("Heatmap: giờ × thứ")
 ax[6].pie([day.registered.sum(), day.casual.sum()], labels=["registered", "casual"], autopct="%.1f%%")
 ax[6].set_title("Pie: chỉ 2 phần")
-steps = pd.Series({"Xem 1 trạm": 1000, "Mở app": 620, "Mở khoá xe": 410, "Trả xe": 395})  # minh hoạ
-ax[7].barh(steps.index, steps.values, color="#4c78a8")
+ax[7].barh(funnel.index, funnel.values, color="#4c78a8")
 ax[7].invert_yaxis()
-ax[7].set_title("Funnel (số minh hoạ): bar ngang có thứ tự")
+ax[7].set_title("Funnel: khách mua lặp lại (Online Retail II)")
 fig.tight_layout()
 fig.savefig(OUT / "eight_charts.png", dpi=80)
 plt.close(fig)
@@ -160,6 +170,7 @@ print("TB/ngày theo thứ:", dict(zip(WEEKDAY, by_wd.round(0).astype(int))))
 print("tháng cao nhất:", monthly.cnt.idxmax().strftime("%Y-%m"), f"{monthly.cnt.max():,}")
 print(f"casual chiếm {day.casual.sum() / day.cnt.sum():.1%} tổng lượt")
 print("ô heatmap cao nhất:", heat.stack().idxmax(), round(heat.max().max()))
+print("funnel khách:", funnel.to_dict())
 print("ảnh:", OUT / "eight_charts.png")
 ```
 
@@ -313,7 +324,7 @@ print(day.groupby(["yr", "season"]).apply(lambda g: g.temp.corr(g.cnt), include_
   không quan trọng", trong khi với team marketing khách vãng lai, đó là khác biệt lớn nhất.
 - **Xu hướng trong nhóm khác xu hướng gộp**: gộp hai năm, nhiệt độ tương quan +0.63 với lượt thuê.
   Nhưng trong mùa 3 (21/6–22/9) tương quan gần 0, riêng 2012 là **−0.33**: khi đã nóng, nóng thêm làm
-  *giảm* lượt thuê. Đây là dạng liên tục của Simpson's paradox: đường hồi quy gộp đi lên vì nó chủ
+  *giảm* lượt thuê. Đây là hiện tượng tương tự Simpson (confounding): mùa là biến gây nhiễu, đường hồi quy gộp đi lên vì nó chủ
   yếu so mùa đông với mùa hè, không nói gì về "hôm nay nóng hơn hôm qua". Đề xuất "dự báo lượt
   thuê tăng khi nhiệt độ tăng" sẽ sai đúng vào mùa cao điểm.
 
@@ -372,15 +383,10 @@ Viết ra tách bạch hai cột trước khi nói trong họp:
 ### Ca thực tế: "doanh thu tháng này giảm 58%"
 
 Online Retail II kết thúc ngày 2011-12-09. Vẽ doanh thu theo tháng một cách ngây thơ, tháng 12/2011
-là cú rơi thẳng đứng. Đoạn code dưới đọc một sheet (khoảng 20–60 giây vì là xlsx), vẽ lại đúng
-cách và so sánh công bằng.
+là cú rơi thẳng đứng. Đoạn code dưới dùng lại `raw` và `sales` đã đọc ở phần 2, vẽ lại đúng cách và
+so sánh công bằng.
 
 ```python
-RETAIL = ensure("online-retail-ii")
-raw = pd.read_excel(RETAIL / "online_retail_II.xlsx", sheet_name="Year 2010-2011")
-raw["Invoice"] = raw["Invoice"].astype(str)
-sales = raw[~raw.Invoice.str.startswith("C") & (raw.Quantity > 0) & (raw.Price > 0)].copy()
-sales["revenue"] = sales.Quantity * sales.Price
 print(f"{len(raw):,} dòng, {raw.InvoiceDate.min():%Y-%m-%d} → {raw.InvoiceDate.max():%Y-%m-%d}")
 
 rev_m = sales.set_index("InvoiceDate").revenue.resample("MS").sum()
@@ -431,7 +437,7 @@ Tiêu đề chart là câu người đọc nhớ nếu họ chỉ đọc một d
 | --- | --- |
 | Lượt thuê theo giờ | Ngày làm việc có hai đỉnh đi làm 8h và 17h; cuối tuần đông buổi trưa |
 | Doanh thu theo tháng | Doanh thu 1–9/12 cao hơn cùng kỳ 46%; tháng 12 chưa kết thúc |
-| Funnel khách hàng | Chỉ 66% khách quay lại mua lần 2; đây là bước rơi lớn nhất |
+| Funnel khách hàng | 1/3 khách không quay lại lần 2: bước mất nhiều khách nhất về số tuyệt đối |
 
 Headline insight có ba phần: **cái gì** (metric), **bao nhiêu** (con số), **so với gì** (tham
 chiếu). Phụ đề nhỏ phía dưới ghi phạm vi dữ liệu, bộ lọc, nguồn. Nếu không viết được headline insight,
@@ -483,8 +489,7 @@ flowchart TD
 ### Funnel cho PM: tỉ lệ so với bước trước, không chỉ so với bước đầu
 
 ```python
-cust = sales.dropna(subset=["Customer ID"]).groupby("Customer ID").Invoice.nunique()
-funnel = pd.Series({f"≥ {k} đơn": int((cust >= k).sum()) for k in [1, 2, 3, 5, 10]})
+# cust, funnel đã tính ở phần 2
 table = pd.DataFrame({"khach": funnel, "so_voi_dau": funnel / funnel.iloc[0],
                       "so_voi_buoc_truoc": funnel / funnel.shift(1)})
 print(table.round(3))
@@ -496,29 +501,39 @@ ax.bar_label(bars, labels=[f"{n:,}  ({p:.0%})" for n, p in zip(funnel, table.so_
 ax.set_xlim(0, funnel.max() * 1.3)
 ax.spines[["top", "right", "bottom"]].set_visible(False)
 ax.set_xticks([])
-ax.set_title("1/3 khách không quay lại lần 2: bước rơi lớn nhất của funnel", loc="left")
+ax.set_title("1 493 khách (34%) không quay lại lần 2: bước mất nhiều khách nhất", loc="left")
 fig.tight_layout()
 fig.savefig(OUT / "repeat_funnel.png", dpi=100)
 plt.close(fig)
 ```
 
-4 338 khách có mã trong năm: 65.6% mua từ 2 đơn, 46.3% từ 3 đơn, 25.7% từ 5 đơn, 9.0% từ 10 đơn. Tỉ
-lệ so với bước trước (66% → 71% → 55% → 35%) cho PM biết bước nào rơi nhiều nhất; tỉ lệ so với bước
-đầu cho biết quy mô. Một funnel chỉ ghi số tuyệt đối buộc PM tự chia. Lưu ý giới hạn: đây là
+4 338 khách có mã trong năm: 65.6% mua từ 2 đơn, 46.3% từ 3 đơn, 25.7% từ 5 đơn, 9.0% từ 10 đơn.
+Một funnel chỉ ghi số tuyệt đối buộc PM tự chia, nên ghi cả hai loại tỉ lệ, và phân biệt hai cách
+nói "bước rơi lớn nhất":
+
+- **Rơi tuyệt đối** (số khách mất ở mỗi bước): 1 493 → 835 → 896 → 723. Bước 1 → 2 mất nhiều khách
+  nhất, nên cải thiện ở đây tác động lên nhiều người nhất.
+- **Rơi tương đối** (tỉ lệ so với bước trước: 66% → 71% → 55% → 35%, tức mất 34%, 29%, 45%, 65%):
+  bước ≥ 5 → ≥ 10 rơi mạnh nhất. Nhưng bước này gộp năm lần mua, còn bước 1 → 2 chỉ một lần, nên so
+  tỉ lệ giữa các bước có độ dài khác nhau là so khập khiễng; funnel tốt có các bước cùng "độ dài".
+
+Headline phải nói rõ đang dùng nghĩa nào: "bước mất nhiều khách nhất" khác "bước có tỉ lệ chuyển đổi
+thấp nhất". Lưu ý giới hạn: đây là
 funnel **tích luỹ trong một năm** chứ không phải funnel theo cohort, nên khách mới vào cuối năm
 chưa có thời gian để quay lại; trình bày cho PM phải ghi rõ điều này.
 
 ## 7. Chọn công cụ vẽ
 
-| Công cụ | Dùng khi | Mạnh | Yếu |
-| --- | --- | --- | --- |
-| **matplotlib** | Chart tĩnh cho báo cáo, cần kiểm soát từng pixel, chạy trong pipeline/cron | Linh hoạt tuyệt đối, xuất PNG/SVG/PDF, không phụ thuộc trình duyệt | Verbose; mặc định xấu; không tương tác |
-| **seaborn** | EDA nhanh trên DataFrame, chart thống kê (phân phối, small multiples, heatmap) | Một dòng cho groupby + hue + facet, palette tốt sẵn | Khó tuỳ biến sâu (phải xuống matplotlib), ít loại chart business (funnel, waterfall) |
-| **plotly** | Chart tương tác trong notebook, HTML gửi đi, prototype dashboard (Dash, Streamlit) | Hover, zoom, có funnel/sunburst/map sẵn, xuất HTML một tệp | HTML nặng; xuất ảnh tĩnh cần thêm `kaleido`; kiểm soát bố cục kém matplotlib |
-| **Excel / Google Sheets** | Người nhận cần sửa số, phân tích một lần, dữ liệu < vài trăm nghìn dòng | Ai cũng mở được, nhanh với pivot chart | Không tái lập được, dễ sai do copy-paste, giới hạn dòng |
-| **Metabase / Superset** | BI tự host, SQL-first, nhiều người cần tự xem số | Miễn phí/mã nguồn mở, kết nối thẳng warehouse, phân quyền | Ít tuỳ biến chart, semantic layer hạn chế (Metabase) |
-| **Power BI** | Doanh nghiệp dùng Microsoft 365, cần mô hình dữ liệu và DAX | Data model mạnh, rẻ khi đã có license M365, row-level security | DAX khó; chạy tốt nhất trên Windows; khoá vào hệ Microsoft |
-| **Tableau** | Phân tích trực quan khám phá, dashboard đẹp cho lãnh đạo | Kéo thả nhanh, chart đẹp, cộng đồng lớn | License đắt; logic tính toán phân tán trong workbook khó review |
+| Công cụ | Dùng khi | Loại công ty hay dùng | Mạnh | Yếu |
+| --- | --- | --- | --- | --- |
+| **matplotlib** | Chart tĩnh cho báo cáo, cần kiểm soát từng pixel, chạy trong pipeline/cron | Công ty có data team mạnh về Python, báo cáo tự động từ pipeline | Linh hoạt tuyệt đối, xuất PNG/SVG/PDF, không phụ thuộc trình duyệt | Verbose; mặc định xấu; không tương tác |
+| **seaborn** | EDA nhanh trên DataFrame, chart thống kê (phân phối, small multiples, heatmap) | Data team Python (DS/DA), chủ yếu cho phân tích nội bộ | Một dòng cho groupby + hue + facet, palette tốt sẵn | Khó tuỳ biến sâu (phải xuống matplotlib), ít loại chart business (funnel, waterfall) |
+| **plotly** | Chart tương tác trong notebook, HTML gửi đi, prototype dashboard (Dash, Streamlit) | Startup/tech company có DA/DS viết Python, cần app dữ liệu nhanh (Streamlit/Dash) | Hover, zoom, có funnel/sunburst/map sẵn, xuất HTML một tệp | HTML nặng; xuất ảnh tĩnh cần thêm `kaleido`; kiểm soát bố cục kém matplotlib |
+| **Excel / Google Sheets** | Người nhận cần sửa số, phân tích một lần, dữ liệu < vài trăm nghìn dòng | Mọi công ty, đặc biệt SME và bộ phận tài chính, kinh doanh; Google Sheets ở công ty dùng Google Workspace | Ai cũng mở được, nhanh với pivot chart | Không tái lập được, dễ sai do copy-paste, giới hạn dòng |
+| **Metabase / Superset** | BI tự host, SQL-first, nhiều người cần tự xem số | Startup/SME, công ty tech có data team tự vận hành hạ tầng, muốn tránh chi phí license | Miễn phí/mã nguồn mở, kết nối thẳng warehouse, phân quyền | Ít tuỳ biến chart, semantic layer hạn chế (Metabase) |
+| **Power BI** | Doanh nghiệp dùng Microsoft 365, cần mô hình dữ liệu và DAX | Enterprise dùng Microsoft 365/Azure: ngân hàng, bán lẻ, sản xuất, công ty đa quốc gia | Data model mạnh, rẻ khi đã có license M365, row-level security | DAX khó; chạy tốt nhất trên Windows; khoá vào hệ Microsoft |
+| **Tableau** | Phân tích trực quan khám phá, dashboard đẹp cho lãnh đạo | Enterprise lớn có ngân sách BI, công ty đã dùng Salesforce | Kéo thả nhanh, chart đẹp, cộng đồng lớn | License đắt; logic tính toán phân tán trong workbook khó review |
+| **Looker Studio / Looker** | Dữ liệu đã nằm trên BigQuery, cần dashboard chia sẻ nhanh (Looker Studio) hoặc semantic layer LookML (Looker) | Công ty dùng Google Cloud/Google Workspace | Looker Studio miễn phí, kết nối BigQuery/Sheets sẵn; Looker có semantic layer mạnh | Looker Studio chậm với dữ liệu lớn, ít tính năng mô hình hoá; Looker đắt, phải học LookML |
 
 Quy tắc quyết định thực dụng:
 
