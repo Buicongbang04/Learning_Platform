@@ -1,0 +1,105 @@
+questions:
+- id: att-weight
+  kind: knowledge
+  type: single
+  prompt: 'IPW cho ATT: người **control** nhận trọng số nào?'
+  options:
+  - id: a
+    text: '`1 / (1 − ps)`'
+  - id: b
+    text: '`ps / (1 − ps)`'
+  - id: c
+    text: '`1 / ps`'
+  - id: d
+    text: '`(1 − ps) / ps`'
+- id: sklearn-default
+  kind: knowledge
+  type: single
+  prompt: Vì sao `LogisticRegression()` mặc định của scikit-learn cho propensity khác `statsmodels.Logit`?
+  options:
+  - id: a
+    text: Dùng link probit thay vì logit
+  - id: b
+    text: Bỏ hằng số (intercept)
+  - id: c
+    text: Có regularization L2 mặc định (`C=1.0`)
+  - id: d
+    text: Tự chuẩn hoá các biến
+- id: high-auc
+  kind: knowledge
+  type: single
+  prompt: Mô hình propensity gần như tách hẳn hai nhóm (AUC gần 1). Điều đó nói gì?
+  options:
+  - id: a
+    text: Mô hình tốt, ước lượng đáng tin hơn
+  - id: b
+    text: Không còn confounding
+  - id: c
+    text: Nên thêm biến để AUC đạt 1
+  - id: d
+    text: 'Overlap kém: ước lượng dựa vào rất ít người control và nhạy với đặc tả'
+- id: trimming
+  kind: knowledge
+  type: multi
+  prompt: Trim propensity ngoài `[0.05, 0.95]` dẫn tới điều gì?
+  options:
+  - id: a
+    text: 'Đổi câu hỏi: ước lượng cho tổng thể có overlap, không còn là ATT trên mọi người tham gia'
+  - id: b
+    text: Không cần giả định unconfoundedness nữa
+  - id: c
+    text: Số người control được dùng giảm mạnh
+  - id: d
+    text: Ước lượng luôn gần con số thí nghiệm hơn
+- id: max-smd
+  kind: data
+  type: single
+  prompt: 'Bộ quan sát (NSW treated + PSID), trước khi cân: covariate nào có |SMD| lớn nhất?'
+  options:
+  - id: a
+    text: '`re75`'
+  - id: b
+    text: '`black`'
+  - id: c
+    text: '`re74`'
+  - id: d
+    text: '`married`'
+- id: ps-small
+  kind: data
+  type: single
+  prompt: 'Propensity 8 covariate: bao nhiêu người PSID (trên 2 490) có `ps < 0.01`?'
+  options:
+  - id: a
+    text: '538'
+  - id: b
+    text: 1 952
+  - id: c
+    text: '69'
+  - id: d
+    text: 2 305
+- id: n-matched
+  kind: data
+  type: single
+  prompt: 1-NN matching có hoàn lại ghép 185 người treated với bao nhiêu người PSID **khác nhau**?
+  options:
+  - id: a
+    text: '185'
+  - id: b
+    text: '43'
+  - id: c
+    text: '69'
+  - id: d
+    text: '118'
+- id: dw-ipw
+  kind: data
+  type: single
+  prompt: IPW với đặc tả Dehejia–Wahba (thêm `age²`, `education²`, `u74`, `u75`), không trim, cho ATT khoảng?
+  options:
+  - id: a
+    text: $2 768
+  - id: b
+    text: $1 759
+  - id: c
+    text: $1 593
+  - id: d
+    text: $582

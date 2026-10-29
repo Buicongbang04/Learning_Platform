@@ -1,0 +1,105 @@
+questions:
+- id: unique-id
+  kind: knowledge
+  type: single
+  prompt: Vì sao gộp khách theo `customer_unique_id`, không theo `customer_id`?
+  options:
+  - id: a
+    text: '`customer_id` có nhiều giá trị null'
+  - id: b
+    text: Mỗi đơn có một `customer_id` mới, nên mọi khách trông như chỉ mua một lần
+  - id: c
+    text: '`customer_unique_id` là khoá của bảng orders'
+  - id: d
+    text: Để query chạy nhanh hơn
+- id: censored
+  kind: knowledge
+  type: single
+  prompt: Ô `(cohort, k)` với cohort + k sau `last_month` nên mang giá trị gì?
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: Giá trị của tháng k − 1
+  - id: c
+    text: 'NaN: chưa quan sát được'
+  - id: d
+    text: 100%
+- id: weighted
+  kind: knowledge
+  type: single
+  prompt: Vì sao retention trung bình dùng trọng số theo cỡ cohort?
+  options:
+  - id: a
+    text: Cohort rất nhỏ (vd. 1 khách) kéo trung bình cộng thô lệch vô lý
+  - id: b
+    text: Để kết quả luôn nhỏ hơn
+  - id: c
+    text: Vì SQL chỉ tính được tổng
+  - id: d
+    text: Để bỏ được các ô NaN
+- id: count-once
+  kind: knowledge
+  type: single
+  prompt: Khách có 2 đơn giao xong trong cùng một tháng được đếm mấy lần ở ô tháng đó?
+  options:
+  - id: a
+    text: '2'
+  - id: b
+    text: '0'
+  - id: c
+    text: Tuỳ số item
+  - id: d
+    text: '1'
+- id: n-unique
+  kind: data
+  type: single
+  prompt: Bảng `customers` có bao nhiêu `customer_unique_id` khác nhau?
+  options:
+  - id: a
+    text: 99 441
+  - id: b
+    text: 93 350
+  - id: c
+    text: 96 096
+  - id: d
+    text: 96 478
+- id: raw-mean
+  kind: data
+  type: single
+  prompt: Trung bình cộng **thô** (không trọng số) của cột retention tháng 1 là?
+  options:
+  - id: a
+    text: 0.483%
+  - id: b
+    text: 4.956%
+  - id: c
+    text: 0.336%
+  - id: d
+    text: 3.00%
+- id: m12
+  kind: data
+  type: single
+  prompt: Retention tháng 12 trung bình có trọng số là?
+  options:
+  - id: a
+    text: 0.166%
+  - id: b
+    text: 0.232%
+  - id: c
+    text: 0.483%
+  - id: d
+    text: 1.66%
+- id: cohort-2016-10
+  kind: data
+  type: single
+  prompt: Cohort 2016-10 có bao nhiêu khách?
+  options:
+  - id: a
+    text: '1'
+  - id: b
+    text: 7 059
+  - id: c
+    text: '324'
+  - id: d
+    text: '262'

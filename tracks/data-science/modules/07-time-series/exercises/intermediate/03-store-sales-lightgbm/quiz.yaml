@@ -1,0 +1,105 @@
+questions:
+- id: naive-loses
+  kind: knowledge
+  type: single
+  prompt: Vì sao baseline "cùng thứ tuần trước" thua xa?
+  options:
+  - id: a
+    text: Rossmann không có mùa vụ tuần
+  - id: b
+    text: Tuần trước thường có trạng thái khuyến mãi ngược với tuần cần dự báo
+  - id: c
+    text: Baseline không xử lý ngày đóng cửa
+  - id: d
+    text: RMSPE phạt dự báo thấp nặng hơn
+- id: promo-ok
+  kind: knowledge
+  type: single
+  prompt: Vì sao dùng `Promo` của chính ngày cần dự báo là hợp lệ?
+  options:
+  - id: a
+    text: Lịch khuyến mãi được lên trước, biết tại thời điểm dự báo
+  - id: b
+    text: '`Promo` không tương quan với `Sales`'
+  - id: c
+    text: LightGBM tự loại leakage
+  - id: d
+    text: '`Promo` là hằng số theo cửa hàng'
+- id: lag1
+  kind: knowledge
+  type: single
+  prompt: Dự báo 42 ngày một lần. Vì sao `lag_1` là leakage?
+  options:
+  - id: a
+    text: Vì nó tương quan quá cao với `Sales`
+  - id: b
+    text: Vì LightGBM không xử lý được NaN
+  - id: c
+    text: Vì ngày đóng cửa có `lag_1` bằng 0
+  - id: d
+    text: Để dự báo ngày thứ 30 của horizon, ta không có doanh thu của ngày thứ 29
+- id: customers
+  kind: knowledge
+  type: multi
+  prompt: Lỗi nào làm feature hoặc đánh giá sai?
+  options:
+  - id: a
+    text: '`df.Sales.shift(42)` không `groupby` Store'
+  - id: b
+    text: Dùng `Customers` làm feature
+  - id: c
+    text: Coi ngày đóng cửa là doanh thu 0 trong rolling mean
+  - id: d
+    text: Chỉ train trên ngày mở cửa trước cutoff
+- id: dropped
+  kind: data
+  type: single
+  prompt: Trong các cửa hàng id 1–60, bao nhiêu cửa hàng bị loại vì không đủ mọi ngày?
+  options:
+  - id: a
+    text: '50'
+  - id: b
+    text: '181'
+  - id: c
+    text: '10'
+  - id: d
+    text: '0'
+- id: naive-0328
+  kind: data
+  type: single
+  prompt: Seasonal naive ở origin 2015-03-28 có MAE khoảng?
+  options:
+  - id: a
+    text: 1 501 €
+  - id: b
+    text: 1 360 €
+  - id: c
+    text: 2 181 €
+  - id: d
+    text: 785 €
+- id: promo-days
+  kind: data
+  type: single
+  prompt: Khuyến mãi (`Promo = 1`) chạy vào những ngày nào trong tuần?
+  options:
+  - id: a
+    text: Mọi ngày
+  - id: b
+    text: Thứ Hai tới thứ Bảy
+  - id: c
+    text: Chỉ cuối tuần
+  - id: d
+    text: Chỉ thứ Hai tới thứ Sáu
+- id: promo-gap
+  kind: data
+  type: single
+  prompt: Trong 50 cửa hàng (ngày mở cửa), thứ nào có chênh lệch doanh thu trung bình có / không `Promo` lớn nhất?
+  options:
+  - id: a
+    text: Thứ Hai
+  - id: b
+    text: Thứ Sáu
+  - id: c
+    text: Thứ Ba
+  - id: d
+    text: Thứ Tư

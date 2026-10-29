@@ -1,0 +1,8 @@
+weak: [b]
+mediator: [a]
+bool-loc: [c]
+bins: [d]
+sp-share: [c]
+sp-late: [a]
+lower-strata: [b]
+late-sp: [d]

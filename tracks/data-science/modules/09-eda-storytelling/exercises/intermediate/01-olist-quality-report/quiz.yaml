@@ -1,0 +1,105 @@
+questions:
+- id: order-denom
+  kind: knowledge
+  type: single
+  prompt: Kiểm tra thứ tự thời gian (vd. carrier sau customer) lấy mẫu số là?
+  options:
+  - id: a
+    text: Mọi đơn
+  - id: b
+    text: Đơn có cả hai ngày
+  - id: c
+    text: Đơn `delivered`
+  - id: d
+    text: Đơn có review
+- id: severity
+  kind: knowledge
+  type: single
+  prompt: Severity của một kiểm tra nên dựa vào?
+  options:
+  - id: a
+    text: Số dòng lỗi
+  - id: b
+    text: Tỉ lệ lỗi
+  - id: c
+    text: Tác động lên phân tích phía sau
+  - id: d
+    text: Bảng chứa lỗi
+- id: payment-join
+  kind: knowledge
+  type: single
+  prompt: 'So tổng `payment_value` với tổng `price + freight_value`: làm sao để không nhân dòng?'
+  options:
+  - id: a
+    text: Cộng theo đơn ở từng bảng rồi mới ghép
+  - id: b
+    text: Dùng inner join
+  - id: c
+    text: '`drop_duplicates` sau khi ghép'
+  - id: d
+    text: Chỉ lấy payment đầu tiên của đơn
+- id: freight-zero
+  kind: knowledge
+  type: single
+  prompt: Item có `freight_value == 0` nên xử lý thế nào?
+  options:
+  - id: a
+    text: Lỗi chặn
+  - id: b
+    text: Xoá khỏi bảng
+  - id: c
+    text: Cảnh báo thiếu dữ liệu
+  - id: d
+    text: 'Thông tin: nghiệp vụ miễn phí vận chuyển'
+- id: bad-month
+  kind: data
+  type: single
+  prompt: 23 đơn có `order_delivered_carrier_date` sau `order_delivered_customer_date` tập trung nhiều nhất ở tháng mua nào?
+  options:
+  - id: a
+    text: 2017-11
+  - id: b
+    text: 2018-03
+  - id: c
+    text: 2017-07
+  - id: d
+    text: 2016-10
+- id: max-rate
+  kind: data
+  type: single
+  prompt: Trong 15 kiểm tra, kiểm tra nào có `fail_rate` cao nhất?
+  options:
+  - id: a
+    text: '`review_id_duplicated`'
+  - id: b
+    text: '`products_missing_category`'
+  - id: c
+    text: '`orders_without_items`'
+  - id: d
+    text: '`freight_zero`'
+- id: n-total
+  kind: data
+  type: single
+  prompt: '`n_total` của `approved_before_purchase` là?'
+  options:
+  - id: a
+    text: 99 441
+  - id: b
+    text: 96 478
+  - id: c
+    text: 96 475
+  - id: d
+    text: 99 281
+- id: n-zero
+  kind: data
+  type: single
+  prompt: Bao nhiêu kiểm tra có `n_failed = 0`?
+  options:
+  - id: a
+    text: '4'
+  - id: b
+    text: '2'
+  - id: c
+    text: '3'
+  - id: d
+    text: '5'

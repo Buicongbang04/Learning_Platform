@@ -1,0 +1,8 @@
+weights: [b]
+min-p: [c]
+ratio: [d]
+not-use: [a, b, d]
+second-donor: [b]
+gap-1989: [c]
+top-ratio: [d]
+placebo-1980: [b]

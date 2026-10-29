@@ -1,0 +1,103 @@
+questions:
+- id: delay-ok
+  kind: knowledge
+  type: single
+  prompt: '`delay_days` (giao thực tế − ngày hẹn) có phải leakage không?'
+  options:
+  - id: a
+    text: Có, vì dùng ngày giao thực tế
+  - id: b
+    text: Có, vì tương quan mạnh với nhãn
+  - id: c
+    text: Không, vì ta dự đoán lúc đơn vừa giao; sẽ là leakage nếu dự đoán lúc mua
+  - id: d
+    text: Không bao giờ là leakage
+- id: passthrough
+  kind: knowledge
+  type: single
+  prompt: Vì sao không dùng `remainder="passthrough"` trong `ColumnTransformer`?
+  options:
+  - id: a
+    text: Nó đưa mọi cột còn lại, kể cả `review_score`, vào model
+  - id: b
+    text: Nó làm chậm pipeline
+  - id: c
+    text: Nó không chạy với `TargetEncoder`
+  - id: d
+    text: Nó bỏ các cột số
+- id: optimistic
+  kind: knowledge
+  type: multi
+  prompt: Cách làm nào khiến điểm đánh giá lạc quan giả?
+  options:
+  - id: a
+    text: '`StandardScaler().fit(table)` rồi mới chia train/val'
+  - id: b
+    text: Fit `TargetEncoder` trên toàn bộ bảng
+  - id: c
+    text: Fit cả pipeline chỉ trên train
+  - id: d
+    text: Chọn `C` bằng tập test
+- id: pure-id
+  kind: knowledge
+  type: single
+  prompt: Vì sao không dùng `order_id` làm feature?
+  options:
+  - id: a
+    text: Là chuỗi
+  - id: b
+    text: Mỗi giá trị chỉ xuất hiện một lần, không tổng quát hoá được
+  - id: c
+    text: Có null
+  - id: d
+    text: Là leakage của review
+- id: val-size
+  kind: data
+  type: single
+  prompt: '`time_split`: tập validation (01–03/2018) có bao nhiêu đơn?'
+  options:
+  - id: a
+    text: 43 362
+  - id: b
+    text: 31 994
+  - id: c
+    text: 63 830
+  - id: d
+    text: 20 468
+- id: late-split
+  kind: data
+  type: single
+  prompt: Tỉ lệ giao trễ cao nhất ở tập nào?
+  options:
+  - id: a
+    text: train
+  - id: b
+    text: val
+  - id: c
+    text: test
+- id: auc-alone
+  kind: data
+  type: single
+  prompt: '"AUC một mình" (`max(AUC, 1 − AUC)` trên toàn bảng) của `delivery_days` là?'
+  options:
+  - id: a
+    text: '0.657'
+  - id: b
+    text: '0.756'
+  - id: c
+    text: '0.685'
+  - id: d
+    text: '0.801'
+- id: n-sellers
+  kind: data
+  type: single
+  prompt: Bảng có bao nhiêu `seller_id` khác nhau?
+  options:
+  - id: a
+    text: 2 956
+  - id: b
+    text: 2 970
+  - id: c
+    text: 3 095
+  - id: d
+    text: 1 792

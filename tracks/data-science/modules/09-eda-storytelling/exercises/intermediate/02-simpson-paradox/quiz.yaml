@@ -1,0 +1,105 @@
+questions:
+- id: weak
+  kind: knowledge
+  type: single
+  prompt: Đảo chiều dạng "yếu" trong bài nghĩa là?
+  options:
+  - id: a
+    text: Mọi tầng đều ngược chiều crude
+  - id: b
+    text: Crude và adjusted ngược dấu
+  - id: c
+    text: Adjusted bằng 0
+  - id: d
+    text: Có ít nhất một tầng ngược chiều crude
+- id: mediator
+  kind: knowledge
+  type: single
+  prompt: Câu hỏi là tác động của logistics lên review. Phân tầng theo số ngày giao có vấn đề gì?
+  options:
+  - id: a
+    text: 'Số ngày giao là mediator: phân tầng chặn đúng con đường đang muốn đo'
+  - id: b
+    text: Không có vấn đề gì
+  - id: c
+    text: Số ngày giao là confounder nên bắt buộc phải phân tầng
+  - id: d
+    text: Có quá nhiều tầng
+- id: bool-loc
+  kind: knowledge
+  type: single
+  prompt: 'Tầng kiểu bool (`late`): vì sao dùng `reindex` thay `.loc[strata]`?'
+  options:
+  - id: a
+    text: '`reindex` nhanh hơn'
+  - id: b
+    text: '`.loc` không nhận list'
+  - id: c
+    text: '`.loc[[False, True]]` bị hiểu là mask, chọn sai dòng mà không báo lỗi'
+  - id: d
+    text: '`reindex` tự chuẩn hoá trọng số'
+- id: bins
+  kind: knowledge
+  type: single
+  prompt: Chọn bin số ngày giao **sau khi** nhìn kết quả để đảo chiều đẹp hơn là?
+  options:
+  - id: a
+    text: Cách làm chuẩn
+  - id: b
+    text: Direct standardization
+  - id: c
+    text: Sensitivity analysis
+  - id: d
+    text: p-hacking bằng biểu đồ
+- id: sp-share
+  kind: data
+  type: single
+  prompt: Tỉ trọng đơn của SP rơi vào tầng 0–6 ngày là?
+  options:
+  - id: a
+    text: 12.7%
+  - id: b
+    text: 39.4%
+  - id: c
+    text: 46.9%
+  - id: d
+    text: 7.35%
+- id: sp-late
+  kind: data
+  type: single
+  prompt: Tỉ lệ giao trễ của đơn SP là?
+  options:
+  - id: a
+    text: 5.8%
+  - id: b
+    text: 9.6%
+  - id: c
+    text: 8.0%
+  - id: d
+    text: 10.7%
+- id: lower-strata
+  kind: data
+  type: single
+  prompt: SP có tỉ lệ review xấu **thấp hơn** ngoài SP ở tầng số ngày giao nào?
+  options:
+  - id: a
+    text: Mọi tầng
+  - id: b
+    text: Chỉ 0–6
+  - id: c
+    text: 0–6 và 7–13
+  - id: d
+    text: Không tầng nào
+- id: late-sp
+  kind: data
+  type: single
+  prompt: Tỉ lệ review xấu của đơn **trễ** ở SP là?
+  options:
+  - id: a
+    text: 58.2%
+  - id: b
+    text: 8.6%
+  - id: c
+    text: 66.8%
+  - id: d
+    text: 44.6%

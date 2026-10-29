@@ -1,0 +1,105 @@
+questions:
+- id: weights
+  kind: knowledge
+  type: single
+  prompt: Trọng số synthetic control bị ràng buộc thế nào?
+  options:
+  - id: a
+    text: Tuỳ ý, ước lượng bằng OLS
+  - id: b
+    text: Không âm và tổng bằng 1
+  - id: c
+    text: Tổng bằng 1, được phép âm
+  - id: d
+    text: Bằng nhau cho mọi donor
+- id: min-p
+  kind: knowledge
+  type: single
+  prompt: 'Placebo trên 39 bang: p-value hoán vị nhỏ nhất có thể là?'
+  options:
+  - id: a
+    text: '0.05'
+  - id: b
+    text: '0.01'
+  - id: c
+    text: $$1/39 \approx 0.026$$
+  - id: d
+    text: '0'
+- id: ratio
+  kind: knowledge
+  type: single
+  prompt: Vì sao xếp placebo theo tỉ số RMSPE sau / trước thay vì chỉ theo gap sau can thiệp?
+  options:
+  - id: a
+    text: Tỉ số luôn dương nên dễ vẽ
+  - id: b
+    text: RMSPE sau không tính được cho bang placebo
+  - id: c
+    text: Để p-value nhỏ hơn
+  - id: d
+    text: Gap lớn sau can thiệp chỉ đáng tin khi khớp tốt trước can thiệp; tỉ số gói cả hai ý
+- id: not-use
+  kind: knowledge
+  type: multi
+  prompt: Khi nào **không** nên dùng synthetic control?
+  options:
+  - id: a
+    text: Chuỗi trước can thiệp ngắn
+  - id: b
+    text: Đơn vị treated nằm ngoài bao lồi của donor
+  - id: c
+    text: Can thiệp cấp bang, nhiều bang donor, chuỗi trước dài
+  - id: d
+    text: Donor cũng chịu ảnh hưởng của can thiệp (spillover)
+- id: second-donor
+  kind: data
+  type: single
+  prompt: Donor có trọng số lớn **thứ hai** của California là?
+  options:
+  - id: a
+    text: Nevada
+  - id: b
+    text: Montana
+  - id: c
+    text: Connecticut
+  - id: d
+    text: Utah
+- id: gap-1989
+  kind: data
+  type: single
+  prompt: Gap (thật − tổng hợp) của California năm 1989 là khoảng?
+  options:
+  - id: a
+    text: −19.5
+  - id: b
+    text: −26.6
+  - id: c
+    text: −8.4
+  - id: d
+    text: −22.9
+- id: top-ratio
+  kind: data
+  type: single
+  prompt: Bang nào có tỉ số RMSPE sau / trước **cao nhất**?
+  options:
+  - id: a
+    text: California
+  - id: b
+    text: Virginia
+  - id: c
+    text: Utah
+  - id: d
+    text: Missouri
+- id: placebo-1980
+  kind: data
+  type: single
+  prompt: 'Placebo theo thời gian (can thiệp giả năm 1980, khớp 1970–1979): gap trung bình 1980–1988 là khoảng?'
+  options:
+  - id: a
+    text: −19.5
+  - id: b
+    text: −3.4
+  - id: c
+    text: −8.4
+  - id: d
+    text: '+12.4'

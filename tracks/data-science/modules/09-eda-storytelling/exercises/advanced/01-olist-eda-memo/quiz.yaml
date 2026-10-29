@@ -1,0 +1,105 @@
+questions:
+- id: mix
+  kind: knowledge
+  type: single
+  prompt: Phần mix gần bằng toàn bộ thay đổi nghĩa là?
+  options:
+  - id: a
+    text: Đơn trễ bị chấm tệ hơn trước
+  - id: b
+    text: Giao trễ chắc chắn gây ra review xấu
+  - id: c
+    text: Nếu tỉ lệ đơn trễ không đổi, review xấu gần như không tăng
+  - id: d
+    text: Dữ liệu có lỗi
+- id: small-n
+  kind: knowledge
+  type: single
+  prompt: AP có tỉ lệ review xấu thấp nhất, trên 66 đơn. Kết luận đúng là?
+  options:
+  - id: a
+    text: Khoảng tin cậy rất rộng, chưa đủ để nói AP tốt nhất
+  - id: b
+    text: AP có dịch vụ tốt nhất
+  - id: c
+    text: Nên nhân rộng mô hình của AP
+  - id: d
+    text: Bỏ AP vì là outlier
+- id: immature
+  kind: knowledge
+  type: single
+  prompt: Vì sao bỏ đơn mua sau 2018-08-31 khi vẽ theo tháng?
+  options:
+  - id: a
+    text: Đơn đó bị huỷ
+  - id: b
+    text: 'Tháng chưa chín: nhiều đơn chưa giao xong hoặc chưa có review'
+  - id: c
+    text: Olist đổi định nghĩa review
+  - id: d
+    text: Để biểu đồ gọn hơn
+- id: title
+  kind: knowledge
+  type: single
+  prompt: Tiêu đề memo nào đúng tinh thần bài?
+  options:
+  - id: a
+    text: Phân tích review Olist
+  - id: b
+    text: Tôi đã làm sạch 9 bảng và phân tích review
+  - id: c
+    text: EDA quý 1/2018
+  - id: d
+    text: Review xấu lên 21% trong tháng 3/2018, đi cùng giao trễ
+- id: peak-month
+  kind: data
+  type: single
+  prompt: Từ 2017-01 tới 2018-08, tháng mua nào có tỉ lệ review xấu cao nhất?
+  options:
+  - id: a
+    text: 2017-11
+  - id: b
+    text: 2018-02
+  - id: c
+    text: 2018-03
+  - id: d
+    text: 2018-01
+- id: ontime-mar
+  kind: data
+  type: single
+  prompt: Tỉ lệ review xấu ở đơn **đúng hẹn** mua tháng 3/2018 là khoảng?
+  options:
+  - id: a
+    text: 10.3%
+  - id: b
+    text: 21.2%
+  - id: c
+    text: 62.0%
+  - id: d
+    text: 13.7%
+- id: second-state
+  kind: data
+  type: single
+  prompt: '`rate_by(table, "customer_state")` (min_n 30): bang đứng **thứ 2** là?'
+  options:
+  - id: a
+    text: AL
+  - id: b
+    text: SE
+  - id: c
+    text: RJ
+  - id: d
+    text: MA
+- id: mix-jan-feb
+  kind: data
+  type: single
+  prompt: '`decompose_change` tháng 1 → tháng 2/2018 (segment `late`): phần `mix` là?'
+  options:
+  - id: a
+    text: +5.68 điểm
+  - id: b
+    text: +4.96 điểm
+  - id: c
+    text: +0.71 điểm
+  - id: d
+    text: +7.69 điểm

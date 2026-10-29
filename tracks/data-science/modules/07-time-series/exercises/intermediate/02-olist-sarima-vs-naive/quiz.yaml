@@ -1,0 +1,105 @@
+questions:
+- id: mase-denom
+  kind: knowledge
+  type: single
+  prompt: Mẫu số của MASE ở mỗi origin trong backtest lấy từ đâu?
+  options:
+  - id: a
+    text: MAE seasonal naive trên toàn chuỗi
+  - id: b
+    text: MAE seasonal naive một bước (lag m) trên phần train của origin đó
+  - id: c
+    text: Độ lệch chuẩn của phần test
+  - id: d
+    text: MAE của SARIMA trên phần train
+- id: fill-zero
+  kind: knowledge
+  type: single
+  prompt: Vì sao `daily_orders` phải có đủ mọi ngày, ngày không có đơn là 0?
+  options:
+  - id: a
+    text: Để giảm phương sai của chuỗi
+  - id: b
+    text: Để tổng số đơn đúng
+  - id: c
+    text: Để lag 7 vẫn là cùng thứ của tuần trước
+  - id: d
+    text: Để STL chạy nhanh hơn
+- id: h0
+  kind: knowledge
+  type: single
+  prompt: Giả thuyết H0 của ADF và KPSS là?
+  options:
+  - id: a
+    text: 'ADF: chuỗi dừng; KPSS: có unit root'
+  - id: b
+    text: 'Cả hai: có unit root'
+  - id: c
+    text: 'Cả hai: chuỗi dừng'
+  - id: d
+    text: 'ADF: có unit root; KPSS: chuỗi dừng'
+- id: one-split
+  kind: knowledge
+  type: single
+  prompt: Vì sao không kết luận từ một lần chia train/test?
+  options:
+  - id: a
+    text: MASE dao động mạnh giữa các origin; một origin có thể cho kết luận ngược
+  - id: b
+    text: SARIMA cần nhiều dữ liệu hơn
+  - id: c
+    text: MASE không tính được trên một lần chia
+  - id: d
+    text: Seasonal naive không có tham số
+- id: stl-min
+  kind: data
+  type: single
+  prompt: Theo STL (chu kỳ 7, robust), thành phần mùa vụ trung bình thấp nhất rơi vào?
+  options:
+  - id: a
+    text: Chủ nhật
+  - id: b
+    text: Thứ Bảy
+  - id: c
+    text: Thứ Hai
+  - id: d
+    text: Thứ Sáu
+- id: worst-origin
+  kind: data
+  type: single
+  prompt: Origin nào có MASE của seasonal naive cao nhất?
+  options:
+  - id: a
+    text: '2018-05-13'
+  - id: b
+    text: '2018-07-08'
+  - id: c
+    text: '2018-03-18'
+  - id: d
+    text: '2018-05-27'
+- id: adf-p
+  kind: data
+  type: single
+  prompt: ADF (`autolag="AIC"`) trên chuỗi gốc cho p-value khoảng?
+  options:
+  - id: a
+    text: '0.000'
+  - id: b
+    text: '0.010'
+  - id: c
+    text: '0.100'
+  - id: d
+    text: '0.069'
+- id: h1-2018
+  kind: data
+  type: single
+  prompt: Trung bình số đơn mỗi ngày từ 2018-01-01 tới 2018-06-30?
+  options:
+  - id: a
+    text: '84'
+  - id: b
+    text: '166'
+  - id: c
+    text: '228'
+  - id: d
+    text: 1 176

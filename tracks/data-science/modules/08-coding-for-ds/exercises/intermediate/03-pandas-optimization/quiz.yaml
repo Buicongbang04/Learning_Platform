@@ -1,0 +1,105 @@
+questions:
+- id: grain
+  kind: knowledge
+  type: single
+  prompt: 'Bảng điểm seller: `revenue` và `review_score` tính ở grain nào?'
+  options:
+  - id: a
+    text: Cả hai theo món
+  - id: b
+    text: '`revenue` theo món, `review_score` theo đơn'
+  - id: c
+    text: Cả hai theo đơn
+  - id: d
+    text: '`revenue` theo đơn, `review_score` theo món'
+- id: bad-nan
+  kind: knowledge
+  type: single
+  prompt: Đơn không có review thì cờ `bad` của đơn đó nên là?
+  options:
+  - id: a
+    text: '`False`'
+  - id: b
+    text: '`True`'
+  - id: c
+    text: NaN, để không tính vào mẫu số
+  - id: d
+    text: '0.5'
+- id: validate
+  kind: knowledge
+  type: single
+  prompt: 'Merge bảng cặp (seller, đơn) với bảng mỗi đơn một dòng: `validate=` nên là?'
+  options:
+  - id: a
+    text: '`"many_to_one"`'
+  - id: b
+    text: '`"one_to_one"`'
+  - id: c
+    text: '`"many_to_many"`'
+  - id: d
+    text: '`"one_to_many"`'
+- id: unique-key
+  kind: knowledge
+  type: single
+  prompt: Vì sao đổi `order_id` sang `category` không giúp giảm bộ nhớ?
+  options:
+  - id: a
+    text: '`category` chỉ dùng cho số'
+  - id: b
+    text: pandas không nén chuỗi
+  - id: c
+    text: '`order_id` có null'
+  - id: d
+    text: 'Giá trị gần như duy nhất mỗi dòng: vẫn phải lưu mọi chuỗi, cộng thêm mã'
+- id: top-seller
+  kind: data
+  type: single
+  prompt: Seller có `revenue` cao nhất có bao nhiêu `n_orders`?
+  options:
+  - id: a
+    text: 1 772
+  - id: b
+    text: '348'
+  - id: c
+    text: 1 124
+  - id: d
+    text: 1 819
+- id: items-category
+  kind: data
+  type: multi
+  prompt: '`optimize_dtypes` (ngưỡng 0.5) trên `order_items`: cột nào thành `category`?'
+  options:
+  - id: a
+    text: '`order_id`'
+  - id: b
+    text: '`product_id`'
+  - id: c
+    text: '`seller_id`'
+  - id: d
+    text: '`shipping_limit_date`'
+- id: item-id-dtype
+  kind: data
+  type: single
+  prompt: Sau `optimize_dtypes`, `order_item_id` có kiểu gì?
+  options:
+  - id: a
+    text: '`int16`'
+  - id: b
+    text: '`int8`'
+  - id: c
+    text: '`int32`'
+  - id: d
+    text: '`int64`'
+- id: items-mem
+  kind: data
+  type: single
+  prompt: Bộ nhớ (deep) của `order_items` trước → sau `optimize_dtypes`?
+  options:
+  - id: a
+    text: 17.4 MB → 15.8 MB
+  - id: b
+    text: 19.3 MB → 2.1 MB
+  - id: c
+    text: 19.3 MB → 17.4 MB
+  - id: d
+    text: 19.3 MB → 11.6 MB

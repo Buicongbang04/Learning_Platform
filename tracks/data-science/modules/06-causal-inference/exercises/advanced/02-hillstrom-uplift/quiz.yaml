@@ -1,0 +1,103 @@
+questions:
+- id: no-label
+  kind: knowledge
+  type: single
+  prompt: Vì sao không có accuracy hay AUC cho uplift của **từng** khách?
+  options:
+  - id: a
+    text: 'Không ai vừa nhận vừa không nhận email: uplift cá nhân không quan sát được'
+  - id: b
+    text: Vì outcome là nhị phân
+  - id: c
+    text: Vì dữ liệu mất cân bằng
+  - id: d
+    text: Vì T-learner không có `predict_proba`
+- id: qini-train
+  kind: knowledge
+  type: single
+  prompt: Tính Qini trên chính tập huấn luyện thì?
+  options:
+  - id: a
+    text: Vẫn đúng, vì dữ liệu là thí nghiệm ngẫu nhiên
+  - id: b
+    text: Qini lạc quan giả vì mô hình học cả nhiễu
+  - id: c
+    text: Qini luôn âm
+  - id: d
+    text: Không khác gì trên tập test
+- id: t-learner
+  kind: knowledge
+  type: single
+  prompt: T-learner ước lượng uplift thế nào?
+  options:
+  - id: a
+    text: Một mô hình có biến treatment, dự đoán với treatment = 1 và 0 rồi trừ
+  - id: b
+    text: Hồi quy outcome lên treatment
+  - id: c
+    text: Hai mô hình riêng cho treated và control, $$\hat\tau(x) = \hat\mu_1(x) - \hat\mu_0(x)$$
+  - id: d
+    text: Xếp hạng khách theo xác suất visit
+- id: why-eval
+  kind: knowledge
+  type: single
+  prompt: Vì sao so uplift theo nhóm top-k% trên Hillstrom là phép kiểm tra hợp lệ?
+  options:
+  - id: a
+    text: Vì có hơn 40 nghìn khách
+  - id: b
+    text: Vì `visit` ít nhiễu hơn `spend`
+  - id: c
+    text: Vì Qini không cần nhóm control
+  - id: d
+    text: Vì xếp hạng chỉ dùng đặc điểm trước thí nghiệm, trong mỗi nhóm treatment vẫn ngẫu nhiên
+- id: womens0
+  kind: data
+  type: single
+  prompt: Uplift `visit` của Womens E-Mail ở khách `womens = 0` là?
+  options:
+  - id: a
+    text: +4.5 điểm %
+  - id: b
+    text: +1.1 điểm %
+  - id: c
+    text: +7.3 điểm %
+  - id: d
+    text: −1.1 điểm %
+- id: qini-mens
+  kind: data
+  type: single
+  prompt: Qini trên toàn bộ 42 693 khách khi xếp hạng theo cột `mens` (giá trị lớn trước, hoà giữ thứ tự gốc)?
+  options:
+  - id: a
+    text: '+0.0034'
+  - id: b
+    text: '+0.0039'
+  - id: c
+    text: −0.0031
+  - id: d
+    text: '0.0000'
+- id: zip
+  kind: data
+  type: single
+  prompt: '`zip_code` nào có uplift `visit` thấp nhất?'
+  options:
+  - id: a
+    text: Rural
+  - id: b
+    text: Urban
+  - id: c
+    text: Surburban
+- id: ctrl-visit
+  kind: data
+  type: single
+  prompt: Tỉ lệ `visit` của nhóm No E-Mail là?
+  options:
+  - id: a
+    text: 15.1%
+  - id: b
+    text: 4.5%
+  - id: c
+    text: 18.5%
+  - id: d
+    text: 10.6%

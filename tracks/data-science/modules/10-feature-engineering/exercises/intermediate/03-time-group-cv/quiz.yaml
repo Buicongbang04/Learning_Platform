@@ -1,0 +1,105 @@
+questions:
+- id: unsorted
+  kind: knowledge
+  type: single
+  prompt: '`TimeSeriesSplit` trên DataFrame chưa sắp theo thời gian thì?'
+  options:
+  - id: a
+    text: Tự sắp theo cột ngày
+  - id: b
+    text: Báo lỗi
+  - id: c
+    text: 'Chỉ chia theo thứ tự dòng: fold test có thể nằm trước train'
+  - id: d
+    text: Kết quả giống KFold có shuffle
+- id: groupkfold
+  kind: knowledge
+  type: single
+  prompt: Khi nào cần GroupKFold theo khách?
+  options:
+  - id: a
+    text: Khi dữ liệu mất cân bằng
+  - id: b
+    text: Khi model phục vụ khách mới và một khách có nhiều dòng
+  - id: c
+    text: Khi có drift theo thời gian
+  - id: d
+    text: Khi số fold lớn hơn 5
+- id: time-not-fix
+  kind: knowledge
+  type: single
+  prompt: 'Mô phỏng mỗi khách 10 dòng rải đều theo thời gian: chia theo thời gian có chữa rò rỉ theo khách không?'
+  options:
+  - id: a
+    text: 'Không: khách có dòng ở mọi giai đoạn nên vẫn nằm cả ở train lẫn test'
+  - id: b
+    text: Có, vì train luôn trước test
+  - id: c
+    text: Có, nếu `gap` > 0
+  - id: d
+    text: Có, nếu số fold đủ lớn
+- id: gap
+  kind: knowledge
+  type: single
+  prompt: Tham số `gap` cần khi nào?
+  options:
+  - id: a
+    text: Khi có nhiều khách mua lại
+  - id: b
+    text: Khi dữ liệu có ngày lễ
+  - id: c
+    text: Khi model quá lớn
+  - id: d
+    text: 'Khi nhãn cần thời gian mới có: đơn cuối fold train có thể chưa có nhãn ở thời điểm thật'
+- id: fold-bad
+  kind: data
+  type: single
+  prompt: Fold test nào (chia thời gian, dev) có tỉ lệ review xấu cao nhất?
+  options:
+  - id: a
+    text: 2017-05-29 → 2017-08-25
+  - id: b
+    text: 2017-11-09 → 2017-12-25
+  - id: c
+    text: 2017-12-25 → 2018-02-14
+  - id: d
+    text: 2018-02-14 → 2018-03-31
+- id: fold1-auc
+  kind: data
+  type: single
+  prompt: AUC của fold thời gian **đầu tiên** (model viết sẵn) là khoảng?
+  options:
+  - id: a
+    text: '0.825'
+  - id: b
+    text: '0.754'
+  - id: c
+    text: '0.668'
+  - id: d
+    text: '0.743'
+- id: test-auc
+  kind: data
+  type: single
+  prompt: Fit model viết sẵn trên toàn bộ dev, AUC trên test (04–08/2018) là?
+  options:
+  - id: a
+    text: '0.7539'
+  - id: b
+    text: '0.6949'
+  - id: c
+    text: '0.7433'
+  - id: d
+    text: '0.6998'
+- id: repeat-share
+  kind: data
+  type: single
+  prompt: Bao nhiêu phần trăm đơn trong dev thuộc khách có từ 2 đơn trở lên?
+  options:
+  - id: a
+    text: 5.94%
+  - id: b
+    text: 3.00%
+  - id: c
+    text: 0.59%
+  - id: d
+    text: 14.4%

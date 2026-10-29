@@ -1,0 +1,105 @@
+questions:
+- id: no-adjust
+  kind: knowledge
+  type: multi
+  prompt: Biến nào **không** được đưa vào tập điều chỉnh khi ước lượng tác động của giao trễ?
+  options:
+  - id: a
+    text: Thời gian giao thực tế
+  - id: b
+    text: Bang của khách
+  - id: c
+    text: Khách có liên hệ CSKH
+  - id: d
+    text: Số ngày hứa giao
+- id: selection
+  kind: knowledge
+  type: single
+  prompt: Bảng chỉ gồm đơn **có review**. Đó là vấn đề gì?
+  options:
+  - id: a
+    text: Confounder chưa đo
+  - id: b
+    text: Mediator
+  - id: c
+    text: 'Điều kiện trên collider: việc có review phụ thuộc cả giao trễ lẫn trải nghiệm'
+  - id: d
+    text: Không có vấn đề, vì đơn không review không có nhãn
+- id: e-value
+  kind: knowledge
+  type: single
+  prompt: E-value khoảng 11 nghĩa là?
+  options:
+  - id: a
+    text: Tác động thật gấp 11 lần tác động quan sát
+  - id: b
+    text: Một confounder chưa đo phải liên hệ với cả trễ lẫn review xấu mạnh cỡ RR 11 mới kéo tác động về 0
+  - id: c
+    text: Cần ít nhất 11 confounder để giải thích kết quả
+  - id: d
+    text: p-value nhỏ hơn 1/11
+- id: lpm
+  kind: knowledge
+  type: single
+  prompt: Trong `bad_review ~ late + covariate` (linear probability model), hệ số của `late` là 0.444. Nghĩa là?
+  options:
+  - id: a
+    text: Odds review xấu của đơn trễ gấp 0.444 lần
+  - id: b
+    text: 44.4% đơn trễ có review xấu
+  - id: c
+    text: Review xấu làm khả năng trễ tăng 44.4%
+  - id: d
+    text: Giữ nguyên covariate, xác suất review xấu của đơn trễ cao hơn 44.4 điểm phần trăm
+- id: late-7d
+  kind: data
+  type: single
+  prompt: Trong các đơn trễ, bao nhiêu phần trăm trễ **từ 7 ngày trở lên** (`days_late >= 7`)?
+  options:
+  - id: a
+    text: 34.4%
+  - id: b
+    text: 42.4%
+  - id: c
+    text: 8.0%
+  - id: d
+    text: 57.6%
+- id: state-late
+  kind: data
+  type: single
+  prompt: Bang của khách nào có tỉ lệ giao trễ cao nhất?
+  options:
+  - id: a
+    text: MA
+  - id: b
+    text: SP
+  - id: c
+    text: AL
+  - id: d
+    text: RJ
+- id: month-late
+  kind: data
+  type: single
+  prompt: Trong các tháng mua có ít nhất 1 000 đơn, tháng nào có tỉ lệ giao trễ cao nhất?
+  options:
+  - id: a
+    text: 2017-11
+  - id: b
+    text: 2018-03
+  - id: c
+    text: 2018-02
+  - id: d
+    text: 2018-08
+- id: dose
+  kind: data
+  type: single
+  prompt: Tỉ lệ review xấu ở đơn trễ từ 2 tới 3 ngày (`2 < days_late <= 3`) là khoảng?
+  options:
+  - id: a
+    text: 19.7%
+  - id: b
+    text: 54.1%
+  - id: c
+    text: 50.4%
+  - id: d
+    text: 34.3%

@@ -1,0 +1,8 @@
+att-weight: [b]
+sklearn-default: [c]
+high-auc: [d]
+trimming: [a, c]
+max-smd: [d]
+ps-small: [b]
+n-matched: [c]
+dw-ipw: [a]

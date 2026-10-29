@@ -1,0 +1,105 @@
+questions:
+- id: label-time
+  kind: knowledge
+  type: single
+  prompt: Mốc "nhãn được biết" đúng cho review là?
+  options:
+  - id: a
+    text: '`review_creation_date`'
+  - id: b
+    text: '`review_answer_timestamp`'
+  - id: c
+    text: '`order_delivered_customer_date`'
+  - id: d
+    text: '`order_estimated_delivery_date`'
+- id: two-leaks
+  kind: knowledge
+  type: multi
+  prompt: '`groupby("seller_id").bad_review.mean()` trên toàn bảng rò rỉ qua đường nào?'
+  options:
+  - id: a
+    text: Review của tương lai
+  - id: b
+    text: Bang của seller
+  - id: c
+    text: Review của chính đơn đang dự đoán
+  - id: d
+    text: Giá của sản phẩm
+- id: strict
+  kind: knowledge
+  type: single
+  prompt: '`allow_exact_matches=False` trong `pd.merge_asof` đảm bảo điều gì?'
+  options:
+  - id: a
+    text: Bỏ seller mới
+  - id: b
+    text: Chỉ lấy event của cùng seller
+  - id: c
+    text: Sắp lại thứ tự dòng
+  - id: d
+    text: 'So sánh chặt: nhãn đến đúng lúc dự đoán không được dùng'
+- id: pit-vs-te
+  kind: knowledge
+  type: single
+  prompt: Vì sao lịch sử point-in-time hơn target encoding trên test?
+  options:
+  - id: a
+    text: Nó tiếp tục cập nhật trong giai đoạn test; target encoding đóng băng ở dữ liệu train
+  - id: b
+    text: Nó dùng smoothing
+  - id: c
+    text: Nó thấy nhãn của đơn test
+  - id: d
+    text: Nó có nhiều cột hơn
+- id: own-share
+  kind: data
+  type: single
+  prompt: Bao nhiêu phần trăm đơn có review trả lời **trước** lúc giao (`label_time < prediction_time`)?
+  options:
+  - id: a
+    text: 2.0%
+  - id: b
+    text: 12.1%
+  - id: c
+    text: 4.9%
+  - id: d
+    text: 0.5%
+- id: test-new
+  kind: data
+  type: single
+  prompt: Tỉ lệ đơn **test** thuộc seller chưa có lịch sử (`seller_past_reviews == 0`)?
+  options:
+  - id: a
+    text: 2.0%
+  - id: b
+    text: 3.2%
+  - id: c
+    text: 4.7%
+  - id: d
+    text: 0%
+- id: best-test
+  kind: data
+  type: single
+  prompt: Trong bốn biến thể, biến thể nào có AUC test cao nhất?
+  options:
+  - id: a
+    text: Không có seller
+  - id: b
+    text: Target encoding `seller_id`
+  - id: c
+    text: Lịch sử seller point-in-time
+  - id: d
+    text: Tỉ lệ seller trên toàn bộ dữ liệu
+- id: pit-auc
+  kind: data
+  type: single
+  prompt: AUC test của biến thể lịch sử seller point-in-time là?
+  options:
+  - id: a
+    text: '0.6998'
+  - id: b
+    text: '0.7592'
+  - id: c
+    text: '0.8044'
+  - id: d
+    text: '0.7106'
