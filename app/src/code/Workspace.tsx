@@ -49,7 +49,7 @@ const RunOutput = memo(function RunOutput({ output }: { output: string }) {
   );
 });
 
-export function OpenInVsCode({ path, className, label = "Mở trong VS Code" }: { path: string; className?: string; label?: string }) {
+function OpenInVsCode({ path, className }: { path: string; className?: string }) {
   const [error, setError] = useState<string | null>(null);
   const open = async () => {
     setError(null);
@@ -64,7 +64,7 @@ export function OpenInVsCode({ path, className, label = "Mở trong VS Code" }: 
     <>
       <button type="button" className={cx(button.outline, className)} onClick={() => void open()} title={`Mở ${path} trong VS Code`}>
         <ExternalLink className="size-4 shrink-0" aria-hidden />
-        <span className="hidden sm:inline">{label}</span>
+        <span className="hidden sm:inline">Mở trong VS Code</span>
       </button>
       {error && (
         <span role="alert" className="max-w-64 truncate text-xs text-error-text" title={error}>

@@ -7,7 +7,7 @@ import { Crumbs, Shell } from "../components/Shell";
 import { ExerciseList, Notes } from "../components/shared";
 import { Markdown } from "../components/Markdown";
 import { badge, button, card, CodeLine, cx, ErrorBlock, LoadingBlock } from "../components/ui";
-import { OpenInVsCode, Workspace } from "../code/Workspace";
+import { Workspace } from "../code/Workspace";
 import { useSplit } from "../code/useSplit";
 import { exerciseLink, moduleLink, trackLink } from "../links";
 import { NotFound } from "./NotFound";
@@ -223,7 +223,6 @@ export function ExercisePage() {
         <StepLink trackId={track.id} target={previous} label="Bài trước" Icon={ChevronLeft} />
         <StepLink trackId={track.id} target={next} label="Bài sau" Icon={ChevronRight} />
       </div>
-      <OpenInVsCode path={exercise.dir} label="Mở thư mục trong VS Code" className="shrink-0" />
       {api.status === "ready" &&
         (done ? (
           <button type="button" className={cx(button.outline, "shrink-0")} onClick={() => setDone(false)} title="Đánh dấu chưa xong" aria-label="Đã xong, bấm để đánh dấu chưa xong">
