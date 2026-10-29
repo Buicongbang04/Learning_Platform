@@ -27,7 +27,10 @@ gộp trả lời "nếu cả hai có mix chung". Khi kết luận đổi dấu 
 | 30+ | 66.80% | 62.49% | 1.3% | 7.1% |
 | Gộp | 10.69% | 14.34% | | |
 
-- Theo số ngày giao: crude −3.66 điểm, adjusted +2.92 điểm, 4/5 tầng ngược chiều → `reversal`.
+- Theo số ngày giao: crude −3.66 điểm, adjusted +2.92 điểm, 4/5 tầng ngược chiều → `reversal`. Đây là
+  đảo chiều dạng yếu (sau chuẩn hoá): ở tầng 0–6 ngày SP vẫn thấp hơn một chút, nên không phải dạng
+  "mọi tầng đều đảo". Kết luận đúng mức: bảng gộp phản ánh phần lớn mix giao nhanh, chưa đủ để nói về
+  tính cách khách SP.
 - Theo trễ / đúng hẹn: đúng hẹn 8.58% so với 9.70%, trễ 44.61% so với 58.25%; adjusted −2.12 điểm,
   không đảo chiều.
 

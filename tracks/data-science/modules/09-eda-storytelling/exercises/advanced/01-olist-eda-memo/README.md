@@ -34,6 +34,9 @@ ngày. Mở `starter/eda.ipynb`:
 3. `decompose_change(table, period_col, a, b, segment="late", target="bad")`: tách thay đổi tỉ lệ
    giữa hai kỳ thành phần **mix** (tỉ trọng segment đổi) và phần **rate** (tỉ lệ trong segment đổi):
 
+   Segment chỉ có mặt ở một trong hai kỳ bị bỏ khỏi `mix` và `rate` (khi đó `mix + rate` có thể khác
+   `total`; nên kiểm tra trước).
+
    $$
    \Delta = \underbrace{\sum_s (w_{b,s} - w_{a,s})\, r_{a,s}}_{\text{mix}} + \underbrace{\sum_s w_{b,s}\,(r_{b,s} - r_{a,s})}_{\text{rate}}
    $$

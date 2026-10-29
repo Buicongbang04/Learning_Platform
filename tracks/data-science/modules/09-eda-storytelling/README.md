@@ -212,8 +212,9 @@ Phân phối `review_score` (95 824 đơn giao xong) có dạng chữ J: 59.2% l
 So sánh tỉ lệ theo nhóm là việc DS làm nhiều nhất và sai nhiều nhất. Xếp hạng bang theo tỉ lệ review
 xấu: bang "tốt nhất" là AP với 6.1%, nhưng chỉ có 66 đơn; bang "tệ nhất" AL 21.3% trên 394 đơn.
 Với 66 đơn (4 review xấu), khoảng tin cậy Wilson 95% là 2.4% tới 14.6%, nên AP có thể nằm gần như
-bất cứ đâu trong bảng xếp hạng. Ở mức seller càng rõ: 56 seller có tỉ lệ trễ 100%, và **cả 56** đều chỉ có 1–2
-đơn.
+bất cứ đâu trong bảng xếp hạng. Ở mức seller càng rõ: trên 95 824 đơn giao xong có review, 56 seller có tỉ lệ trễ
+100%, và **cả 56** đều chỉ có 1–2 đơn (tính trên mọi 96 470 đơn giao xong là 58 seller, cũng đều ≤ 2
+đơn).
 
 Cách làm đúng:
 
@@ -371,9 +372,11 @@ nhanh: "khách SP dễ tính hơn". Giờ chia theo số ngày giao:
 | 30+ | 66.80% | 62.49% | 1.3% | 7.1% |
 | **Gộp** | **10.69%** | **14.34%** | | |
 
-Ở 4 trong 5 nhóm số ngày giao, khách SP có tỉ lệ review xấu **cao hơn**; ở nhóm nhanh nhất hai bên
-gần như bằng nhau. Nhưng 46.9% đơn của SP giao dưới 7 ngày, so với 12.7% ngoài SP. Kết quả gộp chủ
-yếu phản ánh "SP được giao nhanh hơn", không phải "khách SP dễ tính".
+Ở 4 trong 5 nhóm số ngày giao, khách SP có tỉ lệ review xấu **cao hơn**; ở nhóm nhanh nhất SP vẫn
+thấp hơn một chút (7.35% so với 7.70%). Đây là dạng đảo chiều **yếu** (một phần): không phải mọi tầng
+đều ngược chiều, mà là chênh lệch đổi dấu sau khi chuẩn hoá (bên dưới). Nguồn gốc là mix: 46.9% đơn
+của SP giao dưới 7 ngày, so với 12.7% ngoài SP. Bảng gộp phản ánh phần lớn việc SP được giao nhanh
+hơn; nó chưa đủ để nói gì về tính cách khách SP, theo chiều nào cũng vậy (xem phần cơ chế).
 
 **Direct standardization** trả lời câu hỏi "nếu hai nhóm có cùng phân bố số ngày giao thì sao":
 lấy trung bình có trọng số của tỉ lệ từng tầng, với cùng một bộ trọng số $$w_s$$ (ở đây là phân bố
@@ -409,7 +412,8 @@ print((table.mul(w, axis=0).sum()).round(4))                           # tỉ l�
 ```
 
 Chuẩn hoá theo số ngày giao: SP 15.20%, ngoài SP 12.28%. Chênh lệch đổi dấu từ −3.7 điểm phần trăm
-thành +2.9.
+thành +2.9: một Simpson's paradox dạng chuẩn hoá (crude và adjusted ngược dấu, 4/5 tầng ngược chiều
+crude), không phải dạng "mọi tầng đều đảo".
 
 ### Chia theo biến nào mới đúng? Câu trả lời nằm ở cơ chế
 
@@ -439,10 +443,11 @@ phân tầng theo **mediator** (thứ nằm trên đường tác động) hay **
 causal inference (module 06). Trong EDA, việc của bạn là **nhận ra** mix shift và nói rõ kết luận đổi
 thế nào theo cách chia, thay vì chọn bảng nào hợp ý.
 
-Simpson's paradox còn xuất hiện theo **thời gian** (mix shift): tỉ lệ review xấu cả năm 2018 (13.4%)
-cao hơn 2017 (12.1%), nhưng ở đơn trễ thì 2018 thấp hơn (53.8% so với 54.6%); phần lớn chênh lệch
-đến từ tỉ trọng đơn trễ tăng từ 6.5% lên 9.3%. Một dashboard chỉ hiện con số gộp sẽ khiến team chất
-lượng dịch vụ đi tìm nguyên nhân sai chỗ.
+Họ hàng gần của Simpson là **mix shift theo thời gian** (không có đảo chiều, nhưng cùng cơ chế):
+tỉ lệ review xấu cả năm 2018 (13.4%) cao hơn 2017 (12.1%), trong khi từng tầng gần như đứng yên: đơn
+đúng hẹn 9.14% → 9.25%, đơn trễ 54.6% → 53.8%. Phần tăng đến từ tỉ trọng đơn trễ tăng từ 6.5% lên
+9.3%. Một dashboard chỉ hiện con số gộp sẽ khiến team chất lượng dịch vụ đi tìm nguyên nhân sai chỗ
+(chất lượng sản phẩm, thái độ khách) thay vì ở logistics.
 
 ## 7. Kể chuyện với dữ liệu: SCQA, dashboard và memo
 
@@ -468,7 +473,7 @@ tháp**: kết luận trước, lý lẽ sau, chi tiết cuối.
 | Situation | Bối cảnh mọi người đồng ý | Review xấu dao động 9–13% từ tháng 2 tới tháng 10/2017 |
 | Complication | Điều thay đổi, vấn đề | Tháng 2–3/2018 review xấu lên 19–21%, cùng lúc giao trễ lên 16–21% |
 | Question | Câu hỏi người đọc tự hỏi | Có phải chất lượng sản phẩm/seller xấu đi, hay do giao hàng? |
-| Answer | Câu trả lời + hành động | Gần như toàn bộ do giao trễ: giữ tỉ lệ trễ của tháng 1/2018 thì tháng 3 chỉ còn 13.6% review xấu, ngang tháng 1; ở đơn đúng hẹn review xấu chỉ nhích từ 10.3% lên 10.7% (tháng 2). Đề xuất: cảnh báo chủ động cho đơn có nguy cơ trễ |
+| Answer | Câu trả lời + hành động | Gần như toàn bộ phần tăng đi cùng giao trễ (mô tả, chưa phải nhân quả): giữ tỉ lệ trễ của tháng 1/2018 thì tháng 3 chỉ còn 13.6% review xấu, ngang tháng 1; ở đơn đúng hẹn review xấu chỉ nhích từ 10.3% lên 10.7% (tháng 2). Đề xuất: cảnh báo chủ động cho đơn có nguy cơ trễ |
 
 ```mermaid
 flowchart TD

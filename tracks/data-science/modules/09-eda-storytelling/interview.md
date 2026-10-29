@@ -83,8 +83,9 @@ tốt hơn.
 
 Trên Olist: khách SP có tỉ lệ review xấu 10.7%, khách ngoài SP 14.3%. Nhưng ở cùng số ngày giao
 (chia 5 nhóm), khách SP có tỉ lệ cao hơn ở 4 nhóm, nhóm còn lại gần bằng. Lý do: 46.9% đơn SP giao
-dưới 7 ngày, ngoài SP chỉ 12.7%. Con số gộp phản ánh **mix** (SP được giao nhanh), không phải tính
-cách khách. Chuẩn hoá theo cùng phân bố số ngày giao: SP 15.2%, ngoài SP 12.3%.
+dưới 7 ngày, ngoài SP chỉ 12.7%. Chuẩn hoá theo cùng phân bố số ngày giao: SP 15.2%, ngoài SP 12.3%,
+tức chênh lệch đổi dấu. Đây là đảo chiều dạng yếu (sau chuẩn hoá, 4/5 tầng), không phải mọi tầng.
+Con số gộp phản ánh phần lớn **mix** (SP được giao nhanh); nó chưa đủ để kết luận về tính cách khách.
 
 Điểm ứng viên senior phải nói: **thống kê không quyết định bảng nào đúng**, cơ chế mới quyết định.
 Chia theo trễ / đúng hẹn (khách đánh giá theo lời hứa), SP lại thấp hơn ở cả hai tầng. Nếu câu hỏi là
@@ -102,7 +103,7 @@ Theo thứ tự rẻ tới đắt:
 3. **Tử số hay mẫu số**: ít người mua hơn, hay nhiều người vào hơn (chiến dịch kéo traffic chất lượng
    thấp)?
 4. **Mix hay rate**: chia theo kênh, thiết bị, vùng, khách mới/cũ. Nếu mỗi phân khúc không đổi mà
-   tổng giảm thì là mix shift (Simpson), không phải sản phẩm tệ đi.
+   tổng giảm thì là mix shift (có thể dẫn tới Simpson), không phải sản phẩm tệ đi.
 5. **Sự kiện**: release mới, thay đổi giá, đối thủ, sự cố thanh toán.
 
 Báo cáo theo hướng "đã loại trừ gì, còn lại giả thuyết nào, cần dữ liệu gì để xác nhận".
@@ -140,8 +141,8 @@ hoặc cần lập luận. Dấu hiệu dashboard hỏng: 40 biểu đồ, khôn
 
 ## Một PM muốn bảng xếp hạng seller theo tỉ lệ giao trễ để phạt 10 seller tệ nhất. Bạn nói gì?
 
-Xếp hạng thẳng theo tỉ lệ sẽ phạt seller **nhỏ và xui**: trên Olist có 56 seller tỉ lệ trễ 100%, và
-cả 56 chỉ có 1–2 đơn. Đề xuất thay thế:
+Xếp hạng thẳng theo tỉ lệ sẽ phạt seller **nhỏ và xui**: trên Olist (đơn giao xong có review) có 56 seller
+tỉ lệ trễ 100%, và cả 56 chỉ có 1–2 đơn. Đề xuất thay thế:
 
 - **Funnel plot**: vẽ tỉ lệ trễ theo số đơn, kèm giới hạn kiểm soát quanh tỉ lệ chung (hẹp dần khi
   n tăng). Chỉ seller nằm ngoài phễu mới khác biệt thật.
@@ -162,7 +163,7 @@ Kế hoạch:
    không phải do thay đổi cách thu thập review.
 2. **Tách mix và rate**: tỉ lệ trễ cùng tháng lên 15.9% và 21.1% (tháng 1 là 6.5%). Ở đơn đúng hẹn,
    review xấu chỉ nhích từ 10.3% lên khoảng 10.7%. Giữ tỉ lệ trễ của tháng 1 thì tháng 3 chỉ còn
-   khoảng 13.6% review xấu. Kết luận: gần như toàn bộ phần tăng đi qua giao trễ.
+   khoảng 13.6% review xấu. Kết luận (mô tả, chưa phải nhân quả): gần như toàn bộ phần tăng đi cùng giao trễ.
 3. **Đào tiếp vào trễ**: tuyến nào (bang seller → bang khách), hãng vận chuyển, category, seller nào
    đóng góp nhiều nhất số đơn trễ vượt kỳ vọng; có sự kiện bên ngoài (thời tiết, đình công, mùa cao
    điểm sau Tết/Carnaval) không. Ghi rõ phần này là giả thuyết cần xác nhận với đội logistics.

@@ -18,7 +18,7 @@ Kết quả trên Olist thật (96 470 đơn giao xong, seller của item đầu
 | --- | --- |
 | Seller | 2 960 |
 | Tỉ lệ trễ chung | 8.11% |
-| Seller có tỉ lệ trễ 100% | 58, tất cả có tối đa 2 đơn |
+| Seller có tỉ lệ trễ 100% | 58 (trên mọi đơn giao xong; 56 nếu chỉ tính đơn có review), tất cả có tối đa 2 đơn |
 | Top 10 theo tỉ lệ thô | 10 seller có 1–2 đơn |
 | `flag = above` | 140 seller, trong đó 99 có dưới 20 đơn (xấp xỉ normal kém ở n nhỏ) |
 | `alerts(min_n=20)` | 41 seller, chiếm 17.1% số đơn trễ |

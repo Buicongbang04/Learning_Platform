@@ -18,7 +18,8 @@ thật, các quyết định cần cân nhắc và rubric chấm.
 | Bang review xấu cao nhất (n ≥ 30) | AL 21.3% (394 đơn, trễ 23.4%), MA 19.9% (712 đơn, trễ 19.2%) |
 | Bang thấp nhất | AP 6.1% trên 66 đơn, khoảng Wilson 2.4–14.6% |
 
-Câu chuyện chính: **gần như toàn bộ đợt tăng review xấu đầu 2018 đi qua giao trễ**. Giữ tỉ lệ trễ
+Câu chuyện chính: **gần như toàn bộ đợt tăng review xấu đầu 2018 đi cùng giao trễ** (mô tả qua
+tách mix/rate, chưa phải ước lượng nhân quả). Giữ tỉ lệ trễ
 của tháng 1, review xấu tháng 3 chỉ còn khoảng 13.6%.
 
 ## Các quyết định cần cân nhắc
@@ -37,8 +38,8 @@ của tháng 1, review xấu tháng 3 chỉ còn khoảng 13.6%.
 - **Đề xuất có chủ sở hữu và cách đo**: logistics rà soát nguyên nhân; A/B nhắn tin chủ động (module
   03); dashboard tỉ lệ trễ theo tuần đã chín (bài Advanced 02).
 
-Một memo mẫu đạt rubric dài khoảng 450 từ: tiêu đề "Review xấu tăng lên 21% trong tháng 3/2018 gần
-như hoàn toàn do giao trễ, không do sản phẩm"; ba bằng chứng là bảng tách mix/rate, review xấu ở đơn
+Một memo mẫu đạt rubric dài khoảng 450 từ: tiêu đề "Review xấu lên 21% trong tháng 3/2018 đi cùng giao trễ, không thấy ở đơn
+đúng hẹn"; ba bằng chứng là bảng tách mix/rate, review xấu ở đơn
 đúng hẹn gần như không đổi, và chênh lệch đơn trễ/đúng hẹn ổn định qua các tháng.
 
 ## Rubric

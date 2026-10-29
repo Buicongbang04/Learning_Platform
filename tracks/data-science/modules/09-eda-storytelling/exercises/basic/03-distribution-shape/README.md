@@ -28,7 +28,8 @@ Trong `starter/distribution.py`, cài theo docstring:
    không xác định hoặc nhỏ hơn ngưỡng → `"linear"`; có số 0 → `"log1p"`; còn lại → `"log"`.
 3. `fd_bins(s) -> int`: số bins Freedman–Diaconis với độ rộng
    $$h = 2\,\mathrm{IQR}\,n^{-1/3}$$ và số bins $$\lceil (\max - \min)/h \rceil$$. IQR bằng 0 thì
-   dùng Sturges $$\lceil \log_2 n \rceil + 1$$. Kết quả phải khớp `np.histogram_bin_edges(x, "fd")`.
+   dùng Sturges $$\lceil \log_2 n \rceil + 1$$. Khi IQR > 0, kết quả phải khớp `np.histogram_bin_edges(x, "fd")`; khi IQR = 0 bài dùng Sturges
+   (numpy xử lý trường hợp này khác).
 4. `ecdf(s) -> DataFrame` cột `x` (sắp tăng, bỏ NaN) và `y = i/n`.
 
 Sau khi xong, chạy trên `price`, `freight_value` (bảng items) và `payment_value` (bảng payments) của
@@ -43,7 +44,7 @@ Olist thật. Trả lời:
 
 - `shape_summary` đúng mọi khoá trên dữ liệu nhỏ, `tail_ratio` là NaN khi median không dương.
 - `suggest_scale` đúng thứ tự quy tắc, kể cả ngưỡng tuỳ chỉnh.
-- `fd_bins` khớp numpy trên nhiều phân phối, bỏ NaN, dùng Sturges khi IQR = 0.
+- `fd_bins` khớp numpy trên nhiều phân phối có IQR > 0, bỏ NaN, dùng Sturges khi IQR = 0.
 - `ecdf` sắp đúng và bỏ NaN.
 - Trên Olist thật: giá median 74.99, p99 890, `tail_ratio` ≈ 11.87 → `"log"`; phí vận chuyển →
   `"linear"`; `payment_value` → `"log1p"`; `fd_bins(price) = 1712`.

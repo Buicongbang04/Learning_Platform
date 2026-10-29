@@ -39,7 +39,8 @@ hơn? Mở `starter/simpson.ipynb`:
    với trọng số mặc định là phân bố tầng của chính `df`; chỉ dùng tầng có mặt ở mọi nhóm và chuẩn
    hoá lại trọng số. Phải chạy đúng cả khi tầng là cột bool (`late`).
 5. `simpson_check(df, group, stratum, target, a, b) -> dict`: `crude_diff`, `adjusted_diff`,
-   `n_strata`, `strata_against_crude`, `reversal` (định nghĩa trong docstring). Chỉ giữ hai nhóm
+   `n_strata`, `strata_against_crude`, `reversal` (định nghĩa trong docstring). `reversal` là dạng "yếu"
+   (crude và adjusted ngược dấu); dạng "mạnh" là mọi tầng đều ngược chiều crude. Chỉ giữ hai nhóm
    `a`, `b` trước khi tính.
 6. Chạy các cell `explore` trên Olist thật: SP với ngoài SP, chia theo số ngày giao rồi theo trễ /
    đúng hẹn. Viết kết luận 5–8 câu ở cell cuối.
