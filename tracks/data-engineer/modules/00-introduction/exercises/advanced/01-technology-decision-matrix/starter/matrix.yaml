@@ -1,0 +1,26 @@
+# Ma trận quyết định của bạn cho bài toán trong README. Test đọc tệp này.
+# Điểm 1..5 (5 là tốt nhất VỚI BÀI TOÁN NÀY), trọng số tổng bằng 1.
+
+problem: TODO một câu tóm tắt bài toán
+
+volume_estimate:            # ước lượng từ số đo thật của bộ UCI Air Quality (bài basic 03 / intermediate 02)
+  stations: 300
+  readings_per_station_per_day: 0      # TODO
+  bytes_per_reading: 0                 # TODO: byte mỗi dòng CSV thô của UCI
+  raw_gb_per_year: 0                   # TODO
+
+options:                    # ít nhất 3 phương án, mỗi phương án mô tả bằng một câu
+  A: TODO
+  B: TODO
+  C: TODO
+
+weights:                    # ít nhất 5 tiêu chí
+  TODO_criterion: 1.0
+
+scores:                     # mỗi phương án chấm đủ mọi tiêu chí
+  A: {TODO_criterion: 3}
+  B: {TODO_criterion: 3}
+  C: {TODO_criterion: 3}
+
+decision: TODO              # tên phương án bạn chọn
+override_reason: null       # bắt buộc nếu decision KHÁC phương án điểm cao nhất
