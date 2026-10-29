@@ -1,0 +1,26 @@
+# Hợp đồng thu thập cho từng nguồn (bản nháp data contract). Test đọc tệp này.
+# Giá trị cho phép:
+#   type:       database | api | log | mobile | iot
+#   direction:  pull | push
+#   mode:       full | incremental | cdc | stream
+#   frequency:  realtime | minutely | hourly | daily | weekly
+# incremental_key bắt buộc khi mode là incremental hoặc cdc.
+# dedup_key: danh sách cột định danh một bản ghi; [] chỉ khi nguồn không có khoá (ghi lý do ở dedup_note).
+
+sources:
+  - name: orders_db
+    type: database
+    direction: pull
+    mode: TODO
+    frequency: TODO
+    incremental_key: TODO
+    dedup_key: [order_id]
+    dedup_note: null
+    late_data_window: TODO          # vd. "7d": bản ghi cũ tới đâu vẫn có thể đổi
+    raw_path: data/raw/orders_db/   # bắt đầu bằng data/raw/ hoặc s3://, mỗi nguồn một chỗ
+    pii: [TODO]                     # cột chứa dữ liệu cá nhân, [] nếu không có
+    quality_checks: [TODO]          # ít nhất 2 kiểm tra cụ thể
+    source_limits: TODO             # rate limit / tải lên nguồn / giờ cấm
+    owner: TODO                     # đội sở hữu nguồn
+
+  # TODO: thêm các nguồn còn lại của bài toán (web log, mobile app events, thời tiết API, cảm biến IoT)
