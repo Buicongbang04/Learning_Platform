@@ -28,8 +28,8 @@ Quy tắc xuyên suốt:
   LangGraph, multimodal, safety, evaluation, system design. Bám roadmap.sh, kết thúc bằng capstone
   [Trợ lý pháp luật tiếng Việt](capstone/README.md).
 
-Hai phần học song song được sau module 02, nhưng module 05 (kiến trúc Transformer) là cầu nối: ai muốn đi nhanh tới
-ứng dụng có thể học 00, 01, 05 rồi nhảy sang phần B và quay lại phần A sau. Mỗi module có lý thuyết (`README.md`),
+Phần B cần tối thiểu module 00 và 02 (PyTorch để dùng Hugging Face), module 05 được khuyên học trước nhưng không bắt
+buộc. Ai muốn đi nhanh tới ứng dụng: học **00, 01, 02, 04, 05** rồi sang phần B, quay lại 03, 06, 07, 08 sau. Mỗi module có lý thuyết (`README.md`),
 `interview.md` và bài tập 3 mức Basic, Intermediate, Advanced có test tự chấm.
 
 ## Sơ đồ phụ thuộc
@@ -44,7 +44,8 @@ flowchart TD
     M03 --> M06[06 Generative Models]
     M02 --> M07[07 Reinforcement<br/>Learning]
     M05 --> M08[08 Interpretability]
-    M05 --> M09[09 LLM & model mở]
+    M05 -.-> M09[09 LLM & model mở]
+    M02 --> M09
     M00 --> M09
     M09 --> M10[10 Quantization]
     M09 --> M11[11 LLM API<br/>& Prompting]
@@ -84,27 +85,27 @@ flowchart TD
 
 | # | Module | Node roadmap | Kỹ năng chính |
 | --- | --- | --- | --- |
-| 00 | AI Engineer là gì | Introduction | Vai trò, AI vs AGI, tác động lên sản phẩm |
+| 00 | AI Engineer là gì | Introduction (What is an AI Engineer?, vs ML Engineer, AI vs AGI, Roles and Responsibilities, Impact on Product Development, LLMs, Inference, Training, Embeddings, Vector Databases, AI Agents, RAG, Prompt Engineering, Common Terminology) | Vai trò, AI vs AGI, tác động lên sản phẩm |
 | 01 | Neural network từ số 0 ★ | mở rộng | Neuron, backprop bằng numpy, optimizer, init |
 | 02 | PyTorch chuyên sâu ★ | mở rộng | GPU, mixed precision, normalization, debug train |
 | 03 | Computer Vision ★ | mở rộng | LeNet tới ResNet/ViT, YOLO, segmentation |
 | 04 | NLP & Sequence Models ★ | mở rộng | BPE, word2vec, LSTM, seq2seq, attention |
-| 05 | Transformer & kiến trúc LLM ★ | mở rộng (Pre-trained Models) | GPT mini, RoPE, GQA, KV cache, MoE, scaling laws |
+| 05 | Transformer & kiến trúc LLM ★ | mở rộng | GPT mini, RoPE, GQA, KV cache, MoE, scaling laws |
 | 06 | Generative Models ★ | mở rộng | VAE, GAN, diffusion |
 | 07 | Reinforcement Learning ★ | mở rộng | DQN, PPO, Gymnasium, RLHF |
 | 08 | Interpretability ★ | mở rộng | Probing, logit lens, activation patching, SAE |
-| 09 | LLM & model mở | Pre-trained Models, Open vs Closed, Hugging Face, Ollama | Chọn model, Hub, inference, sampling |
+| 09 | LLM & model mở | Pre-trained Models (Benefits, Limitations, Capabilities/Context Length, Cut-off Dates), Popular AI Models (Claude, Gemini, Azure AI, SageMaker, Mistral, Cohere, Replicate), OpenAI Models, Open vs Closed Source, Popular Open Source Models, Hugging Face (Tasks, Hub, Models), Inference SDK, Transformers.js, Ollama (Models, SDK) | Chọn model, Hub, inference, sampling |
 | 10 | Quantization ★ | mở rộng | GPTQ, AWQ, GGUF, bitsandbytes, đo VRAM |
-| 11 | LLM API & Prompting | OpenAI API, Prompt Engineering, Structured Output | Token, chi phí, function calling |
-| 12 | Embeddings & Vector DB | Embeddings, Vector Databases | Semantic search, indexing, vector DB |
-| 13 | RAG | RAG & Implementation | Chunking, hybrid, reranking, trích dẫn, eval |
-| 14 | Fine-tuning LLM | RAG vs Fine-tuning | SFT, LoRA/QLoRA, DPO |
+| 11 | LLM API & Prompting | Open AI Platform, OpenAI API, Chat Completions API, Writing Prompts, Maximum Tokens, Token Counting, Managing Tokens, Pricing Considerations, Open AI Playground, Prompt Engineering, Common Terminology | Token, chi phí, prompt, structured output |
+| 12 | Embeddings & Vector DB | What are Embeddings, Use Cases (Semantic Search, Data Classification, Recommendation, Anomaly Detection), OpenAI Embeddings API/Models, Sentence Transformers, Open-Source Embeddings, Vector Databases (Chroma, Pinecone, Weaviate, FAISS, LanceDB, Qdrant, Supabase, MongoDB Atlas), Indexing Embeddings, Similarity Search | Semantic search, indexing, vector DB |
+| 13 | RAG | RAG & Implementation: RAG Usecases, Implementing RAG (Chunking, Embedding, Vector Database, Retrieval, Generation), Ways of Implementing RAG (Using SDKs Directly; LangChain, LlamaIndex trình bày ở 17), RAG Alternative | Chunking, hybrid, reranking, trích dẫn, eval |
+| 14 | Fine-tuning LLM | Fine-tuning, RAG vs Fine-tuning | SFT, LoRA/QLoRA, DPO |
 | 15 | Reasoning Models ★ | mở rộng | CoT, test-time compute, GRPO, distillation |
-| 16 | AI Agents | AI Agents | ReAct, tool use, MCP, memory, coding agent (nhiều ý ★) |
-| 17 | LangChain & LangGraph ★ | LangChain, LlamaIndex | LCEL, state graph, checkpoint, multi-agent |
-| 18 | Multimodal AI | Multimodal AI | Vision, Whisper, TTS, sinh ảnh |
-| 19 | AI Safety & Security | Safety and Ethics | Prompt injection, red-teaming, guardrails |
-| 20 | Evaluation & Production ★ | Development Tools | Evals, LLM-as-judge, vLLM, observability, chi phí |
+| 16 | AI Agents | Agents Usecases, Prompt Engineering, ReAct Prompting, Building AI Agents, Manual Implementation, OpenAI Functions / Tools (function calling), OpenAI Assistant API (đã cũ, thay bằng tool use hiện hành) | ReAct, tool use, MCP, memory, coding agent (nhiều ý ★) |
+| 17 | LangChain & LangGraph ★ | Ways of Implementing RAG (LangChain, LlamaIndex) | LCEL, state graph, checkpoint, multi-agent |
+| 18 | Multimodal AI | Multimodal AI Usecases/Tasks, Image Understanding, Image Generation, Video Understanding, Audio Processing, Text-to-Speech, Speech-to-Text, OpenAI Vision API, DALL-E API (cũ), Whisper API, Hugging Face Models, LangChain/LlamaIndex for Multimodal Apps, Implementing Multimodal AI | Vision, Whisper, TTS, sinh ảnh |
+| 19 | AI Safety & Security | AI Safety and Ethics: Prompt Injection Attacks, Security and Privacy, Bias and Fairness, Safety Issues, OpenAI Moderation API, end-user IDs, adversarial testing, robust prompt engineering, Know your Customers/Usecases, Constraining outputs and inputs, Safety Best Practices | Prompt injection, red-teaming, guardrails |
+| 20 | Evaluation & Production ★ | Development Tools (AI Code Editors, Code Completion Tools) | Evals, LLM-as-judge, vLLM, observability, chi phí |
 | 21 | AI System Design ★ | mở rộng | Đóng khung bài toán, kiến trúc, case phỏng vấn |
 | 22 | Quantum ML ★ | mở rộng (cập nhật dần) | Qubit, variational circuit, quantum kernel |
 
@@ -130,9 +131,10 @@ Mỗi bài ghi yêu cầu `CPU`, `GPU 4GB` hoặc `GPU 12GB (PC)` kèm thời gi
 | Ollama local (mặc định) | `ollama serve`, `ollama pull qwen2.5:3b`, `ollama pull bge-m3` |
 | Ollama trên PC qua LAN | `OLLAMA_HOST=http://<ip-PC>:11434` |
 | OmniRoute | `LLM_PROVIDER=openai_compat`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` |
-| Gemini | `LLM_PROVIDER=openai_compat` với `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`, `LLM_MODEL=gemini-2.5-flash` |
+| Gemini | `LLM_PROVIDER=openai_compat` với `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`, `LLM_MODEL=gemini-2.5-flash`, `EMBED_MODEL=gemini-embedding-001` |
 
-  Không commit key. Trong test dùng `llmkit.FakeLLM` để LLM trả lời xác định, không cần mạng.
+Không commit key. Trong test dùng `llmkit.FakeLLM` để LLM trả lời xác định, không cần mạng.
+
 - **Model Ollama dùng ở bài Basic/Intermediate:** `qwen2.5:3b` (chat), `bge-m3` hoặc `nomic-embed-text` (embedding).
   `qwen2.5:7b` trở lên chỉ nằm ở bài Advanced hoặc cell "mở rộng" không chấm.
 
