@@ -97,5 +97,18 @@
       "summary": "Đóng khung bài toán, chọn metric, thiết kế hệ thống ML và trình bày kết quả cho stakeholder.",
       "topics": ["Problem Framing", "Metrics", "ML System Design", "Stakeholder Communication"]
     }
-  ]
+  ],
+  "capstone": {
+    "title": "Olist Customer Experience",
+    "readme": "capstone/README.md",
+    "milestones": [
+      { "id": "m01", "title": "EDA và định nghĩa metric", "after": "09-eda-storytelling", "doc": "capstone/milestones/m01-eda-metrics.md" },
+      { "id": "m02", "title": "Dự báo nhu cầu theo ngày", "after": "07-time-series", "doc": "capstone/milestones/m02-demand-forecast.md" },
+      { "id": "m03", "title": "Model dự đoán đơn có nguy cơ review xấu", "after": "11-classic-ml", "doc": "capstone/milestones/m03-bad-review-model.md" },
+      { "id": "m04", "title": "Phân tích nhân quả: giao trễ ảnh hưởng review bao nhiêu", "after": "06-causal-inference", "doc": "capstone/milestones/m04-late-delivery-causal.md" },
+      { "id": "m05", "title": "Thiết kế A/B test cho can thiệp với đơn rủi ro", "after": "04-advanced-experimentation", "doc": "capstone/milestones/m05-ab-test-design.md" },
+      { "id": "m06", "title": "Đóng gói model bằng MLflow, serve qua FastAPI", "after": "14-mlops-for-ds", "doc": "capstone/milestones/m06-mlflow-fastapi.md" },
+      { "id": "m07", "title": "Memo trình bày cho stakeholder", "after": "15-ml-system-design", "doc": "capstone/milestones/m07-stakeholder-memo.md" }
+    ]
+  }
 }
