@@ -39,3 +39,6 @@ setup/.env
 
 # Git worktree của các phiên làm việc
 .claude/worktrees/
+
+# Workspace của superpowers (ledger, brief, review package)
+.superpowers/
