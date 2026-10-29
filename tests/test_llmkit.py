@@ -141,3 +141,15 @@ def test_use_swaps_global_client():
         assert llmkit.chat(MSG) == "giả"
         assert llmkit.embed(["a"]).shape == (1, 64)
     assert llmkit.get_client() is before
+
+
+def test_openai_compat_no_auth_header_when_key_empty():
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers.get("Authorization"))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    OpenAICompatClient(base_url="http://h/v1", api_key="", transport=_transport(handler)).chat(MSG)
+    OpenAICompatClient(base_url="http://h/v1", api_key="k", transport=_transport(handler)).chat(MSG)
+    assert seen == [None, "Bearer k"]

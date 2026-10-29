@@ -177,7 +177,7 @@ class OpenAICompatClient(_HTTPClient):
         key = api_key if api_key is not None else os.environ.get("LLM_API_KEY", "")
         super().__init__(
             url,
-            {"Authorization": f"Bearer {key}"},
+            {"Authorization": f"Bearer {key}"} if key else {},
             _timeout() if timeout is None else timeout,
             transport,
         )
