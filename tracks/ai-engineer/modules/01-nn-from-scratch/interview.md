@@ -179,8 +179,10 @@ sẽ không khớp torch.
 
 Bug hay gặp:
 
-- Quên `model.eval()` khi đánh giá hoặc deploy: kết quả phụ thuộc thành phần batch, batch size 1 cho
-  output rác, và running stats bị "nhiễm" dữ liệu đánh giá.
+- Quên `model.eval()` khi đánh giá hoặc deploy: kết quả phụ thuộc thành phần batch và running stats bị
+  "nhiễm" dữ liệu đánh giá. Với batch 1 mẫu, `BatchNorm1d` ở train mode báo lỗi ngay ("Expected more than
+  1 value per channel when training"); nhưng `BatchNorm2d` trên ảnh có nhiều pixel thì chuẩn hoá theo các
+  pixel của một ảnh, chạy êm mà output vô nghĩa: lỗi im lặng.
 - Batch size nhỏ (1 tới 8): thống kê batch nhiễu, train không ổn định. Dùng LayerNorm/GroupNorm, hoặc
   SyncBatchNorm khi chia batch qua nhiều GPU.
 - Fine-tune với batch nhỏ mà vẫn cập nhật running stats của model pretrain: nên đóng băng BN (để eval
@@ -193,7 +195,7 @@ Transformer dùng nó (chuỗi dài thay đổi, batch nhỏ, sinh từng token)
 ## Dropout: vì sao "inverted", và vì sao pretrain LLM thường để dropout bằng 0?
 
 Inverted dropout đặt 0 với xác suất $$p$$ và nhân phần còn lại với $$1/(1-p)$$ khi train, để kỳ vọng không đổi
-(đo trên một triệu phần tử với $$p = 0.5$$: mean 0.9996). Nhờ vậy eval chỉ cần bỏ dropout, không phải chỉnh
+($$\mathbb{E}[\text{mask}] = (1-p)\cdot\frac{1}{1-p} = 1$$). Nhờ vậy eval chỉ cần bỏ dropout, không phải chỉnh
 trọng số. Khi tự viết: mask sinh mới mỗi forward và lưu lại cho backward; sinh mask mới trong backward là
 bug im lặng.
 
@@ -206,8 +208,11 @@ dropout (và LoRA dropout) lại có ích.
 NaN muộn (không phải bước đầu) thường là thứ gì đó **tăng dần** tới khi tràn số. Thứ tự:
 
 1. **Tái hiện và khoanh vùng**: lưu checkpoint mỗi vài trăm bước; chạy lại từ checkpoint gần nhất với
-   `np.seterr(all="raise")` (numpy) hoặc `torch.autograd.set_detect_anomaly(True)` để dừng ở phép toán
-   đầu tiên ra `nan`/`inf`. Ghi lại batch gây lỗi.
+   công cụ dừng ở phép toán đầu tiên ra `nan`/`inf`. Numpy: `np.seterr(over="raise", invalid="raise",
+   divide="raise")`, không dùng `all="raise"` vì underflow trong softmax/sigmoid ổn định là bình thường và
+   sẽ báo nhầm. PyTorch: `torch.autograd.set_detect_anomaly(True)` bắt NaN sinh ra trong **backward** và in
+   traceback forward của phép gây ra nó; NaN sinh ở **forward** thì phải tự đặt
+   `assert torch.isfinite(t).all()` hoặc forward hook trên từng module. Ghi lại batch gây lỗi.
 2. **Xem dữ liệu của batch đó**: có NaN, inf, giá trị cực lớn, cột hằng (chia std = 0) không. Một bản
    ghi lỗi chỉ xuất hiện ở epoch 3 vì thứ tự xáo.
 3. **Xem số đo đã log**: norm gradient và max abs của logits theo thời gian. Tăng dần rồi nổ là lr quá

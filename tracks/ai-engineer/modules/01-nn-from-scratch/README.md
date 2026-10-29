@@ -18,8 +18,8 @@ Vòng train PyTorch, overfitting và regularization ở mức dùng thư viện 
 uv run python data/download_dataset.py mnist
 ```
 
-Mọi số liệu dưới đây là kết quả chạy thật các khối code trong bài (numpy 2.5.4, torch 2.14.1 bản CPU,
-kiểm ngày 2026-10-30). Khối nào dùng MNIST thì chạy từ thư mục gốc repo.
+Mọi số liệu dưới đây là kết quả chạy thật: các khối code trong bài, và thí nghiệm MNIST ở mục 6 mà bài
+Intermediate 01, 02 cho bạn tự dựng lại (numpy 2.5.4, torch 2.14.1 bản CPU, kiểm ngày 2026-10-30).
 
 Sau module này bạn sẽ:
 
@@ -251,8 +251,9 @@ tham số của MLP nằm ở tầng có input rộng nhất.
 
 ### Universal approximation: hứa gì, không hứa gì
 
-**Universal approximation theorem** (Cybenko 1989 cho sigmoid, Hornik 1991 tổng quát): MLP **một** tầng ẩn,
-đủ rộng, với activation không đa thức, xấp xỉ được mọi hàm liên tục trên miền đóng bị chặn với sai số
+**Universal approximation theorem** (Cybenko 1989 cho sigmoid; Hornik 1991 cho activation bị chặn, không
+hằng; Leshno và cộng sự 1993 cho mọi activation liên tục từng khúc **không phải đa thức**, gồm cả ReLU): MLP
+**một** tầng ẩn, đủ rộng, xấp xỉ được mọi hàm liên tục trên miền đóng bị chặn với sai số
 tuỳ ý. Định lý nói **tồn tại** bộ trọng số, nhưng không nói:
 
 - cần **bao nhiêu** neuron (có thể nhiều theo hàm mũ của số chiều input);
@@ -419,23 +420,7 @@ def forward_backward(p, X, y):
 
 loss, grads = forward_backward(params, X, y)
 
-# 1) Gradient check: sai phân trung tâm trên từng phần tử
-def numerical_grad(name, eps=1e-6):
-    g = np.zeros_like(params[name])
-    for i in np.ndindex(g.shape):
-        old = params[name][i]
-        params[name][i] = old + eps; lp = forward_backward(params, X, y)[0]
-        params[name][i] = old - eps; lm = forward_backward(params, X, y)[0]
-        params[name][i] = old                         # trả lại giá trị cũ
-        g[i] = (lp - lm) / (2 * eps)
-    return g
-
-for name in params:
-    num = numerical_grad(name)
-    rel = np.abs(grads[name] - num).max() / max(np.abs(grads[name]).max() + np.abs(num).max(), 1e-12)
-    print(f"{name}: sai số tương đối {rel:.1e}")
-
-# 2) Đối chiếu PyTorch với cùng trọng số
+# Đối chiếu PyTorch với cùng trọng số
 tp = {k: torch.tensor(v, requires_grad=True) for k, v in params.items()}
 logits = torch.relu(torch.tensor(X) @ tp["W1"] + tp["b1"]) @ tp["W2"] + tp["b2"]
 lt = torch.nn.functional.cross_entropy(logits, torch.tensor(y))
@@ -444,8 +429,9 @@ print("loss khớp torch:", np.isclose(loss, lt.item()),
       "| gradient khớp torch:", all(np.allclose(grads[k], tp[k].grad.numpy()) for k in params))
 ```
 
-Sai số tương đối của cả 4 tham số nằm trong khoảng **4e-11 tới 3e-10**, và loss, gradient khớp
-`torch.autograd` với cùng trọng số. Bài Basic 03 đóng gói đúng các phép tính này thành lớp `Linear`,
+Loss và cả 4 gradient khớp `torch.autograd` với cùng trọng số. Kiểm thêm bằng gradient check (sai phân
+trung tâm từng phần tử, float64, $$\varepsilon = 10^{-6}$$, công thức ở phần dưới; bài Basic 02 cho bạn tự viết
+hàm này), sai số tương đối của cả 4 tham số nằm trong khoảng **4e-11 tới 3e-10**. Bài Basic 03 đóng gói đúng các phép tính này thành lớp `Linear`,
 `ReLU`, `SoftmaxCrossEntropy` có `forward`/`backward`, giống `nn.Module` thu nhỏ.
 
 Ba điều đoạn code cho thấy về backprop thực tế:
@@ -620,100 +606,16 @@ Hai chi tiết hay bị hỏi:
 
 ### So trên MNIST
 
-MLP 784-128-10, He init, batch 64, 3 epoch trên 60 000 ảnh, cùng seed. Chạy khoảng 10 giây trên CPU:
+Thí nghiệm: MLP 784-128-10 viết bằng numpy (đúng `forward_backward` ở mục 4, float32), He init, batch
+64, 3 epoch trên 60 000 ảnh train, cùng seed cho mọi cấu hình, đo test accuracy trên 10 000 ảnh test.
+Mỗi optimizer là một hàm `step(params, grads, t)` cập nhật tại chỗ theo đúng bảng công thức trên. Sau đó
+chạy thêm một "thang" lr cho SGD, mỗi mức 1 epoch, đếm tỉ lệ neuron ẩn không bật với ảnh test nào (ReLU
+chết). Cả lượt chạy khoảng 10 giây trên CPU. Bài Intermediate 01 (MLP trên MNIST) và 02 (Xavier/He,
+SGD momentum, Adam/AdamW khớp `torch.optim`) cho bạn tự dựng lại và tái hiện các bảng này.
 
-```python
-import os
-
-os.environ.setdefault("OMP_NUM_THREADS", "4")       # ma trận nhỏ: quá nhiều luồng BLAS chỉ làm chậm
-import gzip
-from pathlib import Path
-
-import numpy as np
-
-def load_idx(path):
-    with gzip.open(path) as f:
-        data = f.read()
-    ndim = data[3]                                    # 4 byte đầu: magic, byte cuối là số chiều
-    shape = np.frombuffer(data, ">u4", ndim, offset=4)
-    return np.frombuffer(data, np.uint8, offset=4 + 4 * ndim).reshape(shape)
-
-root = Path("data/raw/mnist")
-X = load_idx(root / "train-images-idx3-ubyte.gz").reshape(-1, 784).astype(np.float32) / 255
-y = load_idx(root / "train-labels-idx1-ubyte.gz").astype(np.int64)
-Xt = load_idx(root / "t10k-images-idx3-ubyte.gz").reshape(-1, 784).astype(np.float32) / 255
-yt = load_idx(root / "t10k-labels-idx1-ubyte.gz").astype(np.int64)
-
-def init(seed):
-    r = np.random.default_rng(seed)
-    return [r.normal(0, np.sqrt(2 / 784), (784, 128)).astype(np.float32), np.zeros(128, np.float32),
-            r.normal(0, np.sqrt(2 / 128), (128, 10)).astype(np.float32), np.zeros(10, np.float32)]
-
-def loss_grads(P, xb, yb):
-    W1, b1, W2, b2 = P
-    z1 = xb @ W1 + b1
-    h = np.maximum(z1, 0)
-    z = h @ W2 + b2
-    z = z - z.max(1, keepdims=True)
-    log_p = z - np.log(np.exp(z).sum(1, keepdims=True))
-    dz = np.exp(log_p)
-    dz[np.arange(len(yb)), yb] -= 1
-    dz /= len(yb)
-    dz1 = (dz @ W2.T) * (z1 > 0)
-    return -log_p[np.arange(len(yb)), yb].mean(), [xb.T @ dz1, dz1.sum(0), h.T @ dz, dz.sum(0)]
-
-def sgd(lr, momentum=0.0):
-    v = None
-    def step(P, G, t):
-        nonlocal v
-        v = v or [np.zeros_like(p) for p in P]
-        for p, g, vi in zip(P, G, v):
-            vi *= momentum; vi += g                   # quy ước PyTorch: v = mu*v + g
-            p -= lr * vi
-    return step
-
-def adamw(lr, b1=0.9, b2=0.999, eps=1e-8, wd=0.0):
-    m = s = None
-    def step(P, G, t):
-        nonlocal m, s
-        m = m or [np.zeros_like(p) for p in P]
-        s = s or [np.zeros_like(p) for p in P]
-        for p, g, mi, si in zip(P, G, m, s):
-            mi *= b1; mi += (1 - b1) * g
-            si *= b2; si += (1 - b2) * g * g
-            mhat, shat = mi / (1 - b1 ** t), si / (1 - b2 ** t)   # bias correction
-            p -= lr * wd * p                          # decoupled weight decay (chữ W trong AdamW)
-            p -= lr * mhat / (np.sqrt(shat) + eps)
-    return step
-
-def train(step, epochs=3, bs=64, seed=0):
-    P, rng, t, curve, last = init(seed), np.random.default_rng(seed), 0, [], []
-    for _ in range(epochs):
-        idx, total = rng.permutation(len(X)), 0.0
-        for i in range(0, len(X), bs):
-            b = idx[i:i + bs]
-            loss, G = loss_grads(P, X[b], y[b])
-            t += 1
-            step(P, G, t)
-            total += loss * len(b)
-            last = (last + [loss])[-100:]             # loss 100 batch gần nhất
-        curve.append(total / len(X))
-    h = np.maximum(Xt @ P[0] + P[1], 0)
-    acc = (np.argmax(h @ P[2] + P[3], 1) == yt).mean()
-    dead = (h.max(axis=0) == 0).mean()               # neuron không bật với ảnh test nào
-    return curve, acc, dead, np.mean(last)
-
-for name, step in [("SGD lr 0.01", sgd(0.01)), ("SGD lr 0.1", sgd(0.1)),
-                   ("SGD+momentum 0.9, lr 0.01", sgd(0.01, 0.9)), ("Adam lr 1e-3", adamw(1e-3)),
-                   ("Adam lr 1e-1", adamw(1e-1))]:
-    curve, acc, _, _ = train(step)
-    print(f"{name:26s} train loss theo epoch {' '.join(f'{c:.3f}' for c in curve)} | test acc {acc:.4f}")
-
-# Thang learning rate cho SGD, 1 epoch: lr quá lớn giết ReLU
-for lr in [0.5, 1.0, 2.0, 5.0]:
-    _, acc, dead, tail = train(sgd(lr), epochs=1)
-    print(f"SGD lr {lr:<4} loss 100 batch cuối {tail:.3f} | test acc {acc:.4f} | ReLU chết {dead:.0%}")
-```
+MNIST gốc ở định dạng **idx** nén gzip: 4 byte đầu là "magic number" (hai byte 0, một byte kiểu dữ liệu,
+byte thứ tư là số chiều), tiếp theo mỗi chiều một số nguyên 4 byte big-endian (60 000, 28, 28 với ảnh
+train), rồi tới dữ liệu thô `uint8` xếp liền. Đọc xong thì làm phẳng thành 784 cột và chia 255 về [0, 1].
 
 | Optimizer | Train loss epoch 1 / 2 / 3 | Test acc |
 | --- | --- | --- |
@@ -741,8 +643,9 @@ for lr in [0.5, 1.0, 2.0, 5.0]:
   (công suất model mất đi mà accuracy chưa báo); lr 5.0 giết hết, output thành hằng số, loss đứng ở
   **2.324**, sát $$\ln 10$$, accuracy 0.0982 là tỉ lệ của đúng một lớp trong tập test. Mục 7 dùng lại triệu
   chứng này.
-- Code dùng `OMP_NUM_THREADS=4`: với ma trận nhỏ, để BLAS dùng hết 16 luồng làm cùng đoạn code chậm đi
-  vài lần vì chi phí đồng bộ. Đo trước khi tin "càng nhiều luồng càng nhanh".
+- Thí nghiệm đặt `OMP_NUM_THREADS=4` trước khi import numpy: với ma trận nhỏ, để BLAS dùng hết 16 luồng
+  của laptop làm cùng đoạn code chậm đi khoảng 5 lần (45 giây so với 9 giây) vì chi phí đồng bộ. Đo trước
+  khi tin "càng nhiều luồng càng nhanh".
 
 ### Vòng train
 
@@ -845,45 +748,38 @@ kỳ vọng không đổi; khi eval là phép đồng nhất. Backward dùng l�
   dropout); thường đặt dropout sau khối norm + activation, hoặc chỉ ở các tầng fully connected cuối.
 - Pretrain LLM lớn thường để dropout 0: dữ liệu đủ nhiều, overfit không phải vấn đề chính.
 
-Đối chiếu bản numpy với `torch.nn.BatchNorm1d`, và kiểm kỳ vọng của inverted dropout:
+Trước khi tự viết (bài Intermediate 03), xem `torch.nn.BatchNorm1d` hành xử thế nào, vì đó là thứ bản numpy
+của bạn phải khớp:
 
 ```python
-import numpy as np
 import torch
 
-rng = np.random.default_rng(0)
-x = rng.normal(3.0, 2.0, size=(16, 4))               # batch 16, 4 feature, lệch mean và scale
-gamma, beta, eps, mom = np.ones(4), np.zeros(4), 1e-5, 0.1
-run_mean, run_var = np.zeros(4), np.ones(4)
+torch.manual_seed(0)
+x = 3.0 + 2.0 * torch.randn(16, 4, dtype=torch.float64)   # batch 16, 4 feature, lệch mean và scale
+bn = torch.nn.BatchNorm1d(4).double()                       # momentum 0.1, running_var khởi tạo 1
 
-# BatchNorm khi train: chuẩn hoá bằng thống kê của chính batch
-mu, var = x.mean(axis=0), x.var(axis=0)              # var lệch (chia N) để chuẩn hoá
-out = gamma * (x - mu) / np.sqrt(var + eps) + beta
-run_mean = (1 - mom) * run_mean + mom * mu
-run_var = (1 - mom) * run_var + mom * x.var(axis=0, ddof=1)   # running var không lệch (chia N-1)
-
-bn = torch.nn.BatchNorm1d(4, eps=eps, momentum=mom).double()
 bn.train()
-out_t = bn(torch.tensor(x))
-print("output train khớp torch:", np.allclose(out, out_t.detach().numpy()))
-print("running_mean khớp:", np.allclose(run_mean, bn.running_mean.numpy()),
-      "| running_var khớp:", np.allclose(run_var, bn.running_var.numpy()))
+out = bn(x).detach()
+print(f"train: |mean| output lớn nhất {out.mean(0).abs().max():.1e}, std output {out.std(0, unbiased=False).numpy().round(4)}")
+expect_unbiased = 0.9 * 1 + 0.1 * x.var(0, unbiased=True)
+expect_biased = 0.9 * 1 + 0.1 * x.var(0, unbiased=False)
+print("running_var khớp bản chia N-1:", torch.allclose(bn.running_var, expect_unbiased),
+      "| khớp bản chia N:", torch.allclose(bn.running_var, expect_biased))
 
-# Khi eval: dùng running stats, output của một mẫu không phụ thuộc mẫu khác trong batch
-bn.eval()
-one = torch.tensor(x[:1])
-print("eval khớp:", np.allclose(bn(one).detach().numpy(), (x[:1] - run_mean) / np.sqrt(run_var + eps)))
+try:
+    bn(x[:1])                                               # train mode, batch 1 mẫu
+except ValueError as e:
+    print("batch 1 khi train:", e)
 
-# Inverted dropout: giữ kỳ vọng khi train, eval là identity
-p = 0.5
-a = np.ones(1_000_000)
-mask = (rng.random(a.shape) >= p) / (1 - p)
-print(f"mean sau dropout (train): {(a * mask).mean():.4f}")
+bn.eval()                                                   # eval: dùng running stats
+print("eval, một mẫu riêng = cùng mẫu trong batch:", torch.allclose(bn(x[:1]), bn(x)[:1]))
 ```
 
-Output train, `running_mean`, `running_var` (bản `ddof=1`) và output eval đều khớp torch. Đổi
-`x.var(axis=0, ddof=1)` thành `x.var(axis=0)` thì `running_var` không còn khớp: đúng loại sai lệch mà
-bài Intermediate 03 kiểm. Mean sau dropout trên một triệu phần tử là **0.9996**.
+Khi train, output mỗi feature có mean cỡ 1e-16 và std đúng 1. `running_var` khớp công thức trung bình trượt
+dùng phương sai chia $$N-1$$, **không** khớp bản chia $$N$$: viết `x.var(axis=0)` (mặc định `ddof=0` của numpy)
+cho running var là sai lệch nhỏ mà test của bài Intermediate 03 bắt được. Batch 1 mẫu khi train bị từ chối
+ngay (`Expected more than 1 value per channel when training`). Khi eval, một mẫu đi riêng hay trong batch
+cho cùng kết quả.
 
 ### Khi train hỏng thì nhìn gì
 
@@ -902,7 +798,7 @@ flowchart TD
 
 | Triệu chứng | Nguyên nhân hay gặp | Kiểm thế nào |
 | --- | --- | --- |
-| Loss NaN sau vài trăm bước | lr quá lớn làm logits phình rồi tràn; `log(softmax)` thay vì `log_softmax`; chia cho std = 0 (BN thiếu $$\epsilon$$, cột hằng trong dữ liệu) | `np.seterr(all="raise")` hoặc `torch.autograd.set_detect_anomaly(True)` để dừng ở phép toán đầu tiên; log max abs của logits và norm gradient |
+| Loss NaN sau vài trăm bước | lr quá lớn làm logits phình rồi tràn; `log(softmax)` thay vì `log_softmax`; chia cho std = 0 (BN thiếu $$\epsilon$$, cột hằng trong dữ liệu) | numpy: `np.seterr(over="raise", invalid="raise", divide="raise")` (không dùng `all`, vì underflow trong softmax/sigmoid ổn định là bình thường) để dừng ở phép toán đầu tiên; PyTorch: `torch.autograd.set_detect_anomaly(True)` bắt NaN sinh ra **trong backward** và in traceback forward của phép gây ra nó, còn NaN ở forward thì cần `assert torch.isfinite(t).all()` hoặc forward hook; log max abs của logits và norm gradient |
 | Loss đứng yên ở $$\ln C$$ | ReLU chết hết (bảng lr ở mục 6: lr 5.0 → loss 2.324); nhãn bị xáo khác input; quên gọi optimizer step; khởi tạo 0 | đếm tỉ lệ neuron không bao giờ bật; xem vài cặp (ảnh, nhãn) sau khi xáo; so trọng số trước và sau một bước |
 | Loss giảm rất chậm | lr quá nhỏ; init quá nhỏ (vanishing); input chưa chuẩn hoá (pixel 0 tới 255) | quét lr theo log; log std activation từng tầng |
 | Loss dao động mạnh, thỉnh thoảng nhảy vọt | lr hơi lớn; batch quá nhỏ; một vài mẫu lỗi | giảm lr, thêm warmup, clip gradient |
@@ -952,6 +848,8 @@ Paper:
 
 - Rumelhart, Hinton, Williams. [Learning representations by back-propagating errors](https://www.nature.com/articles/323533a0) (Nature, 1986).
 - Cybenko. [Approximation by superpositions of a sigmoidal function](https://doi.org/10.1007/BF02551274) (1989).
+- Leshno, Lin, Pinkus, Schocken. "Multilayer feedforward networks with a nonpolynomial activation function can
+  approximate any function", Neural Networks 6(6), 1993.
 - Glorot & Bengio. [Understanding the difficulty of training deep feedforward neural networks](https://proceedings.mlr.press/v9/glorot10a.html) (2010), Xavier init.
 - He et al. [Delving Deep into Rectifiers](https://arxiv.org/abs/1502.01852) (2015), He init.
 - Hendrycks & Gimpel. [Gaussian Error Linear Units (GELUs)](https://arxiv.org/abs/1606.08415) (2016).
