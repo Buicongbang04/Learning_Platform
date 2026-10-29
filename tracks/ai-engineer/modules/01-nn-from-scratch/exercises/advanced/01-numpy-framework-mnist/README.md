@@ -24,11 +24,11 @@ từng mở notebook.
 
 ## Đề bài
 
-**Phần cứng:** CPU · ~10 phút
+**Phần cứng:** CPU · ~360 phút
 
-Thời gian trên là lúc chạy cả notebook: bản tham chiếu mất khoảng 4 phút với `OMP_NUM_THREADS=4` (model chính
-15 epoch 30 giây, ablation 5 cấu hình × 2 seed hơn 3 phút), framework của bạn có thể chậm hơn. Viết framework
-và báo cáo mất nhiều giờ.
+Thời gian trên là thời gian làm bài (framework, thí nghiệm, báo cáo). Chạy cả notebook: bản tham chiếu mất
+khoảng 4 phút với `OMP_NUM_THREADS=4` (model chính 15 epoch 30 giây, ablation 5 cấu hình × 2 seed hơn 3 phút),
+framework của bạn có thể chậm hơn.
 
 1. Trong `starter/framework.ipynb` dựng framework bằng numpy, không dùng PyTorch:
    - `Module` (`forward`, `backward`, `parameters`, `state`, `train`/`eval`) và `Sequential`.
