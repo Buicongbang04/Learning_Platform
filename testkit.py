@@ -11,6 +11,7 @@ Trong test:
     from testkit import Exercise
     ex = Exercise(__file__)
     transform = ex.module("transform.py")   # import starter/transform.py (hoặc lời giải)
+    analysis = ex.notebook("analysis.ipynb") # chạy code cell (trừ cell tag `explore`), dùng như module
     sql = ex.read("query.sql")              # đọc tệp văn bản
     ex.require_service("postgres")          # skip nếu dịch vụ Docker chưa chạy
 """
@@ -18,7 +19,9 @@ Trong test:
 from __future__ import annotations
 
 import importlib.util
+import linecache
 import os
+import re
 import socket
 import sys
 from pathlib import Path
@@ -87,6 +90,31 @@ def service_up(name: str, timeout: float = 0.5) -> bool:
         return False
 
 
+# Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
+_MAGIC = re.compile(r"^(\s*)(?:[%!]|[\w, ]+=\s*[%!]).*$")
+
+
+def _unique_name(path: Path) -> str:
+    return "ex_" + "_".join(path.relative_to(ROOT).with_suffix("").parts).replace("-", "_")
+
+
+def _load(path: Path, unique: str, execute, spec=None) -> ModuleType:
+    if unique in sys.modules:
+        return sys.modules[unique]
+    module = importlib.util.module_from_spec(spec) if spec else ModuleType(unique)
+    module.__file__ = str(path)
+    sys.path.insert(0, str(path.parent))
+    try:
+        sys.modules[unique] = module
+        execute(module)
+    except BaseException:
+        del sys.modules[unique]
+        raise
+    finally:
+        sys.path.remove(str(path.parent))
+    return module
+
+
 class Exercise:
     """Một bài tập, xác định từ đường dẫn tệp test đang chạy."""
 
@@ -115,18 +143,46 @@ class Exercise:
 
     def module(self, name: str) -> ModuleType:
         path = self.path(name)
-        unique = "ex_" + "_".join(path.relative_to(ROOT).with_suffix("").parts).replace("-", "_")
-        if unique in sys.modules:
-            return sys.modules[unique]
-        spec = importlib.util.spec_from_file_location(unique, path)
-        module = importlib.util.module_from_spec(spec)
-        sys.path.insert(0, str(path.parent))
-        try:
-            sys.modules[unique] = module
-            spec.loader.exec_module(module)
-        finally:
-            sys.path.remove(str(path.parent))
-        return module
+        spec = importlib.util.spec_from_file_location(_unique_name(path), path)
+        return _load(path, spec.name, lambda module: spec.loader.exec_module(module), spec)
+
+    def notebook(self, name: str) -> ModuleType:
+        """Chạy các code cell của notebook (trừ cell gắn tag `explore`) rồi trả về như một module.
+
+        Dòng magic/shell (`%time ...`, `!ls`, `x = !ls`) thành `pass`, cell magic (`%%bash`) bị bỏ,
+        `display()` in ra như `print`. Output đã lưu trong notebook không ảnh hưởng. Lỗi được báo theo
+        cell: `analysis.ipynb[cell 5]`, dòng tính trong cell.
+        """
+        import nbformat
+
+        path = self.path(name)
+        book = nbformat.read(path, as_version=4)
+        cells = []
+        for number, cell in enumerate(book.cells, start=1):
+            if cell.cell_type != "code" or "explore" in cell.get("metadata", {}).get("tags", []):
+                continue
+            if cell.source.lstrip().startswith("%%"):
+                continue
+            source = "\n".join(_MAGIC.sub(r"\1pass", line) for line in cell.source.splitlines()) + "\n"
+            filename = f"{path}[cell {number}]"
+            linecache.cache[filename] = (len(source), None, source.splitlines(keepends=True), filename)
+            cells.append(compile(source, filename, "exec"))
+        os.environ.setdefault("MPLBACKEND", "Agg")
+
+        def execute(module: ModuleType) -> None:
+            module.__dict__.setdefault("display", print)
+            for code in cells:
+                exec(code, module.__dict__)
+
+        return _load(path, _unique_name(path), execute)
+
+    @staticmethod
+    def dataset(name: str) -> Path:
+        """Thư mục bộ dữ liệu thật `data/raw/<name>/`; skip test nếu chưa tải."""
+        path = ROOT / "data" / "raw" / name
+        if not path.is_dir() or not any(path.iterdir()):
+            pytest.skip(f"Chưa tải bộ {name}. Chạy: uv run python data/download_dataset.py {name}")
+        return path
 
     @staticmethod
     def require_service(name: str) -> None:

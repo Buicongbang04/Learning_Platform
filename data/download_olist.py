@@ -4,11 +4,12 @@ Không bắt buộc: mọi bài tập và capstone chạy được với dữ li
 (cùng tên tệp, cùng cột). Dùng bộ thật khi muốn số liệu "đời thực" cho portfolio.
 
 Chuẩn bị Kaggle API token (một lần):
-  1. Đăng nhập https://www.kaggle.com -> Settings -> API -> "Create New Token".
-     Trình duyệt tải về tệp kaggle.json chứa {"username": "...", "key": "..."}.
-  2. Đặt tệp vào ~/.kaggle/kaggle.json và khoá quyền:
-         mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
-     Hoặc đặt biến môi trường KAGGLE_USERNAME và KAGGLE_KEY.
+  1. Đăng nhập https://www.kaggle.com -> Settings -> API -> "Generate New Token".
+     Kaggle hiện token dạng KGAT_... Ghi vào setup/.env (đã nằm trong .gitignore):
+         KAGGLE_API_TOKEN=KGAT_...
+     Hoặc đặt biến môi trường KAGGLE_API_TOKEN.
+  2. Token kiểu cũ vẫn dùng được: tệp ~/.kaggle/kaggle.json chứa {"username": "...", "key": "..."}
+     (chmod 600), hoặc biến môi trường KAGGLE_USERNAME và KAGGLE_KEY.
   3. Mở trang dataset một lần trên web và bấm chấp nhận điều khoản nếu Kaggle yêu cầu:
          https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
 
@@ -16,7 +17,7 @@ Chạy:
     uv run python data/download_olist.py                 # ghi vào data/raw/ (ghi đè dữ liệu giả)
     uv run python data/download_olist.py --out data/raw_real
 
-Script gọi thẳng REST API của Kaggle bằng requests (không cần cài gói `kaggle`).
+Script tải qua kagglehub (client chính thức của Kaggle, cache ở ~/.cache/kagglehub).
 Nếu đã cài Kaggle CLI, lệnh tương đương:
     kaggle datasets download -d olistbr/brazilian-ecommerce -p data/raw --unzip
 """
@@ -24,17 +25,14 @@ Nếu đã cài Kaggle CLI, lệnh tương đương:
 from __future__ import annotations
 
 import argparse
-import io
-import json
 import os
+import shutil
 import sys
-import zipfile
 from pathlib import Path
 
-import requests
+import kagglehub
 
 DATASET = "olistbr/brazilian-ecommerce"
-URL = f"https://www.kaggle.com/api/v1/datasets/download/{DATASET}"
 DEFAULT_OUT = Path(__file__).resolve().parent / "raw"
 EXPECTED = [
     "olist_customers_dataset.csv", "olist_geolocation_dataset.csv",
@@ -45,15 +43,46 @@ EXPECTED = [
 ]
 
 
-def credentials() -> tuple[str, str] | None:
-    user, key = os.environ.get("KAGGLE_USERNAME"), os.environ.get("KAGGLE_KEY")
-    if user and key:
-        return user, key
-    path = Path(os.environ.get("KAGGLE_CONFIG_DIR", Path.home() / ".kaggle")) / "kaggle.json"
-    if path.exists():
-        data = json.loads(path.read_text())
-        return data["username"], data["key"]
+ENV_FILE = Path(__file__).resolve().parent.parent / "setup" / ".env"
+
+
+def _from_env_file(path: Path, key: str) -> str | None:
+    if not path.exists():
+        return None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        name, sep, value = line.strip().partition("=")
+        if sep and name.strip() == key:
+            return value.strip().strip('"').strip("'") or None
     return None
+
+
+def ensure_kaggle_credentials(env_file: Path = ENV_FILE) -> bool:
+    """Đưa KAGGLE_API_TOKEN từ setup/.env vào môi trường (cho kagglehub); True nếu có token nào dùng được."""
+    if not os.environ.get("KAGGLE_API_TOKEN"):
+        token = _from_env_file(env_file, "KAGGLE_API_TOKEN")
+        if token:
+            os.environ["KAGGLE_API_TOKEN"] = token
+    if os.environ.get("KAGGLE_API_TOKEN"):
+        return True
+    if os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"):
+        return True
+    return (Path(os.environ.get("KAGGLE_CONFIG_DIR", Path.home() / ".kaggle")) / "kaggle.json").exists()
+
+
+def kaggle_download(ref: str, out: Path, files: list[str]) -> list[Path]:
+    """Tải dataset Kaggle qua kagglehub (client chính thức, có cache) rồi chép đúng các tệp cần vào out."""
+    cache = Path(kagglehub.dataset_download(ref))
+    found = {p.name: p for p in cache.rglob("*") if p.is_file()}
+    missing = [name for name in files if name not in found]
+    if missing:
+        raise SystemExit(f"Dataset {ref} thiếu {missing}. Có: {sorted(found)}")
+    out.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name in files:
+        target = out / name
+        shutil.copyfile(found[name], target)
+        written.append(target)
+    return written
 
 
 def main() -> None:
@@ -61,33 +90,17 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
-    creds = credentials()
-    if not creds:
+    if not ensure_kaggle_credentials():
         sys.exit(
-            "Chưa có Kaggle token. Xem hướng dẫn ở đầu tệp data/download_olist.py.\n"
+            "Chưa có Kaggle token (KAGGLE_API_TOKEN trong setup/.env). Xem hướng dẫn ở đầu tệp data/download_olist.py.\n"
             "Không có token vẫn học được: uv run python data/generate_olist.py"
         )
 
     print(f"Đang tải {DATASET} (~45 MB)...")
-    resp = requests.get(URL, auth=creds, timeout=300)
-    if resp.status_code in (401, 403):
-        sys.exit(f"Kaggle từ chối ({resp.status_code}). Kiểm tra token và đã chấp nhận điều khoản dataset chưa.")
-    resp.raise_for_status()
+    for path in kaggle_download(DATASET, args.out, EXPECTED):
+        print(f"  {path}")
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
-        for name in zf.namelist():
-            target = args.out / Path(name).name  # bỏ thư mục con, chặn path traversal
-            if not target.name.endswith(".csv"):
-                continue
-            target.write_bytes(zf.read(name))
-            print(f"  {target}")
-
-    missing = [n for n in EXPECTED if not (args.out / n).exists()]
-    if missing:
-        print(f"Cảnh báo: thiếu {missing}", file=sys.stderr)
-    else:
-        print(f"Xong: 9 tệp CSV trong {args.out.resolve()}")
+    print(f"Xong: 9 tệp CSV trong {args.out.resolve()}")
 
 
 if __name__ == "__main__":

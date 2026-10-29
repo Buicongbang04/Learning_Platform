@@ -1,7 +1,101 @@
 {
   "id": "data-science",
-  "name": "Data Science",
+  "name": "AI & Data Scientist",
   "icon": "flask-conical",
-  "status": "soon",
-  "order": 3
+  "status": "active",
+  "order": 3,
+  "description": "15 module từ toán, thống kê, A/B testing, causal inference tới ML, deep learning và ML system design, thực hành trên dữ liệu thật.",
+  "source": "https://roadmap.sh/ai-data-scientist",
+  "modules": [
+    {
+      "id": "01-math-for-ml",
+      "title": "Toán cho Machine Learning",
+      "summary": "Linear algebra, calculus và optimization đủ để hiểu model bên trong, tự viết gradient descent.",
+      "topics": ["Linear Algebra", "Calculus", "Optimization", "Gradient Descent"]
+    },
+    {
+      "id": "02-probability-statistics",
+      "title": "Xác suất & Thống kê suy luận",
+      "summary": "Phân phối, CLT, sampling, ước lượng, bootstrap và Bayesian cơ bản.",
+      "topics": ["Distributions", "CLT", "Sampling", "Estimation", "Bootstrap", "Bayesian"]
+    },
+    {
+      "id": "03-ab-testing",
+      "title": "Hypothesis Testing & A/B Testing",
+      "summary": "Thiết kế, tính power, phân tích và ra quyết định từ thí nghiệm; tránh SRM, peeking, multiple testing.",
+      "topics": ["Hypothesis Testing", "Power & MDE", "Experiment Design", "SRM", "Sequential Testing", "Multiple Testing"]
+    },
+    {
+      "id": "04-advanced-experimentation",
+      "title": "Experimentation nâng cao",
+      "summary": "Tăng độ nhạy thí nghiệm và phân tích metric khó: CUPED, CUPAC, stratification, ratio metrics.",
+      "topics": ["CUPED", "CUPAC", "Stratification", "Delta Method", "Ratio Metrics", "Network Effects"]
+    },
+    {
+      "id": "05-econometrics-regression",
+      "title": "Econometrics & Regression",
+      "summary": "OLS và các giả định, GLM, fitting distributions, panel data.",
+      "topics": ["OLS", "GLM", "Fitting Distributions", "Panel Data", "Heteroskedasticity"]
+    },
+    {
+      "id": "06-causal-inference",
+      "title": "Causal Inference",
+      "summary": "Ước lượng tác động khi không chạy được A/B test: DiD, synthetic control, IV, RDD, propensity score, uplift.",
+      "topics": ["DiD", "Synthetic Control", "IV", "RDD", "Propensity Score", "Uplift"]
+    },
+    {
+      "id": "07-time-series",
+      "title": "Time Series & Forecasting",
+      "summary": "ARIMA, ETS, mô hình ML với lag feature, backtesting và hierarchical forecasting.",
+      "topics": ["ARIMA", "ETS", "Lag Features", "Backtesting", "Hierarchical Forecasting"]
+    },
+    {
+      "id": "08-coding-for-ds",
+      "title": "Coding cho Data Scientist",
+      "summary": "DSA cho vòng phỏng vấn, SQL dạng phỏng vấn DS, viết pandas/polars nhanh.",
+      "topics": ["DSA", "SQL Interview", "Funnel & Retention", "pandas", "polars"]
+    },
+    {
+      "id": "09-eda-storytelling",
+      "title": "EDA & Data Storytelling",
+      "summary": "Hiểu dữ liệu, trực quan hoá đúng cách và kể câu chuyện từ dữ liệu cho stakeholder.",
+      "topics": ["EDA", "Visualization", "Data Storytelling", "seaborn"]
+    },
+    {
+      "id": "10-feature-engineering",
+      "title": "Feature Engineering & Validation",
+      "summary": "Leakage, encoding, sklearn Pipeline, cross-validation theo thời gian và theo nhóm.",
+      "topics": ["Data Leakage", "Encoding", "sklearn Pipeline", "Time-based CV", "Group CV"]
+    },
+    {
+      "id": "11-classic-ml",
+      "title": "Classic Machine Learning",
+      "summary": "Supervised và unsupervised, metric, tuning, imbalanced data, calibration, interpretability.",
+      "topics": ["Supervised", "Unsupervised", "Metrics", "Imbalanced Data", "Calibration", "SHAP"]
+    },
+    {
+      "id": "12-advanced-ml",
+      "title": "Advanced ML",
+      "summary": "Ensembles, gradient boosting, recommender systems, anomaly detection.",
+      "topics": ["Ensembles", "XGBoost", "LightGBM", "Recommender Systems", "Anomaly Detection"]
+    },
+    {
+      "id": "13-deep-learning",
+      "title": "Deep Learning với PyTorch",
+      "summary": "MLP, CNN, RNN/LSTM, Transformers, transfer learning và embeddings.",
+      "topics": ["PyTorch", "CNN", "RNN / LSTM", "Transformers", "Transfer Learning", "Embeddings"]
+    },
+    {
+      "id": "14-mlops-for-ds",
+      "title": "MLOps cho Data Scientist",
+      "summary": "Tracking thí nghiệm, đóng gói và serve model, monitoring cơ bản, giới thiệu ONNX.",
+      "topics": ["MLflow", "Model Packaging", "FastAPI", "Monitoring", "ONNX"]
+    },
+    {
+      "id": "15-ml-system-design",
+      "title": "ML System Design & làm việc với business",
+      "summary": "Đóng khung bài toán, chọn metric, thiết kế hệ thống ML và trình bày kết quả cho stakeholder.",
+      "topics": ["Problem Framing", "Metrics", "ML System Design", "Stakeholder Communication"]
+    }
+  ]
 }

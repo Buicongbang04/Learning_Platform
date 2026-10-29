@@ -7,7 +7,7 @@ tệp và cùng cột, nên code viết cho cách này chạy được với cá
 | Cách | Lệnh | Ghi chú |
 | --- | --- | --- |
 | Dữ liệu giả (mặc định) | `uv run python data/generate_olist.py` | 50 000 đơn, seed cố định, không cần mạng. `--orders N`, `--out DIR`, `--seed S` |
-| Bộ thật từ Kaggle | `uv run python data/download_olist.py` | Cần Kaggle token, xem đầu tệp script |
+| Bộ thật từ Kaggle | `uv run python data/download_olist.py` | Cần Kaggle token (`KAGGLE_API_TOKEN` trong `setup/.env`), xem đầu tệp script |
 | Event streaming | `uv run python data/simulate_events.py --count 20 --stdout` | JSON lines ra stdout, tệp (`--out`) hoặc Kafka (`--kafka`) |
 
 Dữ liệu ghi vào `data/raw/` (đã nằm trong `.gitignore`, không commit).
@@ -271,6 +271,26 @@ Mỗi dòng là một JSON event, key Kafka là `order_id` (đảm bảo thứ t
 Tuỳ chọn chính: `--dup-rate` (mặc định 0.03), `--late-rate` (0.03), `--cancel-rate` (0.05),
 `--rate` (event/giây, mặc định 10 khi `--kafka`), `--topic` (mặc định `olist.order-events`),
 `--bootstrap` (mặc định `localhost:9094`), `--seed`.
+
+## Bộ dữ liệu thật cho track AI & Data Scientist
+
+Track AI & Data Scientist ưu tiên dữ liệu thật: notebook thực hành và capstone dùng **Olist thật**
+(`download_olist.py`) cùng các bộ công khai dưới đây. Mỗi bộ ghi vào `data/raw/<tên>/` (không commit).
+Test của bài tập không cần các bộ này; phần kiểm trên dữ liệu thật tự skip khi chưa tải.
+
+```bash
+uv run python data/download_dataset.py --list
+uv run python data/download_dataset.py cookie-cats
+```
+
+| Tên | Nội dung | Nguồn | Giấy phép | Module |
+| --- | --- | --- | --- | --- |
+| `cookie-cats` | A/B test vị trí gate (level 30 vs 40) của game Cookie Cats, 90 189 người chơi | [Kaggle](https://www.kaggle.com/datasets/yufengsui/mobile-games-ab-testing) | Không ghi rõ | 03 |
+| `ab-data` | A/B test landing page, 294 478 dòng, có dòng gán nhóm sai | [Kaggle](https://www.kaggle.com/datasets/zhangluyuan/ab-testing) | Không ghi rõ | 03 |
+| `hillstrom` | Thí nghiệm email ngẫu nhiên 3 nhánh, 64 000 khách: visit, conversion, spend | [MineThatData](https://blog.minethatdata.com/2008/03/minethatdata-e-mail-analytics-and-data.html) | Công bố cho học tập (2008) | 03, 04 |
+
+Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
+không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.
 
 ## Nguồn
 
