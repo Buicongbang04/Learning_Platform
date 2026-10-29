@@ -242,8 +242,8 @@ Bài toán đặc thù của luật: câu trả lời đúng **tại một thờ
 ## Roadmap nhắc "OpenAI Assistant API" như một cách làm RAG. Hiện nay bạn dùng gì thay thế, và khi nào chọn RAG managed thay vì tự dựng?
 
 Assistants API (2023) cho upload file, OpenAI tự chunk, embed, lưu vector store và retrieval qua tool `file_search`. OpenAI đã
-thay nó bằng **Responses API** (2025) cùng tool `file_search` trên vector store, và công bố ngừng Assistants API vào giữa năm
-2026. Tương đương ở nhà khác: Gemini File Search, Vertex AI RAG Engine, Bedrock Knowledge Bases, Azure AI Search; Anthropic cho
+thay nó bằng **Responses API** và Conversations API (2025), với tool `file_search` trên vector store; Assistants API đã ngừng
+ngày 26/8/2026 theo trang deprecations của OpenAI. Tương đương ở nhà khác: Gemini File Search, Vertex AI RAG Engine, Bedrock Knowledge Bases, Azure AI Search; Anthropic cho
 gửi tài liệu kèm citations hoặc search result blocks do bạn tự retrieve.
 
 Chọn managed khi: cần ra sản phẩm nhanh, tài liệu được phép lên cloud, chất lượng mặc định đạt trên tập đánh giá của bạn. Tự
