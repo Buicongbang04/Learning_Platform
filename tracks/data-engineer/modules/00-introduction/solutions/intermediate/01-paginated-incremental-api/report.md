@@ -35,7 +35,7 @@
 
 ## Giới hạn
 
-- Catalog còn được sửa: chạy lại sau vài tháng có thể lệch vài trận và vài chục phần trăm magnitude ở mức thập phân.
+- Catalog còn được sửa: chạy lại sau vài tháng có thể lệch vài trận, và magnitude của một số trận đổi vài phần mười.
 - `region` là chuỗi tự do: "Japan" và "Japan region" là hai giá trị; muốn chính xác phải gán theo toạ độ (reverse geocode).
 - Ngưỡng M4.5 toàn cầu: dưới ngưỡng này catalog không đầy đủ ở vùng ít trạm đo, nên không so được số trận nhỏ giữa các vùng.
 - Magnitude trộn nhiều thang (`mb`, `mww`...); so sánh trực tiếp chỉ gần đúng.

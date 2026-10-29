@@ -300,7 +300,12 @@ uv run python data/download_dataset.py cookie-cats
 | `nasa-http-logs` | Access log HTTP NASA KSC, ~1,9 triệu request (Common Log) | [ITA](https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html) | Dùng tự do | ~20 MB (gz) | Tháng 7/1995 (`NASA_access_log_Jul95.gz`) |
 | `air-quality-uci` | Cảm biến khí thật ở Ý, 9 357 dòng theo giờ, -200 là giá trị thiếu | [UCI #360](https://archive.ics.uci.edu/dataset/360/air+quality) | CC BY 4.0 | ~1,5 MB (zip) | Bản UCI id 360 (03/2004-04/2005) |
 
-`open-meteo-archive` là API nên không nằm trong danh mục: bài tự gọi.
+Hai nguồn API của module 00 không nằm trong danh mục vì việc thu thập chính là bài tập: notebook tự gọi API, cache JSON thô và test tự skip khi chưa có.
+
+| Thư mục | API | Giấy phép | Mốc ghim | Bài |
+| --- | --- | --- | --- | --- |
+| `data/raw/open-meteo/` | [Open-Meteo Historical Weather](https://open-meteo.com/en/docs/historical-weather-api), không cần key | CC BY 4.0 | TP.HCM (10.82, 106.63), Hà Nội (21.03, 105.85), 2023-01-01..2023-12-31, theo ngày, `models=era5` | 00 basic 01 |
+| `data/raw/usgs-earthquakes/` | [USGS FDSN Event](https://earthquake.usgs.gov/fdsnws/event/1/), không cần key | Public domain | M ≥ 4.5 toàn cầu, 2024-01-01..2025-01-01, `run-NNN/page-NNN.json` + `state.json` | 00 intermediate 01 |
 
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
 không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.
