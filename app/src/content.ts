@@ -14,6 +14,8 @@ export type Exercise = {
   title: string;
   services: string[];
   files: { path: string; note?: string }[];
+  /** true khi frontmatter có mảng `files` (kể cả rỗng); false nếu thiếu khoá hoặc parse lỗi. */
+  filesDeclared: boolean;
   run: string[];
   dir: string; // đường dẫn từ gốc repo
   goal: string;
@@ -131,6 +133,7 @@ function parseExercise(globKey: string, raw: string, moduleId: string): Exercise
     title: String(data.title ?? slug),
     services: Array.isArray(data.services) ? (data.services as string[]) : [],
     files,
+    filesDeclared: Array.isArray(data.files),
     run: Array.isArray(data.run) ? (data.run as string[]) : [],
     dir,
     goal: find("Mục tiêu"),

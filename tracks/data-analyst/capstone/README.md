@@ -24,7 +24,7 @@ uv run python data/download_dataset.py dunnhumby-complete-journey   # cần Kagg
 ```
 
 Nguồn: [Kaggle `frtgnn/dunnhumby-the-complete-journey`](https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey),
-giấy phép Open Database License (DbCL v1.0). Không commit dữ liệu thô. `causal_data.csv` rất lớn (~696 MB,
+giấy phép ODbL (database) / DbCL v1.0 (contents). Không commit dữ liệu thô. `causal_data.csv` rất lớn (~696 MB,
 36,8 triệu dòng): đọc bằng DuckDB hoặc `usecols`/`chunksize`, không `read_csv` cả tệp bằng pandas.
 
 ### Schema 8 bảng

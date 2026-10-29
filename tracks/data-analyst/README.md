@@ -133,7 +133,7 @@ Có ba dạng bài chính, app hiển thị tương ứng:
   Bài có dữ liệu thật thường kèm **trắc nghiệm** trong app (đọc chart, diễn giải kết quả).
 - **Bài quiz-only** (ví dụ "chọn công cụ", đọc chart): thư mục bài chỉ có `README.md` (frontmatter `files: []`,
   `run: []`) và `quiz.yaml`; không có starter code, không có test để chạy. Mở bài trong app, làm trắc nghiệm,
-  nộp để xem kết quả và giải thích. Lời giải nằm ở `SOLUTION.md` và `quiz-answers.yaml`.
+  nộp để xem kết quả; giải thích chi tiết ở lời giải (SOLUTION.md). Lời giải nằm ở `SOLUTION.md` và `quiz-answers.yaml`.
 
 Bài Advanced không có đáp án duy nhất, chỉ có `SOLUTION.md` với hướng làm và rubric để tự chấm.
 Xem lời giải mẫu: `SOLUTION=1 uv run pytest <thư mục bài> -q`. Khi nào kẹt mới xem, vì phần lớn giá trị

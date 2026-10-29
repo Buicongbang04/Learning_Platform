@@ -271,7 +271,7 @@ senior được trả tiền một phần để bắt những lỗi này, ở ch
 | **3D** | Phối cảnh làm phần gần to hơn phần xa; che giá trị | Không bao giờ dùng cho dữ liệu |
 | **Diện tích sai tỉ lệ** | Icon/bubble phóng theo chiều cao thì diện tích tăng theo bình phương | Bubble: bán kính tỉ lệ với căn bậc hai giá trị (`s=` trong matplotlib đã là diện tích) |
 | **Chọn khoảng thời gian** | Cắt chuỗi từ đáy tạo "tăng trưởng", từ đỉnh tạo "khủng hoảng"; mùa vụ bị nhầm thành xu hướng | Hiện đủ ít nhất một chu kỳ mùa vụ; so cùng kỳ (YoY) |
-| **Kỳ chưa đủ dữ liệu** | Tháng hiện tại mới có 9 ngày được vẽ cạnh tháng đủ 30 ngày | Bỏ kỳ dở dang, đánh dấu nét đứt, hoặc so cùng số ngày |
+| **Kỳ chưa đủ dữ liệu** | Tháng hiện tại mới có 9 ngày lịch (8 ngày có giao dịch) được vẽ cạnh tháng đủ 30 ngày | Bỏ kỳ dở dang, đánh dấu nét đứt, hoặc so cùng số ngày |
 | **Tổng vs trung bình** | Nhóm có nhiều quan sát luôn thắng ở "tổng", dù hiệu suất mỗi quan sát kém hơn | Hỏi câu hỏi là quy mô hay hiệu suất; hiện cả n |
 | **Simpson's paradox** | Xu hướng trong từng nhóm ngược với xu hướng gộp do khác cơ cấu (mix) | Phân tầng theo biến gây nhiễu; báo cáo cả gộp và từng nhóm |
 

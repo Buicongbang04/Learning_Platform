@@ -148,7 +148,7 @@ DATASETS: dict[str, Dataset] = {
         "kaggle", "frtgnn/dunnhumby-the-complete-journey",
         ["campaign_desc.csv", "campaign_table.csv", "causal_data.csv", "coupon.csv", "coupon_redempt.csv",
          "hh_demographic.csv", "product.csv", "transaction_data.csv"],
-        license="Open Database License (DbCL v1.0), dunnhumby (đã kiểm 2026-10-29)",
+        license="ODbL (database) / DbCL v1.0 (contents), dunnhumby (đã kiểm 2026-10-29)",
         homepage="https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey",
         about="Dunnhumby The Complete Journey: 2 500 hộ gia đình mua hàng siêu thị trong 2 năm, 8 tệp CSV (giao dịch, sản phẩm, nhân khẩu, khuyến mãi, coupon)",
     ),

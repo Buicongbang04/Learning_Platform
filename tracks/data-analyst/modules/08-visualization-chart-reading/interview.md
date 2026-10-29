@@ -69,8 +69,8 @@ người đọc không đọc độ cao như tỉ lệ.
 Không trả lời nguyên nhân trước khi kiểm tra chart. Theo thứ tự:
 
 1. **Kỳ chưa đủ dữ liệu?** Phổ biến nhất. Ví dụ thật: Online Retail II kết thúc 9/12/2011; doanh thu
-   tháng 12 so với tháng 11 là −57.7%, nhưng tháng 12 mới có 9 ngày. So cùng ngày 1–9: cao hơn cùng
-   kỳ năm trước **45.6%** và cao hơn 1–9/11 40.6%. Câu chuyện đảo ngược hoàn toàn. Nhưng đó là
+   tháng 12 so với tháng 11 là −57.7%, nhưng tháng 12 mới có 9 ngày lịch (8 ngày có giao dịch). So cùng ngày 1–9: cao hơn cùng
+   kỳ năm trước **45.6%** và cao hơn 1–9/11 40.6%. Câu chuyện đổi chiều. Nhưng đó là
    doanh thu gộp: một hoá đơn 168 470 GBP trong 9 ngày này chiếm phần lớn mức chênh, nên trước khi
    báo con số phải kiểm outlier và đơn bị huỷ ngay sau đó (mức tăng thực nhỏ hơn nhiều, xem bước 2).
 2. **Định nghĩa và dữ liệu**: pipeline có trễ hoặc lỗi không (số đơn ngày hôm qua bằng 0?), có đổi
@@ -82,7 +82,7 @@ Không trả lời nguyên nhân trước khi kiểm tra chart. Theo thứ tự:
    tìm phần đóng góp; tách số đơn × giá trị mỗi đơn.
 
 Trả lời CEO ngắn, có mốc thời gian: "Tháng 12 mới có 9 ngày nên chart đang so 9 ngày với 30 ngày.
-So cùng 9 ngày năm ngoái, doanh thu vẫn cao hơn; em đang kiểm một đơn rất lớn trong kỳ trước khi chốt
+So cùng 9 ngày năm ngoái, doanh thu vẫn cao hơn; em đang kiểm một đơn rất lớn trong 9 ngày đầu tháng 12 trước khi chốt
 con số. Em đã sửa chart để đánh dấu kỳ dở dang." Sau đó
 sửa nguồn gốc: dashboard nên ẩn hoặc đánh dấu nét đứt kỳ chưa kết thúc, và mặc định so cùng số ngày.
 

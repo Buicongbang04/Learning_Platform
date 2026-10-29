@@ -9,8 +9,6 @@ import { useQuiz, type QuizQuestion } from "./quiz";
 import { scoreOf } from "./quizResult";
 import { starterFilesOf, writtenReportOf } from "./starterFiles";
 
-export { isNotebookExercise, notebookOf } from "./exerciseKind";
-
 const KIND_LABEL = { knowledge: "Kiến thức", data: "Dữ liệu" } as const;
 const INLINE_MD = "min-w-0 [&_p]:m-0";
 
@@ -319,7 +317,7 @@ function QuizReview({ quiz }: { quiz: ReturnType<typeof useQuiz> }) {
   );
 }
 
-export function QuizCard({ exercise, trackId, noneNotice }: { exercise: Exercise; trackId: string; noneNotice?: string }) {
+export function QuizCard({ exercise, trackId, noneNotice, variant = "optional" }: { exercise: Exercise; trackId: string; noneNotice?: string; variant?: "optional" | "main" }) {
   const quiz = useQuiz(exercise, trackId);
   if (quiz.status === "none") {
     return noneNotice ? (
@@ -340,11 +338,11 @@ export function QuizCard({ exercise, trackId, noneNotice }: { exercise: Exercise
         <div className="flex flex-wrap items-center gap-2">
           <ClipboardList className="size-4 shrink-0 text-muted" aria-hidden />
           <h2 id="nb-quiz-title" className="text-base font-semibold">
-            Báo cáo bài học
+            {variant === "main" ? "Trắc nghiệm" : "Báo cáo bài học"}
           </h2>
-          <span className={badge.neutral}>Tuỳ chọn</span>
+          {variant !== "main" && <span className={badge.neutral}>Tuỳ chọn</span>}
         </div>
-        {report && <p className="text-xs text-muted">Trắc nghiệm tự kiểm tra, không thay cho {report}.</p>}
+        {variant !== "main" && report && <p className="text-xs text-muted">Trắc nghiệm tự kiểm tra, không thay cho {report}.</p>}
       </div>
       {quiz.stale && !quiz.result && <p className="mb-4 text-sm text-muted">Bộ câu hỏi đã đổi, kết quả cũ không còn hiệu lực. Làm lại để có điểm mới.</p>}
       {quiz.status === "loading" && <LoadingBlock text="Đang tải câu hỏi…" />}

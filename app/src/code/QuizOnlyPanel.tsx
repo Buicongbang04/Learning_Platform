@@ -36,7 +36,7 @@ export function QuizOnlyPanel({ exercise, trackId, done, onMarkDone }: { exercis
           )}
         </div>
       </section>
-      <QuizCard exercise={exercise} trackId={trackId} noneNotice="Bài này chưa có câu hỏi" />
+      <QuizCard exercise={exercise} trackId={trackId} variant="main" noneNotice="Bài này chưa có câu hỏi" />
     </div>
   );
 }

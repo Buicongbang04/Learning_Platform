@@ -62,3 +62,7 @@ tỉ lệ khử cơ cấu `rates.mul(w, axis=0).sum() / w.sum()`. So dấu bằn
 
 `orders[cols].notna().sum()` đếm không null theo cột; đặt lại index bằng tên bước. `funnel / funnel.shift(1)`
 cho bước đầu là `NaN`: `.fillna(1.0)`.
+
+### Đọc thêm
+
+Bài DS [09/advanced/02-seller-scorecard](../../../../../../data-science/modules/09-eda-storytelling/exercises/advanced/02-seller-scorecard/README.md) dùng Olist cho scorecard seller; bài này dùng Berkeley (Simpson) và funnel Olist.

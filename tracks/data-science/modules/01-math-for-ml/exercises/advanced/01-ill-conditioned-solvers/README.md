@@ -1,5 +1,5 @@
 ---
-title: Chọn solver khi ma trận xấu điều kiện: normal equation, QR, SVD, ridge
+title: "Chọn solver khi ma trận xấu điều kiện: normal equation, QR, SVD, ridge"
 level: advanced
 services: []
 files:

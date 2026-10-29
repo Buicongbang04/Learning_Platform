@@ -300,14 +300,14 @@ Bộ có sẵn trong thư viện thì dùng thẳng, không qua registry: `stats
 
 ### Bộ dữ liệu thật cho track Data Analyst
 
-Ba bộ mới (cùng cách tải: `uv run python data/download_dataset.py <tên>`; lần chạy thứ hai không tải lại). Capstone và module 08
-còn dùng Olist thật (`data/download_olist.py`, không thêm khoá). Số dòng dưới đây đếm thật sau khi tải (2026-10-29), là số tham chiếu cho các bài.
+Ba bộ mới (cùng cách tải: `uv run python data/download_dataset.py <tên>`; lần chạy thứ hai không tải lại). Module 08 (bài intermediate 03, funnel)
+dùng Olist thật; capstone dùng dunnhumby (`data/download_olist.py`, không thêm khoá). Số dòng dưới đây đếm thật sau khi tải (2026-10-29), là số tham chiếu cho các bài.
 
 | Tên | Nội dung | Nguồn | Giấy phép | Module |
 | --- | --- | --- | --- | --- |
 | `bike-sharing-uci` | Thuê xe Capital Bikeshare 2011-2012 kèm thời tiết | [UCI #275](https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset) | CC BY 4.0 | 08 |
-| `online-retail-ii` | Giao dịch cửa hàng online quà tặng ở Anh, 2009-12-01 .. 2011-12-09 | [UCI #502](https://archive.ics.uci.edu/dataset/502/online+retail+ii) | CC BY 4.0 | capstone, cohort/RFM |
-| `dunnhumby-complete-journey` | 2 500 hộ gia đình siêu thị trong 2 năm, 8 tệp CSV | [Kaggle](https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey) | Open Database License (DbCL v1.0) | capstone |
+| `online-retail-ii` | Giao dịch cửa hàng online quà tặng ở Anh, 2009-12-01 .. 2011-12-09 | [UCI #502](https://archive.ics.uci.edu/dataset/502/online+retail+ii) | CC BY 4.0 | 08, cohort/RFM |
+| `dunnhumby-complete-journey` | 2 500 hộ gia đình siêu thị trong 2 năm, 8 tệp CSV | [Kaggle](https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey) | ODbL (database) / DbCL v1.0 (contents) | capstone |
 
 Tệp giữ lại và số dòng (không tính dòng tiêu đề):
 
