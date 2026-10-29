@@ -127,12 +127,11 @@ Mọi milestone dùng **cùng** các định nghĩa dưới đây. Đổi địn
 
 ### Về định nghĩa doanh thu
 
-Tôi không kiểm được tài liệu hướng dẫn chính thức của dunnhumby (không truy cập được khi biên soạn), nên
-định nghĩa trên dựa trên **kiểm tra trực tiếp trên dữ liệu**, chưa phải tài liệu chính thức: với các dòng
+Chưa đối chiếu được tài liệu hướng dẫn chính thức của dunnhumby (không truy cập được khi biên soạn), nên định nghĩa trên dựa trên **kiểm tra trực tiếp trên dữ liệu**, chưa phải tài liệu chính thức: với các dòng
 có `COUPON_MATCH_DISC < 0`, giá `SALES_VALUE - RETAIL_DISC - COUPON_MATCH_DISC` chia số lượng cho ra mức giá
 niêm yết "tròn" hợp lý (2,19; 2,99; 2,29), còn `SALES_VALUE` đơn lẻ thì là số lẻ (1,10; 2,05). Suy ra
 `SALES_VALUE` đã **net** của `RETAIL_DISC` và `COUPON_MATCH_DISC`. `COUPON_DISC` là phần nhà sản xuất chi trả cho coupon, nên **không** trừ vào doanh thu ròng của cửa hàng.
-Nếu bạn tìm được tài liệu chính thức khác với kết luận này, hãy sửa bảng định nghĩa và ghi lại. Đây cũng là
+Nếu tìm được tài liệu chính thức khác với kết luận này, hãy sửa bảng định nghĩa và ghi lại. Đây cũng là
 ví dụ của một kỹ năng DA senior: kiểm định nghĩa cột bằng dữ liệu trước khi tin tên cột.
 
 ## Con số tham chiếu
@@ -173,16 +172,18 @@ Tính bằng DuckDB trực tiếp trên tệp CSV đã tải (không lọc), đ�
 
 ## Câu hỏi xuyên suốt và 5 tình huống
 
-Capstone phủ 5 tình huống phân tích lấy từ đề bài thực hành "Sales of FMCG Stores", chuyển sang dữ liệu thật.
-Bộ dữ liệu không có địa lý, nên tình huống địa lý được thay bằng phân tích theo nhóm nhân khẩu học.
+Capstone phủ 5 tình huống phân tích của đề thực hành "Phân tích dữ liệu bán hàng siêu thị" (Grocery
+Sales Database, thư mục Drive "Bài 18: Sales of FMCG Stores"), chuyển sang dữ liệu thật. Bộ gốc là dữ liệu
+sinh ngẫu nhiên nên chỉ dùng cho bài "nghi ngờ dữ liệu" ở module 06; dunnhumby thay vào làm dữ liệu phân
+tích. Vì dunnhumby khác schema, ba tình huống phải đổi cách ánh xạ (ghi rõ bên dưới).
 
-| # | Tình huống | Bảng dùng | Ghi chú |
+| # | Tình huống (đề gốc) | Ánh xạ sang dunnhumby | Bảng dùng |
 | --- | --- | --- | --- |
-| 1 | Doanh thu theo thời gian (tuần/"tháng"), xu hướng, mùa vụ | `transaction_data` | Quy ước tuần/tháng, chú ý hai đầu bị cắt |
-| 2 | Tỷ trọng doanh thu theo ngành hàng (`DEPARTMENT`, `COMMODITY_DESC`) | `transaction_data`, `product` | Pareto, ngành hàng chiếm bao nhiêu % |
-| 3 | Xếp hạng sản phẩm, thương hiệu (top-N theo doanh thu và theo số basket) | `transaction_data`, `product` | Top theo doanh thu khác top theo số lượng |
-| 4 | Phân khúc khách hàng: repeat vs one-time, AOV, basket size, RFM | `transaction_data` | Dùng định nghĩa chung ở trên |
-| 5 | Phân tích theo nhóm nhân khẩu học (thay cho địa lý): tuổi, thu nhập, quy mô hộ, có con | `transaction_data`, `hh_demographic` | Chỉ 801 hộ, nêu rõ giới hạn |
+| 1 | Hiệu suất doanh thu theo thời gian: 1.1 doanh thu thực tế theo tháng; 1.2 tỷ trọng đóng góp của từng danh mục theo từng tháng | Doanh thu ròng theo tuần và theo "tháng" (4 tuần, ghi rõ quy ước); tỷ trọng theo `DEPARTMENT` / `COMMODITY_DESC` theo tháng. Chú ý hai đầu thời gian bị cắt | `transaction_data`, `product` |
+| 2 | Định biên và phân loại sản phẩm: 2.1 top-5 / bottom-5 theo doanh thu; 2.2 tương quan Quantity vs doanh thu (volume cao, giá trị thấp); 2.3 ảnh hưởng của thuộc tính phân loại `Class` | 2.1 xếp hạng sản phẩm (bottom-5 chỉ xét sản phẩm có bán); 2.2 `QUANTITY` vs `SALES_VALUE`, tìm sản phẩm bán nhiều nhưng doanh thu mỗi đơn vị thấp; 2.3 dunnhumby **không có `Class`**, dùng thuộc tính tương đương của `product`: `BRAND` (National/Private) và `DEPARTMENT` | `transaction_data`, `product` |
+| 3 | Hành vi và chân dung khách hàng: 3.1 phân khúc; 3.2 repeat vs one-time; 3.3 AOV và basket size | RFM trên `household_key`; repeat vs one-time và AOV, basket size theo định nghĩa chung ở trên | `transaction_data` |
+| 4 | Năng lực thúc đẩy doanh số của nhân viên (`SalesPersonID`): 4.1 doanh số và số hoá đơn; 4.2 top / underperformer; 4.3 xu hướng theo thời gian, độ ổn định | **Thay bằng hiệu suất theo `STORE_ID`**: dunnhumby không có bảng nhân viên và không có cột người bán, `STORE_ID` là thực thể bán hàng duy nhất. 4.1 tổng doanh số và số basket mỗi cửa hàng; 4.2 nhóm vượt trội và dưới kỳ vọng (so với trung vị, nhớ chuẩn hoá theo quy mô, vì cửa hàng lớn hơn không có nghĩa là hiệu quả hơn); 4.3 độ ổn định doanh số theo tuần (hệ số biến thiên) | `transaction_data` |
+| 5 | Doanh thu theo địa giới (thành phố, quốc gia): 5.1 tổng hợp phân cấp; 5.2 chênh lệch sản lượng giữa vùng; 5.3 chỉ số cho ban giám đốc | **Thay địa lý bằng nhân khẩu học**: dunnhumby không có địa lý. Tổng hợp doanh thu, sản lượng, AOV theo `AGE_DESC`, `INCOME_DESC`, `HOUSEHOLD_SIZE_DESC`, `KID_CATEGORY_DESC`. **Chỉ 801/2 500 hộ (32%) có dữ liệu nhân khẩu học**, nên mọi kết luận nói về nhóm này và phải nêu rõ giới hạn | `transaction_data`, `hh_demographic` |
 
 Hai phần thêm so với đề gốc: **hiệu quả campaign/coupon** (`campaign_*`, `coupon*`, `causal_data`) và
 **market basket**.
@@ -211,9 +212,9 @@ milestone sẽ được thêm cùng nội dung module; hiện mới có danh sá
 | # | Milestone | Sau module | Nội dung chính |
 | --- | --- | --- | --- |
 | 1 | Nạp dữ liệu, làm sạch, data dictionary | 06 | Nạp 8 bảng (causal bằng DuckDB), kiểm khoá và tính toàn vẹn, xử lý dòng `SALES_VALUE = 0`, viết data dictionary |
-| 2 | Trả lời câu hỏi business bằng SQL | 03 và 07 | Tình huống 1 đến 4: doanh thu theo thời gian, tỷ trọng ngành hàng, top sản phẩm, repeat vs one-time, AOV; kèm EDA |
+| 2 | Trả lời câu hỏi business bằng SQL | 03 và 07 | Tình huống 1 đến 4: doanh thu theo thời gian và tỷ trọng ngành hàng, xếp hạng sản phẩm, repeat vs one-time, AOV, basket size, hiệu suất theo `STORE_ID`; kèm EDA |
 | 3 | Star schema và định nghĩa metric dùng chung | 09 | `fact_sales`, `dim_product`, `dim_household`, `dim_date`; khai báo grain, kiểm chất lượng, ghi `METRICS.md` |
 | 4 | Dashboard | 10 | Một dashboard trên Metabase hoặc Superset, một trên Streamlit; cùng số, so sánh hai công cụ |
-| 5 | Phân khúc RFM, cohort retention, market basket | 12 | Tình huống 4 và 5: RFM, cohort theo tuần đầu mua, luật kết hợp, nhóm nhân khẩu học |
+| 5 | Phân khúc RFM, cohort retention, market basket | 12 | Tình huống 3 (RFM, phân khúc sâu hơn) và 5 (nhóm nhân khẩu học), cộng cohort theo tuần đầu mua và luật kết hợp |
 | 6 | Hiệu quả campaign/coupon | 11 và 13 | Đọc như một thí nghiệm có giới hạn: nhóm được gán vs không, hạn chế chọn mẫu, kết luận thận trọng |
 | 7 | Memo và thuyết trình cho ban điều hành | 15 | Một trang memo, 5 slide, khuyến nghị có số liệu, nêu rõ giả định và giới hạn |
