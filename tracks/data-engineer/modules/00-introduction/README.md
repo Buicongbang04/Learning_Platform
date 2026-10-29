@@ -12,17 +12,18 @@ thật bạn sẽ tự thu thập trong bài tập: API thời tiết Open-Meteo
 (07/1995) và dữ liệu cảm biến chất lượng không khí UCI.
 
 ```mermaid
-flowchart LR
-    subgraph SRC[Nguồn]
-        A1[(DB OLTP Olist)]
-        A2[API Open-Meteo]
-        A3[Log NASA HTTP]
-        A4[Cảm biến IoT]
+flowchart TB
+    subgraph SRC[Nguồn dữ liệu thật]
+        direction LR
+        A1[(Olist DB)]
+        A2[API]
+        A3[Log]
+        A4[IoT]
     end
-    SRC --> B[Ingestion<br/>module 05, 07]
-    B --> C[(Storage<br/>module 02, 03, 04)]
-    C --> D[Transformation<br/>module 05, 06]
-    D --> E[Serving<br/>module 09]
+    SRC --> B[Ingestion: module 05, 07]
+    B --> C[(Storage: module 02, 03, 04)]
+    C --> D[Transformation: module 05, 06]
+    D --> E[Serving: module 09]
     E --> F[Analyst, Data Scientist, app]
 ```
 
@@ -121,25 +122,17 @@ Bên dưới mọi giai đoạn là các **undercurrent**: những mối quan t�
 bước nào nhưng bỏ qua thì cả vòng đời hỏng.
 
 ```mermaid
-flowchart LR
-    G[1. Generation<br/>hệ thống nguồn] --> I[3. Ingestion<br/>batch / stream]
-    I --> S[(2. Storage<br/>lake, warehouse)]
-    S --> T[Transformation<br/>clean, join, model]
-    T --> S
-    S --> V[4. Serving<br/>BI, ML, reverse ETL]
-    V --> U1[Analytics]
-    V --> U2[Machine Learning]
-    V --> U3[Reverse ETL vào app]
-
-    subgraph UC[Undercurrents: áp dụng cho mọi giai đoạn]
-        direction LR
-        X1[Security]
-        X2[Data Management<br/>quality, lineage, governance]
-        X3[DataOps<br/>monitoring, CI/CD]
-        X4[Data Architecture]
-        X5[Orchestration]
-        X6[Software Engineering]
+flowchart TB
+    subgraph LC[Vòng đời]
+        direction TB
+        G[1. Generation<br/>hệ thống nguồn] --> I[3. Ingestion<br/>batch / stream]
+        I --> S[(2. Storage<br/>lake, warehouse)]
+        S --> T[Transformation<br/>đọc rồi ghi lại Storage]
+        T --> V[4. Serving<br/>BI, ML, reverse ETL]
+        V --> C[Analytics · ML · app]
     end
+    UC[Undercurrents, cho mọi giai đoạn<br/>Security · Data Management<br/>DataOps · Data Architecture<br/>Orchestration · Software Engineering]
+    UC -.-> LC
 ```
 
 Storage được vẽ ở giữa vì nó không phải "một bước": dữ liệu được lưu ở nguồn, lưu thô sau ingest,
@@ -178,35 +171,12 @@ quyết định 80% độ khó của pipeline: dữ liệu có bị sửa sau kh
 không, schema đổi khi nào.
 
 ```mermaid
-flowchart TB
-    subgraph DB[Database OLTP]
-        D1[(PostgreSQL / MySQL)]
-        D2[Query snapshot<br/>hoặc incremental]
-        D3[CDC: đọc WAL / binlog]
-        D1 --> D2
-        D1 --> D3
-    end
-    subgraph API[API]
-        P1[REST / GraphQL]
-        P2[Phân trang, rate limit,<br/>auth token]
-        P1 --> P2
-    end
-    subgraph LOG[Logs]
-        L1[Web server, app log]
-        L2[File xoay vòng<br/>hoặc agent đẩy đi]
-        L1 --> L2
-    end
-    subgraph MOB[Mobile Apps]
-        M1[SDK tracking event]
-        M2[Gửi theo lô,<br/>offline rồi gửi sau]
-        M1 --> M2
-    end
-    subgraph IOT[IoT]
-        T1[Cảm biến]
-        T2[MQTT / gateway,<br/>giá trị lỗi, lệch đồng hồ]
-        T1 --> T2
-    end
-    D2 & D3 & P2 & L2 & M2 & T2 --> ING[Ingestion]
+flowchart LR
+    D[(Database OLTP<br/>snapshot, incremental)] -->|pull hoặc CDC| ING[Ingestion]
+    P[API REST<br/>phân trang, rate limit] -->|pull theo lịch| ING
+    L[Logs<br/>append-only, dòng hỏng] -->|đọc file / agent| ING
+    M[Mobile Apps<br/>event đến trễ, trùng] -->|push theo lô| ING
+    T[IoT<br/>sentinel, lệch đồng hồ] -->|push qua MQTT| ING
 ```
 
 ### So sánh nhanh năm loại nguồn
@@ -268,8 +238,8 @@ Log là dữ liệu **append-only**, khối lượng lớn, bán cấu trúc. M�
 
 Gồm: host, identity, user, timestamp **kèm múi giờ**, request line, status code, số byte. Bài học
 từ log thật: sẽ luôn có một số ít dòng không khớp regex của bạn (request bị cắt, ký tự lạ), và có
-giá trị đặc biệt nhưng hợp lệ (số byte là `-` khi response không có body). Pipeline đúng **không sập vì một dòng hỏng**: tách dòng lỗi ra file reject, đếm tỉ lệ, và
-cảnh báo khi tỉ lệ vượt ngưỡng. Bộ log tháng 7/1995 có khoảng 1,9 triệu request trong ~20 MB gzip,
+giá trị đặc biệt nhưng hợp lệ (số byte là `-` khi response không có body). Pipeline đúng **không
+sập vì một dòng hỏng**: tách dòng lỗi ra file reject, đếm tỉ lệ, và cảnh báo khi tỉ lệ vượt ngưỡng. Bộ log tháng 7/1995 có khoảng 1,9 triệu request trong ~20 MB gzip,
 đủ lớn để thấy vì sao phải đọc streaming thay vì `readlines()`.
 
 ### Mobile Apps
