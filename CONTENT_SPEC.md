@@ -160,6 +160,30 @@ Gợi ý sát hơn.
   PySpark local). Bài cần dịch vụ thật thì gọi `ex.require_service("postgres")` để tự skip khi chưa bật.
 - Dữ liệu test nhỏ, đặt trong `tests/fixtures/` hoặc tạo trong test. Không phụ thuộc bộ Olist thật.
 
+### Bài tập notebook (`.ipynb`)
+
+Dùng khi bài là phân tích / modeling, như cách Data Scientist làm việc thật. Bài thuần logic vẫn dùng `.py`.
+
+- Starter là `starter/<tên>.ipynb`; test gọi `ex.notebook("<tên>.ipynb")` và dùng kết quả như một module.
+- **Cell chấm điểm chỉ định nghĩa hàm hoặc hằng**, thân hàm `# TODO` + `raise NotImplementedError`.
+  Không gọi tính toán ở top-level, để starter vẫn nạp được và test FAIL chứ không ERROR.
+- **Cell gắn tag `explore`** (đọc dữ liệu thật, vẽ biểu đồ, gọi hàm để xem) bị bỏ qua khi chấm. Dòng đầu
+  cell nên là `# explore: ...` để người dùng VS Code thấy được. Tìm gốc repo trong notebook bằng
+  `ROOT = next(p for p in [Path.cwd(), *Path.cwd().parents] if (p / "pyproject.toml").exists())`.
+- Khi chấm: dòng magic/shell thành `pass`, cell `%%...` bị bỏ, `display` là `print`; lỗi báo theo
+  `tên.ipynb[cell N]`.
+- Commit notebook **không có output**. Lời giải Basic/Intermediate là notebook trùng tên trong `solutions/`,
+  phải chạy được toàn bộ (kể cả cell `explore`) khi đã tải dữ liệu:
+  `uv run jupyter nbconvert --to notebook --execute --stdout <notebook> > /dev/null`.
+
+### Dữ liệu thật
+
+- Notebook thực hành dùng bộ dữ liệu thật. Thêm bộ mới vào registry `DATASETS` trong
+  `data/download_dataset.py` (ghi nguồn, giấy phép) và bảng trong `data/README.md`.
+- Test lấy thư mục bộ dữ liệu bằng `ex.dataset("<tên>")` (trả `data/raw/<tên>/`, tự skip nếu chưa tải).
+  Test trên dữ liệu thật kiểm so với con số đã biết; mọi test còn lại dùng dữ liệu nhỏ sinh trong test.
+- Không commit mẫu trích từ bộ có giấy phép chưa rõ.
+
 ### Lời giải: `solutions/<level>/<NN-slug>/`
 
 - **Basic và Intermediate**: `SOLUTION.md` giải thích cách làm và vì sao, cộng các tệp lời giải

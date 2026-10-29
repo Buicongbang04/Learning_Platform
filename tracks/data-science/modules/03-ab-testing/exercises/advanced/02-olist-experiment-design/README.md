@@ -40,6 +40,10 @@ chủ động cho khách (xin lỗi, báo ngày giao mới, tặng voucher nhỏ
 
 ### Gợi ý 1
 
+Định nghĩa trễ theo docstring (so nguyên timestamp) cho 8.1%; so theo ngày cho khoảng 6.8%. Cả hai
+đều bảo vệ được, nhưng test dùng định nghĩa trong docstring, và DESIGN.md nên nói rõ bạn chọn cái
+nào.
+
 `reviews.sort_values("review_answer_timestamp").drop_duplicates("order_id", keep="last")`.
 Số đơn theo tuần: `set_index("order_purchase_timestamp").resample("W").size()` (tuần mặc định kết
 thúc Chủ nhật, tuần không có đơn được điền 0), rồi bỏ phần tử đầu và cuối.

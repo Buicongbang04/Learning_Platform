@@ -103,7 +103,13 @@ uv run jupyter lab      # hoặc mở .ipynb bằng VS Code, chọn kernel .venv
 - **Cell chấm điểm** chỉ định nghĩa hàm (hoặc hằng). Điền vào chỗ `# TODO`.
 - **Cell gắn tag `explore`** là nơi bạn đọc dữ liệu thật, vẽ biểu đồ, gọi hàm để xem kết quả. Test
   bỏ qua các cell này, nên cứ thoải mái khám phá. Muốn thêm cell khám phá thì gắn tag `explore`
-  (Jupyter: View → Cell Toolbar → Tags; VS Code: "Add Cell Tag").
+  (JupyterLab 4: chọn cell, mở Property Inspector bằng biểu tượng bánh răng ở thanh bên phải, mục
+  Cell Tags; VS Code: nút "..." của cell → "Add Cell Tag").
+- Cell chấm điểm vẫn dùng được `display(...)` và dòng magic như `%time` (khi chấm, magic bị bỏ qua,
+  `display` thành `print`). Cell đọc dữ liệu thật hoặc vẽ biểu đồ thì **phải** gắn tag `explore`,
+  nếu không test sẽ lỗi (ví dụ `NameError: ROOT`, vì `ROOT` được định nghĩa trong một cell `explore`).
+- Khi test báo lỗi, traceback chỉ tới cell: `analysis.ipynb[cell 7]`, line 3 là dòng 3 của cell thứ 7
+  (đếm cả cell markdown).
 - Chấm: `uv run pytest <thư mục bài> -q`. Test chạy các cell chấm điểm rồi kiểm từng hàm.
 - Xem lời giải mẫu: `SOLUTION=1 uv run pytest <thư mục bài> -q`, mở notebook trong `solutions/`.
 

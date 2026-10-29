@@ -35,7 +35,8 @@ traffic có sẵn rồi coi đó là mục tiêu.
 Công thức xấp xỉ normal, two-sided, α = 0.05, power = 0.8:
 
 ```
-n = (1.96 + 0.84)² · [0.10·0.90 + 0.11·0.89] / 0.01² ≈ 14 749 user mỗi nhóm
+n = (1.96 + 0.84)² · [0.10·0.90 + 0.11·0.89] / 0.01² ≈ 14 732 user mỗi nhóm
+(14 749 nếu dùng z chính xác 1.95996 + 0.84162)
 ```
 
 Nói thêm để thể hiện kinh nghiệm: tổng ~29.5 nghìn user; chia cho traffic mỗi ngày đủ điều kiện

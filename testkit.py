@@ -19,7 +19,9 @@ Trong test:
 from __future__ import annotations
 
 import importlib.util
+import linecache
 import os
+import re
 import socket
 import sys
 from pathlib import Path
@@ -88,6 +90,10 @@ def service_up(name: str, timeout: float = 0.5) -> bool:
         return False
 
 
+# Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
+_MAGIC = re.compile(r"^(\s*)(?:[%!]|[\w, ]+=\s*[%!]).*$")
+
+
 def _unique_name(path: Path) -> str:
     return "ex_" + "_".join(path.relative_to(ROOT).with_suffix("").parts).replace("-", "_")
 
@@ -143,21 +149,32 @@ class Exercise:
     def notebook(self, name: str) -> ModuleType:
         """Chạy các code cell của notebook (trừ cell gắn tag `explore`) rồi trả về như một module.
 
-        Dòng magic (`%...`) và shell (`!...`) bị bỏ qua; output đã lưu trong notebook không ảnh hưởng.
+        Dòng magic/shell (`%time ...`, `!ls`, `x = !ls`) thành `pass`, cell magic (`%%bash`) bị bỏ,
+        `display()` in ra như `print`. Output đã lưu trong notebook không ảnh hưởng. Lỗi được báo theo
+        cell: `analysis.ipynb[cell 5]`, dòng tính trong cell.
         """
         import nbformat
 
         path = self.path(name)
         book = nbformat.read(path, as_version=4)
-        lines = []
-        for cell in book.cells:
+        cells = []
+        for number, cell in enumerate(book.cells, start=1):
             if cell.cell_type != "code" or "explore" in cell.get("metadata", {}).get("tags", []):
                 continue
-            lines += [line for line in cell.source.splitlines() if not line.lstrip().startswith(("%", "!"))]
-            lines.append("")
+            if cell.source.lstrip().startswith("%%"):
+                continue
+            source = "\n".join(_MAGIC.sub(r"\1pass", line) for line in cell.source.splitlines()) + "\n"
+            filename = f"{path}[cell {number}]"
+            linecache.cache[filename] = (len(source), None, source.splitlines(keepends=True), filename)
+            cells.append(compile(source, filename, "exec"))
         os.environ.setdefault("MPLBACKEND", "Agg")
-        code = compile("\n".join(lines), str(path), "exec")
-        return _load(path, _unique_name(path), lambda module: exec(code, module.__dict__))
+
+        def execute(module: ModuleType) -> None:
+            module.__dict__.setdefault("display", print)
+            for code in cells:
+                exec(code, module.__dict__)
+
+        return _load(path, _unique_name(path), execute)
 
     @staticmethod
     def dataset(name: str) -> Path:

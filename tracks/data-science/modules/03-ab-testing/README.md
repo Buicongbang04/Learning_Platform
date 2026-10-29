@@ -412,7 +412,7 @@ Kiểm 20 metric độc lập ở α = 0.05 thì xác suất có ít nhất mộ
 | Phương pháp | Kiểm soát | Đặc điểm |
 | --- | --- | --- |
 | Bonferroni | FWER (xác suất có ≥ 1 false positive) | Đơn giản, quá bảo thủ khi nhiều kiểm định |
-| Holm | FWER | Luôn mạnh hơn Bonferroni, không cần giả định gì thêm, nên dùng thay Bonferroni |
+| Holm | FWER | Bác bỏ ít nhất mọi thứ Bonferroni bác bỏ (thường nhiều hơn), không cần giả định gì thêm, nên dùng thay Bonferroni |
 | Benjamini-Hochberg | FDR (tỉ lệ false positive trong số các phát hiện) | Phù hợp khi sàng lọc nhiều metric/segment để tìm hướng điều tra |
 
 Cách giảm vấn đề từ gốc: **một** OEC định trước. Phân tích segment là để *sinh giả thuyết* cho

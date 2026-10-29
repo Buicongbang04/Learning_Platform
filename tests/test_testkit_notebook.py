@@ -41,3 +41,21 @@ def test_failed_load_is_not_cached(monkeypatch):
     for _ in range(2):
         with pytest.raises(RuntimeError, match="top-level"):
             ex.notebook("broken.ipynb")
+
+
+def test_jupyter_idioms_in_graded_cells(monkeypatch):
+    monkeypatch.delenv("SOLUTION", raising=False)
+    nb = exercise("01-demo").notebook("idioms.ipynb")
+    assert nb.VALUE == 42
+
+
+def test_traceback_points_to_notebook_cell(monkeypatch):
+    import traceback
+
+    monkeypatch.delenv("SOLUTION", raising=False)
+    with pytest.raises(RuntimeError) as info:
+        exercise("01-demo").notebook("broken.ipynb")
+    frame = traceback.extract_tb(info.value.__traceback__)[-1]
+    assert frame.filename.endswith("broken.ipynb[cell 1]")
+    assert frame.lineno == 3
+    assert frame.line == "raise RuntimeError('lỗi top-level')"
