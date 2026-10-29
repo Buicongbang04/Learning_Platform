@@ -1,0 +1,30 @@
+[project]
+name = "ai-gpu"
+version = "0.1.0"
+description = "Môi trường CUDA riêng cho bài train nặng (fine-tune, QLoRA) của track AI Engineer"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "transformers>=5.22",
+    "accelerate>=1.15",
+    "peft>=0.21",
+    "trl>=1.17",
+    "bitsandbytes>=0.50",
+    "datasets>=5.1",
+    "ipykernel>=6.29",
+]
+
+[tool.uv]
+package = false
+
+# CUDA 12.6 (cu126): chạy tốt trên driver >= 525 (laptop đang driver 550 = CUDA 12.4 tối đa,
+# cu130 cần driver >= 580 nên không dùng). RTX 30xx = Ampere sm_86, cu126 hỗ trợ đầy đủ.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
