@@ -234,3 +234,29 @@ float khi đã hiểu giới hạn. Kiểm giá hữu hạn để NaN/Infinity k
 Không. Phải đọc contract của đối tượng. Với sqlite3, with connection quản commit/rollback nhưng
 không tự đóng connection. Có thể dùng contextlib.closing cho vòng đời và with con cho transaction.
 Test cả nhánh exception để chắc rollback và tài nguyên được giải phóng.
+
+## Bạn cần đếm số khách unique mỗi ngày, mỗi tuần và mỗi tháng trên 2 tỷ event. Làm thế nào cho rẻ?
+
+`COUNT(DISTINCT customer_id)` chính xác nhưng phải giữ toàn bộ tập khoá trong bộ nhớ (hoặc shuffle cả
+tập), và kết quả theo ngày **không cộng được** thành theo tuần vì khách quay lại bị đếm nhiều lần. Muốn
+có số tuần/tháng lại phải quét lại dữ liệu thô.
+
+Nếu chấp nhận sai số 1–2%, dùng **HyperLogLog**: mỗi ngày lưu một sketch vài KB (BigQuery
+`HLL_COUNT.INIT`, Spark/Databricks `hll_sketch_agg`, Druid/Pinot sketch) trong bảng aggregate. Số tuần
+là merge 7 sketch (max từng register), số tháng là merge 30 sketch, không đụng lại event thô. Sai số chuẩn
+khoảng 1,04 chia căn số register, nên p = 14 (16.384 register) cho khoảng 0,8%.
+
+Cần ghi rõ trên dashboard rằng số là xấp xỉ, và giữ `COUNT(DISTINCT)` chính xác cho chỗ cần đối soát
+(vd. số khách được trả thưởng).
+
+## Vì sao một Data Engineer viết Python vẫn nên đọc được Java/Scala và hiểu JVM?
+
+Spark, Kafka, Flink, Trino đều chạy trên JVM. PySpark chỉ là lớp gọi sang driver JVM qua Py4J, nên lỗi
+production thường là stack trace Java: `OutOfMemoryError: Java heap space`, `GC overhead limit exceeded`,
+`ClassNotFoundException` vì thiếu JAR connector hoặc lệch phiên bản Scala (`_2.12` vs `_2.13`). Đọc được
+dòng `Caused by:` cuối và hiểu heap/GC giúp sửa đúng chỗ: tăng `spark.executor.memory` hay
+`memoryOverhead`, giảm kích thước partition, bỏ Python UDF.
+
+Ngoài ra, connector Kafka Connect, UDF cho Trino/Hive và job Flink độ trễ thấp thường viết bằng Java;
+tài liệu nâng cao của Spark viết bằng Scala. Go thì gặp ở tầng hạ tầng (Kubernetes, Terraform,
+Prometheus exporter). Không cần thành thạo hết, nhưng đọc được là đủ để tự debug.

@@ -275,6 +275,36 @@ local = datetime(2026, 1, 1, 0, 30, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
 assert local.astimezone(timezone.utc).isoformat() == "2025-12-31T17:30:00+00:00"
 ```
 
+### 1.8. Ngoài Python: Java, Scala, Go và JVM
+
+Python là ngôn ngữ chính để viết pipeline, nhưng phần lớn engine bạn điều khiển lại chạy trên
+**JVM** (Java Virtual Machine): Spark và Kafka viết bằng Scala/Java, Flink, Hadoop, Trino, Cassandra,
+Elasticsearch viết bằng Java. Không cần viết Java hằng ngày, nhưng cần đọc được stack trace và hiểu
+vài khái niệm của JVM, vì lỗi production hay đến từ đó:
+
+- **Heap và garbage collection (GC)**: bộ nhớ của executor Spark hay broker Kafka đặt bằng `-Xmx`
+  (`spark.executor.memory`). Khi heap gần đầy, GC chạy liên tục và job "đứng hình" dù CPU bận; log
+  có `GC overhead limit exceeded` hoặc `java.lang.OutOfMemoryError: Java heap space`.
+- **PySpark là hai tiến trình**: code Python gửi kế hoạch sang driver JVM qua Py4J; DataFrame API
+  chạy hoàn toàn trong JVM, còn Python UDF bắt dữ liệu đi qua lại giữa JVM và tiến trình Python (module 06).
+  Đó là lý do lỗi PySpark thường là một stack trace Java dài với dòng `Caused by:` mới là nguyên nhân thật.
+- **Classpath và JAR**: connector (JDBC driver Postgres, `hadoop-aws` để đọc S3, Kafka connector) là
+  tệp `.jar` nạp qua `spark.jars.packages`. Lỗi `ClassNotFoundException` nghĩa là thiếu JAR hoặc lệch
+  phiên bản Scala (`_2.12` vs `_2.13` trong tên artifact).
+
+| Ngôn ngữ | Gặp ở đâu | Khi nào DE cần viết |
+| --- | --- | --- |
+| **Java** | Kafka, Flink, Hadoop, Trino, Kafka Connect, Debezium | Viết connector/SMT cho Kafka Connect, UDF cho Trino/Hive, job Flink cần độ trễ thấp |
+| **Scala** | Spark (mã nguồn và API gốc), Kafka (phần lõi cũ), Akka | Đội Spark lâu năm viết job bằng Scala để có Dataset kiểu tĩnh và không tốn chi phí Python UDF; đọc mã nguồn Spark khi debug |
+| **Go** | Docker, Kubernetes, Terraform, Prometheus, Grafana agent, nhiều CLI hạ tầng | Viết Kubernetes operator, exporter Prometheus, công cụ CLI nhỏ biên dịch ra một binary không phụ thuộc |
+| **Rust** | Polars, DataFusion, Delta Lake (`delta-rs`), `uv`, `ruff` | Hiếm khi viết; biết rằng nhiều thư viện Python nhanh vì lõi là Rust |
+
+Chọn thế nào: bắt đầu với Python + SQL (đủ cho phần lớn công việc DE). Học đọc **Java/Scala** khi làm
+nhiều với Spark/Kafka/Flink, vì tài liệu và ví dụ nâng cao thường viết bằng chúng. Học **Go** khi thiên
+về platform/infra (Kubernetes, công cụ nội bộ). Tuyển dụng: tin tuyển DE ở công ty lớn (ngân hàng,
+thương mại điện tử dùng Hadoop/Spark lâu năm) hay ghi "Python và Java/Scala"; công ty dùng cloud
+warehouse + dbt thường chỉ cần Python và SQL.
+
 ## 2. SQL nâng cao: window function, CTE, đệ quy
 
 ### 2.1. Thứ tự thực thi logic
@@ -738,6 +768,55 @@ vòng) giúp phân bố đều hơn. Cassandra, DynamoDB dùng ý tưởng này 
   version, sequence number, hoặc logical clock.
 - Lỗi một phần (partial failure) là bình thường: thiết kế với timeout, retry, và chấp nhận nút chết.
 
+### 6.5. Cấu trúc dữ liệu và thuật toán kiểu Data Engineer
+
+Phỏng vấn DE vẫn có câu hỏi DSA, nhưng thứ dùng hằng ngày không phải cây đỏ đen mà là vài cấu trúc giúp
+xử lý dữ liệu **lớn hơn RAM** hoặc **chấp nhận sai số nhỏ để đổi lấy bộ nhớ**. Mỗi công cụ lớn đều có
+chúng bên trong; hiểu chúng giúp bạn đọc được Spark UI, chọn tham số và giải thích vì sao một con số là
+xấp xỉ.
+
+| Cấu trúc / thuật toán | Bài toán | Bộ nhớ | Gặp ở đâu |
+| --- | --- | --- | --- |
+| **Hash map / hash partitioning** | Gom theo key, chia dữ liệu cho nhiều máy | Tỉ lệ số key | `GROUP BY`, hash join, Kafka key → partition, Spark shuffle |
+| **External merge sort** | Sort dữ liệu lớn hơn RAM | Một chunk + một dòng mỗi run | Spark spill khi sort-merge join, `ORDER BY`, lệnh `sort` của Linux |
+| **Heap (top-k)** | k phần tử lớn nhất trong stream | k phần tử | `ORDER BY ... LIMIT k`, `takeOrdered`, top sản phẩm |
+| **Bloom filter** | "Đã thấy phần tử này chưa?", chấp nhận dương tính giả | Khoảng 10 bit mỗi phần tử cho 1% | Dedup event, SSTable của Cassandra/RocksDB, Parquet bloom filter, runtime filter khi join |
+| **HyperLogLog** | Đếm số phần tử phân biệt | Vài KB cho bất kỳ cardinality nào | `approx_count_distinct`, Redis `PFCOUNT`, BigQuery `HLL_COUNT` |
+| **Count-Min Sketch, t-digest/KLL** | Tần suất xấp xỉ, quantile (p95) xấp xỉ | Cố định | Heavy hitters, p95 latency trong Druid/Datadog |
+
+```mermaid
+flowchart LR
+    IN[(Tệp 50 GB<br/>RAM 4 GB)] --> C1[chunk 1<br/>sort trong RAM] --> R1[(run 1)]
+    IN --> C2[chunk 2<br/>sort trong RAM] --> R2[(run 2)]
+    IN --> CN[chunk n<br/>sort trong RAM] --> RN[(run n)]
+    R1 --> M{{k-way merge<br/>heap n phần tử}}
+    R2 --> M
+    RN --> M
+    M --> OUT[(Tệp đã sort)]
+```
+
+Ba quy tắc khi chọn:
+
+1. **Chính xác hay xấp xỉ?** Doanh thu, số đơn để đối soát kế toán thì phải chính xác. Số khách unique
+   theo ngày trên dashboard thì HyperLogLog sai 1–2% là chấp nhận được, đổi lại nhanh hơn và tốn ít bộ
+   nhớ hơn `COUNT(DISTINCT)` nhiều lần. Ghi rõ trên dashboard rằng số là xấp xỉ.
+2. **Xấp xỉ có merge được không?** HLL của từng ngày merge thành HLL của tháng mà không quét lại dữ liệu
+   thô; còn `COUNT(DISTINCT)` của từng ngày cộng lại thì sai (khách quay lại bị đếm nhiều lần). Đây là lý
+   do bảng aggregate lưu sketch thay vì lưu con số.
+3. **Lỗi một phía hay hai phía?** Bloom filter chỉ sai theo một hướng: nói "không có" là chắc chắn không
+   có. Vì vậy dùng nó làm bộ lọc trước, câu "có thể có" mới tra kho thật.
+
+Tính tham số Bloom filter cho n phần tử và tỉ lệ dương tính giả p:
+
+$$
+m = -\frac{n \ln p}{(\ln 2)^2}, \qquad k = \frac{m}{n} \ln 2
+$$
+
+Ví dụ khử trùng lặp 10 triệu `event_id` mỗi ngày với p = 0,1%: m khoảng 144 triệu bit (khoảng 18 MB),
+k = 10. Một `set` Python chứa 10 triệu chuỗi 32 ký tự tốn hơn 1 GB.
+
+Bài tập intermediate 04 cài cả năm cấu trúc bằng Python thuần và đo sai số thật.
+
 ## 7. Ghép lại: một script ingest đạt chuẩn
 
 Gộp mọi phần trên thành checklist cho script ingest đầu tiên (chính là milestone m01 của capstone:
@@ -781,4 +860,6 @@ flowchart TD
 - AWS Architecture Blog, Exponential Backoff and Jitter: https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
 - Martin Kleppmann, *Designing Data-Intensive Applications* (chương 5 Replication, 6 Partitioning, 8–9)
 - Amazon Dynamo paper (consistent hashing, quorum): https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf
+- Flajolet và cộng sự, *HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm* (2007): https://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf
+- Spark docs, Tuning (memory, GC): https://spark.apache.org/docs/latest/tuning.html
 - Kaggle, Brazilian E-Commerce Public Dataset by Olist: https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
