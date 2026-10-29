@@ -1,0 +1,8 @@
+dedup-key: [b]
+event-time: [d]
+late-example: [b]
+last-event-id: [a]
+negative-diff: [c]
+lateness-tradeoff: [a, b, c]
+kappa-retention: [d]
+lambda-when: [a, c]

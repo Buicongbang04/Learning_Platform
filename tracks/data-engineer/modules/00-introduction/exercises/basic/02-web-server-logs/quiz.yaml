@@ -1,34 +1,101 @@
 questions:
-  - id: q1
-    kind: knowledge
-    type: single
-    prompt: Trong access log, hai dòng giống hệt nhau (cùng host, giây, đường dẫn, status, bytes) có nên loại trùng không?
-    options:
-      - id: a
-        text: Có, vì dòng trùng chắc chắn là lỗi ghi log
-      - id: b
-        text: Không, vì mỗi dòng là một request thật; hai request cùng giây vẫn có thể xảy ra
-      - id: c
-        text: Có, để số request khớp với số host duy nhất
-  - id: q2
-    kind: data
-    type: single
-    prompt: Ngày nào có nhiều request nhất trong tháng 7/1995 của bộ NASA?
-    options:
-      - id: a
-        text: 1995-07-04
-      - id: b
-        text: 1995-07-13
-      - id: c
-        text: 1995-07-28
-  - id: q3
-    kind: knowledge
-    type: multi
-    prompt: Những việc nào đúng khi parse log lớn có dòng hỏng?
-    options:
-      - id: a
-        text: Đọc streaming từng dòng thay vì nạp cả tệp
-      - id: b
-        text: Dòng không parse được thì tách riêng vào rejected thay vì làm sập pipeline
-      - id: c
-        text: Bỏ im lặng dòng hỏng, không cần đếm
+- id: duplicate-lines
+  kind: knowledge
+  type: single
+  prompt: Trong access log, hai dòng giống hệt nhau (cùng host, giây, đường dẫn, status, bytes) có nên loại trùng không?
+  options:
+  - id: a
+    text: Có, vì dòng trùng chắc chắn là lỗi ghi log
+  - id: b
+    text: Không, vì mỗi dòng là một request thật; hai request cùng giây vẫn có thể xảy ra
+  - id: c
+    text: Có, để số request khớp với số host duy nhất
+- id: bad-lines
+  kind: knowledge
+  type: multi
+  prompt: Những việc nào đúng khi parse log lớn có dòng hỏng?
+  options:
+  - id: a
+    text: Đọc streaming từng dòng thay vì nạp cả tệp
+  - id: b
+    text: Dòng không parse được thì tách riêng vào `rejected` thay vì làm sập pipeline
+  - id: c
+    text: Bỏ im lặng dòng hỏng, không cần đếm
+  - id: d
+    text: Theo dõi tỉ lệ dòng hỏng và cảnh báo khi vượt ngưỡng
+- id: to-utc
+  kind: knowledge
+  type: single
+  prompt: Timestamp `[01/Jul/1995:00:00:01 -0400]` đổi sang UTC là?
+  options:
+  - id: a
+    text: 1995-06-30 20:00:01 UTC
+  - id: b
+    text: 1995-07-01 00:00:01 UTC
+  - id: c
+    text: 1995-07-01 03:00:01 UTC
+  - id: d
+    text: 1995-07-01 04:00:01 UTC
+- id: host-vs-user
+  kind: knowledge
+  type: single
+  prompt: Có thể coi số `host` duy nhất là số người dùng không?
+  options:
+  - id: a
+    text: Có, mỗi host là một máy của một người
+  - id: b
+    text: Không, một host proxy (vd. AOL) có thể đại diện cho rất nhiều người
+  - id: c
+    text: Có, nếu đã loại các host dạng IP
+- id: peak-day
+  kind: data
+  type: single
+  prompt: Ngày nào có nhiều request nhất trong tháng 7/1995 của bộ NASA (giờ `America/New_York`)?
+  options:
+  - id: a
+    text: '1995-07-04'
+  - id: b
+    text: '1995-07-13'
+  - id: c
+    text: '1995-07-28'
+  - id: d
+    text: '1995-07-06'
+- id: quietest-hour
+  kind: data
+  type: single
+  prompt: Giờ nào trong ngày (giờ `America/New_York`, cộng cả tháng) có **ít** request nhất?
+  options:
+  - id: a
+    text: 0h
+  - id: b
+    text: 2h
+  - id: c
+    text: 5h
+  - id: d
+    text: 23h
+- id: weekend-drop
+  kind: data
+  type: single
+  prompt: Trung bình request mỗi ngày cuối tuần thấp hơn ngày thường khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 10%
+  - id: b
+    text: Khoảng 25%
+  - id: c
+    text: Khoảng 40%
+  - id: d
+    text: Khoảng 60%
+- id: log-stops
+  kind: data
+  type: single
+  prompt: Request cuối cùng trong log (giờ server) là lúc nào?
+  options:
+  - id: a
+    text: '1995-07-31 23:59:59'
+  - id: b
+    text: '1995-07-28 13:32:25'
+  - id: c
+    text: '1995-07-30 09:12:47'
+  - id: d
+    text: '1995-07-28 17:32:25'

@@ -1,0 +1,107 @@
+questions:
+- id: raw-before-parse
+  kind: knowledge
+  type: single
+  prompt: Vì sao `collect` lưu **nguyên response** vào `data/raw/open-meteo/` trước khi parse?
+  options:
+  - id: a
+    text: Để giảm dung lượng lưu trữ so với Parquet
+  - id: b
+    text: Vì Open-Meteo yêu cầu lưu lại response
+  - id: c
+    text: Để khi logic parse sai thì sửa và chạy lại từ tệp thô, không gọi lại API
+  - id: d
+    text: Để test chạy nhanh hơn nhờ bỏ qua bước `clean`
+- id: retry-which
+  kind: knowledge
+  type: multi
+  prompt: '`fetch_json` nên **retry** với những trường hợp nào?'
+  options:
+  - id: a
+    text: HTTP 429 Too Many Requests
+  - id: b
+    text: HTTP 400 Bad Request (tham số sai)
+  - id: c
+    text: HTTP 503 Service Unavailable
+  - id: d
+    text: Lỗi mạng / timeout (`requests.RequestException`)
+  - id: e
+    text: HTTP 404 Not Found
+- id: retry-after
+  kind: knowledge
+  type: single
+  prompt: 'Response 429 có header `Retry-After: 7` ở lần thử đầu tiên. `fetch_json` nên chờ bao lâu trước lần thử tiếp?'
+  options:
+  - id: a
+    text: 1 giây (backoff lần đầu)
+  - id: b
+    text: 7 giây
+  - id: c
+    text: 8 giây (1 + 7)
+  - id: d
+    text: Không chờ, thử lại ngay
+- id: era5-what
+  kind: knowledge
+  type: single
+  prompt: Số liệu `model=era5` mà Open-Meteo trả về là gì?
+  options:
+  - id: a
+    text: Số đo trực tiếp của trạm khí tượng gần toạ độ nhất
+  - id: b
+    text: Dự báo thời tiết được lưu lại hằng ngày
+  - id: c
+    text: Ảnh vệ tinh đã đổi thành nhiệt độ bề mặt
+  - id: d
+    text: Dữ liệu tái phân tích trên lưới ~25 km (ô lưới gần toạ độ nhất)
+- id: hanoi-amplitude
+  kind: data
+  type: single
+  prompt: Biên độ nhiệt năm 2023 của **Hà Nội** (tháng nóng nhất trừ tháng lạnh nhất, theo `tmean` trung bình tháng) khoảng bao nhiêu?
+  options:
+  - id: a
+    text: 3,3 °C
+  - id: b
+    text: 8,9 °C
+  - id: c
+    text: 13,6 °C
+  - id: d
+    text: 22,7 °C
+- id: hcmc-hottest-month
+  kind: data
+  type: single
+  prompt: Tháng nóng nhất năm 2023 ở **TP.HCM** (theo `tmean` trung bình tháng) là tháng nào?
+  options:
+  - id: a
+    text: Tháng 4
+  - id: b
+    text: Tháng 5
+  - id: c
+    text: Tháng 6
+  - id: d
+    text: Tháng 7
+- id: hanoi-hot-days
+  kind: data
+  type: single
+  prompt: Năm 2023 Hà Nội có bao nhiêu ngày `tmax >= 35 °C`?
+  options:
+  - id: a
+    text: 7 ngày
+  - id: b
+    text: 21 ngày
+  - id: c
+    text: 47 ngày
+  - id: d
+    text: 82 ngày
+- id: rainy-days
+  kind: data
+  type: single
+  prompt: Số ngày mưa (`precip_mm >= 1`) năm 2023 của TP.HCM và Hà Nội lần lượt là?
+  options:
+  - id: a
+    text: 151 và 220
+  - id: b
+    text: 182 và 151
+  - id: c
+    text: 220 và 47
+  - id: d
+    text: 220 và 151

@@ -1,0 +1,105 @@
+questions:
+- id: csv-format
+  kind: knowledge
+  type: single
+  prompt: Đọc `AirQualityUCI.csv` đúng cần tham số nào?
+  options:
+  - id: a
+    text: '`sep=","`, `decimal="."`'
+  - id: b
+    text: '`sep=";"`, `decimal="."`'
+  - id: c
+    text: '`sep=";"`, `decimal=","`'
+  - id: d
+    text: '`sep="\t"`, `decimal=","`'
+- id: sentinel-rule
+  kind: knowledge
+  type: single
+  prompt: Khi làm sạch, giá trị nào được đổi thành null?
+  options:
+  - id: a
+    text: Mọi giá trị âm
+  - id: b
+    text: Chỉ đúng giá trị `-200`
+  - id: c
+    text: '`-200` và `0`'
+  - id: d
+    text: Mọi giá trị nhỏ hơn `-100`
+- id: outage-definition
+  kind: knowledge
+  type: single
+  prompt: Một giờ chỉ `nmhc_gt` null, các cảm biến khác vẫn có số. Đó là gì?
+  options:
+  - id: a
+    text: Một máy đo riêng lẻ hỏng/ngừng, không phải mất kết nối
+  - id: b
+    text: Mất kết nối của cả trạm
+  - id: c
+    text: Giờ bị trùng cần loại
+  - id: d
+    text: Lệch đồng hồ thiết bị
+- id: drift
+  kind: knowledge
+  type: single
+  prompt: Cảm biến rẻ cho số đo trôi dần theo thời gian dù nồng độ thật không đổi. Hiện tượng này gọi là?
+  options:
+  - id: a
+    text: Sentinel
+  - id: b
+    text: Skew
+  - id: c
+    text: Jitter
+  - id: d
+    text: Drift
+- id: nmhc-missing
+  kind: data
+  type: single
+  prompt: Tỉ lệ thiếu của cột `nmhc_gt` trên cả bộ dữ liệu khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 4%
+  - id: b
+    text: Khoảng 18%
+  - id: c
+    text: Khoảng 90%
+  - id: d
+    text: 100%
+- id: longest-outage
+  kind: data
+  type: single
+  prompt: Đợt cả 5 cảm biến cùng mất dài nhất kéo dài bao lâu, bắt đầu khi nào?
+  options:
+  - id: a
+    text: 75 giờ, từ 2004-12-14 17:00
+  - id: b
+    text: 76 giờ, từ 2005-02-08 17:00
+  - id: c
+    text: 52 giờ, từ 2005-01-02 21:00
+  - id: d
+    text: 366 giờ, từ 2004-10-01 00:00
+- id: co-peaks
+  kind: data
+  type: single
+  prompt: CO trung bình theo giờ trong ngày có đỉnh sáng và đỉnh chiều lúc nào?
+  options:
+  - id: a
+    text: 8h và 18h
+  - id: b
+    text: 7h và 17h
+  - id: c
+    text: 9h và 20h
+  - id: d
+    text: 9h và 19h
+- id: cleanest-month
+  kind: data
+  type: single
+  prompt: Tháng (đủ ngày) có CO trung bình thấp nhất là tháng nào?
+  options:
+  - id: a
+    text: 2004-07
+  - id: b
+    text: 2004-08
+  - id: c
+    text: 2005-04
+  - id: d
+    text: 2005-02

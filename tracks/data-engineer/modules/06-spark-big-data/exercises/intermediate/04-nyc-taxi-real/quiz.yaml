@@ -1,0 +1,107 @@
+questions:
+- id: broadcast-why
+  kind: knowledge
+  type: single
+  prompt: 'Join 83 triệu chuyến với bảng zone 265 dòng: vì sao broadcast join nhanh hơn sort-merge?'
+  options:
+  - id: a
+    text: Bảng nhỏ được gửi nguyên tới mọi executor nên không phải shuffle bảng lớn
+  - id: b
+    text: Broadcast sắp xếp trước cả hai bảng nên merge nhanh hơn
+  - id: c
+    text: Broadcast cache bảng lớn vào bộ nhớ driver
+  - id: d
+    text: Broadcast bỏ qua các dòng không khớp khoá trước khi đọc
+- id: one-file-per-day
+  kind: knowledge
+  type: single
+  prompt: Ghi `partitionBy("pickup_date")` mà mỗi ngày đúng một tệp, vẫn ghi song song nhiều task. Làm gì trước khi ghi?
+  options:
+  - id: a
+    text: '`coalesce(1)`'
+  - id: b
+    text: '`repartition(200)`'
+  - id: c
+    text: '`repartition("pickup_date")`'
+  - id: d
+    text: Không cần gì, Spark tự gom
+- id: pruning
+  kind: knowledge
+  type: single
+  prompt: Đọc chuyến ngày 2019-07-04 từ dữ liệu đã partition nhanh hơn hẳn đọc từ tệp gốc chủ yếu vì?
+  options:
+  - id: a
+    text: Dữ liệu partition được nén zstd
+  - id: b
+    text: 'Partition pruning: chỉ đọc thư mục `pickup_date=2019-07-04`'
+  - id: c
+    text: Spark cache sẵn lần đọc trước
+  - id: d
+    text: Broadcast bảng zone
+- id: wide-ops
+  kind: knowledge
+  type: multi
+  prompt: Phép nào là **wide transformation** (gây shuffle)?
+  options:
+  - id: a
+    text: '`groupBy(...).agg(...)`'
+  - id: b
+    text: '`filter(...)`'
+  - id: c
+    text: '`repartition("pickup_date")`'
+  - id: d
+    text: Join sort-merge hai bảng lớn
+  - id: e
+    text: '`withColumn(...)`'
+- id: top-reject
+  kind: data
+  type: single
+  prompt: Lý do loại chuyến nào nhiều nhất?
+  options:
+  - id: a
+    text: '`bad_duration`'
+  - id: b
+    text: '`bad_amount`'
+  - id: c
+    text: '`too_fast`'
+  - id: d
+    text: '`bad_distance`'
+- id: peak-hour
+  kind: data
+  type: single
+  prompt: Giờ đón khách nào nhiều chuyến nhất năm 2019 (trên dữ liệu sạch)?
+  options:
+  - id: a
+    text: 8h
+  - id: b
+    text: 17h
+  - id: c
+    text: 18h
+  - id: d
+    text: 19h
+- id: tip-payment
+  kind: data
+  type: single
+  prompt: Tip rate (tổng tip / tổng cước) của chuyến trả thẻ và trả tiền mặt lần lượt khoảng?
+  options:
+  - id: a
+    text: 16,5% và 16,5%
+  - id: b
+    text: 22,8% và gần 0%
+  - id: c
+    text: 22,8% và 12%
+  - id: d
+    text: 15% và gần 0%
+- id: lowest-borough
+  kind: data
+  type: single
+  prompt: Borough nào có tip rate chuyến thẻ (theo điểm đón) **thấp nhất**?
+  options:
+  - id: a
+    text: Staten Island
+  - id: b
+    text: Brooklyn
+  - id: c
+    text: Bronx
+  - id: d
+    text: Queens

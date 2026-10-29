@@ -1,0 +1,8 @@
+rec-nasa: [b]
+rec-iot: [c]
+rec-usgs: [a]
+rec-weather: [d]
+need-streaming: [b]
+nasa-rows-per-day: [c]
+nasa-max-gap: [a]
+best-compression: [d]

@@ -1,0 +1,105 @@
+questions:
+- id: dedup-key
+  kind: knowledge
+  type: single
+  prompt: Khoá dedup đúng cho event recentchange là gì?
+  options:
+  - id: a
+    text: '`event.id`, id dòng recent change'
+  - id: b
+    text: '`meta.id`, UUID của chính event'
+  - id: c
+    text: '`(wiki, title)`'
+  - id: d
+    text: '`received_at`'
+- id: event-time
+  kind: knowledge
+  type: single
+  prompt: Window "sửa đổi mỗi phút" nên tính theo trường nào?
+  options:
+  - id: a
+    text: '`received_at` (lúc ta nhận)'
+  - id: b
+    text: '`meta.dt` (lúc event được tạo)'
+  - id: c
+    text: Thứ tự dòng trong tệp
+  - id: d
+    text: '`timestamp` (lúc sửa xảy ra)'
+- id: late-example
+  kind: knowledge
+  type: single
+  prompt: Tumbling window 60 s, `allowed_lateness = 10 s`. `max_event_time` đã thấy là 12:01:25, rồi một event có event time 12:00:58 đến. Kết quả?
+  options:
+  - id: a
+    text: Được cộng vào window 12:00
+  - id: b
+    text: Bị tính là late (window 12:00 đã đóng)
+  - id: c
+    text: Được cộng vào window 12:01
+  - id: d
+    text: Bị coi là bản trùng
+- id: last-event-id
+  kind: knowledge
+  type: single
+  prompt: Nối lại bằng `Last-Event-ID` cho đảm bảo giao nhận nào?
+  options:
+  - id: a
+    text: 'At-least-once: không mất nhưng có thể trùng'
+  - id: b
+    text: Exactly-once
+  - id: c
+    text: 'At-most-once: không trùng nhưng có thể mất'
+  - id: d
+    text: Không đảm bảo gì
+- id: negative-diff
+  kind: knowledge
+  type: single
+  prompt: Đối soát thấy `diff = batch - stream < 0` ở một window. Nguyên nhân khả dĩ nhất?
+  options:
+  - id: a
+    text: Event trễ quá `allowed_lateness`
+  - id: b
+    text: Batch chạy trên dữ liệu chưa đủ
+  - id: c
+    text: 'Stream đếm dư: dedup hở (TTL ngắn, mất state)'
+  - id: d
+    text: Batch dedup quá tay
+- id: lateness-tradeoff
+  kind: knowledge
+  type: multi
+  prompt: Tăng `allowed_lateness` thì điều gì xảy ra?
+  options:
+  - id: a
+    text: Kết quả đầy đủ hơn (ít event late)
+  - id: b
+    text: Window được phát kết quả muộn hơn
+  - id: c
+    text: Phải giữ nhiều state hơn
+  - id: d
+    text: Bỏ nhiều event trễ hơn
+- id: kappa-retention
+  kind: knowledge
+  type: single
+  prompt: EventStreams chỉ giữ lịch sử để replay ~7–31 ngày. Muốn chọn Kappa và tính lại được lịch sử dài cần gì?
+  options:
+  - id: a
+    text: Replay trực tiếp từ EventStreams mỗi lần đổi logic
+  - id: b
+    text: Tăng `allowed_lateness` lên 31 ngày
+  - id: c
+    text: Bắt buộc chuyển sang Lambda, Kappa không làm được
+  - id: d
+    text: Tự giữ lớp raw (JSONL, topic retention dài, bảng Iceberg/Delta) rồi replay từ đó
+- id: lambda-when
+  kind: knowledge
+  type: multi
+  prompt: Khi nào Lambda đáng chọn hơn Kappa?
+  options:
+  - id: a
+    text: Số chốt phải khớp tuyệt đối với hệ nguồn (tài chính, đối soát)
+  - id: b
+    text: Đội muốn chỉ giữ một codebase
+  - id: c
+    text: Logic batch phức tạp (join lớn, ML) khó viết dạng stream
+  - id: d
+    text: Nguồn giữ log đủ lâu để replay

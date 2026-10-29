@@ -1,0 +1,8 @@
+broadcast-why: [a]
+one-file-per-day: [c]
+pruning: [b]
+wide-ops: [a, c, d]
+top-reject: [d]
+peak-hour: [c]
+tip-payment: [b]
+lowest-borough: [c]

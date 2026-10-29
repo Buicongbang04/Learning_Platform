@@ -1,0 +1,8 @@
+csv-format: [c]
+sentinel-rule: [b]
+outage-definition: [a]
+drift: [d]
+nmhc-missing: [c]
+longest-outage: [b]
+co-peaks: [d]
+cleanest-month: [b]

@@ -1,0 +1,8 @@
+raw-before-parse: [c]
+retry-which: [a, c, d]
+retry-after: [b]
+era5-what: [d]
+hanoi-amplitude: [c]
+hcmc-hottest-month: [a]
+hanoi-hot-days: [c]
+rainy-days: [d]

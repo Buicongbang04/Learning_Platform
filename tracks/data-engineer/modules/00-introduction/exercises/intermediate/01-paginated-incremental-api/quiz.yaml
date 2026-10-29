@@ -1,0 +1,105 @@
+questions:
+- id: watermark-column
+  kind: knowledge
+  type: single
+  prompt: Vì sao watermark incremental phải theo `updated` chứ không theo `time`?
+  options:
+  - id: a
+    text: Vì `time` không có trong response JSON
+  - id: b
+    text: Vì `updated` luôn tăng đều theo `time`
+  - id: c
+    text: Vì trận đã xảy ra từ lâu vẫn bị sửa (độ lớn, vị trí); lọc theo `time` sẽ bỏ sót bản sửa
+  - id: d
+    text: Vì USGS không cho lọc theo `time`
+- id: state-when
+  kind: knowledge
+  type: single
+  prompt: '`state.json` (watermark) nên được ghi khi nào?'
+  options:
+  - id: a
+    text: Trước khi gọi trang đầu tiên
+  - id: b
+    text: Sau mỗi trang ghi xong
+  - id: c
+    text: Khi gặp lỗi, để lượt sau chạy tiếp
+  - id: d
+    text: Chỉ khi mọi trang của lượt chạy đã ghi xong
+- id: pagination-stop
+  kind: knowledge
+  type: single
+  prompt: '`fetch_pages` dừng duyệt `offset` khi nào?'
+  options:
+  - id: a
+    text: Khi trang trả về ít bản ghi hơn `page_size`
+  - id: b
+    text: Khi server trả 404
+  - id: c
+    text: Sau đúng 7 trang
+  - id: d
+    text: Khi `offset` vượt 10 000
+- id: merge-runs
+  kind: knowledge
+  type: single
+  prompt: Gộp nhiều lượt chạy, cùng một `id` xuất hiện ở lượt 1 và lượt 2. `load_events` giữ bản nào?
+  options:
+  - id: a
+    text: Bản có `updated` mới nhất
+  - id: b
+    text: Bản ở lượt 1 (bản đầu tiên)
+  - id: c
+    text: Cả hai bản
+  - id: d
+    text: Bản có `mag` lớn hơn
+- id: largest-quake
+  kind: data
+  type: single
+  prompt: Trận M ≥ 4.5 lớn nhất năm 2024 trong dữ liệu là trận nào?
+  options:
+  - id: a
+    text: M7,5 bán đảo Noto (Nhật Bản), 2024-01-01
+  - id: b
+    text: M7,4 Hoa Liên (Đài Loan), 2024-04-02
+  - id: c
+    text: M7,3 Vanuatu, 2024-12-17
+  - id: d
+    text: M7,0 ngoài khơi Cape Mendocino (California), 2024-12-05
+- id: busiest-month
+  kind: data
+  type: single
+  prompt: Tháng nào năm 2024 có nhiều trận M ≥ 4.5 nhất?
+  options:
+  - id: a
+    text: Tháng 1
+  - id: b
+    text: Tháng 4
+  - id: c
+    text: Tháng 8
+  - id: d
+    text: Tháng 12
+- id: top-region
+  kind: data
+  type: single
+  prompt: '`region` nào có nhiều trận nhất?'
+  options:
+  - id: a
+    text: Japan
+  - id: b
+    text: Philippines
+  - id: c
+    text: Tonga
+  - id: d
+    text: Indonesia
+- id: gr-b
+  kind: data
+  type: single
+  prompt: Hệ số b của luật Gutenberg–Richter ước lượng trên dữ liệu khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0,7
+  - id: b
+    text: Khoảng 1,1
+  - id: c
+    text: Khoảng 1,6
+  - id: d
+    text: Khoảng 2,0
