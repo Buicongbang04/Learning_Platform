@@ -38,6 +38,8 @@ export function useQuiz(exercise: Exercise, trackId: string) {
   const [draft, setDraft] = useState<Answers>({});
   const [results, setResults] = useState<QuestionResult[] | null>(null);
   const [retaking, setRetaking] = useState(false);
+  // Kết quả vừa nộp, giữ cục bộ để vẫn hiện được khi tiến độ chưa sẵn sàng (chưa lưu được vào progress).
+  const [submitted, setSubmitted] = useState<QuizResult | null>(null);
   const dir = exercise.dir;
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function useQuiz(exercise: Exercise, trackId: string) {
     setDraft({});
     setResults(null);
     setRetaking(false);
+    setSubmitted(null);
     request<{ questions: QuizQuestion[]; quizHash: string }>(`/api/quiz?dir=${encodeURIComponent(dir)}`)
       .then((body) => {
         if (!live) return;
@@ -65,11 +68,14 @@ export function useQuiz(exercise: Exercise, trackId: string) {
     };
   }, [dir]);
 
-  const stored = progress.status === "ready" ? storedResultFor(progress.of(trackId).quizzes[exercise.key], quizHash) : null;
+  const saved = progress.status === "ready" ? progress.of(trackId).quizzes[exercise.key] : undefined;
+  const stored = storedResultFor(saved, quizHash);
+  // Có kết quả cũ nhưng bộ câu hỏi đã đổi (hash khác): kết quả cũ hết hiệu lực.
+  const stale = status === "ready" && Boolean(saved) && !stored;
 
   // Mở lại bài đã nộp: chấm lại đáp án đã lưu để có `results` (kèm đáp án đúng).
   useEffect(() => {
-    if (!stored || results || retaking) return;
+    if (!stored || results || retaking || submitted) return;
     let live = true;
     request<GradeResponse>("/api/quiz/grade", { dir, answers: stored.answers })
       .then((body) => live && setResults(body.results))
@@ -77,26 +83,31 @@ export function useQuiz(exercise: Exercise, trackId: string) {
     return () => {
       live = false;
     };
-  }, [stored, results, retaking, dir]);
+  }, [stored, results, retaking, submitted, dir]);
 
   const setAnswer = useCallback((qid: string, optionIds: string[]) => setDraft((value) => ({ ...value, [qid]: optionIds })), []);
 
   const submit = useCallback(async () => {
     const body = await request<GradeResponse>("/api/quiz/grade", { dir, answers: draft });
-    const saved: QuizResult = { answers: draft, correct: body.correct, total: body.total, submittedAt: now(), quizHash: body.quizHash };
+    const record: QuizResult = { answers: draft, correct: body.correct, total: body.total, submittedAt: now(), quizHash: body.quizHash };
     setResults(body.results);
+    setSubmitted(record);
     setRetaking(false);
     progress.update(trackId, (track) => {
-      track.quizzes[exercise.key] = saved;
+      track.quizzes[exercise.key] = record;
     });
   }, [dir, draft, exercise.key, trackId, progress]);
 
   const retake = useCallback(() => {
     setDraft({});
+    setSubmitted(null);
     setRetaking(true); // kết quả cũ vẫn nằm trong tiến độ đến khi nộp lại
   }, []);
 
-  const result = useMemo(() => (stored && results && !retaking ? { ...stored, results } : null), [stored, results, retaking]);
+  const result = useMemo(() => {
+    const base = submitted ?? stored;
+    return base && results && !retaking ? { ...base, results } : null;
+  }, [submitted, stored, results, retaking]);
 
-  return { status, error, questions, quizHash, draft, setAnswer, submit, result, retake };
+  return { status, error, questions, quizHash, draft, setAnswer, submit, result, retake, stale: stale && !submitted };
 }

@@ -12,3 +12,8 @@ export type QuizResult = {
 export function storedResultFor(stored: QuizResult | undefined, currentHash: string): QuizResult | null {
   return stored && stored.quizHash === currentHash ? stored : null;
 }
+
+/** Điểm hiển thị tính từ kết quả chấm lại hiện tại, để luôn khớp với dấu đúng/sai từng câu (dù đáp án đã sửa sau khi nộp). */
+export function scoreOf(results: { correct: boolean }[]): { correct: number; total: number } {
+  return { correct: results.filter((item) => item.correct).length, total: results.length };
+}

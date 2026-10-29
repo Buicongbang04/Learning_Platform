@@ -2,7 +2,7 @@ questions:
 - id: delay-ok
   kind: knowledge
   type: single
-  prompt: '`delay_days` (giao thực tế − ngày hẹn) có phải leakage không?'
+  prompt: 'Bài này dự đoán review xấu ngay khi đơn vừa giao xong. Với bài toán đó, `delay_days` (giao thực tế − ngày hẹn) có phải leakage không?'
   options:
   - id: a
     text: Có, vì dùng ngày giao thực tế, thứ không biết được lúc khách đặt hàng

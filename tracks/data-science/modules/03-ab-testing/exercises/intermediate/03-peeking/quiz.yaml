@@ -37,7 +37,7 @@ questions:
   - id: c
     text: 40–41%
   - id: d
-    text: 18–19%
+    text: ≈ 19%
 - id: obf-first
   kind: knowledge
   type: single

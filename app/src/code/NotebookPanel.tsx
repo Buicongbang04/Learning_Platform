@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CircleCheck, CircleX, ClipboardList, LoaderCircle, NotebookPen, RotateCcw, Send, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CircleCheck, CircleX, ClipboardList, FileText, LoaderCircle, NotebookPen, RotateCcw, Send, X } from "lucide-react";
 import { LEVEL_LABEL, type Exercise } from "../content";
 import { Markdown } from "../components/Markdown";
 import { badge, button, card, Checkbox, cx, ErrorBlock, LoadingBlock, ProgressBar } from "../components/ui";
 import { OpenInVsCode, PassedBanner, RunOutput, RunSummary } from "./Workspace";
 import { useWorkspace } from "./workspace";
 import { useQuiz, type QuizQuestion } from "./quiz";
+import { scoreOf } from "./quizResult";
+import { starterFilesOf, writtenReportOf } from "./starterFiles";
 
 /** Notebook của bài (starter/*.ipynb) theo `files` trong frontmatter README; null nếu là bài script. */
 export function notebookOf(exercise: Exercise): string | null {
@@ -19,9 +21,11 @@ export function isNotebookExercise(exercise: Exercise): boolean {
 const KIND_LABEL = { knowledge: "Kiến thức", data: "Dữ liệu" } as const;
 const INLINE_MD = "min-w-0 [&_p]:m-0";
 
-function ExerciseIntroCard({ exercise, notebook, done, onMarkDone }: { exercise: Exercise; notebook: string; done: boolean; onMarkDone: () => void }) {
+function ExerciseIntroCard({ exercise, done, onMarkDone }: { exercise: Exercise; done: boolean; onMarkDone: () => void }) {
   const ws = useWorkspace(exercise.dir);
   const result = ws.result;
+  const starters = starterFilesOf(exercise);
+  const multi = starters.length > 1;
 
   return (
     <section aria-labelledby="nb-intro-title" className={cx(card, "overflow-hidden")}>
@@ -42,14 +46,34 @@ function ExerciseIntroCard({ exercise, notebook, done, onMarkDone }: { exercise:
           </h2>
         </div>
         {exercise.goal && <Markdown className="text-muted [&_p]:text-sm">{exercise.goal}</Markdown>}
-        <div className="flex min-w-0 items-center gap-2 rounded-xl bg-code px-3 py-2 text-sm">
-          <NotebookPen className="size-4 shrink-0 text-muted" aria-hidden />
-          <code className="min-w-0 truncate font-mono text-[13px]" title={notebook}>
-            {notebook}
-          </code>
-        </div>
+        {multi ? (
+          <ul aria-label="Tệp cần làm" className="grid gap-2">
+            {starters.map((file) => {
+              const Icon = file.path.endsWith(".ipynb") ? NotebookPen : FileText;
+              return (
+                <li key={file.path} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-code px-3 py-2">
+                  <Icon className="size-4 shrink-0 text-muted" aria-hidden />
+                  <div className="flex min-w-0 flex-1 basis-40 flex-col">
+                    <code className="min-w-0 truncate font-mono text-[13px]" title={file.path}>
+                      {file.path}
+                    </code>
+                    {file.note && <span className="truncate text-xs text-muted">{file.note}</span>}
+                  </div>
+                  <OpenInVsCode path={`${exercise.dir}/${file.path}`} className="min-h-8 shrink-0 px-3 py-1" showLabel />
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="flex min-w-0 items-center gap-2 rounded-xl bg-code px-3 py-2 text-sm">
+            <NotebookPen className="size-4 shrink-0 text-muted" aria-hidden />
+            <code className="min-w-0 truncate font-mono text-[13px]" title={starters[0].path}>
+              {starters[0].path}
+            </code>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
-          <OpenInVsCode path={`${exercise.dir}/${notebook}`} showLabel />
+          {!multi && <OpenInVsCode path={`${exercise.dir}/${starters[0].path}`} showLabel />}
           <button type="button" className={button.primary} disabled={Boolean(ws.running) || ws.status !== "ready"} onClick={ws.runTests} title={`uv run pytest ${exercise.dir}`}>
             {ws.running === "test" ? <LoaderCircle className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden /> : <Check className="size-4 shrink-0" aria-hidden />}
             {ws.running === "test" ? "Đang chạy…" : "Chạy test"}
@@ -60,7 +84,9 @@ function ExerciseIntroCard({ exercise, notebook, done, onMarkDone }: { exercise:
             Không mở được tệp bài tập: {ws.error}
           </p>
         )}
-        {!result && ws.status === "ready" && <p className="text-sm text-muted">Làm bài trong notebook, lưu lại rồi bấm Chạy test để kiểm tra.</p>}
+        {!result && ws.status === "ready" && (
+          <p className="text-sm text-muted">{multi ? "Làm bài trong notebook và viết báo cáo, lưu lại rồi bấm Chạy test để kiểm tra." : "Làm bài trong notebook, lưu lại rồi bấm Chạy test để kiểm tra."}</p>
+        )}
       </div>
 
       {result && (
@@ -242,13 +268,14 @@ function QuizForm({ quiz }: { quiz: ReturnType<typeof useQuiz> }) {
 function QuizReview({ quiz }: { quiz: ReturnType<typeof useQuiz> }) {
   const result = quiz.result!;
   const byId = new Map(result.results.map((item) => [item.id, item]));
-  const percent = result.total ? (result.correct / result.total) * 100 : 0;
+  const score = scoreOf(result.results);
+  const percent = score.total ? (score.correct / score.total) * 100 : 0;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm">
-          Điểm: <strong className="text-lg font-semibold tabular-nums">{result.correct}/{result.total}</strong>
+          Điểm: <strong className="text-lg font-semibold tabular-nums">{score.correct}/{score.total}</strong>
         </p>
         <span className="flex-1" />
         <button type="button" className={button.outline} onClick={quiz.retake}>
@@ -256,7 +283,7 @@ function QuizReview({ quiz }: { quiz: ReturnType<typeof useQuiz> }) {
           Làm lại
         </button>
       </div>
-      <ProgressBar percent={percent} label={`Đúng ${result.correct} trên ${result.total} câu`} />
+      <ProgressBar percent={percent} label={`Đúng ${score.correct} trên ${score.total} câu`} />
       <ol className="grid gap-3">
         {quiz.questions.map((question, index) => {
           const graded = byId.get(question.id);
@@ -303,16 +330,21 @@ function QuizCard({ exercise, trackId }: { exercise: Exercise; trackId: string }
   const quiz = useQuiz(exercise, trackId);
   if (quiz.status === "none") return null;
   const empty = quiz.status === "ready" && quiz.questions.length === 0;
+  const report = writtenReportOf(exercise);
 
   return (
     <section aria-labelledby="nb-quiz-title" className={cx(card, "p-5")}>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <ClipboardList className="size-4 shrink-0 text-muted" aria-hidden />
-        <h2 id="nb-quiz-title" className="text-base font-semibold">
-          Báo cáo bài học
-        </h2>
-        <span className={badge.neutral}>Tuỳ chọn</span>
+      <div className="mb-4 flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <ClipboardList className="size-4 shrink-0 text-muted" aria-hidden />
+          <h2 id="nb-quiz-title" className="text-base font-semibold">
+            Báo cáo bài học
+          </h2>
+          <span className={badge.neutral}>Tuỳ chọn</span>
+        </div>
+        {report && <p className="text-xs text-muted">Trắc nghiệm tự kiểm tra, không thay cho {report}.</p>}
       </div>
+      {quiz.stale && !quiz.result && <p className="mb-4 text-sm text-muted">Bộ câu hỏi đã đổi, kết quả cũ không còn hiệu lực. Làm lại để có điểm mới.</p>}
       {quiz.status === "loading" && <LoadingBlock text="Đang tải câu hỏi…" />}
       {quiz.status === "error" && <ErrorBlock title="Không tải được câu hỏi" reason={quiz.error} />}
       {empty && <p className="text-sm text-muted">Bộ câu hỏi đang trống.</p>}
@@ -323,10 +355,9 @@ function QuizCard({ exercise, trackId }: { exercise: Exercise; trackId: string }
 
 /** Khung phải của bài notebook: card giới thiệu + chạy test, và card trắc nghiệm (nếu bài có quiz.yaml). */
 export function NotebookPanel({ exercise, trackId, done, onMarkDone }: { exercise: Exercise; trackId: string; done: boolean; onMarkDone: () => void }) {
-  const notebook = notebookOf(exercise)!;
   return (
     <div className="flex flex-col gap-3">
-      <ExerciseIntroCard exercise={exercise} notebook={notebook} done={done} onMarkDone={onMarkDone} />
+      <ExerciseIntroCard exercise={exercise} done={done} onMarkDone={onMarkDone} />
       <QuizCard exercise={exercise} trackId={trackId} />
     </div>
   );
