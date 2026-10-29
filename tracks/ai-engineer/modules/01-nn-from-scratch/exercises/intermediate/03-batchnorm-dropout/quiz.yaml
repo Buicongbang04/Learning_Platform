@@ -1,0 +1,105 @@
+questions:
+- id: bn-epoch1
+  kind: data
+  type: single
+  prompt: Sau epoch 1 (SGD lr 0.1, seed 0, không dropout), test accuracy của MLP không BN và có BN lần lượt là?
+  options:
+  - id: a
+    text: 0.8571 và 0.9269
+  - id: b
+    text: 0.9269 và 0.8571
+  - id: c
+    text: 0.9514 và 0.9582
+  - id: d
+    text: 0.8859 và 0.9192
+- id: running-var
+  kind: knowledge
+  type: single
+  prompt: '`torch.nn.BatchNorm1d` khi train chuẩn hoá và lưu `running_var` bằng phương sai nào?'
+  options:
+  - id: a
+    text: Chia N - 1 khi chuẩn hoá, chia N khi lưu running var
+  - id: b
+    text: Chia N khi chuẩn hoá, chia N - 1 khi lưu running var
+  - id: c
+    text: Chia N cho cả hai, giống mặc định của `np.var`
+  - id: d
+    text: Chia N - 1 cho cả hai, giống mặc định `torch.var`
+- id: dropout-train-loss
+  kind: data
+  type: single
+  prompt: MLP không BN, thêm dropout 0.3. Train loss của epoch cuối (đo khi train) đổi từ 0.022 thành bao nhiêu?
+  options:
+  - id: a
+    text: '0.009'
+  - id: b
+    text: '0.022'
+  - id: c
+    text: '0.087'
+  - id: d
+    text: '0.350'
+- id: linear-bias
+  kind: knowledge
+  type: single
+  prompt: Đặt BatchNorm ngay sau một Linear có bias thì bias đó ra sao?
+  options:
+  - id: a
+    text: Thừa, vì BN trừ mean của batch, β làm thay việc đó
+  - id: b
+    text: Cần thiết, vì BN không có tham số dịch chuyển nào
+  - id: c
+    text: Bị nhân với γ nên cần khởi tạo bằng 1 thay vì 0
+  - id: d
+    text: Làm running mean không hội tụ nên phải bỏ momentum
+- id: train-mode-eval
+  kind: data
+  type: single
+  prompt: Model "BN, dropout 0.3" đạt 0.9595 ở eval mode. Đánh giá nó ở chế độ train với batch 4 cho accuracy bao nhiêu?
+  options:
+  - id: a
+    text: '0.9595'
+  - id: b
+    text: '0.9371'
+  - id: c
+    text: '0.7499'
+  - id: d
+    text: '0.0982'
+- id: mask-backward
+  kind: knowledge
+  type: single
+  prompt: '`Dropout.backward` sinh một mask mới thay vì dùng mask của forward thì sao?'
+  options:
+  - id: a
+    text: Gradient sai mà không báo lỗi, model học kém đi
+  - id: b
+    text: numpy báo lỗi vì shape của mask mới khác shape cũ
+  - id: c
+    text: Không sao, vì kỳ vọng của hai mask bằng nhau
+  - id: d
+    text: Chỉ chậm hơn vì phải sinh số ngẫu nhiên hai lần
+- id: eval-after
+  kind: data
+  type: single
+  prompt: Sau hai lượt đánh giá sai chế độ đó, chuyển lại eval mode thì test accuracy là bao nhiêu?
+  options:
+  - id: a
+    text: 0.9595, eval không phụ thuộc lần chạy trước
+  - id: b
+    text: 0.9546, running stats đã bị ghi đè
+  - id: c
+    text: 0.7499, model vẫn đang ở chế độ train
+  - id: d
+    text: 0.9371, giống lượt train mode batch 1000
+- id: bn-batch-one
+  kind: knowledge
+  type: single
+  prompt: Nếu BatchNorm khi train nhận batch 1 mẫu mà không báo lỗi, output là gì?
+  options:
+  - id: a
+    text: Đúng bằng x, vì mean và std của một mẫu là chính nó
+  - id: b
+    text: Toàn NaN, vì phương sai 0 làm phép chia bị lỗi
+  - id: c
+    text: Bằng β với mọi input, vì x − μ = 0; gradient về x là 0
+  - id: d
+    text: Dùng running stats thay thế nên vẫn giống eval mode

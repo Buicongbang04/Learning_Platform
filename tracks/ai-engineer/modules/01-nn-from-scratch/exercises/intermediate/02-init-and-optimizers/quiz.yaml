@@ -1,0 +1,105 @@
+questions:
+- id: relu-he-grad
+  kind: data
+  type: single
+  prompt: Mạng 10 tầng 512 neuron, ReLU, khởi tạo He (seed 0). Std gradient lan ngược về input là bao nhiêu?
+  options:
+  - id: a
+    text: 3.22e-07
+  - id: b
+    text: 3.05e-02
+  - id: c
+    text: 9.75e-01
+  - id: d
+    text: 2.73e+05
+- id: momentum-lr
+  kind: knowledge
+  type: single
+  prompt: Vì sao SGD + momentum 0.9, lr 0.01 cho đường cong gần trùng SGD lr 0.1?
+  options:
+  - id: a
+    text: Gradient ổn định thì lr hiệu dụng là lr / (1 − μ) = 0.1
+  - id: b
+    text: Momentum làm mượt nhiễu minibatch nên hội tụ như lr lớn
+  - id: c
+    text: Momentum chuẩn hoá gradient theo độ lớn từng toạ độ
+  - id: d
+    text: Trùng hợp của seed 0; đổi seed thì hai đường tách xa
+- id: tanh-saturated
+  kind: data
+  type: single
+  prompt: Mạng 10 tầng tanh khởi tạo N(0, 1) có std activation 0.98. Bao nhiêu phần trăm activation tầng 10 có |h| > 0.99?
+  options:
+  - id: a
+    text: 0.0%
+  - id: b
+    text: 9.5%
+  - id: c
+    text: 50.2%
+  - id: d
+    text: 90.5%
+- id: bias-correction
+  kind: knowledge
+  type: single
+  prompt: Bỏ bias correction khỏi Adam (β1 = 0.9, β2 = 0.999). Bước cập nhật đầu tiên so với lr thì sao?
+  options:
+  - id: a
+    text: Nhỏ hơn lr khoảng 10 lần vì m chỉ bằng 0.1g
+  - id: b
+    text: Lớn hơn lr khoảng 3.16 lần, 0.1g / sqrt(0.001g²)
+  - id: c
+    text: Vẫn đúng bằng lr theo dấu gradient như khi có
+  - id: d
+    text: Bằng 0 vì m và v đều được khởi tạo bằng 0
+- id: best-opt
+  kind: data
+  type: single
+  prompt: Sau 3 epoch trên MNIST (seed 0), cấu hình nào cho test accuracy cao nhất?
+  options:
+  - id: a
+    text: SGD lr 0.1
+  - id: b
+    text: SGD + momentum 0.9, lr 0.01
+  - id: c
+    text: Adam lr 1e-3
+  - id: d
+    text: Adam lr 1e-1
+- id: adamw-vs-l2
+  kind: knowledge
+  type: single
+  prompt: AdamW khác Adam + L2 (cộng λθ vào gradient) ở đâu?
+  options:
+  - id: a
+    text: AdamW trừ λθ thẳng vào tham số, không bị chia cho sqrt(v̂)
+  - id: b
+    text: AdamW chỉ áp weight decay lên bias, còn L2 thì lên mọi W
+  - id: c
+    text: Hai cách giống hệt nhau, AdamW chỉ là tên gọi khác
+  - id: d
+    text: AdamW tắt bias correction để weight decay có hiệu lực
+- id: adam-big-lr
+  kind: data
+  type: single
+  prompt: Adam lr 1e-1 trên MNIST (seed 0) cho kết quả nào?
+  options:
+  - id: a
+    text: Loss giảm đều cả 3 epoch, test acc 0.9747
+  - id: b
+    text: Loss tăng lại ở epoch 3, test acc 0.7288
+  - id: c
+    text: Loss đứng yên ở 2.303, test acc 0.0982
+  - id: d
+    text: Loss giảm đều cả 3 epoch, test acc 0.9160
+- id: torch-fan
+  kind: knowledge
+  type: single
+  prompt: '`nn.Linear` lưu weight shape `(out, in)`. Tính He bằng `std = sqrt(2 / W.shape[0])` thì sao?'
+  options:
+  - id: a
+    text: Đúng, vì shape[0] luôn là fan_in với mọi layer
+  - id: b
+    text: Sai, đó là fan_out; std lệch khi in khác out
+  - id: c
+    text: Sai, He phải dùng tổng fan_in + fan_out
+  - id: d
+    text: Đúng, vì PyTorch tự chuyển vị khi khởi tạo

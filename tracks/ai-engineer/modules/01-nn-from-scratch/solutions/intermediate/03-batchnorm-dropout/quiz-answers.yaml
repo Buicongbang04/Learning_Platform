@@ -1,0 +1,8 @@
+bn-epoch1: [a]
+running-var: [b]
+dropout-train-loss: [c]
+linear-bias: [a]
+train-mode-eval: [c]
+mask-backward: [a]
+eval-after: [b]
+bn-batch-one: [c]

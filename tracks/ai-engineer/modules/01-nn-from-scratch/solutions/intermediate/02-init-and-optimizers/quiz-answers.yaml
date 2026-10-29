@@ -1,0 +1,8 @@
+relu-he-grad: [c]
+momentum-lr: [a]
+tanh-saturated: [d]
+bias-correction: [b]
+best-opt: [c]
+adamw-vs-l2: [a]
+adam-big-lr: [b]
+torch-fan: [b]

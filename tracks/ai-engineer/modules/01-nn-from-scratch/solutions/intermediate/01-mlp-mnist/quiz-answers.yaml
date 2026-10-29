@@ -1,0 +1,8 @@
+pixel-mean: [c]
+inplace: [a]
+step0-loss: [b]
+two-perms: [d]
+lr01-acc: [c]
+weighted-mean: [a]
+dead-relu: [b]
+constant-output: [b]

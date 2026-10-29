@@ -1,0 +1,105 @@
+questions:
+- id: pixel-mean
+  kind: data
+  type: single
+  prompt: Mean pixel (sau khi chia 255) của 60 000 ảnh train MNIST là bao nhiêu?
+  options:
+  - id: a
+    text: '0.5000'
+  - id: b
+    text: '0.3081'
+  - id: c
+    text: '0.1307'
+  - id: d
+    text: '0.2855'
+- id: inplace
+  kind: knowledge
+  type: single
+  prompt: Viết `p = p - lr * g` thay cho `p -= lr * g` trong vòng `for p, g in model.params()` thì sao?
+  options:
+  - id: a
+    text: Model không đổi, loss đứng yên mà không báo lỗi
+  - id: b
+    text: numpy báo lỗi vì không gán được vào biến vòng lặp
+  - id: c
+    text: Chạy đúng nhưng chậm hơn vì phải cấp phát mảng mới
+  - id: d
+    text: Chỉ bias được cập nhật, trọng số W thì không
+- id: step0-loss
+  kind: data
+  type: single
+  prompt: Loss của `MLP([784, 128, 10], seed=0)` chưa train, trên 1000 ảnh train đầu, là bao nhiêu?
+  options:
+  - id: a
+    text: '0.000'
+  - id: b
+    text: '2.384'
+  - id: c
+    text: '2.303'
+  - id: d
+    text: '4.605'
+- id: two-perms
+  kind: knowledge
+  type: single
+  prompt: Xáo `X` và `y` bằng hai lần gọi `rng.permutation` riêng thì vòng train ra sao?
+  options:
+  - id: a
+    text: Nhanh hội tụ hơn vì dữ liệu được xáo kỹ gấp đôi
+  - id: b
+    text: Báo lỗi shape vì hai hoán vị có độ dài khác nhau
+  - id: c
+    text: Như cũ, vì mỗi epoch đằng nào cũng đi hết dữ liệu
+  - id: d
+    text: Nhãn lệch khỏi ảnh, loss quanh ln 10, đoán như ngẫu nhiên
+- id: lr01-acc
+  kind: data
+  type: single
+  prompt: SGD lr 0.1, batch 64, 3 epoch trên 60 000 ảnh (seed 0) cho test accuracy bao nhiêu?
+  options:
+  - id: a
+    text: '0.9160'
+  - id: b
+    text: '0.9552'
+  - id: c
+    text: '0.9636'
+  - id: d
+    text: '0.9747'
+- id: weighted-mean
+  kind: knowledge
+  type: single
+  prompt: Vì sao `train_epoch` cộng `loss * len(batch)` rồi chia cho `len(X)`, thay vì lấy trung bình các loss batch?
+  options:
+  - id: a
+    text: Batch cuối có thể ngắn hơn, mỗi mẫu cần cùng trọng số
+  - id: b
+    text: Loss của mỗi batch là tổng chứ không phải trung bình
+  - id: c
+    text: Để loss epoch nhỏ hơn và đường cong trông mượt hơn
+  - id: d
+    text: numpy cộng float32 không chính xác nếu không nhân
+- id: dead-relu
+  kind: data
+  type: single
+  prompt: Sau 1 epoch SGD lr 1.0 (seed 0), bao nhiêu phần trăm neuron ẩn không bật với ảnh test nào?
+  options:
+  - id: a
+    text: 0%
+  - id: b
+    text: Khoảng 27%
+  - id: c
+    text: Khoảng 98%
+  - id: d
+    text: 100%
+- id: constant-output
+  kind: knowledge
+  type: single
+  prompt: Với lr 5.0, loss đứng ở 2.324 và test accuracy là 0.0982. Điều gì đã xảy ra?
+  options:
+  - id: a
+    text: Model overfit tập train nên test chỉ còn gần 10%
+  - id: b
+    text: ReLU chết hết, output là hằng, luôn đoán một lớp
+  - id: c
+    text: Gradient biến mất vì khởi tạo He quá nhỏ cho 784 input
+  - id: d
+    text: Loss tràn số ra NaN nên argmax luôn trả lớp 0
