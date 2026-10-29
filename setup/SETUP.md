@@ -160,10 +160,20 @@ sudo apt-get update && sudo apt-get install -y terraform
 ## 7. Dữ liệu
 
 ```bash
-uv run python data/generate_olist.py                  # 50k đơn giả vào data/raw/ (~3 giây)
+uv run python data/download_olist.py                  # Olist thật (mặc định), cần KAGGLE_API_TOKEN trong setup/.env
 uv run python data/simulate_events.py --count 20 --stdout
-uv run python data/download_olist.py                  # tuỳ chọn: bộ thật, cần Kaggle token
 ```
+
+Bộ dữ liệu thật khác của track DE (NYC TLC, NASA logs, UCI Air Quality) do notebook tự tải qua `ensure`;
+có thể tải trước: `uv run python data/download_dataset.py nyc-tlc` (`--list` để xem danh mục).
+
+Không có Kaggle token hoặc mạng thì dùng dữ liệu giả làm dự phòng, ghi ra thư mục **riêng**:
+
+```bash
+uv run python data/generate_olist.py --out data/raw/olist_synthetic   # 50k đơn giả (~3 giây)
+```
+
+Chạy `generate_olist.py` **không** có `--out` sẽ ghi đè các tệp Olist thật trong `data/raw/`.
 
 Chi tiết schema: `data/README.md`.
 

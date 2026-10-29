@@ -114,3 +114,40 @@ def test_de_datasets_declared():
 def test_old_datasets_untouched():
     assert {"cookie-cats", "ab-data", "hillstrom"} <= dd.DATASETS.keys()
     assert dd.DATASETS["hillstrom"].files == ["hillstrom.csv"]
+
+
+def test_air_quality_saves_zip_via_multi_url_path(tmp_path, monkeypatch):
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            yield b"PK-fake"
+
+    monkeypatch.setattr(dd.requests, "get", lambda url, **k: FakeResp())
+    paths = dd.download("air-quality-uci", tmp_path)
+    assert [p.name for p in paths] == ["air-quality.zip"]
+    assert (tmp_path / "air-quality.zip").read_bytes() == b"PK-fake"
+
+
+def test_ensure_removes_stale_partial_dirs(tmp_path, monkeypatch):
+    monkeypatch.setattr(dd, "RAW", tmp_path)
+    stale = tmp_path / ".nyc-tlc.partial-deadbeef"
+    stale.mkdir()
+    (stale / "x").write_text("1")
+    other = tmp_path / ".other.partial-1"
+    other.mkdir()
+
+    def fake_download(name, out):
+        out.mkdir(parents=True)
+        (out / "f").write_text("1")
+
+    monkeypatch.setattr(dd, "download", fake_download)
+    dd.ensure("nyc-tlc")
+    assert not stale.exists() and other.exists()

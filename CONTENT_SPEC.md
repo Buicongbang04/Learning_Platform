@@ -189,7 +189,7 @@ Dùng khi bài là phân tích / modeling, như cách Data Scientist làm việc
 
 ### Notebook dữ liệu thật của track Data Engineer
 
-Các bài module 00 và capstone (Bước 0) làm việc trên dữ liệu thật, không chỉ chấm hàm. Quy ước thêm
+Các bài notebook dữ liệu thật của track DE (module 00, capstone Bước 0 và các bài tương tự ở module khác) làm việc trên dữ liệu thật, không chỉ chấm hàm. Quy ước thêm
 (phần chung xem ở trên):
 
 - Cell đầu đưa gốc repo vào `sys.path` rồi gọi `ensure("<tên>")` từ `data/download_dataset.py`

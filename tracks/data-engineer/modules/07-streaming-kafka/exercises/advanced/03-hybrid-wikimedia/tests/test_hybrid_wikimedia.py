@@ -141,7 +141,7 @@ def test_parse_event_edge_cases(nb):
 
 def test_build_clean_dedups_and_types(nb):
     df, stats = nb.build_clean(sample_lines())
-    assert stats == {"lines": 14, "parsed": 12, "dropped": 2, "duplicates": 2}
+    assert stats == {"lines": 15, "parsed": 13, "dropped": 2, "duplicates": 3}
     assert len(df) == 10 and df["event_id"].is_unique
     assert "canary" not in set(df["domain"])
     assert str(df["event_time"].dt.tz) == "UTC" and str(df["received_at"].dt.tz) == "UTC"
@@ -167,7 +167,7 @@ def test_stream_matches_batch_after_dedup(nb):
     df, _ = nb.build_clean(sample_lines())
     stream, stats = nb.stream_counts(sample_events(nb), window=60, allowed_lateness=120)
     assert list(stream.columns) == ["window_start", "wiki", "edits"]
-    assert stats == {"events": 10, "duplicates": 2, "late": 0, "counted": 8}
+    assert stats == {"events": 11, "duplicates": 3, "late": 0, "counted": 8}
     recon = nb.reconcile(stream, nb.batch_counts(df, window=60))
     assert list(recon.columns) == ["window_start", "wiki", "stream_edits", "batch_edits", "diff"]
     assert len(recon) == 6 and (recon["diff"] == 0).all()
@@ -176,18 +176,19 @@ def test_stream_matches_batch_after_dedup(nb):
 def test_stream_late_event_shows_up_in_reconcile(nb):
     df, _ = nb.build_clean(sample_lines())
     stream, stats = nb.stream_counts(sample_events(nb), window=60, allowed_lateness=10)
-    assert stats == {"events": 10, "duplicates": 2, "late": 1, "counted": 7}
+    assert stats == {"events": 11, "duplicates": 3, "late": 1, "counted": 7}
     recon = nb.reconcile(stream, nb.batch_counts(df, window=60))
     assert diffs(recon) == {(ts(0), "enwiki"): 1}
-    assert recon["diff"].sum() == stats["late"]
+    # Bản trùng của event trễ (Hue) phải được đếm là trùng, không phải late lần hai: phải nhớ id TRƯỚC khi xét late
+    assert recon["diff"].sum() == stats["late"] == 1
 
 
 def test_stream_without_dedup_overcounts(nb):
     df, _ = nb.build_clean(sample_lines())
     stream, stats = nb.stream_counts(sample_events(nb), window=60, allowed_lateness=120, dedup=False)
-    assert stats == {"events": 10, "duplicates": 0, "late": 0, "counted": 10}
+    assert stats == {"events": 11, "duplicates": 0, "late": 0, "counted": 11}
     recon = nb.reconcile(stream, nb.batch_counts(df, window=60))
-    assert diffs(recon) == {(ts(0), "wikidatawiki"): -1, (ts(60), "enwiki"): -1}
+    assert diffs(recon) == {(ts(0), "wikidatawiki"): -1, (ts(0), "enwiki"): -1, (ts(60), "enwiki"): -1}
 
 
 def test_short_dedup_ttl_hides_errors_in_totals(nb):
@@ -195,7 +196,7 @@ def test_short_dedup_ttl_hides_errors_in_totals(nb):
     # Event trễ bị bỏ ở window khác. Tổng khớp, từng window thì sai: đối soát phải theo khoá.
     df, _ = nb.build_clean(sample_lines())
     stream, stats = nb.stream_counts(sample_events(nb), window=60, allowed_lateness=10, dedup_ttl=30)
-    assert stats == {"events": 10, "duplicates": 1, "late": 1, "counted": 8}
+    assert stats == {"events": 11, "duplicates": 2, "late": 1, "counted": 8}
     recon = nb.reconcile(stream, nb.batch_counts(df, window=60))
     assert recon["stream_edits"].sum() == recon["batch_edits"].sum()
     assert diffs(recon) == {(ts(0), "enwiki"): 1, (ts(60), "enwiki"): -1}
@@ -222,8 +223,8 @@ def test_reconcile_outer_join_fills_zero(nb):
 def test_insights_on_sample(nb):
     df, stats = nb.build_clean(sample_lines())
     got = nb.insights(df, stats)
-    assert got["events"] == 10 and got["duplicates"] == 2 and got["dropped"] == 2
-    assert got["duplicate_rate"] == pytest.approx(2 / 12)
+    assert got["events"] == 10 and got["duplicates"] == 3 and got["dropped"] == 2
+    assert got["duplicate_rate"] == pytest.approx(3 / 13)
     assert got["duration_min"] == pytest.approx(3.0)
     assert got["edits"] == 8
     assert got["edits_per_min"] == pytest.approx(8 / 3)

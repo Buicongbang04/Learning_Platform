@@ -223,7 +223,7 @@ export function ExercisePage() {
         <StepLink trackId={track.id} target={previous} label="Bài trước" Icon={ChevronLeft} />
         <StepLink trackId={track.id} target={next} label="Bài sau" Icon={ChevronRight} />
       </div>
-      <OpenInVsCode path={exercise.dir} className="shrink-0" />
+      <OpenInVsCode path={exercise.dir} label="Mở thư mục trong VS Code" className="shrink-0" />
       {api.status === "ready" &&
         (done ? (
           <button type="button" className={cx(button.outline, "shrink-0")} onClick={() => setDone(false)} title="Đánh dấu chưa xong" aria-label="Đã xong, bấm để đánh dấu chưa xong">

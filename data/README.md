@@ -1,13 +1,14 @@
-# Dữ liệu Olist
+# Dữ liệu của lộ trình
 
-Toàn bộ lộ trình dùng chung một bộ dữ liệu: **Brazilian E-Commerce Public Dataset by Olist**
-(~100 nghìn đơn hàng 2016–2018 trên sàn Olist, Brazil, 9 bảng). Có hai cách lấy dữ liệu, cùng tên
+Xương sống của lộ trình là **Brazilian E-Commerce Public Dataset by Olist** (~100 nghìn đơn hàng
+2016–2018 trên sàn Olist, Brazil, 9 bảng), bổ sung bằng các bộ dữ liệu thật khác (NYC TLC, NASA logs,
+UCI Air Quality, các API công khai: xem các mục bên dưới). Với Olist có hai cách lấy dữ liệu, cùng tên
 tệp và cùng cột, nên code viết cho cách này chạy được với cách kia.
 
 | Cách | Lệnh | Ghi chú |
 | --- | --- | --- |
 | Bộ thật từ Kaggle (mặc định cho capstone) | `uv run python data/download_olist.py` | Cần Kaggle token (`KAGGLE_API_TOKEN` trong `setup/.env`), xem đầu tệp script |
-| Dữ liệu giả (dự phòng, test, M12) | `uv run python data/generate_olist.py --out data/raw/olist_synthetic` | 50 000 đơn, seed cố định, không cần mạng. `--orders N`, `--out DIR`, `--seed S` |
+| Dữ liệu giả (dự phòng, test) | `uv run python data/generate_olist.py --out data/raw/olist_synthetic` | 50 000 đơn, seed cố định, không cần mạng. `--orders N`, `--out DIR`, `--seed S` |
 | Event streaming | `uv run python data/simulate_events.py --count 20 --stdout` | JSON lines ra stdout, tệp (`--out`) hoặc Kafka (`--kafka`) |
 
 Dữ liệu ghi vào `data/raw/` (đã nằm trong `.gitignore`, không commit).
@@ -299,7 +300,7 @@ uv run python data/download_dataset.py cookie-cats
 | `nasa-http-logs` | Access log HTTP NASA KSC, ~1,9 triệu request (Common Log) | [ITA](https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html) | Dùng tự do | ~20 MB (gz) | Tháng 7/1995 (`NASA_access_log_Jul95.gz`) |
 | `air-quality-uci` | Cảm biến khí thật ở Ý, 9 357 dòng theo giờ, -200 là giá trị thiếu | [UCI #360](https://archive.ics.uci.edu/dataset/360/air+quality) | CC BY 4.0 | ~1,5 MB (zip) | Bản UCI id 360 (03/2004-04/2005) |
 
-Hai nguồn API của module 00 không nằm trong danh mục vì việc thu thập chính là bài tập: notebook tự gọi API, cache JSON thô và test tự skip khi chưa có.
+Ba nguồn dưới đây (hai API và một luồng SSE) không nằm trong danh mục vì việc thu thập chính là bài tập: notebook tự gọi API hoặc ghi luồng, lưu dữ liệu thô vào `data/raw/` và test tự skip khi chưa có.
 
 | Thư mục | API | Giấy phép | Mốc ghim | Bài |
 | --- | --- | --- | --- | --- |

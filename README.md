@@ -52,7 +52,7 @@ Tiến độ lưu ở `progress.json` ở gốc repo. Commit tệp này để gi
 | `tracks/` | Nội dung theo track. Quy ước ở [CONTENT_SPEC.md](CONTENT_SPEC.md) |
 | `tracks/data-engineer/` | 12 module (00–11), 102 bài tập, capstone Olist Data Platform và đánh giá độc lập |
 | `setup/` | Docker Compose cho Postgres, MongoDB, Redis, Cassandra, Neo4j, MinIO, Kafka, Metabase, LocalStack, Airflow |
-| `data/` | Sinh dữ liệu Olist giả lập, tải bộ thật, giả lập event streaming |
+| `data/` | Tải bộ dữ liệu thật (Olist, NYC TLC…), sinh dữ liệu giả lập khi cần, giả lập event |
 | `testkit.py` | Tiện ích test dùng chung cho mọi bài tập |
 | `progress.json` | Tiến độ học (app tự tạo) |
 

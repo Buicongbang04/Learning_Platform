@@ -78,7 +78,7 @@ DATASETS: dict[str, Dataset] = {
         about="Access log HTTP của NASA KSC tháng 7/1995 (gz ~20 MB, ~1,9 triệu request, định dạng Common Log)",
     ),
     "air-quality-uci": Dataset(
-        "url", "https://archive.ics.uci.edu/static/public/360/air+quality.zip", ["air-quality.zip"],
+        "url", ("https://archive.ics.uci.edu/static/public/360/air+quality.zip",), ["air-quality.zip"],
         license="CC BY 4.0 (UCI Machine Learning Repository)",
         homepage="https://archive.ics.uci.edu/dataset/360/air+quality",
         about="Đọc cảm biến khí thật (id 360), 9 357 dòng theo giờ, Ý 03/2004-04/2005, chứa -200 là giá trị thiếu",
@@ -105,6 +105,7 @@ def download(name: str, out: Path) -> list[Path]:
                 with target.open("wb") as fh:
                     for chunk in resp.iter_content(chunk_size=1 << 20):
                         fh.write(chunk)
+            print(fname, flush=True)
             paths.append(target)
         return paths
 
@@ -127,6 +128,8 @@ def ensure(name: str) -> Path:
     if final.is_dir() and any(final.iterdir()):
         return final
     RAW.mkdir(parents=True, exist_ok=True)
+    for stale in RAW.glob(f".{name}.partial-*"):  # dọn thư mục tạm của lần tải bị kill
+        shutil.rmtree(stale, ignore_errors=True)
     tmp = RAW / f".{name}.partial-{random.randrange(16**8):08x}"
     try:
         download(name, tmp)

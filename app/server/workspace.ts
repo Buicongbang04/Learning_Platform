@@ -58,7 +58,7 @@ export function workspaceApi(repoRoot: string): Plugin {
     const starter = listFiles(resolve(root, "starter"), root).filter(isText);
     const tests = listFiles(resolve(root, "tests"), root).filter((path) => path.endsWith(".py"));
     return [
-      ...starter.map((path) => ({ path, content: readFileSync(resolve(root, path), "utf-8"), editable: true })),
+      ...starter.map((path) => ({ path, content: readFileSync(resolve(root, path), "utf-8"), editable: !path.endsWith(".ipynb") })),
       ...tests.map((path) => ({ path, content: readFileSync(resolve(root, path), "utf-8"), editable: false })),
     ];
   };
@@ -138,7 +138,7 @@ export function workspaceApi(repoRoot: string): Plugin {
     if (full !== root && !full.startsWith(root + sep)) throw new HttpError(400, "Đường dẫn nằm ngoài repo");
     if (!existsSync(full)) throw new HttpError(400, "Tệp hoặc thư mục không tồn tại");
     return new Promise<void>((done) => {
-      const child = spawn("code", [full], { cwd: repoRoot, detached: true, stdio: "ignore" });
+      const child = spawn("code", [root, full], { cwd: repoRoot, detached: true, stdio: "ignore" });
       child.once("error", () => {
         send(500, { error: "Không chạy được lệnh `code`. Cài VS Code và bật lệnh `code` trong PATH (xem setup/SETUP.md)." });
         done();

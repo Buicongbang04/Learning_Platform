@@ -34,8 +34,9 @@ luận chứ không có một câu đúng. Dưới đây là hướng làm, các
 - **Event time là `timestamp`** (lúc sửa xảy ra), không phải `meta.dt` (lúc event được tạo) hay
   `received_at` (lúc ta nhận). Window theo processing time thì kết quả đổi theo mỗi lần chạy lại.
 - **Nhớ id trước khi xét late**: bản trùng của một event trễ được đếm là trùng, nhờ vậy
-  `batch - stream == late` khi TTL đủ dài. Thứ tự ngược lại cũng chấp nhận được nếu giải thích được
-  metric giám sát thay đổi thế nào.
+  `batch - stream == late` khi TTL đủ dài. Thứ tự này là bắt buộc: xét late trước thì bản trùng của event
+  trễ bị đếm late lần hai, `late` vượt số sự kiện thật sự mất và đối soát không còn khớp (test có sẵn
+  một bản trùng của event trễ để bắt lỗi này).
 - **`allowed_lateness`**: đọc từ dữ liệu, không đoán. Trên lần ghi mẫu, p95 độ trễ khoảng 6 giây, 10 giây
   bỏ 0,07% sửa đổi, 30 giây không bỏ event nào. Dashboard chấp nhận chậm thêm 30 giây thì đầy đủ.
 - **`dedup_ttl`** phải ≥ khoảng cách lớn nhất giữa hai bản trùng: với nguồn này là thời gian một lần nối lại
