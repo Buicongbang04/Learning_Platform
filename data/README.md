@@ -288,6 +288,15 @@ uv run python data/download_dataset.py cookie-cats
 | `cookie-cats` | A/B test vị trí gate (level 30 vs 40) của game Cookie Cats, 90 189 người chơi | [Kaggle](https://www.kaggle.com/datasets/yufengsui/mobile-games-ab-testing) | Không ghi rõ | 03 |
 | `ab-data` | A/B test landing page, 294 478 dòng, có dòng gán nhóm sai | [Kaggle](https://www.kaggle.com/datasets/zhangluyuan/ab-testing) | Không ghi rõ | 03 |
 | `hillstrom` | Thí nghiệm email ngẫu nhiên 3 nhánh, 64 000 khách: visit, conversion, spend | [MineThatData](https://blog.minethatdata.com/2008/03/minethatdata-e-mail-analytics-and-data.html) | Công bố cho học tập (2008) | 03, 04 |
+| `lalonde` | NSW (LaLonde 1986, bản Dehejia-Wahba): `nsw_dw.dta` mẫu thí nghiệm 445 dòng + `psid_controls.dta` đối chứng quan sát 2 490 dòng; cột `treat`, `re74`, `re75`, `re78` | [NBER, Dehejia](https://users.nber.org/~rdehejia/nswdata2.html) | Công bố công khai cho nghiên cứu/giảng dạy | 06 |
+| `prop99` | Panel 39 bang Mỹ x 1970-2000 (1 209 dòng): `cigsale`, `retprice`, `lnincome`...; California can thiệp 1988 (Abadie, Diamond, Hainmueller 2010) | [GitHub SyntheticControlMethods](https://github.com/OscarEngelbrektson/SyntheticControlMethods) | Repo MIT; dữ liệu từ bài gốc ADH (2010) | 06 |
+| `card` | Card (1995) NLS Young Men, 3 010 nam giới: `lwage`, `educ`, `nearc4` (IV), `exper`... | [Rdatasets / wooldridge](https://vincentarelbundock.github.io/Rdatasets/doc/wooldridge/card.html) | Công bố công khai (David Card); bản CSV qua Rdatasets | 06 |
+| `store-sales` | Doanh số ngày 1 115 cửa hàng Rossmann 2013-2015 (1 017 209 dòng `train.csv` + `store.csv`), mùa vụ tuần/năm | [Kaggle](https://www.kaggle.com/datasets/pratyushakar/rossmann-store-sales) | Không ghi rõ | 07 |
+| `telco-churn` | 7 043 khách viễn thông, 21 cột, nhãn `Churn` | [Kaggle](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) | Không ghi rõ | 11 |
+| `movielens` | ml-latest-small: 100 836 rating, 610 người dùng, 9 742 phim (`ratings`, `movies`, `tags`, `links`) | [GroupLens](https://grouplens.org/datasets/movielens/latest/) | Học tập/nghiên cứu, không phân phối lại, ghi nguồn | 12 |
+| `creditcard-fraud` | 284 807 giao dịch thẻ, 492 gian lận (0,17%) | [Kaggle](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) | DbCL v1.0 | 12 |
+
+Bộ có sẵn trong thư viện thì dùng thẳng, không qua registry: `statsmodels.datasets` (grunfeld, macrodata, co2...) và `torchvision.datasets.FashionMNIST` (tự tải về khi gọi).
 
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
 không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.
