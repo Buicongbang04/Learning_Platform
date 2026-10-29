@@ -65,7 +65,8 @@ Người phỏng vấn senior thường đánh giá cao bước 1–2 hơn cả,
 
 Câu hỏi đầu tiên của bước 1. Trên Olist, khi đơn vừa giao cho đơn vị vận chuyển, một luật một dòng
 "còn dưới 5 ngày tới ngày hẹn giao thì cảnh báo" bắt được 35.2% số đơn trễ với precision 42.7% trên tập
-test. Model LightGBM dùng cùng thời điểm, chọn top 10% đơn, có giá trị kinh doanh ngang luật đó (mục 3).
+test. Trên số gộp cả tập test, model LightGBM dùng cùng thời điểm, chọn top 10% đơn, có giá trị kinh doanh
+ngang luật đó; tách giai đoạn thì kết luận khác nhau theo giai đoạn (mục 3).
 Quy tắc số 1 trong [Rules of ML](https://developers.google.com/machine-learning/guides/rules-of-ml) của
 Google: đừng ngại ra mắt sản phẩm không có ML. Luật đơn giản cho bạn baseline, dữ liệu log, và một hệ
 thống chạy thật để sau này model thay vào.
@@ -295,11 +296,28 @@ Kết quả (tin nhắn 0.5 R$, $$V$$ = 30 R$, $$\Delta$$ = 0.15):
 | Model lúc giao vận chuyển, top 10% | 0.264 | khoảng 96 R$ |
 | Luật "còn dưới 5 ngày tới ngày hẹn" | 0.427 | khoảng 99 R$ |
 
-Luật chọn 1 596 đơn, khoảng 5% tập test. Ở cùng cỡ k đó, luật còn thắng model: precision 0.427 so với
-0.391 của model top 5% (1 607 đơn).
+Luật chọn 1 596 đơn, khoảng 5% tập test. Ở cùng cỡ k đó trên số gộp, luật nhỉnh hơn model: precision
+0.427 so với 0.393 của model top 1 596 đơn (0.391 ở top 5%, 1 607 đơn).
 
-Ba bài học. Một: **thời điểm quyết định** đáng giá hơn mọi tuning. Hai: luật một dòng ngang hoặc hơn
-model, nên model phải chứng minh nó hơn luật trước khi được ra mắt. Ba: kể cả chính sách tốt nhất cũng chỉ khoảng
+**Đừng tin con số gộp.** 1 195 trong 1 596 đơn luật chọn là đơn mua tháng 08/2018. Từ 06/2018 ngày hẹn
+giao rút ngắn (trung vị số ngày hứa giao 22.6 ngày ở đơn mua 04–07/2018, 13.4 ngày ở 08/2018; nguyên nhân
+chưa rõ), nên "còn dưới 5 ngày" chọn rất ít đơn ở giai đoạn đầu và gần 19% đơn ở tháng 8. Bảng gộp trộn
+hai chế độ. So trong từng giai đoạn, với model chọn top k bằng đúng số đơn luật chọn ở giai đoạn đó
+(như capstone M03):
+
+| Giai đoạn mua | Đơn | Tỉ lệ trễ | Luật chọn (k) | Precision luật | Precision model cùng k | R$ luật / model (cả giai đoạn) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 04–07/2018 | 25 799 | 5.0% | 401 (1.6%) | 0.494 | 0.564 | khoảng 690 / 817 |
+| 08/2018 | 6 351 | 10.4% | 1 195 (18.8%) | 0.404 | 0.305 | khoảng 1 576 / 1 041 |
+
+Ở 04–07/2018, model hơn luật ở cùng k; ở 08/2018, luật hơn model. Một giải thích có thể: model train
+trên đơn trước 2018, chưa thấy chế độ ngày hẹn mới, nên thứ hạng của nó lệch ở tháng 8; còn luật tự "ăn
+theo" ngày hẹn ngắn. Tháng 8 chỉ có khoảng 4 tuần và chưa biết chế độ đó còn kéo dài không, nên chưa kết
+luận được luật hay model tốt hơn về lâu dài.
+
+Ba bài học. Một: **thời điểm quyết định** đáng giá hơn mọi tuning. Hai: luật một dòng là đối thủ thật
+của model (hơn ở tháng 8, thua ở 04–07/2018), nên model phải chứng minh nó hơn luật, trong từng giai đoạn,
+trước khi được ra mắt. Ba: kể cả chính sách tốt nhất cũng chỉ khoảng
 100 R$ mỗi tuần, khoảng 5 nghìn R$ một năm, không trả nổi chi phí một kỹ sư bảo trì. Kết luận đúng
 không phải "dự án thất bại" mà là câu hỏi cho business: **giả định $$V$$ = 30 R$ đến từ đâu?**
 
@@ -331,7 +349,7 @@ thái `delivered`), nên metric offline ở đây hơi lạc quan.
 
 Training-serving skew là lỗi phổ biến nhất ở bước này: feature lúc train tính bằng SQL trên bảng đã
 "chốt sổ", lúc serving tính từ event stream, hai bên lệch nhau vài phần trăm và model kém đi mà không ai
-biết. Cách phòng: một định nghĩa feature dùng chung cho cả hai đường (feature store, module 14), log
+biết. Cách phòng: một định nghĩa feature dùng chung cho cả hai đường (feature store, ngoài phạm vi module 14; xem track MLOps), log
 feature lúc serving rồi so phân phối với lúc train.
 
 ### Model: thang baseline
@@ -467,8 +485,14 @@ print(round(2 * n_equal / 70), "tuần với 50/50,", round(n_total_80_20 / 70),
 ```
 
 Với khoảng 70 đơn cảnh báo mỗi tuần, holdout 20% cần khoảng 39 tuần; chia 50/50 lúc đầu cần 24 tuần.
-Một đợt chạy thử 8 tuần (như memo mẫu ở mục 7) chỉ có khoảng 280 đơn mỗi nhóm, đủ power 80% cho tác động
-từ khoảng 9.7 điểm phần trăm trở lên, gần gấp đôi tác động kỳ vọng 5.9 điểm: nó chỉ bắt được tác động
+Con số 70 là trung bình gộp của chính sách top 5% trên 23 tuần test, và nó dồn về cuối kỳ: đơn mua
+04–07/2018 chỉ khoảng 55 cảnh báo mỗi tuần (precision 0.348), tháng 08/2018 khoảng 148. Nếu tháng 8 là
+bất thường, cùng phép tính với 55 cảnh báo mỗi tuần và precision 0.348 cần khoảng 59 tuần (holdout 20%)
+hoặc 36 tuần (50/50). Ra mắt luật trước (pha 1) còn chậm hơn: ngoài tháng 8 luật chỉ chọn khoảng 23 đơn
+mỗi tuần (precision 0.494), tức khoảng 81 tuần với holdout 20%, 49 tuần với 50/50.
+Một đợt chạy thử 8 tuần (như memo mẫu ở mục 7) với 70 cảnh báo mỗi tuần chỉ có khoảng 280 đơn mỗi nhóm,
+đủ power 80% cho tác động từ khoảng 9.7 điểm phần trăm trở lên, khoảng 1.65 lần tác động kỳ vọng 5.9
+điểm (ở nhịp ngoài tháng 8 còn ít đơn hơn nữa): nó chỉ bắt được tác động
 lớn bất ngờ hoặc tín hiệu có hại, không chứng minh được giá trị kỳ vọng. Nói rõ điều này trong memo.
 Lựa chọn thực tế: chạy 50/50 giai đoạn đầu rồi giữ holdout nhỏ lâu dài, đo proxy nhanh hơn (khách liên
 hệ CSKH), hoặc chấp nhận rằng ở quy mô này giá trị chỉ chứng minh được ở mức "không có hại". Một DS

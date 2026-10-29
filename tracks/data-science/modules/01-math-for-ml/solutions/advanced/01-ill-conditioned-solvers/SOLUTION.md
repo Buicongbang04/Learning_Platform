@@ -28,7 +28,9 @@ cho nghiệm sai hơn cả việc đoán w = 0.
 **Olist, đa thức trên đơn vị gốc** `[1, gram, cm³, gram², cm⁶, gram·cm³]` (51 216 item train):
 κ(X) ≈ 5.8 · 10⁹, vậy mà normal equation chỉ lệch nghiệm `lstsq` khoảng 8.5 · 10⁻¹¹ (tương đối), MSE như
 nhau (105.04). Lý do: `scaled_condition_number` chỉ khoảng 12.9; gần như toàn bộ ill-conditioning đến từ
-**thang đo** của cột, mà phép khử Gauss có pivot xử lý được phần lớn. Chuẩn hoá cột đưa κ về 12.2.
+**thang đo** của cột. Sai số làm tròn của floating point gần như không đổi khi nhân một cột với một hằng
+số (đổi đơn vị), nên độ chính xác thực tế được quyết định bởi κ sau khi cân bằng cột, không phải κ thô.
+Chuẩn hoá cột đưa κ về 12.2.
 Đây là điểm phân biệt người hiểu bản chất: condition number lớn chưa chắc là bệnh, phải xem nó còn
 lớn sau khi cân bằng cột không.
 

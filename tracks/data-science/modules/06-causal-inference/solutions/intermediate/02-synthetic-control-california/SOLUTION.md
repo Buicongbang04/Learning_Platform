@@ -30,9 +30,9 @@ California trước 1989; DiD gán cả xu hướng đó cho chính sách.
 ## Đọc kết quả placebo
 
 Missouri (23.9) và Virginia (19.8) có tỉ số cao hơn California. Cả hai khớp trước can thiệp cực sát
-(RMSPE trước 0.44 và 0.82), nên mẫu số nhỏ thổi tỉ số lên. Abadie và cộng sự khớp thêm covariate
-(giá bán lẻ, thu nhập, tỉ lệ dân 15–24 tuổi, tiêu thụ bia, cigsale ở vài năm chọn lọc) và có
-California hạng 1/39. Hai bài học:
+(RMSPE trước 0.44 và 0.82), nên mẫu số nhỏ thổi tỉ số lên. Theo bài báo gốc (Abadie et al. 2010),
+khi khớp thêm covariate (giá bán lẻ, thu nhập, tỉ lệ dân 15–24 tuổi, tiêu thụ bia, cigsale ở vài năm
+chọn lọc) thì California hạng 1/39; lời giải này không chạy lại đặc tả đó. Hai bài học:
 
 1. Với J + 1 đơn vị, p-value hoán vị nhỏ nhất có thể là 1/(J + 1). 39 bang thì không bao giờ
    xuống dưới 0.026: "có ý nghĩa" ở đây là một phát biểu về thứ hạng.

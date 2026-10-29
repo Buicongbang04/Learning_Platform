@@ -21,7 +21,10 @@ Dành nhiều thời gian nhất cho bước 1–2. Ứng viên senior khác jun
 ## Khi nào bạn khuyên **không** dùng ML?
 
 - Luật đơn giản đã đủ tốt: trên Olist, luật "còn dưới 5 ngày tới ngày hẹn lúc giao vận chuyển" cho
-  precision 42.7%, recall 35.2%, giá trị tiền ngang model LightGBM chọn top 10%.
+  precision 42.7%, recall 35.2%, giá trị tiền ngang model LightGBM chọn top 10% **trên số gộp** cả test.
+  Tách giai đoạn ở cùng k thì model hơn luật ở đơn mua 04–07/2018 (precision 0.564 so với 0.494) còn luật
+  hơn model ở 08/2018 (0.404 so với 0.305), khi ngày hẹn giao rút ngắn: luật là đối thủ thật, chưa phân
+  thắng thua về lâu dài.
 - Số quyết định ít (vài chục mỗi tháng): người làm tốt hơn và rẻ hơn.
 - Chưa có nhãn, hoặc nhãn không đáng tin.
 - Quyết định cần giải thích từng ca theo luật (tín dụng ở một số thị trường): luật có kiểm toán.
@@ -59,8 +62,9 @@ Theo thứ tự từ rẻ tới đắt:
    đơn trễ mười ngày.
 4. **Hành động có tác dụng không**: model đúng mà hành động vô hiệu thì giá trị bằng 0. Đây là lý do cần
    holdout trong nhóm được chọn, để tách "model chọn đúng" khỏi "hành động có tác dụng".
-5. **Thí nghiệm đủ power chưa**: với 70 cảnh báo mỗi tuần và holdout 20%, cần khoảng 39 tuần để phát hiện
-   tác động kỳ vọng ở Olist.
+5. **Thí nghiệm đủ power chưa**: với 70 cảnh báo mỗi tuần (trung bình gộp, tháng 08/2018 kéo lên) và
+   holdout 20%, cần khoảng 39 tuần để phát hiện tác động kỳ vọng ở Olist; với nhịp 04–07/2018 (khoảng 55
+   cảnh báo mỗi tuần) cần khoảng 59 tuần.
 
 ## Đổi precision / recall ra tiền thế nào?
 

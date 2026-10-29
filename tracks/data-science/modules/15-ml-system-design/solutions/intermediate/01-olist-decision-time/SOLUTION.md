@@ -36,7 +36,11 @@ Giá trị (tin nhắn 0.5 R$, V = 30 R$, Δ = 0.15, 23 tuần test):
 - PR-AUC giảm từ validation sang test là do prevalence (14.6% → 6.0%), không phải model hỏng.
 - `precision@100` gần 1 vì 226 đơn trên test giao cho vận chuyển **sau** ngày hẹn: luật hiển nhiên.
   Báo cáo trung thực tách phần "dễ" này ra.
-- Luật một dòng ngang model về tiền: ra mắt luật trước, model phải thắng luật mới được thay.
+- Trên số gộp, luật một dòng ngang model về tiền. Nhưng 1 195 trong 1 596 đơn luật chọn là đơn mua
+  08/2018 (ngày hẹn giao rút ngắn từ 06/2018, nguyên nhân chưa rõ), nên phải so tách giai đoạn ở cùng k:
+  04–07/2018 luật 401 đơn, precision 0.494, model 0.564; 08/2018 luật 1 195 đơn, precision 0.404, model
+  0.305. Hai giai đoạn cho kết luận ngược nhau. Ra mắt luật trước, model phải thắng luật trong từng
+  giai đoạn trên holdout mới được thay.
 - Khoảng 100 R$ mỗi tuần không đủ trả chi phí một hệ thống ML. Kết luận đúng là đi kiểm chứng V và Δ
   (thí nghiệm nhỏ, bài Advanced 02), không phải tuning thêm.
 

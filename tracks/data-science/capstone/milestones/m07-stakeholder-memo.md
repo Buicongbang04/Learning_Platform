@@ -11,9 +11,10 @@ với stakeholder (mục 7). Hai bài là bản thu nhỏ của milestone này:
 `modules/15-ml-system-design/exercises/advanced/01-olist-risk-alert-design` (design doc 12 mục) và
 `modules/15-ml-system-design/exercises/advanced/02-stakeholder-one-pager` (memo, tornado, break-even).
 
-**Kỳ vọng trung thực.** Module 15 tìm ra trên Olist rằng với bài toán "đơn sẽ trễ", một luật một dòng
-("còn dưới 5 ngày tới ngày hẹn lúc giao vận chuyển") **ngang model về tiền**, và kể cả chính sách tốt nhất
-cũng chỉ đáng khoảng 100 R$ mỗi tuần với giả định đang dùng. Capstone của bạn dự đoán review xấu, không
+**Kỳ vọng trung thực.** Module 15 tìm ra trên Olist rằng với bài toán "đơn sẽ trễ", **trên số gộp** cả tập
+test, một luật một dòng ("còn dưới 5 ngày tới ngày hẹn lúc giao vận chuyển") ngang model về tiền, nhưng xem
+so sánh tách giai đoạn ở M03 (module 15 mục 3 cũng tách: model hơn luật ở 04–07/2018, luật hơn model ở
+08/2018); và kể cả chính sách tốt nhất cũng chỉ đáng khoảng 100 R$ mỗi tuần với giả định đang dùng. Capstone của bạn dự đoán review xấu, không
 phải trễ, nên kết quả có thể khác: hãy để số của bạn quyết định. Nhưng memo phải đặt model cạnh luật
 không ML, và nếu giá trị nhỏ thì nói thẳng. Không trích khoảng cách "model gấp đôi luật" tính gộp trên
 test: nó chủ yếu do tháng 8/2018, khi ngày hứa giao rút ngắn và luật chọn gần 19% đơn. Chỉ dùng so sánh

@@ -166,7 +166,8 @@ learning rate, hợp với implicit feedback (iALS). **SGD** linh hoạt (thêm 
 BPR), phải chọn learning rate.
 
 Bẫy: MF tối ưu RMSE trên rating đã quan sát không tối ưu top-k. Trên MovieLens, MF có RMSE 0.893
-(tốt hơn baseline bias 0.902) nhưng precision@10 chỉ 0.071, thấp hơn popularity (0.075).
+(tốt hơn baseline bias 0.902) nhưng precision@10 chỉ 0.071: không thắng popularity (0.075; chênh lệch
+nằm trong nhiễu với 610 user) và thua xa item-item (0.097).
 
 ## Cold start là gì và xử lý ra sao?
 

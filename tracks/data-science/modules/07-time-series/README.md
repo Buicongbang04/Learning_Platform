@@ -554,7 +554,8 @@ Trên Rossmann (20 cửa hàng, theo tuần, horizon 6 tuần, hai origin), bài
 
 - Base forecast **tuyến tính và giống nhau ở mọi node** (seasonal naive 52 tuần) đã coherent sẵn:
   reconcile không đổi gì.
-- Cùng một model phi tuyến ở mọi node (Holt damped): gần coherent, reconcile gần như không đổi MAE.
+- Cùng loại model ở mọi node (Holt damped) nhưng tham số fit riêng từng node: không còn coherent chính
+  xác, chỉ gần coherent; reconcile gần như không đổi MAE.
 - Cấp trên dùng model có mùa vụ năm, cấp cửa hàng dùng Holt: reconcile **OLS** kéo dự báo cửa hàng
   về phía thông tin mùa vụ của cấp trên, MAE cửa hàng giảm từ 6 891 xuống 3 738 €/tuần (origin
   2015-06-21) và từ 6 505 xuống 3 602 (origin 2015-05-10). Bottom-up vứt thông tin đó nên tệ ở mọi cấp.

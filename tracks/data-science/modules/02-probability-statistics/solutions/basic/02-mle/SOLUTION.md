@@ -9,9 +9,9 @@
 | Exponential(λ) | $$n\log\lambda - \lambda \textstyle\sum x_i$$ | $$\hat\lambda = 1 / \bar x$$ |
 | Lognormal(μ, σ) | $$-n\log\sigma - \textstyle\sum(\log x_i - \mu)^2 / (2\sigma^2)$$ | mean và std (`ddof=0`) của `log x` |
 
-MLE của σ dùng `ddof=0`, nên **lệch xuống** (biased): kỳ vọng của nó nhỏ hơn σ thật một chút. Với n
-lớn không đáng kể; với n = 5 thì khác biệt cỡ 10%. MLE không hứa không lệch; nó hứa **consistent**
-(hội tụ về giá trị thật khi n tăng) và **hiệu quả tiệm cận** (variance nhỏ nhất có thể khi n lớn).
+MLE của σ dùng `ddof=0`, nên **lệch xuống** (biased): kỳ vọng của nó nhỏ hơn σ thật. Với n lớn không
+đáng kể; với n = 5 thì kỳ vọng của σ̂ chỉ khoảng 0.84σ, thấp hơn cỡ 16%. MLE không hứa không lệch; nó
+hứa **consistent** (hội tụ về giá trị thật khi n tăng) và **hiệu quả tiệm cận** (variance nhỏ nhất có thể khi n lớn).
 
 ## Tối ưu số
 

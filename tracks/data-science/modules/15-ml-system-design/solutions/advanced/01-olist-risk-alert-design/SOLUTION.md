@@ -11,9 +11,10 @@ tham chiếu của người soạn), các quyết định cần cân nhắc và 
 | Review xấu ở đơn trễ / đúng hẹn | 54.1% / 9.2% | Lý thuyết mục 3 |
 | Đơn trễ mỗi tuần (06/2017 – 07/2018) | trung vị 61, phân vị 90 là 289, tối đa 565; 18/61 tuần trên 100 | `weekly_late_volume` |
 | PR-AUC test lúc đặt hàng / lúc giao vận chuyển | 0.120 / 0.378 | Intermediate 01 |
-| Luật "còn dưới 5 ngày" | precision 0.427, recall 0.352, khoảng 99 R$/tuần | Lý thuyết mục 3 |
+| Luật "còn dưới 5 ngày" | precision 0.427, recall 0.352, khoảng 99 R$/tuần (gộp; 1 195/1 596 đơn chọn là 08/2018) | Lý thuyết mục 3 |
+| Luật so với model cùng k, tách giai đoạn | 04–07/2018: 0.494 / 0.564 (k = 401); 08/2018: 0.404 / 0.305 (k = 1 195) | Lý thuyết mục 3 |
 | 95% nhãn có sau / 95% nhãn **trễ** có sau | 25.4 / 34.2 ngày kể từ lúc mua | Basic 03, lý thuyết mục 5 |
-| Holdout 20% đủ power | khoảng 39 tuần (70 cảnh báo/tuần) | Lý thuyết mục 5 |
+| Holdout 20% đủ power | khoảng 39 tuần (70 cảnh báo/tuần, gộp); khoảng 59 tuần ở nhịp 04–07/2018 (55/tuần) | Lý thuyết mục 5 |
 | Recall top 5% theo vùng | N/NE 31.7%, SP 43.6%, khác 17.9% | Intermediate 03 |
 
 Chính sách chọn trên validation (model lúc giao vận chuyển, lưới ngưỡng 0.1–0.5, trần 25–1 000, tin
@@ -35,8 +36,9 @@ yên ả.
 
 - **Thời điểm dự đoán**: lúc giao vận chuyển (PR-AUC gấp ba, vẫn còn trung vị 20.3 ngày). Nêu rõ khác
   model "lúc đơn vừa giao" của module 10/11 vì hành động khác.
-- **Baseline**: luật "còn dưới 5 ngày" ngang model về tiền. Doc tốt đề xuất ra mắt luật trước (pha 1),
-  model thay khi thắng luật trên holdout (pha 2).
+- **Baseline**: luật "còn dưới 5 ngày" ngang model về tiền trên số gộp, nhưng tách giai đoạn thì model hơn
+  ở 04–07/2018 và luật hơn ở 08/2018 (ngày hẹn rút ngắn). Doc tốt không kết luận từ số gộp, đề xuất ra mắt
+  luật trước (pha 1), model thay khi thắng luật trên holdout trong từng giai đoạn (pha 2).
 - **Giá trị**: khoảng 100 R$/tuần dưới giả định cơ sở. Doc tốt nói thẳng con số nhỏ, chỉ ra V và Δ là
   giả định quyết định, đề xuất cách đo (thí nghiệm, bài Advanced 02).
 - **Serving**: batch theo giờ trên sự kiện giao vận chuyển; fallback về luật.

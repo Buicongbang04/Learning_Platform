@@ -72,6 +72,15 @@ def get_runs(nb, data, store):
     return _RUNS
 
 
+def ensure_champion(nb, store):
+    """Đăng ký model nếu alias champion chưa có, để mỗi test chạy được riêng lẻ (-k), không phụ thuộc thứ tự."""
+    uri, exp_id = store
+    try:
+        MlflowClient(uri).get_model_version_by_alias("bad-review", "champion")
+    except mlflow.exceptions.MlflowException:
+        nb.register_best(uri, exp_id, "bad-review")
+
+
 def test_run_logs_params_and_metric(nb, store, data):
     runs = get_runs(nb, data, store)
     uri, exp_id = store
@@ -122,6 +131,7 @@ def test_new_better_run_moves_alias_and_keeps_old_version(nb, store, data):
     uri, exp_id = store
     train, val = data
     client = MlflowClient(uri)
+    ensure_champion(nb, store)
     old = client.get_model_version_by_alias("bad-review", "champion")
     # nhân bản một run với val_auc cao hơn mọi run hiện có
     better = client.create_run(exp_id)
@@ -143,6 +153,7 @@ def test_load_champion_predicts_and_enforces_schema(nb, store, data):
     runs = get_runs(nb, data, store)
     uri, _ = store
     _, val = data
+    ensure_champion(nb, store)
     champion = nb.load_champion(uri, "bad-review")
     pred = np.asarray(champion.predict(val[FEATURES].head(20)))
     assert pred.shape == (20, 2)

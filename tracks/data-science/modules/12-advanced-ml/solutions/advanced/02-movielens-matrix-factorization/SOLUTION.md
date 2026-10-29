@@ -36,7 +36,8 @@ learning rate.
 
 - MF chỉ cải thiện RMSE 1% so với baseline bias trên split theo thời gian. Phần lớn "tín hiệu" của
   rating nằm ở bias user/phim (như bài học từ Netflix Prize).
-- MF tối ưu RMSE **thua popularity** ở precision@10 (0.071 so với 0.075) và thua xa item-item. RMSE
+- MF tối ưu RMSE **không thắng popularity** ở precision@10 (0.071 so với 0.075; chênh 0.004 trên 610
+  user, sai số chuẩn xấp xỉ mỗi con số khoảng 0.003 nếu coi 6 100 gợi ý là độc lập: nằm trong nhiễu) và thua xa item-item (0.097). RMSE
   đo sai số trên những cặp user đã chọn xem; top-10 phải xếp hạng trên mọi phim chưa xem. Baseline
   chỉ bias gợi ý phim điểm trung bình cao nhưng ít người xem (P@10 chỉ 0.053). Danh sách của MF có
   trung vị 115 rating mỗi phim trong train, so với 244 của top-10 phổ biến.

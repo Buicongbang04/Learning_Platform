@@ -170,7 +170,7 @@ placebo outcome / treatment; chạy nhiều đặc tả và báo cả bảng. Se
    đầu tư nhằm cứu chính những đơn đó.
 2. **DAG**: confounder (bang khách, cùng bang với seller, mùa, giá, phí ship, số ngày hứa giao),
    mediator (liên hệ CSKH), selection (chỉ đơn có review).
-3. **Ước lượng**: ngây thơ 44.9 điểm %, hồi quy 44.4, IPW 45.0 (đơn từ 2017); overlap tốt, balance
+3. **Ước lượng** (đơn từ 2017): ngây thơ 44.9 điểm %, hồi quy 44.4, IPW 45.0; overlap tốt, balance
    sau IPW |SMD| ≤ 0.02. Điều chỉnh gần như không đổi con số: điều đáng báo cáo.
 4. **Liều**: review xấu tăng dần theo số ngày trễ (trễ 1 ngày 19.7%, 3 ngày 50.4%); không có bước
    nhảy ở đúng ngày hẹn. Khuyến nghị: ưu tiên cắt đơn trễ nặng, và cân nhắc dời ngày hẹn hợp lý hơn

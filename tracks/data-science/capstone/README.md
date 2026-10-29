@@ -6,7 +6,7 @@ gì để giảm nó?** Bảy milestone đi từ EDA và định nghĩa metric, 
 phân tích nhân quả, thiết kế A/B test, đóng gói và serve model, tới một memo cho ban điều hành.
 
 Toàn bộ dự án chạy trên **Olist thật** (khoảng 100 nghìn đơn, 2016–2018). Dữ liệu thật có chỗ "bẩn" của
-nó: đơn có nhiều review, review được tạo trước cả ngày giao, ngày hẹn giao đổi chính sách giữa chừng,
+nó: đơn có nhiều review, review được tạo trước cả ngày giao, ngày hẹn giao rút ngắn từ 06/2018 (nguyên nhân chưa rõ),
 tháng cuối chưa đủ nhãn. Xử lý những chỗ đó và nói rõ đã xử lý thế nào là một nửa giá trị của capstone.
 
 ## Mục tiêu dự án

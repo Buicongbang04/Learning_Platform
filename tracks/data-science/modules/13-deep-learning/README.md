@@ -580,8 +580,9 @@ Dự án cài sẵn bản CPU (`torch 2.14.1+cpu`) để chạy được trên m
    đúng phiên bản torch đang ghim.
 3. Kiểm tra: `uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available())"`,
    mong đợi đuôi `+cu128` và `True`. `nvidia-smi` cho biết driver hỗ trợ CUDA tới bản nào.
-4. Trước khi chạy test của repo trên máy không có GPU (hoặc CI), đổi lại về index CPU. Test của
-   module chạy được với `CUDA_VISIBLE_DEVICES=""`.
+4. `uv sync` sau khi đổi index ghi lại `uv.lock` và cả `.venv`: **đừng commit** `pyproject.toml` và
+   `uv.lock` đã đổi. Đổi lại về index CPU (rồi `uv sync`) trước khi chạy test của repo hoặc commit; trên
+   máy không có GPU và CI chỉ có bản CPU. Test của module chạy được với `CUDA_VISIBLE_DEVICES=""`.
 
 ### Tái lập và gỡ lỗi
 

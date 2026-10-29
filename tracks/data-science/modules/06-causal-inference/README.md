@@ -296,7 +296,9 @@ giống California.
 
 Suy luận bằng **placebo**: lần lượt coi từng bang là "treated" và tính tỉ số RMSPE sau/trước.
 California đứng thứ 3/39 (p hoán vị 0.077). Với 39 đơn vị, p không bao giờ nhỏ hơn 1/39 ≈ 0.026;
-và đặc tả (có khớp covariate không) đổi được thứ hạng. Bài Intermediate 02 làm từ đầu.
+và đặc tả (có khớp covariate không) đổi được thứ hạng: theo bài báo gốc (Abadie et al. 2010), khớp
+thêm covariate thì California hạng 1/39 (kết quả của bài báo, module này không chạy lại). Bài
+Intermediate 02 làm từ đầu.
 
 Trong doanh nghiệp, synthetic control (và họ hàng của nó như CausalImpact) là công cụ chuẩn để đo
 chiến dịch marketing theo vùng, mở kho mới ở một thành phố, đổi chính sách ở một thị trường.
@@ -446,7 +448,7 @@ Olist: RR 5.86, E-value 11.2. Một confounder chưa đo phải làm cả khả 
 xấu tăng khoảng 11 lần thì mới xoá được tác động. Kết luận "giao trễ gây review xấu" rất vững; còn
 **độ lớn** chính xác vẫn phụ thuộc giả định (selection do "có review", chất lượng seller). Điều chỉnh
 mọi confounder đo được (bang, tháng, giá, phí ship, số ngày hứa giao) trên đơn mua từ 2017 chỉ đổi
-con số ngây thơ 44.9 điểm % thành 44.4 (hồi quy) và 45.0 (IPW).
+con số ngây thơ 44.9 điểm % (đơn từ 2017; trên mọi đơn là 44.8) thành 44.4 (hồi quy) và 45.0 (IPW).
 
 ### Quy trình
 

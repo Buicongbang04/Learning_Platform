@@ -478,7 +478,9 @@ Học bằng **SGD** (duyệt từng rating) hoặc **ALS** (cố định Q, m�
 đổi vai; song song hoá tự nhiên, Spark MLlib dùng ALS). Với implicit feedback, mọi cặp chưa tương
 tác là âm tính yếu (iALS, Hu et al. 2008) hoặc tối ưu trực tiếp thứ hạng (BPR). Trên split theo
 thời gian của MovieLens (bài Advanced 02), baseline chỉ bias có RMSE 0.902, MF 20 chiều 0.893: phần
-lớn tín hiệu nằm ở bias. Và MF tối ưu RMSE có precision@10 chỉ 0.071, **thấp hơn popularity**.
+lớn tín hiệu nằm ở bias. Và MF tối ưu RMSE có precision@10 chỉ 0.071, **không thắng popularity** (0.075;
+chênh 0.004 trên 610 user, trong khi sai số chuẩn xấp xỉ của mỗi con số đã khoảng 0.003: nằm trong
+nhiễu), thấp xa item-item (0.097) dù vẫn hơn baseline chỉ bias.
 
 ### Đánh giá offline
 

@@ -44,7 +44,7 @@ trước 2018-01-01 (51 216 item), đánh giá trên đơn mua từ 2018-04-01 t
 ### Gợi ý 1
 
 Vì sao không `inv`? Tính nghịch đảo tốn hơn và kém chính xác hơn giải trực tiếp hệ phương trình;
-`solve` dùng phân rã LU một lần. Đọc mục 6 của lý thuyết về condition number.
+`solve` dùng phân rã LU một lần. Đọc mục 7 của lý thuyết về condition number.
 
 ### Gợi ý 2
 
