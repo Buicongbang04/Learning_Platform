@@ -2,6 +2,311 @@
   "id": "ai-engineer",
   "name": "AI Engineer",
   "icon": "brain",
-  "status": "soon",
-  "order": 4
+  "status": "active",
+  "order": 4,
+  "description": "23 module từ neural network tự viết, Transformer và các họ mô hình tới RAG, agent, LangGraph, fine-tuning và đánh giá hệ thống AI, kèm các dự án portfolio chạy trên dữ liệu thật.",
+  "source": "https://roadmap.sh/ai-engineer",
+  "modules": [
+    {
+      "id": "00-introduction",
+      "title": "AI Engineer là gì",
+      "summary": "Vai trò AI Engineer so với ML Engineer, AI vs AGI, tác động lên phát triển sản phẩm và bức tranh ngành.",
+      "topics": [
+        "AI Engineer vs ML Engineer",
+        "AI vs AGI",
+        "Vai trò",
+        "Tác động lên sản phẩm",
+        "Bức tranh ngành"
+      ]
+    },
+    {
+      "id": "01-nn-from-scratch",
+      "title": "Neural network từ số 0",
+      "summary": "Neuron, layer, activation, loss và backprop tự viết bằng numpy, optimizer và khởi tạo trọng số.",
+      "topics": [
+        "Neuron",
+        "Layer",
+        "Activation",
+        "Loss",
+        "Backprop",
+        "Optimizer",
+        "Init"
+      ]
+    },
+    {
+      "id": "02-pytorch-deep-dive",
+      "title": "PyTorch chuyên sâu",
+      "summary": "Train trên GPU, mixed precision, normalization, residual, debug khi train hỏng và profiling bộ nhớ.",
+      "topics": [
+        "GPU Training",
+        "Mixed Precision",
+        "Normalization",
+        "Residual",
+        "Debug Training",
+        "Memory Profiling"
+      ]
+    },
+    {
+      "id": "03-computer-vision",
+      "title": "Computer Vision",
+      "summary": "Từ LeNet tới ResNet và ViT, transfer learning, object detection (YOLO) và segmentation.",
+      "topics": [
+        "LeNet",
+        "ResNet",
+        "ViT",
+        "Transfer Learning",
+        "YOLO",
+        "Segmentation"
+      ]
+    },
+    {
+      "id": "04-nlp-sequence-models",
+      "title": "NLP & Sequence Models",
+      "summary": "Tokenization (BPE), word2vec, RNN/LSTM, seq2seq và attention, nền tảng dẫn tới Transformer.",
+      "topics": [
+        "BPE",
+        "word2vec",
+        "RNN",
+        "LSTM",
+        "Seq2seq",
+        "Attention"
+      ]
+    },
+    {
+      "id": "05-transformers-llm-architecture",
+      "title": "Transformer & kiến trúc LLM",
+      "summary": "Tự dựng GPT mini, so BERT với GPT, kiến trúc LLM hiện đại (RoPE, GQA, KV cache, MoE, Mamba) và scaling laws.",
+      "topics": [
+        "GPT mini",
+        "BERT vs GPT",
+        "RoPE",
+        "GQA",
+        "KV Cache",
+        "MoE",
+        "Mamba/SSM",
+        "Scaling Laws"
+      ]
+    },
+    {
+      "id": "06-generative-models",
+      "title": "Generative Models",
+      "summary": "Autoencoder, VAE, GAN và diffusion, kèm dự án diffusion nhỏ sinh ảnh theo class.",
+      "topics": [
+        "Autoencoder",
+        "VAE",
+        "GAN",
+        "Diffusion"
+      ]
+    },
+    {
+      "id": "07-reinforcement-learning",
+      "title": "Reinforcement Learning",
+      "summary": "MDP, Q-learning, DQN, policy gradient, PPO với Gymnasium và giới thiệu RLHF.",
+      "topics": [
+        "MDP",
+        "Q-learning",
+        "DQN",
+        "Policy Gradient",
+        "PPO",
+        "Gymnasium",
+        "RLHF"
+      ]
+    },
+    {
+      "id": "08-interpretability",
+      "title": "Interpretability",
+      "summary": "Mở hộp đen model: probing, attention analysis, logit lens, activation patching và sparse autoencoder.",
+      "topics": [
+        "Probing",
+        "Attention Analysis",
+        "Logit Lens",
+        "Activation Patching",
+        "Sparse Autoencoder"
+      ]
+    },
+    {
+      "id": "09-llms-and-open-models",
+      "title": "LLM & model mã nguồn mở",
+      "summary": "Pre-trained model (lợi ích, giới hạn, context, cut-off), model đóng và mở, Hugging Face, Ollama, inference và sampling.",
+      "topics": [
+        "Pre-trained Models",
+        "Open vs Closed",
+        "Hugging Face",
+        "Ollama",
+        "Context Length",
+        "Sampling"
+      ]
+    },
+    {
+      "id": "10-quantization",
+      "title": "Quantization",
+      "summary": "int8/int4/fp8, PTQ vs QAT, GPTQ, AWQ, GGUF/llama.cpp, bitsandbytes; đo đánh đổi độ chính xác, tốc độ, VRAM.",
+      "topics": [
+        "int8/int4/fp8",
+        "PTQ vs QAT",
+        "GPTQ",
+        "AWQ",
+        "GGUF",
+        "llama.cpp",
+        "bitsandbytes"
+      ]
+    },
+    {
+      "id": "11-llm-apis-prompting",
+      "title": "LLM API & Prompt Engineering",
+      "summary": "Chat Completions-style API, token và chi phí, prompt engineering, structured output và function calling.",
+      "topics": [
+        "Chat API",
+        "Tokens",
+        "Pricing",
+        "Prompt Engineering",
+        "Structured Output",
+        "Function Calling"
+      ]
+    },
+    {
+      "id": "12-embeddings-vector-db",
+      "title": "Embeddings & Vector Database",
+      "summary": "Embeddings và use case (semantic search, phân loại, gợi ý, anomaly), sentence-transformers, vector DB, indexing.",
+      "topics": [
+        "Embeddings",
+        "Semantic Search",
+        "sentence-transformers",
+        "Chroma",
+        "FAISS",
+        "Qdrant",
+        "pgvector",
+        "Indexing"
+      ]
+    },
+    {
+      "id": "13-rag",
+      "title": "RAG",
+      "summary": "Chunking, retrieval, hybrid search, reranking, sinh câu trả lời có trích dẫn, đánh giá RAG và RAG vs fine-tuning.",
+      "topics": [
+        "Chunking",
+        "Retrieval",
+        "Hybrid Search",
+        "Reranking",
+        "Citations",
+        "RAG Evaluation",
+        "RAG vs Fine-tuning"
+      ]
+    },
+    {
+      "id": "14-fine-tuning-llm",
+      "title": "Fine-tuning LLM",
+      "summary": "SFT, LoRA/QLoRA, DPO, chuẩn bị dữ liệu và quyết định khi nào nên fine-tune.",
+      "topics": [
+        "SFT",
+        "LoRA",
+        "QLoRA",
+        "DPO",
+        "Data Preparation"
+      ]
+    },
+    {
+      "id": "15-reasoning-models",
+      "title": "Reasoning Models",
+      "summary": "Chain-of-thought, test-time compute, RL với phần thưởng kiểm được (GRPO), distillation và synthetic data.",
+      "topics": [
+        "Chain-of-Thought",
+        "Test-time Compute",
+        "GRPO",
+        "RLVR",
+        "Distillation",
+        "Synthetic Data"
+      ]
+    },
+    {
+      "id": "16-ai-agents",
+      "title": "AI Agents",
+      "summary": "ReAct, tool use, agent tự viết không framework, context engineering, MCP/A2A, memory dài hạn, computer use, coding agent.",
+      "topics": [
+        "ReAct",
+        "Tool Use",
+        "Context Engineering",
+        "MCP",
+        "A2A",
+        "Memory",
+        "Computer Use",
+        "Coding Agent"
+      ]
+    },
+    {
+      "id": "17-langchain-langgraph",
+      "title": "LangChain & LangGraph",
+      "summary": "LCEL, LangGraph (state, graph, checkpoint), multi-agent và human-in-the-loop.",
+      "topics": [
+        "LangChain",
+        "LCEL",
+        "LangGraph",
+        "Checkpoint",
+        "Multi-agent",
+        "Human-in-the-loop"
+      ]
+    },
+    {
+      "id": "18-multimodal",
+      "title": "Multimodal AI",
+      "summary": "Image understanding, speech-to-text (Whisper), text-to-speech, sinh ảnh, video understanding và dự án trợ lý tài chính đa phương thức.",
+      "topics": [
+        "Vision",
+        "Whisper",
+        "TTS",
+        "Image Generation",
+        "Video Understanding"
+      ]
+    },
+    {
+      "id": "19-ai-safety-security",
+      "title": "AI Safety & Security",
+      "summary": "Prompt injection, privacy, bias và fairness, moderation, red-teaming, ràng buộc input/output và guardrails.",
+      "topics": [
+        "Prompt Injection",
+        "Privacy",
+        "Bias & Fairness",
+        "Moderation",
+        "Red-teaming",
+        "Guardrails"
+      ]
+    },
+    {
+      "id": "20-evaluation-production",
+      "title": "Evaluation & Production",
+      "summary": "Evals, LLM-as-judge, observability, serving (vLLM), speculative decoding, prompt caching, chi phí và độ trễ.",
+      "topics": [
+        "Evals",
+        "LLM-as-judge",
+        "Observability",
+        "vLLM",
+        "Speculative Decoding",
+        "Prompt Caching",
+        "AI Dev Tools"
+      ]
+    },
+    {
+      "id": "21-ai-system-design",
+      "title": "AI System Design",
+      "summary": "Đóng khung bài toán AI, chọn kiến trúc (prompt, RAG, fine-tune, agent) và luyện case phỏng vấn.",
+      "topics": [
+        "Problem Framing",
+        "Prompt vs RAG vs Fine-tune vs Agent",
+        "Trade-offs",
+        "Interview Cases"
+      ]
+    },
+    {
+      "id": "22-quantum-ml",
+      "title": "Quantum Machine Learning",
+      "summary": "Mở rộng, cập nhật dần: qubit, mạch lượng tử, variational circuit, quantum kernel trên simulator và đánh giá thẳng thắn hiện trạng.",
+      "topics": [
+        "Qubit",
+        "Quantum Circuit",
+        "Variational Circuit",
+        "Quantum Kernel",
+        "Simulator"
+      ]
+    }
+  ]
 }
