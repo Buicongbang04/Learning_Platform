@@ -8,6 +8,12 @@
   "source": "https://roadmap.sh/data-engineer",
   "modules": [
     {
+      "id": "00-introduction",
+      "title": "Giới thiệu & vòng đời Data Engineering",
+      "summary": "Data Engineering là gì, khác DS/DA ở đâu; vòng đời và undercurrents; nguồn dữ liệu thật (DB, API, log, mobile, IoT), cân nhắc khi thu thập và cách chọn công nghệ.",
+      "topics": ["What is DE", "DE vs DS", "Lifecycle", "Data Generation", "Data Collection", "Choosing Technologies"]
+    },
+    {
       "id": "01-foundations",
       "title": "Nền tảng kỹ thuật",
       "summary": "Nhập môn Python/SQL tùy chọn; Python cho data, SQL nâng cao, Linux, Git, networking và hệ phân tán.",
