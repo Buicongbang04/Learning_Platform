@@ -12,7 +12,7 @@ tham chiếu của người soạn), các quyết định cần cân nhắc và 
 | Đơn trễ mỗi tuần (06/2017 – 07/2018) | trung vị 61, phân vị 90 là 289, tối đa 565; 18/61 tuần trên 100 | `weekly_late_volume` |
 | PR-AUC test lúc đặt hàng / lúc giao vận chuyển | 0.120 / 0.378 | Intermediate 01 |
 | Luật "còn dưới 5 ngày" | precision 0.427, recall 0.352, khoảng 99 R$/tuần | Lý thuyết mục 3 |
-| 95% nhãn trễ có sau | 25.4 ngày kể từ lúc mua | Basic 03 |
+| 95% nhãn có sau / 95% nhãn **trễ** có sau | 25.4 / 34.2 ngày kể từ lúc mua | Basic 03, lý thuyết mục 5 |
 | Holdout 20% đủ power | khoảng 39 tuần (70 cảnh báo/tuần) | Lý thuyết mục 5 |
 | Recall top 5% theo vùng | N/NE 31.7%, SP 43.6%, khác 17.9% | Intermediate 03 |
 
@@ -41,7 +41,8 @@ yên ả.
   giả định quyết định, đề xuất cách đo (thí nghiệm, bài Advanced 02).
 - **Serving**: batch theo giờ trên sự kiện giao vận chuyển; fallback về luật.
 - **Monitoring**: số đơn quá hẹn chưa giao (có ngay), phân phối điểm, số cảnh báo / trần; metric chất
-  lượng chỉ trên cohort đã chín (30 ngày).
+  lượng chỉ trên cohort đã chín theo nhãn trễ (35 ngày: 95.8% nhãn trễ đã có; mốc 30 ngày chỉ có
+  85.9%).
 - **Retrain**: trên đơn không can thiệp với trọng số holdout (Intermediate 02).
 - **Fairness**: equal opportunity theo vùng; bang khác có recall thấp nhất.
 - **Phương án đã loại** (ví dụ): model lúc đặt hàng (PR-AUC 0.120, dựa vào vùng); online serving

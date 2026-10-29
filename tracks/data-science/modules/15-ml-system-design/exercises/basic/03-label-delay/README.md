@@ -36,7 +36,8 @@ Trong `starter/labels.py`:
 3. `maturity_days(labels, coverage=0.95) -> float`: số ngày d nhỏ nhất (theo quantile) sao cho
    `coverage` phần đơn có nhãn trong vòng d ngày kể từ lúc mua.
 
-Chạy trên Olist thật: nhìn cohort đơn mua tháng 02/2018 ở các ngày 2018-03-01, 03-15, 03-29.
+Chạy trên Olist thật: nhìn cohort đơn mua tháng 02/2018 ở các ngày 2018-03-01, 03-15, 03-29. So
+`maturity_days` trên mọi nhãn với trên riêng đơn trễ (`lab[lab.late]`): mốc "chín" nên lấy cái nào?
 
 ## Tiêu chí đạt
 

@@ -23,8 +23,9 @@ thấp kỷ lục đúng lúc đó. 95% nhãn có trong khoảng 25.4 ngày sau 
 
 Cách dùng trong monitoring:
 
-- Metric chất lượng (precision@k, recall, tỉ lệ trễ) chỉ tính trên cohort **đã chín**: ví dụ đơn mua
-  từ 30 ngày trước trở về trước.
+- Metric chất lượng (precision@k, recall, tỉ lệ trễ) chỉ tính trên cohort **đã chín**, và mốc chín
+  phải tính theo nhãn **trễ** (`maturity_days(lab[lab.late], 0.95)` ≈ 34.2 ngày), không theo mọi nhãn
+  (25.4 ngày). Mốc 30 ngày chỉ có 85.9% nhãn trễ: tỉ lệ trễ vẫn bị báo thấp. Dùng 35 ngày.
 - Song song theo dõi chỉ báo có ngay: số đơn **đã quá hẹn mà chưa giao** (đây là ca trễ biết sớm nhất),
   phân phối điểm model, số cảnh báo mỗi ngày.
 - Ghi rõ trên dashboard "số liệu tới cohort ngày X".

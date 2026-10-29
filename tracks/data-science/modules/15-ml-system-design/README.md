@@ -295,8 +295,11 @@ Kết quả (tin nhắn 0.5 R$, $$V$$ = 30 R$, $$\Delta$$ = 0.15):
 | Model lúc giao vận chuyển, top 10% | 0.264 | khoảng 96 R$ |
 | Luật "còn dưới 5 ngày tới ngày hẹn" | 0.427 | khoảng 99 R$ |
 
-Ba bài học. Một: **thời điểm quyết định** đáng giá hơn mọi tuning. Hai: luật một dòng ngang model, nên
-model phải chứng minh nó hơn luật trước khi được ra mắt. Ba: kể cả chính sách tốt nhất cũng chỉ khoảng
+Luật chọn 1 596 đơn, khoảng 5% tập test. Ở cùng cỡ k đó, luật còn thắng model: precision 0.427 so với
+0.391 của model top 5% (1 607 đơn).
+
+Ba bài học. Một: **thời điểm quyết định** đáng giá hơn mọi tuning. Hai: luật một dòng ngang hoặc hơn
+model, nên model phải chứng minh nó hơn luật trước khi được ra mắt. Ba: kể cả chính sách tốt nhất cũng chỉ khoảng
 100 R$ mỗi tuần, khoảng 5 nghìn R$ một năm, không trả nổi chi phí một kỹ sư bảo trì. Kết luận đúng
 không phải "dự án thất bại" mà là câu hỏi cho business: **giả định $$V$$ = 30 R$ đến từ đâu?**
 
@@ -319,6 +322,12 @@ phải nói thẳng điều đó trong memo (mục 7) thay vì trình bày con s
 | Lịch sử trễ của seller (90 ngày) | Có, nếu tính point-in-time | Có | Phải as-of join (module 10, bài Advanced 01) |
 | Ngày giao cho vận chuyển, số ngày seller xử lý | Không | Có | Đúng loại feature gây leak nếu dùng cho model lúc đặt hàng |
 | Ngày giao thực tế, review | Không | Không | Đây là nhãn |
+
+Hai cảnh báo về chính bảng dữ liệu của module. Một: 165 trên 32 150 đơn tập test có `handling_days`
+âm (ngày giao vận chuyển ghi trước ngày mua): lỗi dữ liệu nguồn, phải lọc hoặc kiểm tra trước khi tin
+feature. Hai: bảng chỉ gồm đơn **cuối cùng** giao xong, tức là điều kiện trên kết quả; khi serving, hệ
+thống chấm điểm cả đơn đang trên đường (có thể bị huỷ, thất lạc, khoảng 3% đơn của Olist không ở trạng
+thái `delivered`), nên metric offline ở đây hơi lạc quan.
 
 Training-serving skew là lỗi phổ biến nhất ở bước này: feature lúc train tính bằng SQL trên bảng đã
 "chốt sổ", lúc serving tính từ event stream, hai bên lệch nhau vài phần trăm và model kém đi mà không ai
@@ -405,8 +414,13 @@ for as_of in ["2018-03-01", "2018-03-15", "2018-03-29"]:
 Đơn mua tháng 02/2018 rốt cuộc trễ 16.0%. Nhìn vào ngày 2018-03-01, chỉ 47% đơn có nhãn và tỉ lệ trễ
 nhìn thấy là 1.4%; ngày 2018-03-15 là 8.9%; phải tới 2018-03-29 mới gần đúng (15.8%). Một hệ thống
 monitoring ngây thơ sẽ báo "mọi thứ ổn" đúng lúc khủng hoảng tệ nhất. Cách xử lý: chỉ tính metric trên
-cohort đã **chín** (ở Olist, 98% nhãn trễ có trong 30 ngày sau khi mua), theo dõi proxy có ngay (phân
-phối điểm, số đơn quá hạn chưa giao), và nói rõ độ trễ trên dashboard (bài Basic 03).
+cohort đã **chín**, theo dõi proxy có ngay (phân phối điểm, số đơn quá hạn chưa giao), và nói rõ độ
+trễ trên dashboard (bài Basic 03).
+
+Định nghĩa "chín" phải dựa vào **nhãn dương**, không phải mọi nhãn. Ở Olist, 95% mọi nhãn có trong
+25.4 ngày và 98.0% trong 30 ngày sau khi mua, nhưng nhãn trễ về chậm hơn hẳn: chỉ 85.9% có trong 30
+ngày, phân vị 95 là 34.2 ngày. Quy tắc "cohort đủ 30 ngày" vì thế vẫn đánh rơi khoảng 14% đơn trễ, đúng
+loại bias vừa nói ở trên. Dùng mốc theo nhãn trễ: cohort đủ **35 ngày** (95.8% nhãn trễ đã có).
 
 ### Feedback loop
 
@@ -453,6 +467,9 @@ print(round(2 * n_equal / 70), "tuần với 50/50,", round(n_total_80_20 / 70),
 ```
 
 Với khoảng 70 đơn cảnh báo mỗi tuần, holdout 20% cần khoảng 39 tuần; chia 50/50 lúc đầu cần 24 tuần.
+Một đợt chạy thử 8 tuần (như memo mẫu ở mục 7) chỉ có khoảng 280 đơn mỗi nhóm, đủ power 80% cho tác động
+từ khoảng 9.7 điểm phần trăm trở lên, gần gấp đôi tác động kỳ vọng 5.9 điểm: nó chỉ bắt được tác động
+lớn bất ngờ hoặc tín hiệu có hại, không chứng minh được giá trị kỳ vọng. Nói rõ điều này trong memo.
 Lựa chọn thực tế: chạy 50/50 giai đoạn đầu rồi giữ holdout nhỏ lâu dài, đo proxy nhanh hơn (khách liên
 hệ CSKH), hoặc chấp nhận rằng ở quy mô này giá trị chỉ chứng minh được ở mức "không có hại". Một DS
 senior nói điều này **trước** khi ra mắt.
@@ -478,8 +495,9 @@ chú ý equal opportunity; can thiệp gây hại (khoá tài khoản nghi gian 
 
 ### Olist: ai được cảnh báo
 
-Tỉ lệ trễ theo vùng của khách: Bắc / Đông Bắc 13.6%, São Paulo 5.9%, các bang còn lại 8.8%. Chọn top 5%
-đơn trên tập test theo model lúc giao vận chuyển (bài Intermediate 03):
+Tỉ lệ trễ theo vùng của khách trên **toàn bộ** 96 470 đơn giao xong: Bắc / Đông Bắc 13.6%, São Paulo
+5.9%, các bang còn lại 8.8%. Bảng dưới chỉ tính trên **tập test** (đơn mua 04–08/2018, nên tỉ lệ trễ thấp
+hơn), chọn top 5% theo model lúc giao vận chuyển (bài Intermediate 03):
 
 | Vùng | Đơn | Tỉ lệ trễ | Selection rate | Precision | Recall (TPR) | FPR |
 | --- | --- | --- | --- | --- | --- | --- |

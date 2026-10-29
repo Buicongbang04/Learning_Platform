@@ -101,7 +101,8 @@ exploration nhỏ khi nhãn chỉ quan sát được cho lựa chọn đã làm.
 ## Nhãn về sau vài tuần. Bạn monitoring model thế nào?
 
 Ba lớp. Lớp có ngay: schema, null, phân phối feature, phân phối điểm, số cảnh báo, proxy sớm (ở Olist là
-số đơn đã quá hẹn mà chưa giao). Lớp nhãn: chỉ tính precision / recall trên cohort **đã chín**. Lớp kinh
+số đơn đã quá hẹn mà chưa giao). Lớp nhãn: chỉ tính precision / recall trên cohort **đã chín**, với mốc chín tính theo
+nhãn dương (ở Olist khoảng 35 ngày cho nhãn trễ, không phải 25 ngày của mọi nhãn). Lớp kinh
 doanh: so với holdout, chậm vài tuần.
 
 Bẫy: tính metric trên các nhãn "đã có" của cohort gần đây. Nhãn trễ của Olist về khi qua ngày hẹn, nhãn
@@ -171,7 +172,8 @@ báo ngày giao mới cho đơn điểm cao, tối đa theo năng lực; mục t
 precision@k theo ngân sách, giá trị tiền ở ngưỡng chọn trên validation. Guardrail: tỉ lệ huỷ, tỉ lệ có
 review (tin nhắn có thể khiến khách không review thay vì review tốt), chi phí CSKH.
 
-**Dữ liệu.** Nhãn trễ so nguyên timestamp ngày giao và ngày hẹn; nhãn về muộn (95% trong khoảng 25 ngày).
+**Dữ liệu.** Nhãn trễ so nguyên timestamp ngày giao và ngày hẹn; nhãn về muộn (95% mọi nhãn trong 25.4 ngày,
+nhưng 95% nhãn trễ phải tới 34.2 ngày).
 Feature lúc giao vận chuyển: số ngày hẹn, số ngày seller xử lý, số ngày còn lại, phí ship, cùng bang,
 lịch sử trễ của seller (as-of join). Không dùng ngày giao thực tế hay review.
 
@@ -206,7 +208,8 @@ chọn nhóm có uplift lớn nhất, không phải nhóm có điểm churn cao 
 
 1. **Label delay**: tháng gần nhất chưa chín. Nhãn đúng hẹn về trước nhãn trễ, nên tỉ lệ trễ nhìn thấy của
    cohort chưa chín luôn thấp. Ở Olist, cohort 02/2018 trông như trễ 1.4% vào ngày 2018-03-01 nhưng thật ra
-   16.0%. Tính lại trên cohort đã đủ 30 ngày.
+   16.0%. Tính lại trên cohort đã chín theo **nhãn trễ** (khoảng 35 ngày: chỉ 85.9% nhãn trễ có trong 30
+   ngày, phân vị 95 là 34.2 ngày).
 2. **Hệ thống không làm giảm trễ**: tin nhắn không làm xe chạy nhanh hơn. Nếu tỉ lệ trễ thật giảm, nguyên
    nhân nằm ở vận hành, mùa vụ hay định nghĩa ngày hẹn (sàn có nới ngày hẹn dài hơn không?).
 3. **Metric đúng của hệ thống** là review xấu ở nhóm được cảnh báo so với holdout, không phải tỉ lệ trễ.
