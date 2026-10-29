@@ -58,7 +58,9 @@ MLP 784-128-10, batch 64, 3 epoch trên 60 000 ảnh (mục 6):
   activation đẹp nhất nhưng 90.5% neuron bão hoà và gradient nổ tới 2.7e+05. Nhìn std thôi là chưa đủ.
 - Momentum 0.9 với lr 0.01 gần trùng SGD lr 0.1: lr hiệu dụng khi gradient ổn định là $$\eta/(1-\mu) = 0.1$$.
 - Adam lr 1e-3 tốt nhất mà không cần tune, nhưng Adam lr 1e-1 có loss **tăng lại** ở epoch 3 và chỉ đạt
-  72.9%: Adam ít nhạy với lr hơn SGD trong vùng hợp lý, không phải miễn nhiễm.
+  72.9%: Adam ít nhạy với lr hơn SGD trong vùng hợp lý, không phải miễn nhiễm. Cấu hình này nằm trong vùng hỗn
+  loạn nên rất nhạy với sai số làm tròn: chạy 1 luồng BLAS cho loss 0.856 / 0.750 / 0.801 và test acc 0.8274
+  (các cấu hình khác chỉ lệch ở chữ số thứ tư), nhưng loss vẫn tăng lại ở epoch 3 và accuracy vẫn tụt xa.
 - Adam chậm hơn SGD khoảng 2 lần mỗi bước: thêm hai mảng state và các phép căn, chia trên mỗi tham số.
   Với model lớn, hai state đó còn là 2 lần bộ nhớ tham số (module 10, 14).
 

@@ -20,7 +20,7 @@ questions:
   - id: a
     text: Gradient ổn định thì lr hiệu dụng là lr / (1 − μ) = 0.1
   - id: b
-    text: Momentum làm mượt nhiễu minibatch nên hội tụ như lr lớn
+    text: Momentum giảm lr dần theo số bước nên tránh được dao động
   - id: c
     text: Momentum chuẩn hoá gradient theo độ lớn từng toạ độ
   - id: d
@@ -83,13 +83,13 @@ questions:
   prompt: Adam lr 1e-1 trên MNIST (seed 0) cho kết quả nào?
   options:
   - id: a
-    text: Loss giảm đều cả 3 epoch, test acc 0.9747
+    text: Loss giảm đều cả 3 epoch, test acc trên 0.97
   - id: b
-    text: Loss tăng lại ở epoch 3, test acc 0.7288
+    text: Loss tăng lại ở epoch 3, test acc dưới 0.85
   - id: c
-    text: Loss đứng yên ở 2.303, test acc 0.0982
+    text: Loss đứng yên ở 2.303, test acc khoảng 0.10
   - id: d
-    text: Loss giảm đều cả 3 epoch, test acc 0.9160
+    text: Loss giảm đều cả 3 epoch, test acc khoảng 0.92
 - id: torch-fan
   kind: knowledge
   type: single

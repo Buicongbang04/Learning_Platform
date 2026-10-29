@@ -1,11 +1,10 @@
 import time
+from contextlib import nullcontext
 
 import numpy as np
 import pytest
 import torch
 import torch.nn.functional as F
-from threadpoolctl import threadpool_limits
-
 from testkit import Exercise
 
 ex = Exercise(__file__)
@@ -163,8 +162,13 @@ def test_load_mnist_real(nb):
 
 def test_mlp_on_real_mnist(nb):
     X, y, Xt, yt = load_real(nb)
+    try:
+        from threadpoolctl import threadpool_limits   # đi kèm scikit-learn; thiếu thì chạy mặc định
+        limit = threadpool_limits(4)
+    except ImportError:
+        limit = nullcontext()
     start = time.perf_counter()
-    with threadpool_limits(4):                            # ma trận nhỏ: nhiều luồng BLAS chỉ làm chậm
+    with limit:                            # ma trận nhỏ: nhiều luồng BLAS chỉ làm chậm
         model, rng = nb.MLP([784, 128, 10], seed=0), np.random.default_rng(0)
         for _ in range(2):
             nb.train_epoch(model, X[:20000], y[:20000], lr=0.1, batch_size=64, rng=rng)
