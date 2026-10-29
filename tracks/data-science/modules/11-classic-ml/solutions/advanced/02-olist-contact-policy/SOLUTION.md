@@ -44,7 +44,7 @@ Tập test: 31 994 đơn trong 21.4 tuần, khoảng 1 493 đơn mỗi tuần; 1
 
 ## Các quyết định cần cân nhắc
 
-1. **Thời điểm dự đoán**: lúc giao (dùng được `late_days`) hay sớm hơn (can thiệp trước khi khách bực, nhưng
+1. **Thời điểm dự đoán**: lúc đơn vừa giao như module 10 (dùng được `late_days`, mọi cột review là leakage) hay sớm hơn: lúc mua / lúc giao cho hãng vận chuyển là một bài toán khác, phải bỏ mọi kết quả giao hàng (can thiệp trước khi khách bực, nhưng
    mất feature mạnh nhất). Một phần review được viết trước khi giao; nêu rõ phạm vi.
 2. **Calibration**: công thức $$t^*$$ cần xác suất đúng. Kiểm tra trên test; calibrate trên dữ liệu gần nhất.
 3. **Ngưỡng cố định hay top-N theo tuần**, như trên.

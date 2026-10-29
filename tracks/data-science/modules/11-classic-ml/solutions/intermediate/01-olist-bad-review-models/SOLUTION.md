@@ -53,7 +53,7 @@ giảm, không phải vì model tốt hơn: Brier cũng phụ thuộc tỉ lệ 
    (0.179, 2.254 R$), vì xác suất của random forest gần calibrated ở cả hai (dự đoán trung bình 16.8% so với 18.0% thật ở validation, 11.1% so với 10.4% ở test). Production: train
    lại trên dữ liệu gần nhất, theo dõi calibration theo tháng, và khi năng lực CSKH cố định thì chọn top N
    thay vì ngưỡng cố định.
-3. Dự đoán trước khi giao phải bỏ `delivery_days` và `late_days`. Tín hiệu mạnh nhất biến mất, ROC-AUC sẽ giảm
+3. Dự đoán trước khi giao là một bài toán khác, với thời điểm dự đoán lúc mua hoặc lúc giao cho hãng vận chuyển, và phải bỏ mọi kết quả giao hàng (`delivery_days`, `late_days`). Tín hiệu mạnh nhất biến mất, ROC-AUC sẽ giảm
    đáng kể; thay bằng feature dự báo trễ (khoảng cách seller–khách, lịch sử trễ của seller, mùa cao điểm), đó
    là một bài toán dự đoán trễ riêng.
 

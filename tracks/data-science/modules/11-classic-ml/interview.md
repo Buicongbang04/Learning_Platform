@@ -181,7 +181,7 @@ Tư vấn:
 
 (Case study.) Các quyết định theo thứ tự:
 
-1. **Thời điểm dự đoán và hành động**: lúc giao hàng (biết thời gian giao, trễ bao nhiêu) hay lúc mua (can
+1. **Thời điểm dự đoán và hành động**: lúc đơn vừa giao (biết thời gian giao, trễ bao nhiêu; mọi cột review là leakage) hay lúc mua / lúc giao cho hãng vận chuyển (bài toán khác, phải bỏ mọi kết quả giao hàng; can
    thiệp sớm hơn nhưng ít thông tin)? Feature chỉ lấy những gì biết tại thời điểm đó. Trễ là tín hiệu mạnh
    nhất: 54% đơn trễ bị review xấu so với khoảng 9% đơn đúng hẹn.
 2. **Nhãn**: review mới nhất ≤ 2 sao. Đơn không có review? Nếu loại, model chỉ áp dụng cho người sẽ review.

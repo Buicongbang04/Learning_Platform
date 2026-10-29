@@ -36,7 +36,7 @@ review 1–2 sao không**, để đội CSKH liên hệ chủ động. Bốn câ
 
 | Câu hỏi | Lựa chọn cho Olist | Vì sao quan trọng |
 | --- | --- | --- |
-| Dự đoán **lúc nào**? | Lúc giao hàng | Quyết định feature nào hợp lệ: `late_days` biết lúc giao, nội dung review thì không |
+| Dự đoán **lúc nào**? | Lúc đơn vừa giao (`order_delivered_customer_date`), đúng như module 10 | Feature giao hàng (số ngày giao thực tế, trễ bao nhiêu) hợp lệ; **mọi cột review** (điểm, bình luận, ngày tạo, ngày trả lời) là leakage |
 | Nhãn là gì? | `review_score <= 2`, review mới nhất của đơn | Tỉ lệ dương 12.8%: mất cân bằng vừa phải |
 | Chia dữ liệu thế nào? | Theo thời gian: train trước 2018-01-01, validation tới trước 2018-04-01, test tới hết 2018-08-31 | Model sẽ chạy trên đơn **tương lai**; chia ngẫu nhiên cho điểm lạc quan giả |
 | Hành động là gì, giá bao nhiêu? | Liên hệ tốn tiền, bỏ lỡ review xấu tốn nhiều hơn | Quyết định ngưỡng (mục 3), không phải ROC-AUC |
@@ -52,6 +52,10 @@ flowchart LR
     G --> H[Chấm một lần trên test<br/>rồi triển khai + theo dõi drift]
     H -.->|drift, đổi chi phí| B
 ```
+
+Nếu muốn can thiệp **trước** khi giao (nhắn tin cho đơn có nguy cơ trễ), đó là một bài toán khác với thời
+điểm dự đoán khác (lúc mua hoặc lúc giao cho hãng vận chuyển): phải bỏ mọi kết quả giao hàng xảy ra sau thời
+điểm đó (`delivery_days`, `late_days`), và ROC-AUC sẽ thấp hơn nhiều.
 
 Baseline đơn giản không phải thủ tục. Nếu logistic regression trên 8 feature đã đạt gần model phức tạp, đó
 là thông tin: phần còn lại nằm ở **dữ liệu**, không phải ở thuật toán.
