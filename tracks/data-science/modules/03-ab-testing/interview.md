@@ -34,10 +34,11 @@ traffic có sẵn rồi coi đó là mục tiêu.
 
 Công thức xấp xỉ normal, two-sided, α = 0.05, power = 0.8:
 
-```
-n = (1.96 + 0.84)² · [0.10·0.90 + 0.11·0.89] / 0.01² ≈ 14 732 user mỗi nhóm
-(14 749 nếu dùng z chính xác 1.95996 + 0.84162)
-```
+$$
+n = \frac{(1.96 + 0.84)^2\,[0.10 \cdot 0.90 + 0.11 \cdot 0.89]}{0.01^2} \approx 14\,732 \text{ user mỗi nhóm}
+$$
+
+(14 749 nếu dùng z chính xác 1.95996 + 0.84162.)
 
 Nói thêm để thể hiện kinh nghiệm: tổng ~29.5 nghìn user; chia cho traffic mỗi ngày đủ điều kiện
 vào thí nghiệm rồi làm tròn lên số tuần trọn; nếu metric cần thời gian "chín" (retention 7 ngày)
@@ -46,7 +47,7 @@ thì cộng thêm. Nếu muốn phát hiện 10% → 10.5% thì cần gấp kho�
 ## Khi nào dùng z-test, t-test, chi-square, Mann-Whitney, bootstrap?
 
 - **z-test hai tỉ lệ / chi-square 2×2**: metric 0/1 (conversion, retention). Hai cách tương đương
-  với bảng 2×2 (z² = χ²).
+  với bảng 2×2 ($$z^2 = \chi^2$$).
 - **Welch t-test**: trung bình của metric liên tục (doanh thu, thời gian). Với mẫu lớn, CLT xử lý
   phân phối lệch. Mặc định Welch thay vì Student vì không cần giả định variance bằng nhau.
 - **Chi-square goodness-of-fit**: so số lượng quan sát với tỉ lệ kỳ vọng, chính là kiểm tra SRM.

@@ -3,7 +3,7 @@
 ## Cách làm
 
 Chuẩn hoá tỉ lệ thiết kế, nhân với tổng số đơn vị để có số kỳ vọng mỗi nhánh, tính thống kê
-chi-square `Σ (O − E)² / E` và lấy p-value phía phải với `k − 1` bậc tự do. Một nhánh bị mất đơn
+chi-square $$\sum (O - E)^2 / E$$ và lấy p-value phía phải với `k − 1` bậc tự do. Một nhánh bị mất đơn
 vị thì nhánh kia "thừa" tương ứng, nên chỉ có `k − 1` thông tin độc lập.
 
 ## Cookie Cats có SRM không?

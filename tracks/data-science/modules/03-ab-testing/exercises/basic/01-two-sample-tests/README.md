@@ -49,6 +49,10 @@ p-value hai phía từ thống kê chuẩn: `2 * norm.sf(abs(z))`. Từ phân ph
 
 ### Gợi ý 2
 
-Đặt `va = var(a, ddof=1) / n_a`, `vb = var(b, ddof=1) / n_b`. Khi đó
-`t = (mean_b − mean_a) / sqrt(va + vb)` và
-`df = (va + vb)² / (va² / (n_a − 1) + vb² / (n_b − 1))`.
+Đặt `va = var(a, ddof=1) / n_a`, `vb = var(b, ddof=1) / n_b` (trong công thức là $$v_A, v_B$$). Khi đó
+
+$$
+t = \frac{\bar b - \bar a}{\sqrt{v_A + v_B}},
+\qquad
+\mathrm{df} = \frac{(v_A + v_B)^2}{\frac{v_A^2}{n_A - 1} + \frac{v_B^2}{n_B - 1}}
+$$

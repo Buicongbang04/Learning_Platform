@@ -26,7 +26,7 @@ và vẫn kiểm soát FWER. Không có lý do dùng Bonferroni thay Holm, trừ
 ## Mô phỏng
 
 10 metric độc lập, không metric nào có tác động: xác suất có ít nhất một p < 0.05 là
-1 − 0.95¹⁰ ≈ 40%. Trong thực tế các metric thường tương quan (visit và conversion), nên con số thấp
+$$1 - 0.95^{10} \approx 40\%$$. Trong thực tế các metric thường tương quan (visit và conversion), nên con số thấp
 hơn, nhưng vẫn cao hơn nhiều so với 5% mà người đọc báo cáo ngầm giả định.
 
 ## Hillstrom (mở rộng)

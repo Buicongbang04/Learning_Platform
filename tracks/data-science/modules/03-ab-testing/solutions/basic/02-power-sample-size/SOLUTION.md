@@ -2,7 +2,7 @@
 
 ## Cách làm
 
-Cả ba hàm dựa vào cùng một hằng số `z = z_{1−α/2} + z_{power}`. Tách hàm `_n_exact` (chưa làm tròn)
+Cả ba hàm dựa vào cùng một hằng số $$z = z_{1-\alpha/2} + z_{\text{power}}$$. Tách hàm `_n_exact` (chưa làm tròn)
 để `mde_proportions` giải phương trình liên tục; nếu giải trên bản đã làm tròn, hàm có bậc thang và
 `brentq` vẫn chạy nhưng nghiệm kém chính xác.
 
@@ -23,7 +23,7 @@ Một DS sẽ quay lại bàn thiết kế với các lựa chọn:
 | --- | --- |
 | Chấp nhận MDE 2 điểm % | Giảm khoảng 4 lần, còn ~6.5 tuần |
 | Chỉ áp cho đơn có nguy cơ trễ (baseline review xấu ~50%) | Variance đổi, nhưng tác động kỳ vọng lớn hơn nhiều; thường lợi hơn |
-| Giảm variance bằng CUPED (module 04) | Giảm n theo hệ số (1 − ρ²) |
+| Giảm variance bằng CUPED (module 04) | Giảm n theo hệ số $$1 - \rho^2$$ |
 | Đổi metric nhạy hơn (điểm review trung bình thay vì tỉ lệ ≤ 2 sao) | Phụ thuộc dữ liệu; phải đo |
 
 ## Vì sao mô phỏng cho ~80%

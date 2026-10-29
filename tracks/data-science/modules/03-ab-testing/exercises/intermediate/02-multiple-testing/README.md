@@ -23,10 +23,10 @@ trả danh sách `bool` cùng thứ tự, `True` là bác bỏ H0:
 
 1. `bonferroni(pvals, alpha=0.05)`: bác bỏ khi `p <= alpha / m`.
 2. `holm(pvals, alpha=0.05)`: sắp p-value tăng dần; với p-value thứ k (đánh số từ 1), bác bỏ khi
-   `p_(k) <= alpha / (m − k + 1)`; dừng ở lần đầu không bác bỏ được, mọi p-value sau đó đều không
+   $$p_{(k)} \le \alpha / (m - k + 1)$$; dừng ở lần đầu không bác bỏ được, mọi p-value sau đó đều không
    bị bác bỏ.
 3. `benjamini_hochberg(pvals, alpha=0.05)`: sắp tăng dần, tìm k **lớn nhất** có
-   `p_(k) <= k · alpha / m`, bác bỏ k p-value nhỏ nhất (kể cả những cái ở giữa không tự thoả).
+   $$p_{(k)} \le k\alpha / m$$, bác bỏ k p-value nhỏ nhất (kể cả những cái ở giữa không tự thoả).
 
 Không dùng `statsmodels.stats.multitest` (test dùng nó để đối chiếu).
 

@@ -82,7 +82,7 @@ một nửa user dùng phiên bản kém hơn. DS senior biết khi nào **khôn
 - **H1 (alternative)**: có tác động. Thường dùng **two-sided** (tốt hơn hoặc tệ hơn), vì thay đổi
   có thể làm hại và ta cần biết điều đó.
 - **Test statistic**: một con số đo "chênh lệch quan sát được lớn cỡ nào so với độ nhiễu",
-  ví dụ z = (p̂_B − p̂_A) / SE.
+  ví dụ $$z = (\hat p_B - \hat p_A) / \mathrm{SE}$$.
 - **p-value**: *nếu H0 đúng*, xác suất thấy một chênh lệch ít nhất cực đoan như đã thấy.
   p-value **không phải** xác suất H0 đúng, cũng không phải xác suất thay đổi có hiệu quả.
 - **α (significance level)**: ngưỡng chấp nhận báo động nhầm, thường 0.05. Bác bỏ H0 khi p < α.
@@ -112,12 +112,14 @@ flowchart TD
     E --> E1[Delta method<br/>module 04]
 ```
 
-**z-test hai tỉ lệ** (conversion, retention). Với x_A thành công trên n_A người:
+**z-test hai tỉ lệ** (conversion, retention). Với $$x_A$$ thành công trên $$n_A$$ người, tỉ lệ gộp
+(pooled, vì giả định H0 là hai tỉ lệ bằng nhau) và thống kê kiểm định là:
 
-```
-p̂ = (x_A + x_B) / (n_A + n_B)                      # pooled, dùng khi giả định H0
-z = (p̂_B − p̂_A) / sqrt( p̂(1 − p̂)(1/n_A + 1/n_B) )
-```
+$$
+\hat p = \frac{x_A + x_B}{n_A + n_B},
+\qquad
+z = \frac{\hat p_B - \hat p_A}{\sqrt{\hat p\,(1 - \hat p)\left(\frac{1}{n_A} + \frac{1}{n_B}\right)}}
+$$
 
 **Welch t-test** (doanh thu, số phút xem). Không giả định hai nhóm cùng variance, nên là lựa chọn
 mặc định thay cho Student t-test. Với mẫu vài nghìn trở lên, CLT đảm bảo trung bình mẫu xấp xỉ
@@ -258,13 +260,18 @@ Cho một metric, bốn đại lượng sau quyết định lẫn nhau; biết b
 - **MDE (Minimum Detectable Effect)**: tác động nhỏ nhất ta muốn phát hiện được.
 - **n**: cỡ mẫu mỗi nhóm.
 
-Với metric tỉ lệ, baseline p₁, muốn phát hiện p₂ = p₁ + MDE, two-sided:
+Với metric tỉ lệ, baseline $$p_1$$, muốn phát hiện $$p_2 = p_1 + \mathrm{MDE}$$, two-sided, cỡ mẫu
+**mỗi nhóm** là:
 
-```
-n mỗi nhóm = (z_{1−α/2} + z_{1−β})² · [p₁(1 − p₁) + p₂(1 − p₂)] / MDE²
-```
+$$
+n = \frac{\left(z_{1-\alpha/2} + z_{1-\beta}\right)^2 \left[p_1(1 - p_1) + p_2(1 - p_2)\right]}{\mathrm{MDE}^2}
+$$
 
-Với metric liên tục có độ lệch chuẩn σ: `n = 2σ²(z_{1−α/2} + z_{1−β})² / MDE²`.
+Với metric liên tục có độ lệch chuẩn $$\sigma$$:
+
+$$
+n = \frac{2\sigma^2 \left(z_{1-\alpha/2} + z_{1-\beta}\right)^2}{\mathrm{MDE}^2}
+$$
 
 Ba hệ quả thực tế:
 
@@ -399,7 +406,7 @@ Cách xử lý:
 - **Cố định cỡ mẫu** từ trước, chỉ đọc kết quả khi đủ (vẫn được xem SRM và guardrail an toàn hằng
   ngày).
 - **Group sequential design**: định trước K lần nhìn với biên chặt hơn ở các lần đầu, ví dụ
-  O'Brien-Fleming: lần nhìn thứ k bác bỏ khi |z| > c·sqrt(K/k). Lần đầu gần như phải có bằng chứng
+  O'Brien-Fleming: lần nhìn thứ $$k$$ bác bỏ khi $$|z_k| > c\sqrt{K/k}$$. Lần đầu gần như phải có bằng chứng
   áp đảo; lần cuối biên gần 1.96. Bài Intermediate 03 cho bạn tự hiệu chỉnh c bằng mô phỏng.
 - **Always-valid inference** (mSPRT, confidence sequence): cho phép nhìn bất cứ lúc nào; được dùng
   trong platform của Optimizely, Eppo, Statsig.
@@ -407,7 +414,7 @@ Cách xử lý:
 ### Multiple testing
 
 Kiểm 20 metric độc lập ở α = 0.05 thì xác suất có ít nhất một metric "có ý nghĩa" do may là
-1 − 0.95²⁰ ≈ 64%. Tương tự với nhiều nhánh, nhiều phân khúc (segment). Phương pháp hiệu chỉnh:
+$$1 - 0.95^{20} \approx 64\%$$. Tương tự với nhiều nhánh, nhiều phân khúc (segment). Phương pháp hiệu chỉnh:
 
 | Phương pháp | Kiểm soát | Đặc điểm |
 | --- | --- | --- |

@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { cx } from "./ui";
 import { CodeBlock } from "../code/CodeBlock";
 
@@ -125,10 +128,14 @@ const components: Components = {
   },
 };
 
+// Công thức viết bằng $$...$$ (trong dòng hoặc khối riêng). Tắt $...$ một dấu để "$0.10" vẫn là tiền.
+const REMARK = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as NonNullable<Parameters<typeof ReactMarkdown>[0]["remarkPlugins"]>;
+const REHYPE = [[rehypeKatex, { throwOnError: false }]] as NonNullable<Parameters<typeof ReactMarkdown>[0]["rehypePlugins"]>;
+
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={cx("prose-md", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components}>
         {children}
       </ReactMarkdown>
     </div>

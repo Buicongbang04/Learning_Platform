@@ -27,7 +27,7 @@ Mở `starter/peeking.ipynb`. Mô hình mô phỏng được mô tả ở cell �
 2. `peeking_fpr(n_per_group, n_looks, n_sims, alpha=0.05, seed=0) -> float`: tỉ lệ thí nghiệm có
    **ít nhất một** lần nhìn với p < alpha.
 3. `obf_fpr(c, n_per_group, n_looks, n_sims, seed=0) -> float`: như trên nhưng lần nhìn thứ k bác
-   bỏ khi `|z_k| > c · sqrt(n_looks / k)`.
+   bỏ khi $$|z_k| > c\sqrt{K/k}$$ với $$K$$ = `n_looks`.
 4. `calibrate_obf_constant(n_looks, alpha=0.05, n_sims=20000, seed=0) -> float`: tìm `c` để
    `obf_fpr` bằng alpha (dùng `n_per_group=100`).
 
@@ -53,6 +53,6 @@ cột `n_k − 1`. Mean = tổng / `n_k`. Lấy nhiều cột một lúc bằng 
 
 ### Gợi ý 2
 
-Thí nghiệm bị bác bỏ ⇔ `max_k |z_k| / sqrt(K/k) > c`. Vậy chỉ cần mô phỏng **một lần**, tính
-`max_k |z_k| / sqrt(K/k)` cho mỗi thí nghiệm, và `c` chính là phân vị `1 − alpha` của nó (hoặc giải
+Thí nghiệm bị bác bỏ $$\iff \max_k |z_k| / \sqrt{K/k} > c$$. Vậy chỉ cần mô phỏng **một lần**, tính
+$$\max_k |z_k| / \sqrt{K/k}$$ cho mỗi thí nghiệm, và `c` chính là phân vị $$1 - \alpha$$ của nó (hoặc giải
 bằng `brentq`). Không cần mô phỏng lại cho mỗi giá trị `c` thử.

@@ -20,15 +20,15 @@ khoảng 1 thí nghiệm được tuyên bố "thắng".
 Dưới H0, chuỗi z theo thời gian là một bước ngẫu nhiên (random walk) được chuẩn hoá. Ở mỗi thời
 điểm nó vượt ±1.96 với xác suất 5%, nhưng xác suất nó vượt ±1.96 **ở ít nhất một thời điểm** trong
 nhiều thời điểm thì lớn hơn nhiều. Các lần nhìn tương quan với nhau (dùng chung dữ liệu cũ), nên
-tăng chậm hơn 1 − 0.95^K, nhưng vẫn tăng không giới hạn khi nhìn liên tục.
+tăng chậm hơn $$1 - 0.95^K$$, nhưng vẫn tăng không giới hạn khi nhìn liên tục.
 
 ## O'Brien-Fleming
 
-Biên `c · sqrt(K/k)` với K = 5: [4.57, 3.23, 2.64, 2.28, 2.04]. Lần đầu (20% dữ liệu) chỉ dừng khi
+Biên $$c\sqrt{K/k}$$ với $$K = 5$$: [4.57, 3.23, 2.64, 2.28, 2.04]. Lần đầu (20% dữ liệu) chỉ dừng khi
 bằng chứng áp đảo; lần cuối gần như kiểm định thông thường (2.04 thay vì 1.96).
 
 Hiệu chỉnh nhanh: thay vì mô phỏng lại cho mỗi `c`, tính một lần thống kê
-`max_k |z_k| / sqrt(K/k)` cho mỗi thí nghiệm; `c` là phân vị 95% của nó. Lời giải vẫn dùng `brentq`
+$$\max_k |z_k| / \sqrt{K/k}$$ cho mỗi thí nghiệm; `c` là phân vị 95% của nó. Lời giải vẫn dùng `brentq`
 để minh hoạ cách giải tổng quát, nhưng trên mảng đã tính sẵn nên tức thì.
 
 Cái giá: biên cuối 2.04 > 1.96 nên cần thêm khoảng 2–3% mẫu để giữ cùng power (với K = 5). Cái
