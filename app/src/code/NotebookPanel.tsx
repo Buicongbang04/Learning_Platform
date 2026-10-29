@@ -9,14 +9,7 @@ import { useQuiz, type QuizQuestion } from "./quiz";
 import { scoreOf } from "./quizResult";
 import { starterFilesOf, writtenReportOf } from "./starterFiles";
 
-/** Notebook của bài (starter/*.ipynb) theo `files` trong frontmatter README; null nếu là bài script. */
-export function notebookOf(exercise: Exercise): string | null {
-  return exercise.files.find((file) => file.path.startsWith("starter/") && file.path.endsWith(".ipynb"))?.path ?? null;
-}
-
-export function isNotebookExercise(exercise: Exercise): boolean {
-  return notebookOf(exercise) !== null;
-}
+export { isNotebookExercise, notebookOf } from "./exerciseKind";
 
 const KIND_LABEL = { knowledge: "Kiến thức", data: "Dữ liệu" } as const;
 const INLINE_MD = "min-w-0 [&_p]:m-0";
@@ -326,9 +319,18 @@ function QuizReview({ quiz }: { quiz: ReturnType<typeof useQuiz> }) {
   );
 }
 
-function QuizCard({ exercise, trackId }: { exercise: Exercise; trackId: string }) {
+export function QuizCard({ exercise, trackId, noneNotice }: { exercise: Exercise; trackId: string; noneNotice?: string }) {
   const quiz = useQuiz(exercise, trackId);
-  if (quiz.status === "none") return null;
+  if (quiz.status === "none") {
+    return noneNotice ? (
+      <section aria-labelledby="nb-quiz-title" className={cx(card, "p-5")}>
+        <h2 id="nb-quiz-title" className="sr-only">
+          Trắc nghiệm
+        </h2>
+        <p className="text-sm text-muted">{noneNotice}</p>
+      </section>
+    ) : null;
+  }
   const empty = quiz.status === "ready" && quiz.questions.length === 0;
   const report = writtenReportOf(exercise);
 
