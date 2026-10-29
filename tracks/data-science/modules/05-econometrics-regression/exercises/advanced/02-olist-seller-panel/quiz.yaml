@@ -1,0 +1,105 @@
+questions:
+- id: seller-fe
+  kind: knowledge
+  type: single
+  prompt: Seller fixed effects loại được loại confounder nào?
+  options:
+  - id: a
+    text: Cú sốc chung của mọi seller trong cùng tháng
+  - id: b
+    text: Đặc tính của seller không đổi theo thời gian
+  - id: c
+    text: Thay đổi trong seller theo thời gian
+  - id: d
+    text: Quan hệ hai chiều giữa trễ và review
+- id: time-fe
+  kind: knowledge
+  type: single
+  prompt: Month fixed effects loại được gì?
+  options:
+  - id: a
+    text: Cú sốc chung mọi seller trong cùng tháng (Black Friday, đợt trễ 02–03/2018)
+  - id: b
+    text: Đặc tính cố định của seller
+  - id: c
+    text: Sai số đo lường của `late_rate`
+  - id: d
+    text: 'Selection: chỉ seller tồn tại đủ lâu'
+- id: filter-order
+  kind: knowledge
+  type: single
+  prompt: Vì sao lọc ô ít đơn (`min_orders`) **trước** rồi mới đếm số tháng (`min_months`)?
+  options:
+  - id: a
+    text: Để chạy nhanh hơn
+  - id: b
+    text: Thứ tự không ảnh hưởng kết quả
+  - id: c
+    text: Làm ngược lại giữ cả seller chỉ còn 1–2 ô đủ đơn
+  - id: d
+    text: Để giữ nhiều seller nhỏ hơn
+- id: not-causal
+  kind: knowledge
+  type: multi
+  prompt: Những lý do nào khiến hệ số two-way FE chưa phải tác động nhân quả?
+  options:
+  - id: a
+    text: Thay đổi trong seller theo thời gian (vd. đổi đối tác vận chuyển)
+  - id: b
+    text: 'Quan hệ hai chiều: hàng lỗi → đổi trả → giao lại trễ'
+  - id: c
+    text: Seller FE không loại được đặc tính cố định của seller
+  - id: d
+    text: 'Selection: chỉ giữ seller tồn tại đủ lâu'
+- id: panel-size
+  kind: data
+  type: single
+  prompt: Panel với tham số mặc định có bao nhiêu ô và bao nhiêu seller?
+  options:
+  - id: a
+    text: 1 507 ô, 146 seller
+  - id: b
+    text: 3 009 ô, 313 seller
+  - id: c
+    text: 3 322 ô, 2 879 seller
+  - id: d
+    text: 3 322 ô, 313 seller
+- id: twfe-read
+  kind: data
+  type: single
+  prompt: Theo hệ số two-way FE, tháng có `late_rate` cao hơn 10 điểm phần trăm đi kèm `bad_rate` cao hơn khoảng?
+  options:
+  - id: a
+    text: 0.48 điểm phần trăm
+  - id: b
+    text: 4.8 điểm phần trăm
+  - id: c
+    text: 5.4 điểm phần trăm
+  - id: d
+    text: 48 điểm phần trăm
+- id: peak-month
+  kind: data
+  type: single
+  prompt: Tháng nào có `late_rate` trung bình (trên các ô seller × tháng) cao nhất?
+  options:
+  - id: a
+    text: 11/2017
+  - id: b
+    text: 02/2018
+  - id: c
+    text: 03/2018
+  - id: d
+    text: 08/2018
+- id: min-orders-10
+  kind: data
+  type: single
+  prompt: Tăng `min_orders` lên 10, hệ số two-way FE thay đổi thế nào?
+  options:
+  - id: a
+    text: Tăng lên khoảng 0.55, đúng như lý thuyết sai số đo lường
+  - id: b
+    text: Không đổi
+  - id: c
+    text: Đổi dấu
+  - id: d
+    text: Giảm còn khoảng 0.45

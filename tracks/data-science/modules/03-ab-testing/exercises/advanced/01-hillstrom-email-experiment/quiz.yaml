@@ -1,0 +1,105 @@
+questions:
+- id: buyer-spend
+  kind: knowledge
+  type: single
+  prompt: Vì sao không nên so "chi tiêu trung bình **của người mua**" giữa các nhánh?
+  options:
+  - id: a
+    text: Vì `spend` lệch phải
+  - id: b
+    text: Vì email thay đổi *ai* mua, nên hai nhóm người mua không còn so sánh được
+  - id: c
+    text: Vì quá ít người mua để tính trung bình
+  - id: d
+    text: Vì phải log `spend` trước
+- id: holm
+  kind: knowledge
+  type: single
+  prompt: Holm so với Bonferroni?
+  options:
+  - id: a
+    text: Holm kiểm soát FDR, Bonferroni kiểm soát FWER
+  - id: b
+    text: Holm bảo thủ hơn Bonferroni
+  - id: c
+    text: Cùng kiểm soát FWER; Holm bác bỏ ít nhất mọi thứ Bonferroni bác bỏ
+  - id: d
+    text: Holm chỉ đúng khi các kiểm định độc lập
+- id: binary-welch
+  kind: knowledge
+  type: single
+  prompt: Với metric 0/1 và n lớn, Welch t-test trên hiệu trung bình so với z-test tỉ lệ không pooled?
+  options:
+  - id: a
+    text: Gần như tương đương
+  - id: b
+    text: Welch sai vì metric không phân phối chuẩn
+  - id: c
+    text: z-test luôn cho CI rộng gấp đôi
+  - id: d
+    text: Chỉ chi-square là đúng
+- id: post-hoc-segments
+  kind: knowledge
+  type: multi
+  prompt: Tìm thấy nhóm khách phản ứng mạnh sau khi cắt nhiều lát. Việc nào đúng?
+  options:
+  - id: a
+    text: Coi đó là giả thuyết, kiểm chứng bằng thí nghiệm mới hoặc dữ liệu chưa dùng
+  - id: b
+    text: Ship ngay chiến lược chọn lọc cho nhóm đó
+  - id: c
+    text: Ước tính lợi nhuận chiến lược chọn lọc trên chính dữ liệu đã dùng để chọn và coi là không chệch
+  - id: d
+    text: Hiệu chỉnh multiple testing khi báo cáo nhiều lát cắt
+- id: srm
+  kind: data
+  type: single
+  prompt: Chi-square SRM cho ba nhánh 21 307 / 21 387 / 21 306 có p-value khoảng?
+  options:
+  - id: a
+    text: '0.0086'
+  - id: b
+    text: '0.09'
+  - id: c
+    text: '0.90'
+  - id: d
+    text: '0.50'
+- id: mens-visit
+  kind: data
+  type: single
+  prompt: Email nam tăng tỉ lệ `visit` bao nhiêu so với không gửi?
+  options:
+  - id: a
+    text: +4.5 điểm phần trăm
+  - id: b
+    text: +0.68 điểm phần trăm
+  - id: c
+    text: +18.3 điểm phần trăm
+  - id: d
+    text: +7.7 điểm phần trăm
+- id: womens-weak
+  kind: data
+  type: multi
+  prompt: Email nữ tăng `visit` **dưới 3 điểm phần trăm** ở nhóm khách nào?
+  options:
+  - id: a
+    text: Đã từng mua hàng nam (`mens = 1`)
+  - id: b
+    text: Chưa từng mua hàng nam (`mens = 0`)
+  - id: c
+    text: Đã từng mua hàng nữ (`womens = 1`)
+  - id: d
+    text: Chưa từng mua hàng nữ (`womens = 0`)
+- id: profit
+  kind: data
+  type: single
+  prompt: 'Gửi email nam cho 100 000 khách (biên lợi nhuận 30%, $0.10 mỗi email): lợi nhuận tăng thêm ước tính khoảng?'
+  options:
+  - id: a
+    text: $77 000
+  - id: b
+    text: $23 000
+  - id: c
+    text: $13 000
+  - id: d
+    text: $2 700

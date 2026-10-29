@@ -1,0 +1,105 @@
+questions:
+- id: lr-threshold
+  kind: knowledge
+  type: single
+  prompt: Gradient descent với lr cố định trên MSE hội tụ khi và chỉ khi?
+  options:
+  - id: a
+    text: $$0 < \text{lr} < 1/\lambda_{\max}(H)$$
+  - id: b
+    text: $$0 < \text{lr} < 2/\lambda_{\max}(H)$$
+  - id: c
+    text: $$0 < \text{lr} < 2/\lambda_{\min}(H)$$
+  - id: d
+    text: $$0 < \text{lr} < 1/\kappa(H)$$
+- id: mse-grad
+  kind: knowledge
+  type: single
+  prompt: Gradient của $$L(w) = \frac{1}{n}\lVert Xw - y\rVert^2$$ là?
+  options:
+  - id: a
+    text: $$\frac{1}{n}X^\top(Xw - y)$$
+  - id: b
+    text: $$\frac{2}{n}X^\top X w$$
+  - id: c
+    text: $$\frac{2}{n}(Xw - y)^\top X X^\top$$
+  - id: d
+    text: $$\frac{2}{n}X^\top(Xw - y)$$
+- id: back-transform
+  kind: knowledge
+  type: single
+  prompt: Hệ số slope $$w_j$$ học trên feature chuẩn hoá $$z_j = (x_j - \mu_j)/\sigma_j$$, đổi về đơn vị gốc là?
+  options:
+  - id: a
+    text: $$w_j / \sigma_j$$
+  - id: b
+    text: $$w_j \cdot \sigma_j$$
+  - id: c
+    text: $$w_j - \mu_j$$
+  - id: d
+    text: $$(w_j - \mu_j)/\sigma_j$$
+- id: mistakes
+  kind: knowledge
+  type: multi
+  prompt: Những việc nào là sai lầm?
+  options:
+  - id: a
+    text: Tính `mu`, `sd` để chuẩn hoá trên cả train lẫn test
+  - id: b
+    text: Tính `mu`, `sd` trên train rồi áp cho val/test
+  - id: c
+    text: Báo cáo hệ số học trên feature chuẩn hoá thành "mỗi kg thêm ... BRL"
+  - id: d
+    text: Chia train / val / test theo thời điểm mua
+- id: n-train
+  kind: data
+  type: single
+  prompt: Bảng train (mua trước 2018-01-01, đủ kích thước) có bao nhiêu item?
+  options:
+  - id: a
+    text: 37 318
+  - id: b
+    text: 24 097
+  - id: c
+    text: 51 216
+  - id: d
+    text: 112 650
+- id: per-kg
+  kind: data
+  type: single
+  prompt: Sau khi đổi về đơn vị gốc, mỗi kg thêm làm phí ship dự đoán tăng bao nhiêu BRL?
+  options:
+  - id: a
+    text: '0.179'
+  - id: b
+    text: '1.459'
+  - id: c
+    text: '5.735'
+  - id: d
+    text: '13.249'
+- id: kappa-raw
+  kind: data
+  type: single
+  prompt: Condition number $$\kappa(H)$$ trên **đơn vị gốc** (intercept, kg, lít) của train khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '8.6'
+  - id: b
+    text: '133'
+  - id: c
+    text: 13 290
+  - id: d
+    text: 1 329
+- id: r2-test
+  kind: data
+  type: single
+  prompt: R² trên test (đơn mua 04–08/2018) của model này là?
+  options:
+  - id: a
+    text: '0.342'
+  - id: b
+    text: '0.458'
+  - id: c
+    text: '0.655'
+  - id: d
+    text: '0.120'

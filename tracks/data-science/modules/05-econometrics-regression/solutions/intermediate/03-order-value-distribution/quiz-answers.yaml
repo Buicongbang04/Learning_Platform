@@ -1,0 +1,8 @@
+lognormal-mle: [b]
+ks-n: [c]
+tails: [a]
+aic: [a, b, d]
+params: [c]
+p-exceed: [d]
+winner: [a]
+q99: [c]

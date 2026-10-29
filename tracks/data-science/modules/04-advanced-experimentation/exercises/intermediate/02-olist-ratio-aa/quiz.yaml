@@ -1,0 +1,105 @@
+questions:
+- id: naive-wrong
+  kind: knowledge
+  type: single
+  prompt: 'Random theo khách nhưng chạy Welch trên **từng sản phẩm**: sai ở đâu?'
+  options:
+  - id: a
+    text: Sản phẩm của cùng một khách tương quan; coi như độc lập làm SE quá nhỏ
+  - id: b
+    text: Giá sản phẩm không phân phối chuẩn
+  - id: c
+    text: Welch cần hai nhóm cùng cỡ
+  - id: d
+    text: SE quá lớn nên mất power
+- id: delta-var
+  kind: knowledge
+  type: single
+  prompt: Delta method cho $$R = \bar Y / \bar N$$ (Y doanh thu, N số sản phẩm mỗi khách, n khách) xấp xỉ $$\mathrm{Var}(R)$$ bằng?
+  options:
+  - id: a
+    text: $$\frac{1}{n}\mathrm{Var}(Y/N)$$
+  - id: b
+    text: $$\mathrm{Var}(Y)/\mathrm{Var}(N)$$
+  - id: c
+    text: $$\frac{1}{n\bar N^2}\left(\mathrm{Var}(Y) - 2R\,\mathrm{Cov}(Y, N) + R^2\mathrm{Var}(N)\right)$$
+  - id: d
+    text: $$\frac{\mathrm{Var}(Y)}{n\bar Y^2}$$
+- id: hash
+  kind: knowledge
+  type: multi
+  prompt: Gán nhóm bằng SHA-256 của salt + id có những tính chất nào?
+  options:
+  - id: a
+    text: 'Tất định: cùng id, cùng salt luôn vào cùng nhóm'
+  - id: b
+    text: Đổi salt cho phân nhóm độc lập với thí nghiệm trước
+  - id: c
+    text: Phải lưu bảng gán vào database mới nhất quán được
+  - id: d
+    text: Tỉ lệ nhóm xấp xỉ `share` khi số id lớn
+- id: aa-purpose
+  kind: knowledge
+  type: single
+  prompt: Chạy A/A hàng nghìn lần trên dữ liệu thật để làm gì?
+  options:
+  - id: a
+    text: Đo tác động thật của thay đổi
+  - id: b
+    text: Kiểm phương pháp có báo nhầm đúng mức α không
+  - id: c
+    text: Tăng power
+  - id: d
+    text: Tìm salt cho kết quả đẹp nhất
+- id: aov
+  kind: data
+  type: single
+  prompt: Giá trung bình mỗi sản phẩm (tổng doanh thu / tổng số sản phẩm) là?
+  options:
+  - id: a
+    text: '125.83'
+  - id: b
+    text: '159.83'
+  - id: c
+    text: '119.98'
+  - id: d
+    text: '105.28'
+- id: design-effect
+  kind: data
+  type: single
+  prompt: Design effect $$(\mathrm{SE}_{\text{delta}}/\mathrm{SE}_{\text{ngây thơ}})^2$$ với salt `olist-aov-aa` khoảng?
+  options:
+  - id: a
+    text: '1.00'
+  - id: b
+    text: '1.17'
+  - id: c
+    text: '1.89'
+  - id: d
+    text: '3.50'
+- id: multi-item
+  kind: data
+  type: single
+  prompt: Bao nhiêu % khách có từ 2 sản phẩm trở lên?
+  options:
+  - id: a
+    text: 3%
+  - id: b
+    text: 25%
+  - id: c
+    text: 50%
+  - id: d
+    text: 12.4%
+- id: naive-fpr
+  kind: data
+  type: single
+  prompt: Từ design effect đó, tỉ lệ báo nhầm lý thuyết của cách ngây thơ ở α = 5% khoảng?
+  options:
+  - id: a
+    text: 7%
+  - id: b
+    text: 5%
+  - id: c
+    text: 12%
+  - id: d
+    text: 20%

@@ -1,0 +1,79 @@
+questions:
+- id: why-inflate
+  kind: knowledge
+  type: single
+  prompt: Vì sao nhìn kết quả nhiều lần và dừng ở lần đầu p < 0.05 làm false positive tăng?
+  options:
+  - id: a
+    text: Dữ liệu mỗi ngày bị ghi lỗi nhiều hơn
+  - id: b
+    text: Dưới H0 chuỗi z là random walk; xác suất vượt ±1.96 ở **ít nhất một** lần nhìn lớn hơn 5%
+  - id: c
+    text: p-value luôn giảm dần khi n tăng
+  - id: d
+    text: Power giảm khi nhìn nhiều lần
+- id: vs-independent
+  kind: knowledge
+  type: single
+  prompt: So với $$1 - 0.95^K$$, false positive thực tế khi nhìn K lần?
+  options:
+  - id: a
+    text: Thấp hơn, vì các lần nhìn tương quan (dùng chung dữ liệu cũ)
+  - id: b
+    text: Bằng đúng
+  - id: c
+    text: Cao hơn, vì các lần nhìn tương quan
+  - id: d
+    text: Luôn bằng 5% nếu K cố định từ trước
+- id: fpr-10
+  kind: knowledge
+  type: single
+  prompt: A/A, nhìn 10 lần cách đều, dừng ở lần đầu p < 0.05. False positive khoảng?
+  options:
+  - id: a
+    text: 5%
+  - id: b
+    text: 10%
+  - id: c
+    text: 40%
+  - id: d
+    text: 18–19%
+- id: obf-first
+  kind: knowledge
+  type: single
+  prompt: 'O''Brien-Fleming với K = 5, c = 2.04: biên $$c\sqrt{K/k}$$ ở lần nhìn đầu khoảng?'
+  options:
+  - id: a
+    text: '1.96'
+  - id: b
+    text: '2.04'
+  - id: c
+    text: '4.56'
+  - id: d
+    text: '2.88'
+- id: daily-ok
+  kind: knowledge
+  type: multi
+  prompt: Việc nào làm hằng ngày mà **không** phá thí nghiệm?
+  options:
+  - id: a
+    text: Theo dõi SRM
+  - id: b
+    text: Theo dõi guardrail an toàn
+  - id: c
+    text: Dừng khi metric chính có p < 0.05
+  - id: d
+    text: Đọc metric chính bằng always-valid inference (mSPRT, confidence sequence)
+- id: obf-cost
+  kind: knowledge
+  type: single
+  prompt: Cái giá của thiết kế O'Brien-Fleming với K = 5 so với nhìn một lần?
+  options:
+  - id: a
+    text: False positive tăng lên khoảng 8%
+  - id: b
+    text: Biên cuối 2.04 > 1.96 nên cần thêm vài phần trăm mẫu để giữ power
+  - id: c
+    text: Không bao giờ dừng sớm được
+  - id: d
+    text: Phải gấp đôi cỡ mẫu

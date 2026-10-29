@@ -1,0 +1,105 @@
+questions:
+- id: lln-clt
+  kind: knowledge
+  type: single
+  prompt: LLN và CLT nói gì?
+  options:
+  - id: a
+    text: 'LLN: trung bình mẫu tiến tới $$\mu$$; CLT: phân phối của trung bình mẫu xấp xỉ chuẩn, độ lệch chuẩn $$\sigma/\sqrt{n}$$'
+  - id: b
+    text: 'LLN: mẫu lớn thì dữ liệu có phân phối chuẩn; CLT: trung bình mẫu tiến tới $$\mu$$'
+  - id: c
+    text: 'LLN: variance mẫu tiến tới 0; CLT: dữ liệu gốc xấp xỉ chuẩn khi n ≥ 30'
+  - id: d
+    text: CLT bảo đảm khoảng t 95% đạt đúng 95% khi n ≥ 30
+- id: se-mean
+  kind: knowledge
+  type: single
+  prompt: Độ lệch chuẩn của trung bình mẫu n quan sát độc lập là?
+  options:
+  - id: a
+    text: $$\sigma / n$$
+  - id: b
+    text: $$\sigma \sqrt{n}$$
+  - id: c
+    text: $$\sigma / \sqrt{n}$$
+  - id: d
+    text: $$\sigma^2 / n$$
+- id: miss-direction
+  kind: knowledge
+  type: single
+  prompt: 'Mẫu nhỏ từ phân phối lệch phải: khoảng t 95% trượt chủ yếu theo kiểu nào?'
+  options:
+  - id: a
+    text: Trượt đều hai phía
+  - id: b
+    text: Khoảng nằm hẳn trên $$\mu$$ (mẫu trúng đơn lớn)
+  - id: c
+    text: Hầu như không trượt
+  - id: d
+    text: 'Khoảng nằm hẳn dưới $$\mu$$ (mẫu không có đơn lớn: mean thấp và s nhỏ)'
+- id: skewed-metric
+  kind: knowledge
+  type: multi
+  prompt: Metric lệch nặng, mẫu nhỏ. Những cách nào hợp lý?
+  options:
+  - id: a
+    text: Bootstrap, và kiểm tra lại độ phủ bằng mô phỏng
+  - id: b
+    text: Báo cáo median, hoặc phân tích trên log và nói rõ là trung bình hình học
+  - id: c
+    text: Xoá vài đơn lớn nhất, không ghi chú
+  - id: d
+    text: Winsorize ở p99.9 và ghi rõ
+- id: skewness
+  kind: data
+  type: single
+  prompt: Skewness của giá trị đơn (96 470 đơn giao xong) khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '0.9'
+  - id: b
+    text: '9.4'
+  - id: c
+    text: '2.1'
+  - id: d
+    text: '94'
+- id: top-1pct
+  kind: data
+  type: single
+  prompt: 1% đơn có giá trị lớn nhất chiếm khoảng bao nhiêu % tổng giá trị?
+  options:
+  - id: a
+    text: 1%
+  - id: b
+    text: 4%
+  - id: c
+    text: 30%
+  - id: d
+    text: 10%
+- id: mean-median
+  kind: data
+  type: single
+  prompt: Mean và median giá trị đơn (BRL) là?
+  options:
+  - id: a
+    text: Mean 105.28, median 159.83
+  - id: b
+    text: Mean 159.83, median 105.28
+  - id: c
+    text: Mean 159.83, median 150.93
+  - id: d
+    text: Mean 120.65, median 105.28
+- id: coverage-30
+  kind: data
+  type: single
+  prompt: Độ phủ thực tế của khoảng t 95% ở n = 30 (lấy mẫu có hoàn lại từ 96 470 đơn) khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 95%
+  - id: b
+    text: Khoảng 70%
+  - id: c
+    text: Khoảng 84%
+  - id: d
+    text: Khoảng 50%

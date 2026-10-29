@@ -1,0 +1,8 @@
+srm-action: [d]
+resample: [a]
+oec: [b]
+not-measured: [a, c]
+r7-diff: [c]
+srm-p: [c]
+r1-decision: [b]
+max-rounds: [a]

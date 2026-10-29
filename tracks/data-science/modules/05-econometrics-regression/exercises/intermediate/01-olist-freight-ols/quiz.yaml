@@ -1,0 +1,105 @@
+questions:
+- id: elasticity
+  kind: knowledge
+  type: single
+  prompt: Model log-log có hệ số `log_distance` = 0.1418. Khoảng cách gấp đôi thì phí ship thay đổi khoảng?
+  options:
+  - id: a
+    text: +14.2%
+  - id: b
+    text: +10.3%
+  - id: c
+    text: +28.4%
+  - id: d
+    text: +0.14 BRL
+- id: dummy-log
+  kind: knowledge
+  type: single
+  prompt: Trong model `log_freight`, hệ số `same_state` = −0.2242. Cùng bang thì phí ship thay đổi khoảng?
+  options:
+  - id: a
+    text: −22.4%
+  - id: b
+    text: −0.22 BRL
+  - id: c
+    text: −20.1%
+  - id: d
+    text: −2.2%
+- id: cluster-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao báo cáo SE cluster theo `seller_id`?
+  options:
+  - id: a
+    text: Vì residual có heteroskedasticity
+  - id: b
+    text: Vì residual của cùng một seller tương quan (đóng gói, kho, hợp đồng vận chuyển)
+  - id: c
+    text: Vì cluster SE luôn nhỏ hơn SE cổ điển
+  - id: d
+    text: Vì mỗi seller chỉ có một đơn
+- id: retransform
+  kind: knowledge
+  type: single
+  prompt: Dự đoán ngược $$e^{\widehat{\log y}}$$ về BRL là ước lượng của?
+  options:
+  - id: a
+    text: Median phí ship (cần hiệu chỉnh smearing nếu muốn mean)
+  - id: b
+    text: Mean phí ship
+  - id: c
+    text: Mode phí ship
+  - id: d
+    text: Percentile 90
+- id: n-orders
+  kind: data
+  type: single
+  prompt: Bảng phân tích có bao nhiêu đơn và bao nhiêu seller?
+  options:
+  - id: a
+    text: 96 470 đơn, 3 095 seller
+  - id: b
+    text: 110 189 đơn, 2 879 seller
+  - id: c
+    text: 86 065 đơn, 313 seller
+  - id: d
+    text: 86 065 đơn, 2 879 seller
+- id: ovb
+  kind: data
+  type: single
+  prompt: Bỏ `same_state` khỏi model, hệ số `log_distance` thành bao nhiêu?
+  options:
+  - id: a
+    text: 0.1418 (không đổi)
+  - id: b
+    text: '0.2001'
+  - id: c
+    text: '0.0835'
+  - id: d
+    text: −0.2242
+- id: cluster-ratio
+  kind: data
+  type: single
+  prompt: SE cluster của `log_weight` lớn gấp khoảng bao nhiêu lần SE cổ điển?
+  options:
+  - id: a
+    text: 0.9 lần
+  - id: b
+    text: 1.2 lần
+  - id: c
+    text: 3 lần
+  - id: d
+    text: 8 lần
+- id: r2
+  kind: data
+  type: single
+  prompt: $$R^2$$ của model là?
+  options:
+  - id: a
+    text: '0.655'
+  - id: b
+    text: '0.342'
+  - id: c
+    text: '0.458'
+  - id: d
+    text: '0.912'

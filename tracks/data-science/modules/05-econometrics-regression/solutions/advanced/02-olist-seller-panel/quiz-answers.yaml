@@ -1,0 +1,8 @@
+seller-fe: [b]
+time-fe: [a]
+filter-order: [c]
+not-causal: [a, b, d]
+panel-size: [d]
+twfe-read: [b]
+peak-month: [c]
+min-orders-10: [d]

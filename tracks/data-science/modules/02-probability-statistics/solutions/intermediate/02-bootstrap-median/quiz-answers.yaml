@@ -1,0 +1,8 @@
+no-mc-noise: [b]
+exact-basis: [c]
+clustered: [a]
+boot-fails: [a, c, d]
+top-state: [d]
+small-states: [a, c, d]
+rr-exact-ci: [b]
+sp-median: [d]

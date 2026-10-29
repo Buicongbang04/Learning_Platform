@@ -1,0 +1,105 @@
+questions:
+- id: pre-only
+  kind: knowledge
+  type: single
+  prompt: Covariate dùng cho CUPED phải thoả điều gì?
+  options:
+  - id: a
+    text: Tương quan với việc gán nhóm
+  - id: b
+    text: Đo trong lúc thí nghiệm chạy
+  - id: c
+    text: Có trước khi gán nhóm, không bị treatment ảnh hưởng
+  - id: d
+    text: Là biến nhị phân
+- id: out-of-fold
+  kind: knowledge
+  type: single
+  prompt: Vì sao CUPAC dùng dự đoán **out-of-fold** (cross-fitting)?
+  options:
+  - id: a
+    text: Để model chạy nhanh hơn
+  - id: b
+    text: Để dự đoán của một dòng không dùng outcome của chính dòng đó (tránh rò rỉ)
+  - id: c
+    text: Để tăng $$R^2$$ trên dữ liệu train
+  - id: d
+    text: Để cân bằng hai nhánh
+- id: no-bias
+  kind: knowledge
+  type: single
+  prompt: Điều chỉnh bằng covariate trước thí nghiệm ảnh hưởng thế nào tới ước lượng tác động?
+  options:
+  - id: a
+    text: Không làm lệch, chỉ thu hẹp CI
+  - id: b
+    text: Làm tác động lớn hơn
+  - id: c
+    text: Kéo tác động về 0
+  - id: d
+    text: Làm lệch nếu covariate yếu
+- id: best-covariate
+  kind: knowledge
+  type: single
+  prompt: Covariate mạnh nhất cho CUPED thường là gì?
+  options:
+  - id: a
+    text: Kênh mua hàng (`channel`)
+  - id: b
+    text: Mã vùng (`zip_code`)
+  - id: c
+    text: Một feature nhân khẩu học bất kỳ
+  - id: d
+    text: Chính metric đó, của cùng đơn vị, ở kỳ trước
+- id: cuped-vr
+  kind: data
+  type: single
+  prompt: CUPED với `history` làm giảm variance của `visit` (email nữ so với không gửi) khoảng bao nhiêu?
+  options:
+  - id: a
+    text: 0.4%
+  - id: b
+    text: 4%
+  - id: c
+    text: 40%
+  - id: d
+    text: 98%
+- id: top-corr
+  kind: data
+  type: single
+  prompt: Trong bốn cột sau, cột nào có tương quan (trị tuyệt đối) với `visit` lớn nhất?
+  options:
+  - id: a
+    text: '`history`'
+  - id: b
+    text: '`womens`'
+  - id: c
+    text: '`recency`'
+  - id: d
+    text: '`mens`'
+- id: reg-vr
+  kind: data
+  type: single
+  prompt: Hồi quy `visit` trên `treat` + 7 cột hồ sơ (SE `HC1`) giảm variance khoảng bao nhiêu so với không điều chỉnh?
+  options:
+  - id: a
+    text: 0.4%
+  - id: b
+    text: 2.6%
+  - id: c
+    text: 26%
+  - id: d
+    text: 60%
+- id: diff-raw
+  kind: data
+  type: single
+  prompt: Tác động của email nữ lên `visit` khi chưa điều chỉnh là?
+  options:
+  - id: a
+    text: +7.66 điểm phần trăm
+  - id: b
+    text: +15.1 điểm phần trăm
+  - id: c
+    text: +0.31 điểm phần trăm
+  - id: d
+    text: +4.52 điểm phần trăm

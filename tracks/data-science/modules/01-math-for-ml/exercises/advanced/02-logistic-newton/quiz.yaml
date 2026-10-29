@@ -1,0 +1,105 @@
+questions:
+- id: convex-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao loss logistic (chưa có L2) là hàm lồi?
+  options:
+  - id: a
+    text: Vì sigmoid là hàm lồi
+  - id: b
+    text: Vì loss luôn dương
+  - id: c
+    text: Vì Hessian $$\frac1n X^\top \mathrm{diag}(p(1-p))X$$ nửa xác định dương, do $$p(1-p) > 0$$
+  - id: d
+    text: Vì gradient bằng 0 tại $$w = 0$$
+- id: scale-feature
+  kind: knowledge
+  type: single
+  prompt: Nhân một feature với 10 (không chuẩn hoá lại). Số bước tới optimum thay đổi thế nào?
+  options:
+  - id: a
+    text: Gradient descent chậm đi nhiều, Newton gần như không đổi
+  - id: b
+    text: Cả hai chậm đi khoảng 10 lần
+  - id: c
+    text: Newton chậm đi, gradient descent không đổi
+  - id: d
+    text: Cả hai không đổi vì optimum là một
+- id: separable
+  kind: knowledge
+  type: multi
+  prompt: Dữ liệu tách được hoàn toàn (một feature chia đúng y = 0 / y = 1). Những phát biểu nào đúng?
+  options:
+  - id: a
+    text: 'MLE không có nghiệm hữu hạn: loss giảm mãi khi $$\lVert w\rVert \to \infty$$'
+  - id: b
+    text: Newton hội tụ trong vài bước tới một nghiệm hữu hạn duy nhất
+  - id: c
+    text: Hessian tiến gần suy biến vì $$p(1-p) \to 0$$
+  - id: d
+    text: Thêm L2 làm loss strongly convex, có nghiệm hữu hạn duy nhất
+- id: sklearn-c
+  kind: knowledge
+  type: single
+  prompt: '`LogisticRegression(C=C)` tương đương cực tiểu loss **trung bình** cộng $$\frac{\lambda}{2}\lVert w\rVert^2$$ với $$\lambda$$ bằng?'
+  options:
+  - id: a
+    text: $$C$$
+  - id: b
+    text: $$1/C$$
+  - id: c
+    text: $$Cn$$
+  - id: d
+    text: $$1/(Cn)$$
+- id: late-odds
+  kind: data
+  type: single
+  prompt: Fit trên **đơn vị gốc** (`late`, `delay_days`, `delivery_days` tính bằng ngày), odds ratio của `late` khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '1.57'
+  - id: b
+    text: '6.27'
+  - id: c
+    text: '1.04'
+  - id: d
+    text: '0.45'
+- id: auc-split
+  kind: data
+  type: single
+  prompt: Model fit trên train (feature chuẩn hoá), AUC trên val và test là?
+  options:
+  - id: a
+    text: Val 0.636, test 0.760
+  - id: b
+    text: Cả hai khoảng 0.76
+  - id: c
+    text: Val 0.760, test 0.636
+  - id: d
+    text: Val 0.700, test 0.698
+- id: delay-bucket
+  kind: data
+  type: single
+  prompt: Trên toàn bảng, tỉ lệ review xấu của đơn **trễ 3–7 ngày** so với ngày hẹn là bao nhiêu?
+  options:
+  - id: a
+    text: 19.1%
+  - id: b
+    text: 61.3%
+  - id: c
+    text: 78.1%
+  - id: d
+    text: 12.8%
+- id: late-by-split
+  kind: data
+  type: single
+  prompt: Split nào có tỉ lệ đơn giao trễ cao nhất?
+  options:
+  - id: a
+    text: train (trước 2018-01-01)
+  - id: b
+    text: test (04–08/2018)
+  - id: c
+    text: Ba split gần bằng nhau, khoảng 6.5%
+  - id: d
+    text: val (01–03/2018)

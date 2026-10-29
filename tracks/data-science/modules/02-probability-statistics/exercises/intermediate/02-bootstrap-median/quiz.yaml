@@ -1,0 +1,107 @@
+questions:
+- id: no-mc-noise
+  kind: knowledge
+  type: single
+  prompt: Loại CI nào cho median **không** có nhiễu Monte Carlo (đổi seed không đổi kết quả)?
+  options:
+  - id: a
+    text: Bootstrap percentile
+  - id: b
+    text: CI chính xác từ thống kê thứ tự
+  - id: c
+    text: Cả hai
+  - id: d
+    text: Không loại nào
+- id: exact-basis
+  kind: knowledge
+  type: single
+  prompt: CI chính xác cho median dựa trên điều gì?
+  options:
+  - id: a
+    text: CLT áp cho median
+  - id: b
+    text: Phân phối t với n − 1 bậc tự do
+  - id: c
+    text: Số quan sát dưới median thật có phân phối $$\mathrm{Binomial}(n, 0.5)$$
+  - id: d
+    text: Số quan sát dưới median thật có phân phối Poisson
+- id: clustered
+  kind: knowledge
+  type: single
+  prompt: Nhiều đơn đến từ cùng một khách. Resample từng đơn độc lập thì CI bootstrap?
+  options:
+  - id: a
+    text: Quá hẹp; nên resample theo khách (cluster) hoặc block bootstrap
+  - id: b
+    text: Quá rộng; nên resample từng đơn nhiều lần hơn
+  - id: c
+    text: Không bị ảnh hưởng
+  - id: d
+    text: Lệch tâm nhưng độ rộng đúng
+- id: boot-fails
+  kind: knowledge
+  type: multi
+  prompt: Trường hợp nào CI bootstrap percentile **không** đáng tin?
+  options:
+  - id: a
+    text: Thống kê cực trị như max, min
+  - id: b
+    text: Median của 40 000 đơn độc lập
+  - id: c
+    text: Percentile 99 trên 200 quan sát
+  - id: d
+    text: Mẫu bị lệch chọn (sampling bias)
+- id: top-state
+  kind: data
+  type: single
+  prompt: Bang nào có median thời gian giao lớn nhất?
+  options:
+  - id: a
+    text: RR
+  - id: b
+    text: AP
+  - id: c
+    text: SP
+  - id: d
+    text: AM
+- id: small-states
+  kind: data
+  type: multi
+  prompt: Bang nào có **dưới 100** đơn giao xong?
+  options:
+  - id: a
+    text: RR
+  - id: b
+    text: AM
+  - id: c
+    text: AP
+  - id: d
+    text: AC
+  - id: e
+    text: RO
+- id: rr-exact-ci
+  kind: data
+  type: single
+  prompt: CI chính xác 95% cho median thời gian giao của RR (41 đơn) là?
+  options:
+  - id: a
+    text: '[24.21, 27.52]'
+  - id: b
+    text: '[17.04, 30.19]'
+  - id: c
+    text: '[22.16, 27.46]'
+  - id: d
+    text: '[24.27, 25.75]'
+- id: sp-median
+  kind: data
+  type: single
+  prompt: Median thời gian giao của SP (ngày) là?
+  options:
+  - id: a
+    text: '10.22'
+  - id: b
+    text: '12.04'
+  - id: c
+    text: '13.18'
+  - id: d
+    text: '7.21'

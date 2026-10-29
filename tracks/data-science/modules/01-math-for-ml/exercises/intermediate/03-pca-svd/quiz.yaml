@@ -1,0 +1,105 @@
+questions:
+- id: evr-denominator
+  kind: knowledge
+  type: single
+  prompt: '`explained_variance_ratio` của mỗi thành phần chia variance của nó cho?'
+  options:
+  - id: a
+    text: Tổng variance của k thành phần đầu
+  - id: b
+    text: Tổng variance của mọi thành phần
+  - id: c
+    text: Số feature d
+  - id: d
+    text: $$\sigma_1^2$$ của thành phần đầu
+- id: thin-svd
+  kind: knowledge
+  type: single
+  prompt: Vì sao luôn gọi `np.linalg.svd(Xc, full_matrices=False)` trên dữ liệu nhiều dòng?
+  options:
+  - id: a
+    text: '`full_matrices=True` cho thành phần sai dấu'
+  - id: b
+    text: '`full_matrices=False` nhanh hơn nhưng kém chính xác hơn, chấp nhận được'
+  - id: c
+    text: '`full_matrices=True` tạo `U` cỡ n × n (khoảng 8 GB với n = 32 340)'
+  - id: d
+    text: '`sklearn` yêu cầu như vậy'
+- id: no-scaling
+  kind: knowledge
+  type: single
+  prompt: Không chuẩn hoá khi các feature khác đơn vị / độ phân tán thì PC1 thường?
+  options:
+  - id: a
+    text: Bị chi phối bởi feature có variance lớn nhất
+  - id: b
+    text: Giống hệt PC1 khi có chuẩn hoá
+  - id: c
+    text: Giải thích tỉ lệ variance nhỏ hơn
+  - id: d
+    text: Trực giao với feature có variance lớn nhất
+- id: when-not
+  kind: knowledge
+  type: multi
+  prompt: Khi nào PCA **không** phải lựa chọn tốt?
+  options:
+  - id: a
+    text: Feature là pixel hoặc embedding tương quan mạnh
+  - id: b
+    text: Cần giải thích từng feature gốc cho kinh doanh
+  - id: c
+    text: Một feature quan trọng cho target nhưng có variance nhỏ
+  - id: d
+    text: Model cây (LightGBM) trên dữ liệu bảng
+- id: pc1-share
+  kind: data
+  type: single
+  prompt: Trên 32 340 sản phẩm (log1p rồi chuẩn hoá), PC1 giải thích bao nhiêu % variance?
+  options:
+  - id: a
+    text: 60.3%
+  - id: b
+    text: 17.64%
+  - id: c
+    text: 53.53%
+  - id: d
+    text: 35.89%
+- id: n-90
+  kind: data
+  type: single
+  prompt: Cần bao nhiêu thành phần để đạt ít nhất 90% variance?
+  options:
+  - id: a
+    text: '3'
+  - id: b
+    text: '4'
+  - id: c
+    text: '5'
+  - id: d
+    text: '6'
+- id: pc2-meaning
+  kind: data
+  type: single
+  prompt: PC2 có loading lớn trên nhóm cột nào?
+  options:
+  - id: a
+    text: Bốn cột kích thước (khối lượng, dài, cao, rộng)
+  - id: b
+    text: Số ảnh, độ dài tên, độ dài mô tả
+  - id: c
+    text: Chỉ khối lượng
+  - id: d
+    text: Khối lượng và số ảnh
+- id: unscaled-pc1
+  kind: data
+  type: single
+  prompt: Bỏ bước chuẩn hoá (chỉ `log1p` rồi trừ trung bình), PC1 gần như chỉ là cột nào?
+  options:
+  - id: a
+    text: Chiều dài
+  - id: b
+    text: Độ dài mô tả
+  - id: c
+    text: Khối lượng
+  - id: d
+    text: Số ảnh

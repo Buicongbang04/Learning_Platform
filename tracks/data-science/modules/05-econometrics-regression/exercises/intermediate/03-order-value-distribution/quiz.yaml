@@ -1,0 +1,105 @@
+questions:
+- id: lognormal-mle
+  kind: knowledge
+  type: single
+  prompt: MLE của lognormal (nghiệm đóng) là?
+  options:
+  - id: a
+    text: $$\hat\mu = \log(\bar x)$$, $$\hat\sigma = \log(s_x)$$
+  - id: b
+    text: $$\hat\mu$$ = trung bình $$\log x$$, $$\hat\sigma$$ = độ lệch chuẩn $$\log x$$ chia n
+  - id: c
+    text: $$\hat\mu$$ = median $$x$$, $$\hat\sigma$$ = IQR / 1.35
+  - id: d
+    text: $$\hat\mu = \bar x$$, $$\hat\sigma = s_x$$
+- id: ks-n
+  kind: knowledge
+  type: single
+  prompt: 'KS cho lognormal: trên 96 470 đơn p ≈ 1e-57, trên 500 đơn p = 0.78. Đọc đúng là?'
+  options:
+  - id: a
+    text: Lognormal sai trên toàn bộ nhưng đúng trên 500 đơn
+  - id: b
+    text: Phải dùng 500 đơn vì p-value lớn hơn đáng tin hơn
+  - id: c
+    text: p-value phụ thuộc chủ yếu vào n; dùng KS statistic để xếp hạng, QQ-plot và đại lượng nghiệp vụ để quyết định
+  - id: d
+    text: KS không dùng được cho phân phối liên tục
+- id: tails
+  kind: knowledge
+  type: single
+  prompt: So sánh đuôi phải của gamma và lognormal?
+  options:
+  - id: a
+    text: Gamma có đuôi mũ, nhẹ hơn nhiều so với đuôi lognormal
+  - id: b
+    text: Gamma có đuôi nặng hơn lognormal
+  - id: c
+    text: Hai đuôi như nhau khi cùng mean
+  - id: d
+    text: Lognormal có đuôi bị chặn
+- id: aic
+  kind: knowledge
+  type: multi
+  prompt: Những phát biểu nào đúng về AIC?
+  options:
+  - id: a
+    text: $$\mathrm{AIC} = 2k - 2\log L$$
+  - id: b
+    text: AIC thấp hơn thì tốt hơn khi so trên cùng dữ liệu
+  - id: c
+    text: AIC thấp nhất nghĩa là model khớp tốt ở đuôi
+  - id: d
+    text: AIC phạt số tham số
+- id: params
+  kind: data
+  type: single
+  prompt: MLE lognormal trên 96 470 đơn cho $$(\hat\mu, \hat\sigma)$$ là?
+  options:
+  - id: a
+    text: (4.657, 0.808)
+  - id: b
+    text: (5.074, 0.808)
+  - id: c
+    text: (4.691, 0.808)
+  - id: d
+    text: (4.691, 1.448)
+- id: p-exceed
+  kind: data
+  type: single
+  prompt: 'P(giá trị đơn > 1 000 BRL): thực tế và theo lognormal đã fit?'
+  options:
+  - id: a
+    text: Thực tế 0.30%, lognormal 1.15%
+  - id: b
+    text: Thực tế 1.15%, lognormal 0.04%
+  - id: c
+    text: Cả hai khoảng 1%
+  - id: d
+    text: Thực tế 1.15%, lognormal 0.30%
+- id: winner
+  kind: data
+  type: single
+  prompt: Giữa lognormal và gamma, phân phối nào có AIC thấp hơn và KS statistic nhỏ hơn?
+  options:
+  - id: a
+    text: Lognormal ở cả hai
+  - id: b
+    text: Gamma ở cả hai
+  - id: c
+    text: Lognormal ở AIC, gamma ở KS
+  - id: d
+    text: Gamma ở AIC, lognormal ở KS
+- id: q99
+  kind: data
+  type: single
+  prompt: Quantile 99% của mẫu là 1 052 BRL. Quantile 99% của lognormal đã fit khoảng?
+  options:
+  - id: a
+    text: 1 052
+  - id: b
+    text: 1 500
+  - id: c
+    text: '713'
+  - id: d
+    text: '450'

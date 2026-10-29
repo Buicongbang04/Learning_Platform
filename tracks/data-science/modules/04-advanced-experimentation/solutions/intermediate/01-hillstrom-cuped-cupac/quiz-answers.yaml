@@ -1,0 +1,8 @@
+pre-only: [c]
+out-of-fold: [b]
+no-bias: [a]
+best-covariate: [d]
+cuped-vr: [a]
+top-corr: [c]
+reg-vr: [b]
+diff-raw: [d]

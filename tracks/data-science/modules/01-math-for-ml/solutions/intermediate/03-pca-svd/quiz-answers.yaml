@@ -1,0 +1,8 @@
+evr-denominator: [b]
+thin-svd: [c]
+no-scaling: [a]
+when-not: [b, c, d]
+pc1-share: [d]
+n-90: [c]
+pc2-meaning: [b]
+unscaled-pc1: [c]

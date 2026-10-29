@@ -1,0 +1,105 @@
+questions:
+- id: open-filter
+  kind: knowledge
+  type: single
+  prompt: Vì sao lọc `Open == 1` trước khi tính doanh số trung bình mỗi ngày?
+  options:
+  - id: a
+    text: Để giảm số dòng cho nhanh
+  - id: b
+    text: Ngày đóng cửa (Sales = 0) làm cửa hàng sửa chữa trông như giảm doanh số và số ngày Chủ nhật trong cửa sổ gây nhiễu
+  - id: c
+    text: Vì ngày đóng cửa không có trong `train.csv`
+  - id: d
+    text: Để tăng tương quan giữa cửa hàng
+- id: cuped-theta
+  kind: knowledge
+  type: single
+  prompt: CUPED dùng $$Y - \theta(X - \bar X)$$ với $$\theta$$ bằng?
+  options:
+  - id: a
+    text: $$\mathrm{Cov}(X, Y)/\mathrm{Var}(X)$$
+  - id: b
+    text: $$\mathrm{Cov}(X, Y)/\mathrm{Var}(Y)$$
+  - id: c
+    text: $$\mathrm{Corr}(X, Y)$$
+  - id: d
+    text: '1'
+- id: cuped-bound
+  kind: knowledge
+  type: single
+  prompt: CUPED giảm variance của metric theo tỉ lệ nào?
+  options:
+  - id: a
+    text: $$\rho$$
+  - id: b
+    text: $$1 - \rho$$
+  - id: c
+    text: $$\rho / 2$$
+  - id: d
+    text: $$\rho^2$$
+- id: design
+  kind: knowledge
+  type: multi
+  prompt: 'Thiết kế với 1 115 cửa hàng: lựa chọn nào hợp lý?'
+  options:
+  - id: a
+    text: Gán nhóm theo tầng (decile `pre`)
+  - id: b
+    text: Phân tích bằng CUPED hoặc hồi quy có `pre`
+  - id: c
+    text: Tung đồng xu `rng.random() < 0.5` cho từng cửa hàng, không kiểm cân bằng
+  - id: d
+    text: Chạy A/A trên dữ liệu lịch sử để kiểm false positive
+- id: cuped-se
+  kind: data
+  type: single
+  prompt: SE của hiệu trung bình khoảng 146. SE của CUPED với `pre` khoảng?
+  options:
+  - id: a
+    text: '140'
+  - id: b
+    text: '56'
+  - id: c
+    text: '20'
+  - id: d
+    text: '2'
+- id: mde-diff
+  kind: data
+  type: single
+  prompt: MDE (power 80%, α = 5%) của hiệu trung bình, tính theo % trung bình `y`, khoảng?
+  options:
+  - id: a
+    text: 0.8%
+  - id: b
+    text: 2.2%
+  - id: c
+    text: 12%
+  - id: d
+    text: 5.8%
+- id: storetype
+  kind: data
+  type: single
+  prompt: Chia tầng theo `StoreType` giải thích khoảng bao nhiêu % variance của `y`?
+  options:
+  - id: a
+    text: 4%
+  - id: b
+    text: 40%
+  - id: c
+    text: 86%
+  - id: d
+    text: 98%
+- id: forgot-open
+  kind: data
+  type: single
+  prompt: Nếu quên lọc `Open == 1` (tính cả ngày đóng cửa), trung bình `y` của 1 115 cửa hàng khoảng?
+  options:
+  - id: a
+    text: 7 014 (không đổi)
+  - id: b
+    text: 8 180
+  - id: c
+    text: 5 892
+  - id: d
+    text: 6 950

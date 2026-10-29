@@ -1,0 +1,105 @@
+questions:
+- id: exposure-day
+  kind: knowledge
+  type: single
+  prompt: Vì sao xem tác động theo **ngày phơi nhiễm** thay vì ngày lịch?
+  options:
+  - id: a
+    text: User vào rải rác; theo ngày lịch, các ngày cuối trộn user mới (đang hào hứng) với user đã quen, che mất xu hướng
+  - id: b
+    text: Ngày lịch có ít dữ liệu hơn
+  - id: c
+    text: Ngày phơi nhiễm luôn cho SE nhỏ hơn
+  - id: d
+    text: Để mỗi user chỉ có một dòng
+- id: primacy
+  kind: knowledge
+  type: single
+  prompt: Primacy effect là gì?
+  options:
+  - id: a
+    text: Tác động lớn ngày đầu rồi giảm dần vì cái mới hết hấp dẫn
+  - id: b
+    text: User quen giao diện cũ nên ban đầu phản ứng tệ, sau đó tác động tăng dần
+  - id: c
+    text: User mới vào thí nghiệm sớm hơn user cũ
+  - id: d
+    text: Tác động không đổi theo thời gian
+- id: interaction
+  kind: knowledge
+  type: single
+  prompt: Nhóm A có p < 0.05, nhóm B có p = 0.3. Kết luận được tác động khác nhau giữa hai nhóm không?
+  options:
+  - id: a
+    text: Có, vì một nhóm có ý nghĩa, nhóm kia không
+  - id: b
+    text: Có, nếu cỡ hai nhóm bằng nhau
+  - id: c
+    text: Không; phải kiểm định tương tác `treat × segment`
+  - id: d
+    text: Không bao giờ so được hai nhóm
+- id: repeated-rows
+  kind: knowledge
+  type: multi
+  prompt: Cửa sổ cuối có nhiều dòng user-ngày cho mỗi user. Những phát biểu nào đúng?
+  options:
+  - id: a
+    text: SE coi mỗi dòng độc lập thường quá nhỏ
+  - id: b
+    text: Gộp theo user (delta method) hoặc dùng SE cluster theo `user_id`
+  - id: c
+    text: Bootstrap theo user cho SE đúng hơn
+  - id: d
+    text: Càng nhiều dòng thì SE thường càng đúng, không cần sửa
+- id: dashboard
+  kind: data
+  type: single
+  prompt: Con số dashboard (chênh lệch phút trung bình trên mọi user-ngày) là?
+  options:
+  - id: a
+    text: '+0.59'
+  - id: b
+    text: '+2.89'
+  - id: c
+    text: '+0.846'
+  - id: d
+    text: '+1.00'
+- id: day0
+  kind: data
+  type: single
+  prompt: Tác động ở ngày phơi nhiễm 0 khoảng bao nhiêu phút?
+  options:
+  - id: a
+    text: '+0.79'
+  - id: b
+    text: '+1.67'
+  - id: c
+    text: '+0.85'
+  - id: d
+    text: '+2.89'
+- id: slope-segment
+  kind: data
+  type: single
+  prompt: Độ dốc novelty (WLS, ngày phơi nhiễm 0–20) có ý nghĩa thống kê ở segment nào?
+  options:
+  - id: a
+    text: Chỉ `existing`
+  - id: b
+    text: Chỉ `new`
+  - id: c
+    text: Cả hai
+  - id: d
+    text: Không segment nào
+- id: interaction-p
+  kind: data
+  type: single
+  prompt: p-value kiểm định tương tác `treat × segment` trên trung bình 4 tuần mỗi user khoảng?
+  options:
+  - id: a
+    text: '0.0001'
+  - id: b
+    text: '0.04'
+  - id: c
+    text: '0.80'
+  - id: d
+    text: '0.22'
