@@ -97,8 +97,10 @@ peak-day: [b]
   (id duy nhất, mỗi câu có đáp án, đáp án thuộc lựa chọn, `single` đúng một đáp án, `multi` ≥1).
 - Câu nhóm `data` phải có đáp án cố định trên dữ liệu đã ghim; bài dùng dữ liệu không tái lập
   (vd. stream Wikimedia người học tự ghi) chỉ có câu `knowledge` *(quyết định của người viết thiết kế)*.
-- Mỗi bài khoảng 5–8 câu, chia đôi kiến thức / dữ liệu khi có thể *(quyết định của người viết thiết
-  kế; khuôn hiển thị không phụ thuộc con số này)*.
+- Bản soạn đầu: mỗi bài khoảng 5–8 câu, chia đôi kiến thức / dữ liệu khi có thể *(quyết định của
+  người viết thiết kế)*. Người học sẽ review và có thể **thêm 5–10 câu mỗi bài** (tức ~10–18 câu):
+  khuôn hiển thị phải dùng tốt với số câu đó và hơn nữa (thanh tiến độ, điều hướng tới câu bất kỳ,
+  biết câu nào chưa trả lời trước khi nộp), không giả định số câu tối đa.
 
 - **Nguồn đáp án câu `data`** *(quyết định của người viết thiết kế)*: tính trên bộ dữ liệu thật đã
   ghim (bản snapshot trong danh mục `data/download_dataset.py` hoặc Olist thật) bằng notebook lời giải
