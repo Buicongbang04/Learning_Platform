@@ -212,3 +212,26 @@ và test hai danh tính đọc chéo; filter trên giao diện không thay thế
 
 SQL là một phần. Cần định nghĩa phiên bản, thông báo consumer, chọn ngày hiệu lực, đối chiếu v1/v2
 và giữ cách kiểm lại lịch sử. Nếu âm thầm thay WHERE, dashboard có thể thay nghĩa dù tên cột vẫn như cũ.
+
+## Đội Data Science cần dữ liệu huấn luyện cho model dự đoán đơn bị review xấu. Bạn dựng phần dữ liệu thế nào?
+
+1. **Định nghĩa label và thời điểm**: label = `review_score <= 2`, thời điểm dự đoán = lúc đặt đơn (hoặc lúc
+   giao). Mọi feature chỉ được dùng dữ liệu **trước** thời điểm đó.
+2. **Bảng feature lịch sử** theo entity và thời điểm (`seller_id`, `feature_ts`, `seller_late_orders_30d`,
+   ...), tính bằng pipeline batch có test như mọi mart.
+3. **Point-in-time join** (ASOF JOIN / `merge_asof`) giữa label và feature để tránh data leakage. Join với giá
+   trị mới nhất sẽ cho điểm offline đẹp giả rồi sụp ở production.
+4. **Version training set**: ghi snapshot bất biến (đường dẫn có version, hoặc Delta/Iceberg version), lưu
+   cùng model kèm version code và khoảng thời gian label.
+5. **Nếu model chạy online**: cùng định nghĩa feature materialize sang online store (Redis/DynamoDB), qua
+   feature store như Feast, để không có training-serving skew. Chưa có model online thì chưa cần feature store.
+
+## Training-serving skew là gì và DE ngăn nó thế nào?
+
+Là khi feature lúc serve tính khác lúc train: logic viết hai lần (SQL cho train, code ứng dụng cho serve),
+khác múi giờ, khác cách xử lý null, hoặc dữ liệu online trễ hơn offline. Model nhận input khác phân phối nó
+đã học nên dự đoán kém mà không báo lỗi.
+
+Cách ngăn: một định nghĩa feature duy nhất sinh cả offline và online store (feature store), cùng một hàm
+transform được test dùng ở cả hai nơi, log feature thực tế lúc serve rồi so phân phối với training set
+(kiểm tra như data quality check), và theo dõi freshness của online store.

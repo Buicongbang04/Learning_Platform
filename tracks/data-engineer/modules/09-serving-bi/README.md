@@ -52,6 +52,71 @@ flowchart LR
 4. **Hợp đồng với người dùng.** Đổi tên cột trong mart có thể làm hỏng 40 dashboard. Coi bảng serving như
    API: có version, có thông báo khi thay đổi.
 
+### Data cho ML: training pipeline, feature store và data versioning
+
+Dòng "ML" trong bảng trên là nhóm tiêu thụ mà DE hay đánh giá thấp. Model chỉ tốt bằng dữ liệu huấn luyện, và
+phần lớn lỗi ML ở production là lỗi dữ liệu: feature tính khác nhau giữa lúc train và lúc serve, dùng nhầm
+thông tin của tương lai, không dựng lại được bộ dữ liệu đã train model đang chạy. Phần này là góc nhìn DE;
+vòng đời model (huấn luyện, registry, deploy, giám sát drift) thuộc track **MLOps** (đang soạn).
+
+**Training pipeline** là một batch pipeline như module 05, đầu ra là bộ dữ liệu huấn luyện thay vì mart:
+
+```mermaid
+flowchart LR
+    S[(Mart / Silver<br/>orders, payments, reviews)] --> F[Tính feature<br/>theo entity + thời điểm]
+    L[(Label<br/>vd. review_score <= 2)] --> J{Point-in-time join}
+    F --> FS[(Feature store<br/>offline: bảng lịch sử)]
+    FS --> J
+    J --> T[(Training set<br/>có version)]
+    T --> M[Huấn luyện model<br/>track MLOps]
+    FS -->|materialize| ON[(Online store<br/>Redis / DynamoDB)]
+    ON --> API[Serving: model gọi feature<br/>theo customer_id trong vài ms]
+```
+
+**Point-in-time correctness** là điều quan trọng nhất. Ví dụ dự đoán đơn Olist có bị review xấu không: label
+là review của đơn đặt ngày 2018-03-10; feature "số đơn trễ hạn của seller" phải tính **chỉ với dữ liệu có
+trước 2018-03-10**. Join với giá trị mới nhất của feature là **data leakage**: model học từ tương lai, điểm
+offline rất đẹp rồi sụp ở production. Kỹ thuật là *as-of join*: với mỗi dòng label, lấy giá trị feature có
+`feature_ts <= event_ts` gần nhất (DuckDB, Spark, pandas `merge_asof` đều có).
+
+```sql
+-- DuckDB: ASOF JOIN lấy giá trị feature gần nhất không vượt quá thời điểm của label
+SELECT l.order_id, l.label_bad_review, f.seller_late_orders_30d
+FROM labels l
+ASOF JOIN seller_features f
+  ON l.seller_id = f.seller_id AND l.event_ts >= f.feature_ts;
+```
+
+**Feature store** giải bài toán "tính một lần, dùng hai nơi": cùng định nghĩa feature sinh ra bảng lịch sử
+(**offline store**, trong warehouse/lakehouse, cho training với point-in-time join) và giá trị mới nhất
+(**online store**, key-value, cho inference vài ms). Nhờ đó tránh **training-serving skew** (logic train viết
+bằng SQL, logic serve viết lại bằng Java, lệch nhau ở chi tiết làm tròn hay múi giờ).
+
+| Lựa chọn | Kiểu | Khi nào hợp |
+| --- | --- | --- |
+| Bảng feature trong warehouse + as-of join tự viết | Không cần công cụ | Chỉ có batch inference, vài model |
+| **Feast** | Mã nguồn mở, khai báo feature bằng Python, offline trên warehouse, online trên Redis/DynamoDB | Cần online serving, muốn tự chủ hạ tầng |
+| Databricks Feature Store, Vertex AI Feature Store, SageMaker Feature Store | Managed, gắn với cloud/nền tảng | Đã dùng nền tảng đó |
+| Tecton, Hopsworks | Thương mại, có streaming feature | Feature thời gian thực (gian lận, gợi ý) |
+
+Đừng dựng feature store khi chưa có model nào ở production: bảng feature có `entity_id`, `feature_ts`, giá
+trị và một as-of join là đủ cho giai đoạn đầu.
+
+**Data versioning**: phải trả lời được "model v12 đang chạy được train trên dữ liệu nào?" để debug, so sánh
+và đáp ứng kiểm toán (EU AI Act yêu cầu tài liệu dữ liệu huấn luyện cho hệ thống rủi ro cao, module 10).
+Các cách, từ đơn giản tới đầy đủ:
+
+- **Snapshot bất biến có tên**: ghi training set ra `s3://ml/training/bad_review/v=2018-09-01/` và không bao
+  giờ ghi đè; lưu đường dẫn đó cùng model.
+- **Time travel của table format**: Delta/Iceberg giữ version theo commit, đọc lại bằng
+  `VERSION AS OF 42` hoặc `TIMESTAMP AS OF`; nhớ rằng `VACUUM`/expire snapshot sẽ xoá version cũ (module 04).
+- **DVC** (Data Version Control): version tệp dữ liệu lớn cạnh code Git, dữ liệu thật nằm ở S3/GCS.
+- **lakeFS**: nhánh/commit kiểu Git cho cả data lake, thử nghiệm trên nhánh rồi merge.
+
+Ghi kèm mỗi lần train: version dữ liệu (hoặc hash), version code feature, khoảng thời gian label, và thống
+kê cơ bản (số dòng, tỉ lệ label dương). Những thứ đó là metadata, đưa vào catalog và lineage như mọi dataset
+khác.
+
 ## 2. Semantic layer và metrics
 
 Analyst thường gặp cảnh: ba dashboard ra ba con số "doanh thu tháng 3". Một cái tính cả đơn bị huỷ, một cái
@@ -527,6 +592,11 @@ Nộp thêm kế hoạch đổi metric v1 → v2: báo người dùng, đối ch
 - Streamlit docs, caching: https://docs.streamlit.io/develop/concepts/architecture/caching
 - PostgreSQL materialized views: https://www.postgresql.org/docs/current/rules-materializedviews.html
 - DuckDB documentation: https://duckdb.org/docs/
+- DuckDB, ASOF JOIN: https://duckdb.org/docs/sql/query_syntax/from#as-of-joins
+- Feast docs, Point-in-time joins: https://docs.feast.dev/getting-started/concepts/point-in-time-joins
+- DVC docs: https://dvc.org/doc · lakeFS docs: https://docs.lakefs.io/
+- Sculley et al., *Hidden Technical Debt in Machine Learning Systems*, NeurIPS 2015.
+- Chip Huyen, *Designing Machine Learning Systems* (O'Reilly, 2022), chương 4–5 (training data, feature engineering).
 - Hightouch, What is Reverse ETL: https://hightouch.com/blog/reverse-etl
 - Census docs, sync behaviors: https://docs.getcensus.com/
 - Segment Reverse ETL: https://segment.com/docs/connections/reverse-etl/
