@@ -132,6 +132,26 @@ DATASETS: dict[str, Dataset] = {
         homepage="https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud",
         about="284 807 giao dịch thẻ (2 ngày, châu Âu 2013), 492 gian lận (0,17%); V1-V28 là PCA, Time, Amount, Class",
     ),
+    "bike-sharing-uci": Dataset(
+        "url", "https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip", ["hour.csv", "day.csv"],
+        license="CC BY 4.0 (UCI Machine Learning Repository; Fanaee-T & Gama 2013)",
+        homepage="https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset",
+        about="Thuê xe đạp theo giờ/ngày của Capital Bikeshare (Washington DC, 2011-2012): hour.csv 17 379 dòng, day.csv 731 dòng, kèm thời tiết",
+    ),
+    "online-retail-ii": Dataset(
+        "url", "https://archive.ics.uci.edu/static/public/502/online+retail+ii.zip", ["online_retail_II.xlsx"],
+        license="CC BY 4.0 (UCI Machine Learning Repository; Chen 2012)",
+        homepage="https://archive.ics.uci.edu/dataset/502/online+retail+ii",
+        about="Giao dịch của cửa hàng online quà tặng ở Anh, 2009-12-01..2011-12-09; xlsx 2 sheet 'Year 2009-2010' và 'Year 2010-2011' (đọc bằng pd.read_excel + openpyxl); hoá đơn bắt đầu bằng 'C' là đơn huỷ",
+    ),
+    "dunnhumby-complete-journey": Dataset(
+        "kaggle", "frtgnn/dunnhumby-the-complete-journey",
+        ["campaign_desc.csv", "campaign_table.csv", "causal_data.csv", "coupon.csv", "coupon_redempt.csv",
+         "hh_demographic.csv", "product.csv", "transaction_data.csv"],
+        license="Open Database License (DbCL v1.0), dunnhumby (đã kiểm 2026-10-29)",
+        homepage="https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey",
+        about="Dunnhumby The Complete Journey: 2 500 hộ gia đình mua hàng siêu thị trong 2 năm, 8 tệp CSV (giao dịch, sản phẩm, nhân khẩu, khuyến mãi, coupon)",
+    ),
 }
 
 
