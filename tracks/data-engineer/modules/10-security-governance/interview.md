@@ -202,3 +202,32 @@ hạn chế quyền truy cập thông tin liên kết định danh cũ/mới.
 Contract và kiểm tra nghiệp vụ phải nêu đơn vị; owner/steward cùng producer/consumer phê duyệt thay đổi.
 Quality gate nên bắt thay đổi chưa hỗ trợ qua đối chiếu/baseline phù hợp. JSON hợp lệ chỉ chứng minh
 cấu trúc, không bảo đảm ý nghĩa dữ liệu còn đúng.
+
+## Đội dev xin bản sao production để test. Bạn obfuscate dữ liệu thế nào?
+
+Không đưa bản sao thô. Dựng một bước **static masking** tự động trong pipeline sao chép, chọn kỹ thuật theo
+thứ dev cần giữ lại:
+
+- Định danh trực tiếp (tên, email, điện thoại, CPF): **substitution tất định**, sinh giá trị giả cùng định
+  dạng với seed là HMAC của khoá gốc, nên cùng khách luôn ra cùng giá trị giả và join/dedup vẫn test được.
+- Khoá dùng để join (`customer_id`): pseudonymize bằng HMAC với key chỉ có ở pipeline.
+- Quasi-identifier (zip, ngày sinh): generalization (zip 5 số đầu, năm sinh).
+- Văn bản tự do (`review_comment_message`): chạy PII detection rồi redact, hoặc thay bằng văn bản sinh.
+- Cột cần phân phối thật cho test hiệu năng: shuffling.
+
+Sau đó kiểm bằng test: quét bản sao bằng regex/PII scanner, phải không còn email/CPF thật nào; số dòng và
+quan hệ khoá ngoại giữ nguyên. Quyền vào bản sao vẫn có kiểm soát, vì pseudonymized data vẫn là dữ liệu cá
+nhân theo GDPR.
+
+## Catalog của công ty có, nhưng không ai tin số liệu trong đó. Bạn làm metadata management thế nào để nó sống?
+
+Catalog chết vì metadata nhập tay và không ai sở hữu. Cách sửa:
+
+1. **Thu thập tự động**: connector pull schema/profiling từ warehouse, dbt manifest, BI tool; push lineage qua
+   OpenLineage từ Airflow/Spark. Không ai phải gõ tên cột.
+2. **Metadata as code**: mô tả, owner, tag, glossary term viết trong `schema.yml` của dbt, review qua PR, deploy
+   vào catalog. CI chặn model gold thiếu `meta.owner` hoặc mô tả.
+3. **Owner rõ ràng**: mỗi dataset một đội chịu trách nhiệm và nhận cảnh báo; steward giữ glossary.
+4. **Active metadata**: tag PII bật masking, freshness/quality hiện ngay trên trang bảng, lineage báo bảng hạ
+   nguồn trước khi đổi schema.
+5. **Đo**: % bảng gold có owner/mô tả, % cột PII đã tag, thời gian từ lúc tạo bảng tới lúc có trong catalog.

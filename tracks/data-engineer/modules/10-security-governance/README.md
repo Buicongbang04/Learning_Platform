@@ -233,6 +233,66 @@ print(CPF_RE.findall("Cliente 123.456.789-09 ligou"))  # ['123.456.789-09']
 print(luhn_ok("4111 1111 1111 1111"))                  # True
 ```
 
+### Data obfuscation: bức tranh chung và cách chọn kỹ thuật
+
+**Data obfuscation** (tên mục trên roadmap) là tên chung cho mọi kỹ thuật làm dữ liệu nhạy cảm khó hiểu
+hoặc không truy ngược được, nhưng vẫn dùng được cho một mục đích cụ thể. Masking, pseudonymization,
+tokenization, encryption ở các mục trên đều là obfuscation; điểm khác là mỗi kỹ thuật giữ lại một thứ khác
+nhau. Chọn kỹ thuật bằng cách hỏi: **người nhận cần giữ lại tính chất gì của dữ liệu?**
+
+| Kỹ thuật | Đảo ngược được? | Giữ định dạng | Giữ join | Giữ thống kê | Dùng cho |
+| --- | --- | --- | --- | --- | --- |
+| Redaction / nulling | Không | Không | Không | Không | Cột không ai cần (ghi chú tự do) |
+| Partial masking | Không | Một phần | Không | Không | Hiển thị cho support: `*** *** 4321` |
+| **Substitution** (giá trị giả cùng định dạng) | Không | Có | Có nếu tất định | Một phần | Dữ liệu dev/test trông như thật |
+| **Shuffling** (xáo giá trị một cột giữa các dòng) | Không | Có | Không | Giữ phân phối của cột, phá tương quan theo dòng | Test hiệu năng, demo |
+| Pseudonymization (HMAC) | Chỉ khi có key và bảng tra | Không | Có | Có (đếm unique) | Analytics trên khách hàng |
+| Tokenization (vault) | Có, qua vault | Có thể | Có | Có | Số thẻ, CPF trong hệ thống vận hành |
+| Encryption / **format-preserving encryption** (FF1) | Có, với key | FPE: có | Tất định: có | Không | Lưu trữ, truyền tải; FPE khi schema cũ bắt buộc định dạng |
+| Generalization, k-anonymity | Không | Không | Không | Ở mức gộp | Chia sẻ dữ liệu ra ngoài |
+| Noise / differential privacy | Không | Có | Không | Gần đúng, có bảo đảm toán học | Công bố thống kê |
+| Synthetic data | Không | Có | Trong bộ sinh ra | Gần đúng nếu mô hình tốt | Chia sẻ rộng, huấn luyện thử |
+
+Ba tình huống hay gặp ở Olist:
+
+1. **Bản sao production cho môi trường dev**: substitution tất định cho tên, email, điện thoại (cùng
+   `customer_id` luôn ra cùng tên giả, nên join và test dedup vẫn đúng), generalization cho zip code, giữ
+   nguyên các cột không nhạy cảm (`order_status`, `price`). Chạy như một bước trong pipeline sao chép, có
+   test kiểm không còn email thật nào.
+2. **Analyst cần đếm khách quay lại**: pseudonymization bằng HMAC, không cần tên hay email.
+3. **Gửi dữ liệu cho đối tác nghiên cứu**: tổng hợp với ngưỡng tối thiểu (k ≥ 10 khách mỗi nhóm), bỏ cột
+   định danh, hoặc dữ liệu tổng hợp (synthetic). Pseudonymization không đủ vì dữ liệu vẫn là dữ liệu cá nhân.
+
+```python
+import hashlib
+import hmac
+import random
+
+from faker import Faker
+
+KEY = b"lay-tu-secret-manager"
+
+def fake_customer(customer_id: str) -> dict:
+    """Substitution tất định: cùng customer_id -> cùng bộ giá trị giả, khác key -> khác hoàn toàn."""
+    seed = int.from_bytes(hmac.new(KEY, customer_id.encode(), hashlib.sha256).digest()[:8], "big")
+    fake = Faker("pt_BR")
+    fake.seed_instance(seed)
+    return {"customer_id": customer_id, "name": fake.name(), "email": fake.email(), "phone": fake.phone_number()}
+
+def shuffle_column(rows: list[dict], column: str, seed: int = 0) -> list[dict]:
+    """Shuffling: phân phối của cột giữ nguyên, nhưng giá trị không còn đi với đúng dòng."""
+    values = [r[column] for r in rows]
+    random.Random(seed).shuffle(values)
+    return [{**r, column: v} for r, v in zip(rows, values)]
+
+assert fake_customer("c1") == fake_customer("c1")
+print(fake_customer("c1")["email"])
+```
+
+Bẫy: obfuscate từng cột nhưng quên **quasi-identifier** (zip + ngày sinh + giới tính), quên cột văn bản tự
+do (`review_comment_message` có số điện thoại), và quên bản sao phụ (log, file export, backup, dữ liệu trong
+bộ test). Obfuscation chỉ có giá trị khi chạy tự động ở mọi đường dữ liệu đi ra khỏi production.
+
 ## 4. Data governance và privacy
 
 **Data governance** là tập hợp *con người, quy trình, công nghệ* để dữ liệu được dùng đúng, an toàn và
@@ -420,6 +480,65 @@ platform hiện đại nghĩa là:
 Kiểm tra nhanh: nếu ngày mai đổi engine hoặc thêm một consumer mới, có phải viết lại pipeline/convert dữ liệu
 không? Nếu có, đó là chỗ thiếu interoperability.
 
+### Metadata management: thu thập, sở hữu và giữ catalog sống
+
+Có catalog chưa phải là có **metadata management**. Catalog không ai cập nhật sau ba tháng sẽ sai, và catalog
+sai còn tệ hơn không có. Metadata management là quy trình giữ metadata đúng, đủ và có người chịu trách nhiệm:
+
+**1. Thu thập tự động, không nhập tay.** Hai mô hình:
+
+- **Pull**: catalog định kỳ quét nguồn (information schema của warehouse, Glue/Hive metastore, dbt
+  `manifest.json`, Airflow, Looker) bằng connector. Dễ bắt đầu; metadata trễ theo chu kỳ quét.
+- **Push**: hệ thống tự phát event khi có thay đổi (OpenLineage từ job, DataHub nhận qua Kafka/REST). Gần thời
+  gian thực; cần mỗi công cụ được tích hợp.
+
+```yaml
+# DataHub ingestion recipe: quét Postgres định kỳ, chạy: datahub ingest -c recipe.yml
+source:
+  type: postgres
+  config:
+    host_port: postgres:5432
+    database: olist
+    username: ${DATAHUB_PG_USER}
+    password: ${DATAHUB_PG_PASSWORD}
+    profiling: { enabled: true }       # thêm số dòng, tỉ lệ null, min/max mỗi cột
+sink:
+  type: datahub-rest
+  config: { server: http://datahub-gms:8080 }
+```
+
+**2. Metadata as code.** Metadata business (mô tả, owner, tag, glossary term) viết cạnh code trong Git và đi
+qua review, rồi được đẩy vào catalog khi deploy. Với dbt:
+
+```yaml
+models:
+  - name: fct_orders
+    description: "Một dòng mỗi đơn hàng đã thanh toán. Doanh thu = price + freight_value."
+    meta:
+      owner: "team-commerce-data@example.com"
+      tier: gold
+      contains_pii: false
+    columns:
+      - name: customer_id
+        description: "Khoá khách hàng đã pseudonymize (HMAC), join với dim_customers."
+        tags: ["pseudonymized"]
+```
+
+**3. Ownership và stewardship.** Mỗi dataset có **owner** (đội chịu trách nhiệm khi sai, nhận cảnh báo) và
+có thể có **data steward** (người giữ định nghĩa nghiệp vụ, duyệt glossary). Dataset không owner thì không
+được lên tầng gold/serving.
+
+**4. Business glossary** gắn thuật ngữ ("khách hàng hoạt động", "doanh thu thuần") với cột cụ thể, để hai
+dashboard không tính hai kiểu cho cùng một từ (nối với semantic layer ở module 09).
+
+**5. Active metadata.** Metadata không chỉ để đọc mà kích hoạt hành động: tag `pii` tự bật masking policy
+(phần 3), lineage tự báo owner các bảng hạ nguồn khi schema sắp đổi, bảng không ai truy vấn 90 ngày được đề
+xuất xoá, freshness trễ thì gắn cảnh báo ngay trên trang catalog của bảng.
+
+Đo sức khoẻ của chính catalog: % bảng gold có owner và mô tả, % cột PII đã gắn tag, độ trễ từ lúc tạo bảng
+tới lúc nó xuất hiện trong catalog. Đưa các chỉ số này vào CI (vd. dbt project bắt buộc `meta.owner` cho model
+gold) để chúng không xấu đi theo thời gian.
+
 ## 7. Quy định: GDPR, ECPA, EU AI Act (góc nhìn Data Engineer)
 
 Phần này là tổng quan thực tế, không phải tư vấn pháp lý. Việc của DE là **biến yêu cầu pháp lý thành
@@ -534,12 +653,17 @@ Nộp owner catalog, ma trận quyền, audit đã che dữ liệu nhạy cảm 
 - AWS KMS, Envelope encryption: https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#enveloping
 - cryptography (Fernet, HMAC): https://cryptography.io/en/latest/
 - Microsoft Presidio (PII detection): https://microsoft.github.io/presidio/
+- NIST SP 800-38G, Format-Preserving Encryption (FF1): https://csrc.nist.gov/pubs/sp/800/38/g/r1/ipd
+- Faker (sinh dữ liệu thay thế): https://faker.readthedocs.io/
+- Cynthia Dwork, Aaron Roth, *The Algorithmic Foundations of Differential Privacy*: https://www.cis.upenn.edu/~aaroth/privacybook.html
 - pandera docs: https://pandera.readthedocs.io/
 - Great Expectations docs: https://docs.greatexpectations.io/
 - dbt data tests: https://docs.getdbt.com/docs/build/data-tests
 - OpenLineage spec: https://openlineage.io/docs/spec/object-model
 - Marquez: https://marquezproject.ai/
 - DataHub: https://datahubproject.io/ · OpenMetadata: https://open-metadata.org/ · Unity Catalog: https://www.unitycatalog.io/
+- DataHub, Metadata ingestion: https://datahubproject.io/docs/metadata-ingestion/
+- dbt, `meta` config: https://docs.getdbt.com/reference/resource-configs/meta
 - GDPR full text: https://gdpr-info.eu/ · Art. 17 Right to erasure: https://gdpr-info.eu/art-17-gdpr/
 - ECPA (US DOJ): https://bja.ojp.gov/program/it/privacy-civil-liberties/authorities/statutes/1285
 - Open Data Contract Standard (Bitol): https://bitol-io.github.io/open-data-contract-standard/
