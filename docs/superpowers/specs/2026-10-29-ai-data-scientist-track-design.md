@@ -1,7 +1,7 @@
 # Thiết kế: track AI & Data Scientist
 
 Ngày: 2026-10-29. Nguồn: [roadmap.sh/ai-data-scientist](https://roadmap.sh/ai-data-scientist)
-(bản PDF chi tiết ở `ai-data-scientist.pdf` gốc repo).
+(bản PDF chi tiết ở `roadmap/ai-data-scientist.pdf`).
 
 ## 1. Mục đích và lý do
 
