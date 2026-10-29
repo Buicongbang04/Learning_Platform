@@ -20,12 +20,11 @@ TRIP_SCHEMA = (
 CLEAN_EXTRA = ["duration_min", "pickup_hour", "pickup_date"]
 
 
-@pytest.fixture(scope="module")
-def spark():
-    session = (
-        SparkSession.builder.master("local[*]")
+def _build(master):
+    return (
+        SparkSession.builder.master(master)
         .appName("06-intermediate-04")
-        .config("spark.driver.memory", "4g")       # chỉ có tác dụng nếu JVM chưa chạy (xem real())
+        .config("spark.driver.memory", "4g")       # chỉ có tác dụng nếu JVM chưa chạy
         .config("spark.ui.enabled", "false")
         .config("spark.ui.showConsoleProgress", "false")
         .config("spark.driver.host", "127.0.0.1")
@@ -34,6 +33,19 @@ def spark():
         .config("spark.sql.shuffle.partitions", "16")
         .getOrCreate()
     )
+
+
+@pytest.fixture(scope="module")
+def spark():
+    # Mỗi tệp TLC là MỘT row group ~100 MB: mỗi task đọc giữ cả column chunk trong heap, ~4 task/GB là an toàn
+    # (đo được: heap 1 GB chạy được 8 task, 12 task thì OutOfMemoryError). Khi test của bài khác đã khởi động
+    # JVM với heap mặc định 1 GB thì không tăng heap được nữa, nên giảm số task song song cho vừa.
+    session = _build("local[*]")
+    heap_gb = session.sparkContext._jvm.java.lang.Runtime.getRuntime().maxMemory() / 2**30
+    slots = max(1, int(heap_gb * 4))
+    if slots < session.sparkContext.defaultParallelism:
+        session.stop()
+        session = _build(f"local[{slots}]")
     session.sparkContext.setLogLevel("ERROR")
     yield session
     session.stop()
@@ -231,11 +243,6 @@ _REAL = {}
 
 def real(spark, nb):
     raw_dir = ex.dataset("nyc-tlc")
-    heap_gb = spark.sparkContext._jvm.java.lang.Runtime.getRuntime().maxMemory() / 2**30
-    if heap_gb < 3:
-        # Mỗi tệp TLC là một row group ~100 MB: 16 task đọc song song cần vài GB heap. JVM đã được test
-        # khác khởi động với heap mặc định 1 GB thì không đổi được nữa.
-        pytest.skip(f"Heap JVM chỉ {heap_gb:.1f} GB: chạy riêng thư mục bài này để test bộ thật")
     if "raw" not in _REAL:
         paths = sorted(raw_dir.glob("yellow_tripdata_2019-*.parquet"))
         assert len(paths) == 12
@@ -245,15 +252,16 @@ def real(spark, nb):
 
 
 def test_real_reject_reasons(spark, nb):
+    # Bộ dữ liệu là snapshot ghim: số phải khớp gần như tuyệt đối (abs=20 chỉ cho sai khác ở biên luật tốc độ).
     raw, _ = real(spark, nb)
     counts = {r["reject_reason"]: r["count"] for r in nb.flag_rejects(raw).groupBy("reject_reason").count().collect()}
     assert sum(counts.values()) == 84_598_444
-    assert counts[None] == pytest.approx(83_382_609, rel=0.001)
+    assert counts[None] == pytest.approx(83_382_609, abs=20)
     assert counts["out_of_period"] == pytest.approx(1_442, abs=10)          # năm 2001, 2008, 2088...
-    assert counts["bad_distance"] == pytest.approx(677_276, rel=0.01)       # nhiều nhất: quãng đường 0
-    assert counts["bad_duration"] == pytest.approx(302_998, rel=0.01)
-    assert counts["bad_amount"] == pytest.approx(161_874, rel=0.01)
-    assert counts["too_fast"] == pytest.approx(72_245, rel=0.01)
+    assert counts["bad_distance"] == pytest.approx(677_276, abs=20)       # nhiều nhất: quãng đường 0
+    assert counts["bad_duration"] == pytest.approx(302_998, abs=20)
+    assert counts["bad_amount"] == pytest.approx(161_874, abs=20)
+    assert counts["too_fast"] == pytest.approx(72_245, abs=20)
 
 
 def test_real_peak_hour(spark, nb):
@@ -261,7 +269,7 @@ def test_real_peak_hour(spark, nb):
     hours = {r["pickup_hour"]: r["trips"] for r in nb.peak_hours(nb.clean_trips(raw)).collect()}
     assert len(hours) == 24
     assert max(hours, key=hours.get) == 18
-    assert hours[18] == pytest.approx(5_478_973, rel=0.001)
+    assert hours[18] == pytest.approx(5_478_973, abs=20)
     assert min(hours, key=hours.get) == 4
 
 
@@ -272,7 +280,7 @@ def test_real_tips(spark, nb):
     assert pay["card"]["tip_rate"] == pytest.approx(0.2277, abs=0.0005)
     assert pay["card"]["tipped_share"] == pytest.approx(0.963, abs=0.001)
     assert pay["cash"]["tip_rate"] == pytest.approx(0.0, abs=0.0005)      # tip tiền mặt không được ghi
-    assert pay["cash"]["trips"] == pytest.approx(22_510_014, rel=0.001)
+    assert pay["cash"]["trips"] == pytest.approx(22_510_014, abs=20)
     boroughs = {r["borough"]: r["tip_rate"] for r in nb.tip_rate_by_borough(clean, zones).collect()}
     assert boroughs["Manhattan"] == pytest.approx(0.2346, abs=0.0005)
     assert boroughs["Queens"] == pytest.approx(0.2073, abs=0.0005)
@@ -292,14 +300,13 @@ def test_real_write_one_month(spark, nb, tmp_path):
     # Ghi một tháng thật (idempotent đã kiểm ở test fixture). Tệp tháng 2 còn chứa vài chục chuyến của
     # ngày 31/01 và các tháng sau (bản ghi gửi trễ), nên có nhiều hơn 28 thư mục ngày.
     raw_dir = ex.dataset("nyc-tlc")
-    real(spark, nb)                                # cùng điều kiện heap
     feb = nb.clean_trips(nb.load_trips(spark, [raw_dir / "yellow_tripdata_2019-02.parquet"]))
     out = tmp_path / "feb"
     nb.write_clean(feb, out)
     parts = _partitions(out)
     assert {f"pickup_date=2019-02-{d:02d}" for d in range(1, 29)} <= set(parts), "Thiếu ngày tháng 2"
     assert all(len(files) == 1 for files in parts.values()), "Mỗi ngày đúng 1 tệp Parquet"
-    assert spark.read.parquet(str(out)).count() == pytest.approx(6_966_272, rel=0.001)
+    assert spark.read.parquet(str(out)).count() == pytest.approx(6_966_272, abs=20)
 
 
 # ---------- notebook, biểu đồ và báo cáo ----------

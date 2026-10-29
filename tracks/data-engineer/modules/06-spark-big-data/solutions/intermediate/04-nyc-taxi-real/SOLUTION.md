@@ -39,7 +39,8 @@ là `report.md`.
   13 giây khi quét tệp gốc.
 - **Cả 12 tháng**: máy 16 nhân, 31 GB chạy cả notebook ~2 phút, nên không cần chọn tháng con. Heap driver 8 GB
   trong notebook (4 GB trong test): mỗi tệp TLC là **một row group ~100 MB**, reader Parquet giữ cả column chunk
-  trong bộ nhớ, 16 task song song với heap mặc định 1 GB sẽ `OutOfMemoryError`.
+  trong bộ nhớ, 16 task song song với heap mặc định 1 GB sẽ `OutOfMemoryError` (đo: 1 GB chịu được 8 task,
+  12 task thì không). Test chạy chung với bài khác (JVM đã có heap 1 GB) nên tự giảm còn ~4 task/GB heap.
 
 ## Con số tham chiếu (bộ thật, 12 tháng 2019)
 
