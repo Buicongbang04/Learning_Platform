@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { LEVELS, type Exercise, type Module, type Track } from "./content";
+import type { QuizResult } from "./code/quizResult";
 
 /* Tiến độ lưu ở progress.json (gốc repo) qua API của vite.config.ts. */
 
@@ -10,10 +11,11 @@ export type TrackProgress = {
   notes: Record<string, string>; // moduleId hoặc exercise.key → ghi chú
   notesSavedAt: Record<string, string>;
   solutionsViewed: Record<string, string>;
+  quizzes: Record<string, QuizResult>; // exercise.key → kết quả trắc nghiệm lần nộp gần nhất
 };
 export type ProgressData = { version: 1; tracks: Record<string, TrackProgress> };
 
-const emptyTrack = (): TrackProgress => ({ sections: {}, exercises: {}, milestones: {}, notes: {}, notesSavedAt: {}, solutionsViewed: {} });
+const emptyTrack = (): TrackProgress => ({ sections: {}, exercises: {}, milestones: {}, notes: {}, notesSavedAt: {}, solutionsViewed: {}, quizzes: {} });
 
 type Status = "loading" | "ready" | "error";
 type ProgressApi = {
