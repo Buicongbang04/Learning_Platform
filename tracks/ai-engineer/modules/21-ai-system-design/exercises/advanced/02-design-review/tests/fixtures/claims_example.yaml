@@ -1,0 +1,35 @@
+# Claim của một design doc KHÁC (không phải VietSky), dùng để test recompute/check_claims.
+claims:
+  - id: A
+    kind: cost_per_1k
+    inputs: {input_tokens: 2000, output_tokens: 500, input_price: 1.0, output_price: 4.0}
+    claimed: 4.0            # đúng: (2000*1 + 500*4) / 1e6 * 1000 = 4.0
+  - id: B
+    kind: cost_per_1k
+    inputs: {input_tokens: 2000, output_tokens: 500, input_price: 1.0, output_price: 4.0,
+             cached_input_tokens: 1500, cached_price: 0.1}
+    claimed: 4.0            # sai: có cache thì 500*1 + 1500*0.1 + 500*4 = 2650 -> 2.65
+  - id: C
+    kind: monthly_cost
+    inputs: {cost_per_request: 0.002, requests_per_day: 50000, days: 30}
+    claimed: 3100           # lệch 3.3%: trong dung sai 10%
+  - id: D
+    kind: kv_bytes_per_token
+    inputs: {n_layers: 36, n_kv_heads: 2, head_dim: 128, kv_bits: 16}
+    claimed: 589824         # sai: dùng 32 head thay vì 2 KV head; đúng là 36 864
+  - id: E
+    kind: weights_bytes
+    inputs: {n_params: 3.1e+9, bits: 16}
+    claimed: 6.2e+9         # đúng
+  - id: F
+    kind: concurrency
+    inputs: {rps: 40, latency_s: 3}
+    claimed: 13.3           # sai: chia thay vì nhân; đúng là 120
+  - id: G
+    kind: gpus
+    inputs: {peak_rps: 30, rps_per_gpu: 4, headroom: 0.25}
+    claimed: 10             # đúng: ceil(30 * 1.25 / 4) = ceil(9.375) = 10
+  - id: H
+    kind: gpus
+    inputs: {peak_rps: 30, rps_per_gpu: 4, headroom: 0.25}
+    claimed: 8              # sai: quên headroom (ceil(7.5) = 8), lệch 20%
