@@ -23,8 +23,8 @@ CIFAR-10. Làm xong bạn tự cài được `GradScaler` và biết khi nào kh
 
 **Phần cứng:** GPU 4GB · ~90 phút
 
-Thời gian trên là thời gian làm bài. Chạy cả notebook bằng kernel `ai-gpu` mất khoảng 6 phút trên RTX 3050 (5 cấu hình ×
-3 epoch); env gốc (CPU) chạy bản thu nhỏ trong 3–7 phút tuỳ máy, đủ để kiểm code nhưng không để đọc số.
+Thời gian trên là thời gian làm bài. Chạy cả notebook bằng kernel `ai-gpu` mất khoảng 5 phút trên RTX 3050 rảnh (5 cấu hình ×
+3 epoch; lâu gấp 2–3 lần khi GPU có tiến trình khác); env gốc (CPU) chạy bản thu nhỏ trong 3–7 phút tuỳ máy, đủ để kiểm code nhưng không để đọc số.
 
 Mở `starter/amp.ipynb` (mục 4 lý thuyết):
 
@@ -61,6 +61,6 @@ Giữ hai cờ cho bước hiện tại: đã unscale chưa, có inf không; `up
 
 ### Gợi ý 2
 
-Trong `train_step`: `with torch.autocast(device_type=x.device.type, dtype=amp_dtype or torch.float32, enabled=amp_dtype is not None)`;
-loss là `F.cross_entropy(logits.float(), y)`. `torch.nn.utils.clip_grad_norm_` trả norm **trước** khi clip; với
-`max_norm=None` truyền `float("inf")` để chỉ đo. `stepped` là norm có hữu hạn hay không.
+Một hàm `train_step` phải chạy được cho cả fp32, fp16 và bf16: `autocast` có cờ bật/tắt, và một `GradScaler` tắt
+hoạt động như phép đồng nhất. Phép giảm cuối cùng (loss) nên làm ở fp32. Hàm clip của PyTorch trả về norm **trước** khi clip,
+và một norm không hữu hạn là dấu hiệu bước này sẽ bị bỏ.

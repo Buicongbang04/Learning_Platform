@@ -428,7 +428,8 @@ một CNN chạy "fp32" trên RTX 30xx thực ra đã dùng TF32 cho conv.
 ### Đo trên RTX 3050 4GB
 
 ResNet-9 (kiến trúc của bài Advanced 01, độ rộng `W`), batch 256 ảnh 32×32 ngẫu nhiên, SGD momentum, `channels_last`,
-trung vị 3 lần × 40 bước, GPU không có tiến trình khác:
+trung vị 3 lần × 40 bước. Lúc đo, một tiến trình khác giữ khoảng 2.4 GB VRAM nhưng không tính (GPU-Util 0%): thời gian
+đáng tin, còn bộ nhớ trống chỉ khoảng 1.6 GB, ảnh hưởng tới một ô của bảng (*):
 
 | Cấu hình | W = 32 (1.6 triệu tham số): ms/bước | peak MiB | W = 64 (6.6 triệu): ms/bước | peak MiB |
 | --- | --- | --- | --- | --- |
@@ -438,7 +439,7 @@ trung vị 3 lần × 40 bước, GPU không có tiến trình khác:
 | autocast bf16 | 26.1 | 312 | 70.9 | 645 |
 | autocast fp16, **không** `channels_last` | | | 121.1 (dao động 82–201) | 645 |
 
-(*) Với W = 64 tắt TF32, cuDNN cần workspace lớn hơn phần VRAM còn trống lúc đo (GPU dùng chung) và rơi về thuật
+(*) Với W = 64 tắt TF32, cuDNN cần workspace lớn hơn phần VRAM còn trống lúc đo (tiến trình kia giữ bộ nhớ) và rơi về thuật
 toán chậm (874 ms/bước): một ví dụ thật của việc bộ nhớ trống quyết định cả tốc độ.
 
 Đọc bảng:
@@ -525,8 +526,9 @@ Không lưu activation bên trong một đoạn mạng, chỉ lưu input của �
 của đoạn rồi mới backward. Với $$n$$ layer chia thành $$\sqrt n$$ đoạn, bộ nhớ activation từ $$O(n)$$ còn $$O(\sqrt n)$$,
 đổi lại thêm khoảng **một lần forward** (Chen et al. 2016). Thực tế:
 
-- `torch.utils.checkpoint.checkpoint(fn, *args, use_reentrant=False)`; bản non-reentrant là mặc định nên dùng, giữ
-  trạng thái RNG (Dropout tính lại ra đúng mask cũ) và chạy được với `torch.autograd.grad`.
+- `torch.utils.checkpoint.checkpoint(fn, *args, use_reentrant=False)`: luôn truyền `use_reentrant` tường minh (torch 2.14
+  cảnh báo khi thiếu, và mặc định khi thiếu vẫn là bản reentrant cũ). `False` là bản PyTorch khuyên dùng: giữ trạng thái RNG
+  (Dropout tính lại ra đúng mask cũ), chạy được với `torch.autograd.grad` và input không cần gradient.
 - Checkpoint đúng **một** đoạn bao cả mạng gần như không giảm peak: lúc backward tính lại, toàn bộ activation lại
   nằm trong bộ nhớ cùng lúc. Checkpoint **từng layer nhỏ** có thể giữ nhiều hơn không checkpoint (giữ input của mọi
   layer, kể cả những thứ vốn không cần). Chọn đoạn cỡ vừa, thường là một block Transformer.
@@ -579,7 +581,7 @@ gần phép đồng nhất rồi học "phần sai khác".
 
 Nhưng đường tắt cũng **cộng dồn phương sai**: $$\mathrm{Var}(x_{l+1}) = \mathrm{Var}(x_l) + \mathrm{Var}(f(x_l))$$ (nếu
 không tương quan). Không có gì giữ $$f$$ nhỏ thì activation lớn dần theo độ sâu. Thí nghiệm dưới đo đúng điều đó trên mạng
-conv 20 tầng (độ rộng 16, He init), một batch ngẫu nhiên:
+conv 20 tầng (độ rộng 16, He init, ReLU **sau** phép cộng như ResNet), một batch ngẫu nhiên:
 
 ```python
 import torch
@@ -588,7 +590,7 @@ from torch import nn
 
 
 class Layer(nn.Module):
-    """conv 3x3 -> (BatchNorm) -> ReLU, có hoặc không có đường tắt."""
+    """plain: relu(bn(conv(x))); residual: relu(x + bn(conv(x))) (ReLU sau phép cộng, như ResNet)."""
 
     def __init__(self, c, norm, residual, zero_init=False):
         super().__init__()
@@ -599,11 +601,11 @@ class Layer(nn.Module):
         if not norm:
             nn.init.zeros_(self.conv.bias)
         if zero_init:
-            nn.init.zeros_(self.norm.weight)                                  # γ = 0: nhánh bắt đầu bằng 0
+            nn.init.zeros_(self.norm.weight)                                  # γ = 0: nhánh bắt đầu bằng 0, β vẫn 0
 
     def forward(self, x):
-        out = F.relu(self.norm(self.conv(x)))
-        return x + out if self.residual else out
+        out = self.norm(self.conv(x))
+        return F.relu(x + out) if self.residual else F.relu(out)
 
 
 def make(depth, norm, residual, zero_init=False, w=16):
@@ -622,19 +624,21 @@ for name, kw in [("plain", dict(norm=False, residual=False)), ("plain + BN", dic
     hooks = [m.register_forward_hook(lambda mod, i, o: stds.append(o.std().item())) for m in net if isinstance(m, Layer)]
     loss = F.cross_entropy(net(x), y)
     loss.backward()
-    g = [m.conv.weight.grad.norm().item() for m in net if isinstance(m, Layer)]
-    ratio = f"{g[0] / g[-1]:.2f}" if g[-1] > 0 else "không xác định (gradient conv = 0, chỉ γ, β có gradient)"
+    layers = [m for m in net if isinstance(m, Layer)]
+    g = [m.conv.weight.grad.norm().item() for m in layers]
+    gamma = layers[0].norm.weight.grad.norm().item() if kw.get("norm") else float("nan")
+    ratio = f"{g[0] / g[-1]:.2f}" if g[-1] > 0 else "-"
     print(f"{name:22s} std activation tầng 1 / 10 / 20: {stds[0]:8.2e} {stds[9]:8.2e} {stds[19]:8.2e}"
-          f" | loss {loss.item():9.3f} | |grad| tầng 1 / tầng 20 = {ratio}")
+          f" | loss {loss.item():9.3f} | |grad| conv tầng 1 / tầng 20 = {ratio} | |grad γ| tầng 1 {gamma:.2e}")
 ```
 
-| Mạng 20 tầng | Std activation tầng 1 / 10 / 20 | Loss lúc khởi tạo ($$\ln 10 = 2.30$$) | Norm gradient tầng 1 / tầng 20 |
-| --- | --- | --- | --- |
-| plain | 0.47 / 0.15 / 0.08 | 2.340 | 0.25 |
-| plain + BN | 0.58 / 0.59 / 0.62 | 2.255 | 18.2 |
-| residual | 0.74 / 23.8 / 6 640 | 7 600 | 0.09 |
-| residual + BN | 0.83 / 1.96 / 3.00 | 5.447 | 1.70 |
-| residual + BN, γ = 0 ở mỗi nhánh | 0.58 / 0.58 / 0.58 | 2.301 | conv chưa có gradient; γ, β có |
+| Mạng 20 tầng | Std activation tầng 1 / 10 / 20 | Loss lúc khởi tạo ($$\ln 10 = 2.30$$) | Norm gradient conv tầng 1 / tầng 20 | Norm gradient γ tầng 1 |
+| --- | --- | --- | --- | --- |
+| plain | 0.47 / 0.15 / 0.08 | 2.340 | 0.25 | |
+| plain + BN | 0.58 / 0.59 / 0.62 | 2.255 | 18.2 | 4.0e-02 |
+| residual | 0.56 / 13.8 / 1 180 | 1 166 | 0.11 | |
+| residual + BN | 0.67 / 1.91 / 2.86 | 2.817 | 2.89 | 3.0e-02 |
+| residual + BN, γ = 0 ở mỗi nhánh | 0.33 / 0.33 / 0.33 | 2.265 | (conv chưa có gradient) | 4.7e-03 |
 
 Rồi train mỗi mạng 300 bước (SGD momentum, lr 0.05, batch 128, 20 000 ảnh CIFAR-10 thật, đánh giá trên 2 000 ảnh test;
 script ngoài module, CPU):
@@ -644,24 +648,27 @@ script ngoài module, CPU):
 | plain | 2.304 (không học) | 0.093 |
 | residual | NaN | 0.098 |
 | plain + BN | 1.674 | 0.327 |
-| residual + BN | 1.716 | 0.350 |
-| residual + BN, γ = 0 | 2.058 | 0.247 |
+| residual + BN | 1.527 | **0.426** |
+| residual + BN, γ = 0 | 1.722 | 0.343 |
 
 Đọc kết quả:
 
 - **Plain, không norm**: activation co dần (0.47 xuống 0.08) dù dùng He init: He init chỉ giữ **kỳ vọng** của bình phương
-  activation, còn với 16 kênh thì giá trị điển hình của một batch vẫn trôi theo độ sâu. Gradient ở tầng đầu chỉ bằng 1/4 tầng cuối, và mạng **không học được gì** trong 300 bước.
-- **Residual, không norm**: phương sai cộng dồn qua 20 nhánh, activation tăng gần $$10^4$$ lần, loss khởi đầu 7 600 và ra NaN.
+  activation, còn với 16 kênh thì giá trị điển hình của một batch vẫn trôi theo độ sâu. Gradient ở tầng đầu chỉ bằng 1/4
+  tầng cuối, và mạng **không học được gì** trong 300 bước.
+- **Residual, không norm**: phương sai cộng dồn qua 20 nhánh, activation tăng hơn 2 000 lần, loss khởi đầu 1 166 và ra NaN.
   Đường tắt một mình không đủ.
-- **Normalization** giữ thang activation ổn định ở mọi tầng và là thứ làm cả hai mạng train được. Mạng plain + BN có gradient
-  ở tầng đầu lớn gấp 18 lần tầng cuối: BN chặn activation nhưng không chặn gradient nổ qua độ sâu; residual + BN cân bằng
-  hơn (1.7).
-- **Zero-init γ** (Goyal et al. 2017): mỗi nhánh residual bắt đầu bằng 0 nên cả mạng là phép đồng nhất lúc khởi tạo, loss
-  đúng $$\ln 10$$, activation không lớn dần. Conv chưa nhận gradient ở bước đầu (vì nhân với $$\gamma = 0$$), nhưng $$\gamma$$
-  có gradient nên nhánh "mở dần". Cái giá thấy ngay trong bảng: sau chỉ 300 bước, bản γ = 0 còn **kém hơn** (0.247 so với
-  0.350) vì các nhánh mất thời gian mở ra. Lợi ích của nó là ổn định khi mạng rất sâu hoặc lr lớn (Goyal et al. dùng nó để
-  train ImageNet với batch 8 192), không phải học nhanh hơn ở mạng 20 tầng. GPT-2 làm việc tương tự bằng cách thu nhỏ
-  projection cuối của mỗi block theo $$1/\sqrt{2L}$$.
+- **Normalization** giữ thang activation ổn định và là thứ làm cả hai mạng train được. Mạng plain + BN có gradient ở tầng
+  đầu lớn gấp 18 lần tầng cuối: BN chặn activation nhưng không chặn gradient nổ qua độ sâu. Residual + BN cân bằng hơn
+  (2.9) và học nhanh nhất: 0.426 so với 0.327 của plain + BN sau cùng 300 bước. Đây là degradation của He et al. ở quy mô nhỏ.
+- **Zero-init γ** (Goyal et al. 2017): γ của BN cuối nhánh bằng 0 nên mỗi block là `relu(x + 0)`, cả mạng gần như phép
+  đồng nhất lúc khởi tạo: loss gần $$\ln 10$$, activation không lớn dần. Conv chưa nhận gradient ở bước đầu (bị nhân với
+  $$\gamma = 0$$) nhưng γ có gradient (4.7e-3), nên nhánh "mở dần". Cái giá thấy trong bảng: sau chỉ 300 bước bản γ = 0 còn
+  **kém hơn** (0.343 so với 0.426) vì các nhánh mất thời gian mở ra. Lợi ích của nó là ổn định khi mạng rất sâu hoặc lr lớn
+  (Goyal et al. dùng nó để train ImageNet với batch 8 192), không phải học nhanh hơn ở mạng 20 tầng. Lưu ý vị trí: nếu ReLU
+  đặt **sau** BN trong nhánh (`relu(bn(conv(x)))`), γ = β = 0 làm ReLU nhận toàn 0 và γ, β không bao giờ có gradient, nhánh
+  không bao giờ mở; zero-init chỉ đúng khi BN là phép cuối của nhánh trước phép cộng. GPT-2 làm việc tương tự bằng cách thu
+  nhỏ projection cuối của mỗi block theo $$1/\sqrt{2L}$$.
 
 ### Pre-norm và post-norm
 

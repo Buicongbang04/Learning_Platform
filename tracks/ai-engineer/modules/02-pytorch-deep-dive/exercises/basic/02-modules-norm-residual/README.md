@@ -55,6 +55,6 @@ dùng `nn.ModuleList`. Weight tying chỉ là gán cùng một `Parameter` cho h
 
 ### Gợi ý 2
 
-GroupNorm: `x.reshape(N, G, -1)`, lấy mean và `var(unbiased=False)` theo chiều cuối, chuẩn hoá, reshape về shape
-cũ, rồi nhân `weight.reshape(1, C, 1, ...)`. RMSNorm: `torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps)`; nâng dtype
-bằng `torch.promote_types(x.dtype, torch.float32)`.
+GroupNorm: gom các phần tử của mỗi (mẫu, nhóm) lại thành một dòng, chuẩn hoá theo dòng, đưa về shape cũ, rồi affine
+theo kênh (để ý cách broadcast `weight` shape `(C,)` vào input `(N, C, *)`). RMSNorm: giống LayerNorm nhưng chỉ chia cho căn
+của trung bình bình phương; nâng độ chính xác trước phép giảm, hạ về dtype gốc ở cuối.

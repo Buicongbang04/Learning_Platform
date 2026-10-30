@@ -72,7 +72,7 @@ questions:
   - id: a
     text: Ra NaN ngay trong epoch đầu tiên
   - id: b
-    text: Ngang nhau, chênh dưới 1 điểm
+    text: Ngang nhau, trong dao động giữa các lần chạy
   - id: c
     text: Thấp hơn khoảng 10 điểm do underflow
   - id: d

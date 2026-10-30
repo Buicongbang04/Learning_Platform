@@ -38,7 +38,7 @@ chỉ test so gradient bắt được), đủ 5 bug 0.102.
 - **Triệu chứng.** Forward chạy, nhưng optimizer chỉ thấy **1 114** tham số (stem và head) thay vì 78 042; ba block giữ
   nguyên trọng số ngẫu nhiên, BatchNorm trong block không đổi chế độ khi `eval()`, `state_dict` thiếu mọi khoá `blocks.*`.
   Trên GPU bug này lộ ngay (`Expected all tensors to be on the same device`), trên CPU thì im lặng.
-- **Phát hiện.** Notebook in sẵn số tham số sau khi train; tính tay: stem 464, ba block 4 672 + 14 528 + 57 728, head 650.
+- **Phát hiện.** Đếm `sum(p.numel() for p in model.parameters())` và so với tính tay: stem 464, ba block 4 672 + 14 528 + 57 728, head 650.
   Hoặc nạp `state_dict` vào một `Net` mới rồi so output; hoặc so trọng số `blocks[0].conv1` trước và sau một bước.
 - **Sửa.** `nn.ModuleList([...])`.
 

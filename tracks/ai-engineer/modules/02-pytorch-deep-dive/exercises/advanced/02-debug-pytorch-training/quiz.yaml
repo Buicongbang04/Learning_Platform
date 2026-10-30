@@ -5,11 +5,11 @@ questions:
   prompt: Trong notebook gốc (chưa sửa), optimizer thấy bao nhiêu tham số của Net(16)?
   options:
   - id: a
-    text: '1 114'
+    text: 1 114
   - id: b
-    text: '78 042'
+    text: 78 042
   - id: c
-    text: '76 928'
+    text: 76 928
   - id: d
     text: '0'
 - id: loss-floor
@@ -26,54 +26,54 @@ questions:
   - id: d
     text: '0.6931'
 - id: eval-symptom
-  kind: knowledge
+  kind: data
   type: single
-  prompt: Toàn bộ vòng train chạy ở eval mode vì evaluate không trả về train(). BatchNorm làm gì trong lúc đó?
+  prompt: Sau khi chạy notebook gốc, running_var của BatchNorm ở stem vẫn toàn số 1. Điều đó nói gì?
   options:
   - id: a
-    text: Dùng running stats ban đầu, không cập nhật chúng
+    text: Lr quá nhỏ nên γ, β của BatchNorm chưa kịp học gì
   - id: b
-    text: Dùng thống kê batch như bình thường, chỉ dropout tắt
+    text: BatchNorm chưa từng chạy ở train mode lúc train
   - id: c
-    text: Báo lỗi vì backward không chạy được ở eval mode
+    text: Weight decay kéo running_var về 1
   - id: d
-    text: Tự chuyển về train mode khi gặp loss.backward()
+    text: Ảnh đã chuẩn hoá theo kênh nên phương sai đúng bằng 1
 - id: accum-bug
   kind: knowledge
   type: single
-  prompt: zero_grad nằm trong vòng lặp micro-batch (2 micro-batch, loss chia 2). Gradient lúc step bằng gì?
+  prompt: Với lr = 0, gradient sau train_step(accum_steps=2) bằng đúng một nửa gradient tính trên nửa batch sau. Điều đó chỉ ra gì?
   options:
   - id: a
-    text: Gradient của cả batch, vì loss đã chia 2
+    text: Loss của mỗi nửa batch chưa được chia cho accum_steps
   - id: b
-    text: Gấp đôi gradient của cả batch
+    text: Autograd tính sai gradient của conv
   - id: c
-    text: Một nửa gradient của micro-batch cuối
+    text: Gradient của nửa batch đầu bị xoá trước step
   - id: d
-    text: Bằng 0, vì zero_grad xoá hết trước step
+    text: BatchNorm chuẩn hoá bằng thống kê của từng nửa batch
 - id: gpu-reveals
   kind: knowledge
   type: single
-  prompt: Bug nào trong năm bug sẽ tự lộ ra bằng một exception nếu chạy notebook trên GPU?
+  prompt: Chuyển notebook gốc sang GPU thì có một exception về device mà trên CPU không có. Vì sao CPU im lặng?
   options:
   - id: a
-    text: Softmax trước cross_entropy
+    text: Tensor PyTorch không quản lý vẫn ở CPU, như mọi thứ khác
   - id: b
-    text: Các ResBlock trong list Python
+    text: CPU tự ép mọi tensor về cùng một dtype nên không thấy lệch
   - id: c
-    text: reshape thay vì permute
+    text: Trên CPU autograd tắt việc kiểm tra device để chạy nhanh hơn
   - id: d
-    text: zero_grad trong vòng accumulation
+    text: Exception trên CPU bị DataLoader nuốt mất
 - id: hardest
   kind: data
   type: single
-  prompt: Khi chỉ còn một mình, bug nào làm val accuracy giảm ít nhất nên dễ lọt nhất?
+  prompt: Bug làm val acc giảm ít nhất khi chỉ còn một mình (0.596 xuống 0.526) qua được test 'học dữ liệu dễ'. Phép thử nào bắt nó?
   options:
   - id: a
-    text: zero_grad trong vòng accumulation
+    text: Vẽ lại vài ảnh sau bước tiền xử lý dữ liệu
   - id: b
-    text: Toàn bộ train ở eval mode
+    text: Đếm tham số của model, so với số tính tay
   - id: c
-    text: Softmax trước cross_entropy
+    text: Loss khi model đúng tuyệt đối
   - id: d
-    text: Các ResBlock trong list Python
+    text: So gradient với một backward trên cả batch

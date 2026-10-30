@@ -28,16 +28,16 @@ questions:
 - id: ref-fp32
   kind: data
   type: single
-  prompt: Bỏ autocast (train fp32) mà giữ batch 512 trên GPU 4GB dùng chung thì bản tham chiếu ra sao?
+  prompt: Bỏ autocast (train fp32) mà giữ batch 512, peak memory của bản tham chiếu so với ngân sách 1.5 GB thế nào?
   options:
   - id: a
-    text: Chậm hơn khoảng 2 lần, accuracy như cũ
+    text: Vẫn dưới, vì tham số và optimizer luôn fp32
   - id: b
-    text: CUDA out of memory, phải giảm batch
+    text: Vượt ngân sách, phải giảm batch hoặc dùng AMP
   - id: c
-    text: Nhanh hơn vì không phải ép kiểu
+    text: Giảm, vì không còn bản sao 16 bit của trọng số
   - id: d
-    text: Loss ra NaN vì gradient tràn
+    text: Không đổi, autocast chỉ ảnh hưởng tới tốc độ
 - id: data-on-gpu
   kind: knowledge
   type: single

@@ -50,8 +50,7 @@ class CifarDataset(Dataset):
 
 
 def seed_worker(worker_id: int) -> None:
-    """worker_init_fn: trong mỗi worker, nếu dataset có thuộc tính `rng`, tạo lại nó bằng
-    np.random.default_rng(torch.initial_seed() % 2**32), để mỗi worker có dòng số ngẫu nhiên riêng
+    """worker_init_fn: mỗi worker phải có dòng số ngẫu nhiên riêng cho `rng` của dataset,
     mà vẫn tái lập được theo seed của DataLoader."""
     # TODO
     raise NotImplementedError

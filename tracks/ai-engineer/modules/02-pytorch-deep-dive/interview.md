@@ -12,7 +12,9 @@ Mỗi tensor có một **version counter** tăng sau mỗi phép tại chỗ (`a
 tensor nó lưu; lúc backward thấy version đã đổi thì báo `one of the variables needed for gradient computation has been
 modified by an inplace operation`. Đó là cơ chế an toàn: nếu không có nó, backward sẽ dùng giá trị đã bị sửa và cho
 gradient sai im lặng (đúng loại bug của code numpy tự viết ở module 01). Cách chữa: bỏ phép tại chỗ, hoặc `clone()`
-trước khi sửa. `inplace=True` của `nn.ReLU` an toàn khi output không bị op khác lưu lại; nó tiết kiệm một tensor.
+trước khi sửa. `inplace=True` của `nn.ReLU` ghi đè lên chính input của nó, nên chỉ an toàn khi op **trước** không lưu tensor đó cho
+backward (sau conv → BatchNorm thì an toàn: BatchNorm lưu input của nó chứ không lưu output; ngay sau một `sigmoid`, vốn lưu
+output, thì lỗi version counter); nó tiết kiệm một tensor.
 
 Ứng viên tốt nói thêm hệ quả về bộ nhớ: những saved tensor đó chính là activation memory, thứ chiếm phần lớn bộ nhớ khi
 train CNN và là thứ checkpointing đánh đổi.
@@ -137,8 +139,8 @@ Những chỗ lệch:
 ## Activation checkpointing đánh đổi gì? Bạn chọn checkpoint ở đâu?
 
 Không lưu activation trong một đoạn, chỉ lưu input của đoạn; khi backward chạy lại forward của đoạn. Bộ nhớ activation
-từ $$O(n)$$ xuống khoảng $$O(\sqrt n)$$ nếu chia $$\sqrt n$$ đoạn, đổi lại thêm khoảng một lần forward cho mỗi đoạn (bài
-Intermediate 02 đo trên GPU dùng chung: bước fp32 batch 256 từ 765 ms lên 826 ms với 4 đoạn, 1 156 ms với 1 đoạn).
+từ $$O(n)$$ xuống khoảng $$O(\sqrt n)$$ nếu chia $$\sqrt n$$ đoạn, đổi lại thêm khoảng một lần forward cho mỗi đoạn (đo thời gian
+thật trên máy của bạn; bài Intermediate 02 đo trên GPU dùng chung nên chỉ con số bộ nhớ là đáng tin).
 
 Chọn đoạn cỡ vừa, thường một block Transformer hoặc một stage ResNet:
 
@@ -170,8 +172,8 @@ không bị nhân liên tiếp qua mọi tầng như mạng plain. Mạng có th
 al. cho thấy mạng plain sâu hơn train **tệ hơn** cả trên tập train (degradation), không phải do overfit.
 
 Nhưng residual không tự đủ: mỗi block cộng thêm phương sai, nên không có normalization hoặc khởi tạo phù hợp thì activation
-nổ theo độ sâu (đo ở mục 6 lý thuyết với 20 tầng conv residual không norm, He init: logits có độ lệch chuẩn cỡ $$4 \times 10^{3}$$,
-loss ban đầu cỡ 6 900). Các cách giữ: normalization trong nhánh, zero-init tầng cuối của nhánh (γ của BN cuối, hoặc
+nổ theo độ sâu (đo ở mục 6 lý thuyết với 20 tầng conv residual không norm, He init: activation tầng cuối có độ lệch chuẩn khoảng 1 180,
+loss ban đầu 1 166). Các cách giữ: normalization trong nhánh, zero-init tầng cuối của nhánh (γ của BN cuối nhánh, đặt trước phép cộng và ReLU, hoặc
 projection như GPT-2 thu nhỏ theo $$1/\sqrt{2L}$$).
 
 - **Post-norm** (Transformer gốc, BERT): $$\mathrm{LN}(x + f(x))$$. Đường tắt bị chuẩn hoá ở mỗi block; mạng sâu cần warmup
@@ -218,10 +220,10 @@ Xem ba câu hỏi (theo khung "compute-bound, memory-bound, overhead-bound" củ
 
 - **GPU có bận không?** Trên trace (Perfetto), khoảng trống giữa các kernel là GPU chờ CPU: dữ liệu (mục 3) hoặc overhead
   Python/launch kernel với model nhỏ (tăng batch, `torch.compile`, CUDA graphs).
-- **Kernel nào chiếm thời gian?** Bảng `key_averages()` sắp theo `self_cuda_time_total`. Conv/matmul chiếm phần lớn là
+- **Kernel nào chiếm thời gian?** Bảng `key_averages()` sắp theo `self_device_time_total`. Conv/matmul chiếm phần lớn là
   compute-bound: AMP, `channels_last`, TF32 giúp. Các op từng phần tử (BN, activation, cộng) chiếm nhiều là memory-bound:
   gộp kernel (`torch.compile`) giúp. Thấy kernel đổi layout (`nchwToNhwc`) là thiếu `channels_last` (đo ở bài Intermediate 02:
   gần 9% thời gian GPU).
-- **Bộ nhớ cấp ở đâu?** `profile_memory=True`, sắp theo `self_cuda_memory_usage`: op nào sinh tensor lớn nhất.
+- **Bộ nhớ cấp ở đâu?** `profile_memory=True`, sắp theo `self_device_memory_usage`: op nào sinh tensor lớn nhất.
 
 Luôn bỏ vài bước đầu (warmup: cuDNN chọn thuật toán, allocator khởi động) và chỉ profile vài bước, vì profiler làm chậm.

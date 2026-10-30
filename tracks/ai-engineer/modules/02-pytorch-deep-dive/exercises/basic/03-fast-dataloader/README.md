@@ -57,6 +57,6 @@ gì về `Generator` bạn tự tạo. Trong `seed_worker`, `torch.utils.data.ge
 
 ### Gợi ý 2
 
-`augment_batch`: `F.pad(x.float(), (pad,) * 4, mode="reflect")`; sinh `dy`, `dx` shape `(N,)`, dựng chỉ số hàng
-`dy[:, None] + arange(H)` rồi `gather` theo chiều 2, tương tự chiều 3; lật bằng
-`torch.where(flip.view(N, 1, 1, 1), out.flip(3), out)`. Ép về dtype gốc ở cuối.
+`augment_batch`: thay vì cắt từng ảnh bằng slicing, dựng cho mỗi ảnh một bảng chỉ số hàng và cột (vị trí bắt đầu cộng
+một dãy `0..H-1`) rồi lấy pixel bằng phép gather theo chỉ số trên cả batch cùng lúc. Lật có điều kiện cũng làm cho cả batch
+bằng một phép chọn theo mặt nạ. Reflect padding cần tensor số thực.

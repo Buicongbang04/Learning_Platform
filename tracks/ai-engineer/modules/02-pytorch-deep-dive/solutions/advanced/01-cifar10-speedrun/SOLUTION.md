@@ -41,8 +41,9 @@ Bản tham chiếu theo đúng bảng trên, batch 512, bf16, RTX 3050 Laptop 4G
   0.4–0.8 điểm; mỗi epoch khoảng 14 giây khi GPU rảnh.
 - **TTA lật ngang** thêm 0.4–0.7 điểm, tốn một lần forward thêm trên tập test (vài giây).
 - **Peak 1 330 MiB** dưới ngân sách 1.5 GB: tập train uint8 150 MB, model và trạng thái SGD khoảng 75 MB, phần còn lại là
-  activation bf16 của batch 512. Bỏ AMP (fp32) với cùng batch 512 thì **OOM** trên GPU dùng chung (PyTorch đã cấp 1.71 GiB khi
-  hỏng): không có mixed precision thì phải giảm batch, và mục tiêu thời gian xa hơn.
+  activation bf16 của batch 512. Bỏ AMP (fp32) với cùng batch 512 thì **vượt ngân sách**: PyTorch đã cấp
+  1.71 GiB thì hết chỗ (lần đo đó GPU có tiến trình khác giữ phần còn lại, nên OOM là do GPU dùng chung; trên GPU rảnh nó chạy
+  được nhưng vẫn quá 1.5 GB). Không có mixed precision thì phải giảm batch, và mục tiêu thời gian xa hơn.
 - Lần chạy đầu tiên của bản tham chiếu giữ cả tập train ở **fp32 đã chuẩn hoá** trên GPU (586 MB) và OOM ngay khi GPU có tiến
   trình khác: lưu uint8, chuẩn hoá từng batch.
 - Thời gian thay đổi gấp đôi theo việc GPU có ai dùng: báo cáo phải ghi điều kiện đo, và so ablation trong cùng điều kiện.

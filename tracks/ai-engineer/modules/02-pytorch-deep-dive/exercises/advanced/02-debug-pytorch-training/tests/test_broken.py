@@ -50,18 +50,18 @@ def test_preprocess(nb):
     torch.testing.assert_close(out, expected)
 
 
-def test_net_parameters_and_state_dict(nb):
+def test_net_size_and_roundtrip(nb):
     torch.manual_seed(0)
     net = nb.Net(16)
     n = sum(p.numel() for p in net.parameters())
-    assert n == 78042, f"Net(16) phải có 78 042 tham số được PyTorch đăng ký, đang có {n}"
+    assert n == 78042, f"Net(16): {n} tham số, kiến trúc dự định có 78 042"
     net.eval()
     x = torch.randn(2, 3, 32, 32)
     torch.manual_seed(1)
     other = nb.Net(16)
     other.load_state_dict(net.state_dict())
     other.eval()
-    torch.testing.assert_close(other(x), net(x), msg="state_dict phải chứa mọi layer")
+    torch.testing.assert_close(other(x), net(x), msg="Net mới nạp state_dict phải cho cùng output")
 
 
 def test_loss_fn(nb):
@@ -75,13 +75,13 @@ def test_loss_fn(nb):
     torch.testing.assert_close(logits.grad, expected)
 
 
-def test_train_step_accumulates_full_batch_gradient(nb):
+def test_train_step_gradient(nb):
     torch.manual_seed(3)
     model = nn.Sequential(nn.Flatten(), nn.Linear(12, 10))
     x, y = torch.randn(8, 3, 2, 2), torch.randint(0, 10, (8,))
     opt = torch.optim.SGD(model.parameters(), lr=0.0)       # lr 0: chỉ nhìn gradient
     for p in model.parameters():
-        p.grad = torch.ones_like(p)                          # gradient cũ còn sót phải bị xoá
+        p.grad = torch.ones_like(p)                          # trạng thái cũ không sạch
     loss = nb.train_step(model, x, y, opt, accum_steps=4)
     ref = nn.Sequential(nn.Flatten(), nn.Linear(12, 10))
     ref.load_state_dict(model.state_dict())
@@ -89,17 +89,17 @@ def test_train_step_accumulates_full_batch_gradient(nb):
     full.backward()
     assert loss == pytest.approx(full.item(), rel=1e-5)
     for p, q in zip(model.parameters(), ref.parameters()):
-        torch.testing.assert_close(p.grad, q.grad, msg="gradient sau accumulation phải bằng gradient của cả batch")
+        torch.testing.assert_close(p.grad, q.grad, msg="gradient sau train_step khác gradient tham chiếu trên cả batch")
 
 
-def test_train_learns_and_updates_batchnorm(nb):
+def test_train_learns_synthetic(nb):
     x_tr, y_tr = synthetic(1024, 0)
     x_va, y_va = synthetic(256, 1)
     hist = nb.train(x_tr, y_tr, x_va, y_va, seed=0, epochs=3, batch_size=64, lr=0.2, w=8)
     assert len(hist["loss"]) == 3 and all(isinstance(v, float) for v in hist["loss"])
     bn = hist["model"].stem[1]
     assert not torch.allclose(bn.running_var, torch.ones_like(bn.running_var)), (
-        "BatchNorm phải được train ở train mode (running stats được cập nhật)"
+        "buffer của BatchNorm không đổi sau khi train"
     )
     assert hist["val_acc"][-1] >= 0.9, f"val acc trên dữ liệu tổng hợp dễ: {hist['val_acc'][-1]:.3f}"
 
