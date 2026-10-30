@@ -2,20 +2,20 @@ questions:
 - id: tax-cl100k
   kind: data
   type: single
-  prompt: Với `cl100k_base`, tổng token bản tiếng Việt của 1 268 cặp câu gấp bao nhiêu lần bản tiếng Anh?
+  prompt: Với `cl100k_base`, TRUNG VỊ tỉ lệ token Việt/Anh tính theo TỪNG CẶP câu (cell histogram) là bao nhiêu?
   options:
   - id: a
     text: '1.08'
   - id: b
     text: '1.43'
   - id: c
-    text: '2.42'
+    text: '2.40'
   - id: d
     text: '3.15'
-- id: fewest-vi
+- id: en-budget
   kind: data
   type: single
-  prompt: Tokenizer nào cho ÍT token tiếng Việt nhất trên 1 268 câu?
+  prompt: Ngân sách 3 000 token, đưa câu TIẾNG ANH theo thứ tự vào. Tokenizer nào chứa được nhiều câu nhất?
   options:
   - id: a
     text: '`cl100k_base`'
@@ -24,24 +24,24 @@ questions:
   - id: c
     text: Qwen2.5
   - id: d
-    text: Byte UTF-8
-- id: chars-per-token
+    text: Cả ba bằng nhau
+- id: en-chars-per-token
   kind: data
   type: single
-  prompt: Với `o200k_base`, trung bình mỗi token tiếng Việt chứa khoảng bao nhiêu ký tự?
+  prompt: Với `o200k_base`, trung bình mỗi token TIẾNG ANH chứa khoảng bao nhiêu ký tự?
   options:
   - id: a
-    text: Khoảng 3.4
+    text: Khoảng 4.5
   - id: b
-    text: Khoảng 1.0
+    text: Khoảng 3.4
   - id: c
     text: Khoảng 2.0
   - id: d
-    text: Khoảng 4.5
-- id: budget-cl100k
+    text: Khoảng 5.4
+- id: budget-o200k
   kind: data
   type: single
-  prompt: Ngân sách 3 000 token, đưa câu tiếng Việt theo thứ tự vào. Với `cl100k_base` chứa được bao nhiêu câu?
+  prompt: Ngân sách 3 000 token, đưa câu tiếng Việt theo thứ tự vào. Với `o200k_base` chứa được bao nhiêu câu?
   options:
   - id: a
     text: '57'
@@ -50,7 +50,7 @@ questions:
   - id: c
     text: '103'
   - id: d
-    text: '142'
+    text: '147'
 - id: words-vs-syllables
   kind: knowledge
   type: single

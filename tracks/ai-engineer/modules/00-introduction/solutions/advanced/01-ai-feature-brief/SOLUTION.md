@@ -53,8 +53,12 @@ của lý thuyết: request trung vị khoảng 4.9 giây (TTFT 0.86 giây), p95
 5. **Cache gần như vô dụng ở đây** (giảm khoảng 4%): phần lặp lại chỉ 150 token. Người viết "bật prompt caching để giảm
    chi phí" mà không tính là chưa đọc số.
 6. **Tự host không chỉ là giá.** 360 USD/tháng cho GPU 24/7 đắt gấp 3 lần Haiku 5.5, lại cần người vận hành, và với
-   72% thời gian bận thì giờ cao điểm sẽ xếp hàng. Lý do hợp lệ để tự host là dữ liệu không được rời hạ tầng, không phải
-   giá, ở quy mô này.
+   72% thời gian bận thì giờ cao điểm sẽ xếp hàng. Tính theo MTok: Haiku 5.5 ở workload này là khoảng 0.148 USD/MTok
+   (110.5 USD cho 744.9 triệu token mỗi tháng), còn GPU 0.5 USD/giờ ở 400 token/giây, bận 100%, là 0.347 USD/MTok. **Tăng
+   tải không làm tự host thắng**: tải gấp 10 lần thì cần thêm GPU, chi phí tăng theo cùng tỉ lệ. Tự host chỉ rẻ hơn về giá
+   khi một GPU 0.5 USD/giờ đạt bền vững trên khoảng 940 token/giây và bận gần hết thời gian (batching nhiều request đồng
+   thời, model nhỏ hơn hoặc quantization), hoặc khi giá API tăng. Ở quy mô này, lý do hợp lệ để tự host là dữ liệu không
+   được rời hạ tầng, không phải giá.
 7. **Số token theo tokenizer khác nhau.** Notebook đếm bằng Qwen2.5; tokenizer của Claude 4.7 trở đi tạo khoảng 30% nhiều
    token hơn (trang giá Anthropic). Memo tốt cộng biên an toàn hoặc đo lại bằng API đếm token của nhà cung cấp.
 8. **Chưa đo chất lượng.** Mọi so sánh giá chỉ có nghĩa khi model đạt bộ eval. Khuyến nghị đúng là "làm bộ eval trước,
@@ -65,7 +69,8 @@ của lý thuyết: request trung vị khoảng 4.9 giây (TTFT 0.86 giây), p95
 Làm, theo hai bước: (1) hai tuần prototype với `qwen2.5:3b` local (miễn phí, phi thương mại) để dựng retrieval, prompt
 có trích dẫn và bộ eval 300 câu + 50 câu chuyên gia duyệt; (2) nếu đạt ngưỡng, production với model API nhỏ (khoảng
 110 USD/tháng, khoảng 145 USD với biên tokenizer 30%), đối chứng một model lớn trên cùng bộ eval. Khuyến nghị sai nếu: model
-nhỏ trượt eval; dữ liệu khách hàng không được gửi ra ngoài; tải tăng hơn 10 lần (khi đó tự host bắt đầu có lợi); hoặc
+nhỏ trượt eval; dữ liệu khách hàng không được gửi ra ngoài (khi đó tự host dù đắt hơn); một GPU tự host đạt bền vững trên khoảng 940
+token/giây ở 0.5 USD/giờ, hoặc giá API tăng (khi đó tự host rẻ hơn về giá); hoặc
 giá khuyến mãi hết hạn đổi thứ tự phương án (Gemini 3.8 Flash tăng gấp đôi từ 2027-01-01).
 
 ## Rubric
@@ -74,7 +79,7 @@ giá khuyến mãi hết hạn đổi thứ tự phương án (Gemini 3.8 Flash 
 | --- | --- | --- |
 | Test | 10 | `request_tokens`, `overflow_rate` qua test; `MEMO.md` đủ 8 mục, không còn TODO |
 | Khối lượng và token | 20 | Số request/ngày, token trung vị và p95 khớp notebook; phát hiện tràn context và nói cái giá của việc cắt |
-| Chi phí | 20 | Ít nhất 3 phương án, ngày kiểm giá, giả định tokenizer và GPU ghi rõ; nhận ra output chi phối và cache gần như không giúp |
+| Chi phí | 20 | Ít nhất 3 phương án, ngày kiểm giá, giả định tokenizer và GPU ghi rõ; nhận ra output chi phối và cache gần như không giúp; so tự host bằng USD/MTok với điều kiện hoà vốn đúng (thông lượng mỗi GPU, không phải tổng tải) |
 | Độ trễ | 10 | TTFT và độ trễ toàn phần có số, từ hệ số tự đo; đề xuất streaming hoặc giới hạn độ dài trả lời |
 | Model và giấy phép | 15 | Phát hiện `qwen-research`; khớp model với phần cứng (VRAM) có số |
 | Vai trò, rủi ro, đo lường | 10 | Phân việc AI Engineer / ML Engineer / chuyên gia rõ; ít nhất 4 rủi ro có cách đo; bộ eval và ngưỡng trước khi ra mắt |

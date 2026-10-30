@@ -23,7 +23,8 @@
 | Qwen2.5 | 28 088 | 38 298 | 1.364 | 1.243 | 3.486 |
 
 Trung vị tỉ lệ từng cặp: 2.40 với `cl100k_base`, 1.43 với `o200k_base`. Ngân sách 3 000 token chứa được 57 câu tiếng
-Việt với `cl100k_base`, 99 với `o200k_base`, 103 với Qwen2.5; bản tiếng Anh 142 tới 147 câu với cả ba.
+Việt với `cl100k_base`, 99 với `o200k_base`, 103 với Qwen2.5; bản tiếng Anh 142 câu với `cl100k_base` và Qwen2.5, 147
+câu với `o200k_base`. Mỗi token tiếng Anh của `o200k_base` chứa trung bình 4.53 ký tự (`cl100k_base` 4.45, Qwen2.5 4.41).
 
 Trả lời câu hỏi cuối notebook:
 

@@ -74,7 +74,7 @@ trung bình 2 000 token input, 250 token output mỗi lượt). Mỗi ngày 40 0
 lớn 2 / 10: $$4800 + 3000 = 7800$$ USD/tháng.
 
 Điểm cộng: (1) nhận ra lịch sử hội thoại làm input tăng theo bình phương số lượt, nên tóm tắt lịch sử hoặc cắt cửa sổ;
-(2) system prompt và tài liệu cố định dùng prompt caching (đọc cache rẻ khoảng 10 tới 20 lần); (3) routing: câu hỏi dễ
+(2) system prompt và tài liệu cố định dùng prompt caching (đọc cache rẻ 10 tới 40 lần tuỳ model); (3) routing: câu hỏi dễ
 cho model nhỏ; (4) cộng biên cho tokenizer (tiếng Việt) và cho tăng trưởng; (5) chi phí API thường nhỏ so với chi phí
 người, nhưng phải có cảnh báo khi vượt ngân sách.
 

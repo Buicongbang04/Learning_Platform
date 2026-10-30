@@ -22,7 +22,10 @@ trước khi xây nó, và báo cáo bằng p50, p95 thay vì một con số.
 
 ## Đề bài
 
-**Phần cứng:** CPU · ~60 phút
+**Phần cứng:** GPU 4GB · ~60 phút
+
+Ollama chạy được cả khi không có GPU (CPU), nhưng chậm hơn nhiều và tỉ lệ prefill/decode khác; câu trắc nghiệm
+về tỉ lệ đó giả định Ollama dùng GPU như laptop của track.
 
 Cần Ollama với `qwen2.5:3b` (Ollama tự dùng GPU nếu có; số liệu trong lời giải đo trên RTX 3050 Laptop 4GB). Các cell
 `explore` gửi khoảng 25 request, chạy 2 tới 5 phút khi GPU rảnh, lâu hơn nhiều nếu GPU đang bận việc khác.

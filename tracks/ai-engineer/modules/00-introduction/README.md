@@ -278,7 +278,8 @@ Ba điều đọc được từ bảng:
 - `qwen2.5:3b` của Ollama là tệp GGUF Q4_K_M 1.93 GB, lớn hơn 1.54 GB của 4 bit "lý tưởng" vì Q4_K_M dùng trung bình
   hơn 4 bit mỗi trọng số và giữ vài tensor ở độ chính xác cao hơn. Ollama báo model chiếm 2.39 GB VRAM với context
   4 096: 1.93 GB trọng số + 0.15 GB KV cache + phần đệm tính toán. Đọc thêm ở module 10.
-- Mistral-7B có KV cache gấp 2.3 lần Qwen2.5-7B dù cùng cỡ: 8 head KV so với 4. Với context dài và nhiều người dùng
+- Mistral-7B có KV cache gấp 2.3 lần Qwen2.5-7B dù cùng cỡ: 32 layer × 8 head KV so với 28 layer × 4 head KV
+  (cùng head_dim 128), $$\frac{32 \times 8}{28 \times 4} \approx 2.3$$. Với context dài và nhiều người dùng
   đồng thời, KV cache, không phải trọng số, quyết định bạn phục vụ được bao nhiêu request.
 
 ### Prefill và decode
@@ -319,6 +320,7 @@ $$
 
 | Nhà cung cấp | Model | Input | Output | Input đọc từ cache | Ghi chú |
 | --- | --- | --- | --- | --- | --- |
+| Anthropic | Claude Fable 5.1 | 10 | 50 | 0.25 | |
 | Anthropic | Claude Opus 5.5 | 4 | 20 | 0.20 | |
 | Anthropic | Claude Sonnet 5.5 | 2 | 10 | 0.10 | |
 | Anthropic | Claude Haiku 5.5 | 0.10 | 0.50 | 0.01 | prompt trên 100 000 token: 0.50 / 2.50 |
@@ -332,8 +334,8 @@ Những quy luật bền hơn con số:
 
 - **Output đắt gấp nhiều lần input**: đúng 5 lần ở mọi dòng của bảng trên, 6 tới 8 lần ở vài model khác của Google
   (mục 4 giải thích vì sao: decode tuần tự, chiếm GPU lâu hơn mỗi token). Thiết kế để output ngắn (định dạng có cấu trúc, không bắt model "nhắc lại câu hỏi") tiết kiệm thật.
-- **Prompt caching**: phần đầu prompt lặp lại (system prompt, tài liệu cố định) đọc từ cache rẻ bằng khoảng 1/10 hoặc
-  1/20 giá input; ghi vào cache có thể đắt hơn giá input thường (Anthropic: 1.25 lần với cache 5 phút).
+- **Prompt caching**: phần đầu prompt lặp lại (system prompt, tài liệu cố định) đọc từ cache rẻ bằng 1/10 tới 1/40 giá
+  input (Haiku 5.5: 1/10; Sonnet 5.5, Opus 5.5: 1/20; Fable 5.1: 1/40); ghi vào cache có thể đắt hơn giá input thường (Anthropic: 1.25 lần với cache 5 phút).
 - **Batch API** (gửi hàng loạt, nhận kết quả không đồng bộ) giảm 50% ở cả ba nhà cung cấp: dùng cho việc
   không cần trả lời ngay như gán nhãn, tóm tắt hàng loạt, chạy eval.
 - **Giá theo độ dài prompt và giá khuyến mãi**: một số model tính giá cao hơn cho cả request khi prompt vượt ngưỡng
@@ -434,9 +436,10 @@ và log đầy đủ.
 Phần này lỗi thời nhanh nhất; đọc như ảnh chụp ngày **2026-10-30** và học cách tự cập nhật.
 
 **Model đóng qua API.** Ba nhà cung cấp lớn đều bán theo **bậc**: model lớn nhất cho suy luận khó và agent dài, model
-giữa cân bằng, model nhỏ cho việc khối lượng lớn cần rẻ và nhanh (bảng giá mục 5): Anthropic (Claude Opus, Sonnet,
-Haiku 5.5), OpenAI (gpt-6-astra, gpt-6.1-sol, gpt-6.1-terra, gpt-6-luna), Google (Gemini 4 Argon, Gemini 3.8 Flash).
-Giá input của bậc cao nhất gấp 40 lần (Anthropic) và 100 lần (OpenAI) bậc thấp nhất, nên **routing** (việc dễ cho model
+giữa cân bằng, model nhỏ cho việc khối lượng lớn cần rẻ và nhanh (bảng giá mục 5): Anthropic (Claude Fable 5.1, Opus,
+Sonnet, Haiku 5.5), OpenAI (gpt-6-astra, gpt-6.1-sol, gpt-6.1-terra, gpt-6-luna), Google (Gemini 4 Argon, Gemini 3.8 Flash).
+Giá input của bậc cao nhất gấp 100 lần bậc thấp nhất ở cả Anthropic (Fable 5.1 so với Haiku 5.5; Opus 5.5 là
+40 lần) và OpenAI (gpt-6-astra so với gpt-6-luna), nên **routing** (việc dễ cho model
 nhỏ) là đòn bẩy chi phí lớn nhất.
 
 **Model mở trọng số (open weights).** Tải về chạy trên máy mình, fine-tune được, dữ liệu không rời hạ tầng. Mười model
