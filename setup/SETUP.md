@@ -26,6 +26,8 @@ uv sync                   # tạo .venv, cài Python 3.12 nếu thiếu và toà
 uv run python -c "import duckdb, pyspark, kafka; print('ok')"
 ```
 
+Tùy chọn cho module 10 và 20 của track AI Engineer: `uv sync --group llama` cài `llama-cpp-python`. Gói này build từ source nên cần `gcc`, `g++`, `cmake` (Debian/Ubuntu: `sudo apt install build-essential cmake`), mất khoảng 4 phút. Không có toolchain thì bỏ qua và dùng Ollama hoặc binary `llama.cpp` server; `uv sync` thường vẫn chạy bình thường.
+
 Mọi lệnh Python dùng `uv run ...` (không cần activate venv). Muốn activate: `source .venv/bin/activate`.
 
 ## 3. Docker

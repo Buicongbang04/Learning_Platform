@@ -62,3 +62,9 @@ export OLLAMA_HOST=http://<ip-PC>:11434
 
 `llmkit.py` đọc biến này (xem docstring đầu `llmkit.py`); bảng biến môi trường ở
 [`../SETUP.md`](../SETUP.md).
+
+## Giai đoạn 3: thư viện thêm và vLLM
+
+`diffusers`, `ultralytics`, `opencv-python-headless`, `tokenizers`, `tiktoken`, `faster-whisper`, `gguf` cùng phiên bản với env gốc (ghim `==`). Phụ thuộc gián tiếp phát hành sau 2026-10-16 bị chặn bằng `constraint-dependencies` (bỏ khi đủ 2 tuần).
+
+**vLLM không cài được** cùng env này: `vllm==0.31.0` đòi `transformers<5.18`, trong khi env cần `transformers>=5.22`. Module 20 (serving) dùng `llama.cpp` server / Ollama trên laptop; vLLM chỉ nên thử trong env riêng trên PC (driver mới) và ghi là cell không chấm.

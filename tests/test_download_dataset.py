@@ -194,3 +194,78 @@ def test_hf_download_calls_hub(monkeypatch, tmp_path):
     assert (out / "sub" / "a.json").read_text() == "{}"
     assert calls[0]["repo_id"] == "o/r" and calls[0]["filename"] == "sub/a.json"
     assert calls[0]["repo_type"] == "dataset" and calls[0]["token"] == "hf_x"
+
+
+def test_hf_revision_is_passed_to_hub(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    ds = dd.Dataset("hf", "o/r", ["sub/a.json"], license="x", homepage="x", revision="refs/convert/parquet")
+    monkeypatch.setitem(dd.DATASETS, "t-hf", ds)
+    cached = tmp_path / "a.json"
+    cached.write_text("{}")
+    calls = []
+    monkeypatch.setattr(dd, "hf_hub_download", lambda **kw: calls.append(kw) or str(cached))
+    dd.download("t-hf", tmp_path / "out")
+    assert calls[0]["revision"] == "refs/convert/parquet"
+
+
+def _fake_stream(payloads):
+    class Resp:
+        def __init__(self, data):
+            self.data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            yield self.data
+
+    it = iter(payloads)
+    return lambda *a, **k: Resp(next(it))
+
+
+def test_tuple_url_extract_keeps_dirs_and_removes_archives(monkeypatch, tmp_path):
+    import tarfile
+
+    dd = load("download_dataset")
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w") as zf:
+        zf.writestr("Ped/img/a.png", "x")
+        zf.writestr("Ped/mask/a_mask.png", "y")
+    tbuf = io.BytesIO()
+    with tarfile.open(fileobj=tbuf, mode="w:gz") as tf:
+        info = tarfile.TarInfo("batches/data_1")
+        info.size = 3
+        tf.addfile(info, io.BytesIO(b"abc"))
+    ds = dd.Dataset("url", ("http://x/a.zip", "http://x/b.tgz"), ["a.zip", "b.tgz"], license="x", homepage="x", extract=True)
+    monkeypatch.setitem(dd.DATASETS, "t-ex", ds)
+    monkeypatch.setattr(dd.requests, "get", _fake_stream([zbuf.getvalue(), tbuf.getvalue()]))
+    out = tmp_path / "out"
+    paths = dd.download("t-ex", out)
+    assert (out / "Ped" / "img" / "a.png").read_text() == "x"
+    assert (out / "batches" / "data_1").read_bytes() == b"abc"
+    assert not (out / "a.zip").exists() and not (out / "b.tgz").exists()
+    assert out / "Ped" / "mask" / "a_mask.png" in paths
+
+
+def test_extract_rejects_path_traversal(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w") as zf:
+        zf.writestr("../evil.txt", "x")
+    ds = dd.Dataset("url", ("http://x/a.zip",), ["a.zip"], license="x", homepage="x", extract=True)
+    monkeypatch.setitem(dd.DATASETS, "t-ex", ds)
+    monkeypatch.setattr(dd.requests, "get", _fake_stream([zbuf.getvalue()]))
+    with pytest.raises(SystemExit):
+        dd.download("t-ex", tmp_path / "out")
+    assert not (tmp_path / "evil.txt").exists()
+
+
+def test_phase3_datasets_registered():
+    dd = load("download_dataset")
+    assert {"cifar10", "oxford-pets", "penn-fudan", "uit-vsfc", "iwslt15-en-vi", "wikipedia-vi", "openorca-viet", "gsm8k", "prompt-injections", "fleurs-vi"} <= set(dd.DATASETS)
