@@ -46,14 +46,25 @@ gần "có ý nghĩa", chỉ vì khách 75 nghìn GBP rơi vào control. Cắt �
 ## Các quyết định cần cân nhắc
 
 - **Metric chính**: tỉ lệ mua dễ đo, MDE +6.3 điểm, nhưng không nói voucher có **lời** không (khách mua nhiều
-  hơn ở giá thấp hơn). Lựa chọn tốt hơn: **doanh thu sau voucher trên mỗi khách được chia nhóm trong 30 ngày, cắt
-  ở p99 của giai đoạn trước** (ngưỡng ghi số cụ thể trong brief, ví dụ 3 674 GBP), tỉ lệ mua là metric phụ. Ngưỡng
-  cắt tính từ dữ liệu **trước** thí nghiệm (hoặc từ control), không chọn sau khi xem kết quả.
-- **Ngưỡng hoà vốn** (ví dụ giả định: biên lợi nhuận gộp 40%): voucher 10% giảm giá bán, giá vốn giữ nguyên, nên
-  lợi nhuận trên doanh thu niêm yết của nhóm treatment là 40% − 10% = 30%. Hoà vốn khi doanh thu treatment ≥
-  40/30 = **1.33 lần** control, tức +33%. Nếu mọi khách đều dùng voucher; thực tế ít hơn nên ngưỡng thấp hơn. MDE
-  khoảng +29% gần ngưỡng hoà vốn: thí nghiệm vừa đủ nhạy để phân biệt "không tác dụng" với "đủ hoà vốn", không đủ
-  để đo chính xác hiệu ứng nhỏ.
+  hơn ở giá thấp hơn). Lựa chọn tốt hơn: **doanh thu theo giá niêm yết (trước khi trừ voucher) trên mỗi khách
+  được chia nhóm trong 30 ngày, cắt ở p99 của giai đoạn trước** (ngưỡng ghi số cụ thể trong brief, ví dụ 3 674
+  GBP), tỉ lệ mua là metric phụ, chi phí voucher (giá trị giảm giá thực tế) là metric phụ để tính lợi nhuận. Đo
+  theo giá niêm yết để metric so được với baseline lịch sử và với control (không ai giảm giá); ngưỡng hoà vốn phía
+  dưới tính trên **chính metric này**. Ngưỡng cắt tính từ dữ liệu **trước** thí nghiệm (hoặc từ control), không
+  chọn sau khi xem kết quả.
+- **Ngưỡng hoà vốn** (ví dụ giả định: biên lợi nhuận gộp 40%, mọi đơn của nhóm treatment đều dùng voucher): gọi
+  R là doanh thu theo giá niêm yết. Control lãi 0.4·R_c. Treatment bán giảm 10% nhưng giá vốn giữ nguyên, nên lãi
+  (0.4 − 0.1)·R_t = 0.3·R_t. Hoà vốn khi R_t / R_c ≥ 0.4 / 0.3 = **1.33**, tức doanh thu **theo giá niêm yết** tăng
+  +33%. Cùng điều kiện đó viết theo doanh thu **sau voucher** R′_t = 0.9·R_t là R′_t / R_c ≥ 1.2, tức +20%: hai con
+  số mô tả cùng một ngưỡng trên hai metric khác nhau. Lỗi hay gặp là đo metric sau voucher mà so với ngưỡng +33%
+  (hoặc ngược lại); brief phải ghi rõ ngưỡng đi với metric nào. Thực tế không phải đơn nào cũng dùng voucher nên
+  ngưỡng thấp hơn.
+- **Power so với ngưỡng**: MDE khoảng +29% (metric theo giá niêm yết, cắt p99, 958 khách mỗi nhóm) nhỏ hơn ngưỡng
+  +33%: nếu voucher đúng ở mức hoà vốn, thí nghiệm có hơn 80% khả năng thấy hiệu ứng **khác 0**. Nhưng để cận dưới
+  của khoảng tin cậy **vượt** +33% thì hiệu ứng thật phải khoảng +60% trở lên; với hiệu ứng nằm giữa 0 và hoà vốn,
+  kết quả thường là "chưa kết luận". Nói thẳng với Giám đốc kinh doanh: thí nghiệm một đợt này loại được "voucher vô
+  dụng" và "voucher lãi rất rõ", không đo chính xác được vùng quanh hoà vốn. Muốn hơn thì mở rộng đối tượng (nới
+  định nghĩa đang hoạt động lên 180 ngày) hoặc lặp lại thí nghiệm ở đợt sau và gộp kết quả.
 - **Tỉ lệ chia**: 50/50 cho power cao nhất. Nếu CRM muốn ít khách nhận voucher hơn (rủi ro chi phí), 30/70 làm
   MDE tăng; tính lại và ghi rõ.
 - **Thời lượng**: gửi một lần ngày 1/9, đo 30 ngày, đọc sau khi dữ liệu và đơn huỷ của tháng 9 đã ổn định (khoảng
@@ -73,11 +84,12 @@ gần "có ý nghĩa", chỉ vì khách 75 nghìn GBP rơi vào control. Cắt �
   làm doanh thu sau giảm giá trên mỗi khách tăng đủ để bù chi phí giảm giá.
 - **Đối tượng**: 1 923 khách có mua trong 90 ngày trước 1/9/2011; chia 50/50 theo hash `welcome-voucher-2011`
   (958 / 965).
-- **Metric**: chính là doanh thu sau voucher/khách trong 30 ngày, cắt ở 3 674 GBP; phụ là tỉ lệ mua (baseline
+- **Metric**: chính là doanh thu theo giá niêm yết/khách trong 30 ngày, cắt ở 3 674 GBP; phụ là chi phí voucher, tỉ lệ mua (baseline
   37.9%) và doanh thu 90 ngày; guardrail là tỉ lệ doanh thu bị huỷ (baseline 2.9%, ngưỡng +1 điểm) và giá trị đơn
   trung bình.
-- **Sample size**: MDE khoảng +29% doanh thu cắt đuôi, +6.3 điểm tỉ lệ mua; hoà vốn cần khoảng +33% (biên 40%, ví
-  dụ giả định).
+- **Sample size**: MDE khoảng +29% doanh thu (giá niêm yết, cắt đuôi), +6.3 điểm tỉ lệ mua; hoà vốn cần khoảng
+  +33% trên chính metric này (tương đương +20% nếu đo sau voucher; biên 40%, ví dụ giả định). Đủ để thấy một hiệu ứng
+  cỡ hoà vốn khác 0, không đủ để chứng minh đã vượt hoà vốn.
 - **Quy tắc**: SRM hoặc guardrail hỏng thì điều tra; CI trên < ngưỡng hoà vốn thì không gửi rộng; CI dưới > 0 và
   ước lượng ≥ hoà vốn thì gửi; còn lại chưa kết luận, không gửi rộng, thiết kế lần sau với đối tượng lớn hơn.
 - **Readout chạy thử**: bảng A/A ở trên, ghi rõ "không ai nhận voucher", nêu bài học về khách 75 nghìn GBP.
@@ -90,7 +102,7 @@ gần "có ý nghĩa", chỉ vì khách 75 nghìn GBP rơi vào control. Cắt �
 | Câu hỏi và quyết định | 10 | Nêu rõ quyết định, người quyết, giả thuyết có cơ chế |
 | Đối tượng và chia nhóm | 10 | Định nghĩa "đang hoạt động" có ngày, số khách, đơn vị chia nhóm, hash + salt, vì sao cố định đối tượng trước |
 | Metric và guardrail | 20 | Metric chính tính trên mọi khách được chia nhóm, xử lý đuôi dài bằng ngưỡng đặt trước, phân biệt tỉ lệ mua với doanh thu; guardrail có baseline và ngưỡng |
-| Sample size | 15 | MDE thật cho cả hai metric, so với ngưỡng hoà vốn (ghi rõ giả định biên lợi nhuận); nói thẳng metric nào không khả thi |
+| Sample size | 15 | MDE thật cho cả hai metric, so với ngưỡng hoà vốn tính trên đúng metric chính (ghi rõ giả định biên lợi nhuận); nói thẳng metric nào không khả thi và thí nghiệm phân biệt được điều gì |
 | Kiểm tra và quy tắc | 15 | SRM, không peeking, một ngày đọc kết quả; quy tắc ship/không ship/chưa kết luận viết theo CI và ngưỡng, trước khi có dữ liệu |
 | Readout chạy thử | 10 | Bảng A/A có số; giải thích chênh lệch doanh thu không cắt đuôi; tỉ lệ false positive gần 5% |
 | Rủi ro | 5 | Ít nhất hai rủi ro cụ thể: mùa vụ, kéo cầu sớm, lây nhiễm mã, khách sỉ |

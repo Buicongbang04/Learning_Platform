@@ -53,9 +53,11 @@ bộ `online-retail-ii`). Mở `starter/experiment_brief.ipynb`:
 ### Gợi ý 1
 
 Brief tốt trả lời được câu "nếu kết quả ra X thì ta làm gì" **trước** khi có kết quả. Bắt đầu từ quyết định
-(gửi voucher cho mọi khách hay không), suy ra ngưỡng đáng làm: voucher 10% lấy đi 10% doanh thu của khách dùng
-voucher, nên doanh thu phải tăng đủ để bù. Rồi mới hỏi: với khoảng 960 khách mỗi nhóm, thí nghiệm có đủ nhạy để
-thấy mức đó không?
+(gửi voucher cho mọi khách hay không), suy ra ngưỡng đáng làm: voucher giảm 10% giá bán của các đơn dùng voucher
+nhưng giá vốn giữ nguyên, nên doanh thu phải tăng đủ để lợi nhuận (không phải doanh thu) bù được phần giảm giá.
+Chọn rõ metric chính đo theo giá niêm yết hay sau voucher, rồi tính ngưỡng hoà vốn **trên đúng metric đó** (hai
+cách cho hai con số khác nhau). Rồi mới hỏi: với khoảng 960 khách mỗi nhóm, thí nghiệm có đủ nhạy để phân biệt
+"không tác dụng" với "đủ hoà vốn" không?
 
 ### Gợi ý 2
 

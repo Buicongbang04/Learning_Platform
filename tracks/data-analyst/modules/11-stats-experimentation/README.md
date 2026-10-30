@@ -267,8 +267,9 @@ cáo; phần còn lại sẽ xảy ra kể cả không có quảng cáo. Có nê
 
 ### Bẫy khi đọc kết quả
 
-- **Peeking**: xem p-value mỗi ngày và dừng khi p < 0.05. Mô phỏng 28 lần nhìn khi A và B như nhau cho khoảng 27%
-  thí nghiệm "có ý nghĩa" ở một lúc nào đó. Muốn dừng sớm thì thiết kế sequential test từ đầu.
+- **Peeking**: xem p-value mỗi ngày và dừng khi p < 0.05. Mô phỏng 28 lần nhìn khi A và B như nhau (đoạn code cuối mục này)
+  cho khoảng 25-30% thí nghiệm "có ý nghĩa" ở một lúc nào đó, thay vì 5%. Muốn dừng sớm thì thiết kế sequential
+  test từ đầu.
 - **Novelty, primacy**: lift giảm dần theo tuần (người dùng tò mò) hoặc tăng dần (người dùng cần làm quen). Đọc
   theo tuần, chạy đủ lâu.
 - **Phân khúc sau thí nghiệm**: tách 10 phân khúc thì gần như chắc có một phân khúc "có ý nghĩa". Đó là giả thuyết
@@ -277,6 +278,27 @@ cáo; phần còn lại sẽ xảy ra kể cả không có quảng cáo. Có nê
   hoặc tiền.
 - **Lây nhiễm giữa nhóm** (network effect, chia sẻ mã giảm giá, marketplace hai phía): hiệu ứng đo được lệch về 0
   hoặc đổi dấu; cần chia theo cụm (vùng, thời gian).
+
+Mô phỏng peeking: A và B như nhau, nhìn kết quả mỗi ngày trong 4 tuần.
+
+```python
+import numpy as np
+
+rng = np.random.default_rng(0)
+sims, days, per_day, p = 4000, 28, 500, 0.10  # A và B cùng tỉ lệ 10%, mỗi nhóm 500 người/ngày
+a = rng.binomial(per_day, p, (sims, days)).cumsum(axis=1)
+b = rng.binomial(per_day, p, (sims, days)).cumsum(axis=1)
+n = per_day * np.arange(1, days + 1)
+pooled = (a + b) / (2 * n)
+z = (b - a) / n / np.sqrt(pooled * (1 - pooled) * 2 / n)
+print(f"dừng khi p < 0.05 ở bất kỳ ngày nào: {(np.abs(z) > 1.96).any(axis=1).mean():.1%}")
+print(f"chỉ nhìn ngày cuối: {(np.abs(z[:, -1]) > 1.96).mean():.1%}")
+```
+
+```text
+dừng khi p < 0.05 ở bất kỳ ngày nào: 26.6%
+chỉ nhìn ngày cuối: 5.2%
+```
 
 ## 5. Correlation không phải causation, và DiD nhanh
 

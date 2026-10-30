@@ -63,6 +63,6 @@ ngẫu nhiên **tần suất**.
 ## Ba câu cho CMO (mẫu)
 
 "Quảng cáo tăng tỉ lệ mua từ 1.79% lên 2.55% (+0.77 điểm %, khoảng tin cậy 0.60-0.94), tức khoảng 4 300 đơn tăng
-thêm trong 565 nghìn người thấy quảng cáo; đây là hiệu ứng thật, không phải ngẫu nhiên. Nên tiếp tục, với điều
+thêm trong 565 nghìn người thấy quảng cáo; với điều kiện cách chia nhóm được xác nhận, đây là hiệu ứng thật, không phải ngẫu nhiên. Nên tiếp tục, với điều
 kiện chi phí cho mỗi đơn tăng thêm (không phải mỗi đơn) thấp hơn biên lợi nhuận. Cần đội kỹ thuật kiểm vì sao tỉ lệ
 nhóm đối chứng lệch theo ngày (3.5-4.7%) trước khi dùng kết quả để tối ưu lịch chạy quảng cáo."

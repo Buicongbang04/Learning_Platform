@@ -68,9 +68,10 @@ một ngưỡng đặt trước; vượt ngưỡng thì không ship dù metric c
 
 Voucher 10% cho khách đang hoạt động:
 
-- Metric chính: doanh thu **sau voucher** trên mỗi khách được chia nhóm (kể cả người không mua) trong 30 ngày, cắt
-  đuôi ở p99 giai đoạn trước. Không chọn "tỉ lệ mua": voucher có thể làm nhiều người mua hơn ở giá thấp hơn mà
-  lỗ.
+- Metric chính: doanh thu **theo giá niêm yết** trên mỗi khách được chia nhóm (kể cả người không mua) trong 30
+  ngày, cắt đuôi ở p99 giai đoạn trước, kèm ngưỡng hoà vốn tính trên chính metric đó (ví dụ giả định biên gộp 40%:
+  +33% theo giá niêm yết, tương đương +20% nếu đo sau voucher; trộn hai cách là lỗi hay gặp). Không chọn "tỉ lệ
+  mua": voucher có thể làm nhiều người mua hơn ở giá thấp hơn mà lỗ.
 - Metric phụ: tỉ lệ mua, số đơn, doanh thu 90 ngày (kéo cầu sớm?).
 - Guardrail: tỉ lệ doanh thu bị huỷ (baseline 2.9% trên Online Retail II, ngưỡng +1 điểm), biên lợi nhuận, giá trị
   đơn trung bình.
@@ -117,7 +118,7 @@ ghi 95/5 thay vì 96/4 thì p ≈ 3e-271); và tổng thể đúng tỉ lệ v�
 ## Peeking là gì? Nếu business thật sự cần dừng sớm thì sao?
 
 Peeking: xem p-value nhiều lần trong lúc chạy và dừng ngay khi p < 0.05. Mỗi lần nhìn là một cơ hội thêm cho nhiễu
-vượt ngưỡng: mô phỏng 28 lần nhìn (mỗi ngày trong 4 tuần) khi A và B như nhau cho khoảng 27% thí nghiệm "có ý
+vượt ngưỡng: mô phỏng 28 lần nhìn (mỗi ngày trong 4 tuần) khi A và B như nhau cho khoảng 25-30% thí nghiệm "có ý
 nghĩa" ở một thời điểm nào đó, thay vì 5%.
 
 Nếu cần dừng sớm (tính năng gây hại, hoặc cơ hội lớn): thiết kế từ đầu **sequential testing** (group sequential với

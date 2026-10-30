@@ -30,7 +30,7 @@ cần cân nhắc, headline mẫu và rubric chấm memo.
 | Placebo mốc giả 1/6/2011 (chỉ dữ liệu trước) | DiD −10.2%; hồi quy −15.8%, p = 0.31 |
 | Placebo cùng mùa 2010, mốc 1/9/2010 | DiD **−13.6%**; hồi quy −11.5%, p = 0.30 |
 | Xu hướng trước | độ dốc khoảng cách log +0.004/tuần, p = 0.65: không thấy hai nhóm đi lệch nhau trước 1/9 |
-| Độ nhạy | sai số chuẩn khoảng 0.084 trên log, nên hiệu ứng phải cỡ +25-30% mới có cơ hội tốt (power 80%) được phát hiện |
+| Độ nhạy (cell explore "độ nhạy của phương pháp") | sai số chuẩn 0.0843 trên log, MDE (alpha 0.05, power 0.8) = 2.80 × 0.0843 = 0.236 log, tức khoảng **+27%**: hiệu ứng nhỏ hơn thì nhiều khả năng không thấy |
 | So cùng nước, năm trước | 1.681 / 1.456 − 1 = +15.5% (không trừ được xu hướng tăng của công ty giữa hai năm) |
 
 **Câu chuyện đúng**: 68% là thật nhưng gần như toàn bộ là mùa vụ cuối năm: các nước châu Âu khác (không có chiến
