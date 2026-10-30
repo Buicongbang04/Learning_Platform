@@ -1,0 +1,64 @@
+questions:
+  - id: offday-share
+    kind: data
+    type: single
+    prompt: "Ngày nghỉ (cuối tuần, lễ) chiếm bao nhiêu % số ngày, và mang bao nhiêu % lượt của khách vãng lai?"
+    options:
+      - { id: a, text: "31.6% số ngày; 31.7% lượt khách vãng lai" }
+      - { id: b, text: "31.6% số ngày; 51.1% lượt khách vãng lai" }
+      - { id: c, text: "51.1% số ngày; 18.8% lượt khách vãng lai" }
+      - { id: d, text: "13.2% số ngày; 31.7% lượt khách vãng lai" }
+  - id: window-concentration
+    kind: data
+    type: single
+    prompt: "Khung chiến dịch (ngày nghỉ, 10h-17h, tháng 4-10) chiếm 6.1% số giờ có dữ liệu. Nó chứa bao nhiêu % tổng lượt của khách vãng lai?"
+    options:
+      - { id: a, text: "27.6%" }
+      - { id: b, text: "38.9%" }
+      - { id: c, text: "18.8%" }
+      - { id: d, text: "51.1%" }
+  - id: reach-ratio
+    kind: data
+    type: single
+    prompt: "Tỉ trọng khách vãng lai trong lượt thuê ngày nghỉ cao gấp khoảng bao nhiêu lần ngày làm việc?"
+    options:
+      - { id: a, text: "1.1 lần" }
+      - { id: b, text: "1.6 lần" }
+      - { id: c, text: "2.4 lần" }
+      - { id: d, text: "3.9 lần" }
+  - id: offday-peak-hour
+    kind: data
+    type: single
+    prompt: "Theo chart lượt TB mỗi giờ, khách vãng lai ngày nghỉ đông nhất vào giờ nào?"
+    options:
+      - { id: a, text: "8h" }
+      - { id: b, text: "17h" }
+      - { id: c, text: "11h" }
+      - { id: d, text: "14h" }
+  - id: bluf
+    kind: knowledge
+    type: single
+    prompt: "Giám đốc marketing chỉ đọc dòng đầu của memo. Dòng đó nên là gì?"
+    options:
+      - { id: a, text: "Mô tả bộ dữ liệu và kỳ phân tích đã dùng" }
+      - { id: b, text: "Câu hỏi giám đốc đặt ra, viết lại cho rõ" }
+      - { id: c, text: "Kết luận và việc nên làm, có một con số" }
+      - { id: d, text: "Các bước làm sạch và phân tích đã thực hiện" }
+  - id: valid-limitation
+    kind: knowledge
+    type: single
+    prompt: "Câu nào là **giới hạn** đúng và quan trọng nhất cần ghi trong memo này?"
+    options:
+      - { id: a, text: "Dữ liệu không cho biết khách vãng lai nào sẽ đăng ký thành viên" }
+      - { id: b, text: "Dữ liệu chỉ có 17 379 dòng nên không thể tin được kết quả" }
+      - { id: c, text: "Phân tích chưa dùng model machine learning để dự đoán" }
+      - { id: d, text: "Khách vãng lai chắc chắn không muốn trở thành thành viên" }
+  - id: no-jargon
+    kind: knowledge
+    type: single
+    prompt: "Vì sao memo nên viết \"ngày nghỉ\" thay vì \"workingday = 0\"?"
+    options:
+      - { id: a, text: "Vì tên cột có thể đổi khi dữ liệu được cập nhật" }
+      - { id: b, text: "Vì viết tên cột làm memo dài hơn giới hạn từ" }
+      - { id: c, text: "Vì người đọc có thể sao chép sai tên cột đó" }
+      - { id: d, text: "Vì người đọc ra quyết định không đọc tên cột" }

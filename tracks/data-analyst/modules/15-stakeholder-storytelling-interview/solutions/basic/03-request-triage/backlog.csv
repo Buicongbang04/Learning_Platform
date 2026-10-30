@@ -1,0 +1,13 @@
+id,requester,ask,decision,impact,effort_hours,recurring,in_dashboard
+R01,CEO,Doanh thu và số khách theo nước 12 tháng qua,Chọn thị trường ưu tiên năm 2012,5,6,False,False
+R02,Trưởng vùng Bắc,Doanh thu tuần của vùng Bắc,Theo dõi KPI vùng hằng tuần,2,1,True,True
+R03,Trưởng phòng CRM,Làm giúp chị phân tích khách hàng,,3,16,False,False
+R04,Vận hành,Tỉ lệ giao trễ theo kho tuần này,Điều phối shipper giữa các kho,4,3,True,False
+R05,Marketing,Chiến dịch email tháng 11 có hiệu quả không,Gia hạn hợp đồng nền tảng email,4,12,False,False
+R06,Tài chính,Tính lại hoa hồng sales của 3 năm trước,Đối chiếu một khiếu nại hoa hồng cũ,2,40,False,False
+R07,PM,Bao nhiêu người dùng tính năng wishlist,Giữ hay gỡ tính năng wishlist,3,2,False,False
+R08,CFO,Tỉ lệ hoàn hàng quý 4 khớp sổ kế toán,Báo cáo hội đồng quản trị,5,10,False,False
+R09,Sales,Top 20 khách sỉ đang giảm mua,Gọi chăm sóc khách sỉ tuần này,4,4,False,False
+R10,Merchandising,Danh sách SKU bán chậm nên cắt,Cắt danh mục cho năm 2012,4,20,False,False
+R11,Nhân sự,Số nhân viên theo phòng ban,Báo cáo nội bộ hằng tháng,1,1,True,True
+R12,Vận hành,Số đơn hôm qua tăng đột biến có bất thường không,Kiểm tra đơn gian lận,3,1,False,False
