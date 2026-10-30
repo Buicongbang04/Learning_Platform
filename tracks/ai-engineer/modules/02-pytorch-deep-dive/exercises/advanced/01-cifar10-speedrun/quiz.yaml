@@ -1,0 +1,79 @@
+questions:
+- id: ref-epochs
+  kind: data
+  type: single
+  prompt: Bản tham chiếu (ResNet-9, bf16, batch 512, TTA) cần khoảng bao nhiêu epoch để đạt 94% test accuracy?
+  options:
+  - id: a
+    text: '10'
+  - id: b
+    text: '16'
+  - id: c
+    text: '24'
+  - id: d
+    text: '60'
+- id: ref-tta
+  kind: data
+  type: single
+  prompt: TTA lật ngang thêm bao nhiêu điểm test accuracy cho bản tham chiếu 24 epoch?
+  options:
+  - id: a
+    text: Giảm vì ảnh lật là ảnh lạ
+  - id: b
+    text: Khoảng 2 tới 3 điểm
+  - id: c
+    text: Không đổi gì đáng kể
+  - id: d
+    text: Khoảng 0.4 tới 0.7 điểm
+- id: ref-fp32
+  kind: data
+  type: single
+  prompt: Bỏ autocast (train fp32) mà giữ batch 512 trên GPU 4GB dùng chung thì bản tham chiếu ra sao?
+  options:
+  - id: a
+    text: Chậm hơn khoảng 2 lần, accuracy như cũ
+  - id: b
+    text: CUDA out of memory, phải giảm batch
+  - id: c
+    text: Nhanh hơn vì không phải ép kiểu
+  - id: d
+    text: Loss ra NaN vì gradient tràn
+- id: data-on-gpu
+  kind: knowledge
+  type: single
+  prompt: Vì sao giữ cả tập train ở uint8 trên GPU thay vì float32 đã chuẩn hoá?
+  options:
+  - id: a
+    text: float32 trên GPU không xáo được bằng torch.randperm
+  - id: b
+    text: Tensor Core chỉ nhân được số nguyên 8 bit trên GPU Ampere
+  - id: c
+    text: 150 MB thay vì 586 MB, chuẩn hoá từng batch gần như miễn phí
+  - id: d
+    text: Augmentation lật ngang chỉ chạy trên tensor kiểu uint8
+- id: timing
+  kind: knowledge
+  type: single
+  prompt: Đo thời gian train trên GPU bằng time.perf_counter() mà không torch.cuda.synchronize() thì sao?
+  options:
+  - id: a
+    text: Số đo luôn lớn hơn thật vì có thêm overhead của Python
+  - id: b
+    text: Số đo có thể nhỏ hơn thật vì kernel chạy bất đồng bộ
+  - id: c
+    text: PyTorch báo lỗi vì GPU chưa xong việc
+  - id: d
+    text: Không sao, perf_counter đã chờ GPU sẵn
+- id: item-each-step
+  kind: knowledge
+  type: single
+  prompt: Gọi loss.item() ở mỗi bước train trên GPU có hại gì?
+  options:
+  - id: a
+    text: Không hại gì, item() chỉ đọc một số nhỏ
+  - id: b
+    text: Giữ lại graph của mọi bước nên rò rỉ bộ nhớ
+  - id: c
+    text: Làm sai giá trị loss vì ép về float64
+  - id: d
+    text: CPU phải chờ GPU xong mỗi bước, mất xếp hàng kernel

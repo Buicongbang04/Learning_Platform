@@ -1,0 +1,6 @@
+ref-epochs: [c]
+ref-tta: [d]
+ref-fp32: [b]
+data-on-gpu: [c]
+timing: [b]
+item-each-step: [d]
