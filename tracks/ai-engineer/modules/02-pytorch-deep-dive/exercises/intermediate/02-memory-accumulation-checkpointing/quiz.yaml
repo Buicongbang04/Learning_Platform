@@ -1,0 +1,105 @@
+questions:
+- id: act-fp32
+  kind: data
+  type: single
+  prompt: ResNet-9 W=32, batch 128 ảnh CIFAR-10, fp32. saved_tensor_bytes đo được bao nhiêu activation?
+  options:
+  - id: a
+    text: 6.3 MiB
+  - id: b
+    text: 59.5 MiB
+  - id: c
+    text: 237.9 MiB
+  - id: d
+    text: 951.6 MiB
+- id: act-bf16
+  kind: data
+  type: single
+  prompt: Cùng model và batch đó trong autocast bf16, activation còn bao nhiêu?
+  options:
+  - id: a
+    text: 136.2 MiB, hơn một nửa bản fp32
+  - id: b
+    text: 119.0 MiB, đúng một nửa bản fp32
+  - id: c
+    text: 237.9 MiB, autocast không đổi activation
+  - id: d
+    text: 59.5 MiB, một phần tư bản fp32
+- id: ckpt-4
+  kind: data
+  type: single
+  prompt: Chia 12 layer của ResNet-9 thành 4 đoạn checkpoint thì activation được giữ lại còn bao nhiêu?
+  options:
+  - id: a
+    text: 1.5 MiB
+  - id: b
+    text: 15.5 MiB
+  - id: c
+    text: 97.6 MiB
+  - id: d
+    text: 136.2 MiB
+- id: adamw-bytes
+  kind: data
+  type: single
+  prompt: Sau một bước AdamW, tham số + gradient + trạng thái optimizer của ResNet-9 tốn bao nhiêu byte mỗi tham số?
+  options:
+  - id: a
+    text: '8.0'
+  - id: b
+    text: '12.0'
+  - id: c
+    text: '16.0'
+  - id: d
+    text: '20.0'
+- id: accum-norm
+  kind: data
+  type: single
+  prompt: Sai lệch tương đối giữa gradient của 4 micro-batch 64 và một batch 256 là bao nhiêu với BatchNorm và với GroupNorm?
+  options:
+  - id: a
+    text: BatchNorm 2.8e-01, GroupNorm 8.4e-07
+  - id: b
+    text: BatchNorm 8.4e-07, GroupNorm 2.8e-01
+  - id: c
+    text: Cả hai cỡ 1e-06, tức là tương đương
+  - id: d
+    text: Cả hai cỡ 0.3, accumulation luôn lệch
+- id: ckpt-one-segment
+  kind: knowledge
+  type: single
+  prompt: Checkpoint một đoạn duy nhất bao cả mạng giữ ít activation nhất, nhưng vì sao peak memory trên GPU gần như không giảm?
+  options:
+  - id: a
+    text: Lúc backward chạy lại forward, mọi activation lại nằm trong bộ nhớ
+  - id: b
+    text: PyTorch tự tắt checkpoint khi chỉ có một đoạn duy nhất
+  - id: c
+    text: Gradient của tham số chiếm phần lớn bộ nhớ ở mọi cấu hình
+  - id: d
+    text: Caching allocator không trả lại bộ nhớ đã giải phóng
+- id: accum-weight
+  kind: knowledge
+  type: single
+  prompt: Batch 10, micro-batch tối đa 4 (4, 4, 2). Nhân loss của mỗi micro-batch với gì để gradient bằng gradient cả batch?
+  options:
+  - id: a
+    text: 1/3, vì có 3 micro-batch
+  - id: b
+    text: Số mẫu của micro-batch chia 10
+  - id: c
+    text: 1, cộng dồn là đủ
+  - id: d
+    text: 1/4, theo cỡ micro-batch
+- id: forward-peak
+  kind: knowledge
+  type: single
+  prompt: Đo memory_allocated quanh một bước train ResNet-9 trên GPU. Đỉnh nằm ở đâu?
+  options:
+  - id: a
+    text: Sau optimizer.step, vì AdamW tạo thêm hai moment
+  - id: b
+    text: Cuối forward, trước backward, khi activation còn đủ
+  - id: c
+    text: Ngay khi chuyển model lên GPU bằng .to(cuda)
+  - id: d
+    text: Sau zero_grad, vì gradient được cấp phát lại từ đầu
