@@ -1,0 +1,8 @@
+mrr-after: [c]
+cpu-latency: [c]
+up-down: [b]
+best-k: [b]
+lazy-load: [b]
+ceiling: [a]
+stable-ties: [c]
+when-rerank: [b]

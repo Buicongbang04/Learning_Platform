@@ -1,0 +1,105 @@
+questions:
+- id: gold-in-sources
+  kind: data
+  type: single
+  prompt: Với retrieve hai tầng (5 điều dense, giữ 5 khoản), bao nhiêu trong 20 câu đầu tập ghim có điều đúng nằm trong nguồn?
+  options:
+  - id: a
+    text: 20 / 20
+  - id: b
+    text: 18 / 20
+  - id: c
+    text: 15 / 20
+  - id: d
+    text: 11 / 20
+- id: gate-ood
+  kind: data
+  type: single
+  prompt: Với `MIN_SCORE = 0.5`, cổng điểm chặn bao nhiêu trong 5 câu ngoài phạm vi trước khi gọi LLM?
+  options:
+  - id: a
+    text: 5 câu, không câu nào tới LLM
+  - id: b
+    text: 4 câu, câu giá vàng lọt qua cổng
+  - id: c
+    text: 2 câu, ba câu còn lại tới LLM
+  - id: d
+    text: 0 câu, cosine đều trên 0.6
+- id: theory-repro
+  kind: data
+  type: single
+  prompt: Tái hiện thí nghiệm mục 5 lý thuyết (3 nguồn cả điều cắt ở 1 500 ký tự, có điều đúng), `qwen2.5:3b` trả lời gì?
+  options:
+  - id: a
+    text: Không, theo khoản 4 Điều 7 và trích [2]
+  - id: b
+    text: Có, Công an xã được phạt và trích [1]
+  - id: c
+    text: Đúng câu từ chối, không trích nguồn nào
+  - id: d
+    text: Trả lời có trích [4], một số ngoài khoảng
+- id: refuse-with-gold
+  kind: data
+  type: single
+  prompt: Trong 20 câu với nguồn là khoản, bao nhiêu câu model từ chối dù điều đúng có trong nguồn (lý thuyết, cả điều cắt cụt, là 6)?
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: '2'
+  - id: c
+    text: '6'
+  - id: d
+    text: '9'
+- id: gate-first
+  kind: knowledge
+  type: single
+  prompt: Vì sao kiểm ngưỡng điểm retrieval trước khi gọi LLM, dù prompt đã dặn từ chối khi thiếu căn cứ?
+  options:
+  - id: a
+    text: LLM không hiểu được chỉ thị từ chối bằng tiếng Việt
+  - id: b
+    text: Rẻ, và nội dung tài liệu trong prompt không lách được
+  - id: c
+    text: Để điểm cosine của câu hỏi cao hơn khi gọi lại LLM
+  - id: d
+    text: Ollama báo lỗi nếu prompt chứa nguồn có điểm quá thấp
+- id: short-ids
+  kind: knowledge
+  type: single
+  prompt: Vì sao bắt model trích `[2]` thay vì chép số hiệu "47/2011/TT-BCA"?
+  options:
+  - id: a
+    text: Số ngắn tốn ít token hơn nên câu trả lời nhanh gấp đôi
+  - id: b
+    text: Model nhỏ hay chép sai số hiệu; [2] thì code map ngược được
+  - id: c
+    text: Số hiệu văn bản có dấu "/" làm hỏng định dạng JSON đầu ra
+  - id: d
+    text: Pháp luật cấm trích nguyên số hiệu văn bản trong câu trả lời
+- id: drop-out-of-range
+  kind: knowledge
+  type: single
+  prompt: Có 5 nguồn, model viết "Theo [1] và [7]". `parse_citations` nên làm gì với `[7]`?
+  options:
+  - id: a
+    text: Bỏ đi, chỉ giữ [1], vì không có nguồn số 7
+  - id: b
+    text: Đổi thành [5], nguồn cuối cùng gần nhất với 7
+  - id: c
+    text: Báo lỗi và gọi lại LLM cho tới khi hết số sai
+  - id: d
+    text: Giữ lại, vì model có thể biết thêm nguồn khác
+- id: cut-refusal
+  kind: knowledge
+  type: single
+  prompt: Ở phần lý thuyết, model từ chối dù điều đúng nằm trong prompt. Nguyên nhân chính theo cây debug là gì?
+  options:
+  - id: a
+    text: Nhiệt độ 0 làm model quá thận trọng khi trả lời
+  - id: b
+    text: Phần trả lời nằm sau chỗ cắt 1 500 ký tự của điều dài
+  - id: c
+    text: Retrieval đặt điều đúng ở hạng thấp nhất trong prompt
+  - id: d
+    text: bge-m3 cắt câu hỏi ở 4 096 token nên mất ý chính

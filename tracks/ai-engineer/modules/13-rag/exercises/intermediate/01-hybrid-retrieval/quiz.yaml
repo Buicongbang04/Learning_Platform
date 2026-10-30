@@ -1,0 +1,105 @@
+questions:
+- id: bm25-full-mrr
+  kind: data
+  type: single
+  prompt: Trên lát cắt của phần lý thuyết BM25 âm tiết đạt MRR@10 0.686. Trên toàn bộ corpus với 300 câu ghim thì bao nhiêu?
+  options:
+  - id: a
+    text: '0.686'
+  - id: b
+    text: '0.643'
+  - id: c
+    text: '0.574'
+  - id: d
+    text: '0.433'
+- id: hybrid-vs-dense
+  kind: data
+  type: single
+  prompt: Trên tập ghim, hybrid RRF (BM25 âm tiết + dense) so với dense `bge-m3` một mình thế nào?
+  options:
+  - id: a
+    text: Hybrid thắng dense ở mọi cột, MRR@10 0.77 so với 0.71
+  - id: b
+    text: R@10 nhỉnh hơn nhưng R@1 và MRR@10 thấp hơn dense
+  - id: c
+    text: Hai cách cho đúng cùng một con số ở mọi cột trong bảng
+  - id: d
+    text: Hybrid thua ở mọi cột, MRR@10 chỉ còn 0.57
+- id: only-dense
+  kind: data
+  type: single
+  prompt: Trong 300 câu ghim, bao nhiêu câu chỉ nhánh dense đưa điều đúng vào top-10 (BM25 thì không)?
+  options:
+  - id: a
+    text: '7'
+  - id: b
+    text: '21'
+  - id: c
+    text: '28'
+  - id: d
+    text: '244'
+- id: long-articles
+  kind: data
+  type: single
+  prompt: Bao nhiêu điều dài hơn 16 000 ký tự, tức bị `bge-m3` qua Ollama cắt ở 4 096 token mà không báo?
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: '131'
+  - id: c
+    text: '1 340'
+  - id: d
+    text: '6 142'
+- id: rrf-ranks
+  kind: knowledge
+  type: single
+  prompt: Vì sao RRF trộn theo thứ hạng thay vì cộng điểm BM25 với cosine?
+  options:
+  - id: a
+    text: Thứ hạng tính nhanh hơn điểm nên tiết kiệm được độ trễ
+  - id: b
+    text: Hai thang điểm khác hẳn nhau, cộng thô lệch về BM25
+  - id: c
+    text: Cosine luôn âm với văn bản ngắn nên không cộng được
+  - id: d
+    text: Cộng điểm cần GPU, còn thứ hạng chạy được trên CPU
+- id: weak-branch
+  kind: knowledge
+  type: single
+  prompt: Vì sao hybrid có thể thua dense ở R@1 trên corpus lớn, dù hai nhánh hỏng ở những câu khác nhau?
+  options:
+  - id: a
+    text: RRF bầu ngang nhau nên nhánh BM25 yếu kéo hạng xuống
+  - id: b
+    text: Hằng số k = 60 quá nhỏ cho một corpus 61 425 điều
+  - id: c
+    text: Dense đã chuẩn hoá L2 còn BM25 thì chưa chuẩn hoá
+  - id: d
+    text: RRF bỏ hết tài liệu chỉ xuất hiện trong một danh sách
+- id: l2-once
+  kind: knowledge
+  type: single
+  prompt: Chuẩn hoá L2 các vector corpus một lần lúc index mang lại gì?
+  options:
+  - id: a
+    text: Vector nhỏ gọn hơn nên tệp cache trên đĩa nhẹ đi nhiều
+  - id: b
+    text: Tích vô hướng thành cosine, truy vấn chỉ nhân ma trận
+  - id: c
+    text: Embedding model trả kết quả ổn định hơn giữa các lần
+  - id: d
+    text: Loại được các văn bản trùng lặp nhau ra khỏi corpus
+- id: cache-ids
+  kind: knowledge
+  type: single
+  prompt: Vì sao lưu danh sách id (`bge-m3.ids.json`) cạnh ma trận `.npy` và so khớp trước khi dùng cache?
+  options:
+  - id: a
+    text: numpy không đọc được tệp .npy nếu thiếu tệp id đi kèm
+  - id: b
+    text: Để Ollama biết văn bản nào đã embed rồi và bỏ qua chúng
+  - id: c
+    text: Corpus đổi thì dòng i không còn là điều i, sai im lặng
+  - id: d
+    text: Tệp id giúp nén ma trận .npy nhỏ đi được khoảng một nửa

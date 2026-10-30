@@ -153,3 +153,51 @@ def test_openai_compat_no_auth_header_when_key_empty():
     OpenAICompatClient(base_url="http://h/v1", api_key="", transport=_transport(handler)).chat(MSG)
     OpenAICompatClient(base_url="http://h/v1", api_key="k", transport=_transport(handler)).chat(MSG)
     assert seen == [None, "Bearer k"]
+
+
+def test_ollama_embed_batch_500_retries_item_by_item():
+    calls = []
+
+    def handler(request):
+        inputs = json.loads(request.content)["input"]
+        calls.append(inputs)
+        if "nan" in inputs:
+            return httpx.Response(500, json={"error": "failed to encode response: json: unsupported value: NaN"})
+        return httpx.Response(200, json={"embeddings": [[float(len(t)), 1.0] for t in inputs]})
+
+    client = OllamaClient(transport=_transport(handler))
+    out = client.embed(["a", "bb", "ccc"])
+    assert out.shape == (3, 2) and out.dtype == np.float32
+    assert len(calls) == 1  # lô tốt: một request
+
+    calls.clear()
+    with pytest.raises(LLMError, match="thứ 1"):
+        client.embed(["a", "nan", "ccc"])
+    assert calls == [["a", "nan", "ccc"], ["a"], ["nan"]]
+
+
+def test_ollama_embed_batch_500_recovers_when_items_succeed():
+    calls = []
+
+    def handler(request):
+        inputs = json.loads(request.content)["input"]
+        calls.append(inputs)
+        if len(inputs) > 1:
+            return httpx.Response(500, json={"error": "NaN"})
+        return httpx.Response(200, json={"embeddings": [[float(len(inputs[0])), 0.0]]})
+
+    out = OllamaClient(transport=_transport(handler)).embed(["a", "bb"])
+    np.testing.assert_allclose(out, [[1.0, 0.0], [2.0, 0.0]])
+    assert len(calls) == 3
+
+
+def test_ollama_embed_4xx_not_retried():
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(404, json={"error": 'model "bge-m3" not found, try pulling it first'})
+
+    with pytest.raises(LLMError, match="ollama pull bge-m3"):
+        OllamaClient(transport=_transport(handler)).embed(["a", "b"])
+    assert len(calls) == 1

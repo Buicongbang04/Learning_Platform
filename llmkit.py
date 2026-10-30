@@ -66,6 +66,10 @@ class LLMError(RuntimeError):
     """Lỗi gọi LLM; thông điệp tiếng Việt kèm lệnh khắc phục."""
 
 
+class _ServerError(LLMError):
+    """Server trả HTTP 5xx (lỗi phía model/server, có thể chỉ do một phần dữ liệu gửi lên)."""
+
+
 class LLMClient(Protocol):
     def chat(
         self,
@@ -105,6 +109,8 @@ class _HTTPClient:
             ) from exc
         except httpx.TransportError as exc:
             raise LLMError(self._hint_connect()) from exc
+        if response.status_code >= 500:
+            raise _ServerError(self._hint_http(response.status_code, response.text, model))
         if response.status_code >= 400:
             raise LLMError(self._hint_http(response.status_code, response.text, model))
         return response.json()
@@ -156,7 +162,24 @@ class OllamaClient(_HTTPClient):
 
     def embed(self, texts, *, model=None) -> np.ndarray:
         used = model or self.embed_model
-        data = self._post("/api/embed", {"model": used, "input": list(texts)}, used)
+        texts = list(texts)
+        try:
+            data = self._post("/api/embed", {"model": used, "input": texts}, used)
+        except _ServerError:
+            if len(texts) == 1:
+                raise
+            # Ollama (vd. bge-m3) đôi khi trả NaN cho một văn bản và làm hỏng cả lô bằng HTTP 500:
+            # gửi lại từng văn bản để chỉ văn bản lỗi mới báo lỗi.
+            rows = []
+            for i, text in enumerate(texts):
+                try:
+                    rows.append(self.embed([text], model=used)[0])
+                except _ServerError as exc:
+                    raise _ServerError(
+                        f"Ollama không embed được văn bản thứ {i} trong lô ({text[:60]!r}...): {exc}. "
+                        "Thường do model trả NaN với văn bản này; bỏ qua hoặc sửa nhẹ văn bản rồi embed lại."
+                    ) from exc
+            return np.stack(rows).astype(np.float32)
         return np.asarray(data["embeddings"], dtype=np.float32)
 
 
