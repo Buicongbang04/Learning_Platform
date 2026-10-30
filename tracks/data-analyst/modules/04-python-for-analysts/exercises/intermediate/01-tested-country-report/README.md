@@ -29,7 +29,8 @@ mỗi quý ra con số hơi khác một chút. Bạn viết lại thành `starte
 
 1. `clean_transactions(tx)`: dòng hợp lệ theo định nghĩa chung của track (bỏ hoá đơn `C`, `Quantity <= 0`,
    `Price <= 0`; `Invoice` ép `str`), thêm `revenue = Quantity * Price`.
-2. `country_summary(tx, start, end)`: mỗi quốc gia một dòng trong kỳ nửa mở `[start, end)`, cột `revenue`, `orders`
+2. `country_summary(tx, start, end)`: **gọi `clean_transactions(tx)`** (không chép lại bộ lọc; bộ chấm cài lỗi bằng
+   cách thay hàm `clean_transactions` theo tên), rồi mỗi quốc gia một dòng trong kỳ nửa mở `[start, end)`, cột `revenue`, `orders`
    (số hoá đơn khác nhau), `customers` (số `Customer ID` khác nhau), `aov`, `share`; sắp `revenue` giảm dần.
 3. `compare_periods(tx, current, previous, top=None)`: ghép hai kỳ bằng **outer merge có `validate`**, cột `revenue`,
    `revenue_prev`, `change`, `growth` (`NaN` khi kỳ trước bằng 0), `status` (`both`, `new`, `lost`); `top=N` gộp phần

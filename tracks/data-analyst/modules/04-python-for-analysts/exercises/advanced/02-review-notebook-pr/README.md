@@ -24,7 +24,8 @@ góp ý phong cách, và viết review mà tác giả sửa được ngay.
 
 Báo cáo doanh thu tháng của team (`starter/pr/before.ipynb`, Online Retail II, sheet `Year 2010-2011`, CC BY 4.0) đang
 chạy trên main. Đồng nghiệp Minh mở PR *"Thêm năm 2009-2010 để so YoY"* (`starter/pr/after.ipynb`; hai notebook
-chỉ để đọc, mở bằng Jupyter hoặc VS Code, app không hiện chúng) và nhờ bạn review
+chỉ để đọc, có trong danh sách tệp của Workspace ở dạng JSON chỉ đọc; mở bằng Jupyter hoặc VS Code để xem như
+notebook) và nhờ bạn review
 trước buổi họp tháng, nơi CEO sẽ xem bảng YoY.
 
 1. Viết `starter/nbreview.py`:

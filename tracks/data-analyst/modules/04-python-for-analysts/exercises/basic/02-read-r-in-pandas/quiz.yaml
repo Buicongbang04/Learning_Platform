@@ -94,7 +94,8 @@ questions:
     kind: knowledge
     type: single
     prompt: |
-      Đoạn pandas nào tương đương, kể cả việc **báo lỗi** khi có hai dòng cùng `(country, year)`?
+      Khi có hai dòng cùng `(country, year)`, `pivot_wider` của R **không cộng gộp**: nó cảnh báo và tạo cột kiểu list. Bản
+      pandas nào cũng không lặng lẽ cộng gộp khi khoá trùng (mà báo lỗi)?
 
       ```r
       co2 |> select(country, year, co2) |> pivot_wider(names_from = year, values_from = co2)

@@ -27,7 +27,7 @@ metric ở một chỗ có test, dữ liệu gốc không bị sửa, notebook k
 ## Đề bài
 
 Head of Sales cần báo cáo tháng "doanh thu, số đơn, số khách theo quốc gia và tháng" chạy lại được mỗi tháng. Bản duy
-nhất là `starter/messy/Untitled_final_v3.ipynb` (mở bằng Jupyter hoặc VS Code; app không hiện tệp này vì nó chỉ để đọc) (Online Retail II, sheet `Year 2010-2011`, CC BY 4.0). Đọc kỹ notebook
+nhất là `starter/messy/Untitled_final_v3.ipynb` (có trong danh sách tệp của Workspace ở dạng JSON chỉ đọc; mở bằng Jupyter hoặc VS Code để xem như notebook) (Online Retail II, sheet `Year 2010-2011`, CC BY 4.0). Đọc kỹ notebook
 đó (có thể chép code ra để chạy thử trên dữ liệu thật), rồi dựng `starter/project/`:
 
 ```

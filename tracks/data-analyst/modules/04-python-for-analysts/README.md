@@ -372,9 +372,9 @@ sns.relplot(data=co2[co2.country.isin(["Vietnam", "India"])], x="year", y="co2_p
 | `left_join(a, b, by = "k")` | `a.merge(b, on="k", how="left")` | dplyr 1.1 có `relationship = "many-to-one"` giống `validate` |
 | `count(df, g)` | `df.value_counts("g")` hoặc `df.groupby("g").size()` | |
 | `pivot_longer(cols, names_to, values_to)` | `melt(id_vars, var_name, value_name)` | wide → long |
-| `pivot_wider(names_from, values_from)` | `pivot(index, columns, values)` | long → wide |
+| `pivot_wider(names_from, values_from)` | `pivot(index, columns, values)` | long → wide. Khoá trùng: R cảnh báo và tạo cột list, pandas `pivot` báo lỗi; không bên nào cộng lặng lẽ như `pivot_table(aggfunc="sum")` |
 | `mean(x, na.rm = TRUE)` | `x.mean()` | Mặc định NA khác nhau |
-| `slice_max(x, n = 3)` | `nlargest(3, "x")` | |
+| `slice_max(x, n = 3)` | `nlargest(3, "x")` | `slice_max` mặc định giữ mọi dòng hoà điểm (`with_ties = TRUE`), `nlargest` thì không (trừ khi `keep="all"`) |
 
 ### Bảng đối chiếu ggplot2 ↔ seaborn / matplotlib
 
