@@ -1,0 +1,73 @@
+questions:
+  - id: naive-mom-dec
+    kind: data
+    type: single
+    prompt: "Theo `monthly_kpis`, `mom_pct` của tháng 12/2011 là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng -58%" }
+      - { id: b, text: "Khoảng -22%" }
+      - { id: c, text: "Khoảng +31%" }
+      - { id: d, text: "Khoảng +41%" }
+  - id: lfl-prev-month
+    kind: data
+    type: single
+    prompt: "Theo `same_period_compare`, doanh thu 1-9/12/2011 (`mtd`) so với 1-9/11/2011 (`mtd_prev_month`) thay đổi bao nhiêu?"
+    options:
+      - { id: a, text: "Giảm khoảng 58%" }
+      - { id: b, text: "Tăng khoảng 4%" }
+      - { id: c, text: "Tăng khoảng 41%" }
+      - { id: d, text: "Tăng khoảng 46%" }
+  - id: ytd-growth
+    kind: data
+    type: single
+    prompt: "Luỹ kế năm tới 9/12, năm 2011 (`ytd`) so với cùng kỳ 2010 (`ytd_prev_year`) tăng bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng +1.6%" }
+      - { id: b, text: "Khoảng +3.8%" }
+      - { id: c, text: "Khoảng +7.5%" }
+      - { id: d, text: "Khoảng +12%" }
+  - id: worst-yoy
+    kind: data
+    type: single
+    prompt: "Trong các tháng đã đủ dữ liệu (`is_complete`), tháng nào có `yoy_pct` thấp nhất?"
+    options:
+      - { id: a, text: "12/2010" }
+      - { id: b, text: "02/2011" }
+      - { id: c, text: "03/2011" }
+      - { id: d, text: "04/2011" }
+  - id: ceo-answer
+    kind: knowledge
+    type: single
+    prompt: "Ngày 10/12/2011 CEO hỏi: \"Tháng này bán kém tháng trước 58% à?\". Câu trả lời nào đúng nhất?"
+    options:
+      - { id: a, text: "Đúng, doanh thu tháng 12 mới bằng 42% tháng 11" }
+      - { id: b, text: "Chưa so được: tháng 12 mới có 8 ngày bán, so cùng 9 ngày đầu tháng thì cao hơn" }
+      - { id: c, text: "Sai, vì tháng 12 năm nào cũng là tháng cao điểm" }
+      - { id: d, text: "Chưa biết, phải đợi hết tháng mới nói được gì" }
+  - id: nullif-why
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `mom_pct` dùng `revenue / NULLIF(prev, 0) - 1` thay vì `revenue / prev - 1`?"
+    options:
+      - { id: a, text: "Để làm tròn kết quả về 4 chữ số" }
+      - { id: b, text: "Để tháng trước bằng 0 cho ra NULL thay vì lỗi hoặc vô cực" }
+      - { id: c, text: "Để bỏ các tháng có doanh thu âm" }
+      - { id: d, text: "Để LAG bỏ qua dòng NULL" }
+  - id: lag-needs-spine
+    kind: knowledge
+    type: single
+    prompt: "Bảng tổng hợp theo tháng không có dòng 02/2011 (tháng đó không bán gì) và không dùng spine. Ở dòng 05/2011, `lag(revenue, 12) OVER (ORDER BY month)` trả doanh thu của tháng nào?"
+    options:
+      - { id: a, text: "05/2010" }
+      - { id: b, text: "04/2010" }
+      - { id: c, text: "06/2010" }
+      - { id: d, text: "NULL" }
+  - id: inclusive-end
+    kind: knowledge
+    type: single
+    prompt: "`invoice_date` là TIMESTAMP. Lọc nào lấy đủ mọi dòng của ngày 1-9/11/2011?"
+    options:
+      - { id: a, text: "invoice_date BETWEEN '2011-11-01' AND '2011-11-09'" }
+      - { id: b, text: "invoice_date <= '2011-11-09' AND invoice_date >= '2011-11-01'" }
+      - { id: c, text: "invoice_date >= '2011-11-01' AND invoice_date < '2011-11-10'" }
+      - { id: d, text: "date_trunc('month', invoice_date) = '2011-11-01'" }

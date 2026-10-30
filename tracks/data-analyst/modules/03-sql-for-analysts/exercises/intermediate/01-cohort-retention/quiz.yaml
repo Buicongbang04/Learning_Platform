@@ -1,0 +1,73 @@
+questions:
+  - id: dec-cohort-size
+    kind: data
+    type: single
+    prompt: "Cohort 12/2009 có 955 khách, cohort 12/2010 chỉ có 76 khách, dù tháng 12/2010 có 885 khách có mã mua hàng. Giải thích nào đúng?"
+    options:
+      - { id: a, text: "Cửa hàng mất gần hết khách mới trong năm 2010" }
+      - { id: b, text: "Dữ liệu bắt đầu 12/2009 nên khách cũ cũng bị tính là mới ở cohort đầu" }
+      - { id: c, text: "Tháng 12/2010 chỉ có 20 ngày bán nên ít khách hơn" }
+      - { id: d, text: "Sheet 2010-2011 thiếu Customer ID nhiều hơn hẳn sheet 2009-2010, nên ít khách được nhận diện" }
+  - id: peak-k
+    kind: data
+    type: single
+    prompt: "Với cohort 12/2009, tháng k (k từ 1 tới 23) nào có retention cao nhất?"
+    options:
+      - { id: a, text: "k = 1 (01/2010)" }
+      - { id: b, text: "k = 3 (03/2010)" }
+      - { id: c, text: "k = 11 (11/2010)" }
+      - { id: d, text: "k = 23 (11/2011)" }
+  - id: oct-m1
+    kind: data
+    type: single
+    prompt: "Theo `retention_summary`, `m1` của cohort 10/2011 là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 17.5%" }
+      - { id: b, text: "Khoảng 25.7%" }
+      - { id: c, text: "Khoảng 32.1%" }
+      - { id: d, text: "NULL" }
+  - id: weighted-m1
+    kind: data
+    type: single
+    prompt: "Trung bình đơn giản của `m1` qua 23 cohort có m1 là khoảng 21.5%. Trung bình có trọng số theo `cohort_size` (tổng khách quay lại tháng 1 / tổng khách) là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 18.2%" }
+      - { id: b, text: "Khoảng 21.5%" }
+      - { id: c, text: "Khoảng 23.5%" }
+      - { id: d, text: "Khoảng 35.3%" }
+  - id: null-vs-zero
+    kind: knowledge
+    type: single
+    prompt: "Trong bảng tóm tắt, cohort 11/2011 có `m1` là NULL. Nếu thay bằng 0, người đọc slide sẽ hiểu sai thế nào?"
+    options:
+      - { id: a, text: "Không sai gì, NULL và 0 đều nghĩa là chưa có ai" }
+      - { id: b, text: "Hiểu là không khách nào quay lại, trong khi thật ra chưa tới lúc đo" }
+      - { id: c, text: "Hiểu là cohort 11/2011 có cỡ bằng 0" }
+      - { id: d, text: "Hiểu là dữ liệu tháng 11/2011 bị lỗi pipeline nên cả cohort phải loại khỏi báo cáo" }
+  - id: distinct-activity
+    kind: knowledge
+    type: single
+    prompt: "Bỏ `DISTINCT` ở bước lấy hoạt động (khách, tháng) thì `retention` thay đổi thế nào?"
+    options:
+      - { id: a, text: "Không đổi, vì cỡ cohort cũng bị nhân lên đúng theo cùng tỉ lệ số dòng" }
+      - { id: b, text: "Có thể vượt 100%, vì một khách mua nhiều dòng được đếm nhiều lần" }
+      - { id: c, text: "Giảm, vì các dòng trùng bị loại ra" }
+      - { id: d, text: "Truy vấn báo lỗi vì GROUP BY thiếu cột" }
+  - id: not-monotonic
+    kind: knowledge
+    type: single
+    prompt: "Cohort 12/2009 có retention k = 3 (42.5%) cao hơn k = 1 (35.3%). Điều này có hợp lý không?"
+    options:
+      - { id: a, text: "Không, retention luôn giảm dần nên truy vấn sai" }
+      - { id: b, text: "Hợp lý: đây là tỉ lệ active đúng tháng k, khách có thể nghỉ rồi quay lại" }
+      - { id: c, text: "Hợp lý vì cỡ cohort tăng dần theo thời gian" }
+      - { id: d, text: "Không, vì k = 3 rơi vào tháng chưa đủ dữ liệu" }
+  - id: compare-cohorts
+    kind: knowledge
+    type: single
+    prompt: "CRM muốn biết cohort 2011 có giữ khách tốt hơn cohort 2010 không. Cách so nào công bằng nhất?"
+    options:
+      - { id: a, text: "So m12 của hai năm, vì m12 là con số dài hạn nhất và ít nhiễu nhất trong bảng" }
+      - { id: b, text: "So cùng tháng lịch: tháng 6/2011 của mọi cohort" }
+      - { id: c, text: "So cùng k và cùng tháng cohort năm trước, chỉ trên ô đã quan sát được" }
+      - { id: d, text: "So trung bình đơn giản mọi ô của từng năm" }
