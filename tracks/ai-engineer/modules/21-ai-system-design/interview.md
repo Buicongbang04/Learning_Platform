@@ -106,12 +106,21 @@ nhất giảm E2E.
 
 ## Hệ thống gồm guardrail, retrieval và LLM nối tiếp, p95 từng bước là 0.2 s, 0.5 s và 6.3 s. p95 end-to-end có phải 7.0 s?
 
-Không nhất thiết. Percentile không cộng được: p95 của tổng phụ thuộc các bước tương quan thế nào. Nếu các bước độc lập,
-request chậm ở bước này hiếm khi chậm ở bước kia, nên tổng các p95 **đánh giá cao** đuôi; trong mô phỏng của bài Basic
-03 (ba bước lognormal độc lập), tổng các p95 là 6.97 s còn p95 thật là 6.52 s. Nếu đuôi của các bước rơi vào những
-request khác nhau theo kiểu bù trừ, tổng có thể **đánh giá thấp**. Nếu chúng tương quan dương (cùng chậm vì máy quá tải)
-thì cộng gần đúng. Cách đúng là đo E2E từng request (trace có span cho mỗi bước) rồi lấy percentile; SLO đặt trên con số
-đó, không đặt trên trung bình.
+Không nhất thiết, và sai theo cả hai chiều. Percentile không cộng được: p95 của tổng phụ thuộc **hình dạng đuôi** của
+từng bước và các bước phụ thuộc nhau thế nào.
+
+- **Đuôi liên tục, kiểu lognormal, các bước độc lập:** request chậm ở bước này thường không chậm ở bước kia, nên tổng
+  các p95 **đánh giá cao**. Mô phỏng của bài Basic 03 (ba bước lognormal độc lập): tổng các p95 là 6.97 s, p95 thật là
+  6.52 s.
+- **Đuôi là gai hiếm, kể cả khi các bước độc lập:** ba bước, mỗi bước 0.2 s nhưng có 3% khả năng mất 10 s (timeout,
+  cold start). p95 từng bước là 0.2 s, tổng là 0.6 s. Nhưng xác suất có ít nhất một gai là $$1 - 0.97^3 \approx 8.7\%$$,
+  lớn hơn 5%, nên p95 thật khoảng 10.4 s: tổng các p95 **đánh giá thấp** 17 lần. Gai của mỗi bước nằm dưới ngưỡng 5% nên
+  percentile từng bước không thấy, còn tổng thì thấy.
+- Khi gai của các bước rơi vào những request khác nhau (phụ thuộc âm), hợp của chúng càng lớn, đuôi của tổng càng dày.
+  Khi các bước cùng chậm (tương quan dương, ví dụ máy quá tải), cộng percentile gần đúng hơn.
+
+Không có công thức chung. Cách đúng là đo E2E từng request (trace có span cho mỗi bước) rồi lấy percentile; SLO đặt trên
+con số đó, không đặt trên trung bình.
 
 ## Khi nào nên self-host model thay vì dùng API?
 

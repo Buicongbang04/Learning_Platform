@@ -29,11 +29,19 @@ request lognormal, seed 42):
 | Percentile của tổng từng request | 1.96 s | 6.52 s | 11.46 s |
 | Tổng percentile từng bước | 1.87 s | 6.97 s | 12.63 s |
 
-Bước LLM có p95 6.29 s, retrieval 0.50 s, guardrail 0.18 s. Với các bước độc lập, request chậm ở bước này hiếm khi cũng
-chậm ở bước kia, nên cộng p95 **đánh giá cao** đuôi (ước lượng bi quan, tốn tài nguyên). Ngược lại, ở test thứ nhất
-đuôi của hai bước rơi vào hai request khác nhau và cộng p80 cho 5.6 s trong khi p80 thật là 11 s: **đánh giá thấp**.
-Khi các bước tương quan dương (cùng chậm vì máy quá tải), cộng percentile gần đúng hơn. Không có công thức chung: đo
-E2E của từng request (trace có span cho mỗi bước, module 20) rồi lấy percentile.
+Bước LLM có p95 6.29 s, retrieval 0.50 s, guardrail 0.18 s. Với đuôi **liên tục kiểu lognormal** và các bước độc lập,
+request chậm ở bước này thường không chậm ở bước kia, nên cộng p95 **đánh giá cao** đuôi (ước lượng bi quan, tốn tài
+nguyên). Đây không phải quy luật của "độc lập" mà của hình dạng đuôi:
+
+- **Gai hiếm** đi ngược lại, kể cả khi các bước độc lập. Test `test_pipeline_rare_spikes`: ba bước 0.2 s, mỗi bước có
+  3 trên 100 request mất 10 s. p95 từng bước vẫn là 0.2 s (gai chiếm 3%, dưới ngưỡng 5%), tổng các p95 là 0.6 s; nhưng
+  9% request có một gai nên p95 thật là 10.4 s, **đánh giá thấp** 17 lần. Với gai độc lập xác suất 3% mỗi bước, xác suất
+  có ít nhất một gai là $$1 - 0.97^3 \approx 8.7\%$$, cùng kết luận.
+- Gai của các bước rơi vào những request khác nhau (phụ thuộc âm) làm đuôi của tổng dày hơn nữa: test thứ nhất cộng p80
+  cho 5.6 s trong khi p80 thật là 11 s.
+- Khi các bước tương quan dương (cùng chậm vì máy quá tải), cộng percentile gần đúng hơn.
+
+Không có công thức chung: đo E2E của từng request (trace có span cho mỗi bước, module 20) rồi lấy percentile.
 
 **Ngân sách token.** SLO 3 s, prompt 2 000 token, overhead 0.2 s: chỉ còn 24 token output ở 30 token/s, gần như không
 trả lời được gì. Phải stream (SLO áp lên TTFT thay vì E2E), hoặc dùng model/GPU decode nhanh hơn.

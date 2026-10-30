@@ -193,7 +193,7 @@ Từ trang giá chính thức ([Anthropic](https://platform.claude.com/docs/en/a
 | Claude Sonnet 5.5 | 2 | 10 | 0.10 | ghi cache 5 phút 2.50 |
 | Claude Opus 5.5 | 4 | 20 | 0.20 | ghi cache 5 phút 5 |
 | Gemini 2.5 Flash-Lite | 0.10 | 0.40 | 0.01 | cache tính thêm phí lưu theo giờ |
-| Gemini 3.8 Flash | 0.75 | 3.75 | 0.075 | giá tới 31/12/2026; từ 1/1/2027 là 1.50 / 7.50 / 0.15 |
+| Gemini 3.8 Flash | 0.75 | 3.75 | 0.075 | giá tới 31/12/2026; từ 1/1/2027 là 1.50 / 7.50 / 0.15; cache tính thêm phí lưu 0.50 USD mỗi triệu token mỗi giờ (1.00 từ 2027) |
 
 Batch API của cả hai hãng giảm 50% cho việc không cần trả lời ngay (tóm tắt cuộc gọi qua đêm, chấm eval). Dòng cuối
 là ví dụ sống về việc giá đổi: cùng một model, giá gấp đôi sau hai tháng.
@@ -219,8 +219,10 @@ tục nên số lần ghi không đáng kể.)
 ### Chi phí ẩn
 
 - **Vòng agent**: bước $$i$$ gửi lại cả lịch sử, tổng input của $$n$$ bước là
-  $$n T_0 + \Delta \frac{n(n-1)}{2}$$ với $$T_0$$ là prompt ban đầu và $$\Delta$$ là phần thêm mỗi bước. Agent 10 bước tốn
-  không phải 10 lần mà khoảng 30 lần một câu hỏi đơn (bài Basic 01).
+  $$n T_0 + \Delta \frac{n(n-1)}{2}$$ với $$T_0$$ là prompt ban đầu và $$\Delta$$ là phần thêm mỗi bước. Với $$T_0 = 4\,000$$ và
+  $$\Delta = 1\,800 \approx 0.45\,T_0$$ (300 token output và 1 500 token kết quả tool mỗi bước, ví dụ của bài Basic 01),
+  agent 10 bước tốn input không phải 10 lần mà khoảng 30 lần một câu hỏi đơn; $$\Delta$$ càng lớn so với $$T_0$$, hệ số
+  càng cao.
 - **Reasoning token** tính là output, có thể gấp nhiều lần phần trả lời nhìn thấy.
 - **Retry, fallback, cascade**: request lỗi rồi gọi lại, request đi qua hai model.
 - **Ngoài LLM**: embedding lại kho tài liệu khi đổi model embedding, vector DB, observability, chạy eval (LLM-as-judge
@@ -262,7 +264,15 @@ sequenceDiagram
 ### Vì sao decode chậm: băng thông bộ nhớ
 
 Prefill nhân ma trận lớn cho cả prompt một lúc, bị chặn bởi FLOPs (cỡ $$2N$$ phép tính cho mỗi token với $$N$$ tham
-số). Decode sinh một token cần đọc **toàn bộ trọng số** từ bộ nhớ GPU một lần mà chỉ tính rất ít, nên bị chặn bởi băng
+số), nên
+
+$$
+r_{\text{prefill}} \le \frac{F_{\text{eff}}}{2N}
+$$
+
+với $$F_{\text{eff}}$$ là FLOPs/giây GPU thực sự đạt được. Ví dụ với một GPU giả định đạt 50 TFLOPS hiệu dụng, Qwen2.5-7B
+($$N = 7.6 \cdot 10^9$$) prefill tối đa khoảng $$5 \cdot 10^{13} / (1.52 \cdot 10^{10}) \approx 3\,300$$ token/giây: prompt
+2 000 token mất cỡ 0.6 giây. Decode sinh một token cần đọc **toàn bộ trọng số** từ bộ nhớ GPU một lần mà chỉ tính rất ít, nên bị chặn bởi băng
 thông. Trần tốc độ decode khi batch 1:
 
 $$
@@ -273,7 +283,9 @@ với $$B_{\text{mem}}$$ là băng thông bộ nhớ GPU và $$M_{\text{weights}
 decode nhanh hơn khoảng 99.5 token/giây, dù còn thừa sức tính. Qwen2.5-7B bf16 (15.2 GB) trên 360 GB/s: tối đa khoảng
 23.6 token/giây. Hệ quả thiết kế: quantize (module 10) tăng tốc decode gần tỉ lệ với số byte giảm; và **batching** cho
 nhiều request dùng chung một lần đọc trọng số, nên thông lượng tổng tăng gần tuyến tính theo batch cho tới khi chạm
-giới hạn tính toán hay bộ nhớ KV. Đó là lý do vLLM với continuous batching phục vụ nhiều người dùng trên một GPU hiệu
+giới hạn tính toán hay bộ nhớ KV. Công thức trần ở trên bỏ qua việc mỗi bước decode còn phải đọc **KV cache** của
+mọi chuỗi trong batch; lượng này tăng theo batch × độ dài context và với context dài có thể lớn ngang trọng số, nên
+thông lượng thật thấp hơn trần. Đó là lý do vLLM với continuous batching phục vụ nhiều người dùng trên một GPU hiệu
 quả hơn hẳn chạy từng request.
 
 ### Đo thật: phần chờ thường lớn hơn phần tính
@@ -335,7 +347,12 @@ Ví dụ định cỡ: Qwen2.5-7B quantize 4.5 bit (3.99 GiB trọng số) trên
 **Định luật Little**: trong hệ thống ổn định, số request đang xử lý trung bình $$L = \lambda W$$ (tốc độ đến nhân thời
 gian mỗi request). 20 request/giây, mỗi request 6 giây, nghĩa là trung bình 120 request đang chạy cùng lúc. Đảo lại,
 một GPU giữ $$c$$ request đồng thời, mỗi cái mất $$W(c)$$ giây, phục vụ $$c / W(c)$$ request/giây. $$W(c)$$ tăng theo $$c$$
-(batch lớn thì mỗi request chậm hơn), nên thông lượng mỗi GPU phụ thuộc SLO:
+(batch lớn thì mỗi request chậm hơn), nên thông lượng mỗi GPU phụ thuộc SLO.
+
+Vì sao cần headroom: trong mô hình hàng đợi đơn giản nhất (M/M/1), thời gian chờ trung bình trong hàng là
+$$\frac{\rho}{1 - \rho}$$ lần thời gian phục vụ, với $$\rho$$ là mức tải (tốc độ đến chia công suất). Ở $$\rho = 0.5$$ chờ bằng
+một lần thời gian phục vụ, ở 0.8 gấp 4 lần, ở 0.9 gấp 9 lần: chạy hệ thống sát 100% công suất thì độ trễ bùng nổ dù
+"vẫn còn chỗ". Hệ thống LLM có batching không đúng M/M/1, nhưng hình dạng đường cong là bài học đúng. Số GPU:
 
 $$
 n_{\text{GPU}} = \left\lceil \frac{\lambda_{\text{peak}} (1 + h)}{\max_{c:\ W(c) \le \text{SLO}} \dfrac{c}{W(c)}} \right\rceil + \text{spare}

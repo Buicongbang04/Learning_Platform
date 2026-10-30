@@ -50,7 +50,8 @@ Làm bốn việc:
    - `seqs_per_gpu`: như bài Basic 02, $$\left\lfloor \frac{(\text{vram\_gib} - \text{reserve\_gib}) \cdot 2^{30} - \text{weights}}{\text{KV}_{\text{token}} \cdot \text{context\_tokens}} \right\rfloor$$.
    - `gpus_for_memory` $$= \lceil \text{peak\_concurrency} / \text{seqs\_per\_gpu} \rceil$$;
      `gpus_for_throughput` $$= \lceil \text{peak\_rps} (1 + \text{headroom}) / \text{rps\_per\_gpu} \rceil$$;
-     `gpus` là số lớn hơn; `self_host_monthly_usd` $$= \text{gpus} \cdot \text{usd\_per\_gpu\_hour} \cdot 730$$.
+     `gpus` là số lớn hơn (khác bài Intermediate 01, ở đây **không** cộng GPU dự phòng N+1: bàn chuyện dự phòng trong
+     mục 6 và 9 của doc); `self_host_monthly_usd` $$= \text{gpus} \cdot \text{usd\_per\_gpu\_hour} \cdot 730$$.
    - Số nguyên (`requests_per_day`, `seqs_per_gpu`, ba số GPU) trả `int`. Ném `ValueError` khi
      `cached_input_tokens > input_tokens` hoặc `seqs_per_gpu` bằng 0 (model không vừa GPU).
 

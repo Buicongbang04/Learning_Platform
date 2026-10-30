@@ -49,7 +49,8 @@ có thể làm mất tiền hoặc lộ dữ liệu khách; đề không nói l�
      "rel_error", "ok"}` cùng thứ tự đầu vào, với `rel_error` $$= |\text{claimed} - \text{recomputed}| / |\text{recomputed}|$$
      (nếu giá trị đúng bằng 0 thì là $$|\text{claimed}|$$) và `ok` khi `rel_error <= rel_tol`.
 2. **`starter/claims.yaml`**: trích **mọi** con số định lượng ở mục 4 của doc thành claim (đã có 2 claim mẫu). `inputs`
-   lấy đúng như doc ghi, `claimed` là kết quả doc đưa ra. Ít nhất 6 claim, phủ ít nhất 5 kind.
+   lấy đúng như doc ghi (kể cả yêu cầu và quy chuẩn ở mục 2 mà phép tính phải tuân theo), `claimed` là kết quả doc
+   đưa ra. Ít nhất 6 claim, phủ ít nhất 5 kind.
 3. **`starter/REVIEW.md`**: viết review theo khung có sẵn. Mỗi vấn đề một mục `## Vấn đề N: <tên ngắn>` với mức độ
    (chặn ship / nghiêm trọng / nên sửa), doc nói gì, vì sao sai kèm bằng chứng, và đề xuất cụ thể. Ít nhất 6 vấn đề,
    ít nhất 700 từ, nhắc tên (id) của **mọi** claim mà `check_claims` đánh dấu sai, và một mục kiểm số liệu. Đừng dừng

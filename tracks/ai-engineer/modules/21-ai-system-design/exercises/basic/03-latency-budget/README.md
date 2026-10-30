@@ -47,8 +47,8 @@ Trong `starter/latency.py`, chỉ dùng thư viện chuẩn, theo quy ước ở
 - TTFT và E2E khớp giá trị tính tay; ví dụ 2 000 token prompt, 300 token output: 12.2 s, trong đó decode 10 s.
 - Trần decode của `qwen2.5:3b` Q4_K_M (1 929 912 432 byte) trên 192 GB/s khoảng 99.5 token/s.
 - `percentile` khớp `numpy.percentile` trên mẫu ngẫu nhiên nhiều cỡ và nhiều `q`.
-- `pipeline_percentiles` cho thấy cả hai chiều: tổng các p80 thấp hơn p80 thật khi đuôi rơi vào các request khác nhau,
-  và tổng các p95 cao hơn p95 thật khi các bước độc lập.
+- `pipeline_percentiles` cho thấy cả hai chiều: tổng các p95 cao hơn p95 thật với ba bước độc lập đuôi lognormal, và
+  thấp hơn hẳn khi đuôi là gai hiếm (mỗi bước 3% request mất 10 s) hoặc gai rơi vào các request khác nhau.
 - `max_output_tokens` đúng ở biên và trả `int`.
 
 ## Gợi ý

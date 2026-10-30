@@ -18,6 +18,7 @@ một trợ lý AI tự trả lời và **tự xử lý** phần lớn yêu cầ
 - **Độ chính xác 95%.**
 - Độ trễ trung bình dưới 6 giây.
 - Chi phí vận hành dưới 150 000 USD/tháng.
+- Tuân thủ quy chuẩn hạ tầng của công ty: mọi ước lượng capacity cộng **headroom 20%** cho lưu lượng đột biến.
 
 ## 3. Kiến trúc
 

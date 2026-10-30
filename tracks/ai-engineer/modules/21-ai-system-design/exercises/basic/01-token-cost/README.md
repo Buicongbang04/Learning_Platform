@@ -61,5 +61,6 @@ cột). Tính phần input "thường" trước: `input_tokens - cached_tokens -
 ### Gợi ý 2
 
 Với vòng agent, viết hẳn danh sách $$P_1, \dots, P_n$$ rồi cộng: tổng input là $$\sum_i P_i$$. Có cache thì token đọc
-từ cache là $$P_1 + \dots + P_{n-1}$$, và token ghi là phần còn lại (bằng đúng $$P_n$$). Kiểm bằng ví dụ prefix 3 000,
-mỗi bước thêm 1 000 token, 5 bước: 25 000 token input, 18 000 đọc cache, 7 000 ghi cache.
+từ cache là $$P_1 + \dots + P_{n-1}$$, và token ghi là phần còn lại (bằng đúng $$P_n$$). Kiểm bằng ví dụ prefix 2 000,
+mỗi bước thêm 500 token, 4 bước: $$P$$ là 2 000, 2 500, 3 000, 3 500; tổng 11 000 token input, 7 500 đọc cache, 3 500
+ghi cache.

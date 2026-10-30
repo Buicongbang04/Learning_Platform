@@ -16,7 +16,7 @@ claims:
   - id: D
     kind: kv_bytes_per_token
     inputs: {n_layers: 36, n_kv_heads: 2, head_dim: 128, kv_bits: 16}
-    claimed: 589824         # sai: dùng 32 head thay vì 2 KV head; đúng là 36 864
+    claimed: 294912         # sai: dùng 16 attention head (Qwen2.5-3B) thay vì 2 KV head; đúng là 36 864
   - id: E
     kind: weights_bytes
     inputs: {n_params: 3.1e+9, bits: 16}

@@ -20,7 +20,7 @@ Sáu con số định lượng của mục 4 (id có thể khác bản của b�
 | Request đồng thời | 1.9 | 120 | 98% | chia thay vì nhân (Little) |
 | Trọng số 4-bit | 3.8e9 byte | 3.8e9 byte | 0% | đúng |
 | KV cache / token | 401 408 byte | 57 344 byte | 600% | dùng 28 attention head thay cho 4 KV head; GPU 24 GB chứa khoảng 40 chuỗi 8k, không phải 6 |
-| Số GPU | 6 | 8 | 25% | quên headroom 20% |
+| Số GPU | 6 | 8 | 25% | quên headroom 20% mà quy chuẩn ở mục 2 của chính doc yêu cầu |
 
 Hai bài học: lỗi lan truyền (chi phí tháng) không bắt được bằng kiểm từng dòng; và lỗi có thể nằm về phía an toàn
 (KV cache thừa 7 lần làm thuê thừa GPU) hoặc phía nguy hiểm (chi phí thiếu 32%, đồng thời thiếu 60 lần).

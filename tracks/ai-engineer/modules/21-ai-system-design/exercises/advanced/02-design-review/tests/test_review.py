@@ -41,7 +41,7 @@ def test_check_claims(rv):
     assert [r["id"] for r in res] == list("ABCDEFGH")
     assert {r["id"] for r in res if not r["ok"]} == {"B", "D", "F", "H"}
     by_id = {r["id"]: r for r in res}
-    assert by_id["D"]["rel_error"] == pytest.approx(15.0)  # (589 824 - 36 864) / 36 864
+    assert by_id["D"]["rel_error"] == pytest.approx(7.0)  # (294 912 - 36 864) / 36 864
     assert by_id["C"]["rel_error"] == pytest.approx(1 / 30)
     assert by_id["H"]["rel_error"] == pytest.approx(0.2)
     assert by_id["B"]["recomputed"] == pytest.approx(2.65) and by_id["B"]["claimed"] == 4.0

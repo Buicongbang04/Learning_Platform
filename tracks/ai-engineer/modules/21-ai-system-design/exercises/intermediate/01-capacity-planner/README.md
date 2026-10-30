@@ -33,7 +33,7 @@ chậm nhưng GPU phục vụ được nhiều request hơn mỗi giây. Một d
    $$\frac{\text{requests\_per\_day}}{86\,400} \cdot \text{peak\_to\_avg}$$. `ValueError` nếu số request âm hoặc hệ số < 1.
 2. `little_concurrency(rps, latency_s) -> float`: định luật Little $$L = \lambda W$$. `ValueError` nếu âm.
 3. `request_latency(row, output_tokens) -> float`: $$\text{TTFT}_{p95} + n_{out} \cdot \text{TPOT}_{p95}$$, xấp xỉ độ trễ p95
-   ở điểm vận hành đó (cộng hai p95 là xấp xỉ bi quan, xem bài Basic 03).
+   ở điểm vận hành đó (cộng hai p95 chỉ là xấp xỉ, lệch theo chiều nào tuỳ hình dạng đuôi, xem bài Basic 03).
 4. `rps_per_gpu(row, output_tokens) -> float`: một GPU giữ `concurrency` request, mỗi cái mất `request_latency`, nên
    phục vụ $$\frac{c}{\text{latency}}$$ request/giây (định luật Little đảo lại).
 5. `best_operating_point(bench, output_tokens, ttft_slo_s, e2e_slo_s) -> dict | None`: trong các dòng có

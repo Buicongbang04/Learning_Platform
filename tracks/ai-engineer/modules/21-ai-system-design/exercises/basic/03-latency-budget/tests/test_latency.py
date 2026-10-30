@@ -54,8 +54,22 @@ def test_pipeline_tails_in_different_requests(lat):
     assert sum_of == pytest.approx(5.6)
 
 
+def test_pipeline_rare_spikes(lat):
+    # 3 bước 0.2 s, mỗi bước 3/100 request bị gai 10 s (ở các request khác nhau). p95 từng bước vẫn 0.2 s
+    # nên tổng các p95 = 0.6 s, nhưng 9% request có gai: p95 thật = 10.4 s. Tổng các p95 đánh giá THẤP.
+    stages = {}
+    for k, s in enumerate(["guard", "retrieve", "llm"]):
+        v = [0.2] * 100
+        for i in range(3):
+            v[10 * k + i] = 10.0
+        stages[s] = v
+    of_sum, sum_of = lat.pipeline_percentiles(stages, 95)
+    assert of_sum == pytest.approx(10.4)
+    assert sum_of == pytest.approx(0.6)
+
+
 def test_pipeline_independent_tails(lat):
-    # 3 bước độc lập, đuôi dài: tổng các p95 đánh giá CAO p95 thật
+    # 3 bước độc lập, đuôi lognormal liên tục: ở đây tổng các p95 đánh giá CAO p95 thật (không phải quy luật chung)
     rng = np.random.default_rng(42)
     stages = {s: rng.lognormal(mu, 0.8, 2000).tolist() for s, mu in [("guard", -3), ("retrieve", -2), ("llm", 0.5)]}
     totals = np.sum([stages[s] for s in stages], axis=0)
