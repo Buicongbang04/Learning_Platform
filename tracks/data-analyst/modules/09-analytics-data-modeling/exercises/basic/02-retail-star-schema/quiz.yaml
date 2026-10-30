@@ -1,0 +1,55 @@
+questions:
+  - id: guest-lines
+    kind: data
+    type: single
+    prompt: "Bao nhiêu dòng của `fct_sales_line` (bộ thật) được gán `customer_key = 0`?"
+    options:
+      - { id: a, text: "1 428" }
+      - { id: b, text: "132 220" }
+      - { id: c, text: "4 339" }
+      - { id: d, text: "0" }
+  - id: non-merch-share
+    kind: data
+    type: single
+    prompt: "Các dòng có `is_merchandise = false` chiếm bao nhiêu phần trăm doanh thu gộp?"
+    options:
+      - { id: a, text: "Khoảng 0.4%" }
+      - { id: b, text: "Khoảng 16.5%" }
+      - { id: c, text: "Khoảng 3.7%" }
+      - { id: d, text: "Khoảng 12.3%" }
+  - id: second-product
+    kind: data
+    type: single
+    prompt: "Xếp mã hàng hoá theo doanh thu gộp, hạng 2 là `23843` (PAPER CRAFT, LITTLE BIRDIE, 168 470 GBP) chỉ với một dòng. Nên làm gì trước khi đưa nó vào báo cáo top sản phẩm?"
+    options:
+      - { id: a, text: "Kiểm xem hoá đơn đó có bị huỷ ngay sau đó" }
+      - { id: b, text: "Bỏ khỏi fact vì một dòng là lỗi nhập liệu" }
+      - { id: c, text: "Đổi grain fact sang một dòng mỗi sản phẩm" }
+      - { id: d, text: "Đánh dấu nó là mã phí, không phải hàng hoá" }
+  - id: dim-customer-rows
+    kind: data
+    type: single
+    prompt: "`dim_customer` của bộ thật có 4 339 dòng trong khi dữ liệu có 4 338 khách có mã. Dòng thừa là gì?"
+    options:
+      - { id: a, text: "Một khách có hai quốc gia nên bị tách đôi" }
+      - { id: b, text: "Một khách chỉ có hoá đơn huỷ trong năm" }
+      - { id: c, text: "Một mã khách bị đọc sai kiểu từ xlsx" }
+      - { id: d, text: "Dòng unknown member cho khách vãng lai" }
+  - id: country-in-fact
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `country` nằm ở fact thay vì chỉ lấy `current_country` từ `dim_customer`?"
+    options:
+      - { id: a, text: "Quốc gia ghi theo từng hoá đơn, và khách vãng lai cũng có" }
+      - { id: b, text: "DuckDB không join được cột chữ giữa hai bảng" }
+      - { id: c, text: "Để fact nhỏ hơn và truy vấn chạy nhanh hơn" }
+      - { id: d, text: "Vì dimension không được chứa cột dạng văn bản" }
+  - id: price-in-fact
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `unit_price` thuộc fact, không phải `dim_product`?"
+    options:
+      - { id: a, text: "Vì giá là số, còn dimension chỉ chứa chữ" }
+      - { id: b, text: "Phần lớn mã hàng có nhiều mức giá trong năm" }
+      - { id: c, text: "Vì giá cộng được qua mọi chiều như doanh thu" }
+      - { id: d, text: "Để dim_product có đúng một cột mô tả" }

@@ -1,0 +1,61 @@
+version: 2
+
+models:
+  - name: fct_sales_line
+    description: >
+      Grain: một dòng hàng hợp lệ của hoá đơn. Hợp lệ = mã hoá đơn không bắt đầu bằng C, Quantity > 0,
+      Price > 0. revenue là doanh thu gộp (không trừ hoá đơn huỷ về sau).
+    columns:
+      - name: line_id
+        description: Khoá của grain, lấy từ số thứ tự dòng trong tệp nguồn.
+        data_tests: [unique, not_null]
+      - name: invoice_no
+        description: Mã hoá đơn (degenerate dimension); một hoá đơn có nhiều dòng.
+        data_tests: [not_null]
+      - name: customer_id
+        description: Mã khách; NULL là khách vãng lai.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+      - name: revenue
+        description: quantity * unit_price, GBP.
+        data_tests: [not_null]
+
+  - name: dim_customer
+    description: "Grain: một khách có mã. current_country là quốc gia của lần mua hợp lệ muộn nhất (SCD type 1)."
+    columns:
+      - name: customer_id
+        description: Mã khách (natural key).
+        data_tests: [unique, not_null]
+      - name: cohort_month
+        description: Tháng của hoá đơn hợp lệ đầu tiên trong dữ liệu đã nạp.
+        data_tests: [not_null]
+
+  - name: mart_monthly_sales
+    description: >
+      Grain: một tháng dương lịch. Bảng cho dashboard doanh thu tháng. Dữ liệu bắt đầu 01/12/2010 nên
+      khách "mới" của tháng 12/2010 gồm cả khách cũ chưa có trong dữ liệu.
+    columns:
+      - name: month
+        description: Ngày đầu tháng.
+        data_tests: [unique, not_null]
+      - name: revenue
+        description: Tổng doanh thu gộp của các dòng hợp lệ trong tháng, GBP. Cộng được qua các tháng.
+        data_tests: [not_null]
+      - name: orders
+        description: Số hoá đơn hợp lệ khác nhau trong tháng. Cộng được qua các tháng (mỗi hoá đơn thuộc một tháng).
+        data_tests: [not_null]
+      - name: active_customers
+        description: Số khách có mã có ít nhất một hoá đơn hợp lệ trong tháng. Không cộng qua các tháng.
+        data_tests: [not_null]
+      - name: new_customers
+        description: Số khách có hoá đơn hợp lệ đầu tiên rơi vào tháng này.
+        data_tests: [not_null]
+      - name: aov
+        description: revenue / orders của tháng (tỉ số của tổng). Không lấy trung bình các tháng.
+        data_tests: [not_null]
+      - name: is_complete_month
+        description: false khi dữ liệu dừng trước ngày cuối tháng (tháng chưa đủ, không so MoM trực tiếp).
+        data_tests: [not_null]

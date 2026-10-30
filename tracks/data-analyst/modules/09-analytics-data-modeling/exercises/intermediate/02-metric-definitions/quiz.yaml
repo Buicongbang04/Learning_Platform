@@ -1,0 +1,55 @@
+questions:
+  - id: finance-gap
+    kind: data
+    type: single
+    prompt: "Tháng 11/2011, truy vấn Finance cũ ra 1 461 756.25 GBP, định nghĩa chung ra 1 509 496.33 GBP. Phần chênh 47 740 GBP là gì?"
+    options:
+      - { id: a, text: "Doanh thu của khách vãng lai không có mã khách" }
+      - { id: b, text: "Giá trị các hoá đơn huỷ (số âm)" }
+      - { id: c, text: "Các mã phí POST, DOT, M" }
+      - { id: d, text: "Dòng có giá bằng 0 bị loại" }
+  - id: marketing-aov
+    kind: data
+    type: single
+    prompt: "\"AOV\" tháng 11/2011 trên dashboard Marketing cũ là 18.00 GBP. Con số đó thực chất là gì?"
+    options:
+      - { id: a, text: "Doanh thu trung bình mỗi đơn của khách có mã" }
+      - { id: b, text: "Doanh thu trung bình mỗi khách có mã trong tháng đó" }
+      - { id: c, text: "Doanh thu trung bình mỗi dòng hàng có mã khách" }
+      - { id: d, text: "Doanh thu trung bình mỗi ngày trong tháng" }
+  - id: total-active
+    kind: data
+    type: single
+    prompt: "Báo cáo Marketing theo quốc gia (bộ thật): dòng Tổng `active_customers` là 4 338, còn cộng các dòng quốc gia ra bao nhiêu?"
+    options:
+      - { id: a, text: "4 338" }
+      - { id: b, text: "13 054" }
+      - { id: c, text: "3 920" }
+      - { id: d, text: "4 346" }
+  - id: dec-legacy
+    kind: data
+    type: single
+    prompt: "Tháng 12/2011, Finance cũ ra 433 686 GBP, định nghĩa chung (gộp) ra 638 811 GBP. Phần lớn chênh lệch đến từ đâu?"
+    options:
+      - { id: a, text: "Một hoá đơn 168 470 GBP bị huỷ ngay sau đó" }
+      - { id: b, text: "Tháng 12/2011 mới có 8 ngày dữ liệu, chưa đủ tháng" }
+      - { id: c, text: "Khách vãng lai tăng mạnh trong tháng 12" }
+      - { id: d, text: "Định nghĩa chung cộng trùng các dòng lặp" }
+  - id: additive-new
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `new_customers` có `additive_over_time: true` còn `active_customers` là `false`?"
+    options:
+      - { id: a, text: "Mỗi khách chỉ mới ở một tháng, nhưng hoạt động ở nhiều tháng" }
+      - { id: b, text: "Khách mới ít hơn khách hoạt động nên sai số nhỏ hơn" }
+      - { id: c, text: "count_distinct có filter thì luôn cộng được qua tháng" }
+      - { id: d, text: "Khách mới không bao gồm khách vãng lai, còn khách cũ có" }
+  - id: owner-role
+    kind: knowledge
+    type: single
+    prompt: "Trường `owner` trong định nghĩa metric dùng để làm gì?"
+    options:
+      - { id: a, text: "Người duy nhất được xem metric trên dashboard" }
+      - { id: b, text: "Người viết SQL đầu tiên cho metric đó" }
+      - { id: c, text: "Team được tính doanh thu đó vào chỉ tiêu" }
+      - { id: d, text: "Người duyệt và trả lời mọi thay đổi định nghĩa" }

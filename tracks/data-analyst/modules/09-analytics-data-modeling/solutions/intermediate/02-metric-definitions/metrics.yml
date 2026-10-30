@@ -1,0 +1,64 @@
+# Định nghĩa metric dùng chung cho dashboard Finance và Marketing (Online Retail II, bảng fct_sales).
+# Đổi định nghĩa: mở pull request, owner của metric duyệt, ghi vào caveats từ ngày nào áp dụng.
+metrics:
+  - name: revenue
+    label: Doanh thu gộp
+    description: >
+      Tổng Quantity * Price của dòng hàng hợp lệ (bỏ hoá đơn C..., Quantity <= 0, Price <= 0), GBP, theo ngày
+      lập hoá đơn. Gộp: chưa trừ các hoá đơn bị huỷ về sau.
+    owner: Finance analytics (trưởng nhóm)
+    type: sum
+    expr: revenue
+    additive_over_time: true
+    caveats:
+      - Không phải doanh thu ròng của kế toán; doanh thu ròng trừ thêm giá trị hoá đơn huỷ.
+      - Có các mã phí (POST, DOT, M, AMAZONFEE...); báo cáo sản phẩm cần lọc riêng.
+
+  - name: orders
+    label: Số đơn
+    description: >
+      Số hoá đơn hợp lệ khác nhau (có ít nhất một dòng hợp lệ), kể cả hoá đơn của khách vãng lai.
+    owner: Finance analytics (trưởng nhóm)
+    type: count_distinct
+    expr: invoice_no
+    additive_over_time: true
+    caveats:
+      - Mỗi hoá đơn thuộc đúng một tháng và một quốc gia nên cộng theo tháng hay quốc gia đều đúng.
+
+  - name: active_customers
+    label: Khách hoạt động
+    description: >
+      Số khách có mã có ít nhất một hoá đơn hợp lệ trong kỳ. Khách vãng lai (không có Customer ID) không tính.
+    owner: CRM analytics
+    type: count_distinct
+    expr: customer_id
+    additive_over_time: false
+    caveats:
+      - Không cộng qua các tháng hay quốc gia; tổng kỳ phải tính lại từ dòng.
+      - Khoảng 16.5% doanh thu đến từ khách vãng lai, không có trong metric này.
+
+  - name: new_customers
+    label: Khách mới
+    description: >
+      Số khách có mã mà tháng của hoá đơn hợp lệ đầu tiên (first_purchase_month) rơi vào kỳ đang xét.
+    owner: CRM analytics
+    type: count_distinct
+    expr: customer_id
+    filters:
+      - invoice_month = first_purchase_month
+    additive_over_time: true
+    caveats:
+      - Dữ liệu bắt đầu 01/12/2010 nên mọi khách của 12/2010 đều là "mới"; không so tháng đó với các tháng sau.
+
+  - name: aov
+    label: Giá trị đơn trung bình
+    description: >
+      Doanh thu gộp chia số đơn trong kỳ (revenue / orders), tính sau khi tổng hợp ở đúng grain được hỏi.
+    owner: Finance analytics (trưởng nhóm)
+    type: ratio
+    numerator: revenue
+    denominator: orders
+    additive_over_time: false
+    caveats:
+      - Không lấy trung bình các AOV con; không lấy trung bình doanh thu mỗi dòng.
+      - Tháng chưa đủ hoặc có đơn lớn bị huỷ sau (12/2011) làm AOV kỳ đó không so được.

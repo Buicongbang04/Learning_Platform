@@ -1,0 +1,43 @@
+version: 2
+
+# TODO: với mỗi model, thêm mô tả (nói rõ grain) và data test theo đề bài.
+# Ví dụ cú pháp (dbt >= 1.10):
+#   columns:
+#     - name: customer_id
+#       description: Mã khách; NULL là khách vãng lai.
+#       data_tests:
+#         - not_null
+#         - relationships:
+#             arguments:
+#               to: ref('dim_customer')
+#               field: customer_id
+
+models:
+  - name: fct_sales_line
+    description: TODO
+    columns:
+      - name: line_id
+      - name: customer_id
+
+  - name: dim_customer
+    description: TODO
+    columns:
+      - name: customer_id
+
+  - name: mart_monthly_sales
+    description: TODO
+    columns:
+      - name: month
+        description: TODO
+      - name: revenue
+        description: TODO
+      - name: orders
+        description: TODO
+      - name: active_customers
+        description: TODO
+      - name: new_customers
+        description: TODO
+      - name: aov
+        description: TODO
+      - name: is_complete_month
+        description: TODO
