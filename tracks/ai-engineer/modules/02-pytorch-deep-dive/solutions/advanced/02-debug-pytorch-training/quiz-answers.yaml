@@ -1,0 +1,6 @@
+optimizer-params: [c]
+loss-floor: [b]
+eval-symptom: [b]
+accum-bug: [c]
+gpu-reveals: [a]
+hardest: [d]

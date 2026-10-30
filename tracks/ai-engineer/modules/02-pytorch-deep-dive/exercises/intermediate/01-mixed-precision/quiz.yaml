@@ -1,0 +1,105 @@
+questions:
+- id: act-underflow
+  kind: data
+  type: single
+  prompt: Gradient theo activation của ResNet-9 (W=32, lúc khởi tạo, 256 ảnh train đầu) ép về fp16 ở scale 1. Tỉ lệ underflow là bao nhiêu?
+  options:
+  - id: a
+    text: '0.0000'
+  - id: b
+    text: '0.0004'
+  - id: c
+    text: '0.1208'
+  - id: d
+    text: '0.5013'
+- id: weight-vs-act
+  kind: data
+  type: single
+  prompt: Cũng batch đó, gradient theo trọng số ép về fp16 ở scale 1 thì sao, và vì sao?
+  options:
+  - id: a
+    text: Gần như không mất gì, vì nó là tổng trên cả batch
+  - id: b
+    text: Mất khoảng 12%, giống hệt gradient theo activation
+  - id: c
+    text: Tràn thành inf, vì nó lớn hơn 65 504
+  - id: d
+    text: Mất hết, vì trọng số được lưu ở fp16
+- id: scale-256
+  kind: data
+  type: single
+  prompt: Nhân gradient theo activation với 2^8 trước khi ép về fp16 thì tỉ lệ underflow còn bao nhiêu?
+  options:
+  - id: a
+    text: '0.1208'
+  - id: b
+    text: '0.0004'
+  - id: c
+    text: '0.0602'
+  - id: d
+    text: '0.0000, cùng mức 2^16'
+- id: toy-scale
+  kind: data
+  type: single
+  prompt: Chuỗi 8 bước ở cell so sánh (init_scale 8, growth_interval 3, gradient inf ở bước 2 và 6). Scale sau bước cuối là bao nhiêu?
+  options:
+  - id: a
+    text: '2.0'
+  - id: b
+    text: '4.0'
+  - id: c
+    text: '8.0'
+  - id: d
+    text: '16.0'
+- id: peak-memory
+  kind: data
+  type: single
+  prompt: Trên GPU, peak memory của fp16/bf16 so với fp32 khi train ResNet-9 W=32 (batch 256, tập train nằm trên GPU) thế nào?
+  options:
+  - id: a
+    text: Giảm khoảng một phần ba
+  - id: b
+    text: Giảm đúng một nửa
+  - id: c
+    text: Không đổi, tham số vẫn fp32
+  - id: d
+    text: Tăng vì có thêm bản 16 bit
+- id: no-scaler
+  kind: data
+  type: single
+  prompt: fp16 không scaler, 3 epoch trên GPU, so với fp16 + GradScaler thì test accuracy thế nào?
+  options:
+  - id: a
+    text: Ra NaN ngay trong epoch đầu tiên
+  - id: b
+    text: Ngang nhau, trong dao động giữa các lần chạy
+  - id: c
+    text: Thấp hơn khoảng 10 điểm do underflow
+  - id: d
+    text: Không học, đứng ở mức 10% (đoán mò)
+- id: clip-order
+  kind: knowledge
+  type: single
+  prompt: Với GradScaler, clip_grad_norm_ phải đặt ở đâu trong một bước train?
+  options:
+  - id: a
+    text: Ngay sau backward, trước unscale_
+  - id: b
+    text: Sau unscale_, trước scaler.step
+  - id: c
+    text: Sau scaler.step, trước update
+  - id: d
+    text: Không cần, GradScaler tự clip
+- id: bf16-no-scaler
+  kind: knowledge
+  type: single
+  prompt: Vì sao train bằng bf16 thường không cần loss scaling?
+  options:
+  - id: a
+    text: bf16 có 8 bit mũ như fp32 nên không underflow ở đó
+  - id: b
+    text: bf16 có nhiều bit mantissa hơn fp16 nên chính xác hơn
+  - id: c
+    text: autocast tự nhân loss với 2^16 khi dùng bf16
+  - id: d
+    text: Gradient luôn được tính ở fp32 khi dùng bf16
