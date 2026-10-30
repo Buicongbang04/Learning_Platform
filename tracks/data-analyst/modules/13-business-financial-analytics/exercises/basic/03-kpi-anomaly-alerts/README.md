@@ -4,7 +4,7 @@ level: basic
 services: []
 files:
   - path: starter/kpi_alerts.ipynb
-    note: 5 hàm TODO (baseline, score, bảng cảnh báo, gộp đợt, phân loại) + đọc kết quả
+    note: 6 hàm TODO (baseline, score, bảng cảnh báo, gộp đợt, độ phủ giờ, phân loại) + đọc kết quả
   - path: tests/test_kpi_alerts.py
     note: Không sửa
 run:
@@ -16,8 +16,8 @@ run:
 ## Mục tiêu
 
 Dựng một quy tắc cảnh báo KPI hằng ngày mà người nhận không bỏ qua: so với baseline cùng thứ của các tuần trước,
-đo độ lệch bằng thang robust, gộp ngày liên tiếp thành một đợt và gắn lý do, rồi so với hai quy tắc ngây thơ
-(ngưỡng cố định, giảm so với hôm qua).
+đo độ lệch bằng thang robust, gộp ngày liên tiếp thành một đợt, kiểm độ phủ dữ liệu để tách cảnh báo do dữ liệu
+thiếu khỏi sự kiện thật, gắn lý do, rồi so với hai quy tắc ngây thơ (ngưỡng cố định, giảm so với hôm qua).
 
 ## Đề bài
 
@@ -28,9 +28,10 @@ thuê mỗi ngày). Head of Operations muốn mỗi sáng nhận tin nhắn khi 
 1. `seasonal_baseline(y, weeks=4)`: median của cùng thứ trong 4 tuần trước.
 2. `robust_score(y, baseline, window=56, min_periods=28)`: `ln(y / baseline)` chia cho `1.4826 × MAD` của chính độ
    lệch đó trong 56 ngày **trước** (không tính ngày đang xét).
-3. `alert_table`, `alert_episodes`, `triage`: các ngày `|score| > 4`, gộp ngày liên tiếp thành đợt, gắn lý do
-   `holiday` / `bad_weather` / `investigate` từ cột `holiday` và `weathersit`.
-4. Chạy các cell `explore`: hai quy tắc ngây thơ, quy tắc mùa vụ trên dữ liệu thật, chart, danh sách cần điều tra.
+3. `alert_table`, `alert_episodes`: các ngày `|score| > 4`, gộp ngày liên tiếp thành đợt.
+4. `hour_coverage(hour)` và `triage(alerts, day, coverage=None, min_hours=20)`: số giờ có dữ liệu mỗi ngày trong
+   `hour.csv`; gắn lý do `partial_day` (dưới 20 giờ dữ liệu) / `holiday` / `bad_weather` / `investigate`.
+5. Chạy các cell `explore`: độ phủ giờ, hai quy tắc ngây thơ, quy tắc mùa vụ trên dữ liệu thật, chart, danh sách cần điều tra.
    Trả lời bốn câu ở cuối notebook. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy notebook.
 
 Định nghĩa chính xác (NaN, thứ tự lý do, cột kết quả) nằm trong notebook. Các hàm không được sửa dữ liệu đầu vào.
@@ -38,9 +39,11 @@ thuê mỗi ngày). Head of Operations muốn mỗi sáng nhận tin nhắn khi 
 ## Tiêu chí đạt
 
 - Test trên dữ liệu nhỏ pass: baseline đúng thứ và bỏ qua ngoại lệ, thang đo chỉ dùng ngày trước và bỏ `NaN`,
-  bảng cảnh báo và hướng, gộp đợt (kể cả bảng rỗng), thứ tự ưu tiên lý do.
-- Trên bộ thật: 675 ngày có score (từ 26/02/2011); 39 ngày cảnh báo (36 drop), 26 đợt; ngày tệ nhất 29/10/2012
-  (22 lượt so với baseline 6 326.5, score khoảng −57.9); lý do: 25 `investigate`, 11 `bad_weather`, 3 `holiday`.
+  bảng cảnh báo và hướng, gộp đợt (kể cả bảng rỗng), độ phủ giờ, thứ tự ưu tiên lý do (thiếu giờ đứng đầu).
+- Trên bộ thật: 675 ngày có score (từ 26/02/2011); 39 ngày cảnh báo (36 drop), 26 đợt; 76 ngày thiếu ít nhất một
+  giờ trong `hour.csv`. Score âm nhất (29/10/2012, 22 lượt, khoảng −57.9) là **artifact**: ngày đó chỉ có 1 giờ dữ
+  liệu (30/10 có 11 giờ). Lý do khi có kiểm độ phủ: 23 `investigate`, 10 `bad_weather`, 3 `partial_day`, 3 `holiday`;
+  cảnh báo lớn nhất trên ngày đủ giờ là 26/12/2012.
 - Trắc nghiệm trong app: đúng ít nhất 6/8 câu.
 
 ## Gợi ý

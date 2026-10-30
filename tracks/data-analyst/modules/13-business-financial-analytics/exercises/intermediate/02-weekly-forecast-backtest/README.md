@@ -40,7 +40,8 @@ dự báo doanh số tuần toàn chuỗi cho 8 tuần tới. Mở `starter/week
   đúng pha cả khi `h > m`; trung bình theo cờ khuyến mãi; backtest không cho phương pháp thấy tương lai, báo lỗi khi
   thiếu thực tế; bảng tổng hợp.
 - Trên bộ thật: 934 cửa hàng so sánh được; 133 tuần (07/01/2013 tới 20/07/2015), tổng 5 065 433 519; 71 tuần có
-  khuyến mãi; MAPE trung bình 6 điểm cắt: `promo_average` 6.26%, `seasonal_naive` 6.31%, `moving_average` 14.82%.
+  khuyến mãi; MAPE trung bình 6 điểm cắt: `promo_average` và `seasonal_naive` khoảng 6.3% mỗi phương pháp (chênh nhau
+  dưới 0.5 điểm, thứ hạng giữa hai cái là nhiễu), `moving_average` khoảng 14.8% (tệ nhất).
 - Trắc nghiệm trong app: đúng ít nhất 6/8 câu.
 
 ## Gợi ý

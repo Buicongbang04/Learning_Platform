@@ -20,12 +20,12 @@ questions:
   - id: worst-day
     kind: data
     type: single
-    prompt: "Ngày có score âm nhất là ngày nào, và vì sao?"
+    prompt: "Score âm nhất (khoảng −58) rơi vào 29/10/2012, ngày bão Sandy, với 22 lượt thuê. Kiểm `hour_coverage` thấy gì, và nên báo thế nào?"
     options:
-      - { id: a, text: "25/12/2012: Giáng sinh, ngày lễ có holiday = 1" }
-      - { id: b, text: "27/08/2011: bão Irene" }
-      - { id: c, text: "29/10/2012: bão Sandy, 22 lượt" }
-      - { id: d, text: "26/12/2012: tuyết rơi sau Giáng sinh" }
+      - { id: a, text: "Đủ 24 giờ; báo khẩn: cầu giảm 99% vì bão" }
+      - { id: b, text: "Đủ 24 giờ; bỏ qua vì bão là chuyện ai cũng biết" }
+      - { id: c, text: "Chỉ 1 giờ dữ liệu; báo là ngày thiếu giờ, kiểm nguồn" }
+      - { id: d, text: "Không có trong hour.csv; xoá ngày đó khỏi day.csv" }
   - id: investigate-share
     kind: data
     type: single

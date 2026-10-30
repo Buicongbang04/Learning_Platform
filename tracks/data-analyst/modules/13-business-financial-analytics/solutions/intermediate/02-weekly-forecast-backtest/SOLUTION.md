@@ -4,7 +4,11 @@
 
 - **`comparable_stores`**: đếm số ngày khác nhau của mỗi cửa hàng, giữ cửa hàng có đủ `(max − min).days + 1` ngày.
   Ở Rossmann, ngày đóng cửa vẫn có dòng (`Open = 0`, `Sales = 0`), nên thiếu dòng nghĩa là thiếu dữ liệu, không phải
-  đóng cửa.
+  đóng cửa. Tập cửa hàng được chọn **một lần trên toàn khoảng `train`** (kể cả các tuần nằm sau mỗi điểm cắt của
+  backtest). Việc này không làm lộ doanh số tương lai cho phương pháp dự báo, vì tiêu chí chỉ là "có dòng mọi ngày",
+  và nó chỉ loại các cửa hàng có dữ liệu bị gián đoạn (180 cửa hàng thiếu 7-12/2014, cửa hàng 988 thiếu một ngày).
+  Nhưng cần nói rõ: trong vận hành thật, tập so sánh được phải chọn bằng thông tin có tại thời điểm dự báo (cửa hàng
+  đang mở, không có lịch đóng cửa đã biết).
 - **`weekly_sales`**: gán thứ Hai của tuần, `groupby` với tổng `Sales`, `max` của `Promo`, số ngày khác nhau; bỏ
   tuần dưới 7 ngày (tuần đầu 31/12/2012 và tuần cuối 27/07/2015 dở dang).
 - **Ba phương pháp**: đều không cần fit. `seasonal_naive` dùng vị trí `len − m + (i % m)` để đúng pha cả khi

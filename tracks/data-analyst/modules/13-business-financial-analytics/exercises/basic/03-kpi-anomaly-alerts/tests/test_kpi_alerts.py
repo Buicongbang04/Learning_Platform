@@ -106,14 +106,40 @@ def test_triage(nb):
     assert out["reason"].tolist() == ["holiday", "bad_weather", "investigate", "investigate"]
 
 
+def test_triage_partial_day(nb):
+    y, base, score = alert_inputs()
+    alerts = nb.alert_table(y, base, score, threshold=4.0)
+    day = pd.DataFrame({"holiday": [0, 1, 0, 0, 0, 0, 0, 0], "weathersit": [1, 3, 3, 1, 1, 1, 2, 1]},
+                       index=y.index)
+    # 02/03 chỉ 5 giờ (thiếu giờ thắng cả holiday); 05/03 đủ 24; 07/03 không có trong coverage (0 giờ)
+    coverage = pd.Series([24, 5, 24, 24, 24, 24], index=y.index[:6], name="hours")
+    out = nb.triage(alerts, day, coverage)
+    assert out["reason"].tolist() == ["partial_day", "bad_weather", "investigate", "partial_day"]
+    out = nb.triage(alerts, day, coverage, min_hours=4)
+    assert out["reason"].tolist() == ["holiday", "bad_weather", "investigate", "partial_day"]
+
+
+def test_hour_coverage(nb):
+    hour = pd.DataFrame({"dteday": pd.to_datetime(["2024-01-02", "2024-01-01", "2024-01-01", "2024-01-01"]),
+                         "hr": [5, 0, 1, 1]})
+    before = hour.copy()
+    out = nb.hour_coverage(hour)
+    pd.testing.assert_frame_equal(hour, before)
+    assert out.name == "hours" and out.index.name == "date"
+    assert list(out.index) == list(pd.to_datetime(["2024-01-01", "2024-01-02"]))
+    assert out.tolist() == [2, 1]
+
+
 @pytest.fixture(scope="module")
 def real():
-    day = pd.read_csv(ex.dataset("bike-sharing-uci") / "day.csv", parse_dates=["dteday"]).set_index("dteday")
-    return day, day["cnt"].astype(float)
+    root = ex.dataset("bike-sharing-uci")
+    day = pd.read_csv(root / "day.csv", parse_dates=["dteday"]).set_index("dteday")
+    hour = pd.read_csv(root / "hour.csv", parse_dates=["dteday"])
+    return day, day["cnt"].astype(float), hour
 
 
 def test_real_alerts(nb, real):
-    day, y = real
+    day, y, hour = real
     base = nb.seasonal_baseline(y)
     score = nb.robust_score(y, base)
     assert score.notna().sum() == 675
@@ -121,10 +147,21 @@ def test_real_alerts(nb, real):
     alerts = nb.alert_table(y, base, score)
     assert len(alerts) == 39
     assert (alerts["direction"] == "drop").sum() == 36
+    # score âm nhất (−57.9, 29/10/2012) là artifact: ngày đó hour.csv chỉ có 1 giờ (22 lượt), không đo cầu
     worst = alerts["score"].idxmin()
     assert worst == pd.Timestamp("2012-10-29")
     assert alerts.loc[worst, "baseline"] == pytest.approx(6326.5)
     assert alerts.loc[worst, "score"] == pytest.approx(-57.94, abs=0.01)
     assert len(nb.alert_episodes(alerts)) == 26
-    reasons = nb.triage(alerts, day)["reason"].value_counts().to_dict()
-    assert reasons == {"investigate": 25, "bad_weather": 11, "holiday": 3}
+    coverage = nb.hour_coverage(hour)
+    assert len(coverage) == 731 and (coverage < 24).sum() == 76
+    assert coverage.loc["2012-10-29"] == 1 and coverage.loc["2012-10-30"] == 11
+    assert nb.triage(alerts, day)["reason"].value_counts().to_dict() == {"investigate": 25, "bad_weather": 11,
+                                                                         "holiday": 3}
+    triaged = nb.triage(alerts, day, coverage)
+    assert triaged["reason"].value_counts().to_dict() == {"investigate": 23, "bad_weather": 10, "partial_day": 3,
+                                                          "holiday": 3}
+    assert sorted(triaged.index[triaged["reason"] == "partial_day"].strftime("%Y-%m-%d")) == [
+        "2011-08-27", "2012-10-29", "2012-10-30"]
+    real_days = triaged[triaged["reason"] != "partial_day"]
+    assert real_days["score"].idxmin() == pd.Timestamp("2012-12-26")     # cảnh báo lớn nhất trên ngày đủ giờ

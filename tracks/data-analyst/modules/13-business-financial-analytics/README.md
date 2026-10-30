@@ -49,8 +49,8 @@ Ba phần của module dựa trên kiến thức đã có ở module khác; ph�
 - **Chuỗi thời gian**: track Data Science, module [07. Time series](../../../data-science/modules/07-time-series/README.md)
   đi sâu phân rã, ARIMA/ETS, LightGBM, backtest, prediction interval, reconciliation. Ở đây chỉ giữ phần một DA cần
   để trả lời FP&A có trách nhiệm: baseline, backtest, khoảng sai số, giả định.
-- **Thí nghiệm**: tác động thật của giá và khuyến mãi đo tốt nhất bằng thí nghiệm có đối chứng (module 11 của track
-  này; track Data Science module [04](../../../data-science/modules/04-advanced-experimentation/README.md) có bài
+- **Thí nghiệm**: tác động thật của giá và khuyến mãi đo tốt nhất bằng thí nghiệm có đối chứng (module
+  [11. Thống kê & thí nghiệm](../11-stats-experimentation/README.md) của track này; track Data Science module [04](../../../data-science/modules/04-advanced-experimentation/README.md) có bài
   thiết kế thí nghiệm trên chính Rossmann). Phần 4 dưới đây chỉ làm phân tích quan sát và chỉ ra giới hạn của nó.
 
 ## 2. Root cause khi chỉ số biến động
@@ -468,8 +468,9 @@ kiểm từng ngày với lịch lễ thì 27 là ngày lễ, 9 là một hai ng
 28/03/2013 trước Thứ Sáu Tuần Thánh), 5 là ngay sau lễ, 5 là ngày mà baseline bị kéo xuống vì có ngày lễ trong 4 tuần
 trước (10/06/2013: hai trong bốn thứ Hai làm baseline là lễ, Phục sinh 01/04 và Ngũ Tuần 20/05), và 2 là tuần
 trước Giáng sinh. Không cảnh báo nào là "sự cố thật". Với dữ liệu bán lẻ, phần lớn công sức làm cảnh báo là **lịch**: bỏ ngày lễ khỏi lịch sử của baseline, so ngày
-lễ với cùng lễ năm trước, và gắn nhãn trước / sau lễ trước khi gửi. Bài Basic 03 làm đủ các bước trên Bike Sharing,
-nơi thời tiết đóng vai trò của lịch.
+lễ với cùng lễ năm trước, và gắn nhãn trước / sau lễ trước khi gửi. Một bước nữa phải làm trước khi tin bất kỳ cảnh
+báo nào: **kiểm độ phủ dữ liệu** của ngày đó (đủ giờ, đủ cửa hàng, đủ nguồn chưa). Bài Basic 03 làm đủ các bước trên
+Bike Sharing, nơi thời tiết đóng vai trò của lịch, và hai cảnh báo lớn nhất hoá ra là ngày chỉ có 1 và 11 giờ dữ liệu.
 
 ### Chọn công cụ
 

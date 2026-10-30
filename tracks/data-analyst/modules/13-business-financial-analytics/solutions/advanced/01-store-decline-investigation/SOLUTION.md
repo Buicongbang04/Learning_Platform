@@ -6,7 +6,10 @@ quyết định cần cân nhắc và rubric chấm memo.
 ## Ba hàm
 
 - **`store_yoy`**: lọc từng kỳ bằng `(Date >= start) & (Date <= end)`, `groupby("Store")` tổng `Sales`, `Open`,
-  `Customers`; `join(how="inner")` để chỉ giữ cửa hàng có ở cả hai kỳ. Ba thành phần là phân rã nhân, nên tích
+  `Customers`; `join(how="inner")` để chỉ giữ cửa hàng có ở cả hai kỳ. Tập cửa hàng ở đây chọn theo **hai kỳ so
+  sánh**, không theo toàn khoảng `train` như `comparable_stores` của bài Intermediate 02: 180 cửa hàng thiếu dữ liệu
+  7-12/2014 vẫn đủ cả hai nửa đầu năm nên vẫn được so. Cách chọn nào cũng phải ghi rõ trong memo, vì nó quyết định
+  "chuỗi tăng 3.4%" là tăng của tập cửa hàng nào. Ba thành phần là phân rã nhân, nên tích
   `(1 + days)(1 + traffic)(1 + spc)` đúng bằng `1 + growth` (khác với LMDI của module 01 vốn chia thay đổi tuyệt đối).
 - **`competition_timing`**: dựng ngày mở từ năm và tháng (`pd.to_datetime` với dict `year`, `month`, `day`), điền
   tạm giá trị cho dòng thiếu rồi gán `unknown` bằng `np.select`, điều kiện xếp theo thời gian.
