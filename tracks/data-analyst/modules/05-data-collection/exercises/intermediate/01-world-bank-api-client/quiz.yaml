@@ -1,0 +1,73 @@
+questions:
+  - id: requests-per-indicator
+    kind: data
+    type: single
+    prompt: "Với `per_page=50`, 10 nước ASEAN × 2015–2023, mỗi chỉ số cần bao nhiêu request để lấy đủ?"
+    options:
+      - { id: a, text: "1 request" }
+      - { id: b, text: "2 request" }
+      - { id: c, text: "10 request" }
+      - { id: d, text: "90 request" }
+  - id: largest-online
+    kind: data
+    type: single
+    prompt: "Năm 2023, nước nào có dân số online (dân số × % dùng internet) lớn nhất ASEAN, khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Việt Nam, khoảng 78 triệu" }
+      - { id: b, text: "Philippines, khoảng 90 triệu" }
+      - { id: c, text: "Indonesia, khoảng 195 triệu" }
+      - { id: d, text: "Thái Lan, khoảng 64 triệu" }
+  - id: vn-internet
+    kind: data
+    type: single
+    prompt: "Tỉ lệ dân Việt Nam dùng internet thay đổi thế nào từ 2015 tới 2023?"
+    options:
+      - { id: a, text: "Từ khoảng 45% lên khoảng 78%" }
+      - { id: b, text: "Từ khoảng 70% lên khoảng 95%" }
+      - { id: c, text: "Từ khoảng 20% lên khoảng 50%" }
+      - { id: d, text: "Gần như đứng yên quanh 60%" }
+  - id: richest-not-largest
+    kind: data
+    type: single
+    prompt: "Nước có GDP/người cao nhất ASEAN năm 2023 đứng thứ mấy về dân số online?"
+    options:
+      - { id: a, text: "Singapore, đứng thứ 3 sau Indonesia và Thái Lan" }
+      - { id: b, text: "Brunei, đứng thứ 1 vì 99% dùng internet" }
+      - { id: c, text: "Malaysia, đứng thứ 2 sau Indonesia" }
+      - { id: d, text: "Singapore, đứng thứ 7 với khoảng 5.6 triệu" }
+  - id: missing-value
+    kind: knowledge
+    type: single
+    prompt: "API trả `value: null` cho tỉ lệ internet của Myanmar năm 2023. Trên bảng cho slide, dân số online của Myanmar nên là gì?"
+    options:
+      - { id: a, text: "0, vì không có dữ liệu thì coi như không có ai" }
+      - { id: b, text: "Để trống (NaN) và ghi chú \"chưa có số liệu\"" }
+      - { id: c, text: "Lấy trung bình 9 nước còn lại thay vào cho đủ" }
+      - { id: d, text: "Bỏ Myanmar khỏi bảng để slide gọn hơn" }
+  - id: error-in-200
+    kind: knowledge
+    type: single
+    prompt: "Request trả HTTP 200 với body `[{\"message\": [{\"key\": \"Invalid value\"}]}]`. `get_json` nên làm gì?"
+    options:
+      - { id: a, text: "Thử lại với backoff vì có thể là lỗi tạm thời" }
+      - { id: b, text: "Trả về body, để hàm gọi tự kiểm tra sau" }
+      - { id: c, text: "Báo ApiError ngay kèm nội dung message, không thử lại" }
+      - { id: d, text: "Trả danh sách rỗng để pipeline phía sau vẫn chạy tiếp được" }
+  - id: redact-why
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `redact` URL trước khi ghi vào log hoặc tệp metadata?"
+    options:
+      - { id: a, text: "Để người khác không gọi lại được API khi chưa có quyền" }
+      - { id: b, text: "URL ngắn hơn giúp tệp log nhỏ hơn và đọc nhanh hơn" }
+      - { id: c, text: "API sẽ từ chối request nếu URL chứa key trong log" }
+      - { id: d, text: "Log được nhiều người đọc; key lộ ra là phải thu hồi" }
+  - id: lastupdated
+    kind: knowledge
+    type: single
+    prompt: "Vì sao lưu `lastupdated` (từ metadata) và thời điểm tải cạnh JSON thô?"
+    options:
+      - { id: a, text: "Số được sửa theo thời gian; cần biết slide dùng bản nào" }
+      - { id: b, text: "World Bank tính phí theo số lần cập nhật dữ liệu" }
+      - { id: c, text: "pandas cần ngày cập nhật để đọc JSON đúng múi giờ" }
+      - { id: d, text: "Để API trả nhanh hơn khi gọi lại lần sau" }

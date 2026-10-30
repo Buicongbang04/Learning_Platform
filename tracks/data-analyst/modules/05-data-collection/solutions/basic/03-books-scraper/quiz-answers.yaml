@@ -1,0 +1,8 @@
+robots-404: [b]
+catalog-size: [a]
+dedupe-key: [d]
+rating-price: [a]
+sandbox-insight: [c]
+mojibake: [b]
+truncated-title: [c]
+real-competitor: [a, b, c, e]
