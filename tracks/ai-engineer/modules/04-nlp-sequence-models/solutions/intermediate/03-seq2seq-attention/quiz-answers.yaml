@@ -1,0 +1,8 @@
+reverse-none: [a]
+reverse-attn: [c]
+short-bleu: [a]
+heatmap: [a]
+why-parallel: [b]
+mask-inf: [a]
+exposure: [b]
+mt-heatmap: [b]

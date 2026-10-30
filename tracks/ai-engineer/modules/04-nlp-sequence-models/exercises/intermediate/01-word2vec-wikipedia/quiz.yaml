@@ -1,0 +1,92 @@
+questions:
+- id: n-phrases
+  kind: data
+  type: single
+  prompt: Với `min_count=5`, `delta=5`, `threshold=100` trên 5 000 bài (seed 0), `find_phrases` tìm được bao nhiêu cụm?
+  options:
+  - id: a
+    text: '2 931'
+  - id: b
+    text: '13 077'
+  - id: c
+    text: '21 834'
+  - id: d
+    text: '48 520'
+- id: hanoi-neighbors
+  kind: data
+  type: single
+  prompt: Ở model train sau khi ghép cụm, các láng giềng gần nhất của `hà_nội` chủ yếu là gì?
+  options:
+  - id: a
+    text: Các thành phố, địa danh khác của Việt Nam
+  - id: b
+    text: Tên các quốc gia châu Á như nhật_bản, lào
+  - id: c
+    text: Từ chỉ thời gian như tháng, năm, ngày
+  - id: d
+    text: Các âm tiết rời như hà, nội, giang
+- id: syllable-neighbors
+  kind: data
+  type: single
+  prompt: Ở model train trên âm tiết (không ghép cụm), láng giềng của `mèo` có `thằn` và `lằn`. Điều đó cho thấy gì?
+  options:
+  - id: a
+    text: Model đã học đúng nghĩa của cả từ thằn lằn ghép
+  - id: b
+    text: Vector học được là của âm tiết trong từ ghép
+  - id: c
+    text: Subsampling đã bỏ quá nhiều từ phổ biến
+  - id: d
+    text: Phân phối nhiễu mũ 0.75 làm lệch từ hiếm
+- id: analogy-acc
+  kind: data
+  type: single
+  prompt: Analogy nước–thủ đô (top 1, chỉ cặp có trong vocab) của model ghép cụm đúng khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 1%
+  - id: b
+    text: Khoảng 11%
+  - id: c
+    text: Khoảng 45%
+  - id: d
+    text: Khoảng 80%
+- id: trung-quoc
+  kind: knowledge
+  type: single
+  prompt: Vì sao `trung quốc` không được ghép thành cụm dù rất phổ biến?
+  options:
+  - id: a
+    text: '"quốc" quá phổ biến nên mẫu số lớn, điểm thấp'
+  - id: b
+    text: Cặp này xuất hiện dưới min_count lần trong corpus
+  - id: c
+    text: TOKEN_RE đã bỏ chữ "quốc" vì có dấu thanh
+  - id: d
+    text: apply_phrases chỉ ghép cặp ở đầu câu
+- id: lr-times-batch
+  kind: knowledge
+  type: single
+  prompt: Vì sao lr của optimizer là `lr * batch_size` chứ không phải `lr`?
+  options:
+  - id: a
+    text: Gradient sparse của PyTorch tự động chia lr cho batch size
+  - id: b
+    text: Loss là trung bình, nhân lại để mỗi cặp có bước như word2vec gốc
+  - id: c
+    text: Batch lớn cần lr lớn hơn hẳn để model khỏi bị overfit
+  - id: d
+    text: Embedding sparse=True chỉ chạy được với lr lớn
+- id: power-075
+  kind: knowledge
+  type: single
+  prompt: Lấy mẫu âm theo tần suất mũ 0.75 thay vì mũ 1 có tác dụng gì?
+  options:
+  - id: a
+    text: Bỏ hẳn các từ phổ biến nhất ra khỏi tập mẫu negative
+  - id: b
+    text: Nâng xác suất từ hiếm, negative bớt toàn "của", "và"
+  - id: c
+    text: Làm loss nhỏ hơn nên train ổn định hơn
+  - id: d
+    text: Giữ mỗi lần xuất hiện của từ với xác suất 0.75
