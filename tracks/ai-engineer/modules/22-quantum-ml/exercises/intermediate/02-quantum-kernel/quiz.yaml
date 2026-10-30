@@ -1,0 +1,105 @@
+questions:
+- id: iris-vs-rbf
+  kind: data
+  type: single
+  prompt: Trên Iris (5-fold), kernel ZZ ở scale tốt nhất so với SVM RBF và logistic regression thế nào?
+  options:
+  - id: a
+    text: ZZ 0.927, ngang RBF 0.927, logistic 0.960
+  - id: b
+    text: ZZ 0.993, hơn hẳn RBF 0.953 và logistic 0.960
+  - id: c
+    text: ZZ 0.860, kém xa RBF 0.953 và logistic 0.960
+  - id: d
+    text: ZZ 0.953, ngang RBF 0.953, logistic 0.960
+- id: moons-best
+  kind: data
+  type: single
+  prompt: Trên moons, test accuracy tốt nhất của kernel ZZ (mọi scale đã thử) và của SVM RBF là bao nhiêu?
+  options:
+  - id: a
+    text: ZZ 0.970, SVM RBF 0.843
+  - id: b
+    text: ZZ 0.843, SVM RBF 0.970
+  - id: c
+    text: ZZ 0.830, SVM RBF 0.847
+  - id: d
+    text: ZZ 0.953, SVM RBF 0.970
+- id: scale4
+  kind: data
+  type: single
+  prompt: Iris, scale 4.0. Train và test accuracy là bao nhiêu?
+  options:
+  - id: a
+    text: train 0.978, test 0.927
+  - id: b
+    text: train 0.400, test 0.902
+  - id: c
+    text: train 0.902, test 0.400
+  - id: d
+    text: train 0.868, test 0.860
+- id: concentration-10
+  kind: data
+  type: single
+  prompt: Breast cancer, 10 qubit, scale 1.0. Trung bình phần tử ngoài đường chéo của kernel train khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '0.546'
+  - id: b
+    text: '0.283'
+  - id: c
+    text: '0.058'
+  - id: d
+    text: '0.674'
+- id: concentration-why
+  kind: knowledge
+  type: single
+  prompt: Khi kernel tiến về ma trận đơn vị, chuyện gì xảy ra với SVM?
+  options:
+  - id: a
+    text: SVM tự bỏ kernel đã cho và chuyển sang dùng kernel tuyến tính mặc định
+  - id: b
+    text: Mọi điểm train thành support vector riêng, thuộc lòng, không tổng quát
+  - id: c
+    text: SVM tổng quát tốt hơn vì các điểm tách nhau rõ trong không gian lớn
+  - id: d
+    text: Bài toán tối ưu của SVM hết lồi nên solver không còn hội tụ được
+- id: centered
+  kind: knowledge
+  type: single
+  prompt: Vì sao dùng alignment đã center thay vì ⟨K, T⟩ / (‖K‖‖T‖) thô?
+  options:
+  - id: a
+    text: Center làm K thành nửa xác định dương, bản thô thì không
+  - id: b
+    text: Bản thô không tính được khi K có phần tử bằng đúng 0
+  - id: c
+    text: Bản đã center luôn bằng test accuracy của SVM tương ứng
+  - id: d
+    text: Bản thô đổi khi cộng hằng vào K và lệch theo tỉ lệ lớp
+- id: shots-cost
+  kind: knowledge
+  type: single
+  prompt: Một fold Iris có 120 điểm train và 30 điểm test. Trên phần cứng cần bao nhiêu mạch khác nhau để có cả kernel train và test?
+  options:
+  - id: a
+    text: '150'
+  - id: b
+    text: 3 600
+  - id: c
+    text: 10 740
+  - id: d
+    text: 22 500
+- id: shots-10
+  kind: data
+  type: single
+  prompt: Iris scale 0.5, kernel ước lượng từ 10 shots mỗi phần tử. Test accuracy (5-fold) là bao nhiêu?
+  options:
+  - id: a
+    text: '0.900'
+  - id: b
+    text: '0.953'
+  - id: c
+    text: '0.400'
+  - id: d
+    text: '0.967'
