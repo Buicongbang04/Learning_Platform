@@ -1,0 +1,73 @@
+questions:
+  - id: humidity-r2
+    kind: data
+    type: single
+    prompt: "Độ ẩm có r = −0.10 với lượt thuê/ngày (p ≈ 0.006). Độ ẩm một mình giải thích khoảng bao nhiêu phần trăm phương sai lượt thuê?"
+    options:
+      - { id: a, text: "Khoảng 1%" }
+      - { id: b, text: "Khoảng 10%" }
+      - { id: c, text: "Khoảng 39%" }
+      - { id: d, text: "Khoảng 94%" }
+  - id: significance-meaning
+    kind: knowledge
+    type: single
+    prompt: "Trưởng vận hành hỏi: \"Độ ẩm có ý nghĩa thống kê, vậy ngày ẩm có nên giảm xe?\". Câu trả lời đúng nhất?"
+    options:
+      - { id: a, text: "Có: p < 0.01 nghĩa là độ ẩm là nguyên nhân chính làm giảm khách" }
+      - { id: b, text: "Có: p nhỏ nghĩa là ảnh hưởng của độ ẩm lên lượt thuê rất lớn" }
+      - { id: c, text: "Chưa: p nhỏ chỉ nói quan hệ khác 0; độ lớn quá nhỏ để điều xe" }
+      - { id: d, text: "Không: p-value đúng chỉ khi dữ liệu có hơn mười nghìn ngày" }
+  - id: temp-ci
+    kind: data
+    type: single
+    prompt: "Khoảng tin cậy 95% của r giữa nhiệt độ (°C) và lượt thuê/ngày là bao nhiêu?"
+    options:
+      - { id: a, text: "[0.03; 0.17]" }
+      - { id: b, text: "[0.58; 0.67]" }
+      - { id: c, text: "[0.16; 0.30]" }
+      - { id: d, text: "[0.61; 0.99]" }
+  - id: holiday-raw
+    kind: data
+    type: single
+    prompt: "So thẳng 21 ngày lễ với 500 ngày làm việc (Welch), chênh lệch `cnt` và p-value là bao nhiêu?"
+    options:
+      - { id: a, text: "−850 lượt, p ≈ 0.08" }
+      - { id: b, text: "−595 lượt, p ≈ 0.04" }
+      - { id: c, text: "+458 lượt, p ≈ 0.02" }
+      - { id: d, text: "−1 308 lượt, p ≈ 0.001" }
+  - id: why-matched
+    kind: knowledge
+    type: single
+    prompt: "Vì sao so mỗi ngày lễ với ngày làm việc cùng năm-tháng cho khoảng tin cậy hẹp hơn so thẳng?"
+    options:
+      - { id: a, text: "Vì so cùng tháng làm số ngày lễ trong mẫu tăng lên đáng kể" }
+      - { id: b, text: "Vì phương pháp ghép cặp luôn cho p-value nhỏ hơn t-test thường" }
+      - { id: c, text: "Vì Welch t-test không dùng được khi hai nhóm khác cỡ mẫu" }
+      - { id: d, text: "Vì biến động theo mùa bị loại khỏi phép so, chỉ còn khác biệt do lễ" }
+  - id: casual-holidays
+    kind: data
+    type: single
+    prompt: "So cùng năm-tháng, bao nhiêu trong 21 ngày lễ có số khách vãng lai (`casual`) cao hơn ngày làm việc?"
+    options:
+      - { id: a, text: "21 ngày" }
+      - { id: b, text: "16 ngày" }
+      - { id: c, text: "10 ngày" }
+      - { id: d, text: "5 ngày" }
+  - id: marketing-answer
+    kind: knowledge
+    type: single
+    prompt: "Câu trả lời nào cho trưởng marketing là đúng mực nhất?"
+    options:
+      - { id: a, text: "Ngày lễ không ảnh hưởng gì vì so thẳng có p = 0.08 > 0.05" }
+      - { id: b, text: "Lễ giảm khách thành viên, tăng vãng lai: khuyến mãi nên nhắm vãng lai" }
+      - { id: c, text: "Ngày lễ giảm mọi loại khách nên cần khuyến mãi cho tất cả mọi người" }
+      - { id: d, text: "Không kết luận được gì vì cả hai năm chỉ có 21 ngày lễ trong dữ liệu" }
+  - id: multiple-tests
+    kind: knowledge
+    type: single
+    prompt: "Bạn chạy 6 kiểm định và một cái có p = 0.04. Cách đọc hợp lý nhất?"
+    options:
+      - { id: a, text: "Bằng chứng mạnh, vì p < 0.05 không phụ thuộc số kiểm định đã chạy" }
+      - { id: b, text: "Bỏ kết quả đó đi vì chạy nhiều kiểm định thì mọi p-value đều vô nghĩa" }
+      - { id: c, text: "Bằng chứng yếu: chạy nhiều kiểm định thì dễ có p < 0.05 do may" }
+      - { id: d, text: "Nhân p với 6 rồi báo cáo p = 0.24 là ảnh hưởng thật nhưng nhỏ" }
