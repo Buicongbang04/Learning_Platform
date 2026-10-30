@@ -1,0 +1,172 @@
+questions:
+  - id: filter-summarise
+    kind: knowledge
+    type: single
+    prompt: |
+      Đoạn pandas nào cho cùng kết quả?
+
+      ```r
+      co2 |>
+        filter(year == 2024, !is.na(iso_code)) |>
+        summarise(total = sum(co2, na.rm = TRUE))
+      ```
+    options:
+      - { id: a, text: '`co2[co2.year == 2024].co2.sum()`' }
+      - { id: b, text: '`co2[(co2.year == 2024) & co2.iso_code.notna()].co2.sum()`' }
+      - { id: c, text: '`co2[co2.iso_code.isna() & (co2.year == 2024)].co2.sum(skipna=True)`' }
+      - { id: d, text: '`co2.query("year == 2024").co2.mean()`' }
+  - id: na-rm
+    kind: knowledge
+    type: single
+    prompt: |
+      Cột `Price` có một ô `NA` ở dòng của Iceland. Bản R và bản pandas `tx.groupby("Country").Price.mean()` khác nhau
+      ở đâu?
+
+      ```r
+      tx |> group_by(Country) |> summarise(avg_price = mean(Price))
+      ```
+    options:
+      - { id: a, text: 'Không khác: cả hai đều tự bỏ qua ô thiếu' }
+      - { id: b, text: 'R báo lỗi, còn pandas ra NaN cho Iceland' }
+      - { id: c, text: 'R ra NA cho Iceland, pandas bỏ ô thiếu ra số' }
+      - { id: d, text: 'R bỏ hẳn nhóm Iceland khỏi kết quả trả về' }
+  - id: n-vs-n-distinct
+    kind: knowledge
+    type: single
+    prompt: |
+      Đoạn pandas nào cho cùng kết quả?
+
+      ```r
+      tx |>
+        group_by(Country) |>
+        summarise(orders = n_distinct(Invoice), lines = n())
+      ```
+    options:
+      - { id: a, text: '`tx.groupby("Country").agg(orders=("Invoice", "count"), lines=("Invoice", "size"))`' }
+      - { id: b, text: '`tx.groupby("Country").agg(orders=("Invoice", "nunique"), lines=("Invoice", "size"))`' }
+      - { id: c, text: '`tx.groupby("Country").agg(orders=("Invoice", "size"), lines=("Invoice", "nunique"))`' }
+      - { id: d, text: '`tx.groupby("Country").agg(orders=("Invoice", "nunique"), lines=("Invoice", "sum"))`' }
+  - id: group-mutate
+    kind: knowledge
+    type: single
+    prompt: |
+      Đoạn R thêm cột `share` (tỉ trọng của mỗi năm trong tổng của nước đó) và **giữ nguyên số dòng**. Bản pandas nào
+      tương đương?
+
+      ```r
+      co2 |> group_by(country) |> mutate(share = co2 / sum(co2, na.rm = TRUE)) |> ungroup()
+      ```
+    options:
+      - { id: a, text: '`co2.assign(share=co2.co2 / co2.groupby("country").co2.transform("sum"))`' }
+      - { id: b, text: '`co2.groupby("country").agg(share=("co2", "sum"))`' }
+      - { id: c, text: '`co2.assign(share=co2.co2 / co2.co2.sum())`' }
+      - { id: d, text: '`co2.groupby("country").co2.sum() / co2.co2`' }
+  - id: lag-gap
+    kind: knowledge
+    type: single
+    prompt: |
+      Bản pandas tương đương là `co2.groupby("country").co2.shift()`. Một nước có dòng năm 1944 rồi **không có dòng nào** từ 1945 tới 1993;
+      cột `prev` của dòng năm 1994 chứa gì, ở cả R lẫn pandas?
+
+      ```r
+      co2 |> arrange(country, year) |> group_by(country) |> mutate(prev = lag(co2))
+      ```
+    options:
+      - { id: a, text: 'NA, vì năm 1993 không có dữ liệu' }
+      - { id: b, text: 'Giá trị năm 1944, dòng liền trước' }
+      - { id: c, text: 'Trung bình các năm trước đó của nước đó' }
+      - { id: d, text: 'R ra NA, còn pandas ra giá trị năm 1944' }
+  - id: pivot-longer
+    kind: knowledge
+    type: single
+    prompt: |
+      `wide` có cột `country` và các cột năm `2014`, `2024`. Đoạn pandas nào cho cùng bảng long?
+
+      ```r
+      wide |> pivot_longer(cols = -country, names_to = "year", values_to = "co2")
+      ```
+    options:
+      - { id: a, text: '`wide.pivot(index="country", columns="year", values="co2")`' }
+      - { id: b, text: '`wide.melt(id_vars="year", var_name="country", value_name="co2")`' }
+      - { id: c, text: '`wide.stack().unstack()`, rồi đặt lại tên cột' }
+      - { id: d, text: '`wide.melt(id_vars="country", var_name="year", value_name="co2")`' }
+  - id: pivot-wider
+    kind: knowledge
+    type: single
+    prompt: |
+      Đoạn pandas nào tương đương, kể cả việc **báo lỗi** khi có hai dòng cùng `(country, year)`?
+
+      ```r
+      co2 |> select(country, year, co2) |> pivot_wider(names_from = year, values_from = co2)
+      ```
+    options:
+      - { id: a, text: '`co2.pivot_table(index="country", columns="year", values="co2", aggfunc="sum")`' }
+      - { id: b, text: '`co2.pivot(index="country", columns="year", values="co2")`' }
+      - { id: c, text: '`co2.groupby(["country", "year"]).co2.sum()`' }
+      - { id: d, text: '`co2.melt(id_vars="country", value_name="co2")`' }
+  - id: left-join-relationship
+    kind: knowledge
+    type: single
+    prompt: |
+      `products` là bảng tra giá theo `StockCode`. Bản pandas nào giữ đúng ý nghĩa của tham số `relationship`?
+
+      ```r
+      left_join(tx, products, by = "StockCode", relationship = "many-to-one")
+      ```
+    options:
+      - { id: a, text: '`tx.merge(products, on="StockCode", how="left", validate="many_to_one")`' }
+      - { id: b, text: '`tx.merge(products, on="StockCode", how="inner")`' }
+      - { id: c, text: '`products.merge(tx, on="StockCode", how="left", validate="one_to_many")`' }
+      - { id: d, text: '`tx.merge(products, on="StockCode", how="left")` rồi `drop_duplicates()`' }
+  - id: geom-bar
+    kind: knowledge
+    type: single
+    prompt: |
+      Mỗi dòng của `tx` là một dòng hàng. Chart nào vẽ ra cùng chiều cao cột?
+
+      ```r
+      ggplot(tx, aes(x = Country)) + geom_bar()
+      ```
+    options:
+      - { id: a, text: '`sns.barplot(data=tx, x="Country", y="Quantity")`' }
+      - { id: b, text: '`sns.histplot(data=tx, x="Quantity")`' }
+      - { id: c, text: '`sns.countplot(data=tx, x="Country")`' }
+      - { id: d, text: '`sns.barplot(data=tx, x="Country", y="Price", estimator="sum")`' }
+  - id: facet-free-y
+    kind: knowledge
+    type: single
+    prompt: |
+      Bản seaborn nào giữ được `scales = "free_y"` (mỗi ô một trục y riêng)?
+
+      ```r
+      ggplot(co2_sea, aes(year, co2)) + geom_line() + facet_wrap(~country, scales = "free_y")
+      ```
+    options:
+      - { id: a, text: '`sns.lineplot(data=co2_sea, x="year", y="co2", hue="country")`' }
+      - { id: b, text: '`sns.relplot(data=co2_sea, x="year", y="co2", col="country", kind="line")`' }
+      - { id: c, text: '`sns.relplot(data=co2_sea, x="year", y="co2", col="country", kind="line", facet_kws={"sharex": False})`' }
+      - { id: d, text: '`sns.relplot(data=co2_sea, x="year", y="co2", col="country", kind="line", facet_kws={"sharey": False})`' }
+  - id: slice-max
+    kind: knowledge
+    type: single
+    prompt: |
+      `co2_ok` là `co2` đã bỏ dòng có `co2` rỗng. Lấy năm phát thải cao nhất của mỗi nước (mỗi nước một dòng, giả sử
+      không có giá trị bằng nhau). Bản pandas nào đúng?
+
+      ```r
+      co2_ok |> group_by(country) |> slice_max(co2, n = 1) |> ungroup()
+      ```
+    options:
+      - { id: a, text: '`co2_ok.nlargest(1, "co2")`' }
+      - { id: b, text: '`co2_ok.loc[co2_ok.groupby("country").co2.idxmax()]`' }
+      - { id: c, text: '`co2_ok.groupby("country").co2.max().reset_index()`, rồi giữ mọi cột còn lại' }
+      - { id: d, text: '`co2_ok.sort_values("co2").head(1)` cho mỗi nước' }
+  - id: keep-r
+    kind: knowledge
+    type: single
+    prompt: "Bạn vào một nhóm nghiên cứu dịch tễ; toàn bộ báo cáo tuần là R Markdown, 6 người viết R, có test và CI. Bạn quen pandas hơn. Nên làm gì?"
+    options:
+      - { id: a, text: "Viết lại hết sang Python trong tháng đầu tiên" }
+      - { id: b, text: "Viết phần mới bằng Python, phần cũ để nguyên" }
+      - { id: c, text: "Học R đủ để đọc, sửa, viết tiếp theo codebase" }
+      - { id: d, text: "Đề xuất bỏ báo cáo tuần, chuyển sang dashboard" }

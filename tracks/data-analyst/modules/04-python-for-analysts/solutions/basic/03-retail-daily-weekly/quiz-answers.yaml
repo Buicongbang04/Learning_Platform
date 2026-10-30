@@ -1,0 +1,8 @@
+closed-weekday: [c]
+two-denominators: [a]
+non-saturday-zero: [b]
+weakest-open-day: [d]
+best-week: [d]
+zero-week: [a]
+resample-zero: [b]
+rolling-on-transactions: [c]
