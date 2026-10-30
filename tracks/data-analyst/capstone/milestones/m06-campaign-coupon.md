@@ -19,7 +19,10 @@ Root Cause, Unit Economics, What-if). Bài gần nhất ở module 11:
 `modules/11-stats-experimentation/exercises/advanced/02-did-campaign-claim` (đọc lại một tuyên bố
 "campaign hiệu quả" bằng DiD), `modules/11-stats-experimentation/exercises/intermediate/01-marketing-ab-readout`,
 `modules/11-stats-experimentation/exercises/advanced/01-experiment-brief`. Phần promotion analysis, tính
-chi phí ưu đãi và kịch bản what-if dùng kiến thức module 13.
+chi phí ưu đãi và kịch bản what-if dùng kiến thức module 13; bài gần nhất ở module 13:
+`modules/13-business-financial-analytics/exercises/advanced/02-promo-review` (đánh giá khuyến mãi),
+`modules/13-business-financial-analytics/exercises/basic/02-order-unit-economics` (chi phí ưu đãi trên mỗi đơn),
+`modules/13-business-financial-analytics/exercises/intermediate/01-price-volume-mix` (tách giá/lượng/cơ cấu).
 
 ## Việc cần làm
 

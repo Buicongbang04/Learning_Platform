@@ -52,10 +52,10 @@ ngày từ lần mua cuối là 139.
 
 ## Đáp án trắc nghiệm
 
-- `lost-revenue` (b) **khoảng 14%**. 44% là tỉ lệ **khách** Lost, 82% là doanh thu Active.
-- `tenure-zero` (b) **42**.
-- `datedif-month` (a) **11**: ngày 3 chưa tới ngày 12 nên tháng thứ 12 chưa tròn; 356 là số ngày.
+- `lost-revenue` (c) **khoảng 14%**. 44% là tỉ lệ **khách** Lost, 82% là doanh thu Active.
+- `tenure-zero` (a) **42**.
+- `datedif-month` (d) **11**: ngày 3 chưa tới ngày 12 nên tháng thứ 12 chưa tròn; 356 là số ngày.
 - `report-date` (b).
-- `left-censor` (b).
-- `validation-why` (b) **10**: COUNTIF không phân biệt hoa thường. Dropdown vẫn cần cho các lỗi gõ khác
+- `left-censor` (c).
+- `validation-why` (d) **10**: COUNTIF không phân biệt hoa thường. Dropdown vẫn cần cho các lỗi gõ khác
   (gạch nối, dấu cách thừa, sai chính tả).

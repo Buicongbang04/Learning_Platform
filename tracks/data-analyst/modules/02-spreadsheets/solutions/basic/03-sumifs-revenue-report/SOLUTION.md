@@ -51,9 +51,9 @@ Sheet `Report`:
 ## Đáp án trắc nghiệm
 
 - `excluded-rows` (b) **188** = 6 810 − 6 622. 49 là số dòng không có Customer ID, 311 là số đơn.
-- `aov-spike` (b): hoá đơn 573153. (a) sai vì AOV chia theo số đơn, không theo số ngày; (c) sai vì cột
+- `aov-spike` (d): hoá đơn 573153. (a) sai vì AOV chia theo số đơn, không theo số ngày; (b) sai vì cột
   Valid đã loại đơn huỷ.
 - `total-aov` (a). (b) là lỗi trung bình của trung bình.
-- `count-vs-counta` (b). (c) ngược: cả hai bỏ qua ô trống thật; khác nhau ở text.
+- `count-vs-counta` (c). (b) ngược: cả hai bỏ qua ô trống thật; khác nhau ở text.
 - `orderstart-sort` (b): cờ phụ thuộc thứ tự dòng; sắp lại thì một hoá đơn bị tách, đếm nhiều lần.
-- `sumifs-vs-groupby` (b): `pivot_table(index="Country", columns="Month", values="Revenue", aggfunc="sum")`.
+- `sumifs-vs-groupby` (a): `pivot_table(index="Country", columns="Month", values="Revenue", aggfunc="sum")`.

@@ -26,7 +26,7 @@ function listFiles(root: string, base: string): string[] {
     if (SKIP_DIRS.has(entry.name) || entry.name.endsWith(".pyc")) continue;
     const full = resolve(root, entry.name);
     if (entry.isDirectory()) out.push(...listFiles(full, base));
-    else if (entry.isFile() && statSync(full).size <= MAX_FILE_BYTES) out.push(relative(base, full).split(sep).join("/"));
+    else if (entry.isFile() && (isBinaryDoc(entry.name) || statSync(full).size <= MAX_FILE_BYTES)) out.push(relative(base, full).split(sep).join("/"));
   }
   return out;
 }
@@ -43,6 +43,13 @@ export function resolveStarterFile(root: string, path: unknown): string {
   if (!full.startsWith(starter + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
   // Chặn symlink trỏ ra ngoài starter/ (tệp chưa tồn tại thì để các bước sau báo 404).
   if (existsSync(full) && !realpathSync(full).startsWith(realpathSync(starter) + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
+  return full;
+}
+
+/** Như resolveStarterFile nhưng chỉ nhận tệp văn phòng/ảnh (open-file không được mở tệp tùy ý bằng xdg-open). */
+export function resolveOpenableFile(root: string, path: unknown): string {
+  const full = resolveStarterFile(root, path);
+  if (!isBinaryDoc(full)) throw new HttpError(400, "Chỉ mở được tệp văn phòng/ảnh (xlsx, docx, pdf, png…) bằng ứng dụng ngoài");
   return full;
 }
 
@@ -202,7 +209,7 @@ export function workspaceApi(repoRoot: string): Plugin {
         return send(200, { ok: true });
       }
       if (url.pathname === "/api/workspace/open-file") {
-        const full = starterFile(root, body.path);
+        const full = resolveOpenableFile(root, body.path);
         if (!existsSync(full)) throw new HttpError(404, "Tệp không tồn tại");
         return await openExternal(full, send);
       }

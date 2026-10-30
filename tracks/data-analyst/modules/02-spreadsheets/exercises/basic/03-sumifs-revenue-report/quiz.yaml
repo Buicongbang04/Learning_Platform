@@ -14,9 +14,9 @@ questions:
     prompt: "AOV của France tháng 10/2011 là 956.73 GBP, gần gấp đôi các tháng khác. Nguyên nhân chính?"
     options:
       - { id: a, text: "Tháng 10 có ít ngày hơn nên chia ra lớn hơn" }
-      - { id: b, text: "Một hoá đơn 8 895.76 GBP trên chỉ 35 đơn của tháng" }
-      - { id: c, text: "Đơn huỷ bị cộng vào doanh thu tháng 10" }
-      - { id: d, text: "Giá bán sản phẩm ở thị trường Pháp tăng mạnh trong tháng 10" }
+      - { id: b, text: "Đơn huỷ bị cộng vào doanh thu tháng 10" }
+      - { id: c, text: "Giá bán sản phẩm ở thị trường Pháp tăng mạnh trong tháng 10" }
+      - { id: d, text: "Một hoá đơn 8 895.76 GBP trên chỉ 35 đơn của tháng" }
   - id: total-aov
     kind: data
     type: single
@@ -32,8 +32,8 @@ questions:
     prompt: "H2 dùng COUNTA trên cột Invoice ra 6 810, H8 dùng COUNT trên cột Customer ID ra 6 761. Vì sao dùng hai hàm khác nhau?"
     options:
       - { id: a, text: "COUNT nhanh hơn nên dùng cho cột lớn" }
-      - { id: b, text: "COUNT chỉ đếm ô số; Invoice là text nên COUNT ra 0" }
-      - { id: c, text: "COUNTA bỏ qua ô trống, COUNT thì không" }
+      - { id: b, text: "COUNTA bỏ qua ô trống, COUNT thì không" }
+      - { id: c, text: "COUNT chỉ đếm ô số; Invoice là text nên COUNT ra 0" }
       - { id: d, text: "Hai hàm cho kết quả như nhau, chọn hàm nào cũng được" }
   - id: orderstart-sort
     kind: knowledge
@@ -49,7 +49,7 @@ questions:
     type: single
     prompt: "Trong pandas, bảng doanh thu B3:D4 tương đương với thao tác nào?"
     options:
-      - { id: a, text: "merge hai bảng theo Country" }
-      - { id: b, text: "pivot_table trên dòng hợp lệ, Country × Month, sum" }
+      - { id: a, text: "pivot_table trên dòng hợp lệ, Country × Month, sum" }
+      - { id: b, text: "merge hai bảng theo Country" }
       - { id: c, text: "drop_duplicates theo Invoice rồi sum" }
       - { id: d, text: "resample theo tháng trên toàn bộ dòng, kể cả dòng huỷ và dòng giá 0" }

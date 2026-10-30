@@ -5,16 +5,16 @@ questions:
     prompt: "53 khách Lost chiếm bao nhiêu doanh thu gộp của 120 khách trong mẫu?"
     options:
       - { id: a, text: "Khoảng 4%" }
-      - { id: b, text: "Khoảng 14%" }
-      - { id: c, text: "Khoảng 44%" }
+      - { id: b, text: "Khoảng 44%" }
+      - { id: c, text: "Khoảng 14%" }
       - { id: d, text: "Khoảng 82%" }
   - id: tenure-zero
     kind: data
     type: single
     prompt: "Bao nhiêu khách có TenureMonths = 0, và vì sao con số này lớn hơn số khách chỉ có 1 đơn (39)?"
     options:
-      - { id: a, text: "39; hai con số luôn bằng nhau" }
-      - { id: b, text: "42; vì có khách mua nhiều đơn trong vòng chưa tròn 1 tháng" }
+      - { id: a, text: "42; vì có khách mua nhiều đơn trong vòng chưa tròn 1 tháng" }
+      - { id: b, text: "39; hai con số luôn bằng nhau" }
       - { id: c, text: "53; vì mọi khách Lost đều có tenure 0" }
       - { id: d, text: "42; vì DATEDIF làm tròn xuống thành số âm với khách mua cùng một ngày" }
   - id: datedif-month
@@ -22,10 +22,10 @@ questions:
     type: single
     prompt: "`DATEDIF(DATE(2010,11,12), DATE(2011,11,3), \"m\")` trả về bao nhiêu?"
     options:
-      - { id: a, text: "11" }
-      - { id: b, text: "12" }
-      - { id: c, text: "356" }
-      - { id: d, text: "#NUM!" }
+      - { id: a, text: "12" }
+      - { id: b, text: "356" }
+      - { id: c, text: "#NUM!" }
+      - { id: d, text: "11" }
   - id: report-date
     kind: knowledge
     type: single
@@ -41,8 +41,8 @@ questions:
     prompt: "TenureMonths lớn nhất trong mẫu là 24. Một khách mua từ 2008 sẽ hiện tenure bao nhiêu, và nên ghi chú gì?"
     options:
       - { id: a, text: "Tenure đúng của khách, vì DATEDIF đọc được cả lịch sử mua hàng trước khi dữ liệu bắt đầu" }
-      - { id: b, text: "Tối đa khoảng 24 tháng, vì dữ liệu bắt đầu 01/12/2009; tenure bị cắt đầu" }
-      - { id: c, text: "#NUM!, vì ngày đầu trước năm 2009" }
+      - { id: b, text: "#NUM!, vì ngày đầu trước năm 2009" }
+      - { id: c, text: "Tối đa khoảng 24 tháng, vì dữ liệu bắt đầu 01/12/2009; tenure bị cắt đầu" }
       - { id: d, text: "0, vì khách không có hoá đơn trong dữ liệu" }
   - id: validation-why
     kind: knowledge
@@ -50,6 +50,6 @@ questions:
     prompt: "Không có data validation, người dùng gõ `At Risk` (chữ R hoa) vào L4. L5 trả gì?"
     options:
       - { id: a, text: "0, vì COUNTIF phân biệt hoa thường" }
-      - { id: b, text: "10, vì COUNTIF không phân biệt hoa thường" }
-      - { id: c, text: "#N/A, vì không có giá trị khớp" }
-      - { id: d, text: "120, vì điều kiện bị bỏ qua" }
+      - { id: b, text: "#N/A, vì không có giá trị khớp" }
+      - { id: c, text: "120, vì điều kiện bị bỏ qua" }
+      - { id: d, text: "10, vì COUNTIF không phân biệt hoa thường" }

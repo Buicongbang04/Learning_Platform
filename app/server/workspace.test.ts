@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isBinaryDoc, isText, readExerciseFiles, resolveStarterFile } from "./workspace.ts";
+import { isBinaryDoc, isText, readExerciseFiles, resolveOpenableFile, resolveStarterFile } from "./workspace.ts";
 
 test("isText: .xlsx và tệp văn phòng/ảnh không phải text", () => {
   for (const name of ["sales.xlsx", "a.XLSM", "a.ods", "a.docx", "a.pdf", "a.png", "a.jpeg"]) assert.equal(isText(`starter/${name}`), false, name);
@@ -44,4 +44,19 @@ test("resolveStarterFile: symlink trỏ ra ngoài starter/ bị chặn", () => {
   const root = exercise();
   symlinkSync(join(root, "tests", "test_x.py"), join(root, "starter", "link.py"));
   assert.throws(() => resolveStarterFile(root, "starter/link.py"));
+});
+
+test("readExerciseFiles: .xlsx lớn hơn 256 KB vẫn được liệt kê, tệp text quá lớn thì bỏ", () => {
+  const root = exercise();
+  writeFileSync(join(root, "starter", "big.xlsx"), Buffer.alloc(300 * 1024, 1));
+  writeFileSync(join(root, "starter", "big.csv"), "a".repeat(300 * 1024));
+  const files = readExerciseFiles(root);
+  assert.deepEqual(files.find((f) => f.path === "starter/big.xlsx"), { path: "starter/big.xlsx", binary: true });
+  assert.equal(files.find((f) => f.path === "starter/big.csv"), undefined);
+});
+
+test("resolveOpenableFile: chỉ cho mở tệp văn phòng/ảnh, tệp text bị từ chối", () => {
+  const root = exercise();
+  assert.equal(resolveOpenableFile(root, "starter/sales.xlsx"), join(root, "starter", "sales.xlsx"));
+  assert.throws(() => resolveOpenableFile(root, "starter/notes.py"), { status: 400 });
 });

@@ -5,6 +5,7 @@ import uuid
 
 import duckdb
 import pytest
+import requests
 
 import testkit
 from testkit import Exercise
@@ -195,7 +196,10 @@ def superset():
         ex.require_service(name)
     import clients
 
-    return clients.superset_session()
+    try:
+        return clients.superset_session()
+    except requests.RequestException as e:
+        pytest.skip(f"Superset chưa đăng nhập được ({type(e).__name__}). Bật BI bằng: {BI_START}")
 
 
 def _all(session, kind):

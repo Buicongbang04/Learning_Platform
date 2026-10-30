@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
+import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -41,12 +42,17 @@ def metabase():
 def superset():
     import clients
 
-    return clients.superset_session()
+    try:
+        return clients.superset_session()
+    except requests.RequestException as e:
+        pytest.skip(f"Superset chưa đăng nhập được ({type(e).__name__}). Bật BI bằng: {START}")
 
 
 def test_metabase_login_va_thay_database_de(metabase):
+    import clients
+
     me = metabase.get("/api/user/current")
-    assert me.ok and me.json()["email"] == "admin@example.com"
+    assert me.ok and me.json()["email"] == clients.METABASE_ADMIN_EMAIL
     dbs = metabase.get("/api/database").json()
     dbs = dbs["data"] if isinstance(dbs, dict) else dbs
     de = [d for d in dbs if d["name"] == "de"]

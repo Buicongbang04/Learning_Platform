@@ -190,7 +190,7 @@ services:
         superset db upgrade
         # Chỉ bỏ qua lỗi "admin đã tồn tại"; lỗi khác dừng container.
         if ! out=$$(superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@example.com 2>&1); then
-          echo "$$out" | grep -q -i "already exist\|exist" || { echo "$$out"; exit 1; }
+          echo "$$out" | grep -qi "already exist" || { echo "$$out"; exit 1; }
         fi
         superset init
         exec /usr/bin/run-server.sh

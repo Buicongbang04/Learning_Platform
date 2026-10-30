@@ -6,15 +6,15 @@ questions:
     options:
       - { id: a, text: "Khoảng 9%" }
       - { id: b, text: "Khoảng 29%" }
-      - { id: c, text: "Khoảng 37%" }
-      - { id: d, text: "Khoảng 91%" }
+      - { id: c, text: "Khoảng 91%" }
+      - { id: d, text: "Khoảng 37%" }
   - id: why-not-found
     kind: knowledge
     type: single
     prompt: "Vì sao 440 dòng không tìm thấy mã trong Catalog?"
     options:
-      - { id: a, text: "Do VLOOKUP thiếu FALSE nên trả #N/A" }
-      - { id: b, text: "Catalog lấy từ năm trước, các mã này là hàng mới ra" }
+      - { id: a, text: "Catalog lấy từ năm trước, các mã này là hàng mới ra" }
+      - { id: b, text: "Do VLOOKUP thiếu FALSE nên trả #N/A" }
       - { id: c, text: "Do mã trong Orders lưu dạng số còn mã trong Catalog lưu dạng text" }
       - { id: d, text: "Do mã hàng có khoảng trắng thừa ở cuối" }
   - id: iferror-zero
@@ -23,16 +23,16 @@ questions:
     prompt: "Một đồng nghiệp viết `=IFERROR(VLOOKUP(D2,Catalog!$B$2:$C$4102,2,FALSE),0)` cho ListPrice. Hậu quả trên báo cáo là gì?"
     options:
       - { id: a, text: "Không sao, 0 là giá trị mặc định hợp lý cho giá" }
-      - { id: b, text: "Hàng mới có giá niêm yết 0, mức giảm thành âm vô cực hoặc lỗi chia" }
-      - { id: c, text: "VLOOKUP chạy chậm hơn nhiều vì phải bắt lỗi" }
+      - { id: b, text: "VLOOKUP chạy chậm hơn nhiều vì phải bắt lỗi" }
+      - { id: c, text: "Hàng mới có giá niêm yết 0, mức giảm thành âm vô cực hoặc lỗi chia" }
       - { id: d, text: "Kết quả giống hệt IFNA, chỉ khác tên hàm nên báo cáo không đổi gì cả" }
   - id: below-list
     kind: data
     type: single
     prompt: "Trong 1 078 dòng tìm được giá niêm yết, bao nhiêu dòng bán thấp hơn, bằng, cao hơn giá đó?"
     options:
-      - { id: a, text: "260 thấp hơn, 706 bằng, 112 cao hơn" }
-      - { id: b, text: "112 thấp hơn, 706 bằng, 260 cao hơn" }
+      - { id: a, text: "112 thấp hơn, 706 bằng, 260 cao hơn" }
+      - { id: b, text: "260 thấp hơn, 706 bằng, 112 cao hơn" }
       - { id: c, text: "440 thấp hơn, 638 bằng, 0 cao hơn" }
       - { id: d, text: "706 thấp hơn, 260 bằng, 112 cao hơn" }
   - id: discount-conclusion
@@ -41,15 +41,15 @@ questions:
     prompt: "Dòng bán dưới giá có mức giảm trung vị khoảng 69%. Câu nào nên gửi Head of Sales?"
     options:
       - { id: a, text: "Sales đang giảm giá 69% cho khách nước ngoài, cần dừng chương trình này ngay lập tức" }
-      - { id: b, text: "Giá tháng 12 thấp hơn bảng giá năm trước; cần hỏi pricing có đổi giá/xả hàng" }
-      - { id: c, text: "Bảng giá sai nên bỏ qua cột DiscountPct" }
-      - { id: d, text: "Khách EU được giá tốt hơn khách ngoài EU" }
+      - { id: b, text: "Bảng giá sai nên bỏ qua cột DiscountPct" }
+      - { id: c, text: "Khách EU được giá tốt hơn khách ngoài EU" }
+      - { id: d, text: "Giá tháng 12 thấp hơn bảng giá năm trước; cần hỏi pricing có đổi giá/xả hàng" }
   - id: lookup-choice
     kind: knowledge
     type: single
     prompt: "Bạn gửi file này cho đối tác dùng Excel 2016. Cột Description nên viết bằng hàm nào?"
     options:
-      - { id: a, text: "XLOOKUP, vì nó mới và tra được sang trái" }
-      - { id: b, text: "INDEX/MATCH, vì Excel 2016 không có XLOOKUP" }
+      - { id: a, text: "INDEX/MATCH, vì Excel 2016 không có XLOOKUP" }
+      - { id: b, text: "XLOOKUP, vì nó mới và tra được sang trái" }
       - { id: c, text: "VLOOKUP với số cột âm để tra sang trái" }
       - { id: d, text: "HLOOKUP, vì nó chạy ở mọi phiên bản" }

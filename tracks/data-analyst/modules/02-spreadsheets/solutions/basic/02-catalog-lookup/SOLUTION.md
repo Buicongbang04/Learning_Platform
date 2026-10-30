@@ -37,11 +37,11 @@ Summary: `B2 =COUNTIF(Orders!G2:G1519,"NOT IN CATALOG")`, `B3 =COUNTIF(Orders!K2
 
 ## Đáp án trắc nghiệm
 
-- `not-found-share` (c) **khoảng 37%** (37.5%). 29% là tỉ lệ **dòng**, không phải doanh thu: hàng mới
+- `not-found-share` (d) **khoảng 37%** (37.5%). 29% là tỉ lệ **dòng**, không phải doanh thu: hàng mới
   có giá trị dòng cao hơn trung bình.
-- `why-not-found` (b): danh mục là của năm trước. (a) sai vì G dùng XLOOKUP khớp chính xác; (c), (d) đã
+- `why-not-found` (a): danh mục là của năm trước. (b) sai vì G dùng XLOOKUP khớp chính xác; (c), (d) đã
   được loại khi dựng workbook (mã viết HOA, TRIM, cùng kiểu text).
-- `iferror-zero` (b): giá 0 làm `1-F2/H2` chia cho 0, và tổng "giá niêm yết" bị kéo xuống.
-- `below-list` (a).
-- `discount-conclusion` (b): quan sát khác kết luận; (d) không trả lời được từ cột DiscountPct.
-- `lookup-choice` (b): Excel 2016 hiện `#NAME?` với XLOOKUP; VLOOKUP không nhận số cột âm.
+- `iferror-zero` (c): giá 0 làm `1-F2/H2` chia cho 0, và tổng "giá niêm yết" bị kéo xuống.
+- `below-list` (b).
+- `discount-conclusion` (d): quan sát khác kết luận; (c) không trả lời được từ cột DiscountPct.
+- `lookup-choice` (a): Excel 2016 hiện `#NAME?` với XLOOKUP; VLOOKUP không nhận số cột âm.

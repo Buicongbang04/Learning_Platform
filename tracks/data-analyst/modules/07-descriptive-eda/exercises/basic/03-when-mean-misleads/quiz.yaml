@@ -40,7 +40,7 @@ questions:
     type: single
     prompt: "Doanh số TB mỗi cửa hàng (ngày mở cửa): mean 6 935 EUR. Bỏ 10 cửa hàng lớn nhất (dưới 1% số cửa hàng) thì mean còn bao nhiêu?"
     options:
-      - { id: a, text: "6 922 EUR, gần như không đổi" }
+      - { id: a, text: "6 921 EUR, gần như không đổi" }
       - { id: b, text: "6 590 EUR, bằng median" }
       - { id: c, text: "6 827 EUR, giảm khoảng 1.6%" }
       - { id: d, text: "5 774 EUR, giảm khoảng 17%" }

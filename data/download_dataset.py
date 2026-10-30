@@ -197,9 +197,19 @@ def _no_token() -> SystemExit:
     )
 
 
+def _reject_html(url: str, resp) -> None:
+    """Drive/host trả trang HTML (quota, quyền truy cập) thay vì dữ liệu: báo rõ, không ghi tệp rác."""
+    if str(resp.headers.get("Content-Type", "")).lower().startswith("text/html"):
+        raise SystemExit(
+            f"{url} trả về trang HTML thay vì dữ liệu (thường là Drive hết quota hoặc cần quyền truy cập). "
+            "Thử lại sau hoặc tải tay rồi đặt tệp vào data/raw/<tên bộ dữ liệu>/."
+        )
+
+
 def _get(url: str) -> bytes:
     resp = requests.get(url, timeout=300)
     resp.raise_for_status()
+    _reject_html(url, resp)
     return resp.content
 
 
@@ -214,6 +224,7 @@ def download(name: str, out: Path) -> list[Path]:
             target = out / fname
             with requests.get(url, stream=True, timeout=300) as resp:
                 resp.raise_for_status()
+                _reject_html(url, resp)
                 with target.open("wb") as fh:
                     for chunk in resp.iter_content(chunk_size=1 << 20):
                         fh.write(chunk)

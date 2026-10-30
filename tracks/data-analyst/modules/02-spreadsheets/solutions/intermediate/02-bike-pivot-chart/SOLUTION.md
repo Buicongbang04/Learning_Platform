@@ -48,9 +48,9 @@ Headline gợi ý: "2012 cao hơn 2011 ở cả 12 tháng, +64.9% cả năm; tă
 
 ## Đáp án trắc nghiệm
 
-- `yoy-year` (b) **khoảng 65%** (64.9%).
+- `yoy-year` (d) **khoảng 65%** (64.9%).
 - `yoy-month` (a): tháng 3 +157.4%, tháng 6 +41.3%.
 - `avg-of-growth` (b): trung bình không trọng số của 12 tỉ lệ là 76.5%.
-- `pivot-refresh` (b): công thức tự tính lại, pivot là ảnh chụp cho tới khi Refresh.
-- `growth-story` (b): headline nói kết luận và giới hạn. (c) nhầm nguyên nhân, (d) dữ liệu chỉ có 2 năm.
+- `pivot-refresh` (c): công thức tự tính lại, pivot là ảnh chụp cho tới khi Refresh.
+- `growth-story` (a): headline nói kết luận và giới hạn. (c) nhầm nguyên nhân, (d) dữ liệu chỉ có 2 năm.
 - `chart-type` (b).

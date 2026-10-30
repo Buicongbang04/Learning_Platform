@@ -14,9 +14,9 @@ questions:
     prompt: "Hoa hồng của 40 nhân viên sales tính hằng tuần từ 300 000 dòng đơn hàng, dùng để trả lương. Head of Sales quen Excel. Thiết kế nào?"
     options:
       - { id: a, text: "Workbook Excel, mỗi tuần dán dữ liệu mới vào sheet gốc rồi kéo lại công thức" }
-      - { id: b, text: "SQL/Python tính có test, xuất Excel tóm tắt có README và Checks" }
-      - { id: c, text: "Google Sheets cho cả team sales cùng sửa công thức" }
-      - { id: d, text: "Pivot table Excel, refresh mỗi tuần" }
+      - { id: b, text: "Google Sheets cho cả team sales cùng sửa công thức" }
+      - { id: c, text: "Pivot table Excel, refresh mỗi tuần" }
+      - { id: d, text: "SQL/Python tính có test, xuất Excel tóm tắt có README và Checks" }
   - id: price-scenarios
     kind: knowledge
     type: single
@@ -32,8 +32,8 @@ questions:
     prompt: "File tra giá gửi cho nhà phân phối dùng Excel 2016. Cột tra mô tả theo mã (mã nằm bên phải mô tả) viết bằng gì?"
     options:
       - { id: a, text: "XLOOKUP, vì gọn nhất" }
-      - { id: b, text: "INDEX/MATCH" }
-      - { id: c, text: "VLOOKUP với số cột âm" }
+      - { id: b, text: "VLOOKUP với số cột âm" }
+      - { id: c, text: "INDEX/MATCH" }
       - { id: d, text: "Dán giá trị đã tra sẵn, xoá công thức" }
   - id: campaign-tracker
     kind: knowledge
@@ -41,16 +41,16 @@ questions:
     prompt: "8 người marketing cần cùng nhập kế hoạch chiến dịch mỗi ngày, xem lịch sử ai sửa gì; công ty dùng Google Workspace. Công cụ nào?"
     options:
       - { id: a, text: "File Excel gửi qua email, mỗi người một bản" }
-      - { id: b, text: "Google Sheets có data validation và vùng khoá" }
-      - { id: c, text: "Bảng Postgres, mỗi người tự viết INSERT" }
-      - { id: d, text: "LibreOffice trên ổ mạng dùng chung" }
+      - { id: b, text: "Bảng Postgres, mỗi người tự viết INSERT" }
+      - { id: c, text: "LibreOffice trên ổ mạng dùng chung" }
+      - { id: d, text: "Google Sheets có data validation và vùng khoá" }
   - id: reconcile
     kind: knowledge
     type: single
     prompt: "Dashboard và file finance lệch 4% doanh thu tháng. Bước đầu tiên hợp nhất?"
     options:
-      - { id: a, text: "Tin số dashboard vì nó lấy từ warehouse" }
-      - { id: b, text: "Thống nhất định nghĩa, rồi ghép hai nguồn theo hoá đơn và pivot chênh lệch" }
+      - { id: a, text: "Thống nhất định nghĩa, rồi ghép hai nguồn theo hoá đơn và pivot chênh lệch" }
+      - { id: b, text: "Tin số dashboard vì nó lấy từ warehouse" }
       - { id: c, text: "Lấy trung bình hai con số" }
       - { id: d, text: "Vẽ lại dashboard bằng Excel cho khớp với file của finance rồi gửi lại cho cả hai bên" }
   - id: weekly-distinct
@@ -59,8 +59,8 @@ questions:
     prompt: "Báo cáo tuần cần số khách khác nhau của cả tháng. Workbook có số khách từng tuần. Cách nào đúng?"
     options:
       - { id: a, text: "Cộng số khách của 4–5 tuần" }
-      - { id: b, text: "Lấy số khách lớn nhất trong các tuần" }
-      - { id: c, text: "Đếm khách khác nhau trên dữ liệu cả tháng (cờ lần đầu, UNIQUE hoặc SQL)" }
+      - { id: b, text: "Đếm khách khác nhau trên dữ liệu cả tháng (cờ lần đầu, UNIQUE hoặc SQL)" }
+      - { id: c, text: "Lấy số khách lớn nhất trong các tuần" }
       - { id: d, text: "Lấy trung bình số khách mỗi tuần rồi nhân với số tuần trong tháng đó" }
   - id: refresh-pipeline
     kind: knowledge
@@ -68,8 +68,8 @@ questions:
     prompt: "Pipeline Python sinh file .xlsx có công thức bằng openpyxl; bạn muốn kiểm giá trị đã tính trước khi gửi. Làm gì?"
     options:
       - { id: a, text: "Đọc lại bằng openpyxl với data_only=True ngay sau khi ghi để lấy giá trị đã tính" }
-      - { id: b, text: "Cho LibreOffice headless tính lại (soffice --convert-to) rồi đọc giá trị" }
-      - { id: c, text: "Không cần, openpyxl tự tính công thức khi lưu" }
+      - { id: b, text: "Không cần, openpyxl tự tính công thức khi lưu" }
+      - { id: c, text: "Cho LibreOffice headless tính lại (soffice --convert-to) rồi đọc giá trị" }
       - { id: d, text: "Mở file bằng trình soạn thảo văn bản" }
   - id: pivot-vs-sumifs
     kind: knowledge
@@ -77,15 +77,15 @@ questions:
     prompt: "Báo cáo tháng gửi lãnh đạo có bố cục cố định, các ô khác tham chiếu vào nó. Dùng gì cho bảng chính?"
     options:
       - { id: a, text: "Pivot table, các công thức khác trỏ thẳng vào ô kết quả của pivot đó" }
-      - { id: b, text: "SUMIFS/COUNTIFS trên bố cục cố định, đối chiếu với pivot" }
-      - { id: c, text: "Gõ tay số từ dashboard vào bảng" }
-      - { id: d, text: "Chart pivot, không cần bảng" }
+      - { id: b, text: "Gõ tay số từ dashboard vào bảng" }
+      - { id: c, text: "Chart pivot, không cần bảng" }
+      - { id: d, text: "SUMIFS/COUNTIFS trên bố cục cố định, đối chiếu với pivot" }
   - id: llm-formula
     kind: knowledge
     type: single
     prompt: "Bạn nhờ chatbot viết công thức tra cứu và muốn dán cả 5 000 dòng khách (tên, email) để nó 'kiểm giúp'. Nên làm gì?"
     options:
-      - { id: a, text: "Dán hết, chatbot cần dữ liệu thật mới viết đúng" }
-      - { id: b, text: "Chỉ mô tả cấu trúc cột hoặc vài dòng đã che, tự kiểm công thức trên file" }
+      - { id: a, text: "Chỉ mô tả cấu trúc cột hoặc vài dòng đã che, tự kiểm công thức trên file" }
+      - { id: b, text: "Dán hết, chatbot cần dữ liệu thật mới viết đúng" }
       - { id: c, text: "Dán hết nhưng xoá dòng tiêu đề" }
       - { id: d, text: "Không dùng chatbot cho bất kỳ việc gì liên quan tới spreadsheet trong mọi trường hợp" }

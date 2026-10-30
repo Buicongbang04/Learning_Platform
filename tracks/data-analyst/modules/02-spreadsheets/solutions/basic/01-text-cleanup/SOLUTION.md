@@ -41,11 +41,11 @@ LibreOffice lưu `CONCAT` vào `.xlsx` thành `_xlfn.CONCAT`; test bỏ tiền t
 
 ## Đáp án trắc nghiệm
 
-- `spaces-count` (b) **83 dòng**. 17 là số mã hàng có chữ thường (B5), 95 là số dòng khách vãng lai (B4).
-- `case-codes` (c) **3 958**: 112 mã có cả dạng hoa và thường. 117 là số mã có chữ thường, nhưng 5 mã
+- `spaces-count` (c) **83 dòng**. 17 là số mã hàng có chữ thường (B5), 95 là số dòng khách vãng lai (B4).
+- `case-codes` (a) **3 958**: 112 mã có cả dạng hoa và thường. 117 là số mã có chữ thường, nhưng 5 mã
   chỉ xuất hiện ở dạng thường nên không bị gộp.
 - `proper-quote` (b): PROPER viết hoa chữ `S` sau dấu nháy, kết quả chỉ hợp để hiển thị.
-- `nbsp` (b): TRIM chỉ xử lý dấu cách mã 32; dùng `SUBSTITUTE(C2,CHAR(160)," ")` trước TRIM. Bộ Online
+- `nbsp` (d): TRIM chỉ xử lý dấu cách mã 32; dùng `SUBSTITUTE(C2,CHAR(160)," ")` trước TRIM. Bộ Online
   Retail II không có ký tự này, dữ liệu copy từ web thì hay có.
-- `substitute-vs-replace` (b): che mã không cần biết nội dung, chỉ cần vị trí; đổi `EIRE` cần tìm đúng chuỗi.
+- `substitute-vs-replace` (c): che mã không cần biết nội dung, chỉ cần vị trí; đổi `EIRE` cần tìm đúng chuỗi.
 - `keep-raw` (a, b, d). (c) sai: cột phụ làm file lớn hơn chứ không nhỏ hơn, và đó không phải lý do.

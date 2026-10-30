@@ -5,9 +5,9 @@ questions:
     prompt: "Tổng lượt thuê 2012 tăng bao nhiêu so với 2011?"
     options:
       - { id: a, text: "Khoảng 41%" }
-      - { id: b, text: "Khoảng 65%" }
-      - { id: c, text: "Khoảng 70%" }
-      - { id: d, text: "Khoảng 157%" }
+      - { id: b, text: "Khoảng 70%" }
+      - { id: c, text: "Khoảng 157%" }
+      - { id: d, text: "Khoảng 65%" }
   - id: yoy-month
     kind: data
     type: single
@@ -32,16 +32,16 @@ questions:
     prompt: "Bạn sửa một giá trị cnt ở sheet Days. Bảng YoY và pivot thay đổi thế nào?"
     options:
       - { id: a, text: "Cả hai tự cập nhật ngay" }
-      - { id: b, text: "YoY tự cập nhật; pivot chỉ đổi khi Refresh" }
-      - { id: c, text: "Pivot tự cập nhật; YoY phải bấm tính lại" }
+      - { id: b, text: "Pivot tự cập nhật; YoY phải bấm tính lại" }
+      - { id: c, text: "YoY tự cập nhật; pivot chỉ đổi khi Refresh" }
       - { id: d, text: "Không cái nào đổi cho tới khi mở lại file" }
   - id: growth-story
     kind: knowledge
     type: single
     prompt: "Headline nào đúng nhất cho chart hai năm?"
     options:
-      - { id: a, text: "Lượt thuê theo tháng 2011 và 2012" }
-      - { id: b, text: "2012 cao hơn 2011 ở mọi tháng, +65% cả năm; tăng mạnh nhất đầu năm" }
+      - { id: a, text: "2012 cao hơn 2011 ở mọi tháng, +65% cả năm; tăng mạnh nhất đầu năm" }
+      - { id: b, text: "Lượt thuê theo tháng 2011 và 2012" }
       - { id: c, text: "Lượt thuê tăng 157% nhờ thời tiết tháng 3" }
       - { id: d, text: "Tháng 9 năm 2012 là tháng tốt nhất mọi thời đại của Capital Bikeshare" }
   - id: chart-type
