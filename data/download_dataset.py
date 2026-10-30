@@ -21,6 +21,7 @@ import os
 import random
 import shutil
 import sys
+import tarfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -45,6 +46,8 @@ class Dataset:
     homepage: str
     about: str = ""
     needs_token: bool = False  # chỉ dùng cho source="hf": bắt buộc có HF_TOKEN
+    revision: str | None = None  # chỉ dùng cho source="hf": nhánh/tag, vd "refs/convert/parquet"
+    extract: bool = False  # chỉ dùng cho source="url" kiểu tuple: giải nén .zip/.tar.gz/.tgz giữ cấu trúc thư mục rồi xoá tệp nén
 
 
 DATASETS: dict[str, Dataset] = {
@@ -150,6 +153,75 @@ DATASETS: dict[str, Dataset] = {
         about="Truy hồi văn bản pháp luật Việt Nam: corpus các điều luật, câu hỏi và qrels (điều luật liên quan)",
         needs_token=False,
     ),
+    # --- AI Engineer giai đoạn 3: ảnh, văn bản tiếng Việt, tiếng nói, toán, an toàn ---
+    "cifar10": Dataset(
+        "hf", "uoft-cs/cifar10", ["plain_text/train-00000-of-00001.parquet", "plain_text/test-00000-of-00001.parquet"],
+        license="Thẻ Hugging Face ghi unknown; Krizhevsky (2009) công bố cho nghiên cứu/học tập, ghi nguồn bài báo. Bản mirror HF vì www.cs.toronto.edu tải rất chậm/treo",
+        homepage="https://huggingface.co/datasets/uoft-cs/cifar10",
+        about="CIFAR-10: 50 000 ảnh train + 10 000 ảnh test, 32x32x3, 10 lớp; parquet với cột img ({bytes: PNG}) và label",
+    ),
+    "oxford-pets": Dataset(
+        "hf", "timm/oxford-iiit-pet", ["data/train-00000-of-00001.parquet", "data/test-00000-of-00001.parquet"],
+        license="CC BY-SA 4.0 (Parkhi, Vedaldi, Zisserman, Jawahar 2012, VGG Oxford); bản mirror HF của timm vì thor.robots.ox.ac.uk tải rất chậm (~1 MB/phút)",
+        homepage="https://huggingface.co/datasets/timm/oxford-iiit-pet",
+        about="Oxford-IIIT Pet: ảnh chó/mèo 37 giống (parquet: image {bytes}, label, image_id...), dùng cho transfer learning; không có trimap",
+    ),
+    "penn-fudan": Dataset(
+        "url", ("https://www.cis.upenn.edu/~jshi/ped_html/PennFudanPed.zip",), ["PennFudanPed.zip"],
+        license="Công bố công khai bởi Jianbo Shi (UPenn) cho nghiên cứu; không ghi giấy phép chính thức",
+        homepage="https://www.cis.upenn.edu/~jshi/ped_html/",
+        about="Penn-Fudan Pedestrian: 170 ảnh, 345 người đi bộ, kèm mask từng người (PennFudanPed/PNGImages, PedMasks, Annotation)",
+        extract=True,
+    ),
+    "uit-vsfc": Dataset(
+        "hf", "uitnlp/vietnamese_students_feedback",
+        ["default/train/0000.parquet", "default/validation/0000.parquet", "default/test/0000.parquet"],
+        license="Thẻ Hugging Face ghi unknown; UIT-NLP công bố cho nghiên cứu/học tập (Nguyen et al., KSE 2018). Không dùng thương mại",
+        homepage="https://huggingface.co/datasets/uitnlp/vietnamese_students_feedback",
+        about="UIT-VSFC: phản hồi sinh viên tiếng Việt, cột sentence/sentiment (0 negative, 1 neutral, 2 positive)/topic; bản parquet do Hugging Face tự chuyển từ script gốc",
+        revision="refs/convert/parquet",
+    ),
+    "iwslt15-en-vi": Dataset(
+        "url",
+        tuple(f"https://raw.githubusercontent.com/stefan-it/nmt-en-vi/master/data/{n}-en-vi.tgz" for n in ("train", "dev-2012", "test-2013")),
+        ["train-en-vi.tgz", "dev-2012-en-vi.tgz", "test-2013-en-vi.tgz"],
+        license="Dữ liệu IWSLT 2015 en-vi (Stanford NLP công bố cho nghiên cứu/học tập); bản mirror GitHub stefan-it/nmt-en-vi vì nlp.stanford.edu không truy cập được từ máy này",
+        homepage="https://nlp.stanford.edu/projects/nmt/",
+        about="IWSLT'15 en-vi: 133 317 cặp câu train (TED), dev tst2012 1 553 cặp, test tst2013 1 268 cặp (train.en/.vi, tst2012.*, tst2013.*)",
+        extract=True,
+    ),
+    "wikipedia-vi": Dataset(
+        "hf", "wikimedia/wikipedia",
+        ["20231101.vi/train-00001-of-00004.parquet", "20231101.vi/train-00002-of-00004.parquet"],
+        license="CC BY-SA 3.0 và GFDL (Wikipedia, Wikimedia Foundation)",
+        homepage="https://huggingface.co/datasets/wikimedia/wikipedia",
+        about="Wikipedia tiếng Việt bản 20231101, chỉ 2 trong 4 shard (~120 MB) để vừa laptop; cột id/url/title/text",
+    ),
+    "openorca-viet": Dataset(
+        "hf", "vilm/OpenOrca-Viet", ["OpenOrca-Viet.jsonl"],
+        license="Apache-2.0 (thẻ Hugging Face); dữ liệu sinh bởi GPT-4/PaLM-2/Claude từ vi-FLAN, tuân điều khoản các nhà cung cấp model khi dùng thương mại",
+        homepage="https://huggingface.co/datasets/vilm/OpenOrca-Viet",
+        about="Instruction tiếng Việt kiểu Orca: JSONL với instruction (system prompt), input, output; ~290 MB",
+    ),
+    "gsm8k": Dataset(
+        "hf", "openai/gsm8k", ["main/train-00000-of-00001.parquet", "main/test-00000-of-00001.parquet"],
+        license="MIT (OpenAI, Cobbe et al. 2021)",
+        homepage="https://huggingface.co/datasets/openai/gsm8k",
+        about="GSM8K: 7 473 bài toán chữ cấp tiểu học train + 1 319 test, cột question/answer (đáp số sau '####')",
+    ),
+    "prompt-injections": Dataset(
+        "hf", "deepset/prompt-injections",
+        ["data/train-00000-of-00001-9564e8b05b4757ab.parquet", "data/test-00000-of-00001-701d16158af87368.parquet"],
+        license="Apache-2.0 (deepset)",
+        homepage="https://huggingface.co/datasets/deepset/prompt-injections",
+        about="Prompt injection: 546 train + 116 test, cột text/label (1 = injection), pha trộn tiếng Anh và tiếng Đức",
+    ),
+    "fleurs-vi": Dataset(
+        "hf", "google/fleurs", ["data/vi_vn/test.tsv", "data/vi_vn/audio/test.tar.gz"],
+        license="CC BY 4.0 (Google, Conneau et al. 2022)",
+        homepage="https://huggingface.co/datasets/google/fleurs",
+        about="FLEURS tiếng Việt, tập test: tệp tsv (id, tên wav, transcription...) + audio/test.tar.gz các wav 16 kHz; ~545 MB",
+    ),
 }
 
 
@@ -173,6 +245,19 @@ def _get(url: str) -> bytes:
     return resp.content
 
 
+def _extract(archive: Path, out: Path) -> None:
+    """Giải nén .zip hoặc .tar.gz/.tgz vào out, giữ cấu trúc thư mục; chặn đường dẫn thoát khỏi out."""
+    if archive.suffix == ".zip":
+        with zipfile.ZipFile(archive) as zf:
+            for member in zf.namelist():
+                if not (out / member).resolve().is_relative_to(out.resolve()):
+                    raise SystemExit(f"{archive.name}: đường dẫn nguy hiểm {member!r}")
+            zf.extractall(out)
+    else:
+        with tarfile.open(archive) as tf:
+            tf.extractall(out, filter="data")
+
+
 def download(name: str, out: Path) -> list[Path]:
     """Ba kiểu URL: một tệp (lưu thành files[0]); thư mục kết thúc bằng "/" (tải từng tên trong files);
     tệp .zip (giải nén, giữ các tệp có tên trong files, bất kể thư mục con)."""
@@ -189,6 +274,11 @@ def download(name: str, out: Path) -> list[Path]:
                         fh.write(chunk)
             print(fname, flush=True)
             paths.append(target)
+        if ds.extract:
+            for target in paths:
+                _extract(target, out)
+                target.unlink()
+            return [p for p in out.rglob("*") if p.is_file()]
         return paths
 
     if ds.source == "url":
@@ -230,7 +320,7 @@ def download(name: str, out: Path) -> list[Path]:
         out.mkdir(parents=True, exist_ok=True)
         written = []
         for f in ds.files:
-            cached = hf_hub_download(repo_id=ds.ref, filename=f, repo_type="dataset", token=token)
+            cached = hf_hub_download(repo_id=ds.ref, filename=f, repo_type="dataset", token=token, revision=ds.revision)
             target = out / f  # giữ đường dẫn con (qrels/train.jsonl và qrels/test.jsonl khác tên nhưng cùng cấp)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(cached, target)

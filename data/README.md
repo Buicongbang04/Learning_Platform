@@ -335,6 +335,47 @@ Cấu trúc thật của `zalo-legal` (đã kiểm khi tải, 2026-10-29), tất
 
 Không có `legal_corpus.json` lồng `articles` như dự kiến ban đầu; repo `nntoan209/ZaloLegal` không còn truy cập được. Không commit mẫu của bộ này.
 
+#### Bộ dữ liệu thêm cho giai đoạn 3 (21 module còn lại)
+
+Đã tải thử thật ngày 2026-10-30, đếm trên tệp đã tải. Nguồn `url` kiểu tuple có `extract=True` thì giải nén (giữ cấu trúc thư mục) rồi xoá tệp nén; nguồn `hf` có `revision` (vd `refs/convert/parquet`) cho bộ HF chỉ có script.
+
+| Tên | Nội dung (đã đếm) | Nguồn | Giấy phép | Module |
+| --- | --- | --- | --- | --- |
+| `cifar10` | 50 000 train + 10 000 test, 32x32x3, 10 lớp; parquet `plain_text/{train,test}-00000-of-00001.parquet`, cột `img` (`{bytes}` PNG), `label` (137 MB) | [HF uoft-cs/cifar10](https://huggingface.co/datasets/uoft-cs/cifar10) (mirror vì www.cs.toronto.edu tải ~1 MB/phút) | Thẻ HF `unknown`; Krizhevsky 2009 cho nghiên cứu/học tập | 02, 03, 06 |
+| `oxford-pets` | 3 680 train + 3 669 test = 7 349 ảnh, 37 giống; cột `image` (`{bytes}`), `label`, `image_id`, `label_cat_dog` (754 MB); không có trimap | [HF timm/oxford-iiit-pet](https://huggingface.co/datasets/timm/oxford-iiit-pet) (mirror vì thor.robots.ox.ac.uk ~1 MB/phút) | CC BY-SA 4.0 | 03 |
+| `penn-fudan` | 170 ảnh (`PennFudanPed/PNGImages`), 170 mask (`PedMasks`), `Annotation/*.txt`, 345 người (53 MB) | [UPenn](https://www.cis.upenn.edu/~jshi/ped_html/) | Công bố cho nghiên cứu, không ghi giấy phép | 03 |
+| `uit-vsfc` | 11 426 train + 1 583 validation + 3 166 test; cột `sentence`, `sentiment` (0 negative, 1 neutral, 2 positive; train 5 325/458/5 643), `topic` (0 lecturer, 1 training_program, 2 facility, 3 others); parquet ở `default/<split>/0000.parquet` | [HF uitnlp/vietnamese_students_feedback](https://huggingface.co/datasets/uitnlp/vietnamese_students_feedback), nhánh `refs/convert/parquet` | Thẻ HF `unknown`; UIT-NLP cho nghiên cứu/học tập | 04, 11, 12, 20 |
+| `iwslt15-en-vi` | `train.en/.vi` 133 317 cặp, `tst2012.*` 1 553 cặp (dev), `tst2013.*` 1 268 cặp (test); văn bản thô một câu mỗi dòng, đã tách từ (31 MB) | [stefan-it/nmt-en-vi](https://github.com/stefan-it/nmt-en-vi) (mirror; nlp.stanford.edu không truy cập được từ máy này) | IWSLT 2015 (TED), Stanford NLP công bố cho nghiên cứu | 04 |
+| `wikipedia-vi` | 2 trong 4 shard `20231101.vi`: `train-00001-of-00004.parquet` và `train-00002-of-00004.parquet`, mỗi shard 322 170 bài (644 340 bài, 117 MB); cột `id`, `url`, `title`, `text` | [HF wikimedia/wikipedia](https://huggingface.co/datasets/wikimedia/wikipedia) | CC BY-SA 3.0 + GFDL | 04, 05, 10 |
+| `openorca-viet` | 121 178 dòng JSONL `instruction` (system prompt), `input`, `output`; Orca tiếng Việt từ vi-FLAN (280 MB) | [HF vilm/OpenOrca-Viet](https://huggingface.co/datasets/vilm/OpenOrca-Viet) | Apache-2.0 (output do GPT-4/PaLM-2/Claude sinh, theo điều khoản nhà cung cấp) | 14 |
+| `gsm8k` | 7 473 train + 1 319 test; cột `question`, `answer` (đáp số sau `####`) | [HF openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) | MIT | 15 |
+| `prompt-injections` | 546 train (343 nhãn 0, 203 nhãn 1) + 116 test; cột `text`, `label` (1 = injection); lẫn tiếng Anh và tiếng Đức | [HF deepset/prompt-injections](https://huggingface.co/datasets/deepset/prompt-injections) | Apache-2.0 | 19 |
+| `fleurs-vi` | tập test tiếng Việt: `data/vi_vn/test.tsv` 857 dòng (cột 1 id, 2 tên wav, 3 câu gốc, 4 chuẩn hoá) + `data/vi_vn/audio/test.tar.gz` 857 wav 16 kHz (520 MB) | [HF google/fleurs](https://huggingface.co/datasets/google/fleurs) | CC BY 4.0 | 18 |
+
+Không qua registry: `FashionMNIST` (đã có ở `data/raw/fashion-mnist/FashionMNIST/raw`, đọc bằng `torchvision.datasets.FashionMNIST("data/raw/fashion-mnist")`), MNIST dùng `mnist` ở trên, Gymnasium (FrozenLake, CartPole, LunarLander cần `box2d`), ALE Atari (ROM đóng gói sẵn trong `ale-py`), Iris và moons (`sklearn.datasets`).
+
+**Cần người học làm (không tự thay):** MC-OCR 2021 (module 17, hoá đơn tiếng Việt) cần đăng ký với ban tổ chức ([mc-ocr](https://rivf2021-mc-ocr.vietnlp.com/)) rồi tải thủ công; chưa có trong registry. Common Voice vi (Mozilla) cần đăng nhập HF và chấp nhận điều khoản nên bài âm thanh dùng `fleurs-vi` thay thế. Model lớn (Qwen2.5, Pythia, Whisper) chưa tải: mỗi module tự tải trong cell `explore`.
+
+#### Thư viện giai đoạn 3 ↔ module
+
+Ghim `==` ở `pyproject.toml` gốc (CPU). `huggingface-hub` hạ về `>=1.32.0,<2.0` (lock: 1.33.0) vì `diffusers` 0.41.0, bản mới nhất đủ 2 tuần, đòi `<2.0`; nâng lại khi `diffusers` 0.42.x đủ 2 tuần (từ 2026-11-06).
+
+| Thư viện (phiên bản) | Module |
+| --- | --- |
+| `datasets` 5.1.0, `tokenizers` 0.23.3, `tiktoken` 0.14.0, `sacrebleu` 2.6.0 | 00, 04, 05, 09, 11 |
+| `opencv-python-headless` 5.0.0.93, `ultralytics` 8.4.178 | 03 |
+| `diffusers` 0.41.0, `imageio[ffmpeg]` 2.38.1 | 06, 18 |
+| `gymnasium[classic-control,box2d]` 1.4.0, `ale-py` 0.12.1 | 07 |
+| `peft` 0.21.2, `trl` 1.16.0, `accelerate` 1.15.0 | 10, 14, 15 |
+| `gguf` 0.19.0 (đọc/ghi GGUF; chạy model qua `llama.cpp` hoặc Ollama, xem README `setup/gpu`) | 10, 20 |
+| `langchain-core` 1.6.12, `langchain-ollama` 1.1.0, `langgraph` 1.2.16, `langgraph-checkpoint-sqlite` 3.1.2 | 16, 17, 19 |
+| `mcp` 2.3.0 | 16 |
+| `faiss-cpu` 1.15.1, `chromadb` 1.5.9, `qdrant-client` 1.19.1, `lancedb` 0.40.0, `pgvector` 0.5.1 | 12, 13 |
+| `faster-whisper` 1.2.1, `soundfile` 0.14.0, `jiwer` 4.0.0 | 18 |
+| `opentelemetry-sdk` 1.45.1 | 20 |
+| `pennylane` 0.45.1 | 22 |
+| `bitsandbytes`, `vllm` (chỉ GPU, `setup/gpu`) | 10, 14, 20 |
+
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
 không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.
 
