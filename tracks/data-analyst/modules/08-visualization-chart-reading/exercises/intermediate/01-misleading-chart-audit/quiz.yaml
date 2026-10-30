@@ -1,0 +1,55 @@
+questions:
+  - id: truncated-ratio
+    kind: knowledge
+    type: single
+    prompt: "Hai bar có giá trị 4.2 và 4.0, trục y bắt đầu từ 3.9. Trên hình, bar thứ nhất cao gấp khoảng bao nhiêu lần bar thứ hai?"
+    options:
+      - { id: a, text: "Khoảng 1.05 lần, đúng như dữ liệu" }
+      - { id: b, text: "Khoảng 2 lần so với bar thứ hai" }
+      - { id: c, text: "Khoảng 3 lần so với bar thứ hai" }
+      - { id: d, text: "Khoảng 10 lần so với bar thứ hai" }
+  - id: weekday-warning
+    kind: knowledge
+    type: single
+    prompt: "Bạn vẽ bar lượt thuê trung bình theo thứ, từ T2 tới CN, và `audit_chart` báo `unsorted_bars`. Bạn làm gì?"
+    options:
+      - { id: a, text: "Sắp lại các cột giảm dần theo giá trị cho linter hết báo" }
+      - { id: b, text: "Giữ T2 tới CN vì thứ có thứ tự tự nhiên; bỏ qua cảnh báo" }
+      - { id: c, text: "Đổi sang pie 7 lát để biểu đồ không còn trục danh mục" }
+      - { id: d, text: "Đổi nhãn T2..CN thành số 0..6 để linter không nhận ra" }
+  - id: dual-axis-fix
+    kind: knowledge
+    type: single
+    prompt: "Chart khách vãng lai và nhiệt độ theo tháng đang dùng hai trục y. Cách thay tốt nhất cho slide là gì?"
+    options:
+      - { id: a, text: "Giữ hai trục, chỉnh thang để hai đường trùng khít nhau hơn" }
+      - { id: b, text: "Hai panel xếp chồng chung trục x, mỗi panel một thang đo" }
+      - { id: c, text: "Một trục y, nhân nhiệt độ với 1 000 cho cùng độ lớn" }
+      - { id: d, text: "Pie tỉ trọng khách vãng lai mỗi tháng, tô màu theo nhiệt độ" }
+  - id: many-states
+    kind: knowledge
+    type: single
+    prompt: "Doanh thu Olist trải trên 27 bang, bang lớn nhất chiếm hơn 1/3. Chart nào hợp cho slide?"
+    options:
+      - { id: a, text: "Pie 27 lát, ghi tên bang và phần trăm ngay trên mỗi lát" }
+      - { id: b, text: "Bar ngang top 8 bang giảm dần, gộp phần còn lại vào Khác" }
+      - { id: c, text: "Donut 27 lát, legend màu cho từng bang đặt bên phải" }
+      - { id: d, text: "Bar đứng 27 bang có nhãn trục, sắp theo mã bang A-Z" }
+  - id: line-from-zero
+    kind: knowledge
+    type: single
+    prompt: "Luật `truncated_bar_axis` chỉ xét bar, không xét line chart. Vì sao line chart được phép có trục y không bắt đầu từ 0?"
+    options:
+      - { id: a, text: "Line mã hoá giá trị bằng vị trí và độ dốc, không bằng độ dài" }
+      - { id: b, text: "Line chart thường có ít điểm dữ liệu hơn bar nên khó vẽ sai lệch" }
+      - { id: c, text: "matplotlib luôn tự đặt trục y của line chart từ 0" }
+      - { id: d, text: "Người xem quen đọc line chart nên không bị đánh lừa" }
+  - id: linter-blind-spot
+    kind: knowledge
+    type: single
+    prompt: "Chart nào dưới đây `audit_chart` trả `set()` nhưng vẫn có thể làm người xem hiểu sai?"
+    options:
+      - { id: a, text: "Line doanh thu tháng, tháng cuối mới có 9 ngày, không chú thích" }
+      - { id: b, text: "Bar 5 nhóm có nhãn trục, sắp giảm dần, trục y bắt đầu từ 50" }
+      - { id: c, text: "Pie 9 lát tỉ trọng doanh thu theo kênh bán hàng" }
+      - { id: d, text: "Bar 4 quốc gia có nhãn trục, sắp theo bảng chữ cái" }

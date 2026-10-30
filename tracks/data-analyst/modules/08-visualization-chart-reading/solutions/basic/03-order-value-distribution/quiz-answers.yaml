@@ -1,0 +1,7 @@
+mean-vs-median: [b]
+share-above-mean: [b]
+top1-revenue: [c]
+ecdf-cliff: [c]
+linear-hist: [a]
+tail-chart: [b]
+typical-value: [c]

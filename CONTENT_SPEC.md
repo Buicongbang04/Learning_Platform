@@ -180,6 +180,15 @@ Dùng khi bài là phân tích / modeling, như cách Data Scientist làm việc
   phải chạy được toàn bộ (kể cả cell `explore`) khi đã tải dữ liệu:
   `uv run jupyter nbconvert --to notebook --execute --stdout <notebook> > /dev/null`.
 
+#### Bài chỉ có trắc nghiệm
+
+Bài đọc hiểu / chọn phương án, không có code để chạy (vd. track Data Analyst, module đọc biểu đồ).
+
+- Có `README.md` (frontmatter `files: []`, `run: []`), `exercises/<level>/<slug>/quiz.yaml` và
+  `solutions/<level>/<slug>/quiz-answers.yaml` kèm `SOLUTION.md` giải thích từng đáp án.
+- Không có `starter/` và `tests/`. App nhận ra bài này khi `files` không có tệp nào bắt đầu bằng `starter/` hoặc `tests/`,
+  và hiện card giới thiệu (có nút "Đánh dấu hoàn thành") cùng card trắc nghiệm thay cho trình soạn code.
+
 ### Dữ liệu thật
 
 - Notebook thực hành dùng bộ dữ liệu thật. Thêm bộ mới vào registry `DATASETS` trong

@@ -1,0 +1,73 @@
+questions:
+  - id: depts-women-higher
+    kind: data
+    type: single
+    prompt: "Theo `admit_rate(BERKELEY, [\"dept\", \"gender\"])`, ở bao nhiêu trong 6 khoa nữ có tỉ lệ được nhận cao hơn nam?"
+    options:
+      - { id: a, text: "1 khoa" }
+      - { id: b, text: "2 khoa" }
+      - { id: c, text: "4 khoa" }
+      - { id: d, text: "6 khoa" }
+  - id: women-mix
+    kind: data
+    type: single
+    prompt: "Khoa A và B có tỉ lệ nhận chung trên 60%. Bao nhiêu phần trăm hồ sơ của nữ nộp vào hai khoa này?"
+    options:
+      - { id: a, text: "Khoảng 7%" }
+      - { id: b, text: "Khoảng 25%" }
+      - { id: c, text: "Khoảng 50%" }
+      - { id: d, text: "Khoảng 65%" }
+  - id: adjusted-rates
+    kind: data
+    type: single
+    prompt: "Tỉ lệ khử cơ cấu khoa (trọng số là tổng hồ sơ mỗi khoa, chung cho hai giới) của nam và nữ là bao nhiêu?"
+    options:
+      - { id: a, text: "nam 44.5%, nữ 30.4%" }
+      - { id: b, text: "nam 38.7%, nữ 43.0%" }
+      - { id: c, text: "nam 43.0%, nữ 38.7%" }
+      - { id: d, text: "nam 30.4%, nữ 44.5%" }
+  - id: why-flip
+    kind: knowledge
+    type: single
+    prompt: "Cơ chế nào làm tỉ lệ gộp của nữ thấp hơn nam dù theo từng khoa thì ngược lại?"
+    options:
+      - { id: a, text: "Nữ nộp ít hồ sơ hơn nam nên tỉ lệ gộp kém ổn định" }
+      - { id: b, text: "Nữ nộp phần lớn vào các khoa có tỉ lệ nhận chung thấp" }
+      - { id: c, text: "Khoa A và B nhận quá nhiều nữ so với chỉ tiêu ban đầu" }
+      - { id: d, text: "Tỉ lệ gộp lấy trung bình 6 tỉ lệ khoa, không theo số hồ sơ" }
+  - id: dean-message
+    kind: knowledge
+    type: single
+    prompt: "Hiệu trưởng hỏi: \"Số liệu này có cho thấy trường thiên vị nam không?\". Câu trả lời đúng mực nhất là gì?"
+    options:
+      - { id: a, text: "Có: tỉ lệ gộp chênh 14 điểm, đủ lớn để kết luận thiên vị" }
+      - { id: b, text: "Không: 4/6 khoa nhận nữ cao hơn, chứng minh trường công bằng" }
+      - { id: c, text: "Không thấy ở cấp khoa; chênh lệch gộp đến từ nơi nữ nộp hồ sơ" }
+      - { id: d, text: "Chưa nói được gì vì 6 khoa là mẫu quá nhỏ để phân tích" }
+  - id: biggest-loss
+    kind: data
+    type: single
+    prompt: "Trong funnel Olist, bước nào mất nhiều đơn nhất tính theo số tuyệt đối?"
+    options:
+      - { id: a, text: "purchased → approved" }
+      - { id: b, text: "approved → carrier" }
+      - { id: c, text: "carrier → delivered" }
+      - { id: d, text: "Ba bước mất ngang nhau" }
+  - id: delivered-share
+    kind: data
+    type: single
+    prompt: "Bao nhiêu phần trăm đơn đã mua có mốc giao tới khách (`delivered` so với `purchased`)?"
+    options:
+      - { id: a, text: "88.1%" }
+      - { id: b, text: "93.5%" }
+      - { id: c, text: "97.0%" }
+      - { id: d, text: "99.8%" }
+  - id: recent-orders
+    kind: knowledge
+    type: single
+    prompt: "Đơn mua tháng 9-10/2018 chưa đơn nào có mốc giao. PM muốn theo dõi tỉ lệ giao thành công theo tháng. Bạn làm gì?"
+    options:
+      - { id: a, text: "Báo tỉ lệ giao thành công tháng 9-10/2018 là 0% để cảnh báo" }
+      - { id: b, text: "Chỉ tính tháng mua đã đủ thời gian giao; tháng mới ghi là chưa đủ" }
+      - { id: c, text: "Gộp mọi tháng thành một funnel để tháng mới không lộ ra" }
+      - { id: d, text: "Đếm đơn có trạng thái shipped như đã giao cho đủ số liệu" }

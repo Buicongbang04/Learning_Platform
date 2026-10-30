@@ -298,6 +298,43 @@ uv run python data/download_dataset.py cookie-cats
 
 Bộ có sẵn trong thư viện thì dùng thẳng, không qua registry: `statsmodels.datasets` (grunfeld, macrodata, co2...) và `torchvision.datasets.FashionMNIST` (tự tải về khi gọi).
 
+### Bộ dữ liệu thật cho track Data Analyst
+
+Ba bộ mới (cùng cách tải: `uv run python data/download_dataset.py <tên>`; lần chạy thứ hai không tải lại). Module 08 (bài intermediate 03, funnel)
+dùng Olist thật; capstone dùng dunnhumby (`data/download_olist.py`, không thêm khoá). Số dòng dưới đây đếm thật sau khi tải (2026-10-29), là số tham chiếu cho các bài.
+
+| Tên | Nội dung | Nguồn | Giấy phép | Module |
+| --- | --- | --- | --- | --- |
+| `bike-sharing-uci` | Thuê xe Capital Bikeshare 2011-2012 kèm thời tiết | [UCI #275](https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset) | CC BY 4.0 | 08 |
+| `online-retail-ii` | Giao dịch cửa hàng online quà tặng ở Anh, 2009-12-01 .. 2011-12-09 | [UCI #502](https://archive.ics.uci.edu/dataset/502/online+retail+ii) | CC BY 4.0 | 08, cohort/RFM |
+| `dunnhumby-complete-journey` | 2 500 hộ gia đình siêu thị trong 2 năm, 8 tệp CSV | [Kaggle](https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey) | ODbL (database) / DbCL v1.0 (contents) | capstone |
+
+Tệp giữ lại và số dòng (không tính dòng tiêu đề):
+
+| Bộ | Tệp | Số dòng |
+| --- | --- | --- |
+| `bike-sharing-uci` | `hour.csv` | 17 379 |
+| `bike-sharing-uci` | `day.csv` | 731 |
+| `online-retail-ii` | `online_retail_II.xlsx`, sheet `Year 2009-2010` (2009-12-01 .. 2010-12-09) | 525 461 |
+| `online-retail-ii` | `online_retail_II.xlsx`, sheet `Year 2010-2011` (2010-12-01 .. 2011-12-09) | 541 910 |
+| `dunnhumby-complete-journey` | `transaction_data.csv` | 2 595 732 |
+| `dunnhumby-complete-journey` | `causal_data.csv` (~696 MB) | 36 786 524 |
+| `dunnhumby-complete-journey` | `product.csv` | 92 353 |
+| `dunnhumby-complete-journey` | `coupon.csv` | 124 548 |
+| `dunnhumby-complete-journey` | `campaign_table.csv` | 7 208 |
+| `dunnhumby-complete-journey` | `coupon_redempt.csv` | 2 318 |
+| `dunnhumby-complete-journey` | `hh_demographic.csv` | 801 |
+| `dunnhumby-complete-journey` | `campaign_desc.csv` | 30 |
+
+Ghi chú:
+
+- Online Retail II là **một tệp `.xlsx` hai sheet** (`Year 2009-2010`, `Year 2010-2011`), không có bản CSV; đọc bằng
+  `pd.read_excel(path, sheet_name=None)` (cần `openpyxl`, đã có trong `pyproject.toml`). Hai sheet **chồng nhau** từ 2010-12-01 đến 2010-12-09
+  (đọc cả hai thì phải khử trùng). Cột: `Invoice`, `StockCode`, `Description`, `Quantity`, `InvoiceDate`, `Price`, `Customer ID`, `Country`.
+  Hoá đơn bắt đầu bằng `C` là đơn huỷ/trả hàng (10 206 dòng ở sheet 1, 9 288 dòng ở sheet 2); `Customer ID` có giá trị thiếu.
+- Dunnhumby: cột chính của `transaction_data.csv`: `household_key`, `BASKET_ID`, `DAY`, `PRODUCT_ID`, `QUANTITY`, `SALES_VALUE`, `STORE_ID`, `RETAIL_DISC`, `TRANS_TIME`, `WEEK_NO`, `COUPON_DISC`, `COUPON_MATCH_DISC`.
+  `causal_data.csv` rất lớn, nên đọc bằng DuckDB hoặc `usecols`/`chunksize`.
+
 ### Bộ dữ liệu thật cho track Data Engineer
 
 `download_dataset.py` cũng phục vụ track Data Engineer. Bài gọi `ensure("<tên>")` (tải vào thư mục tạm rồi

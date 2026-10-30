@@ -1,0 +1,109 @@
+questions:
+  - id: late-deliveries-trend
+    kind: knowledge
+    type: single
+    prompt: "Trưởng phòng vận hành hỏi: \"Tỉ lệ đơn giao trễ mỗi tuần trong 18 tháng qua có đang giảm không?\" Chart nào?"
+    options:
+      - { id: a, text: "Bar chart 78 cột, mỗi cột một tuần, sắp giảm dần" }
+      - { id: b, text: "Line chart theo tuần, trục x là thời gian" }
+      - { id: c, text: "Pie chart: tỉ trọng đơn trễ của từng tuần" }
+      - { id: d, text: "Histogram tỉ lệ trễ của 78 tuần" }
+  - id: provinces-revenue
+    kind: knowledge
+    type: single
+    prompt: "Giám đốc kinh doanh muốn so doanh thu quý của 34 tỉnh/thành để biết nơi nào dẫn đầu, nơi nào tụt lại. Chart nào?"
+    options:
+      - { id: a, text: "Bar dọc 34 cột xếp theo thứ tự mã tỉnh/thành" }
+      - { id: b, text: "Pie 34 lát, ghi % trên mỗi lát" }
+      - { id: c, text: "Bar ngang sắp giảm dần, top 15 + \"Khác\"" }
+      - { id: d, text: "Heatmap tỉnh × tháng của quý" }
+  - id: delivery-time-shape
+    kind: knowledge
+    type: single
+    prompt: "Bạn cần cho team logistics thấy thời gian giao hàng (giờ) của 120 nghìn đơn phân bố thế nào: đa số mất bao lâu, có đuôi dài không. Chart nào?"
+    options:
+      - { id: a, text: "Line chart thời gian giao theo mã đơn" }
+      - { id: b, text: "Bar chart thời gian giao trung bình" }
+      - { id: c, text: "Scatter thời gian giao theo mã đơn" }
+      - { id: d, text: "Histogram (đuôi rất dài thì trục log)" }
+  - id: channel-mix
+    kind: knowledge
+    type: single
+    prompt: "CMO hỏi: \"Tỉ trọng doanh thu của 4 kênh (web, app, sàn TMĐT, cửa hàng) thay đổi thế nào qua 12 tháng?\" Chart nào?"
+    options:
+      - { id: a, text: "Stacked bar 100% theo tháng, mỗi kênh một màu" }
+      - { id: b, text: "12 pie chart, mỗi tháng một pie" }
+      - { id: c, text: "Line chart doanh thu tuyệt đối 4 kênh" }
+      - { id: d, text: "Scatter doanh thu web vs doanh thu app theo tháng" }
+  - id: new-vs-returning
+    kind: knowledge
+    type: single
+    prompt: "Một slide tổng kết tháng cần đúng một ý: khách mới chiếm bao nhiêu % số khách mua hàng tháng này (còn lại là khách cũ). Cách thể hiện nào hợp lý?"
+    options:
+      - { id: a, text: "Stacked bar 12 tháng gần nhất" }
+      - { id: b, text: "Một con số lớn, hoặc pie 2 lát" }
+      - { id: c, text: "Histogram số đơn mỗi khách" }
+      - { id: d, text: "Line chart số khách mới theo ngày" }
+  - id: ads-vs-orders
+    kind: knowledge
+    type: single
+    prompt: "Marketing hỏi: \"Ngày nào chi quảng cáo nhiều hơn thì có nhiều đơn hơn không?\" Bạn có 365 ngày, mỗi ngày một cặp (chi phí, số đơn). Chart nào?"
+    options:
+      - { id: a, text: "Hai line chart chung một dual axis" }
+      - { id: b, text: "Stacked bar chi phí và số đơn theo ngày" }
+      - { id: c, text: "Scatter: x là chi phí, y là số đơn" }
+      - { id: d, text: "Heatmap chi phí theo thứ × tháng" }
+  - id: support-shifts
+    kind: knowledge
+    type: single
+    prompt: "Trưởng nhóm chăm sóc khách hàng cần xếp ca: số ticket mới trung bình theo từng giờ của từng thứ trong tuần. Chart nào?"
+    options:
+      - { id: a, text: "Heatmap: hàng là thứ, cột là giờ, màu là số ticket" }
+      - { id: b, text: "Pie chart 168 lát, mỗi lát một giờ trong tuần" }
+      - { id: c, text: "Line chart 168 điểm, một đường liên tục cả tuần" }
+      - { id: d, text: "Histogram số ticket mỗi giờ, gộp chung mọi thứ trong tuần" }
+  - id: checkout-steps
+    kind: knowledge
+    type: single
+    prompt: "PM hỏi: \"Tháng này khách rơi nhiều nhất ở bước nào: xem sản phẩm → thêm giỏ → thanh toán → đặt thành công?\" Chart nào?"
+    options:
+      - { id: a, text: "Pie chart 4 lát, mỗi lát là số khách ở một bước" }
+      - { id: b, text: "Line chart số khách của 4 bước theo ngày" }
+      - { id: c, text: "Scatter số khách bước trước vs bước sau" }
+      - { id: d, text: "Funnel 4 bước, ghi % so với bước trước" }
+  - id: tool-weekly-kpi
+    kind: knowledge
+    type: single
+    prompt: "40 quản lý vùng xem KPI bán hàng mỗi thứ Hai, mỗi người lọc vùng của mình và chỉ được thấy vùng mình. Công ty dùng Microsoft 365. Công cụ nào?"
+    options:
+      - { id: a, text: "Notebook matplotlib, xuất 40 ảnh PNG mỗi tuần" }
+      - { id: b, text: "Power BI với row-level security theo vùng" }
+      - { id: c, text: "File Excel gửi email, mỗi vùng một sheet" }
+      - { id: d, text: "plotly xuất một HTML gửi cho cả 40 người" }
+  - id: tool-board-slide
+    kind: knowledge
+    type: single
+    prompt: "Một chart cho slide họp hội đồng quản trị, có thể phải vẽ lại khi số liệu được chốt lại; data team viết Python. Công cụ nào?"
+    options:
+      - { id: a, text: "matplotlib trong script/notebook lưu ở git" }
+      - { id: b, text: "Dashboard Tableau mới dựng cho một chart" }
+      - { id: c, text: "plotly HTML để thành viên HĐQT tự zoom" }
+      - { id: d, text: "Vẽ tay trong PowerPoint từ số copy-paste" }
+  - id: tool-interactive-share
+    kind: knowledge
+    type: single
+    prompt: "PM muốn tự rê chuột xem số đơn từng ngày trong 2 năm trên một chart gửi qua Slack. Công ty chưa có công cụ BI. Công cụ nào?"
+    options:
+      - { id: a, text: "seaborn, gửi một ảnh PNG độ phân giải thật cao" }
+      - { id: b, text: "Excel pivot chart gửi kèm 730 dòng số" }
+      - { id: c, text: "plotly, xuất một tệp HTML gửi qua Slack" }
+      - { id: d, text: "Mua license Tableau chỉ cho chart này" }
+  - id: tool-finance-scenario
+    kind: knowledge
+    type: single
+    prompt: "Kế toán trưởng nhận bảng dự toán 2 000 dòng kèm chart, muốn tự sửa giả định tăng trưởng và thấy chart đổi theo ngay. Không dùng lại hằng tuần. Công cụ nào?"
+    options:
+      - { id: a, text: "Script matplotlib, sửa số thì gửi lại PNG" }
+      - { id: b, text: "Dashboard Metabase nối vào warehouse" }
+      - { id: c, text: "Notebook plotly cài trên máy kế toán" }
+      - { id: d, text: "Excel/Google Sheets: công thức + chart" }

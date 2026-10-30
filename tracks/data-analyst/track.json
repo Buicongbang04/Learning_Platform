@@ -2,6 +2,199 @@
   "id": "data-analyst",
   "name": "Data Analyst",
   "icon": "chart-column",
-  "status": "soon",
-  "order": 2
+  "status": "active",
+  "order": 2,
+  "description": "15 module từ tư duy phân tích, Excel, SQL, Python tới trực quan hoá, BI, experimentation và storytelling, nhắm chuẩn Data Analyst senior, thực hành trên dữ liệu thật.",
+  "source": "https://roadmap.sh/data-analyst",
+  "modules": [
+    {
+      "id": "01-analyst-mindset",
+      "title": "Vai trò DA & tư duy phân tích",
+      "summary": "Vai trò của Data Analyst, 4 loại analytics, đặt câu hỏi business, KPI, metric tree và bản đồ công cụ.",
+      "topics": [
+        "Analytics Types",
+        "Business Questions",
+        "KPI",
+        "Metric Tree",
+        "Tool Map"
+      ]
+    },
+    {
+      "id": "02-spreadsheets",
+      "title": "Excel / Spreadsheet",
+      "summary": "Hàm cốt lõi, XLOOKUP, pivot table và charting; chọn Excel, Google Sheets hay LibreOffice.",
+      "topics": [
+        "Excel Functions",
+        "XLOOKUP",
+        "Pivot Table",
+        "Charting",
+        "Google Sheets"
+      ]
+    },
+    {
+      "id": "03-sql-for-analysts",
+      "title": "SQL cho DA",
+      "summary": "SQL trả lời câu hỏi business: YoY/MoM, running total, top-N theo nhóm, cohort, funnel.",
+      "topics": [
+        "Window Functions",
+        "YoY/MoM",
+        "Top-N",
+        "Cohort",
+        "Funnel"
+      ]
+    },
+    {
+      "id": "04-python-for-analysts",
+      "title": "Python cho DA",
+      "summary": "pandas, matplotlib, seaborn cho phân tích; R giới thiệu; git và cấu trúc project tái lập được.",
+      "topics": [
+        "pandas",
+        "matplotlib",
+        "seaborn",
+        "R (dplyr/ggplot2)",
+        "Git",
+        "Reproducibility"
+      ]
+    },
+    {
+      "id": "05-data-collection",
+      "title": "Thu thập dữ liệu",
+      "summary": "Lấy dữ liệu từ database, CSV, API và web scraping.",
+      "topics": [
+        "Databases",
+        "CSV",
+        "APIs",
+        "Web Scraping"
+      ]
+    },
+    {
+      "id": "06-data-cleaning",
+      "title": "Làm sạch dữ liệu",
+      "summary": "Missing data, duplicates, outliers, transformation và cách nghi ngờ một bộ dữ liệu trước khi báo cáo.",
+      "topics": [
+        "Missing Data",
+        "Duplicates",
+        "Outliers",
+        "Transformation",
+        "Data Suspicion"
+      ]
+    },
+    {
+      "id": "07-descriptive-eda",
+      "title": "Thống kê mô tả & EDA",
+      "summary": "Central tendency, dispersion, distribution và quy trình khám phá dữ liệu (EDA).",
+      "topics": [
+        "Central Tendency",
+        "Dispersion",
+        "Skewness & Kurtosis",
+        "Distributions",
+        "EDA"
+      ]
+    },
+    {
+      "id": "08-visualization-chart-reading",
+      "title": "Trực quan hoá & đọc biểu đồ",
+      "summary": "Chọn chart theo câu hỏi, nhận ra chart gây hiểu nhầm, đọc chart ra insight. Trọng tâm của track.",
+      "topics": [
+        "Chart Selection",
+        "Misleading Charts",
+        "Chart Reading",
+        "matplotlib/seaborn/plotly",
+        "Heatmap",
+        "Funnel"
+      ]
+    },
+    {
+      "id": "09-analytics-data-modeling",
+      "title": "Data modeling cho analytics",
+      "summary": "Star schema, fact/dimension, grain, dbt, semantic layer, data quality test và tài liệu hoá metric.",
+      "topics": [
+        "Star Schema",
+        "Grain",
+        "dbt",
+        "Semantic Layer",
+        "Data Quality",
+        "Metric Definition"
+      ]
+    },
+    {
+      "id": "10-bi-dashboards",
+      "title": "BI & Dashboard",
+      "summary": "Khái niệm và so sánh Tableau, Power BI, Looker; thực hành Metabase, Superset, Streamlit; thiết kế KPI dashboard.",
+      "topics": [
+        "Metabase",
+        "Superset",
+        "Streamlit",
+        "Power BI/Tableau/Looker",
+        "KPI Dashboard"
+      ]
+    },
+    {
+      "id": "11-stats-experimentation",
+      "title": "Thống kê & Experimentation cho quyết định",
+      "summary": "Hypothesis testing, correlation, regression, A/B test từ phía DA, correlation khác causation, DiD nhanh.",
+      "topics": [
+        "Hypothesis Testing",
+        "Regression",
+        "A/B Test",
+        "Guardrail Metrics",
+        "Sample Size",
+        "DiD"
+      ]
+    },
+    {
+      "id": "12-product-customer-analytics",
+      "title": "Product & customer analytics",
+      "summary": "Funnel, cohort, retention, LTV, CAC, RFM, market basket và tracking plan.",
+      "topics": [
+        "Funnel",
+        "Cohort",
+        "Retention",
+        "LTV/CAC",
+        "RFM",
+        "Market Basket",
+        "Tracking Plan"
+      ]
+    },
+    {
+      "id": "13-business-financial-analytics",
+      "title": "Business & financial analytics",
+      "summary": "Root cause khi chỉ số biến động, P&L, margin, unit economics, giá/khuyến mãi, dự báo, scenario, giám sát KPI.",
+      "topics": [
+        "Root Cause",
+        "P&L",
+        "Unit Economics",
+        "Promotion Analysis",
+        "Forecasting",
+        "What-if",
+        "KPI Alerting"
+      ]
+    },
+    {
+      "id": "14-ml-bigdata-for-analysts",
+      "title": "ML & Big Data cho DA",
+      "summary": "Tổng quan ML, các thuật toán trong roadmap, đánh giá model, deep learning giới thiệu và khái niệm Big Data.",
+      "topics": [
+        "Supervised/Unsupervised",
+        "Decision Trees",
+        "K-Means",
+        "Model Evaluation",
+        "Deep Learning Intro",
+        "Hadoop/Spark"
+      ]
+    },
+    {
+      "id": "15-stakeholder-storytelling-interview",
+      "title": "Stakeholder, storytelling & phỏng vấn",
+      "summary": "Nhận yêu cầu mơ hồ, scoping, storytelling, memo, dùng AI khi phân tích, take-home, case interview, portfolio.",
+      "topics": [
+        "Scoping",
+        "Storytelling",
+        "Memo",
+        "AI-assisted Analysis",
+        "Case Interview",
+        "Portfolio"
+      ]
+    }
+  ]
 }

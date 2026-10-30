@@ -1,0 +1,73 @@
+questions:
+  - id: weekend-peak-hour
+    kind: data
+    type: single
+    prompt: "Theo `weekday_hour_matrix`, thứ Bảy và Chủ nhật đông nhất vào giờ nào (lượt thuê trung bình cao nhất)?"
+    options:
+      - { id: a, text: "8h" }
+      - { id: b, text: "13h" }
+      - { id: c, text: "17h" }
+      - { id: d, text: "20h" }
+  - id: season-label
+    kind: data
+    type: single
+    prompt: "Mã `season = 1`, mang nhãn `spring` theo Readme của UCI, thật ra gồm những ngày nào trong năm?"
+    options:
+      - { id: a, text: "Từ 21/3 tới 20/6" }
+      - { id: b, text: "Từ 21/12 tới 20/3" }
+      - { id: c, text: "Từ 1/3 tới 31/5" }
+      - { id: d, text: "Từ 1/1 tới 31/3 (quý 1)" }
+  - id: season-ratio
+    kind: data
+    type: single
+    prompt: "Theo `rides_by_season`, tổng lượt thuê của mùa cao nhất gấp khoảng bao nhiêu lần mùa thấp nhất?"
+    options:
+      - { id: a, text: "1.3 lần" }
+      - { id: b, text: "1.6 lần" }
+      - { id: c, text: "2.3 lần" }
+      - { id: d, text: "3.1 lần" }
+  - id: casual-peak-month
+    kind: data
+    type: single
+    prompt: "Theo `casual_share_by_month`, tháng nào khách vãng lai chiếm tỉ trọng cao nhất?"
+    options:
+      - { id: a, text: "04/2011" }
+      - { id: b, text: "07/2011" }
+      - { id: c, text: "05/2012" }
+      - { id: d, text: "08/2012" }
+  - id: yoy-growth
+    kind: data
+    type: single
+    prompt: "Theo `daily_rides`, tổng lượt thuê năm 2012 so với năm 2011 thay đổi bao nhiêu?"
+    options:
+      - { id: a, text: "+18%" }
+      - { id: b, text: "+40%" }
+      - { id: c, text: "+65%" }
+      - { id: d, text: "+112%" }
+  - id: why-100-stacked
+    kind: knowledge
+    type: single
+    prompt: "Marketing hỏi tỉ trọng khách vãng lai đổi theo mùa ra sao. Vì sao vẽ stacked bar 100% chứ không phải stacked bar số lượt tuyệt đối?"
+    options:
+      - { id: a, text: "Stacked tuyệt đối không vẽ được khi có tới 24 tháng trên trục x" }
+      - { id: b, text: "Tổng lượt đổi theo mùa nên phần casual khó so giữa các tháng" }
+      - { id: c, text: "Stacked 100% cho biết thêm số lượt tuyệt đối mỗi tháng" }
+      - { id: d, text: "Stacked tuyệt đối chỉ hợp khi trục y không bắt đầu từ 0" }
+  - id: why-mean-heatmap
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `weekday_hour_matrix` lấy trung bình `cnt` chứ không lấy tổng?"
+    options:
+      - { id: a, text: "Số lần mỗi thứ và số giờ có dữ liệu khác nhau giữa các ô" }
+      - { id: b, text: "Heatmap của seaborn không vẽ được giá trị lớn hơn 1 000" }
+      - { id: c, text: "Trung bình luôn chính xác hơn tổng khi dữ liệu là số đếm theo giờ" }
+      - { id: d, text: "Tổng sẽ làm ô cuối tuần luôn lớn hơn ô ngày làm việc" }
+  - id: season-bar-order
+    kind: knowledge
+    type: single
+    prompt: "`rides_by_season` trả bảng sắp giảm dần. Khi vẽ bar 4 mùa cho trưởng vận hành, nên sắp các cột thế nào?"
+    options:
+      - { id: a, text: "Giảm dần theo giá trị, để mùa cao nhất đứng đầu" }
+      - { id: b, text: "Theo thứ tự chữ cái của nhãn mùa để người xem dễ tìm" }
+      - { id: c, text: "Giữ thứ tự mùa trong năm, tô màu nhấn mùa cao nhất" }
+      - { id: d, text: "Tăng dần theo giá trị, để mùa cao nhất đứng cuối" }

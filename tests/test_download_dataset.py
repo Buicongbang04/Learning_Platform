@@ -34,10 +34,11 @@ def no_kaggle_env(monkeypatch, tmp_path):
 
 def test_registry_entries_complete():
     dd = load("download_dataset")
-    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud"} <= set(dd.DATASETS)
+    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud", "bike-sharing-uci", "online-retail-ii", "dunnhumby-complete-journey"} <= set(dd.DATASETS)
     for ds in dd.DATASETS.values():
         assert ds.source in ("kaggle", "url")
         assert ds.ref and ds.files and ds.license and ds.homepage
+        assert ds.homepage.startswith("https://")
 
 
 def test_token_from_env_file_is_exported(no_kaggle_env, monkeypatch):
