@@ -1,0 +1,73 @@
+questions:
+  - id: biggest-driver
+    kind: data
+    type: single
+    prompt: "Doanh thu hàng hoá tháng 9-11 tăng khoảng 190 nghìn GBP (+5.6%). Hiệu ứng dương lớn nhất là gì?"
+    options:
+      - { id: a, text: "Giá, khoảng +1.18 triệu GBP" }
+      - { id: b, text: "Mix, khoảng +83 nghìn GBP" }
+      - { id: c, text: "Mã mới, khoảng +1.18 triệu GBP" }
+      - { id: d, text: "Lượng, khoảng +690 nghìn GBP mỗi kỳ" }
+  - id: common-units
+    kind: data
+    type: single
+    prompt: "Tổng số lượng bán của 2 481 mã có mặt ở cả hai kỳ đổi bao nhiêu?"
+    options:
+      - { id: a, text: "Giảm khoảng 22%" }
+      - { id: b, text: "Tăng khoảng 1%" }
+      - { id: c, text: "Gần như không đổi" }
+      - { id: d, text: "Giảm khoảng 5%" }
+  - id: new-share
+    kind: data
+    type: single
+    prompt: "Mã mới (chỉ bán ở kỳ 2011) chiếm khoảng bao nhiêu doanh thu hàng hoá tháng 9-11/2011?"
+    options:
+      - { id: a, text: "Khoảng 8%" }
+      - { id: b, text: "Khoảng 33%" }
+      - { id: c, text: "Khoảng 50%" }
+      - { id: d, text: "Khoảng 15%" }
+  - id: price-driver
+    kind: data
+    type: single
+    prompt: "Các mã kéo hiệu ứng giá xuống nhiều nhất (đồ trang trí Giáng sinh) có giá niêm yết (max) gần như giữ nguyên. Median giá thực thu cho thấy gì?"
+    options:
+      - { id: a, text: "Tăng nhẹ, do khách mua lẻ nhiều hơn" }
+      - { id: b, text: "Không đổi, hiệu ứng giá chỉ là sai số làm tròn" }
+      - { id: c, text: "Giảm vì đổi đơn vị tính từ hộp sang cái" }
+      - { id: d, text: "Giảm mạnh, ví dụ 1.45 → 0.39 GBP: bán xả hàng" }
+  - id: formula-order
+    kind: data
+    type: single
+    prompt: "Nếu tính `price` trên số lượng kỳ gốc và `mix` theo giá kỳ mới (thứ tự ngược), hiệu ứng giá thành bao nhiêu?"
+    options:
+      - { id: a, text: "Vẫn khoảng −117 nghìn GBP, công thức không ảnh hưởng" }
+      - { id: b, text: "Khoảng +147 nghìn GBP: đổi cả dấu" }
+      - { id: c, text: "Khoảng −691 nghìn GBP, bằng hiệu ứng lượng" }
+      - { id: d, text: "Bằng 0 vì giá và mix triệt tiêu nhau" }
+  - id: raise-prices
+    kind: knowledge
+    type: single
+    prompt: "Giám đốc hỏi: \"Hiệu ứng giá âm, vậy mình nên tăng giá?\" Trả lời nào trung thực nhất?"
+    options:
+      - { id: a, text: "Nên tăng, vì hiệu ứng giá âm nghĩa là giá đang quá thấp" }
+      - { id: b, text: "Không nên, vì hiệu ứng giá chỉ chiếm phần nhỏ của thay đổi" }
+      - { id: c, text: "Giá âm do bán xả và mức giá sỉ; cần thử nghiệm giá" }
+      - { id: d, text: "Nên giảm giá tiếp vì giá giảm đi kèm số lượng tăng" }
+  - id: mix-units
+    kind: knowledge
+    type: single
+    prompt: "Điểm yếu lớn nhất của hiệu ứng `volume` / `mix` khi tính trên số lượng của hàng nghìn mã khác nhau là gì?"
+    options:
+      - { id: a, text: "Cộng chung đơn vị khác nhau (một cái bút, một tấm thảm)" }
+      - { id: b, text: "Không cộng lại đúng bằng thay đổi doanh thu" }
+      - { id: c, text: "Không tính được khi có mã mới hoặc mã đã ngừng bán ở kỳ sau" }
+      - { id: d, text: "Chỉ đúng khi giá của mọi mã không đổi" }
+  - id: new-lost
+    kind: knowledge
+    type: single
+    prompt: "Vì sao tách riêng `new` và `lost` thay vì cho mã mới có giá kỳ gốc bằng 0?"
+    options:
+      - { id: a, text: "Vì pandas không chia được cho 0" }
+      - { id: b, text: "Mã mới không có giá kỳ gốc; ép bằng 0 đẩy cả doanh thu vào giá" }
+      - { id: c, text: "Vì mã mới luôn đắt hơn mã cũ nên phải tách ra để xem riêng" }
+      - { id: d, text: "Để tổng bridge lớn hơn thay đổi doanh thu thật" }

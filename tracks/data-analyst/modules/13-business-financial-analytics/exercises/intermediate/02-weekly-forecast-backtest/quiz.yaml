@@ -1,0 +1,73 @@
+questions:
+  - id: all-stores-drop
+    kind: data
+    type: single
+    prompt: "Tổng doanh số tuần của **mọi** cửa hàng: trung bình tháng 7/2014 so với tháng 6/2014 đổi bao nhiêu, và vì sao?"
+    options:
+      - { id: a, text: "Tăng 1.5% nhờ mùa hè" }
+      - { id: b, text: "Giảm 14% vì 180 cửa hàng không có dữ liệu 7-12/2014" }
+      - { id: c, text: "Giảm 14% vì đối thủ mở nhiều cửa hàng mới gần các cửa hàng" }
+      - { id: d, text: "Không đổi; dữ liệu đầy đủ mọi cửa hàng" }
+  - id: comparable-count
+    kind: data
+    type: single
+    prompt: "Bao nhiêu cửa hàng có dữ liệu cho mọi ngày từ 01/01/2013 tới 31/07/2015?"
+    options:
+      - { id: a, text: "1 115" }
+      - { id: b, text: "935" }
+      - { id: c, text: "934" }
+      - { id: d, text: "180" }
+  - id: promo-gap
+    kind: data
+    type: single
+    prompt: "Trên chuỗi so sánh được, doanh số trung bình của tuần có khuyến mãi so với tuần không có là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 43.5 so với 31.9 triệu" }
+      - { id: b, text: "Khoảng 37.9 so với 37.3 triệu" }
+      - { id: c, text: "Gần bằng nhau, khoảng 38 triệu" }
+      - { id: d, text: "Khoảng 49.3 so với 34.4 triệu" }
+  - id: best-method
+    kind: data
+    type: single
+    prompt: "Sau 6 điểm cắt, kết luận nào đúng về MAPE trung bình?"
+    options:
+      - { id: a, text: "Moving average tốt nhất, khoảng 6%" }
+      - { id: b, text: "Seasonal naive tốt nhất hẳn, khoảng 3%" }
+      - { id: c, text: "Ba phương pháp gần như bằng nhau, đều khoảng 10% MAPE" }
+      - { id: d, text: "Promo average và seasonal naive ngang nhau, khoảng 6.3%" }
+  - id: ets-result
+    kind: data
+    type: single
+    prompt: "ETS (Holt-Winters trên log, mùa vụ 52 tuần) trong cell explore cho MAPE trung bình bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 10%, kém hơn seasonal naive" }
+      - { id: b, text: "Khoảng 3%, tốt nhất trong bốn phương pháp" }
+      - { id: c, text: "Khoảng 6%, ngang seasonal naive" }
+      - { id: d, text: "Không chạy được với dữ liệu này" }
+  - id: hardest-cutoff
+    kind: data
+    type: single
+    prompt: "Với seasonal naive và promo average, điểm cắt nào cho MAPE lớn nhất?"
+    options:
+      - { id: a, text: "2015-05-25, đầu mùa hè" }
+      - { id: b, text: "2015-01-05, ngay sau mùa lễ cuối năm" }
+      - { id: c, text: "2015-04-27, ngay sau lễ Phục sinh năm 2015" }
+      - { id: d, text: "2015-02-02, giữa mùa đông" }
+  - id: ma-why
+    kind: knowledge
+    type: single
+    prompt: "Vì sao moving average 4 tuần tệ nhất trên chuỗi này?"
+    options:
+      - { id: a, text: "Vì 4 tuần là quá ít dữ liệu để tính trung bình" }
+      - { id: b, text: "Vì nó bị ảnh hưởng bởi 180 cửa hàng thiếu dữ liệu năm 2014" }
+      - { id: c, text: "Nó dự báo một đường phẳng giữa tuần cao và tuần thấp" }
+      - { id: d, text: "Vì nó luôn dự báo cao hơn thực tế khoảng 15%" }
+  - id: snaive-bias
+    kind: knowledge
+    type: single
+    prompt: "Seasonal naive có bias trung bình khoảng −2.8% (dự báo thấp hơn thực tế). Nên hiểu và xử lý thế nào?"
+    options:
+      - { id: a, text: "Bỏ seasonal naive vì bias khác 0 là sai" }
+      - { id: b, text: "Chuỗi tăng theo năm; nhân thêm tỉ lệ tăng gần đây" }
+      - { id: c, text: "Bias âm nghĩa là MAPE đang bị tính sai dấu ở mọi điểm cắt" }
+      - { id: d, text: "Không cần làm gì vì FP&A chỉ quan tâm MAPE" }
