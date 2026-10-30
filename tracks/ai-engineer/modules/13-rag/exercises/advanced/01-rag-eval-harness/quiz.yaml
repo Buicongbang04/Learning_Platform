@@ -1,0 +1,105 @@
+questions:
+- id: hybrid-vs-dense
+  kind: data
+  type: single
+  prompt: Trên 50 câu đầu tập ghim, so recall@5 và MRR@10 của thứ hạng dense với thứ hạng hybrid (bài 01), kết quả thế nào?
+  options:
+  - id: a
+    text: Hybrid cao hơn ở cả hai cột, chênh vài câu trên 50
+  - id: b
+    text: Dense cao hơn ở cả hai cột, vì BM25 kéo hybrid xuống
+  - id: c
+    text: Hai cấu hình bằng nhau tuyệt đối ở cả hai cột
+  - id: d
+    text: Hybrid cao hơn 0.3 điểm MRR, cách biệt rất xa
+- id: rerank-gain
+  kind: data
+  type: single
+  prompt: Trên 50 câu này, rerank top-50 bằng cross-encoder đổi MRR@10 so với hybrid thế nào, và độ trễ ra sao?
+  options:
+  - id: a
+    text: MRR tăng hơn 0.1, độ trễ chỉ tăng vài phần trăm
+  - id: b
+    text: MRR gần như không đổi, độ trễ tăng gần 10 lần
+  - id: c
+    text: MRR giảm mạnh, vì cross-encoder không đọc tiếng Việt
+  - id: d
+    text: MRR tăng gấp đôi, đổi lại độ trễ tăng gấp đôi
+- id: khoan-hit
+  kind: data
+  type: single
+  prompt: Cùng thứ hạng dense, "5 khoản" có context_hit không cao hơn "5 điều cắt 1 500 ký tự". Vì sao?
+  options:
+  - id: a
+    text: Khoản quá ngắn nên vector bge-m3 của khoản kém chính xác hơn
+  - id: b
+    text: 5 khoản thường dồn vào khoảng 3 điều, bỏ rơi điều khác
+  - id: c
+    text: Cổng điểm chặn nhiều câu hơn khi dùng khoản
+  - id: d
+    text: Qrels gán nhãn theo khoản nên điều không khớp
+- id: refuse-unit
+  kind: data
+  type: single
+  prompt: Đổi nguồn từ "cả điều cắt 1 500 ký tự" sang "5 khoản", số câu qwen2.5:3b từ chối dù điều đúng có trong nguồn đổi thế nào?
+  options:
+  - id: a
+    text: Giảm rõ, khoảng một nửa
+  - id: b
+    text: Không đổi, vì model giống nhau
+  - id: c
+    text: Tăng gấp đôi, vì khoản thiếu ngữ cảnh
+  - id: d
+    text: Về 0, model không còn từ chối câu nào
+- id: refused-not-judged
+  kind: knowledge
+  type: single
+  prompt: run_eval không gửi câu bị từ chối cho judge faithfulness. Hệ quả cần nói rõ trong báo cáo là gì?
+  options:
+  - id: a
+    text: Faithfulness cao có thể chỉ vì cấu hình đó từ chối nhiều câu khó
+  - id: b
+    text: Không có hệ quả gì, câu từ chối luôn có faithfulness bằng 1
+  - id: c
+    text: Cột refused bị tính sai vì thiếu điểm judge của câu từ chối
+  - id: d
+    text: Recall@5 của cấu hình đó bị đếm thiếu các câu từ chối
+- id: nan-not-zero
+  kind: knowledge
+  type: single
+  prompt: Judge trả JSON hỏng cho một câu. Vì sao trả nan và đếm judge_nan, thay vì cho điểm 0?
+  options:
+  - id: a
+    text: Vì pandas không lưu được số 0 trong cột kiểu float của bảng
+  - id: b
+    text: Điểm 0 nói câu trả lời bịa, trong khi thật ra chưa chấm được
+  - id: c
+    text: Vì nan làm trung bình cả cột thành nan, nên dễ thấy lỗi hơn
+  - id: d
+    text: Vì json_schema bảo đảm judge không bao giờ trả JSON hỏng
+- id: wrong-source-test
+  kind: knowledge
+  type: single
+  prompt: Chấm cùng câu trả lời với nguồn của câu hỏi khác mà judge vẫn cho faithfulness trung bình 0.6. Kết luận đúng?
+  options:
+  - id: a
+    text: Câu trả lời tốt đến mức đúng với cả nguồn khác
+  - id: b
+    text: Judge chấm theo kiến thức riêng, chưa dùng được để đo bịa
+  - id: c
+    text: Cần tăng số khoản trong nguồn lên 10 để judge có đủ căn cứ
+  - id: d
+    text: Nguồn sai vẫn cùng lĩnh vực luật nên 0.6 là hợp lý
+- id: judge-choice
+  kind: knowledge
+  type: multi
+  prompt: Những cách nào giúp điểm LLM-as-judge đáng tin hơn?
+  options:
+  - id: a
+    text: Judge mạnh hơn hoặc khác họ với model sinh câu trả lời
+  - id: b
+    text: Hiệu chỉnh trên vài chục câu có nhãn người chấm
+  - id: c
+    text: Thang điểm nhỏ, có mô tả từng mức, output JSON theo schema
+  - id: d
+    text: Cho judge xem cấu hình nào sinh ra câu trả lời để chấm sát hơn
