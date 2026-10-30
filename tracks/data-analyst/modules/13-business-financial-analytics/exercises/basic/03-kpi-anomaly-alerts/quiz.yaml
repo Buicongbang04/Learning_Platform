@@ -29,10 +29,10 @@ questions:
   - id: investigate-share
     kind: data
     type: single
-    prompt: "Trong 39 ngày cảnh báo, `triage` gắn `investigate` (không phải lễ, không phải `weathersit >= 3`) cho bao nhiêu ngày?"
+    prompt: "Trong 39 ngày cảnh báo, `triage(alerts, day, coverage)` (có kiểm độ phủ, như cell explore) gắn `investigate` (không thiếu giờ, không phải lễ, không phải `weathersit >= 3`) cho bao nhiêu ngày?"
     options:
       - { id: a, text: "3 ngày" }
-      - { id: b, text: "11 ngày" }
+      - { id: b, text: "23 ngày" }
       - { id: c, text: "39 ngày" }
       - { id: d, text: "25 ngày" }
   - id: christmas-2011

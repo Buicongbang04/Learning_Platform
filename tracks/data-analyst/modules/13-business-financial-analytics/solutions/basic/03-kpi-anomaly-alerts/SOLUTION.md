@@ -46,12 +46,14 @@
 - `fixed-threshold` **b**: 98 ngày, 72 ngày rơi vào tháng 1–3. Ngưỡng cố định đo mùa, không đo bất thường; mùa
   hè một ngày mất nửa lượt thuê (ví dụ 07/10/2012: 3 510 so với baseline 7 620) không bị báo.
 - `seasonal-count` **a**: 39 ngày, 26 đợt. 58 là số ngày ở ngưỡng 3; 65 là quy tắc so với hôm qua; 25 là số ngày
-  `investigate`.
+  ở ngưỡng 5.
 - `worst-day` **c**: `hour.csv` chỉ có 1 giờ cho ngày 29/10/2012. Cảnh báo bắn vì dữ liệu thiếu, nên tin nhắn phải
   nói "dữ liệu ngày 29/10 chỉ có 1 giờ, đang kiểm nguồn" thay vì "cầu giảm 99%". Bão Sandy có thật và có thể hệ
   thống đã đóng, nhưng dữ liệu không cho phân biệt hai khả năng đó. Xoá ngày (d) làm mất dấu vết; bỏ qua (b) thì lần
   sau pipeline hỏng cũng bị bỏ qua.
-- `investigate-share` **d**: 25 ngày; 11 là `bad_weather`, 3 là `holiday`.
+- `investigate-share` **b**: 23 ngày khi có kiểm độ phủ; 10 là `bad_weather`, 3 là `partial_day`, 3 là `holiday`.
+  25 (d) là số `investigate` khi chạy `triage` không có `coverage`: khi kiểm độ phủ, 30/10/2012 và 27/08/2011 chuyển
+  từ `investigate` sang `partial_day`, còn 29/10/2012 chuyển từ `bad_weather` sang `partial_day`.
 - `christmas-2011` **b**: cờ `holiday` theo lịch nghỉ liên bang; Giáng sinh 2011 rơi vào Chủ nhật nên ngày nghỉ
   chính thức là thứ Hai 26/12. Bài học: cờ lễ trong dữ liệu không phải "ngày người dùng nghỉ"; bảng lịch cho
   cảnh báo nên có cả ngày lễ thật và các ngày quanh lễ.
