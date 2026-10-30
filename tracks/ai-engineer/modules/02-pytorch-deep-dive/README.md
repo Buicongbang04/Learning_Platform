@@ -660,7 +660,8 @@ script ngoài module, CPU):
   Đường tắt một mình không đủ.
 - **Normalization** giữ thang activation ổn định và là thứ làm cả hai mạng train được. Mạng plain + BN có gradient ở tầng
   đầu lớn gấp 18 lần tầng cuối: BN chặn activation nhưng không chặn gradient nổ qua độ sâu. Residual + BN cân bằng hơn
-  (2.9) và học nhanh nhất: 0.426 so với 0.327 của plain + BN sau cùng 300 bước. Đây là degradation của He et al. ở quy mô nhỏ.
+  (2.9) và học nhanh nhất: 0.426 so với 0.327 của plain + BN sau cùng 300 bước. Một seed, một lần chạy ngắn nên chỉ là dấu hiệu, không phải bằng chứng; nó cùng chiều với degradation mà He et al. đo
+  ở quy mô lớn.
 - **Zero-init γ** (Goyal et al. 2017): γ của BN cuối nhánh bằng 0 nên mỗi block là `relu(x + 0)`, cả mạng gần như phép
   đồng nhất lúc khởi tạo: loss gần $$\ln 10$$, activation không lớn dần. Conv chưa nhận gradient ở bước đầu (bị nhân với
   $$\gamma = 0$$) nhưng γ có gradient (4.7e-3), nên nhánh "mở dần". Cái giá thấy trong bảng: sau chỉ 300 bước bản γ = 0 còn

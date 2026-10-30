@@ -2,20 +2,20 @@ questions:
 - id: optimizer-params
   kind: data
   type: single
-  prompt: Trong notebook gốc (chưa sửa), optimizer thấy bao nhiêu tham số của Net(16)?
+  prompt: Net(16) đúng kiến trúc dự định (stem, 3 ResBlock w → 2w → 4w, Linear) có bao nhiêu tham số?
   options:
   - id: a
-    text: 1 114
+    text: 39 021
   - id: b
-    text: 78 042
-  - id: c
     text: 76 928
+  - id: c
+    text: 78 042
   - id: d
-    text: '0'
+    text: 80 352
 - id: loss-floor
   kind: data
   type: single
-  prompt: Với 10 lớp, cross-entropy tính trên softmax(logits) có giá trị nhỏ nhất (khi model đúng tuyệt đối) là bao nhiêu?
+  prompt: Đưa vào loss_fn của notebook gốc logits rất tự tin và đúng (10 lớp). Loss ra bao nhiêu?
   options:
   - id: a
     text: '0.0000'
