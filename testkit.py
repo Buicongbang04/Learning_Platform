@@ -14,6 +14,7 @@ Trong test:
     analysis = ex.notebook("analysis.ipynb") # chạy code cell (trừ cell tag `explore`), dùng như module
     sql = ex.read("query.sql")              # đọc tệp văn bản
     ex.require_service("postgres")          # skip nếu dịch vụ Docker chưa chạy
+    wb = ex.workbook("report.xlsx")         # bài Excel: wb.formula("Sheet", "B2"), wb.value("Sheet", "B2")
 """
 
 from __future__ import annotations
@@ -22,10 +23,14 @@ import importlib.util
 import linecache
 import os
 import re
+import shutil
 import socket
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -115,6 +120,71 @@ def _load(path: Path, unique: str, execute, spec=None) -> ModuleType:
     return module
 
 
+class WorkbookView:
+    """Workbook .xlsx của người học: đọc công thức (không cần LibreOffice) và giá trị đã tính lại."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._formulas = None
+        self._values = None
+        self._values_mtime = None
+
+    def _formula_book(self):
+        if self._formulas is None:
+            import openpyxl
+
+            self._formulas = openpyxl.load_workbook(self.path)  # data_only=False: giữ chuỗi công thức
+        return self._formulas
+
+    @property
+    def sheetnames(self) -> list[str]:
+        return list(self._formula_book().sheetnames)
+
+    def _sheet(self, book, sheet: str):
+        if sheet not in book.sheetnames:
+            pytest.fail(f"Workbook {self.path.name} không có sheet '{sheet}'. Có: {book.sheetnames}")
+        return book[sheet]
+
+    def formula(self, sheet: str, cell: str) -> str | None:
+        """Chuỗi công thức (`"=SUM(A1:A3)"`) nếu ô là công thức, ngược lại `None` (ô gõ cứng hoặc trống)."""
+        raw = self._sheet(self._formula_book(), sheet)[cell].value
+        if isinstance(raw, str) and raw.startswith("="):
+            return raw
+        if raw is not None and not isinstance(raw, (str, int, float, bool)) and hasattr(raw, "text"):
+            return raw.text  # ArrayFormula
+        return None
+
+    def pivot_tables(self, sheet: str) -> list:
+        return list(getattr(self._sheet(self._formula_book(), sheet), "_pivots", []))
+
+    def value(self, sheet: str, cell: str) -> Any:
+        """Giá trị đã tính lại bằng LibreOffice (cache theo mtime của tệp)."""
+        import openpyxl
+
+        mtime = self.path.stat().st_mtime_ns
+        if self._values is None or self._values_mtime != mtime:
+            soffice = shutil.which("soffice")
+            if not soffice:
+                pytest.skip("Cần LibreOffice (soffice) để tính lại công thức")
+            with tempfile.TemporaryDirectory(prefix="wbcalc-") as tmp:
+                src = Path(tmp) / "in" / self.path.name
+                out = Path(tmp) / "out"
+                src.parent.mkdir()
+                out.mkdir()
+                shutil.copy(self.path, src)
+                cmd = [
+                    soffice, f"-env:UserInstallation=file://{tmp}/profile", "--headless",
+                    "--convert-to", "xlsx:Calc MS Excel 2007 XML", "--outdir", str(out), str(src),
+                ]
+                try:
+                    subprocess.run(cmd, check=True, capture_output=True, timeout=120)
+                except (subprocess.SubprocessError, OSError) as exc:
+                    pytest.fail(f"LibreOffice không tính lại được {self.path.name}: {exc}")
+                self._values = openpyxl.load_workbook(out / src.name, data_only=True)
+            self._values_mtime = mtime
+        return self._sheet(self._values, sheet)[cell].value
+
+
 class Exercise:
     """Một bài tập, xác định từ đường dẫn tệp test đang chạy."""
 
@@ -137,6 +207,10 @@ class Exercise:
         if not path.exists():
             pytest.fail(f"Không thấy tệp {path.relative_to(ROOT)}")
         return path
+
+    def workbook(self, name: str) -> WorkbookView:
+        """Workbook .xlsx của bài (starter hoặc lời giải với SOLUTION=1)."""
+        return WorkbookView(self.path(name))
 
     def read(self, name: str) -> str:
         return self.path(name).read_text(encoding="utf-8")

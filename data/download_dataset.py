@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from download_olist import ENV_FILE, ensure_kaggle_credentials, kaggle_download  # noqa: E402
 
 RAW = Path(__file__).resolve().parent / "raw"
+_DRIVE = "https://drive.usercontent.google.com/download?id={}&export=download&confirm=t"
 
 
 @dataclass(frozen=True)
@@ -151,6 +152,40 @@ DATASETS: dict[str, Dataset] = {
         license="ODbL (database) / DbCL v1.0 (contents), dunnhumby (đã kiểm 2026-10-29)",
         homepage="https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey",
         about="Dunnhumby The Complete Journey: 2 500 hộ gia đình mua hàng siêu thị trong 2 năm, 8 tệp CSV (giao dịch, sản phẩm, nhân khẩu, khuyến mãi, coupon)",
+    ),
+    "grocery-sales-synthetic": Dataset(
+        "url",
+        tuple(_DRIVE.format(i) for i in (
+            "1B4APzkcF4KaslMHx8GsUOuptVzeyKL2d",
+            "1WZbxCNXar-fgbX-2AiDQDyaplFlLuc8H",
+            "1De6c9O4z3mtXFmdjtil0U25_ohhan4tM",
+            "1GG7hYlvJGgnUtGNCbKFGBPnLkD45KFfV",
+            "1rJt_kMT6AwNIpPQTKYqQprG0O8DOH7k_",
+            "1kxQM4Utt5QwVU7wRpVKPn2L8nLaq6uyD",
+            "1gE2sah4dLh0a4sXSA-1bqaf-Rn5XvNGO",
+        )),
+        ["categories.csv", "cities.csv", "countries.csv", "customers.csv", "employees.csv", "products.csv", "sales.csv"],
+        license="Không rõ (Grocery Sales Database trên Kaggle, dữ liệu SINH GIẢ) - chỉ dùng cục bộ, không commit trích mẫu",
+        homepage="https://drive.google.com/drive/folders/1rtawsOtllVE3FUwRZx7slywGLLU7mvol",
+        about="Cơ sở dữ liệu siêu thị SINH GIẢ (synthetic) 7 bảng; sales.csv ~517 MB (6 758 125 dòng). Chỉ dùng cho bài 'nghi ngờ dữ liệu' (module 06) và đọc/ghép nhiều bảng (module 09)",
+    ),
+    "marketing-ab": Dataset(
+        "kaggle", "faviovaz/marketing-ab-testing", ["marketing_AB.csv"],
+        license="CC0: Public Domain (ghi trên Kaggle, đã kiểm 2026-10-30)",
+        homepage="https://www.kaggle.com/datasets/faviovaz/marketing-ab-testing",
+        about="A/B test quảng cáo vs PSA, 588k người dùng: test group, converted, total ads, most ads day/hour",
+    ),
+    "ecommerce-events": Dataset(
+        "kaggle", "cianaellington/retail-rocket-cleaned-events-dataset", ["clean_events.csv"],
+        license="CC0: Public Domain (ghi trên Kaggle, đã kiểm 2026-10-30); bản làm sạch từ Retailrocket recommender dataset",
+        homepage="https://www.kaggle.com/datasets/cianaellington/retail-rocket-cleaned-events-dataset",
+        about="Sự kiện web thật (view, addtocart, transaction) của một cửa hàng online, 2015-05..2015-09, ~2,75 triệu dòng: funnel view -> cart -> purchase",
+    ),
+    "owid-co2": Dataset(
+        "url", "https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv", ["owid-co2-data.csv"],
+        license="CC BY 4.0 (Our World in Data, Global Carbon Project...); ghi nguồn khi dùng",
+        homepage="https://github.com/owid/co2-data",
+        about="CO2 và phát thải theo quốc gia-năm (~50k dòng, 1750..): dữ liệu công khai để đối chiếu pandas/R",
     ),
 }
 
