@@ -1,0 +1,105 @@
+questions:
+- id: reverse-none
+  kind: data
+  type: single
+  prompt: Trên bài đảo chuỗi dài tới 20 (hidden 32), model không attention đúng nguyên chuỗi khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.11
+  - id: b
+    text: Khoảng 0.50
+  - id: c
+    text: Khoảng 0.85
+  - id: d
+    text: Khoảng 0.98
+- id: reverse-attn
+  kind: data
+  type: single
+  prompt: Cùng bài đó, hai model có attention (Luong, Bahdanau) đạt khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.3 đến 0.4
+  - id: b
+    text: Khoảng 0.6 đến 0.7
+  - id: c
+    text: Từ 0.98 trở lên
+  - id: d
+    text: Ngang model không attention
+- id: short-bleu
+  kind: data
+  type: single
+  prompt: Dịch câu ≤ 15 từ sau 3 epoch trên CPU, BLEU tst2013 của hai model nằm trong khoảng nào?
+  options:
+  - id: a
+    text: Dưới 5, attention hơn khoảng 1 điểm
+  - id: b
+    text: Khoảng 15, attention hơn khoảng 5 điểm
+  - id: c
+    text: Khoảng 30, hai model bằng nhau
+  - id: d
+    text: Trên 40, không attention tốt hơn
+- id: heatmap
+  kind: data
+  type: single
+  prompt: Ma trận attention của model Luong trên bài đảo chuỗi có hình dạng gì?
+  options:
+  - id: a
+    text: Một đường chéo ngược
+  - id: b
+    text: Một đường chéo xuôi
+  - id: c
+    text: Đều nhau ở mọi ô vuông
+  - id: d
+    text: Dồn hết vào cột đầu tiên
+- id: why-parallel
+  kind: knowledge
+  type: single
+  prompt: Vì sao Luong (không input feeding) train song song theo thời gian được còn Bahdanau thì không?
+  options:
+  - id: a
+    text: Luong dùng dot product nên GPU tính nhanh hơn hẳn
+  - id: b
+    text: Bước RNN của Luong không cần context, Bahdanau thì cần
+  - id: c
+    text: Bahdanau có thêm một lớp tanh nên phải tính tuần tự
+  - id: d
+    text: Luong bỏ qua padding nên không phải lặp từng bước
+- id: mask-inf
+  kind: knowledge
+  type: single
+  prompt: Vì sao gán score `-inf` cho padding trước softmax thay vì nhân mask sau softmax?
+  options:
+  - id: a
+    text: Nhân sau làm tổng trọng số khác 1 và lệch phân phối
+  - id: b
+    text: Nhân mask sau softmax chạy chậm hơn nhiều trên GPU
+  - id: c
+    text: Softmax không nhận được tensor có số 0 ở trong đầu vào
+  - id: d
+    text: -inf giúp model học nhanh hơn ở các epoch đầu
+- id: exposure
+  kind: knowledge
+  type: single
+  prompt: Bản dịch lặp "rất rất" và lệch nghĩa sau một từ sai. Hiện tượng này gọi là gì?
+  options:
+  - id: a
+    text: Vanishing gradient ở phía encoder
+  - id: b
+    text: Exposure bias khi decode tự hồi quy
+  - id: c
+    text: Overfitting do vocab quá nhỏ hẹp
+  - id: d
+    text: Nút thắt của attention kiểu Bahdanau
+- id: mt-heatmap
+  kind: data
+  type: single
+  prompt: Heatmap attention Luong của câu "i was very proud of my country ." sau 3 epoch trông thế nào?
+  options:
+  - id: a
+    text: Đường chéo, mỗi từ Việt nhìn đúng từ Anh tương ứng
+  - id: b
+    text: Mọi bước đều dồn trọng số vào dấu chấm cuối câu
+  - id: c
+    text: Trọng số chia đều cho mọi từ tiếng Anh ở mọi bước
+  - id: d
+    text: Mọi bước đều dồn trọng số vào từ đầu tiên là i

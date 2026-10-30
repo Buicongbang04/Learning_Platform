@@ -1,0 +1,92 @@
+questions:
+- id: neutral-share
+  kind: data
+  type: single
+  prompt: Lớp neutral chiếm khoảng bao nhiêu phần trăm tập train UIT-VSFC?
+  options:
+  - id: a
+    text: Khoảng 4%
+  - id: b
+    text: Khoảng 15%
+  - id: c
+    text: Khoảng 33%
+  - id: d
+    text: Khoảng 47%
+- id: majority-f1
+  kind: data
+  type: single
+  prompt: Đoán toàn bộ test là positive cho accuracy 0.502. Macro-F1 của cách đoán này là bao nhiêu?
+  options:
+  - id: a
+    text: '0.502'
+  - id: b
+    text: '0.669'
+  - id: c
+    text: '0.223'
+  - id: d
+    text: '0.000'
+- id: best-model
+  kind: data
+  type: single
+  prompt: Trên test, khác biệt rõ nhất giữa BiLSTM và TF-IDF + logistic regression nằm ở đâu?
+  options:
+  - id: a
+    text: Accuracy, BiLSTM hơn khoảng 5 điểm
+  - id: b
+    text: F1 lớp neutral, khoảng 0.42 so với 0.31
+  - id: c
+    text: F1 lớp positive, khoảng 0.93 so với 0.80
+  - id: d
+    text: Không có khác biệt nào lớn hơn 0.01
+- id: neutral-errors
+  kind: data
+  type: single
+  prompt: BiLSTM đoán sai bao nhiêu trong 167 câu neutral của tập test?
+  options:
+  - id: a
+    text: '12'
+  - id: b
+    text: '55'
+  - id: c
+    text: '112'
+  - id: d
+    text: '167'
+- id: why-pack
+  kind: knowledge
+  type: single
+  prompt: Không dùng `pack_padded_sequence` mà lấy `output[:, -1]` của LSTM thì sao?
+  options:
+  - id: a
+    text: PyTorch báo lỗi shape vì các câu trong batch dài khác nhau
+  - id: b
+    text: Câu ngắn bị đọc thêm padding, kết quả phụ thuộc batch
+  - id: c
+    text: Chỉ chậm hơn vì phải tính trên cả phần padding
+  - id: d
+    text: Chiều ngược của BiLSTM bị bỏ qua hoàn toàn
+- id: deepcopy
+  kind: knowledge
+  type: single
+  prompt: Lưu `best = model.state_dict()` (không copy) để nạp lại cuối train thì chuyện gì xảy ra?
+  options:
+  - id: a
+    text: Nạp lại trọng số của epoch cuối, không phải epoch tốt nhất
+  - id: b
+    text: PyTorch báo lỗi vì state_dict đã bị giải phóng
+  - id: c
+    text: Đúng như mong đợi vì state_dict luôn là một bản sao
+  - id: d
+    text: Chỉ mất bias, còn trọng số vẫn của epoch tốt nhất
+- id: metric-choice
+  kind: knowledge
+  type: single
+  prompt: Vì sao chọn epoch và model theo macro-F1 thay vì accuracy trên UIT-VSFC?
+  options:
+  - id: a
+    text: Accuracy không tính được khi bài toán có từ ba lớp trở lên
+  - id: b
+    text: Macro-F1 luôn cao hơn accuracy nên đẹp hơn khi báo cáo
+  - id: c
+    text: Lớp hiếm bị accuracy bỏ qua, macro-F1 cân mỗi lớp như nhau
+  - id: d
+    text: sklearn chỉ hỗ trợ early stopping theo F1
