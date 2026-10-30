@@ -1,0 +1,79 @@
+questions:
+- id: optimizer-params
+  kind: data
+  type: single
+  prompt: Trong notebook gốc (chưa sửa), optimizer thấy bao nhiêu tham số của Net(16)?
+  options:
+  - id: a
+    text: '1 114'
+  - id: b
+    text: '78 042'
+  - id: c
+    text: '76 928'
+  - id: d
+    text: '0'
+- id: loss-floor
+  kind: data
+  type: single
+  prompt: Với 10 lớp, cross-entropy tính trên softmax(logits) có giá trị nhỏ nhất (khi model đúng tuyệt đối) là bao nhiêu?
+  options:
+  - id: a
+    text: '0.0000'
+  - id: b
+    text: '1.4612'
+  - id: c
+    text: '2.3026'
+  - id: d
+    text: '0.6931'
+- id: eval-symptom
+  kind: knowledge
+  type: single
+  prompt: Toàn bộ vòng train chạy ở eval mode vì evaluate không trả về train(). BatchNorm làm gì trong lúc đó?
+  options:
+  - id: a
+    text: Dùng running stats ban đầu, không cập nhật chúng
+  - id: b
+    text: Dùng thống kê batch như bình thường, chỉ dropout tắt
+  - id: c
+    text: Báo lỗi vì backward không chạy được ở eval mode
+  - id: d
+    text: Tự chuyển về train mode khi gặp loss.backward()
+- id: accum-bug
+  kind: knowledge
+  type: single
+  prompt: zero_grad nằm trong vòng lặp micro-batch (2 micro-batch, loss chia 2). Gradient lúc step bằng gì?
+  options:
+  - id: a
+    text: Gradient của cả batch, vì loss đã chia 2
+  - id: b
+    text: Gấp đôi gradient của cả batch
+  - id: c
+    text: Một nửa gradient của micro-batch cuối
+  - id: d
+    text: Bằng 0, vì zero_grad xoá hết trước step
+- id: gpu-reveals
+  kind: knowledge
+  type: single
+  prompt: Bug nào trong năm bug sẽ tự lộ ra bằng một exception nếu chạy notebook trên GPU?
+  options:
+  - id: a
+    text: Softmax trước cross_entropy
+  - id: b
+    text: Các ResBlock trong list Python
+  - id: c
+    text: reshape thay vì permute
+  - id: d
+    text: zero_grad trong vòng accumulation
+- id: hardest
+  kind: data
+  type: single
+  prompt: Khi chỉ còn một mình, bug nào làm val accuracy giảm ít nhất nên dễ lọt nhất?
+  options:
+  - id: a
+    text: zero_grad trong vòng accumulation
+  - id: b
+    text: Toàn bộ train ở eval mode
+  - id: c
+    text: Softmax trước cross_entropy
+  - id: d
+    text: Các ResBlock trong list Python
