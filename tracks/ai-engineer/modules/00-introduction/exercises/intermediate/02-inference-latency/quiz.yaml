@@ -1,0 +1,79 @@
+questions:
+- id: prefill-vs-decode
+  kind: data
+  type: single
+  prompt: Trong phép quét của bạn (Ollama dùng GPU), tốc độ prefill so với tốc độ decode thế nào?
+  options:
+  - id: a
+    text: Gần bằng nhau, chênh dưới 2 lần
+  - id: b
+    text: Decode nhanh hơn prefill vài lần
+  - id: c
+    text: Prefill nhanh hơn decode hơn 10 lần
+  - id: d
+    text: Phụ thuộc hoàn toàn vào nhiệt độ sampling
+- id: output-drives-latency
+  kind: data
+  type: single
+  prompt: Khi số token output tăng từ 16 lên 256 (prompt giữ khoảng 300 token), thời gian phục vụ `service_s` thay đổi thế nào?
+  options:
+  - id: a
+    text: Gần như không đổi vì độ dài prompt vẫn giữ nguyên
+  - id: b
+    text: Tăng gần tỉ lệ thuận với số token output
+  - id: c
+    text: Giảm vì model đã nạp sẵn vào bộ nhớ
+  - id: d
+    text: Tăng theo bình phương số token output
+- id: cold-start
+  kind: knowledge
+  type: single
+  prompt: Lần gọi đầu có `load_duration` 4.8 giây, lần sau 0.19 giây. Trong sản phẩm, xử lý cold start thế nào?
+  options:
+  - id: a
+    text: Giữ model nạp sẵn (keep-alive) hoặc gọi làm nóng
+  - id: b
+    text: Tăng temperature để model trả lời nhanh hơn
+  - id: c
+    text: Bỏ qua, cold start không ảnh hưởng người dùng
+  - id: d
+    text: Rút ngắn prompt để giảm thời gian nạp model
+- id: p95-not-mean
+  kind: knowledge
+  type: single
+  prompt: 95 request mất 1 giây, 5 request mất 20 giây. Con số nào cho thấy người dùng đang gặp request rất chậm?
+  options:
+  - id: a
+    text: Trung bình 1.95 giây trên cả 100 request
+  - id: b
+    text: Trung vị p50 bằng 1 giây của 100 request
+  - id: c
+    text: Phân vị p99 hoặc max bằng 20 giây
+  - id: d
+    text: Số request trong một phút
+- id: streaming
+  kind: knowledge
+  type: single
+  prompt: Bật streaming cho chatbot thay đổi gì?
+  options:
+  - id: a
+    text: Giảm cả TTFT lẫn tổng thời gian sinh của mọi câu trả lời dài
+  - id: b
+    text: Người dùng thấy chữ sớm, tổng thời gian gần như không đổi
+  - id: c
+    text: Giảm số token output nên rẻ hơn
+  - id: d
+    text: Tăng tốc độ decode nhờ gửi từng phần
+- id: rag-latency-lever
+  kind: knowledge
+  type: single
+  prompt: Câu trả lời RAG 2 000 token vào, 300 token ra, mất khoảng 5 giây. Đòn bẩy nào giảm độ trễ nhiều nhất?
+  options:
+  - id: a
+    text: Rút ngắn câu trả lời
+  - id: b
+    text: Cắt nửa số tài liệu
+  - id: c
+    text: Bật prompt caching
+  - id: d
+    text: Đổi sang tokenizer khác

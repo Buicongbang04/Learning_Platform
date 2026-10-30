@@ -1,0 +1,7 @@
+tax-cl100k: [c]
+fewest-vi: [c]
+chars-per-token: [a]
+budget-cl100k: [a]
+words-vs-syllables: [b]
+compare-price: [b]
+context-includes-output: [d]
