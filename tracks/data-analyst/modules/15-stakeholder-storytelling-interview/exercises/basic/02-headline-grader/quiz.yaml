@@ -1,0 +1,91 @@
+questions:
+  - id: ladder-best
+    kind: data
+    type: single
+    prompt: "Dựa vào số tháng 10 và 11/2011 trong bảng, headline nào tốt nhất cho memo gửi COO về mùa cao điểm?"
+    options:
+      - { id: a, text: "Doanh thu theo tháng, tháng 10 và tháng 11/2011" }
+      - { id: b, text: "Doanh thu tháng 11/2011 đạt 1 509 496 GBP" }
+      - { id: c, text: "Tháng 11 tăng 31% nhờ số đơn (+36%), AOV còn giảm 4%" }
+      - { id: d, text: "Tháng 11 tăng 36% nhờ khách mua những đơn lớn hơn hẳn" }
+  - id: wrong-number
+    kind: data
+    type: single
+    prompt: "Headline nào **sai số** so với bảng tháng 10-11/2011?"
+    options:
+      - { id: a, text: "Doanh thu tháng 11 tăng 36% so với tháng 10" }
+      - { id: b, text: "Tháng 11 có 2 769 hoá đơn, nhiều hơn 729 đơn" }
+      - { id: c, text: "AOV tháng 11 là 545 GBP, thấp hơn tháng 10" }
+      - { id: d, text: "Doanh thu tháng 11 vượt 1.5 triệu GBP, cao nhất năm" }
+  - id: points-vs-percent
+    kind: data
+    type: single
+    prompt: "Bike Sharing: tỉ lệ khách vãng lai 19.9% (2011) và 18.2% (2012). Headline nào **đúng**?"
+    options:
+      - { id: a, text: "Khách vãng lai giảm 1.7% trong năm 2012 so với năm 2011" }
+      - { id: b, text: "Tỉ lệ khách vãng lai giảm 1.7 điểm phần trăm, còn 18.2%" }
+      - { id: c, text: "Số lượt của khách vãng lai năm 2012 giảm còn 18.2%" }
+      - { id: d, text: "Khách vãng lai giảm 18.2% vì thành viên tăng nhanh" }
+  - id: partial-month
+    kind: data
+    type: single
+    prompt: "Ngày 10/12/2011, bạn viết tin nhắn về doanh thu tháng 12 (dữ liệu tới 09/12). Headline nào đúng và công bằng?"
+    options:
+      - { id: a, text: "Doanh thu tháng 12 giảm 58% so với tháng 11/2011" }
+      - { id: b, text: "Doanh thu tháng 12 chỉ đạt 638 811 GBP, thấp nhất năm" }
+      - { id: c, text: "Tháng 12 đang sụt mạnh, cần họp khẩn với đội sales" }
+      - { id: d, text: "9 ngày đầu tháng 12 cao hơn cùng kỳ năm 2010 46%" }
+  - id: causal-language
+    kind: data
+    type: single
+    prompt: "Từ bảng AOV theo thứ (thứ Ba 613, Chủ nhật 369 GBP), headline nào **không** nói quá điều dữ liệu chứng minh?"
+    options:
+      - { id: a, text: "Mua vào Chủ nhật khiến khách hàng chi tiêu ít đi 40%" }
+      - { id: b, text: "Đơn Chủ nhật có AOV 369 GBP, thấp hơn thứ Ba 40%" }
+      - { id: c, text: "Mở bán Chủ nhật làm giảm giá trị đơn trung bình" }
+      - { id: d, text: "Đóng cửa Chủ nhật sẽ giúp AOV tăng thêm 40%" }
+  - id: scqa-headline
+    kind: knowledge
+    type: single
+    prompt: "Theo SCQA và kim tự tháp, headline của memo nên lấy từ phần nào?"
+    options:
+      - { id: a, text: "Answer: câu trả lời và khuyến nghị, có con số" }
+      - { id: b, text: "Situation: bối cảnh mà mọi người trong phòng đều đồng ý" }
+      - { id: c, text: "Question: câu hỏi người đọc đang tự hỏi" }
+      - { id: d, text: "Complication: điều đã thay đổi, vấn đề" }
+  - id: scqa-complication
+    kind: data
+    type: single
+    prompt: "Memo về bán hàng quốc tế (Online Retail II). Câu nào đóng vai **Complication**?"
+    options:
+      - { id: a, text: "Ngoài UK mang 15.9% doanh thu 12 tháng qua" }
+      - { id: b, text: "Nên quản lý khách lớn như key account riêng" }
+      - { id: c, text: "Nửa doanh thu ngoài UK (49.8%) nằm ở 10 khách" }
+      - { id: d, text: "Có nên đầu tư mở rộng ra các thị trường nước ngoài?" }
+  - id: missing-reference
+    kind: knowledge
+    type: single
+    prompt: "Headline \"AOV đạt 534 GBP\" thiếu gì để người đọc hành động được?"
+    options:
+      - { id: a, text: "Đơn vị tiền tệ của con số được nêu" }
+      - { id: b, text: "Thêm chữ số thập phân cho chính xác" }
+      - { id: c, text: "Tên bảng dữ liệu và câu SQL đã dùng" }
+      - { id: d, text: "Tham chiếu: so với kỳ trước, mục tiêu" }
+  - id: growth-base
+    kind: data
+    type: single
+    prompt: "Bike Sharing: 1 243 103 lượt (2011), 2 049 576 lượt (2012). Headline nào **đúng**?"
+    options:
+      - { id: a, text: "Lượt thuê 2012 đạt 2.05 triệu, tăng 65% so với 2011" }
+      - { id: b, text: "Lượt thuê 2012 đạt 2.05 triệu, tăng 39% so với 2011" }
+      - { id: c, text: "Lượt thuê 2012 tăng gấp đôi, đạt 2.05 triệu lượt" }
+      - { id: d, text: "Lượt thuê 2012 tăng 0.8 triệu, tức là tăng 80%" }
+  - id: read-across
+    kind: knowledge
+    type: single
+    prompt: "Bạn đọc ngang tiêu đề 4 slide của một deck. Deck nào đã sẵn sàng gửi?"
+    options:
+      - { id: a, text: "Tổng quan thị trường; Doanh thu; Khách hàng; Phụ lục" }
+      - { id: b, text: "Dữ liệu và nguồn; Làm sạch; Phân tích; Mô hình hoá dự báo" }
+      - { id: c, text: "Cao điểm do số đơn; Đơn nhỏ đi; Cần thêm năng lực; Phụ lục" }
+      - { id: d, text: "Doanh thu tháng 11; AOV tháng 11; Số đơn tháng 11; Kết luận" }

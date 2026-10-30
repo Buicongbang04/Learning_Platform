@@ -1,0 +1,55 @@
+questions:
+  - id: excluded-rows
+    kind: data
+    type: single
+    prompt: "Bao nhiêu dòng của sheet Data bị loại khỏi doanh thu (Valid = 0)?"
+    options:
+      - { id: a, text: "49 dòng" }
+      - { id: b, text: "188 dòng" }
+      - { id: c, text: "311 dòng" }
+      - { id: d, text: "6 622 dòng" }
+  - id: aov-spike
+    kind: data
+    type: single
+    prompt: "AOV của France tháng 10/2011 là 956.73 GBP, gần gấp đôi các tháng khác. Nguyên nhân chính?"
+    options:
+      - { id: a, text: "Tháng 10 có ít ngày hơn nên chia ra lớn hơn" }
+      - { id: b, text: "Đơn huỷ bị cộng vào doanh thu tháng 10" }
+      - { id: c, text: "Giá bán sản phẩm ở thị trường Pháp tăng mạnh trong tháng 10" }
+      - { id: d, text: "Một hoá đơn 8 895.76 GBP trên chỉ 35 đơn của tháng" }
+  - id: total-aov
+    kind: data
+    type: single
+    prompt: "AOV của cả hai nước trong ba tháng (ô E15) là bao nhiêu?"
+    options:
+      - { id: a, text: "535.13 GBP, tổng doanh thu chia tổng số đơn" }
+      - { id: b, text: "562.08 GBP, trung bình sáu ô AOV" }
+      - { id: c, text: "25.13 GBP, doanh thu trung bình mỗi dòng" }
+      - { id: d, text: "615.78 GBP, AOV của France" }
+  - id: count-vs-counta
+    kind: knowledge
+    type: single
+    prompt: "H2 dùng COUNTA trên cột Invoice ra 6 810, H8 dùng COUNT trên cột Customer ID ra 6 761. Vì sao dùng hai hàm khác nhau?"
+    options:
+      - { id: a, text: "COUNT nhanh hơn nên dùng cho cột lớn" }
+      - { id: b, text: "COUNTA bỏ qua ô trống, COUNT thì không" }
+      - { id: c, text: "COUNT chỉ đếm ô số; Invoice là text nên COUNT ra 0" }
+      - { id: d, text: "Hai hàm cho kết quả như nhau, chọn hàm nào cũng được" }
+  - id: orderstart-sort
+    kind: knowledge
+    type: single
+    prompt: "Ai đó sắp lại sheet Data theo Country rồi StockCode. Cột OrderStart và bảng Số đơn sẽ thế nào?"
+    options:
+      - { id: a, text: "Không đổi, vì công thức tự cập nhật" }
+      - { id: b, text: "Sai, vì cờ dựa vào dòng trên cùng hoá đơn nằm liền nhau" }
+      - { id: c, text: "Báo lỗi #REF! ở mọi ô" }
+      - { id: d, text: "Đúng hơn, vì các dòng cùng quốc gia và cùng mã hàng nằm gần nhau" }
+  - id: sumifs-vs-groupby
+    kind: knowledge
+    type: single
+    prompt: "Trong pandas, bảng doanh thu B3:D4 tương đương với thao tác nào?"
+    options:
+      - { id: a, text: "pivot_table trên dòng hợp lệ, Country × Month, sum" }
+      - { id: b, text: "merge hai bảng theo Country" }
+      - { id: c, text: "drop_duplicates theo Invoice rồi sum" }
+      - { id: d, text: "resample theo tháng trên toàn bộ dòng, kể cả dòng huỷ và dòng giá 0" }

@@ -1,0 +1,73 @@
+questions:
+  - id: simple-ltv-real
+    kind: data
+    type: single
+    prompt: "Với AOV, số đơn mỗi năm và retention năm tính trên khách 12/2010-11/2011, và biên 35% (giả định), LTV đơn giản là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 507 GBP" }
+      - { id: b, text: "Khoảng 1 449 GBP" }
+      - { id: c, text: "Khoảng 1 878 GBP" }
+      - { id: d, text: "Khoảng 5 365 GBP" }
+  - id: new-first-year
+    kind: data
+    type: single
+    prompt: "Khách mới 01-11/2010 (3 311 khách) mang lại bao nhiêu doanh thu trong 12 tháng đầu?"
+    options:
+      - { id: a, text: "Mean 1 449 GBP, median 708 GBP" }
+      - { id: b, text: "Mean 708 GBP, median 1 449 GBP" }
+      - { id: c, text: "Mean 1 878 GBP, median 1 449 GBP" }
+      - { id: d, text: "Mean 473 GBP, median 423 GBP" }
+  - id: why-optimistic
+    kind: knowledge
+    type: single
+    prompt: "Lý do chính khiến LTV đơn giản cao hơn nhiều so với giá trị thật của khách mới trong bộ này?"
+    options:
+      - { id: a, text: "AOV tính trên mọi hoá đơn nên thấp hơn AOV của khách mới" }
+      - { id: b, text: "Retention năm 63.6% đo trên khách đã sống sót, khách mới rời nhanh hơn" }
+      - { id: c, text: "Biên 35% quá thấp so với biên thật của ngành bán quà tặng" }
+      - { id: d, text: "Công thức không tính tháng 12/2011 vì tháng đó chưa đủ" }
+  - id: slowest-payback
+    kind: data
+    type: single
+    prompt: "Với CAC 200 GBP và biên 35% (giả định), cohort nào của 12 tháng 2010 hoàn vốn chậm nhất?"
+    options:
+      - { id: a, text: "Cohort 05/2010, tháng thứ 3" }
+      - { id: b, text: "Cohort 07/2010, tháng thứ 3" }
+      - { id: c, text: "Cohort 09/2010, tháng thứ 0" }
+      - { id: d, text: "Cohort 12/2010, tháng thứ 4" }
+  - id: never-payback
+    kind: data
+    type: single
+    prompt: "Với CAC 400 GBP và biên 35% (giả định), cohort nào của 2010 chưa hoàn vốn trong mọi tháng đã quan sát?"
+    options:
+      - { id: a, text: "Cohort 11/2010 và 12/2010" }
+      - { id: b, text: "Cohort 05/2010 và 07/2010" }
+      - { id: c, text: "Mọi cohort từ 06/2010 trở đi" }
+      - { id: d, text: "Không cohort nào, tất cả đã hoàn vốn" }
+  - id: max-cac-6m
+    kind: data
+    type: single
+    prompt: "Theo bảng kịch bản (cohort 01/2010 trở đi), CAC tối đa để hoàn vốn trong 6 tháng với biên 35% (giả định) là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 235 GBP" }
+      - { id: b, text: "Khoảng 332 GBP" }
+      - { id: c, text: "Khoảng 502 GBP" }
+      - { id: d, text: "Khoảng 657 GBP" }
+  - id: ltv-cac-rule
+    kind: knowledge
+    type: single
+    prompt: "Một quản lý nói: \"LTV/CAC trên 3 là tốt, cứ chi thêm\". Bạn bổ sung điều gì?"
+    options:
+      - { id: a, text: "Ngưỡng 3 là định luật của mọi ngành, chỉ cần đạt là chi thêm" }
+      - { id: b, text: "LTV/CAC càng cao thì càng nên giảm chi marketing ngay lập tức" }
+      - { id: c, text: "Xem cả thời gian hoàn vốn và tiền mặt; LTV ở đây phần lớn là dự báo" }
+      - { id: d, text: "Chỉ cần so LTV với AOV, không cần đến CAC trong quyết định này" }
+  - id: blended-cac
+    kind: knowledge
+    type: single
+    prompt: "CAC gộp (blended) của công ty là 80 USD. Marketing muốn tăng gấp đôi ngân sách Facebook Ads. Con số nào cần cho quyết định này?"
+    options:
+      - { id: a, text: "CAC gộp 80 USD, vì đã gồm mọi kênh của công ty" }
+      - { id: b, text: "LTV trung bình của mọi khách, không cần tách kênh" }
+      - { id: c, text: "Tổng ngân sách chia tổng số khách mới của cả tháng trước" }
+      - { id: d, text: "CAC biên của Facebook Ads và LTV của khách từ kênh đó" }

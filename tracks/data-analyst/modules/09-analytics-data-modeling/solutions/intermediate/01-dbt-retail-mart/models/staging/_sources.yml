@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Online Retail II (UCI, CC BY 4.0) do bước EL nạp nguyên trạng vào schema raw của DuckDB:
+      tên cột giữ như tệp xlsx, thêm source_row là số thứ tự dòng trong tệp (bắt đầu từ 1).
+    schema: raw
+    tables:
+      - name: sales_lines
+        columns:
+          - name: source_row
+            data_tests: [unique, not_null]

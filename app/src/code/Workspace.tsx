@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { Check, CircleAlert, CircleCheck, CircleX, ExternalLink, FileCode, LoaderCircle, Lock, Play, RotateCcw, SquareTerminal, X } from "lucide-react";
+import { Check, CircleAlert, CircleCheck, CircleX, ExternalLink, FileCode, FileSpreadsheet, LoaderCircle, Lock, Play, RotateCcw, SquareTerminal, X } from "lucide-react";
 import type { Exercise } from "../content";
 import { button, CodeLine, cx, ErrorBlock, LoadingBlock } from "../components/ui";
 import { CodeEditor } from "./CodeEditor";
@@ -102,6 +102,26 @@ export function OpenInVsCode({ path, className, showLabel = false }: { path: str
   );
 }
 
+function BinaryFileNotice({ path, onOpen }: { path: string; onOpen: () => Promise<string | null> }) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex h-full flex-col items-start justify-center gap-3 px-5 py-4 text-sm">
+      <p className="font-medium">Tệp nhị phân — mở bằng LibreOffice/Excel</p>
+      <p className="text-muted">App không soạn được loại tệp này. Mở, làm bài rồi lưu lại ngay trong tệp, sau đó bấm "Chạy test".</p>
+      <CodeLine text={path} />
+      <button type="button" className={button.outline} onClick={() => void onOpen().then(setError)}>
+        <ExternalLink className="size-4 shrink-0" aria-hidden />
+        Mở bằng ứng dụng mặc định
+      </button>
+      {error && (
+        <p role="alert" className="text-xs text-error-text">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; done: boolean; onMarkDone: () => void }) {
   const ws = useWorkspace(exercise.dir);
   const [active, setActive] = useState<string | null>(null);
@@ -110,7 +130,7 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
   useEffect(() => {
     if (ws.status !== "ready" || (active && ws.files.some((file) => file.path === active))) return;
     const listed = exercise.files.map((file) => file.path).find((path) => path.startsWith("starter/") && ws.files.some((file) => file.path === path));
-    setActive(listed ?? ws.files.find((file) => file.editable)?.path ?? ws.files[0]?.path ?? null);
+    setActive(listed ?? ws.files.find((file) => !file.binary && file.editable)?.path ?? ws.files[0]?.path ?? null);
   }, [ws.status, ws.files, active, exercise.files]);
 
   if (ws.status === "loading") return <LoadingBlock text="Đang mở tệp bài tập…" />;
@@ -119,7 +139,7 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
 
   const file = ws.files.find((item) => item.path === active) ?? ws.files[0];
   const result = ws.result;
-  const runnable = file.editable && file.path.endsWith(".py") && HAS_MAIN.test(ws.contentOf(file.path));
+  const runnable = !file.binary && file.editable && file.path.endsWith(".py") && HAS_MAIN.test(ws.contentOf(file.path));
   const services = exercise.services.filter((service) => service !== "airflow");
 
   return (
@@ -141,17 +161,17 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
                   selected ? "text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary" : "text-muted hover:text-foreground focus-visible:text-foreground",
                 )}
               >
-                {item.editable ? <FileCode className="size-3.5 shrink-0" aria-hidden /> : <Lock className="size-3.5 shrink-0" aria-label="Chỉ đọc" />}
+                {item.binary ? <FileSpreadsheet className="size-3.5 shrink-0" aria-hidden /> : item.editable ? <FileCode className="size-3.5 shrink-0" aria-hidden /> : <Lock className="size-3.5 shrink-0" aria-label="Chỉ đọc" />}
                 <span className="font-mono">{item.path.replace(/^(starter|tests)\//, "")}</span>
               </button>
             );
           })}
         </div>
         <span className={cx("shrink-0 px-2 text-xs", ws.saveState === "error" ? "text-error-text" : "text-muted")} role="status" title={ws.saveState === "error" ? ws.error : undefined}>
-          {file.editable ? SAVE_LABEL[ws.saveState] : "Chỉ đọc"}
+          {file.binary ? "Nhị phân" : file.editable ? SAVE_LABEL[ws.saveState] : "Chỉ đọc"}
         </span>
         {file.path.endsWith(".ipynb") && <OpenInVsCode path={`${exercise.dir}/${file.path}`} className="min-h-8 shrink-0 px-3 py-1" />}
-        {file.editable && (
+        {!file.binary && file.editable && (
           <button
             type="button"
             className={button.icon}
@@ -165,15 +185,19 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
       </div>
 
       <div className="min-h-0 grow-(--split-a) basis-0">
-        <CodeEditor
-          path={file.path}
-          content={ws.contentOf(file.path)}
-          revision={ws.revisions[file.path] ?? 0}
-          readOnly={!file.editable}
-          onChange={ws.change}
-          onSave={() => void ws.save()}
-          onRun={ws.runTests}
-        />
+        {file.binary ? (
+          <BinaryFileNotice path={`${exercise.dir}/${file.path}`} onOpen={() => ws.openExternal(file.path)} />
+        ) : (
+          <CodeEditor
+            path={file.path}
+            content={ws.contentOf(file.path)}
+            revision={ws.revisions[file.path] ?? 0}
+            readOnly={!file.editable}
+            onChange={ws.change}
+            onSave={() => void ws.save()}
+            onRun={ws.runTests}
+          />
+        )}
       </div>
 
       <div

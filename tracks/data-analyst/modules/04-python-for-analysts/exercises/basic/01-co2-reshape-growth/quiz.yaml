@@ -1,0 +1,73 @@
+questions:
+  - id: aggregate-sum
+    kind: data
+    type: single
+    prompt: "Cộng cả cột `co2` của mọi dòng năm 2024 (không bỏ dòng có `iso_code` rỗng) ra bao nhiêu lần dòng `World`?"
+    options:
+      - { id: a, text: "Khoảng 1 lần, gần bằng World" }
+      - { id: b, text: "Khoảng 2 lần, do có châu lục" }
+      - { id: c, text: "Khoảng 6.4 lần" }
+      - { id: d, text: "Khoảng 10 lần" }
+  - id: vn-rank
+    kind: data
+    type: single
+    prompt: "Năm 2024, Việt Nam xếp thứ mấy trong 11 nước ASEAN về tổng CO2, và chiếm khoảng bao nhiêu phần tổng ASEAN?"
+    options:
+      - { id: a, text: "Thứ nhất, khoảng 30%" }
+      - { id: b, text: "Thứ hai sau Indonesia, khoảng 18%" }
+      - { id: c, text: "Thứ ba sau Indonesia và Malaysia, 14%" }
+      - { id: d, text: "Thứ tư, khoảng 10%" }
+  - id: fastest-cagr
+    kind: data
+    type: single
+    prompt: "Nước ASEAN nào có CAGR tổng CO2 2014 → 2024 cao nhất?"
+    options:
+      - { id: a, text: "Lào" }
+      - { id: b, text: "Việt Nam" }
+      - { id: c, text: "Campuchia" }
+      - { id: d, text: "Indonesia" }
+  - id: vn-per-capita
+    kind: data
+    type: single
+    prompt: "Phát thải đầu người năm 2024 của Việt Nam (3.67 tấn) so với trung bình thế giới và các nước ASEAN thế nào?"
+    options:
+      - { id: a, text: "Cao hơn trung bình thế giới, gần Malaysia" }
+      - { id: b, text: "Thấp hơn thế giới, chỉ hơi dưới Thái Lan" }
+      - { id: c, text: "Thấp nhất ASEAN, dưới cả Myanmar" }
+      - { id: d, text: "Cao nhất ASEAN, trên cả Brunei" }
+  - id: vn-jump-year
+    kind: data
+    type: single
+    prompt: "Trong 2015–2024, năm nào CO2 Việt Nam tăng mạnh nhất so với năm liền trước?"
+    options:
+      - { id: a, text: "2015" }
+      - { id: b, text: "2018" }
+      - { id: c, text: "2019" }
+      - { id: d, text: "2021" }
+  - id: eritrea-gap
+    kind: knowledge
+    type: single
+    prompt: "`groupby('country').co2.pct_change()` cho Eritrea năm 1994 khoảng +3 800%, còn `yoy` của bạn ra `NaN`. Vì sao?"
+    options:
+      - { id: a, text: "pct_change so với dòng 1944, cách 50 năm" }
+      - { id: b, text: "Năm 1994 Eritrea có giá trị CO2 bị lỗi" }
+      - { id: c, text: "pct_change tính theo phần nghìn, không phải %" }
+      - { id: d, text: "yoy sai vì bỏ mất dòng năm 1994" }
+  - id: pivot-vs-pivot-table
+    kind: knowledge
+    type: single
+    prompt: "Vì sao bài yêu cầu `to_wide` dùng `pivot` (báo lỗi khi khoá trùng) thay vì `pivot_table(aggfunc='sum')`?"
+    options:
+      - { id: a, text: "pivot chạy nhanh hơn pivot_table nhiều lần" }
+      - { id: b, text: "pivot_table không đổi được long sang wide" }
+      - { id: c, text: "pivot_table luôn bỏ các ô có giá trị NaN" }
+      - { id: d, text: "Khoá trùng là dữ liệu bẩn, cộng lặng lẽ che lỗi" }
+  - id: big-pct-small-base
+    kind: knowledge
+    type: single
+    prompt: "Lào tăng 457% trong 10 năm, Việt Nam tăng 106%. Câu nào đúng khi viết cho ban phát triển bền vững?"
+    options:
+      - { id: a, text: "Lào là rủi ro phát thải lớn nhất ASEAN" }
+      - { id: b, text: "Tỉ lệ lớn trên nền nhỏ: Lào thêm 20 Mt, VN thêm 191 Mt" }
+      - { id: c, text: "Hai nước tăng như nhau vì cùng thuộc ASEAN" }
+      - { id: d, text: "Chỉ nên so tăng trưởng, không cần giá trị" }

@@ -1,0 +1,55 @@
+questions:
+  - id: dec2010-new
+    kind: data
+    type: single
+    prompt: "Trên bộ thật, `new_customers` của tháng 12/2010 bằng bao nhiêu và vì sao phải ghi chú?"
+    options:
+      - { id: a, text: "41; vì tháng chỉ có 8 ngày dữ liệu" }
+      - { id: b, text: "885; vì dữ liệu bắt đầu đúng tháng đó" }
+      - { id: c, text: "323; vì là cao điểm mua quà Giáng sinh" }
+      - { id: d, text: "0; vì chưa có tháng trước để so sánh" }
+  - id: dec2011-aov
+    kind: data
+    type: single
+    prompt: "`aov` tháng 12/2011 là 779.99 GBP, cao hơn mọi tháng khác. Diễn giải nào đúng?"
+    options:
+      - { id: a, text: "Khách mua giỏ lớn hơn hẳn trước Giáng sinh" }
+      - { id: b, text: "AOV bị tính sai vì mart cộng trùng đơn" }
+      - { id: c, text: "Tháng chưa đủ và có một đơn lớn bị huỷ sau" }
+      - { id: d, text: "Giá bán tăng mạnh từ đầu tháng 12/2011" }
+  - id: sum-active
+    kind: data
+    type: single
+    prompt: "Cộng cột `active_customers` của 13 tháng ra bao nhiêu, so với 4 338 khách thật của cả năm?"
+    options:
+      - { id: a, text: "4 338, bằng số khách của cả năm" }
+      - { id: b, text: "4 346, lệch vì 8 khách có hai quốc gia" }
+      - { id: c, text: "1 664, bằng tháng đông khách nhất" }
+      - { id: d, text: "13 054, vì khách mua nhiều tháng bị đếm lặp" }
+  - id: staging-no-filter
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `stg_sales_lines` chỉ gắn cờ `is_valid_sale` mà không lọc bỏ dòng huỷ?"
+    options:
+      - { id: a, text: "Để model khác (đối soát huỷ, doanh thu ròng) vẫn dùng được" }
+      - { id: b, text: "Vì dbt không cho phép mệnh đề WHERE trong một model staging" }
+      - { id: c, text: "Vì view staging không lọc được trên DuckDB" }
+      - { id: d, text: "Để fact có nhiều dòng hơn và chạy nhanh hơn" }
+  - id: buggy-mart
+    kind: knowledge
+    type: single
+    prompt: "Bản mart bỏ khách vãng lai vẫn qua mọi test `unique`, `not_null`. Vì sao chỉ singular test đối soát bắt được?"
+    options:
+      - { id: a, text: "Vì schema test chỉ chạy trên staging" }
+      - { id: b, text: "Mỗi dòng vẫn hợp lệ; chỉ tổng là sai" }
+      - { id: c, text: "Vì mart thiếu cột `is_guest`" }
+      - { id: d, text: "Vì dbt bỏ qua test khi mart là table" }
+  - id: severity
+    kind: knowledge
+    type: single
+    prompt: "Test nào nên để `severity: warn` thay vì `error` (chặn build)?"
+    options:
+      - { id: a, text: "`unique` trên cột `month` của `mart_monthly_sales`" }
+      - { id: b, text: "Đối soát tổng doanh thu mart với fact" }
+      - { id: c, text: "Tỉ lệ dòng khách vãng lai vượt 20% trong ngày" }
+      - { id: d, text: "`relationships` từ fact tới `dim_customer`" }

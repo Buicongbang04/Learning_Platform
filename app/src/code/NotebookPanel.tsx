@@ -8,6 +8,7 @@ import { useWorkspace } from "./workspace";
 import { useQuiz, type QuizQuestion } from "./quiz";
 import { scoreOf } from "./quizResult";
 import { starterFilesOf, writtenReportOf } from "./starterFiles";
+import { quizCardShown } from "./exerciseKind";
 
 const KIND_LABEL = { knowledge: "Kiến thức", data: "Dữ liệu" } as const;
 const INLINE_MD = "min-w-0 [&_p]:m-0";
@@ -317,8 +318,9 @@ function QuizReview({ quiz }: { quiz: ReturnType<typeof useQuiz> }) {
   );
 }
 
-export function QuizCard({ exercise, trackId, noneNotice, variant = "optional" }: { exercise: Exercise; trackId: string; noneNotice?: string; variant?: "optional" | "main" }) {
+export function QuizCard({ exercise, trackId, noneNotice, variant = "optional", hideUntilReady = false }: { exercise: Exercise; trackId: string; noneNotice?: string; variant?: "optional" | "main"; hideUntilReady?: boolean }) {
   const quiz = useQuiz(exercise, trackId);
+  if (!quizCardShown(quiz.status, hideUntilReady, Boolean(noneNotice))) return null;
   if (quiz.status === "none") {
     return noneNotice ? (
       <section aria-labelledby="nb-quiz-title" className={cx(card, "p-5")}>

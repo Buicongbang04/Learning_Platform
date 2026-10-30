@@ -1,0 +1,73 @@
+questions:
+  - id: stores-reporting
+    kind: data
+    type: single
+    prompt: "Bao nhiêu cửa hàng có dữ liệu trong nửa cuối 2014 (01/07–31/12/2014)?"
+    options:
+      - { id: a, text: "1 115 cửa hàng, như mọi tháng khác" }
+      - { id: b, text: "1 114 cửa hàng" }
+      - { id: c, text: "935 cửa hàng" }
+      - { id: d, text: "180 cửa hàng" }
+  - id: balanced-total
+    kind: data
+    type: single
+    prompt: "Trên 935 cửa hàng có dữ liệu cả hai kỳ, tổng doanh số nửa cuối 2014 so với nửa cuối 2013 thay đổi bao nhiêu?"
+    options:
+      - { id: a, text: "Tăng khoảng 2.5%" }
+      - { id: b, text: "Giảm khoảng 13.2%" }
+      - { id: c, text: "Tăng khoảng 3.4%" }
+      - { id: d, text: "Không đổi" }
+  - id: why-mean-higher
+    kind: data
+    type: single
+    prompt: "Mean doanh số mỗi cửa hàng-ngày tăng 3.4% trên mọi cửa hàng nhưng chỉ 2.7% trên 935 cửa hàng. Vì sao?"
+    options:
+      - { id: a, text: "Năm 2014 có nhiều ngày khuyến mãi hơn hẳn năm 2013" }
+      - { id: b, text: "180 cửa hàng vắng mặt vốn bán thấp hơn mức chung" }
+      - { id: c, text: "Mean trên mọi cửa hàng đã tính cả những ngày đóng cửa" }
+      - { id: d, text: "935 cửa hàng còn lại có nhiều ngày Chủ nhật mở cửa hơn" }
+  - id: ceo-answer
+    kind: knowledge
+    type: single
+    prompt: "Câu trả lời nào cho CEO đúng nhất?"
+    options:
+      - { id: a, text: "Finance đúng: tổng doanh số là con số chính thức của cả công ty" }
+      - { id: b, text: "Ops đúng: mean mỗi cửa hàng-ngày không bị số cửa hàng làm ảnh hưởng" }
+      - { id: c, text: "Cả hai sai một phần; so cùng 935 cửa hàng thì doanh số tăng 2.5%" }
+      - { id: d, text: "Không kết luận được gì khi chưa có đủ dữ liệu của 180 cửa hàng" }
+  - id: unit-vs-row
+    kind: data
+    type: single
+    prompt: "Loại cửa hàng nào có `row_mean` và `unit_mean` chênh nhau nhiều nhất (khoảng 120 EUR/ngày)?"
+    options:
+      - { id: a, text: "Loại a: 602 cửa hàng, nhiều cửa hàng nhất" }
+      - { id: b, text: "Loại d: số khách TB mỗi ngày ít nhất" }
+      - { id: c, text: "Loại c: không bao giờ mở cửa Chủ nhật" }
+      - { id: d, text: "Loại b: số ngày bán chênh lệch lớn" }
+  - id: type-b
+    kind: data
+    type: single
+    prompt: "Cửa hàng loại b bán TB 10 233 EUR/ngày, gấp 1.48 lần loại a (6 926). Vì sao?"
+    options:
+      - { id: a, text: "Đông khách hơn nhiều (2 022 so với 795/ngày), mỗi khách chi ít hơn" }
+      - { id: b, text: "Mỗi khách chi nhiều hơn (11.25 so với 8.71 EUR) với lượng khách như nhau" }
+      - { id: c, text: "Loại b có nhiều ngày khuyến mãi hơn hẳn so với cửa hàng loại a" }
+      - { id: d, text: "Loại b chỉ có 17 cửa hàng nên trung bình không đáng tin" }
+  - id: per-customer-chain
+    kind: data
+    type: single
+    prompt: "Doanh số mỗi khách của cả chuỗi (tổng doanh số / tổng số khách, ngày bán) là bao nhiêu?"
+    options:
+      - { id: a, text: "9.49 EUR" }
+      - { id: b, text: "9.12 EUR" }
+      - { id: c, text: "8.71 EUR" }
+      - { id: d, text: "6.96 EUR" }
+  - id: dashboard-fix
+    kind: knowledge
+    type: single
+    prompt: "Sửa dashboard của Finance thế nào để chuyện này không lặp lại?"
+    options:
+      - { id: a, text: "Đổi tổng doanh số thành mean doanh số mỗi cửa hàng-ngày" }
+      - { id: b, text: "Xoá khỏi dữ liệu mọi cửa hàng đã từng bị thiếu ngày nào đó" }
+      - { id: c, text: "Điền doanh số còn thiếu bằng mean của chính cửa hàng đó" }
+      - { id: d, text: "Hiện số cửa hàng có dữ liệu và một đường like-for-like" }

@@ -1,0 +1,6 @@
+excluded-rows: [b]
+aov-spike: [d]
+total-aov: [a]
+count-vs-counta: [c]
+orderstart-sort: [b]
+sumifs-vs-groupby: [a]

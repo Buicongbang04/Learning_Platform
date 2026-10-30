@@ -1,0 +1,73 @@
+questions:
+  - id: champions-share
+    kind: data
+    type: single
+    prompt: "Champions chiếm bao nhiêu phần trăm khách và bao nhiêu phần trăm doanh thu năm?"
+    options:
+      - { id: a, text: "24.1% khách, 69.5% doanh thu" }
+      - { id: b, text: "11.7% khách, 46.8% doanh thu" }
+      - { id: c, text: "12.4% khách, 22.7% doanh thu" }
+      - { id: d, text: "26.8% khách, 6.4% doanh thu" }
+  - id: largest-segment
+    kind: data
+    type: single
+    prompt: "Segment nào đông khách nhất?"
+    options:
+      - { id: a, text: "about_to_sleep (700 khách)" }
+      - { id: b, text: "potential_loyalist (634 khách)" }
+      - { id: c, text: "champions (507 khách)" }
+      - { id: d, text: "hibernating (1 164 khách)" }
+  - id: one-order
+    kind: data
+    type: single
+    prompt: "Bao nhiêu khách có đúng 1 hoá đơn trong năm (F = 1)?"
+    options:
+      - { id: a, text: "1 493 khách (34%)" }
+      - { id: b, text: "868 khách (20%)" }
+      - { id: c, text: "391 khách (9%)" }
+      - { id: d, text: "2 328 khách (54%)" }
+  - id: at-risk-value
+    kind: data
+    type: single
+    prompt: "Trong 278 khách at_risk, bao nhiêu khách có điểm M từ 4 trở lên (đáng ưu tiên liên hệ trực tiếp)?"
+    options:
+      - { id: a, text: "28 khách" }
+      - { id: b, text: "71 khách" }
+      - { id: c, text: "142 khách" }
+      - { id: d, text: "278 khách" }
+  - id: top10
+    kind: data
+    type: single
+    prompt: "10 khách lớn nhất chiếm bao nhiêu phần trăm doanh thu năm?"
+    options:
+      - { id: a, text: "Khoảng 1.7%" }
+      - { id: b, text: "Khoảng 17.3%" }
+      - { id: c, text: "Khoảng 46.8%" }
+      - { id: d, text: "Khoảng 80%" }
+  - id: new-caveat
+    kind: knowledge
+    type: single
+    prompt: "21 trong 67 khách \"new\" đã mua trước 12/2010 (sheet 2009-2010). Bạn làm gì trước khi gửi bảng cho CRM?"
+    options:
+      - { id: a, text: "Xoá 21 khách đó khỏi bảng để segment \"new\" sạch" }
+      - { id: b, text: "Giữ nguyên, vì RFM chỉ dùng dữ liệu của năm đang xét" }
+      - { id: c, text: "Đổi tên theo đúng điều dữ liệu biết: một đơn trong năm, mua gần đây" }
+      - { id: d, text: "Gộp \"new\" vào champions vì cùng có điểm R bằng 5" }
+  - id: champions-action
+    kind: knowledge
+    type: single
+    prompt: "Hành động nào hợp nhất với champions?"
+    options:
+      - { id: a, text: "Mã giảm 20% hằng tháng để giữ họ mua đều" }
+      - { id: b, text: "Không làm gì, vì họ sẽ mua dù sao" }
+      - { id: c, text: "Chiến dịch win-back với ưu đãi có thời hạn" }
+      - { id: d, text: "Giữ quan hệ: early access, quản lý tài khoản" }
+  - id: quintile-drift
+    kind: knowledge
+    type: single
+    prompt: "Điểm nào trong R, F, M của một khách có thể đổi chỉ vì hành vi của những khách **khác** thay đổi (cùng ngày chốt, khách đó giữ nguyên số liệu của mình)?"
+    options:
+      - { id: a, text: "M, vì mốc quintile tính lại theo mọi khách" }
+      - { id: b, text: "F, vì mốc 1, 2, 4, 9 đơn đổi theo mùa vụ" }
+      - { id: c, text: "R, vì recency được so với khách gần nhất" }
+      - { id: d, text: "Không điểm nào, mỗi điểm chỉ dùng số của khách" }

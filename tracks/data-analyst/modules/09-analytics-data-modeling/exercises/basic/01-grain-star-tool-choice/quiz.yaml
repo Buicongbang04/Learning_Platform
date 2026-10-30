@@ -1,0 +1,109 @@
+questions:
+  - id: retail-grain
+    kind: knowledge
+    type: single
+    prompt: "Fact bán hàng dựng từ tệp Online Retail II. Câu khai báo grain nào đúng với dữ liệu?"
+    options:
+      - { id: a, text: "Một dòng = một hoá đơn hợp lệ" }
+      - { id: b, text: "Một dòng = một cặp (Invoice, StockCode)" }
+      - { id: c, text: "Một dòng = một dòng của hệ thống bán hàng" }
+      - { id: d, text: "Một dòng = một khách hàng trong một ngày bán" }
+  - id: pair-key
+    kind: data
+    type: single
+    prompt: "Trên các dòng hợp lệ của sheet `Year 2010-2011`, bao nhiêu cặp (Invoice, StockCode) xuất hiện hơn một lần?"
+    options:
+      - { id: a, text: "0" }
+      - { id: b, text: "220" }
+      - { id: c, text: "19 960" }
+      - { id: d, text: "9 566" }
+  - id: aov-grain
+    kind: data
+    type: single
+    prompt: "Trung bình cột `revenue` trên bảng dòng hàng hợp lệ là 20.12 GBP. Giá trị đơn trung bình (AOV) cả năm là bao nhiêu?"
+    options:
+      - { id: a, text: "534.40 GBP" }
+      - { id: b, text: "20.12 GBP" }
+      - { id: c, text: "541.11 GBP" }
+      - { id: d, text: "820 516 GBP" }
+  - id: measure-type
+    kind: knowledge
+    type: single
+    prompt: "Trong `fct_sales_line`, cột nào là measure non-additive (cộng lại vô nghĩa)?"
+    options:
+      - { id: a, text: "`revenue`" }
+      - { id: b, text: "`unit_price`" }
+      - { id: c, text: "`quantity`" }
+      - { id: d, text: "`invoice_no`" }
+  - id: semi-additive
+    kind: knowledge
+    type: single
+    prompt: "Fact snapshot ghi tồn kho cuối mỗi ngày của từng cửa hàng. Tồn kho của cả chuỗi cho tháng 3 lấy thế nào?"
+    options:
+      - { id: a, text: "Cộng tồn kho của 31 ngày và mọi cửa hàng" }
+      - { id: b, text: "Trung bình tồn kho các cửa hàng ngày 31/3" }
+      - { id: c, text: "Lấy ngày có tồn kho cao nhất trong tháng" }
+      - { id: d, text: "Cộng các cửa hàng tại ngày cuối tháng" }
+  - id: grocery-snowflake
+    kind: knowledge
+    type: single
+    prompt: "Grocery Sales: `customers.CityID` → `cities.CountryID` → `countries`. Trong star schema cho phân tích bán hàng, tên thành phố và quốc gia của khách nằm ở đâu?"
+    options:
+      - { id: a, text: "Gộp vào `dim_customer` thành cột thành phố, quốc gia" }
+      - { id: b, text: "Giữ ba bảng nối nhau, để mỗi dashboard tự join khi cần" }
+      - { id: c, text: "Chép tên thành phố vào mọi dòng của fact" }
+      - { id: d, text: "Bỏ đi vì đó không phải measure" }
+  - id: grocery-role
+    kind: knowledge
+    type: single
+    prompt: "Grocery Sales: `sales.SalesPersonID` trỏ tới `employees.EmployeeID`. Bảng `employees` đóng vai gì trong star schema?"
+    options:
+      - { id: a, text: "Một fact thứ hai về nhân sự" }
+      - { id: b, text: "Bridge table nối khách hàng với sản phẩm đã mua" }
+      - { id: c, text: "Dimension nhân viên bán hàng của fact" }
+      - { id: d, text: "Bỏ qua, vì không có cột số nào" }
+  - id: scd-choice
+    kind: knowledge
+    type: single
+    prompt: "Head of Sales muốn doanh thu theo vùng phụ trách của nhân viên; số quý trước không được đổi khi nhân viên chuyển vùng. Bạn dùng gì cho `dim_employee`?"
+    options:
+      - { id: a, text: "SCD type 1: ghi đè vùng mới" }
+      - { id: b, text: "SCD type 2: thêm phiên bản theo thời gian" }
+      - { id: c, text: "Xoá nhân viên cũ, tạo nhân viên mới" }
+      - { id: d, text: "Không cần dimension, lọc theo tên" }
+  - id: unknown-member
+    kind: data
+    type: single
+    prompt: "Online Retail II: nếu dashboard inner join fact với `dim_customer` không có dòng unknown member, mất bao nhiêu phần trăm doanh thu gộp?"
+    options:
+      - { id: a, text: "Khoảng 0.1%" }
+      - { id: b, text: "Khoảng 3.7%" }
+      - { id: c, text: "Khoảng 25.0%" }
+      - { id: d, text: "Khoảng 16.5%" }
+  - id: fanout-signal
+    kind: knowledge
+    type: single
+    prompt: "Sau lần nạp mới, tổng doanh thu không đổi nhưng doanh thu theo danh mục cộng lại tăng 12%. Nghi ngờ đầu tiên?"
+    options:
+      - { id: a, text: "Có thêm đơn hàng mới đến muộn" }
+      - { id: b, text: "Khoá của bảng sản phẩm bị lặp" }
+      - { id: c, text: "Tỉ giá GBP vừa được cập nhật" }
+      - { id: d, text: "Dashboard đang dùng cache cũ" }
+  - id: tool-shared-definition
+    kind: knowledge
+    type: single
+    prompt: "Ba dashboard Metabase, một notebook và một file Excel tính \"khách hoạt động\" theo ba cách khác nhau. Sửa ở đâu là hợp nhất?"
+    options:
+      - { id: a, text: "Sửa tay từng dashboard cho giống nhau" }
+      - { id: b, text: "Viết một trang wiki mô tả công thức" }
+      - { id: c, text: "Một model hoặc metric chung mà mọi nơi đọc" }
+      - { id: d, text: "Chuyển toàn bộ sang Power BI" }
+  - id: tool-small-team
+    kind: knowledge
+    type: single
+    prompt: "Startup có 1 DA, Postgres 6 bảng, Metabase. Cần \"doanh thu ròng\" thống nhất cho 3 dashboard ngay tuần này. Chỗ đặt định nghĩa hợp nhất?"
+    options:
+      - { id: a, text: "Một SQL view có chú thích trong Postgres" }
+      - { id: b, text: "Mua Looker và viết LookML cho 6 bảng" }
+      - { id: c, text: "Mỗi dashboard tự lọc như hiện nay" }
+      - { id: d, text: "Một file Excel tổng hợp gửi mỗi sáng" }

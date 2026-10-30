@@ -1,0 +1,73 @@
+questions:
+  - id: default-read
+    kind: data
+    type: single
+    prompt: "Gọi `pd.read_csv(EXPORT)` với mọi tham số mặc định trên tệp export thì chuyện gì xảy ra?"
+    options:
+      - { id: a, text: "Đọc được 1 580 dòng, 8 cột, nhưng cột giá là chuỗi" }
+      - { id: b, text: "Lỗi UnicodeDecodeError ở byte 0xe9 (chữ é)" }
+      - { id: c, text: "Đọc được nhưng mọi chữ có dấu thành dấu ?" }
+      - { id: d, text: "Lỗi ParserError vì số cột không đều nhau" }
+  - id: silent-one-column
+    kind: data
+    type: single
+    prompt: "Thêm `encoding=\"cp1252\"` nhưng vẫn để delimiter mặc định thì kết quả là gì?"
+    options:
+      - { id: a, text: "Lỗi ParserError vì không tìm thấy dấu phẩy nào trong tệp" }
+      - { id: b, text: "Bảng 1 580 dòng, 8 cột, ngày bị đảo" }
+      - { id: c, text: "Bảng đúng 8 cột vì pandas tự đoán dấu ;" }
+      - { id: d, text: "Bảng 1 583 dòng chỉ có 1 cột, không báo lỗi" }
+  - id: forgot-decimal
+    kind: knowledge
+    type: single
+    prompt: "Đọc đúng `sep=\";\"` nhưng quên `decimal=\",\"`. Cột `Prix unitaire` ra sao và vì sao nguy hiểm?"
+    options:
+      - { id: a, text: "Thành chuỗi \"2,55\"; phép nhân/tổng sau đó lỗi hoặc ra sai" }
+      - { id: b, text: "Thành 255.0; doanh thu bị nhân lên 100 lần mà không ai để ý" }
+      - { id: c, text: "Thành 2.0; phần lẻ bị cắt, doanh thu hơi thấp" }
+      - { id: d, text: "Thành NaN; pandas bỏ qua dòng khi tính tổng" }
+  - id: month-first
+    kind: data
+    type: single
+    prompt: "Nếu đọc ngày theo kiểu Mỹ (`%m/%d/%Y`, `errors=\"coerce\"`), bao nhiêu dòng vẫn parse được mà không báo lỗi?"
+    options:
+      - { id: a, text: "0 dòng" }
+      - { id: b, text: "117 dòng" }
+      - { id: c, text: "685 dòng" }
+      - { id: d, text: "895 dòng" }
+  - id: revenue
+    kind: data
+    type: single
+    prompt: "Doanh thu tháng 11/2011 của khách Pháp theo định nghĩa chung của track (dòng hợp lệ) là bao nhiêu?"
+    options:
+      - { id: a, text: "31 758.71 GBP" }
+      - { id: b, text: "30 697.51 GBP" }
+      - { id: c, text: "29 220.71 GBP" }
+      - { id: d, text: "32 819.91 GBP" }
+  - id: postage-share
+    kind: data
+    type: single
+    prompt: "Dòng `StockCode = POST` (phí vận chuyển) chiếm khoảng bao nhiêu phần doanh thu dòng hợp lệ?"
+    options:
+      - { id: a, text: "Khoảng 1%" }
+      - { id: b, text: "Khoảng 3%" }
+      - { id: c, text: "Khoảng 8%" }
+      - { id: d, text: "Khoảng 15%" }
+  - id: int64-customer
+    kind: knowledge
+    type: single
+    prompt: "Vì sao đọc `N° client` bằng kiểu `Int64` thay vì để pandas tự chọn?"
+    options:
+      - { id: a, text: "Int64 tốn ít bộ nhớ hơn float64 nhiều" }
+      - { id: b, text: "Int64 tự loại các dòng không có mã khách" }
+      - { id: c, text: "pandas không đọc được số nguyên lớn hơn 9 999 trong file CSV" }
+      - { id: d, text: "Ô trống làm cột thành float: mã thành 12674.0, ghép bảng lệch" }
+  - id: control-total
+    kind: knowledge
+    type: single
+    prompt: "Dòng `Total lignes;1580` ở cuối tệp dùng để làm gì?"
+    options:
+      - { id: a, text: "Không dùng; xoá đi cho tệp sạch là đủ" }
+      - { id: b, text: "Đối chiếu: số dòng đọc được phải khớp số nguồn" }
+      - { id: c, text: "Để biết tệp có bao nhiêu khách hàng" }
+      - { id: d, text: "Để pandas biết cần bỏ bao nhiêu dòng ở cuối tệp khi đọc" }

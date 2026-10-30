@@ -1,0 +1,73 @@
+questions:
+  - id: inflation
+    kind: data
+    type: single
+    prompt: "Theo `fanout_audit`, join thẳng giao dịch với `campaign_table` làm tổng doanh thu lớn lên bao nhiêu lần?"
+    options:
+      - { id: a, text: "Khoảng 1.1 lần" }
+      - { id: b, text: "Khoảng 2.4 lần" }
+      - { id: c, text: "Khoảng 5.4 lần" }
+      - { id: d, text: "Khoảng 17 lần" }
+  - id: unknown-share
+    kind: data
+    type: single
+    prompt: "Theo `revenue_by_income`, nhóm `Unknown` (hộ không có nhân khẩu học) chiếm bao nhiêu doanh thu?"
+    options:
+      - { id: a, text: "Khoảng 44%" }
+      - { id: b, text: "Khoảng 12%" }
+      - { id: c, text: "Khoảng 32%" }
+      - { id: d, text: "Khoảng 68%" }
+  - id: inner-coverage
+    kind: data
+    type: single
+    prompt: "Câu starter của `revenue_by_income` (INNER JOIN với `hh_demographic`) có tổng doanh thu bằng bao nhiêu phần trăm doanh thu thật?"
+    options:
+      - { id: a, text: "100%, chỉ thiếu dòng Unknown" }
+      - { id: b, text: "Khoảng 32%" }
+      - { id: c, text: "Hơn 100% vì bị nhân bản" }
+      - { id: d, text: "Khoảng 56%" }
+  - id: per-household
+    kind: data
+    type: single
+    prompt: "Theo `campaign_type_revenue`, doanh thu mỗi hộ của nhóm TypeC khoảng 7 194, nhóm None khoảng 1 029. Kết luận nào đúng?"
+    options:
+      - { id: a, text: "Campaign TypeC làm mỗi hộ nhận được chi tiêu nhiều gấp khoảng 7 lần hộ không nhận" }
+      - { id: b, text: "Chưa kết luận được: campaign có thể đã nhắm sẵn vào hộ chi nhiều" }
+      - { id: c, text: "TypeC hiệu quả nhất nên dồn ngân sách sang TypeC" }
+      - { id: d, text: "Nhóm None quá nhỏ nên con số không có ý nghĩa" }
+  - id: sum-over-types
+    kind: data
+    type: single
+    prompt: "Cộng cột `revenue` của 4 dòng `campaign_type_revenue` được khoảng 16.4 triệu, gấp đôi doanh thu thật 8.06 triệu. Vì sao?"
+    options:
+      - { id: a, text: "Một hộ nhận nhiều loại campaign có mặt ở nhiều dòng; bảng này không cộng dọc được" }
+      - { id: b, text: "Truy vấn vẫn còn nhân bản doanh thu theo số campaign mà mỗi hộ nhận được trong kỳ" }
+      - { id: c, text: "Nhóm None bị tính hai lần" }
+      - { id: d, text: "SALES_VALUE đã gồm cả giảm giá" }
+  - id: detect-fanout
+    kind: knowledge
+    type: single
+    prompt: "Cách nhanh nhất để biết trước một join có nhân bản dòng hay không?"
+    options:
+      - { id: a, text: "Chạy thử join rồi xem truy vấn có báo lỗi khoá trùng hay không" }
+      - { id: b, text: "Đổi INNER JOIN thành LEFT JOIN" }
+      - { id: c, text: "Thêm DISTINCT vào SELECT cuối cùng" }
+      - { id: d, text: "So count(*) với count(DISTINCT khoá) ở bảng bên phải" }
+  - id: distinct-hides
+    kind: knowledge
+    type: single
+    prompt: "Câu starter của `campaign_type_revenue` dùng `count(DISTINCT household_key)` nên cột `households` đúng. Còn cột `revenue`?"
+    options:
+      - { id: a, text: "Cũng đúng, vì DISTINCT áp dụng cho cả dòng" }
+      - { id: b, text: "Sai: DISTINCT chỉ sửa phép đếm, sum vẫn cộng mọi dòng đã bị nhân" }
+      - { id: c, text: "Sai, vì thiếu ORDER BY nên sum cộng theo thứ tự ngẫu nhiên" }
+      - { id: d, text: "Đúng nếu thêm GROUP BY household_key" }
+  - id: not-in-null
+    kind: knowledge
+    type: single
+    prompt: "`WHERE household_key NOT IN (SELECT household_key FROM campaign_table)`. Nếu `campaign_table` có một dòng `household_key` NULL, kết quả là gì?"
+    options:
+      - { id: a, text: "Như khi không có NULL" }
+      - { id: b, text: "Trả mọi hộ" }
+      - { id: c, text: "Không trả dòng nào" }
+      - { id: d, text: "Báo lỗi kiểu dữ liệu" }

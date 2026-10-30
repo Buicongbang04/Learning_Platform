@@ -1,0 +1,7 @@
+variant-codes: [c]
+case-merge: [a]
+fuzzy-survivors: [d]
+off-canonical-share: [b]
+high-score-pair: [b]
+ranking-key: [d]
+same-code-different-item: [a]

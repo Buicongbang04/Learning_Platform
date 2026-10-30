@@ -1,0 +1,100 @@
+questions:
+  - id: bank-branch-managers
+    kind: knowledge
+    type: single
+    prompt: "Ngân hàng dùng Microsoft 365 và Azure, 300 giám đốc chi nhánh mở báo cáo hằng ngày, mỗi người chỉ được thấy số của chi nhánh mình. Chọn công cụ nào?"
+    options:
+      - { id: a, text: "Metabase bản mã nguồn mở, mỗi chi nhánh một dashboard" }
+      - { id: b, text: "Power BI, data model chung và row-level security" }
+      - { id: c, text: "Streamlit, kiểm tên đăng nhập trong code" }
+      - { id: d, text: "Looker Studio chia sẻ link cho từng người" }
+  - id: startup-selfserve
+    kind: knowledge
+    type: single
+    prompt: "Startup 40 người, dữ liệu trong Postgres, không có ngân sách license; team marketing không viết SQL nhưng muốn tự xem số theo kênh, theo tuần. Chọn gì?"
+    options:
+      - { id: a, text: "Tableau Cloud cho cả công ty" }
+      - { id: b, text: "Notebook Python gửi file HTML mỗi tuần" }
+      - { id: c, text: "Superset, dạy marketing dùng SQL Lab" }
+      - { id: d, text: "Metabase tự host, model chuẩn cho marketing" }
+  - id: sql-team-rls
+    kind: knowledge
+    type: single
+    prompt: "Công ty tech: analyst đều viết SQL, cần nhiều loại chart (heatmap, sankey), cần row-level security cho đối tác xem dữ liệu của họ, không muốn trả license và có DE vận hành server. Chọn gì?"
+    options:
+      - { id: a, text: "Apache Superset" }
+      - { id: b, text: "Metabase bản mã nguồn mở" }
+      - { id: c, text: "Looker Studio" }
+      - { id: d, text: "Excel chia sẻ qua OneDrive" }
+  - id: what-if-inventory
+    kind: knowledge
+    type: single
+    prompt: "Trưởng vận hành muốn kéo thanh trượt giá bán, xem ngay dự báo tồn kho từ model Python của team DS. Ba người dùng, nội bộ. Chọn gì?"
+    options:
+      - { id: a, text: "Metabase với một biến số trong SQL" }
+      - { id: b, text: "Power BI với parameter what-if" }
+      - { id: c, text: "Streamlit gọi model, có test cho phần logic" }
+      - { id: d, text: "Superset với Jinja template" }
+  - id: governed-active-user
+    kind: knowledge
+    type: single
+    prompt: "Công ty dữ liệu trên BigQuery, sáu team tự làm dashboard và đang có ba định nghĩa \"active user\" khác nhau. Vấn đề cần công cụ nào giải?"
+    options:
+      - { id: a, text: "Looker Studio để dashboard đẹp và thống nhất màu" }
+      - { id: b, text: "Semantic layer quản trị bằng git, ví dụ LookML" }
+      - { id: c, text: "Thêm một dashboard tổng hợp ba định nghĩa" }
+      - { id: d, text: "Streamlit để DA tự tính lại mọi số" }
+  - id: ga4-free-share
+    kind: knowledge
+    type: single
+    prompt: "Team marketing 5 người dùng Google Workspace cần dashboard từ GA4 và một Google Sheet ngân sách, chia sẻ cho agency, miễn phí. Chọn gì?"
+    options:
+      - { id: a, text: "Looker Studio" }
+      - { id: b, text: "Looker (LookML)" }
+      - { id: c, text: "Power BI Premium" }
+      - { id: d, text: "Superset tự host" }
+  - id: share-as-measure
+    kind: knowledge
+    type: single
+    prompt: "Trong Power BI, tile \"tỉ trọng khách vãng lai\" phải đúng khi người xem lọc theo tháng, mùa, loại ngày. Định nghĩa thế nào?"
+    options:
+      - { id: a, text: "Calculated column casual / cnt, visual lấy Average" }
+      - { id: b, text: "Calculated column casual / cnt, visual lấy Sum" }
+      - { id: c, text: "Tính sẵn trong Excel rồi nhập vào model" }
+      - { id: d, text: "Measure DIVIDE(SUM(casual), SUM(cnt))" }
+  - id: tableau-first-purchase
+    kind: knowledge
+    type: single
+    prompt: "Trong Tableau, view đang nhóm theo tháng. Bạn cần ngày mua đầu tiên của mỗi khách (để dựng cohort), không phụ thuộc view. Dùng gì?"
+    options:
+      - { id: a, text: "Table calculation RUNNING_MIN theo tháng trên Order Date" }
+      - { id: b, text: "{FIXED [Customer ID] : MIN([Order Date])}" }
+      - { id: c, text: "Bộ lọc Top N trên Customer ID" }
+      - { id: d, text: "Kéo Order Date vào Filters, chọn Minimum" }
+  - id: one-off-why
+    kind: knowledge
+    type: single
+    prompt: "CEO hỏi một lần: \"Vì sao doanh thu Germany tháng 3 giảm?\". Cách trả lời hợp nhất?"
+    options:
+      - { id: a, text: "Dựng dashboard Germany có 12 card để CEO tự xem" }
+      - { id: b, text: "Mở self-serve trên bảng thô cho CEO" }
+      - { id: c, text: "Phân tích ad-hoc bằng SQL, trả lời bằng memo" }
+      - { id: d, text: "Thêm bộ lọc Germany vào mọi dashboard" }
+  - id: metabase-drill
+    kind: knowledge
+    type: single
+    prompt: "Trên Metabase, bạn muốn người dùng business click vào một cột bar để xem chi tiết và nhóm theo chiều khác. Question nên dựng thế nào?"
+    options:
+      - { id: a, text: "Query builder trên model, không dùng native SQL" }
+      - { id: b, text: "Native SQL có nhiều biến text" }
+      - { id: c, text: "Native SQL, bảng trong FROM đặt alias ngắn cho gọn" }
+      - { id: d, text: "Ảnh chụp chart dán vào card text" }
+  - id: looker-vs-studio
+    kind: knowledge
+    type: single
+    prompt: "Ứng viên ghi \"thành thạo Looker\" vì đã làm dashboard Looker Studio. Khác biệt chính giữa hai sản phẩm là gì?"
+    options:
+      - { id: a, text: "Looker Studio chỉ chạy trên Windows" }
+      - { id: b, text: "Looker không nối được BigQuery" }
+      - { id: c, text: "Hai tên của cùng một sản phẩm, chỉ khác giá" }
+      - { id: d, text: "Looker có semantic layer LookML trong git" }

@@ -1,0 +1,73 @@
+questions:
+  - id: fee-top1
+    kind: data
+    type: single
+    prompt: "Bỏ điều kiện \"chỉ hàng hoá\" khỏi `top3_per_country.sql`, có bao nhiêu nước (trên 38) có \"mặt hàng\" số 1 là một mã phí (`POST`, `DOT`, `M`)?"
+    options:
+      - { id: a, text: "0 nước" }
+      - { id: b, text: "3 nước" }
+      - { id: c, text: "18 nước" }
+      - { id: d, text: "35 nước" }
+  - id: uk-top-share
+    kind: data
+    type: single
+    prompt: "Mặt hàng số 1 ở United Kingdom (`22423`, REGENCY CAKESTAND 3 TIER) chiếm bao nhiêu doanh thu hàng hoá của UK?"
+    options:
+      - { id: a, text: "Khoảng 1.7%" }
+      - { id: b, text: "Khoảng 8.5%" }
+      - { id: c, text: "Khoảng 17.0%" }
+      - { id: d, text: "Khoảng 40.0%" }
+  - id: class-a-count
+    kind: data
+    type: single
+    prompt: "Theo `pareto.sql`, nhóm A (làm ra khoảng 80% doanh thu hàng hoá) gồm bao nhiêu mặt hàng trên 3 897?"
+    options:
+      - { id: a, text: "Khoảng 390 (10%)" }
+      - { id: b, text: "Khoảng 1 950 (50%)" }
+      - { id: c, text: "Khoảng 3 120 (80%)" }
+      - { id: d, text: "Khoảng 830 (21%)" }
+  - id: rank-rows
+    kind: data
+    type: single
+    prompt: "Đổi `row_number()` thành `rank()` trong `top3_per_country.sql` (giữ `rnk <= 3`). Kết quả trên bộ thật có bao nhiêu dòng?"
+    options:
+      - { id: a, text: "114 dòng, như cũ" }
+      - { id: b, text: "121 dòng" }
+      - { id: c, text: "Ít hơn 114 dòng" }
+      - { id: d, text: "38 dòng" }
+  - id: jar-outlier
+    kind: data
+    type: single
+    prompt: "Mặt hàng `23166` (MEDIUM CERAMIC TOP STORAGE JAR) đứng hạng 5 trong Pareto với khoảng 81 nghìn GBP. Xem các dòng của nó, điều gì đúng?"
+    options:
+      - { id: a, text: "Khoảng 95% đến từ một dòng 74 215 cái, bị huỷ 16 phút sau" }
+      - { id: b, text: "Bán đều mỗi tháng cho hàng trăm khách sỉ khác nhau ở UK" }
+      - { id: c, text: "Phần lớn bán cho vài khách sỉ ở Đức và Pháp trong mùa Giáng sinh" }
+      - { id: d, text: "Doanh thu đến từ phí vận chuyển gộp vào mã hàng" }
+  - id: share-before-filter
+    kind: knowledge
+    type: single
+    prompt: "Một bạn tính `share_of_country` SAU khi lọc `rnk <= 3` (chia cho tổng của 3 dòng còn lại). Hệ quả là gì?"
+    options:
+      - { id: a, text: "Không khác gì, vì tổng doanh thu của nước không đổi khi lọc" }
+      - { id: b, text: "Truy vấn báo lỗi vì window function sau WHERE" }
+      - { id: c, text: "Tỉ trọng có thể ra số âm khi nước đó có nhiều hoá đơn huỷ" }
+      - { id: d, text: "Tỉ trọng 3 dòng luôn cộng bằng 100%, thổi phồng mức tập trung" }
+  - id: rows-vs-range
+    kind: knowledge
+    type: single
+    prompt: "`sum(revenue) OVER (ORDER BY revenue DESC)` không ghi frame. Hai mặt hàng cùng doanh thu 20 GBP sẽ nhận luỹ kế thế nào?"
+    options:
+      - { id: a, text: "Luỹ kế khác nhau, mặt hàng đứng sau lớn hơn đúng 20 GBP như mong muốn" }
+      - { id: b, text: "Cùng một giá trị luỹ kế (đã cộng cả hai), vì frame mặc định là RANGE" }
+      - { id: c, text: "NULL cho mặt hàng thứ hai" }
+      - { id: d, text: "Truy vấn báo lỗi, vì khoá ORDER BY trong OVER phải là duy nhất" }
+  - id: abc-use
+    kind: knowledge
+    type: single
+    prompt: "Team mua hàng muốn cắt bớt mặt hàng nhóm C. Trước khi khuyến nghị, kiểm thêm gì là quan trọng nhất?"
+    options:
+      - { id: a, text: "Đổi ngưỡng 80/95 thành 70/90 để nhóm C nhỏ lại và dễ trình bày" }
+      - { id: b, text: "Sắp lại theo số lượng bán thay vì doanh thu rồi phân nhóm lại từ đầu" }
+      - { id: c, text: "Mặt hàng C có phải hàng mới ra, hàng mùa vụ hay hàng hay mua kèm A không" }
+      - { id: d, text: "Bỏ dòng của khách vãng lai (không có mã khách) rồi tính lại toàn bộ Pareto" }

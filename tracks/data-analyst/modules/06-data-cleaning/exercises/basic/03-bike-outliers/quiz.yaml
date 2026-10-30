@@ -1,0 +1,64 @@
+questions:
+  - id: daily-iqr
+    kind: data
+    type: single
+    prompt: "Áp IQR (k = 1.5) lên lượt thuê theo **ngày** (`day.cnt`, 731 ngày): bao nhiêu ngày bị đánh dấu?"
+    options:
+      - { id: a, text: "0 ngày" }
+      - { id: b, text: "17 ngày" }
+      - { id: c, text: "44 ngày" }
+      - { id: d, text: "73 ngày" }
+  - id: hourly-iqr
+    kind: data
+    type: single
+    prompt: "Áp IQR (k = 1.5) lên lượt thuê theo **giờ** đánh dấu 505 giờ. Phần lớn các giờ đó là gì?"
+    options:
+      - { id: a, text: "Giờ đêm 0-5h, khi gần như không ai thuê xe" }
+      - { id: b, text: "Giờ cao điểm 8h và 17-18h của ngày làm việc" }
+      - { id: c, text: "Buổi chiều cuối tuần có thời tiết đẹp" }
+      - { id: d, text: "Các giờ trong những ngày có bão lớn hoặc có tuyết" }
+  - id: lowest-day-hours
+    kind: data
+    type: single
+    prompt: "Ngày 29/10/2012 có 22 lượt thuê, thấp nhất hai năm. `hour.csv` có bao nhiêu giờ dữ liệu cho ngày đó?"
+    options:
+      - { id: a, text: "24 giờ" }
+      - { id: b, text: "11 giờ" }
+      - { id: c, text: "1 giờ" }
+      - { id: d, text: "0 giờ" }
+  - id: demand-drops
+    kind: data
+    type: single
+    prompt: "Bao nhiêu ngày có lượt thuê dưới 40% trung vị trượt 29 ngày (`demand_drop`)?"
+    options:
+      - { id: a, text: "44 ngày" }
+      - { id: b, text: "1 ngày" }
+      - { id: c, text: "8 ngày" }
+      - { id: d, text: "17 ngày" }
+  - id: sensor-fix
+    kind: knowledge
+    type: single
+    prompt: "Ngày 10/3/2011 có `hum = 0` ở cả 22 giờ có dữ liệu, trời mưa (`weathersit = 3`). Xử lý thế nào cho model dự báo?"
+    options:
+      - { id: a, text: "Bỏ cả ngày đó ra khỏi dữ liệu train của model" }
+      - { id: b, text: "Đặt hum là thiếu rồi xử lý; giữ lượt thuê" }
+      - { id: c, text: "Thay hum bằng 0.5 vì đó là giữa thang đo" }
+      - { id: d, text: "Giữ nguyên, model tự học được giá trị lạ" }
+  - id: zscore-miss
+    kind: knowledge
+    type: single
+    prompt: "Vì sao z-score (ngưỡng 3) không đánh dấu ngày 22 lượt?"
+    options:
+      - { id: a, text: "Lượt thuê ngày trải rộng (std 1 937), nên 22 lượt chỉ cách mean 2.3 std" }
+      - { id: b, text: "z-score chỉ bắt được giá trị lớn bất thường, không bắt được giá trị nhỏ" }
+      - { id: c, text: "Ngày đó có weathersit = 3, nên pandas tự loại khỏi phép tính std" }
+      - { id: d, text: "Mean và std phải tính trên log của cnt, nếu không z-score luôn sai" }
+  - id: purpose
+    kind: knowledge
+    type: single
+    prompt: "Ngày bão 29/10/2012 nên xử lý thế nào trong báo cáo lượt thuê tháng 10 và trong dữ liệu train model dự báo ngày thường?"
+    options:
+      - { id: a, text: "Bỏ khỏi cả báo cáo lẫn dữ liệu train" }
+      - { id: b, text: "Thay bằng trung bình tháng ở cả hai nơi" }
+      - { id: c, text: "Báo cáo giữ nguyên; train thì loại hoặc gắn cờ" }
+      - { id: d, text: "Giữ nguyên ở cả hai nơi, vì đó là dữ liệu thật" }

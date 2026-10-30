@@ -1,0 +1,91 @@
+questions:
+  - id: mcar-case
+    kind: knowledge
+    type: single
+    prompt: "Tình huống nào gần với MCAR (thiếu hoàn toàn ngẫu nhiên) nhất?"
+    options:
+      - { id: a, text: "Máy quét kẹt giấy ngẫu nhiên làm mất 1% phiếu khảo sát giấy" }
+      - { id: b, text: "Người thu nhập cao thường bỏ trống câu hỏi về mức thu nhập" }
+      - { id: c, text: "Đơn đặt qua app cũ không gửi mã vùng, còn đơn trên web thì có" }
+      - { id: d, text: "Cảm biến nhiệt tự tắt khi nhiệt độ vượt quá 45 độ C" }
+  - id: survey-mnar
+    kind: knowledge
+    type: single
+    prompt: "Khảo sát hài lòng sau mua: khách rất không hài lòng ít trả lời hơn. Cơ chế thiếu của điểm hài lòng là gì?"
+    options:
+      - { id: a, text: "MCAR" }
+      - { id: b, text: "MAR theo kênh mua" }
+      - { id: c, text: "MNAR" }
+      - { id: d, text: "Không thiếu gì" }
+  - id: missing-region
+    kind: knowledge
+    type: single
+    prompt: "Dashboard doanh thu theo vùng: 3% đơn thiếu vùng vì app phiên bản cũ không gửi trường này. Làm gì?"
+    options:
+      - { id: a, text: "Bỏ 3% đơn đó khỏi mọi con số trên dashboard" }
+      - { id: b, text: "Giữ trong tổng, nhãn 'Không rõ vùng', báo tỉ lệ" }
+      - { id: c, text: "Chia 3% đó cho các vùng theo tỉ trọng doanh thu hiện có" }
+      - { id: d, text: "Gán vào vùng có nhiều đơn nhất của công ty" }
+  - id: missing-price
+    kind: knowledge
+    type: single
+    prompt: "Kế toán cần doanh thu tháng. 2% dòng bán hàng thiếu đơn giá. Cách xử lý nào đúng nhất?"
+    options:
+      - { id: a, text: "Điền đơn giá trung bình của toàn bộ sản phẩm rồi cộng" }
+      - { id: b, text: "Bỏ các dòng đó, vì 2% là quá nhỏ để làm thay đổi kết luận" }
+      - { id: c, text: "Điền bằng 0 để không ai nói báo cáo đã thổi phồng số" }
+      - { id: d, text: "Lấy giá từ bảng giá theo ngày; không được thì báo riêng" }
+  - id: duplicate-events
+    kind: knowledge
+    type: single
+    prompt: "Bảng event có nhiều cặp dòng giống hệt nhau (cùng user, event, giây). Việc đầu tiên nên làm là gì?"
+    options:
+      - { id: a, text: "Tìm nguồn tạo trùng (retry gửi lại?) và khoá đúng như event_id" }
+      - { id: b, text: "Chạy `drop_duplicates()` trên mọi cột rồi tiếp tục làm báo cáo" }
+      - { id: c, text: "Giữ nguyên, vì dòng trùng chỉ chiếm phần nhỏ của toàn bảng" }
+      - { id: d, text: "Bỏ cả hai dòng của mỗi cặp trùng để chắc chắn không đếm sai" }
+  - id: fuzzy-tool
+    kind: knowledge
+    type: single
+    prompt: "50 000 tên công ty khách hàng viết lệch nhau (`Cty TNHH ABC`, `ABC Co., Ltd`), cần gộp một lần, có người duyệt từng nhóm. Chọn công cụ nào?"
+    options:
+      - { id: a, text: "Excel, chức năng Remove Duplicates" }
+      - { id: b, text: "SQL `SELECT DISTINCT` trên tên công ty" }
+      - { id: c, text: "OpenRefine, clustering rồi duyệt nhóm" }
+      - { id: d, text: "pandas `drop_duplicates` trên cột tên" }
+  - id: big-order
+    kind: knowledge
+    type: single
+    prompt: "Một hoá đơn 168 470 GBP, gấp 15 lần hoá đơn lớn thứ hai cùng tuần, làm doanh thu tuần tăng vọt. Làm gì trước?"
+    options:
+      - { id: a, text: "Winsorize ở p99 để chart doanh thu tuần trông hợp lý hơn" }
+      - { id: b, text: "Bỏ vì z-score lớn hơn 3, đúng quy tắc outlier thống kê" }
+      - { id: c, text: "Giữ nguyên vì đó là giao dịch thật đã ghi trong hệ thống" }
+      - { id: d, text: "Kiểm hoá đơn có bị huỷ sau đó không, hỏi team sales" }
+  - id: weekly-partner-file
+    kind: knowledge
+    type: single
+    prompt: "Mỗi tuần đối tác gửi file Excel 200 nghìn dòng, làm sạch qua 12 bước, kết quả cần review và tái lập. Chọn gì?"
+    options:
+      - { id: a, text: "Script pandas trong git, có test và nhật ký làm sạch" }
+      - { id: b, text: "Làm tay trong Excel, ghi các bước vào sheet ghi chú" }
+      - { id: c, text: "OpenRefine, lưu lịch sử thao tác sau mỗi lần làm" }
+      - { id: d, text: "Google Sheets, chia sẻ cho cả team cùng sửa trực tiếp" }
+  - id: warehouse-checks
+    kind: knowledge
+    type: single
+    prompt: "Warehouse của công ty đã dùng dbt. Muốn kiểm khoá duy nhất, không null, giá trị hợp lệ mỗi lần nạp. Dùng gì?"
+    options:
+      - { id: a, text: "Notebook chạy tay vào mỗi sáng thứ Hai" }
+      - { id: b, text: "Công thức COUNTIF trong file Excel" }
+      - { id: c, text: "Hỏi người dùng dashboard khi có lỗi" }
+      - { id: d, text: "dbt tests trên model, chạy cùng dbt build" }
+  - id: dplyr-distinct
+    kind: knowledge
+    type: single
+    prompt: "R: `df %>% distinct(customer_id, .keep_all = TRUE)`. Dòng pandas nào tương đương?"
+    options:
+      - { id: a, text: "`df.drop_duplicates()`" }
+      - { id: b, text: "`df.drop_duplicates(\"customer_id\")`" }
+      - { id: c, text: "`df[\"customer_id\"].drop_duplicates()`" }
+      - { id: d, text: "`df.groupby(\"customer_id\").size()`" }

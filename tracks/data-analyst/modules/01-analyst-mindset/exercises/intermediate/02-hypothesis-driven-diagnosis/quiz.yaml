@@ -1,0 +1,73 @@
+questions:
+  - id: check-first
+    kind: knowledge
+    type: single
+    prompt: "Trong cây giả thuyết của bài, nên kiểm nhánh nào trước tiên, và vì sao?"
+    options:
+      - { id: a, text: "Phân khúc, vì đó là câu giám đốc hỏi" }
+      - { id: b, text: "Thời tiết, vì đó là nguyên nhân hay gặp" }
+      - { id: c, text: "Lịch và dữ liệu, vì rẻ nhất và hay đúng" }
+      - { id: d, text: "Mùa vụ, vì cần dữ liệu năm trước" }
+  - id: per-day-change
+    kind: data
+    type: single
+    prompt: "Tính theo lượt thuê **mỗi ngày**, tháng 10/2012 thay đổi bao nhiêu so với tháng 9/2012?"
+    options:
+      - { id: a, text: "Khoảng −3%" }
+      - { id: b, text: "Khoảng −9%" }
+      - { id: c, text: "Khoảng −12%" }
+      - { id: d, text: "Khoảng −20%" }
+  - id: last-year
+    kind: data
+    type: single
+    prompt: "Cùng chuyển tháng 9 → 10 năm 2011, lượt thuê mỗi ngày thay đổi bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng −6%" }
+      - { id: b, text: "Gần như không đổi" }
+      - { id: c, text: "Khoảng +6%" }
+      - { id: d, text: "Khoảng −12%" }
+  - id: clear-day-change
+    kind: data
+    type: single
+    prompt: "Theo `same_weather_change`, chỉ so ngày trời quang, tháng 10/2012 thấp hơn tháng 9/2012 bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 12%" }
+      - { id: b, text: "Khoảng 3%" }
+      - { id: c, text: "Khoảng 9%" }
+      - { id: d, text: "Không thấp hơn, cao hơn 5%" }
+  - id: casual-share
+    kind: data
+    type: single
+    prompt: "Khách vãng lai (`casual`) chỉ chiếm khoảng 20% lượt thuê tháng 9/2012. Họ chiếm bao nhiêu phần mức giảm sang tháng 10?"
+    options:
+      - { id: a, text: "Khoảng 20%, đúng bằng tỉ trọng" }
+      - { id: b, text: "Khoảng 10%" }
+      - { id: c, text: "Gần như toàn bộ mức giảm" }
+      - { id: d, text: "Gần một nửa (khoảng 47%)" }
+  - id: mix-adjusted
+    kind: data
+    type: single
+    prompt: "Nếu tháng 10/2012 có cơ cấu thời tiết như tháng 9 (73% ngày quang, 27% ngày mây), lượt mỗi ngày tháng 10 sẽ thấp hơn tháng 9 khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 3%" }
+      - { id: b, text: "Khoảng 12%" }
+      - { id: c, text: "Khoảng 9%" }
+      - { id: d, text: "Không thấp hơn" }
+  - id: conclusion
+    kind: knowledge
+    type: single
+    prompt: "Kết luận nào phù hợp nhất để gửi giám đốc?"
+    options:
+      - { id: a, text: "Khách đang bỏ dịch vụ, nhất là vãng lai" }
+      - { id: b, text: "Không rõ nguyên nhân, cần thêm một tháng" }
+      - { id: c, text: "Phần lớn do mùa vụ và thời tiết xấu hơn" }
+      - { id: d, text: "Tháng 10 dài hơn tháng 9 một ngày" }
+  - id: limitation
+    kind: knowledge
+    type: single
+    prompt: "Phân tích trên `day.csv` **chưa** chứng minh được điều gì?"
+    options:
+      - { id: a, text: "Tháng 10/2012 có nhiều ngày mây hơn tháng 9" }
+      - { id: b, text: "Số thành viên đang dùng dịch vụ không giảm" }
+      - { id: c, text: "Ngày 29/10/2012 chỉ có 22 lượt thuê" }
+      - { id: d, text: "Năm 2011 tháng 10 cũng thấp hơn tháng 9" }

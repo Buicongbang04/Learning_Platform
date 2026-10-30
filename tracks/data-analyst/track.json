@@ -196,5 +196,53 @@
         "Portfolio"
       ]
     }
-  ]
+  ],
+  "capstone": {
+    "title": "Dunnhumby: The Complete Journey",
+    "readme": "capstone/README.md",
+    "milestones": [
+      {
+        "id": "m01",
+        "title": "Nạp dữ liệu, làm sạch, data dictionary",
+        "after": "06-data-cleaning",
+        "doc": "capstone/milestones/m01-load-clean-dictionary.md"
+      },
+      {
+        "id": "m02",
+        "title": "Trả lời tình huống 1–4 bằng SQL",
+        "after": "07-descriptive-eda",
+        "doc": "capstone/milestones/m02-sql-business-questions.md"
+      },
+      {
+        "id": "m03",
+        "title": "Star schema và định nghĩa metric dùng chung",
+        "after": "09-analytics-data-modeling",
+        "doc": "capstone/milestones/m03-star-schema-metrics.md"
+      },
+      {
+        "id": "m04",
+        "title": "Dashboard Metabase/Superset và Streamlit",
+        "after": "10-bi-dashboards",
+        "doc": "capstone/milestones/m04-dashboards.md"
+      },
+      {
+        "id": "m05",
+        "title": "RFM, cohort retention, market basket, nhân khẩu học",
+        "after": "12-product-customer-analytics",
+        "doc": "capstone/milestones/m05-segmentation-cohort-basket.md"
+      },
+      {
+        "id": "m06",
+        "title": "Hiệu quả campaign/coupon",
+        "after": "13-business-financial-analytics",
+        "doc": "capstone/milestones/m06-campaign-coupon.md"
+      },
+      {
+        "id": "m07",
+        "title": "Memo và thuyết trình cho ban điều hành",
+        "after": "15-stakeholder-storytelling-interview",
+        "doc": "capstone/milestones/m07-exec-memo.md"
+      }
+    ]
+  }
 }

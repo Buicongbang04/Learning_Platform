@@ -1,0 +1,73 @@
+questions:
+  - id: two-year-sentence
+    kind: data
+    type: single
+    prompt: "`contract_two_year` có odds ratio 0.25 (khoảng tin cậy 0.17–0.37). Câu nào đúng để gửi Head of Retention?"
+    options:
+      - { id: a, text: "Chỉ 25% khách hợp đồng hai năm đã rời bỏ trong tháng gần nhất của dữ liệu" }
+      - { id: b, text: "Xác suất rời bỏ thấp hơn month-to-month đúng 25 điểm phần trăm tuyệt đối" }
+      - { id: c, text: "Odds rời bỏ thấp hơn khoảng 75% so với month-to-month, cùng yếu tố khác" }
+      - { id: d, text: "Chuyển mọi khách sang hợp đồng hai năm sẽ giảm được 75% số khách rời bỏ" }
+  - id: tenure-two-years
+    kind: data
+    type: single
+    prompt: "`tenure_years` có odds ratio 0.684. Hai khách giống hệt nhau trừ việc một người gắn bó lâu hơn 2 năm: odds rời bỏ của người đó thấp hơn khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Thấp hơn khoảng 63%" }
+      - { id: b, text: "Thấp hơn khoảng 53%" }
+      - { id: c, text: "Thấp hơn khoảng 32%" }
+      - { id: d, text: "Thấp hơn khoảng 68%" }
+  - id: weakest-factor
+    kind: data
+    type: single
+    prompt: "Trong bảng odds ratio, yếu tố nào có bằng chứng yếu nhất (khoảng tin cậy sát 1 nhất, p-value lớn nhất)?"
+    options:
+      - { id: a, text: "`senior`" }
+      - { id: b, text: "`tech_support`" }
+      - { id: c, text: "`paperless`" }
+      - { id: d, text: "`monthly_charges_10`" }
+  - id: paperless-causal
+    kind: knowledge
+    type: single
+    prompt: "`paperless` có odds ratio 1.60. Đề xuất nào hợp lý nhất?"
+    options:
+      - { id: a, text: "Bỏ hoá đơn điện tử cho mọi khách để giảm 60% số khách rời ngay trong quý tới" }
+      - { id: b, text: "Coi là tín hiệu tương quan, kiểm lại bằng phân tầng hoặc thử nghiệm" }
+      - { id: c, text: "Loại cột paperless vì hệ số dương làm model khó giải thích" }
+      - { id: d, text: "Kết luận paperless là nguyên nhân lớn thứ hai sau cáp quang" }
+  - id: top-decile
+    kind: data
+    type: single
+    prompt: "Trên tập test, decile 1 (10% khách điểm cao nhất) có bao nhiêu phần trăm rời bỏ, và lift là bao nhiêu?"
+    options:
+      - { id: a, text: "73.4% rời bỏ, lift 2.77" }
+      - { id: b, text: "27.8% rời bỏ, lift 1.00" }
+      - { id: c, text: "54.5% rời bỏ, lift 2.06" }
+      - { id: d, text: "84.1% rời bỏ, lift 3.17" }
+  - id: same-budget
+    kind: data
+    type: single
+    prompt: "Quy tắc gọi 476 khách test và bắt được 246 khách rời. Model, gọi 476 khách điểm cao nhất, bắt được bao nhiêu?"
+    options:
+      - { id: a, text: "246 khách (52.7%), bằng quy tắc" }
+      - { id: b, text: "309 khách (66.2%)" }
+      - { id: c, text: "286 khách (61.2%)" }
+      - { id: d, text: "467 khách (100%)" }
+  - id: why-statsmodels
+    kind: knowledge
+    type: single
+    prompt: "Vì sao bài dùng `statsmodels` thay cho `LogisticRegression()` mặc định của scikit-learn để đọc hệ số?"
+    options:
+      - { id: a, text: "scikit-learn không fit được logistic regression khi trong X có các biến nhị phân 0/1" }
+      - { id: b, text: "Mặc định sklearn có regularization L2 làm co hệ số, và không cho CI hay p-value" }
+      - { id: c, text: "statsmodels cho ROC-AUC cao hơn trên cùng dữ liệu test" }
+      - { id: d, text: "statsmodels tự chọn đặc trưng quan trọng nên không cần đặt nhóm tham chiếu" }
+  - id: auc-meaning
+    kind: knowledge
+    type: single
+    prompt: "ROC-AUC 0.84 trên test nghĩa là gì?"
+    options:
+      - { id: a, text: "Model dự đoán đúng 84% khách trong tập test" }
+      - { id: b, text: "84% khách rời bỏ nằm trong 50% khách điểm cao nhất" }
+      - { id: c, text: "Model giữ lại được 84% số khách sắp rời bỏ" }
+      - { id: d, text: "Lấy ngẫu nhiên một khách rời, một khách ở lại: 84% khả năng khách rời có điểm cao hơn" }

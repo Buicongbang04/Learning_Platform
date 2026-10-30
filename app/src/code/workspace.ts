@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type WorkspaceFile = { path: string; content: string; editable: boolean };
+export type WorkspaceFile = { path: string; content: string; editable: boolean; binary?: false } | { path: string; binary: true };
 export type RunResult = {
   kind: "test" | "file";
   code: number | null;
@@ -64,6 +64,7 @@ export function useWorkspace(dir: string) {
         const { files: list } = await request<{ files: WorkspaceFile[] }>(`/api/workspace/files?dir=${encodeURIComponent(dir)}`);
         if (quiet && isDirty()) return;
         for (const file of list) {
+          if (file.binary) continue;
           if (latest.current[file.path] !== file.content) replace(file.path, file.content);
           saved.current[file.path] = file.content;
         }
@@ -110,6 +111,18 @@ export function useWorkspace(dir: string) {
       timer.current = window.setTimeout(() => void save(), 800);
     },
     [save],
+  );
+
+  const openExternal = useCallback(
+    async (path: string): Promise<string | null> => {
+      try {
+        await request("/api/workspace/open-file", { dir, path });
+        return null;
+      } catch (reason) {
+        return (reason as Error).message;
+      }
+    },
+    [dir],
   );
 
   const reset = useCallback(
@@ -159,5 +172,5 @@ export function useWorkspace(dir: string) {
     };
   }, [load, save]);
 
-  return { status, error, files, revisions, saveState, running, result, load, change, save, reset, runTests, runFile, contentOf, clearResult };
+  return { status, error, files, revisions, saveState, running, result, load, change, save, reset, openExternal, runTests, runFile, contentOf, clearResult };
 }

@@ -1,0 +1,109 @@
+questions:
+  - id: signups-by-channel
+    kind: knowledge
+    type: single
+    prompt: "Trưởng nhóm marketing hỏi: \"Tháng trước có bao nhiêu khách mới đăng ký, chia theo từng kênh (Facebook, Google, giới thiệu)?\" Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: checkout-drop
+    kind: knowledge
+    type: single
+    prompt: "PM hỏi: \"Tỉ lệ chuyển đổi ở bước thanh toán tuần này giảm 3 điểm phần trăm. Do đâu?\" Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: warehouse-demand
+    kind: knowledge
+    type: single
+    prompt: "Giám đốc chuỗi cung ứng hỏi: \"Quý tới mỗi kho sẽ cần xuất khoảng bao nhiêu thùng hàng?\" Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: warehouse-order-qty
+    kind: knowledge
+    type: single
+    prompt: "Cùng giám đốc đó hỏi tiếp: \"Mỗi kho nên đặt nhập bao nhiêu thùng để tổng chi phí lưu kho và chi phí thiếu hàng thấp nhất, với sức chứa hiện có?\" Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: churn-risk
+    kind: knowledge
+    type: single
+    prompt: "Team CRM hỏi: \"Những khách nào có khả năng ngừng mua trong 30 ngày tới?\" Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: voucher-budget
+    kind: knowledge
+    type: single
+    prompt: "Team CRM hỏi tiếp: \"Với ngân sách 50 triệu đồng, nên gửi voucher cho nhóm khách nào để giữ chân được nhiều khách nhất?\" Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: region-split
+    kind: knowledge
+    type: single
+    prompt: "Giám đốc vùng hỏi: \"Doanh thu miền Bắc giảm trong khi miền Nam tăng. Khác biệt đến từ giá, cơ cấu sản phẩm hay một vài cửa hàng?\" Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: delivery-dashboard
+    kind: knowledge
+    type: single
+    prompt: "Trưởng phòng vận hành cần màn hình hiện thời gian giao hàng trung bình theo tỉnh, cập nhật mỗi sáng cho tuần đang chạy. Đây là loại analytics nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: ml-for-counting
+    kind: knowledge
+    type: single
+    prompt: "Một đồng nghiệp huấn luyện model machine learning để trả lời câu \"Mỗi tháng năm ngoái có bao nhiêu đơn bị huỷ?\" (dữ liệu đơn và trạng thái huỷ đã có đủ). Câu hỏi này thuộc loại nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: excel-forecast
+    kind: knowledge
+    type: single
+    prompt: "Kế toán trưởng làm trong Excel: lấy doanh thu tháng 12 năm trước nhân tỉ lệ tăng trưởng 11 tháng đầu năm nay để ước doanh thu tháng 12 năm nay. Việc này thuộc loại nào?"
+    options:
+      - { id: a, text: "Descriptive (mô tả)" }
+      - { id: b, text: "Diagnostic (chẩn đoán)" }
+      - { id: c, text: "Predictive (dự báo)" }
+      - { id: d, text: "Prescriptive (đề xuất)" }
+  - id: missing-customer-id
+    kind: knowledge
+    type: single
+    prompt: "Bạn phát hiện khoảng một phần tư dòng giao dịch thiếu mã khách hàng, đếm số dòng đó, rồi quyết định giữ chúng cho số doanh thu nhưng loại khỏi số khách. Bạn đang ở bước nào của Key Concepts of Data?"
+    options:
+      - { id: a, text: "Collection (thu thập)" }
+      - { id: b, text: "Cleanup (làm sạch)" }
+      - { id: c, text: "Exploration (khám phá)" }
+      - { id: d, text: "Visualisation (trực quan)" }
+  - id: ab-noise
+    kind: knowledge
+    type: single
+    prompt: "Nhóm B của một thử nghiệm có tỉ lệ chuyển đổi cao hơn nhóm A 0.4 điểm phần trăm. Bạn kiểm xem chênh lệch đó có thể chỉ do ngẫu nhiên không. Bạn đang ở bước nào của Key Concepts of Data?"
+    options:
+      - { id: a, text: "Exploration (khám phá)" }
+      - { id: b, text: "Visualisation (trực quan)" }
+      - { id: c, text: "Statistical analysis (thống kê)" }
+      - { id: d, text: "Machine learning (học máy)" }

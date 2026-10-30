@@ -1,0 +1,74 @@
+questions:
+  - id: robots-404
+    kind: data
+    type: single
+    prompt: "Khi bạn chạy bài, `https://books.toscrape.com/robots.txt` trả về gì, và `robots_allows` hiểu thế nào?"
+    options:
+      - { id: a, text: "HTTP 200, cấm mọi bot; phải dừng crawl" }
+      - { id: b, text: "HTTP 404; không có giới hạn nào, được crawl" }
+      - { id: c, text: "HTTP 403; chỉ cấm bot không có User-Agent" }
+      - { id: d, text: "HTTP 500; theo chuẩn RFC 9309 phải coi như được phép crawl" }
+  - id: catalog-size
+    kind: data
+    type: single
+    prompt: "Crawl hết danh mục, bạn có bao nhiêu sách (theo `url`) và bao nhiêu tiêu đề khác nhau?"
+    options:
+      - { id: a, text: "1 000 sách, 999 tiêu đề" }
+      - { id: b, text: "1 000 sách, 1 000 tiêu đề" }
+      - { id: c, text: "980 sách, 980 tiêu đề" }
+      - { id: d, text: "999 sách, 999 tiêu đề" }
+  - id: dedupe-key
+    kind: knowledge
+    type: single
+    prompt: "Vì sao bỏ trùng theo `url` chứ không theo `title`?"
+    options:
+      - { id: a, text: "So sánh URL nhanh hơn so sánh tiêu đề dài" }
+      - { id: b, text: "pandas chỉ bỏ trùng được trên cột chuỗi ngắn" }
+      - { id: c, text: "Tiêu đề có thể chứa dấu hay ký tự đặc biệt nên không so sánh được" }
+      - { id: d, text: "Hai sách khác nhau có thể trùng tên; URL mới là định danh" }
+  - id: rating-price
+    kind: data
+    type: single
+    prompt: "Giá trung bình của sách 5 sao so với sách 1 sao trên toàn danh mục là bao nhiêu?"
+    options:
+      - { id: a, text: "35.37 so với 34.56 GBP: gần như bằng nhau" }
+      - { id: b, text: "52.10 so với 21.40 GBP: gấp hơn hai lần" }
+      - { id: c, text: "28.90 so với 41.20 GBP: sách 5 sao rẻ hơn" }
+      - { id: d, text: "45.00 so với 35.00 GBP: đắt hơn khoảng 30%" }
+  - id: sandbox-insight
+    kind: knowledge
+    type: single
+    prompt: "Team pricing hỏi: \"Vậy đánh giá không ảnh hưởng tới giá sách?\" Câu trả lời đúng là gì?"
+    options:
+      - { id: a, text: "Đúng, hệ số tương quan 0.03 chứng minh là không ảnh hưởng gì" }
+      - { id: b, text: "Sai, cần thêm dữ liệu mới thấy ảnh hưởng rõ" }
+      - { id: c, text: "Không kết luận được: giá và sao ở sandbox là dữ liệu giả" }
+      - { id: d, text: "Đúng với sách tiếng Anh, chưa chắc với sách Việt" }
+  - id: mojibake
+    kind: knowledge
+    type: single
+    prompt: "Dùng `requests` rồi đọc `r.text`, giá hiện thành `Â£51.77`. Nguyên nhân?"
+    options:
+      - { id: a, text: "Website cố tình chèn ký tự lạ để chặn scraper" }
+      - { id: b, text: "Server không gửi charset, requests đoán ISO-8859-1" }
+      - { id: c, text: "BeautifulSoup đổi bảng mã khi parse bằng lxml" }
+      - { id: d, text: "Giá được lưu bằng bảng mã cp1252 ngay trong mã nguồn HTML" }
+  - id: truncated-title
+    kind: knowledge
+    type: single
+    prompt: "Vì sao lấy tiêu đề từ thuộc tính `title` của thẻ `<a>` thay vì chữ hiển thị?"
+    options:
+      - { id: a, text: "Chữ hiển thị thay đổi theo trình duyệt" }
+      - { id: b, text: "Thuộc tính title luôn được dịch sang tiếng Anh" }
+      - { id: c, text: "Chữ hiển thị bị cắt thành \"...\" với tên dài" }
+      - { id: d, text: "BeautifulSoup không đọc được chữ trong thẻ a" }
+  - id: real-competitor
+    kind: knowledge
+    type: multi
+    prompt: "Trước khi chạy scraper này trên website thật của đối thủ, bạn cần kiểm những gì? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Điều khoản sử dụng (ToS) có cấm thu thập tự động không" }
+      - { id: b, text: "Có API hoặc feed giá chính thức thay cho scraping không" }
+      - { id: c, text: "Dữ liệu có chứa thông tin cá nhân (tên, email người review) không" }
+      - { id: d, text: "Có cần đổi User-Agent giả làm trình duyệt để không bị chặn không" }
+      - { id: e, text: "Tần suất và giờ chạy để không làm chậm website của họ" }

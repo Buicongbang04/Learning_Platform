@@ -1,0 +1,64 @@
+questions:
+  - id: failed-claims
+    kind: data
+    type: single
+    prompt: "Trên dữ liệu thật, với rel_tol = 1%, bao nhiêu claim trong LLM_CLAIMS không đạt?"
+    options:
+      - { id: a, text: "2 claim" }
+      - { id: b, text: "3 claim" }
+      - { id: c, text: "4 claim" }
+      - { id: d, text: "6 claim" }
+  - id: best-weekday
+    kind: data
+    type: single
+    prompt: "Theo data dictionary (weekday 0 = Chủ nhật), ngày nào trong tuần có lượt thuê trung bình cao nhất?"
+    options:
+      - { id: a, text: "Thứ Sáu (mã 5)" }
+      - { id: b, text: "Thứ Bảy (mã 6)" }
+      - { id: c, text: "Chủ nhật (mã 0)" }
+      - { id: d, text: "Thứ Năm (mã 4)" }
+  - id: temp-celsius
+    kind: data
+    type: single
+    prompt: "Nhiệt độ trung bình hai năm theo °C là bao nhiêu?"
+    options:
+      - { id: a, text: "0.50 °C" }
+      - { id: b, text: "12.4 °C" }
+      - { id: c, text: "23.7 °C" }
+      - { id: d, text: "20.3 °C" }
+  - id: swapped-growth
+    kind: data
+    type: single
+    prompt: "Claim \"khách vãng lai tăng 68.4%\" sai. 68.4% thực ra là gì?"
+    options:
+      - { id: a, text: "Tăng trưởng tổng lượt thuê" }
+      - { id: b, text: "Tăng trưởng lượt của thành viên" }
+      - { id: c, text: "Tỉ trọng khách vãng lai 2012" }
+      - { id: d, text: "Tăng trưởng ngày đông nhất" }
+  - id: root-cause
+    kind: knowledge
+    type: single
+    prompt: "Bốn claim sai có chung nguyên nhân gốc nào?"
+    options:
+      - { id: a, text: "Chatbot bịa số ngẫu nhiên không có cơ sở" }
+      - { id: b, text: "Dữ liệu Bike Sharing có lỗi ở nhiều cột" }
+      - { id: c, text: "Số thật bị gắn nhầm nhãn, mã hoặc đơn vị" }
+      - { id: d, text: "Sai số làm tròn khi chép số sang câu chữ" }
+  - id: corr-wording
+    kind: knowledge
+    type: single
+    prompt: "temp_corr = 0.63 là đúng. Câu nào được phép viết trong báo cáo gửi giám đốc?"
+    options:
+      - { id: a, text: "Ngày ấm hơn thường có nhiều lượt thuê hơn, xét cả hai năm" }
+      - { id: b, text: "Tăng nhiệt độ 1 độ sẽ làm lượt thuê tăng thêm 63%" }
+      - { id: c, text: "Nhiệt độ giải thích 63% biến động của lượt thuê" }
+      - { id: d, text: "Mùa hè càng nóng thì lượt thuê trong ngày càng tăng" }
+  - id: what-to-send
+    kind: knowledge
+    type: single
+    prompt: "Bạn cần LLM viết SQL trên bảng đơn hàng có mã khách và email. Gửi gì là phù hợp nhất (công cụ chưa được công ty duyệt cho dữ liệu khách)?"
+    options:
+      - { id: a, text: "100 dòng đầu của bảng, để LLM hiểu dữ liệu" }
+      - { id: b, text: "Hồ sơ cột đã che mã khách, email và câu hỏi" }
+      - { id: c, text: "Toàn bộ bảng nén zip, để LLM tự phân tích" }
+      - { id: d, text: "100 dòng đầu, xoá cột email nhưng giữ mã khách" }

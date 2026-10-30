@@ -1,0 +1,109 @@
+questions:
+  - id: tool-pm-selfserve
+    kind: knowledge
+    type: single
+    prompt: "PM của một app thương mại điện tử muốn tự xem funnel và retention theo phiên bản app mỗi ngày, không cần nhờ DA viết SQL. Công ty đã có warehouse. Nên đưa PM công cụ nào?"
+    options:
+      - { id: a, text: "GA4, vì miễn phí và có sẵn báo cáo nguồn traffic" }
+      - { id: b, text: "Amplitude hoặc Mixpanel, có funnel và retention dựng sẵn" }
+      - { id: c, text: "Một notebook pandas mà PM chạy lại mỗi sáng" }
+      - { id: d, text: "Segment, vì nó gom mọi sự kiện về một chỗ" }
+  - id: tool-official-ltv
+    kind: knowledge
+    type: single
+    prompt: "CFO cần LTV/CAC theo kênh cho buổi họp HĐQT: phải nối sự kiện với đơn hàng, hoàn tiền và chi phí marketing từng kênh, và con số phải kiểm lại được. Làm ở đâu?"
+    options:
+      - { id: a, text: "Trong Amplitude, vì nó đã có sẵn dữ liệu sự kiện" }
+      - { id: b, text: "Trong GA4, vì nó nối được với chi phí Google Ads" }
+      - { id: c, text: "Trong một file Excel tổng hợp tay từ các báo cáo" }
+      - { id: d, text: "Trong warehouse bằng SQL/dbt, có định nghĩa ghi lại" }
+  - id: tool-campaign-traffic
+    kind: knowledge
+    type: single
+    prompt: "Team marketing một website bán hàng muốn biết chiến dịch Google Ads và email nào đem về nhiều phiên và đơn nhất. Công cụ đầu tiên nên dùng?"
+    options:
+      - { id: a, text: "GA4 với UTM, nối Google Ads và xuất sang BigQuery" }
+      - { id: b, text: "PostHog tự host để giữ dữ liệu trong hạ tầng mình" }
+      - { id: c, text: "RudderStack để gửi sự kiện tới nhiều đích khác nhau" }
+      - { id: d, text: "Bảng RFM tính lại mỗi tuần trong warehouse của công ty" }
+  - id: tool-selfhost
+    kind: knowledge
+    type: single
+    prompt: "Một startup fintech không được đưa dữ liệu hành vi người dùng ra hạ tầng bên ngoài, và muốn product analytics kèm feature flag, session replay. Chọn gì?"
+    options:
+      - { id: a, text: "Mixpanel bản cloud, bật chế độ ẩn danh IP" }
+      - { id: b, text: "GA4, tắt chia sẻ dữ liệu với Google" }
+      - { id: c, text: "PostHog tự host trong hạ tầng của công ty" }
+      - { id: d, text: "Google Sheets nhận sự kiện qua Apps Script" }
+  - id: tool-cdp
+    kind: knowledge
+    type: single
+    prompt: "Công ty dùng warehouse, Amplitude và hai nền tảng quảng cáo. Mỗi nơi có SDK riêng, tên sự kiện lệch nhau. Họ muốn instrument một lần và kiểm schema theo tracking plan. Đó là loại công cụ nào?"
+    options:
+      - { id: a, text: "Một BI tool như Metabase để vẽ mọi nguồn" }
+      - { id: b, text: "Một product analytics tool thứ hai để đối chiếu" }
+      - { id: c, text: "Một dbt project chuẩn hoá tên sau khi dữ liệu về" }
+      - { id: d, text: "Một CDP như Segment hoặc RudderStack (Protocols)" }
+  - id: retention-wholesale
+    kind: knowledge
+    type: single
+    prompt: "Khách sỉ của một nhà phân phối đặt hàng theo quý. Head of Sales hỏi: \"Bao nhiêu khách của cohort quý 1 chưa bỏ hẳn?\". Loại retention nào hợp?"
+    options:
+      - { id: a, text: "Unbounded: có mua ở tháng k hoặc bất kỳ lúc nào sau đó" }
+      - { id: b, text: "Bracket theo tháng: có mua đúng trong tháng thứ k" }
+      - { id: c, text: "N-day: quay lại đúng ngày 1, ngày 7, ngày 30" }
+      - { id: d, text: "Revenue retention: doanh thu tháng k so với tháng 0" }
+  - id: retention-daily-app
+    kind: knowledge
+    type: single
+    prompt: "Một app học từ vựng muốn người dùng mở app mỗi ngày. PM hỏi bản onboarding mới có giữ người dùng tốt hơn không. Nên báo retention gì?"
+    options:
+      - { id: a, text: "Unbounded theo tháng, vì luôn giảm dần và dễ đọc" }
+      - { id: b, text: "N-day (ngày 1, 7, 30) theo cohort ngày cài đặt" }
+      - { id: c, text: "Doanh thu tháng k chia doanh thu tháng 0 của cohort" }
+      - { id: d, text: "Số người dùng hoạt động hằng tháng (MAU) toàn app" }
+  - id: funnel-unit
+    kind: knowledge
+    type: single
+    prompt: "Team checkout ra trang thanh toán mới và hỏi: \"Một lượt ghé có giỏ hàng giờ có hoàn tất đơn trong cùng lượt nhiều hơn không?\". Đếm funnel theo đơn vị nào?"
+    options:
+      - { id: a, text: "Theo visitor, mọi sự kiện trong cả kỳ dữ liệu" }
+      - { id: b, text: "Theo sản phẩm, đếm người xem và người mua từng mã" }
+      - { id: c, text: "Theo phiên, mọi bước nằm trong cùng một phiên" }
+      - { id: d, text: "Theo đơn hàng, đếm đơn đã thanh toán mỗi ngày" }
+  - id: simple-ltv
+    kind: knowledge
+    type: single
+    prompt: "Ví dụ giả định: AOV 50 USD, 6 đơn mỗi khách mỗi năm, biên lợi nhuận gộp 40%, retention năm 60%. LTV đơn giản (lợi nhuận gộp) là bao nhiêu?"
+    options:
+      - { id: a, text: "300 USD" }
+      - { id: b, text: "120 USD" }
+      - { id: c, text: "500 USD" }
+      - { id: d, text: "750 USD" }
+  - id: payback
+    kind: knowledge
+    type: single
+    prompt: "Ví dụ giả định: CAC 70 USD. Lợi nhuận gộp mỗi khách của cohort theo tháng k = 0, 1, 2, 3, 4 là 30, 15, 15, 10, 10 USD. Payback ở tháng nào?"
+    options:
+      - { id: a, text: "Tháng k = 1" }
+      - { id: b, text: "Tháng k = 2" }
+      - { id: c, text: "Tháng k = 4" }
+      - { id: d, text: "Tháng k = 3" }
+  - id: rfm-quintile-f
+    kind: knowledge
+    type: single
+    prompt: "Trên Online Retail II, 1 493 trong 4 338 khách (34%) có đúng 1 đơn. Chấm điểm F bằng quintile (20% mỗi mức) gặp vấn đề gì?"
+    options:
+      - { id: a, text: "Không có vấn đề, quintile luôn cân bằng 20% mỗi mức" }
+      - { id: b, text: "Khách 1 đơn bị đẩy hết lên mức điểm F cao nhất là 5" }
+      - { id: c, text: "Khách cùng 1 đơn bị chia vào hai mức theo thứ tự ngẫu nhiên" }
+      - { id: d, text: "Quintile không tính được khi có giá trị trùng nhau" }
+  - id: basket-priority
+    kind: knowledge
+    type: single
+    prompt: "Merchandiser chỉ làm được một combo tuần này. Luật X: support 0.3%, lift 25. Luật Y: support 4.2%, lift 6.4. Hai cặp có giá tương đương. Ưu tiên luật nào và vì sao?"
+    options:
+      - { id: a, text: "X, vì lift càng cao thì càng nhiều doanh thu tăng thêm" }
+      - { id: b, text: "Y, vì xuất hiện trong gấp 14 lần số giỏ mà lift vẫn rõ" }
+      - { id: c, text: "X, vì support thấp nghĩa là còn nhiều dư địa để bán kèm" }
+      - { id: d, text: "Không chọn được nếu chưa biết confidence của mỗi luật" }

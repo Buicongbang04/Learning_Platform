@@ -57,6 +57,9 @@ dependencies = [
     "skl2onnx>=1.20.0",
     "plotly>=5.24",
     "openpyxl>=3.1.5",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "mlxtend>=0.23",
 ]
 
 [tool.uv]

@@ -1,0 +1,14 @@
+name: retail_mart
+version: "1.0.0"
+config-version: 2
+profile: retail
+
+model-paths: ["models"]
+test-paths: ["data_tests"]   # singular test; tách khỏi thư mục tests/ của bài tập
+
+models:
+  retail_mart:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

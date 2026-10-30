@@ -34,7 +34,7 @@ def no_kaggle_env(monkeypatch, tmp_path):
 
 def test_registry_entries_complete():
     dd = load("download_dataset")
-    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud", "bike-sharing-uci", "online-retail-ii", "dunnhumby-complete-journey"} <= set(dd.DATASETS)
+    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud", "bike-sharing-uci", "online-retail-ii", "dunnhumby-complete-journey", "grocery-sales-synthetic", "marketing-ab", "ecommerce-events", "owid-co2"} <= set(dd.DATASETS)
     for ds in dd.DATASETS.values():
         assert ds.source in ("kaggle", "url")
         assert ds.ref and ds.files and ds.license and ds.homepage
@@ -91,6 +91,7 @@ def test_url_download_writes_file(monkeypatch, tmp_path):
 
     class Resp:
         status_code = 200
+        headers = {"content-type": "text/csv"}
         content = b"recency,history\n10,142.44\n"
 
         def raise_for_status(self):
@@ -157,3 +158,40 @@ def test_zip_missing_member_names_it(monkeypatch, tmp_path):
     monkeypatch.setattr(dd, "_get", lambda url: _zip_bytes([("d/a.csv", b"1")]))
     with pytest.raises(SystemExit, match="nope.csv"):
         dd.download("t-zip2", tmp_path)
+
+
+def _html_resp():
+    class Resp:
+        status_code = 200
+        headers = {"Content-Type": "text/html; charset=utf-8"}
+        content = b"<html>Quota exceeded</html>"
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            yield self.content
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    return Resp()
+
+
+def test_html_response_single_url_is_rejected(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    monkeypatch.setattr(dd.requests, "get", lambda *a, **k: _html_resp())
+    with pytest.raises(SystemExit, match="HTML"):
+        dd.download("hillstrom", tmp_path)
+
+
+def test_html_response_tuple_url_is_rejected(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-tuple", _url_dataset(dd, ("http://h/a", "http://h/b"), ["a.csv", "b.csv"]))
+    monkeypatch.setattr(dd.requests, "get", lambda *a, **k: _html_resp())
+    with pytest.raises(SystemExit, match="HTML"):
+        dd.download("t-tuple", tmp_path)
+    assert not (tmp_path / "a.csv").exists()

@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: stg_sales_lines
+    description: Mỗi dòng của tệp nguồn một dòng (kể cả dòng huỷ, dòng giá 0), đã đổi tên cột và ép kiểu.
+    columns:
+      - name: line_id
+        data_tests: [unique, not_null]
+      - name: invoice_no
+        data_tests: [not_null]
+      - name: is_valid_sale
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]

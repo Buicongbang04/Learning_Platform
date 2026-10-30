@@ -1,0 +1,55 @@
+# Định nghĩa metric dùng chung cho dashboard Finance và Marketing (Online Retail II, bảng fct_sales).
+# Cột của fct_sales: line_id, invoice_no, invoice_month, country, customer_id (NULL = khách vãng lai),
+# first_purchase_month, revenue. Cú pháp và các trường bắt buộc: xem docstring đầu metric_layer.py.
+metrics:
+  - name: revenue                      # mẫu đã viết đủ
+    label: Doanh thu gộp
+    description: >
+      Tổng Quantity * Price của dòng hàng hợp lệ (bỏ hoá đơn C..., Quantity <= 0, Price <= 0), GBP, theo ngày
+      lập hoá đơn. Gộp: chưa trừ các hoá đơn bị huỷ về sau.
+    owner: Finance analytics (trưởng nhóm)
+    type: sum
+    expr: revenue
+    additive_over_time: true
+    caveats:
+      - Không phải doanh thu ròng của kế toán; doanh thu ròng trừ thêm giá trị hoá đơn huỷ.
+      - Có các mã phí (POST, DOT, M, AMAZONFEE...); báo cáo sản phẩm cần lọc riêng.
+
+  # TODO: viết đủ bốn metric dưới (thay mọi TODO): mô tả cho người không biết SQL, owner, công thức,
+  # additive_over_time đúng, caveats ghi lưu ý thật của dữ liệu.
+  - name: orders
+    label: Số đơn
+    description: TODO
+    owner: TODO
+    type: count_distinct
+    expr: TODO
+    additive_over_time: false
+    caveats: []
+
+  - name: active_customers
+    label: Khách hoạt động
+    description: TODO
+    owner: TODO
+    type: count_distinct
+    expr: TODO
+    additive_over_time: true
+    caveats: []
+
+  - name: new_customers
+    label: Khách mới
+    description: TODO
+    owner: TODO
+    type: count_distinct
+    expr: TODO
+    # gợi ý: filters là danh sách điều kiện SQL trên cột của fct_sales
+    additive_over_time: false
+    caveats: []
+
+  - name: aov
+    label: Giá trị đơn trung bình
+    description: TODO
+    owner: TODO
+    type: sum
+    expr: TODO
+    additive_over_time: true
+    caveats: []

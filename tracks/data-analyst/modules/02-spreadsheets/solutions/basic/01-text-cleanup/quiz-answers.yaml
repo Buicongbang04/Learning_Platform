@@ -1,0 +1,6 @@
+spaces-count: [c]
+case-codes: [a]
+proper-quote: [b]
+nbsp: [d]
+substitute-vs-replace: [c]
+keep-raw: [a, b, d]

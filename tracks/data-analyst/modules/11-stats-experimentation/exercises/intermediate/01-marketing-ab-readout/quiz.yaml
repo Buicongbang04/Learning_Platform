@@ -1,0 +1,73 @@
+questions:
+  - id: overall-lift
+    kind: data
+    type: single
+    prompt: "Chênh lệch tỉ lệ chuyển đổi giữa nhóm `ad` và `psa` (điểm %) cùng khoảng tin cậy 95% là bao nhiêu?"
+    options:
+      - { id: a, text: "+0.43 điểm % [0.33; 0.53]" }
+      - { id: b, text: "+0.77 điểm % [0.60; 0.94]" }
+      - { id: c, text: "+2.55 điểm % [2.51; 2.60]" }
+      - { id: d, text: "+43.1 điểm % [33.3; 52.8]" }
+  - id: srm-reading
+    kind: data
+    type: single
+    prompt: "Kiểm SRM tổng thể so với thiết kế 96/4 cho p ≈ 0.9998. Nếu brief ghi thiết kế 95/5, p sẽ thế nào?"
+    options:
+      - { id: a, text: "Vẫn gần 1, vì cỡ mẫu rất lớn nên SRM không nhạy với tỉ lệ thiết kế" }
+      - { id: b, text: "Khoảng 0.05, ngay sát ngưỡng ý nghĩa thông thường của kiểm định" }
+      - { id: c, text: "Nhỏ hơn 1e-200: chênh 1 điểm trên 588 nghìn người là SRM rất rõ" }
+      - { id: d, text: "Không tính được vì nhóm psa quá nhỏ so với nhóm ad để chi-square" }
+  - id: day-balance
+    kind: data
+    type: single
+    prompt: "Tỉ lệ người dùng nhóm `psa` theo `most_ads_day` dao động trong khoảng nào?"
+    options:
+      - { id: a, text: "3.50% tới 4.71%" }
+      - { id: b, text: "3.98% tới 4.02%" }
+      - { id: c, text: "1.79% tới 2.55%" }
+      - { id: d, text: "12.1% tới 16.6%" }
+  - id: day-imbalance-meaning
+    kind: knowledge
+    type: single
+    prompt: "Tổng thể đúng 96/4 nhưng tỉ lệ `psa` theo ngày lệch rõ (p ≈ 5e-48). Diễn giải hợp lý nhất?"
+    options:
+      - { id: a, text: "Không có gì đáng lo, vì SRM tổng thể đã qua nên mọi phân khúc đều cân bằng" }
+      - { id: b, text: "Thí nghiệm hỏng hoàn toàn, phải bỏ mọi kết quả và chạy lại từ đầu" }
+      - { id: c, text: "Ngày cuối tuần nhóm psa ít hơn, nên quảng cáo hiệu quả hơn vào cuối tuần" }
+      - { id: d, text: "Biến đo sau khi chia nhóm: hai nhóm có thể được phục vụ khác nhau; hỏi đội kỹ thuật" }
+  - id: decision
+    kind: data
+    type: single
+    prompt: "Với MDE giả định 0.5 điểm %, SRM tổng thể đạt, không có guardrail bị hại, `decide` trả gì?"
+    options:
+      - { id: a, text: "ship" }
+      - { id: b, text: "inconclusive" }
+      - { id: c, text: "do_not_ship" }
+      - { id: d, text: "investigate" }
+  - id: significant-but-small
+    kind: knowledge
+    type: single
+    prompt: "Một thí nghiệm khác có CI của chênh lệch là [+0.1; +0.3] điểm %, MDE 0.5 điểm %. Vì sao quy tắc trả `do_not_ship`?"
+    options:
+      - { id: a, text: "Vì khoảng tin cậy chứa 0 nên kết quả không có ý nghĩa thống kê" }
+      - { id: b, text: "Hiệu ứng có thật nhưng chắc chắn nhỏ hơn mức đáng bỏ chi phí" }
+      - { id: c, text: "Vì p-value của thí nghiệm này chắc chắn phải lớn hơn mức 0.05" }
+      - { id: d, text: "Vì cần thêm dữ liệu trước khi có thể nói bất kỳ điều gì về nó" }
+  - id: dose-causation
+    kind: knowledge
+    type: single
+    prompt: "Người thấy hơn 100 quảng cáo chuyển đổi 17.1%, người thấy 1-5 chỉ 0.25%. Kết luận nào đúng?"
+    options:
+      - { id: a, text: "Mỗi quảng cáo thêm làm tăng chuyển đổi, nên tăng tần suất hiển thị" }
+      - { id: b, text: "Quảng cáo chỉ hiệu quả với người đã thấy ít nhất 50 quảng cáo" }
+      - { id: c, text: "Nhóm psa cũng tăng như vậy: người dùng nhiều vừa thấy nhiều vừa mua nhiều" }
+      - { id: d, text: "Nên cắt quảng cáo cho người thấy ít vì gần như không ai chuyển đổi" }
+  - id: incremental
+    kind: data
+    type: single
+    prompt: "Ước tính số chuyển đổi tăng thêm nhờ quảng cáo trong nhóm `ad` (chênh lệch × số người nhóm ad) là khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 420" }
+      - { id: b, text: "Khoảng 14 400" }
+      - { id: c, text: "Khoảng 24 300" }
+      - { id: d, text: "Khoảng 4 300" }

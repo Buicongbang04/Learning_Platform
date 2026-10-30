@@ -1,0 +1,21 @@
+# Tracking plan cho khối "Thường mua kèm" trên trang sản phẩm. Quy ước:
+# - Tên sự kiện: snake_case dạng object_action, động từ ở quá khứ (recommendation_shown, cart_item_added).
+# - Mỗi thuộc tính: type (string, integer, number, boolean, timestamp, array), required (true/false), enum nếu có.
+# - common_properties gửi kèm mọi sự kiện. Không đưa dữ liệu cá nhân (email, số điện thoại, tên, địa chỉ).
+# Xoá mọi chữ TODO khi viết xong.
+
+feature: "TODO: một câu mô tả tính năng"
+
+common_properties:
+  anonymous_id: {type: string, required: true}
+  # TODO: session_id, event_time, user_id, và thuộc tính chung khác bạn cần (platform, app_version...)
+
+events:
+  recommendation_shown:
+    trigger: "TODO: khi nào gửi, gửi từ client hay server"
+    owner: "TODO: team chịu trách nhiệm"
+    metrics: ["TODO: metric mà sự kiện này phục vụ"]
+    properties:
+      item_id: {type: string, required: true}   # sản phẩm của trang đang xem
+      # TODO: các thuộc tính khác (sản phẩm được gợi ý, vị trí, nguồn luật...)
+  # TODO: ít nhất 3 sự kiện nữa: click vào gợi ý, thêm giỏ (có nguồn), hoàn tất đơn...

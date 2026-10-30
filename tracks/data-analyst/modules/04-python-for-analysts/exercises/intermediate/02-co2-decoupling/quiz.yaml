@@ -1,0 +1,73 @@
+questions:
+  - id: absolute-count
+    kind: data
+    type: single
+    prompt: "Trong 75 nước từ 10 triệu dân (2005 → 2022), bao nhiêu nước tách rời tuyệt đối (GDP tăng, CO2 sản xuất giảm)?"
+    options:
+      - { id: a, text: "3 nước" }
+      - { id: b, text: "17 nước" }
+      - { id: c, text: "39 nước" }
+      - { id: d, text: "56 nước" }
+  - id: offshoring-countries
+    kind: data
+    type: single
+    prompt: "Những nước nào giảm CO2 sản xuất nhưng CO2 tiêu dùng vẫn tăng (cờ `offshoring`)?"
+    options:
+      - { id: a, text: "Anh, Pháp, Đức" }
+      - { id: b, text: "Mỹ, Nhật Bản, Canada" }
+      - { id: c, text: "Australia, Mexico, Ba Lan" }
+      - { id: d, text: "Không có nước nào" }
+  - id: vietnam-class
+    kind: data
+    type: single
+    prompt: "Việt Nam 2005 → 2022: CO2 sản xuất +237%, GDP +170%. Nhãn của Việt Nam là gì?"
+    options:
+      - { id: a, text: "relative: CO2 tăng chậm hơn GDP" }
+      - { id: b, text: "absolute: CO2 giảm khi GDP tăng" }
+      - { id: c, text: "gdp_decline: GDP không tăng trong kỳ" }
+      - { id: d, text: "coupled: CO2 tăng nhanh hơn GDP" }
+  - id: uk-change
+    kind: data
+    type: single
+    prompt: "Nước nào giảm CO2 sản xuất nhiều nhất trong nhóm `absolute`, và GDP của nước đó đổi thế nào?"
+    options:
+      - { id: a, text: "Anh: CO2 −45%, GDP +21%" }
+      - { id: b, text: "Đức: CO2 −23%, GDP +33%" }
+      - { id: c, text: "Ukraine: CO2 −54%, GDP −23%" }
+      - { id: d, text: "Mỹ: CO2 −17%, GDP +33%" }
+  - id: sensitivity
+    kind: data
+    type: single
+    prompt: "Hạ ngưỡng dân số từ 10 triệu xuống 1 triệu (vẫn 2005 → 2022). Số nước và số nước `absolute` theo sản xuất đổi ra sao?"
+    options:
+      - { id: a, text: "Không đổi: 75 nước, 17 absolute" }
+      - { id: b, text: "117 nước, 37 absolute" }
+      - { id: c, text: "117 nước, vẫn 17 absolute" }
+      - { id: d, text: "90 nước, 19 absolute" }
+  - id: consumption-meaning
+    kind: knowledge
+    type: single
+    prompt: "CO2 tiêu dùng (`consumption_co2`) khác CO2 sản xuất (`co2`) ở đâu?"
+    options:
+      - { id: a, text: "Chỉ tính phát thải của hộ gia đình, không tính công nghiệp" }
+      - { id: b, text: "Cộng phát thải của hàng nhập, trừ phát thải của hàng xuất" }
+      - { id: c, text: "Là CO2 sản xuất chia cho dân số của nước đó" }
+      - { id: d, text: "Tính thêm thay đổi sử dụng đất như phá rừng" }
+  - id: why-validate
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `period_change` ghép năm đầu với năm cuối bằng `merge(..., validate=\"one_to_one\")`?"
+    options:
+      - { id: a, text: "Một nước có hai dòng cùng năm thì báo lỗi, không nhân dòng" }
+      - { id: b, text: "validate làm merge chạy nhanh hơn trên bảng lớn" }
+      - { id: c, text: "Không có validate thì merge bỏ các nước thiếu GDP" }
+      - { id: d, text: "validate tự sắp kết quả theo tên nước" }
+  - id: what-not-to-claim
+    kind: knowledge
+    type: single
+    prompt: "Câu nào **không** nên viết trong đoạn gửi quỹ đầu tư?"
+    options:
+      - { id: a, text: "14 nước giảm CO2 cả theo sản xuất lẫn tiêu dùng" }
+      - { id: b, text: "Kết quả đổi khi chọn năm đầu hoặc ngưỡng dân số khác" }
+      - { id: c, text: "Chính sách khí hậu của 17 nước này đã làm CO2 giảm" }
+      - { id: d, text: "Việt Nam thuộc nhóm CO2 tăng nhanh hơn GDP" }

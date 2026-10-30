@@ -1,7 +1,7 @@
 import type { Plugin } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile, spawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 
 const EXERCISE_DIR = /^tracks\/[\w.-]+\/modules\/[\w.-]+\/exercises\/(basic|intermediate|advanced)\/[\w.-]+$/;
@@ -9,14 +9,13 @@ const MAX_FILE_BYTES = 256 * 1024;
 const MAX_OUTPUT = 200_000;
 const SKIP_DIRS = new Set(["__pycache__", ".pytest_cache", "target", "logs", "dbt_packages", ".terraform"]);
 
-type FileEntry = { path: string; content: string; editable: boolean };
+export type FileEntry = { path: string; content: string; editable: boolean } | { path: string; binary: true };
 
 class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
+  status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
   }
 }
 
@@ -27,12 +26,42 @@ function listFiles(root: string, base: string): string[] {
     if (SKIP_DIRS.has(entry.name) || entry.name.endsWith(".pyc")) continue;
     const full = resolve(root, entry.name);
     if (entry.isDirectory()) out.push(...listFiles(full, base));
-    else if (entry.isFile() && statSync(full).size <= MAX_FILE_BYTES) out.push(relative(base, full).split(sep).join("/"));
+    else if (entry.isFile() && (isBinaryDoc(entry.name) || statSync(full).size <= MAX_FILE_BYTES)) out.push(relative(base, full).split(sep).join("/"));
   }
   return out;
 }
 
-const isText = (path: string) => !/\.(duckdb|parquet|png|jpe?g|gif|zip|gz|db|sqlite)$/i.test(path);
+/** Tệp văn phòng/ảnh trong starter/: không đọc như text, app chỉ liệt kê và cho mở bằng ứng dụng ngoài. */
+export const isBinaryDoc = (path: string) => /\.(xlsx|xlsm|xls|ods|docx|pdf|png|jpe?g|gif)$/i.test(path);
+export const isText = (path: string) => !isBinaryDoc(path) && !/\.(duckdb|parquet|zip|gz|db|sqlite)$/i.test(path);
+
+/** Đường dẫn tuyệt đối của tệp trong starter/ của bài; ném HttpError nếu nằm ngoài starter/. */
+export function resolveStarterFile(root: string, path: unknown): string {
+  if (typeof path !== "string" || !path.startsWith("starter/")) throw new HttpError(400, "Chỉ sửa được tệp trong starter/");
+  const full = resolve(root, path);
+  const starter = resolve(root, "starter");
+  if (!full.startsWith(starter + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
+  // Chặn symlink trỏ ra ngoài starter/ (tệp chưa tồn tại thì để các bước sau báo 404).
+  if (existsSync(full) && !realpathSync(full).startsWith(realpathSync(starter) + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
+  return full;
+}
+
+/** Như resolveStarterFile nhưng chỉ nhận tệp văn phòng/ảnh (open-file không được mở tệp tùy ý bằng xdg-open). */
+export function resolveOpenableFile(root: string, path: unknown): string {
+  const full = resolveStarterFile(root, path);
+  if (!isBinaryDoc(full)) throw new HttpError(400, "Chỉ mở được tệp văn phòng/ảnh (xlsx, docx, pdf, png…) bằng ứng dụng ngoài");
+  return full;
+}
+
+export function readExerciseFiles(root: string): FileEntry[] {
+  const starterAll = listFiles(resolve(root, "starter"), root);
+  const tests = listFiles(resolve(root, "tests"), root).filter((path) => path.endsWith(".py"));
+  return [
+    ...starterAll.filter(isText).map((path) => ({ path, content: readFileSync(resolve(root, path), "utf-8"), editable: !path.endsWith(".ipynb") })),
+    ...starterAll.filter(isBinaryDoc).map((path): FileEntry => ({ path, binary: true })),
+    ...tests.map((path) => ({ path, content: readFileSync(resolve(root, path), "utf-8"), editable: false })),
+  ];
+}
 
 export function workspaceApi(repoRoot: string): Plugin {
   const exerciseRoot = (dir: unknown) => {
@@ -41,12 +70,7 @@ export function workspaceApi(repoRoot: string): Plugin {
     if (!existsSync(full)) throw new HttpError(404, "Không có thư mục bài tập");
     return full;
   };
-  const starterFile = (root: string, path: unknown) => {
-    if (typeof path !== "string" || !path.startsWith("starter/")) throw new HttpError(400, "Chỉ sửa được tệp trong starter/");
-    const full = resolve(root, path);
-    if (!full.startsWith(resolve(root, "starter") + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
-    return full;
-  };
+  const starterFile = resolveStarterFile;
 
   const pythonFile = (root: string, path: unknown) => {
     const full = starterFile(root, path);
@@ -54,14 +78,7 @@ export function workspaceApi(repoRoot: string): Plugin {
     return full;
   };
 
-  const readFiles = (root: string): FileEntry[] => {
-    const starter = listFiles(resolve(root, "starter"), root).filter(isText);
-    const tests = listFiles(resolve(root, "tests"), root).filter((path) => path.endsWith(".py"));
-    return [
-      ...starter.map((path) => ({ path, content: readFileSync(resolve(root, path), "utf-8"), editable: !path.endsWith(".ipynb") })),
-      ...tests.map((path) => ({ path, content: readFileSync(resolve(root, path), "utf-8"), editable: false })),
-    ];
-  };
+  const readFiles = readExerciseFiles;
 
   let running = false;
 
@@ -151,6 +168,20 @@ export function workspaceApi(repoRoot: string): Plugin {
     });
   };
 
+  const openExternal = (full: string, send: (status: number, data: unknown) => void) =>
+    new Promise<void>((done) => {
+      const child = spawn("xdg-open", [full], { cwd: repoRoot, detached: true, stdio: "ignore" });
+      child.once("error", () => {
+        send(500, { error: "Không chạy được xdg-open. Mở tệp bằng LibreOffice/Excel theo đường dẫn đã hiện." });
+        done();
+      });
+      child.once("spawn", () => {
+        child.unref();
+        send(200, { ok: true });
+        done();
+      });
+    });
+
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (!url.pathname.startsWith("/api/workspace/")) return next();
@@ -176,6 +207,11 @@ export function workspaceApi(repoRoot: string): Plugin {
         if (!existsSync(full)) throw new HttpError(404, "Tệp không tồn tại");
         writeFileSync(full, body.content, "utf-8");
         return send(200, { ok: true });
+      }
+      if (url.pathname === "/api/workspace/open-file") {
+        const full = resolveOpenableFile(root, body.path);
+        if (!existsSync(full)) throw new HttpError(404, "Tệp không tồn tại");
+        return await openExternal(full, send);
       }
       if (url.pathname === "/api/workspace/reset") {
         starterFile(root, body.path);

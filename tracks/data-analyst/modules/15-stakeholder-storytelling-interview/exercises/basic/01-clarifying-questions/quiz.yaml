@@ -1,0 +1,109 @@
+questions:
+  - id: revenue-by-country
+    kind: knowledge
+    type: single
+    prompt: "Giám đốc kinh doanh nhắn: \"Kéo cho anh doanh thu theo nước nhé.\" Bạn chỉ được hỏi lại một câu. Câu nào đáng hỏi nhất?"
+    options:
+      - { id: a, text: "Anh muốn em xuất file CSV hay Excel ạ?" }
+      - { id: b, text: "Anh cần số này để quyết định việc gì ạ?" }
+      - { id: c, text: "Em nên join bảng orders với bảng nào ạ?" }
+      - { id: d, text: "Dữ liệu đơn hàng có từ năm nào vậy anh?" }
+  - id: dashboard-dropped
+    kind: knowledge
+    type: single
+    prompt: "8 giờ sáng ngày 3 của tháng, COO gửi ảnh dashboard: \"Doanh thu tháng này thấp quá, chuyện gì vậy?\" Việc đầu tiên nên làm?"
+    options:
+      - { id: a, text: "Gửi ngay bảng doanh thu theo 20 phân khúc để COO tự xem" }
+      - { id: b, text: "Hỏi COO muốn chia nhỏ theo kênh hay theo vùng trước" }
+      - { id: c, text: "Kiểm xem tháng mới có 2 ngày dữ liệu và so cùng số ngày" }
+      - { id: d, text: "Mở phân tích nguyên nhân giảm doanh thu kéo dài một tuần" }
+  - id: customer-analysis
+    kind: knowledge
+    type: single
+    prompt: "Trưởng phòng CRM: \"Làm giúp chị phân tích khách hàng nhé.\" Câu hỏi làm rõ nào giúp cắt phạm vi tốt nhất?"
+    options:
+      - { id: a, text: "Chị đang cân nhắc chương trình gì cho nhóm khách nào?" }
+      - { id: b, text: "Chị muốn em dùng k-means hay phân khúc theo RFM?" }
+      - { id: c, text: "Chị cần bao nhiêu chart trong báo cáo cuối cùng?" }
+      - { id: d, text: "Chị muốn phân tích toàn bộ khách hàng từ trước tới nay ạ?" }
+  - id: if-result-x
+    kind: knowledge
+    type: single
+    prompt: "Bạn hỏi: \"Nếu kết quả cho thấy chiến dịch email không hiệu quả, chị sẽ làm gì khác?\" Marketing trả lời: \"Vẫn chạy tiếp, vì hợp đồng đã ký cả năm.\" Điều đó nói gì?"
+    options:
+      - { id: a, text: "Phải làm phân tích kỹ hơn để thuyết phục chị ấy dừng" }
+      - { id: b, text: "Câu hỏi làm rõ này hỏi sai, lần sau không nên hỏi" }
+      - { id: c, text: "Nên đổi sang dùng model ML để đo hiệu quả chiến dịch chính xác hơn" }
+      - { id: d, text: "Quyết định năm nay không phụ thuộc kết quả: làm nhỏ hoặc dời" }
+  - id: bad-clarifying
+    kind: knowledge
+    type: single
+    prompt: "Yêu cầu: \"Đo xem tính năng gợi ý sản phẩm mới có tốt không.\" Câu hỏi làm rõ nào **kém** nhất?"
+    options:
+      - { id: a, text: "Tốt nghĩa là tăng doanh thu, tăng chuyển đổi hay giữ khách?" }
+      - { id: b, text: "Tính năng ra mắt cho mọi người hay có nhóm chưa được bật?" }
+      - { id: c, text: "Anh muốn em viết bằng SQL hay viết bằng Python trên notebook?" }
+      - { id: d, text: "Kết quả này dùng để quyết định mở rộng hay gỡ tính năng ạ?" }
+  - id: draft-reply
+    kind: knowledge
+    type: single
+    prompt: "Một VP rất bận gửi yêu cầu mơ hồ lúc 6 giờ chiều. Cách trả lời nào hiệu quả nhất?"
+    options:
+      - { id: a, text: "Gửi bản nháp: em hiểu là X để quyết định Y, so với Z, gửi thứ Năm" }
+      - { id: b, text: "Gửi danh sách năm câu hỏi mở và chờ VP trả lời đủ rồi mới làm" }
+      - { id: c, text: "Không hỏi gì, tự đoán ý VP và làm đủ mọi góc nhìn có thể nghĩ ra" }
+      - { id: d, text: "Đặt lịch họp một giờ vào tuần sau để cùng VP làm rõ yêu cầu" }
+  - id: scope-creep
+    kind: knowledge
+    type: single
+    prompt: "Đã chốt gửi phân tích thứ Sáu. Thứ Tư, PM nhắn: \"Tiện chia thêm theo 5 kênh nhé.\" Phần này cần thêm 2 ngày. Bạn trả lời gì?"
+    options:
+      - { id: a, text: "Đồng ý và cố làm thêm buổi tối để vẫn gửi thứ Sáu" }
+      - { id: b, text: "Từ chối vì yêu cầu đã chốt, không nhận thay đổi nào" }
+      - { id: c, text: "Hỏi: gửi bản cũ thứ Sáu rồi bổ sung, hay gửi đủ thứ Ba?" }
+      - { id: d, text: "Im lặng làm cả hai phần và gửi trễ, vì kết quả sẽ đầy đủ hơn" }
+  - id: precision-needed
+    kind: knowledge
+    type: single
+    prompt: "CFO cần \"tỉ lệ hoàn hàng quý này\". Câu nào quyết định effort nhiều nhất?"
+    options:
+      - { id: a, text: "Anh muốn số hiển thị ở dạng phần trăm hay dạng thập phân?" }
+      - { id: b, text: "Số này dùng cho họp nội bộ hay báo cáo phải khớp sổ kế toán?" }
+      - { id: c, text: "Anh có muốn thêm chart cột vào trong email gửi số không ạ?" }
+      - { id: d, text: "Anh muốn số này làm tròn tới một hay tới hai chữ số thập phân?" }
+  - id: out-of-scope
+    kind: knowledge
+    type: single
+    prompt: "Trong scope note cho câu hỏi \"khách quay lại có giảm không\", mục **ngoài phạm vi** nên ghi gì?"
+    options:
+      - { id: a, text: "Không ghi gì, để linh hoạt nhận thêm yêu cầu về sau" }
+      - { id: b, text: "Ghi mọi thứ có thể làm, để stakeholder tự chọn cái nào" }
+      - { id: c, text: "Ghi tên các bảng và thư viện sẽ dùng để phân tích" }
+      - { id: d, text: "Ghi rõ không làm dự báo, không đo nhân quả, và vì sao" }
+  - id: self-serve
+    kind: knowledge
+    type: single
+    prompt: "Ba tuần liền, trưởng vùng hỏi \"doanh thu tuần của vùng tôi\". Số này đã có trên dashboard chính thức, có bộ lọc vùng. Bạn làm gì?"
+    options:
+      - { id: a, text: "Gửi link dashboard kèm cách lọc vùng; hỏi nếu còn thiếu gì" }
+      - { id: b, text: "Mỗi tuần tự viết SQL kéo lại số và gửi email cho trưởng vùng" }
+      - { id: c, text: "Dựng một dashboard mới riêng cho vùng này với số tính lại" }
+      - { id: d, text: "Từ chối vì yêu cầu lặp lại không phải việc của team data" }
+  - id: quadrant
+    kind: knowledge
+    type: single
+    prompt: "Yêu cầu: tính lại hoa hồng sales cho 3 năm trước để \"xem cho biết\", không có quyết định nào đi kèm, ước lượng 5 ngày. Góc phần tư nào?"
+    options:
+      - { id: a, text: "Quick win: impact cao, effort thấp" }
+      - { id: b, text: "Big bet: impact cao, effort cao" }
+      - { id: c, text: "Money pit: impact thấp, effort cao" }
+      - { id: d, text: "Fill-in: impact thấp, effort thấp" }
+  - id: recurring-to-dashboard
+    kind: knowledge
+    type: single
+    prompt: "Câu \"tỉ lệ giao trễ theo kho tuần này\" được hỏi lần thứ hai, bởi người khác, chưa có trên dashboard. Xử lý nào hợp lý nhất?"
+    options:
+      - { id: a, text: "Trả lời bằng query cũ, không cần làm thêm việc gì khác" }
+      - { id: b, text: "Trả lời lần này, mở ticket đưa metric vào dashboard" }
+      - { id: c, text: "Viết analysis plan một trang và chờ duyệt rồi làm" }
+      - { id: d, text: "Từ chối vì người hỏi lần trước đã có câu trả lời" }

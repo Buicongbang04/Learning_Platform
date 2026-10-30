@@ -1,0 +1,55 @@
+questions:
+  - id: yoy-year
+    kind: data
+    type: single
+    prompt: "Tổng lượt thuê 2012 tăng bao nhiêu so với 2011?"
+    options:
+      - { id: a, text: "Khoảng 41%" }
+      - { id: b, text: "Khoảng 70%" }
+      - { id: c, text: "Khoảng 157%" }
+      - { id: d, text: "Khoảng 65%" }
+  - id: yoy-month
+    kind: data
+    type: single
+    prompt: "Tháng nào có tăng trưởng YoY cao nhất, và tháng nào thấp nhất?"
+    options:
+      - { id: a, text: "Cao nhất tháng 3 (+157%), thấp nhất tháng 6 (+41%)" }
+      - { id: b, text: "Cao nhất tháng 9 (+72%), thấp nhất tháng 1 (+153%)" }
+      - { id: c, text: "Cao nhất tháng 1 (+153%), thấp nhất tháng 12 (+42%)" }
+      - { id: d, text: "Cao nhất tháng 6 (+41%), thấp nhất tháng 3 (+157%)" }
+  - id: avg-of-growth
+    kind: knowledge
+    type: single
+    prompt: "Một đồng nghiệp ghi D14 = AVERAGE(D2:D13) ≈ 76%. Vì sao khác 64.9%?"
+    options:
+      - { id: a, text: "Do làm tròn khi định dạng phần trăm" }
+      - { id: b, text: "Trung bình tỉ lệ coi tháng ít lượt ngang tháng nhiều lượt" }
+      - { id: c, text: "Do pivot chưa được refresh" }
+      - { id: d, text: "Do 2012 là năm nhuận có thêm một ngày 29/02 nên mọi tỉ lệ đều lệch đi" }
+  - id: pivot-refresh
+    kind: knowledge
+    type: single
+    prompt: "Bạn sửa một giá trị cnt ở sheet Days. Bảng YoY và pivot thay đổi thế nào?"
+    options:
+      - { id: a, text: "Cả hai tự cập nhật ngay" }
+      - { id: b, text: "Pivot tự cập nhật; YoY phải bấm tính lại" }
+      - { id: c, text: "YoY tự cập nhật; pivot chỉ đổi khi Refresh" }
+      - { id: d, text: "Không cái nào đổi cho tới khi mở lại file" }
+  - id: growth-story
+    kind: knowledge
+    type: single
+    prompt: "Headline nào đúng nhất cho chart hai năm?"
+    options:
+      - { id: a, text: "2012 cao hơn 2011 ở mọi tháng, +65% cả năm; tăng mạnh nhất đầu năm" }
+      - { id: b, text: "Lượt thuê theo tháng 2011 và 2012" }
+      - { id: c, text: "Lượt thuê tăng 157% nhờ thời tiết tháng 3" }
+      - { id: d, text: "Tháng 9 năm 2012 là tháng tốt nhất mọi thời đại của Capital Bikeshare" }
+  - id: chart-type
+    kind: knowledge
+    type: single
+    prompt: "Để so 12 tháng của hai năm cho Head of Operations, chart nào hợp nhất?"
+    options:
+      - { id: a, text: "Pie 24 lát, mỗi lát một tháng" }
+      - { id: b, text: "Hai đường (hoặc cột nhóm) theo tháng, trục y từ 0" }
+      - { id: c, text: "Chart 3D cột chồng để nổi bật" }
+      - { id: d, text: "Dual axis: năm 2011 dùng trục trái, năm 2012 dùng trục phải để dễ so" }

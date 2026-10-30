@@ -51,27 +51,29 @@ flowchart TD
 **Xanh dương** là nền tảng và công cụ (Excel, SQL, Python). **Xanh lá** là vòng đời dữ liệu: thu thập,
 làm sạch, EDA, trực quan hoá, modeling, BI. **Vàng** là phân tích để ra quyết định kinh doanh. Module
 02, 03, 04 học song song được; module 14 ngắn, phần lớn nhắc lại. Module 08 là **trọng tâm** của track
-(chọn chart, bắt chart gây hiểu nhầm, đọc chart ra insight) và là module mẫu được làm trước.
+(chọn chart, bắt chart gây hiểu nhầm, đọc chart ra insight).
 
 ## Các module
 
-| # | Module | Mục roadmap gốc | Kỹ năng chính |
-| --- | --- | --- | --- |
-| 01 | Vai trò DA & tư duy phân tích | Introduction, Key Concepts | 4 loại analytics, câu hỏi business, KPI, metric tree, bản đồ công cụ |
-| 02 | Excel / Spreadsheet | Excel (IF, DATEDIF, VLOOKUP/HLOOKUP, REPLACE/SUBSTITUTE, UPPER/LOWER/PROPER, CONCAT, TRIM, AVERAGE, COUNT, SUM, MIN/MAX), Charting | Công thức, XLOOKUP, pivot table, chart |
-| 03 | SQL cho DA | Learn SQL | YoY/MoM, running total, top-N, cohort, funnel bằng SQL |
-| 04 | Python cho DA | Programming (pandas, matplotlib, seaborn), R | Phân tích bằng pandas, R đối chiếu, git, project tái lập ★ |
-| 05 | Thu thập dữ liệu | Data Collection (databases, CSV, APIs, web scraping) | Đọc từ DB, API, scraping có đạo đức |
-| 06 | Làm sạch dữ liệu | Data Cleaning | Missing, duplicates, outliers, transformation, nghi ngờ dữ liệu |
-| 07 | Thống kê mô tả & EDA | Statistical Analysis, Exploration | Central tendency, dispersion, distribution, EDA |
-| 08 | Trực quan hoá & đọc biểu đồ | Data Visualization (chart types, thư viện) | Chọn chart, chart gây hiểu nhầm, đọc chart ra insight |
-| 09 | Data modeling cho analytics ★ | (thêm) | Star schema, grain, dbt, semantic layer, định nghĩa metric |
-| 10 | BI & Dashboard | Tools (Tableau, Power BI) | Metabase, Superset, Streamlit, thiết kế KPI dashboard |
-| 11 | Thống kê & Experimentation | Hypothesis Testing, Correlation, Regression | A/B test từ phía DA, guardrail, sample size, DiD nhanh ★ |
-| 12 | Product & customer analytics ★ | (thêm) | Funnel, cohort, retention, LTV, CAC, RFM, market basket, tracking plan |
-| 13 | Business & financial analytics ★ | (thêm) | Root cause, P&L, margin, unit economics, giá/khuyến mãi, dự báo, giám sát KPI |
-| 14 | ML & Big Data cho DA | Advanced Topics (ML, Deep Learning, Big Data) | Thuật toán roadmap, đánh giá model, Hadoop/Spark ở mức khái niệm |
-| 15 | Stakeholder, storytelling & phỏng vấn ★ | Final steps (portfolio, Kaggle, networking) | Scoping, memo, AI khi phân tích, take-home, case interview |
+15 module, **108 bài tập** (12 module có 7 bài: 3 Basic, 2 Intermediate, 2 Advanced; module 02, 08 và 12 có 8 bài vì thêm một bài Intermediate), cộng capstone 7 milestone.
+
+| # | Module | Mục roadmap gốc | Kỹ năng chính | Bài tập |
+| --- | --- | --- | --- | --- |
+| 01 | Vai trò DA & tư duy phân tích | Introduction, Key Concepts | 4 loại analytics, câu hỏi business, KPI, metric tree, bản đồ công cụ | 7 |
+| 02 | Excel / Spreadsheet | Excel (IF, DATEDIF, VLOOKUP/HLOOKUP, REPLACE/SUBSTITUTE, UPPER/LOWER/PROPER, CONCAT, TRIM, AVERAGE, COUNT, SUM, MIN/MAX), Charting | Công thức, XLOOKUP, pivot table, chart | 8 |
+| 03 | SQL cho DA | Learn SQL | YoY/MoM, running total, top-N, cohort, funnel bằng SQL | 7 |
+| 04 | Python cho DA | Programming (pandas, matplotlib, seaborn), R | Phân tích bằng pandas, R đối chiếu, git, project tái lập ★ | 7 |
+| 05 | Thu thập dữ liệu | Data Collection (databases, CSV, APIs, web scraping) | Đọc từ DB, API, scraping có đạo đức | 7 |
+| 06 | Làm sạch dữ liệu | Data Cleaning | Missing, duplicates, outliers, transformation, nghi ngờ dữ liệu | 7 |
+| 07 | Thống kê mô tả & EDA | Statistical Analysis, Exploration | Central tendency, dispersion, distribution, EDA | 7 |
+| 08 | Trực quan hoá & đọc biểu đồ | Data Visualization (chart types, thư viện) | Chọn chart, chart gây hiểu nhầm, đọc chart ra insight | 8 |
+| 09 | Data modeling cho analytics ★ | (thêm) | Star schema, grain, dbt, semantic layer, định nghĩa metric | 7 |
+| 10 | BI & Dashboard | Tools (Tableau, Power BI) | Metabase, Superset, Streamlit, thiết kế KPI dashboard | 7 |
+| 11 | Thống kê & Experimentation | Hypothesis Testing, Correlation, Regression | A/B test từ phía DA, guardrail, sample size, DiD nhanh ★ | 7 |
+| 12 | Product & customer analytics ★ | (thêm) | Funnel, cohort, retention, LTV, CAC, RFM, market basket, tracking plan | 8 |
+| 13 | Business & financial analytics ★ | (thêm) | Root cause, P&L, margin, unit economics, giá/khuyến mãi, dự báo, giám sát KPI | 7 |
+| 14 | ML & Big Data cho DA | Advanced Topics (ML, Deep Learning, Big Data) | Thuật toán roadmap, đánh giá model, Hadoop/Spark ở mức khái niệm | 7 |
+| 15 | Stakeholder, storytelling & phỏng vấn ★ | Final steps (portfolio, Kaggle, networking) | Scoping, memo, AI khi phân tích, take-home, case interview | 7 |
 
 ## Bản đồ công cụ
 
@@ -102,7 +104,7 @@ Danh sách bộ, nguồn, giấy phép và lệnh tải ở [`data/README.md`](.
 ```bash
 uv sync                                                          # môi trường Python (xem setup/SETUP.md)
 uv run python data/download_dataset.py --list                    # các bộ có sẵn
-uv run python data/download_dataset.py bike-sharing-uci          # module mẫu 08
+uv run python data/download_dataset.py bike-sharing-uci          # module 08
 uv run python data/download_dataset.py online-retail-ii
 uv run python data/download_dataset.py dunnhumby-complete-journey # capstone, cần Kaggle token
 ```

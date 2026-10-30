@@ -1,0 +1,73 @@
+questions:
+  - id: temp-effect
+    kind: data
+    type: single
+    prompt: "Trong model đầy đủ, giữ các yếu tố khác cố định, ngày ấm hơn 5°C có thêm bao nhiêu lượt thuê (CI 95%, HC3)?"
+    options:
+      - { id: a, text: "+810 lượt [742; 877]" }
+      - { id: b, text: "+125 lượt [108; 141]" }
+      - { id: c, text: "+623 lượt [539; 707]" }
+      - { id: d, text: "+2 014 lượt [1 888; 2 139]" }
+  - id: omitted-variable
+    kind: data
+    type: single
+    prompt: "Hệ số nhiệt độ giảm từ 162.0 (chỉ nhiệt độ) xuống 124.6 (đầy đủ). Bước thêm biến nào làm hệ số giảm nhiều nhất?"
+    options:
+      - { id: a, text: "Thêm mùa (155.4 → 130.2)" }
+      - { id: b, text: "Thêm năm (162.0 → 155.4)" }
+      - { id: c, text: "Thêm thời tiết (130.2 → 125.3)" }
+      - { id: d, text: "Thêm ngày lễ, ngày làm việc (125.3 → 124.6)" }
+  - id: why-biased
+    kind: knowledge
+    type: single
+    prompt: "Vì sao model chỉ có nhiệt độ phóng đại ảnh hưởng của nhiệt độ?"
+    options:
+      - { id: a, text: "Vì OLS luôn cho hệ số lớn hơn khi model có ít biến hơn" }
+      - { id: b, text: "Nhiệt độ đi cùng mùa, thời tiết; thiếu chúng, hệ số gánh luôn phần đó" }
+      - { id: c, text: "Vì nhiệt độ đo bằng °C nên hệ số luôn lớn hơn khi dùng thang chuẩn hoá" }
+      - { id: d, text: "Vì R² của model một biến thấp nên mọi hệ số của model đó đều sai" }
+  - id: season-sign
+    kind: knowledge
+    type: single
+    prompt: "Hệ số `winter` so với `spring` là +1 546 lượt. Cách đọc đúng?"
+    options:
+      - { id: a, text: "Mùa đông ở Washington DC đông khách hơn mùa xuân 1 546 lượt mỗi ngày" }
+      - { id: b, text: "Mô hình sai vì mùa đông chắc chắn phải ít khách hơn mùa xuân" }
+      - { id: c, text: "Mã spring phủ khoảng 21/12-20/3; so ở cùng nhiệt độ, giai đoạn đó ít khách hơn" }
+      - { id: d, text: "Ngày mùa đông nhiều ngày lễ hơn nên hệ số mùa đông bị đẩy lên cao" }
+  - id: workingday
+    kind: data
+    type: single
+    prompt: "Hệ số `workingday` trong model đầy đủ là bao nhiêu, có ý nghĩa thống kê ở mức 5% không?"
+    options:
+      - { id: a, text: "+118 lượt, p ≈ 0.12: không có ý nghĩa" }
+      - { id: b, text: "−624 lượt, p ≈ 0.015: có ý nghĩa" }
+      - { id: c, text: "+254 lượt, p ≈ 0.11: không có ý nghĩa" }
+      - { id: d, text: "+1 019 lượt, p < 0.001: có ý nghĩa" }
+  - id: autocorrelation
+    kind: data
+    type: single
+    prompt: "Durbin-Watson của residual là 1.09. Dùng HAC (7 ngày) thì sai số chuẩn của hệ số nhiệt độ thay đổi thế nào?"
+    options:
+      - { id: a, text: "Giảm từ 8.6 xuống 5.3" }
+      - { id: b, text: "Tăng từ 8.6 lên 14.8" }
+      - { id: c, text: "Không đổi vì hệ số không đổi" }
+      - { id: d, text: "Tăng từ 8.6 lên 124.6" }
+  - id: turning-point
+    kind: data
+    type: single
+    prompt: "Thêm nhiệt độ bình phương vào model. Đường cong nhiệt độ đạt đỉnh ở khoảng bao nhiêu độ?"
+    options:
+      - { id: a, text: "20.3°C" }
+      - { id: b, text: "35.3°C" }
+      - { id: c, text: "41.0°C" }
+      - { id: d, text: "27.6°C" }
+  - id: explain-vs-predict
+    kind: knowledge
+    type: single
+    prompt: "Đồng nghiệp đề xuất bỏ hết biến không có ý nghĩa và thêm biến trễ để R² cao hơn. Với câu hỏi của trưởng vận hành, phản hồi tốt nhất?"
+    options:
+      - { id: a, text: "Đồng ý: R² cao hơn nghĩa là hệ số nhiệt độ chính xác hơn và đáng tin hơn" }
+      - { id: b, text: "Đồng ý: biến không có ý nghĩa thống kê luôn phải bỏ khỏi model giải thích" }
+      - { id: c, text: "Không: phải dùng machine learning thay regression khi muốn R² cao hơn" }
+      - { id: d, text: "Không cần: câu hỏi là giải thích; chọn biến theo nghiệp vụ, đọc CI" }

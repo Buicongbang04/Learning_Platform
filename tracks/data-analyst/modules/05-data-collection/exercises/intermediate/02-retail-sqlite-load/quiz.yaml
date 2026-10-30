@@ -1,0 +1,73 @@
+questions:
+  - id: overlap-rows
+    kind: data
+    type: single
+    prompt: "Sheet `Year 2009-2010` có bao nhiêu dòng nằm trong đoạn trùng 01–09/12/2010 (phải bỏ trước khi nạp)?"
+    options:
+      - { id: a, text: "0 dòng, hai sheet không trùng" }
+      - { id: b, text: "9 dòng, một dòng mỗi ngày" }
+      - { id: c, text: "22 523 dòng" }
+      - { id: d, text: "525 461 dòng, cả sheet" }
+  - id: naive-december
+    kind: data
+    type: single
+    prompt: "Nếu ghép hai sheet mà không bỏ đoạn trùng, doanh thu tháng 12/2010 sẽ bị báo cao lên khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Gần như không đổi, vì đoạn trùng chỉ có 9 ngày đầu" }
+      - { id: b, text: "Khoảng 53%: 1.26 triệu thay vì 0.82 triệu GBP" }
+      - { id: c, text: "Đúng gấp đôi, vì cả tháng bị đếm hai lần" }
+      - { id: d, text: "Khoảng 5%: 0.87 triệu thay vì 0.82 triệu GBP" }
+  - id: reload
+    kind: knowledge
+    type: single
+    prompt: "Nạp lại batch `2010-2011` lần thứ hai, bảng `sales` còn 1 044 848 dòng như cũ. Điều gì đảm bảo việc này?"
+    options:
+      - { id: a, text: "SQLite tự phát hiện và bỏ các dòng trùng mỗi khi ghi" }
+      - { id: b, text: "Bảng có khoá chính trên cột invoice" }
+      - { id: c, text: "pandas `to_sql` mặc định ghi đè cả bảng" }
+      - { id: d, text: "Xoá dòng của batch rồi ghi lại, trong một transaction" }
+  - id: read-vs-query
+    kind: data
+    type: single
+    prompt: "Trên máy của bạn, đọc hai sheet Excel và truy vấn doanh thu 25 tháng từ SQLite mất khoảng bao lâu?"
+    options:
+      - { id: a, text: "Đọc Excel cỡ một phút, truy vấn khoảng một giây" }
+      - { id: b, text: "Đọc Excel vài giây, truy vấn vài giây" }
+      - { id: c, text: "Đọc Excel cỡ một giây, truy vấn cỡ một phút" }
+      - { id: d, text: "Cả hai đều cỡ một phút vì cùng phải đọc hết dữ liệu" }
+  - id: nov-yoy
+    kind: data
+    type: single
+    prompt: "Doanh thu tháng 11/2011 so với tháng 11/2010 (dòng hợp lệ, hai sheet đã bỏ trùng)?"
+    options:
+      - { id: a, text: "Tăng khoảng 2.7%" }
+      - { id: b, text: "Tăng khoảng 27%" }
+      - { id: c, text: "Giảm khoảng 2.7%" }
+      - { id: d, text: "Giảm khoảng 57%" }
+  - id: bind-params
+    kind: knowledge
+    type: single
+    prompt: "Vì sao truyền `start`, `end` bằng bind parameter (`:start`) thay vì f-string ghép vào SQL?"
+    options:
+      - { id: a, text: "Bind parameter làm mọi truy vấn chạy nhanh gấp nhiều lần" }
+      - { id: b, text: "f-string không chạy được với SQLAlchemy 2" }
+      - { id: c, text: "Giá trị có dấu nháy không phá SQL, không bị SQL injection" }
+      - { id: d, text: "Để SQLite tự đổi chuỗi ngày thành kiểu ngày" }
+  - id: to-sql-multi
+    kind: knowledge
+    type: single
+    prompt: "Thử `to_sql` trên 50 000 dòng với SQLite: `method=None` so với `method=\"multi\"`. Kết quả và lý do?"
+    options:
+      - { id: a, text: "multi nhanh hơn nhiều vì gộp nhiều dòng một câu INSERT" }
+      - { id: b, text: "Hai cách nhanh như nhau vì cùng ghi một bảng" }
+      - { id: c, text: "multi báo lỗi vì SQLite không hỗ trợ INSERT nhiều dòng một lúc" }
+      - { id: d, text: "multi chậm hơn nhiều; executemany của sqlite3 đã tối ưu" }
+  - id: outgrow-sqlite
+    kind: knowledge
+    type: multi
+    prompt: "Khi nào nên chuyển bảng này từ SQLite sang Postgres hoặc warehouse? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Nhiều người hoặc nhiều job cần ghi cùng lúc" }
+      - { id: b, text: "Dữ liệu lên hàng chục GB, truy vấn quét cả bảng chậm" }
+      - { id: c, text: "Cần phân quyền theo người dùng, BI tool kết nối qua mạng" }
+      - { id: d, text: "Bảng có hơn một triệu dòng" }

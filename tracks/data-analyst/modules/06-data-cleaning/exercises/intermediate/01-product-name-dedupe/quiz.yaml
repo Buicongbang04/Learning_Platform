@@ -1,0 +1,64 @@
+questions:
+  - id: variant-codes
+    kind: data
+    type: single
+    prompt: "Sau khi viết hoa `StockCode` và chuẩn hoá mô tả, bao nhiêu mã hàng có hơn một mô tả?"
+    options:
+      - { id: a, text: "19 mã" }
+      - { id: b, text: "109 mã" }
+      - { id: c, text: "193 mã" }
+      - { id: d, text: "589 mã" }
+  - id: case-merge
+    kind: data
+    type: single
+    prompt: "Trong các dòng hợp lệ, viết hoa `StockCode` làm số mã hàng giảm từ 3 912 xuống 3 803. Điều đó nghĩa là gì?"
+    options:
+      - { id: a, text: "109 sản phẩm từng bị đếm thành hai mã chỉ vì chữ hoa/thường" }
+      - { id: b, text: "109 mã hàng bị xoá vì là mã phí như POST, DOT hay mã M" }
+      - { id: c, text: "109 dòng trùng lặp hoàn toàn đã được bỏ khỏi dữ liệu" }
+      - { id: d, text: "109 sản phẩm đổi mã giữa năm, nên cần nối mã cũ với mã mới" }
+  - id: fuzzy-survivors
+    kind: data
+    type: single
+    prompt: "`fuzzy_pairs` ở ngưỡng 0.9 cho 589 cặp tên của các mã khác nhau. Bao nhiêu cặp qua được `likely_same`?"
+    options:
+      - { id: a, text: "589 cặp" }
+      - { id: b, text: "193 cặp" }
+      - { id: c, text: "28 cặp" }
+      - { id: d, text: "0 cặp" }
+  - id: off-canonical-share
+    kind: data
+    type: single
+    prompt: "Doanh thu nằm trên các dòng có mô tả khác tên chuẩn của mã chiếm bao nhiêu phần trăm doanh thu hàng hoá?"
+    options:
+      - { id: a, text: "Khoảng 0.2%" }
+      - { id: b, text: "Khoảng 2.1%" }
+      - { id: c, text: "Khoảng 8.5%" }
+      - { id: d, text: "Khoảng 20%" }
+  - id: high-score-pair
+    kind: knowledge
+    type: single
+    prompt: "`GARDENIA 1 WICK MORRIS BOXED CANDLE` và `GARDENIA 3 WICK MORRIS BOXED CANDLE` có score 0.97, hai mã khác nhau. Kết luận?"
+    options:
+      - { id: a, text: "Gộp: score trên 0.95 gần như chắc chắn là cùng một món" }
+      - { id: b, text: "Không gộp: khác số bấc là hai sản phẩm, score chỉ đo chữ" }
+      - { id: c, text: "Gộp, nhưng chỉ khi hai mã có cùng một giá bán trung vị" }
+      - { id: d, text: "Không kết luận được, cần hạ ngưỡng xuống 0.85 rồi chạy lại" }
+  - id: ranking-key
+    kind: knowledge
+    type: single
+    prompt: "Bảng top sản phẩm theo doanh thu nên gom theo khoá nào?"
+    options:
+      - { id: a, text: "`Description` gốc, vì người đọc hiểu tên hơn hiểu mã" }
+      - { id: b, text: "Tên chuẩn hoá, gộp các mã có tên giống nhau tới 0.9" }
+      - { id: c, text: "`StockCode` như trong dữ liệu gốc, giữ cả chữ thường" }
+      - { id: d, text: "`StockCode` viết hoa, hiển thị kèm tên chuẩn của mã" }
+  - id: same-code-different-item
+    kind: knowledge
+    type: single
+    prompt: "Mã `22502` có hai mô tả `PICNIC BASKET WICKER SMALL` và `PICNIC BASKET WICKER 60 PIECES`, giá trung vị rất khác nhau. Làm gì?"
+    options:
+      - { id: a, text: "Ghi chú, hỏi team catalog xem mã có bị dùng lại cho món khác không" }
+      - { id: b, text: "Gộp luôn: cùng mã hàng thì chắc chắn là cùng một món hàng" }
+      - { id: c, text: "Bỏ các dòng `60 PIECES` vì đó là mô tả ít dòng hơn tên chuẩn" }
+      - { id: d, text: "Tách thành hai mã mới bằng cách thêm hậu tố vào `StockCode`" }

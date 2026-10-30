@@ -1,0 +1,91 @@
+questions:
+  - id: prod-db
+    kind: knowledge
+    type: single
+    prompt: "Bạn cần doanh thu theo ngày 90 ngày qua từ database đơn hàng của app. Công ty có database production và một read replica cập nhật trễ vài giây. Bạn làm gì?"
+    options:
+      - { id: a, text: "Truy vấn tổng hợp trên read replica, chỉ kéo bảng kết quả" }
+      - { id: b, text: "Chạy SELECT * trên production lấy mọi đơn về pandas" }
+      - { id: c, text: "Nhờ dev xuất cả bảng đơn hàng ra Excel mỗi sáng" }
+      - { id: d, text: "Scrape trang quản trị đơn hàng của app mỗi đêm cho đủ dữ liệu" }
+  - id: partner-file
+    kind: knowledge
+    type: single
+    prompt: "Đối tác gửi file CSV doanh số tháng. Bạn đọc xong được 10 412 dòng, nhưng email của họ ghi \"10 450 dòng\". Bước tiếp theo?"
+    options:
+      - { id: a, text: "Dùng 10 412 dòng vì chênh 0.4% không đáng kể với báo cáo tháng" }
+      - { id: b, text: "Tìm dòng bị mất (ký tự lạ, xuống hàng trong ô) trước khi tính" }
+      - { id: c, text: "Nhân doanh thu với 10 450 / 10 412 cho đủ" }
+      - { id: d, text: "Đổi sang đọc bằng Excel vì Excel không mất dòng" }
+  - id: api-vs-scrape
+    kind: knowledge
+    type: single
+    prompt: "Bạn cần GDP và dân số của 10 nước ASEAN, 2015–2023, cho slide chọn thị trường. Cách lấy hợp nhất?"
+    options:
+      - { id: a, text: "Scrape bảng trên Wikipedia của từng nước" }
+      - { id: b, text: "Gõ tay số từ báo cáo PDF của từng chính phủ" }
+      - { id: c, text: "Gọi World Bank API, lưu JSON thô kèm ngày tải" }
+      - { id: d, text: "Hỏi chatbot rồi dán bảng nó trả lời vào slide" }
+  - id: robots-meaning
+    kind: knowledge
+    type: single
+    prompt: "Website đối thủ không cấm `/products/` trong `robots.txt`, nhưng điều khoản sử dụng cấm thu thập tự động. Kết luận đúng?"
+    options:
+      - { id: a, text: "Được scrape, vì robots.txt mới là quy định ràng buộc" }
+      - { id: b, text: "Được scrape nếu nghỉ 5 giây giữa các request" }
+      - { id: c, text: "Được scrape nếu xoay vòng proxy để website không phát hiện ra" }
+      - { id: d, text: "Không tự quyết; robots.txt không thay ToS, hỏi pháp chế" }
+  - id: personal-data
+    kind: knowledge
+    type: multi
+    prompt: "Marketing muốn scrape tên và số điện thoại người bán trên một sàn rao vặt để gọi chào hàng. Những điểm nào là vấn đề? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Đó là dữ liệu cá nhân; xử lý cần căn cứ pháp lý (Luật Bảo vệ dữ liệu cá nhân 2025)" }
+      - { id: b, text: "Người bán đăng số để người mua liên hệ, không đồng ý nhận chào hàng" }
+      - { id: c, text: "Điều khoản của sàn gần như chắc chắn cấm thu thập tự động" }
+      - { id: d, text: "Scraping chậm hơn mua danh sách có sẵn từ bên thứ ba" }
+  - id: api-key
+    kind: knowledge
+    type: single
+    prompt: "API thời tiết trả phí cấp cho bạn một API key. Notebook phân tích sẽ được commit vào git của team. Cách giữ key đúng?"
+    options:
+      - { id: a, text: "Ghi key ở cell đầu, xoá output trước khi commit" }
+      - { id: b, text: "Đọc key từ biến môi trường / .env nằm trong .gitignore" }
+      - { id: c, text: "Mã hoá key bằng base64 rồi để ở cell đầu của notebook cho tiện" }
+      - { id: d, text: "Gửi key qua chat để mỗi người tự dán vào code" }
+  - id: http-200-error
+    kind: knowledge
+    type: single
+    prompt: "World Bank API trả HTTP 200 với body `[{\"message\": [{\"key\": \"Invalid value\"}]}]`. Code của bạn chỉ kiểm `status_code == 200`. Hậu quả?"
+    options:
+      - { id: a, text: "Không sao cả, vì HTTP 200 nghĩa là request đã thành công trọn vẹn" }
+      - { id: b, text: "Code sẽ tự retry cho tới khi có dữ liệu" }
+      - { id: c, text: "Bảng ra rỗng hoặc lỗi khó hiểu; phải kiểm cả nội dung" }
+      - { id: d, text: "API sẽ khoá key vì gửi tham số sai" }
+  - id: pagination
+    kind: knowledge
+    type: single
+    prompt: "API trả 50 bản ghi mỗi trang, kèm `pages: 4` và `total: 187`. Code của bạn chỉ gọi trang 1. Bảng của bạn có gì?"
+    options:
+      - { id: a, text: "Đủ 187 bản ghi vì API tự gộp các trang" }
+      - { id: b, text: "4 bản ghi, mỗi trang một bản ghi tóm tắt" }
+      - { id: c, text: "Lỗi vì chưa đọc hết các trang còn lại" }
+      - { id: d, text: "50 bản ghi, thiếu 137, không có lỗi nào báo" }
+  - id: daily-pipeline
+    kind: knowledge
+    type: single
+    prompt: "Một notebook bạn chạy tay mỗi sáng để kéo dữ liệu API vào bảng báo cáo nay có 5 dashboard phụ thuộc. Hôm qua chạy hai lần, doanh số bị nhân đôi. Bước đúng?"
+    options:
+      - { id: a, text: "Dặn mọi người chỉ chạy notebook một lần mỗi ngày" }
+      - { id: b, text: "Chuyển cả 5 dashboard sang đọc file Excel mà bạn gửi lên mỗi sáng" }
+      - { id: c, text: "Thêm cell xoá cả bảng rồi nạp lại toàn bộ lịch sử" }
+      - { id: d, text: "Làm nạp idempotent, có log, rồi bàn giao cho DE lên lịch" }
+  - id: raw-first
+    kind: knowledge
+    type: single
+    prompt: "Vì sao nên lưu response thô (JSON/HTML nguyên bản kèm thời điểm tải, URL, tham số) trước khi parse?"
+    options:
+      - { id: a, text: "Để parse lại khi sửa lỗi mà không gọi nguồn lần nữa" }
+      - { id: b, text: "Vì file JSON nhỏ hơn bảng đã parse rất nhiều" }
+      - { id: c, text: "Vì pandas không đọc được JSON từ bộ nhớ" }
+      - { id: d, text: "Để nguồn dữ liệu không tính phí lần gọi sau" }

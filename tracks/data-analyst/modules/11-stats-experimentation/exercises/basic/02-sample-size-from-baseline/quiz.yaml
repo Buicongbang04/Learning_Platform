@@ -1,0 +1,73 @@
+questions:
+  - id: baseline-60
+    kind: data
+    type: single
+    prompt: "Baseline tỉ lệ khách mới mua lần hai trong 60 ngày (cohort từ 2010-01-01, chỉ khách đủ cửa sổ) là bao nhiêu?"
+    options:
+      - { id: a, text: "21.1%" }
+      - { id: b, text: "35.2%" }
+      - { id: c, text: "43.9%" }
+      - { id: d, text: "50.4%" }
+  - id: weekly-traffic
+    kind: data
+    type: single
+    prompt: "Trong 47 tuần trọn của năm 2011 (3/1 tới 27/11), trung bình mỗi tuần có bao nhiêu khách mới?"
+    options:
+      - { id: a, text: "Khoảng 12" }
+      - { id: b, text: "Khoảng 32" }
+      - { id: c, text: "Khoảng 67" }
+      - { id: d, text: "Khoảng 125" }
+  - id: weeks-5pp
+    kind: data
+    type: single
+    prompt: "Để phát hiện +5 điểm % (alpha 0.05 hai phía, power 0.8) với lưu lượng đó, cần gom khách trong bao nhiêu tuần?"
+    options:
+      - { id: a, text: "4 tuần" }
+      - { id: b, text: "24 tuần" }
+      - { id: c, text: "94 tuần" }
+      - { id: d, text: "573 tuần" }
+  - id: mde-4-weeks
+    kind: data
+    type: single
+    prompt: "Nếu chỉ chạy 4 tuần như trưởng nhóm CRM muốn, MDE tuyệt đối nhỏ nhất phát hiện được là khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "2.5 điểm %" }
+      - { id: b, text: "5 điểm %" }
+      - { id: c, text: "10 điểm %" }
+      - { id: d, text: "25 điểm %" }
+  - id: censoring
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `repeat_rate` loại khách có đơn đầu chưa đủ 60 ngày trước mốc cuối dữ liệu?"
+    options:
+      - { id: a, text: "Họ chưa có đủ thời gian để quay lại, giữ thì baseline bị kéo thấp" }
+      - { id: b, text: "Họ thường là khách vãng lai không có mã, nên không ghép được hoá đơn" }
+      - { id: c, text: "Tháng cuối có nhiều đơn huỷ, nên hoá đơn của họ không còn hợp lệ" }
+      - { id: d, text: "Bỏ bớt khách làm cỡ mẫu nhỏ đi, giúp kiểm định chạy nhanh hơn" }
+  - id: readout-timing
+    kind: knowledge
+    type: single
+    prompt: "Giả sử chấp nhận MDE lớn và gom khách trong 12 tuần. Sớm nhất khi nào có kết quả metric chính?"
+    options:
+      - { id: a, text: "Ngay khi kết thúc tuần thứ 12 của giai đoạn gom khách" }
+      - { id: b, text: "Sau 60 ngày tính từ ngày bắt đầu gửi email cho nhóm đầu" }
+      - { id: c, text: "Khoảng 12 tuần cộng 60 ngày: khách vào cuối cũng cần đủ cửa sổ" }
+      - { id: d, text: "Bất cứ lúc nào p-value xuống dưới 0.05 trong lúc đang chạy" }
+  - id: recommendation
+    kind: knowledge
+    type: single
+    prompt: "Câu trả lời nào cho trưởng nhóm CRM là đúng mực nhất?"
+    options:
+      - { id: a, text: "Cứ chạy 4 tuần, nếu p-value nhỏ thì kết luận email hiệu quả" }
+      - { id: b, text: "Hạ alpha xuống 0.01 để kết quả 4 tuần đáng tin cậy hơn" }
+      - { id: c, text: "Theo dõi p-value hằng ngày và dừng ngay khi đạt ý nghĩa" }
+      - { id: d, text: "4 tuần chỉ thấy hiệu ứng ~25 điểm; nên mở rộng đối tượng hoặc đổi metric" }
+  - id: mde-scaling
+    kind: knowledge
+    type: single
+    prompt: "Giữ baseline, alpha và power. Giảm MDE từ 5 xuống 2.5 điểm % thì cỡ mẫu mỗi nhóm tăng khoảng bao nhiêu lần?"
+    options:
+      - { id: a, text: "2 lần" }
+      - { id: b, text: "4 lần" }
+      - { id: c, text: "6 lần" }
+      - { id: d, text: "10 lần" }

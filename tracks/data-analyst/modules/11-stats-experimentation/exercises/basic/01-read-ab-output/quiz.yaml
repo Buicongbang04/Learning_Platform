@@ -1,0 +1,109 @@
+questions:
+  - id: test-for-rate
+    kind: knowledge
+    type: single
+    prompt: "PM so tỉ lệ đăng ký của hai landing page, mỗi trang khoảng 20 nghìn người được chia ngẫu nhiên. Kiểm định nào?"
+    options:
+      - { id: a, text: "Paired t-test trên tỉ lệ đăng ký của từng ngày chạy thí nghiệm" }
+      - { id: b, text: "Pearson correlation giữa landing page và việc đăng ký" }
+      - { id: c, text: "z-test hai tỉ lệ (tương đương chi-square trên bảng 2×2)" }
+      - { id: d, text: "Mann-Whitney U trên thời gian ở lại trang của mỗi người" }
+  - id: test-for-revenue
+    kind: knowledge
+    type: single
+    prompt: "Metric chính là doanh thu/người trong 30 ngày, lệch phải rất mạnh, mỗi nhóm 40 nghìn người. CFO quan tâm tổng doanh thu. Cách so nào hợp lý nhất?"
+    options:
+      - { id: a, text: "Mann-Whitney U vì dữ liệu không có phân phối chuẩn" }
+      - { id: b, text: "Welch t-test trên trung bình, cắt đuôi ở p99 đặt trước" }
+      - { id: c, text: "Chi-square trên số người có doanh thu lớn hơn 0" }
+      - { id: d, text: "So trung vị doanh thu của hai nhóm bằng mắt" }
+  - id: p-value-meaning
+    kind: knowledge
+    type: single
+    prompt: "Readout ghi: \"p = 0.03\". Câu nào diễn giải đúng?"
+    options:
+      - { id: a, text: "Có 97% khả năng phiên bản B tốt hơn phiên bản A" }
+      - { id: b, text: "Có 3% khả năng kết quả này là do lỗi khi đo đạc" }
+      - { id: c, text: "Hiệu ứng thật lớn gấp khoảng 33 lần so với nhiễu" }
+      - { id: d, text: "Nếu A, B như nhau, chênh lệch cỡ này hiếm (3%)" }
+  - id: ci-vs-mde
+    kind: knowledge
+    type: single
+    prompt: "Chênh lệch conversion là +0.6 điểm %, CI 95% [−0.2; +1.4], MDE đặt trước 0.5 điểm %. Đọc thế nào?"
+    options:
+      - { id: a, text: "Chưa kết luận: khoảng chứa cả 0 lẫn mức MDE" }
+      - { id: b, text: "Không có hiệu ứng vì khoảng tin cậy chứa 0" }
+      - { id: c, text: "Ship vì ước lượng điểm +0.6 đã lớn hơn MDE" }
+      - { id: d, text: "Không ship vì hiệu ứng chắc chắn nhỏ hơn MDE" }
+  - id: srm
+    kind: knowledge
+    type: single
+    prompt: "Thiết kế 50/50, quan sát 50 600 và 49 400 người (chi-square p ≈ 0.0001). Conversion nhóm B cao hơn rõ. Làm gì?"
+    options:
+      - { id: a, text: "Ship B: lệch 1.2% số người là nhỏ, không ảnh hưởng" }
+      - { id: b, text: "Bỏ ngẫu nhiên 1 200 người nhóm A cho hai nhóm bằng nhau" }
+      - { id: c, text: "Chưa đọc hiệu ứng; tìm nguyên nhân lệch chia nhóm trước" }
+      - { id: d, text: "Đổi sang Welch t-test vì hai nhóm không cùng cỡ mẫu" }
+  - id: guardrail
+    kind: knowledge
+    type: single
+    prompt: "Checkout mới: conversion +2% tương đối (CI không chứa 0). Guardrail thời gian tải trang +8%, ngưỡng cho phép +5%. Quyết định?"
+    options:
+      - { id: a, text: "Ship ngay, vì metric chính mới là thứ quyết định" }
+      - { id: b, text: "Chưa ship; sửa hiệu năng rồi chạy lại thí nghiệm" }
+      - { id: c, text: "Ship cho nửa người dùng để giảm bớt tác hại" }
+      - { id: d, text: "Bỏ guardrail đi vì nó đã làm chậm quyết định" }
+  - id: peeking
+    kind: knowledge
+    type: single
+    prompt: "Thí nghiệm dự kiến 4 tuần. Ngày thứ 4, PM thấy p = 0.03 và muốn dừng để ship. Phản hồi đúng?"
+    options:
+      - { id: a, text: "Chạy đủ 4 tuần: dừng khi p vừa đẹp làm tăng false positive" }
+      - { id: b, text: "Dừng được, vì p = 0.03 vẫn nhỏ hơn ngưỡng alpha 0.05 đã đặt trước" }
+      - { id: c, text: "Dừng được nếu kiểm định lại bằng một kiểm định một phía" }
+      - { id: d, text: "Chạy tiếp tới khi p xuống dưới 0.01 thì chắc chắn hơn" }
+  - id: novelty
+    kind: knowledge
+    type: single
+    prompt: "Lift click theo tuần của giao diện mới: tuần 1 +6%, tuần 2 +3%, tuần 3 +1%. Cách đọc hợp lý nhất?"
+    options:
+      - { id: a, text: "Hiệu ứng thật là +6%, các tuần sau bị nhiễu kéo xuống" }
+      - { id: b, text: "Lấy trung bình ba tuần +3.3% và báo đó là hiệu ứng" }
+      - { id: c, text: "Thí nghiệm hỏng vì hiệu ứng không ổn định theo tuần" }
+      - { id: d, text: "Có thể là novelty: chạy thêm, đọc các tuần sau" }
+  - id: relative-absolute
+    kind: knowledge
+    type: single
+    prompt: "Conversion tăng từ 2.0% lên 2.3%. Slide ghi \"tăng 15%\". Cách báo đầy đủ nhất?"
+    options:
+      - { id: a, text: "Ghi \"tăng 0.3%\" vì số đó nhỏ và an toàn hơn" }
+      - { id: b, text: "Ghi +0.3 điểm % (+15% tương đối) và số đơn thêm" }
+      - { id: c, text: "Ghi \"tăng 15%\" vì lãnh đạo thích số tương đối" }
+      - { id: d, text: "Ghi \"tăng 115%\" vì 2.3 / 2.0 = 1.15 lần" }
+  - id: post-hoc-segments
+    kind: knowledge
+    type: single
+    prompt: "Tổng thể không có ý nghĩa. Tách 10 phân khúc sau khi chạy, riêng \"iOS, Hà Nội\" có p = 0.03. Làm gì?"
+    options:
+      - { id: a, text: "Ship riêng cho phân khúc iOS, Hà Nội vì đã có ý nghĩa" }
+      - { id: b, text: "Báo cáo rằng tính năng chỉ hiệu quả với người dùng iOS" }
+      - { id: c, text: "Coi là giả thuyết; kiểm bằng thí nghiệm mới đặt trước" }
+      - { id: d, text: "Gộp phân khúc đó vào tổng rồi kiểm định lại một lần nữa" }
+  - id: tool-platform
+    kind: knowledge
+    type: single
+    prompt: "Công ty chạy khoảng 40 thí nghiệm/tháng trên app, cần chia nhóm ổn định, cảnh báo SRM và scorecard tự động. Chọn gì?"
+    options:
+      - { id: a, text: "Nền tảng experimentation (GrowthBook, Statsig, Optimizely...)" }
+      - { id: b, text: "Mỗi thí nghiệm một notebook Python do DA tự chạy rồi gửi kết quả" }
+      - { id: c, text: "Một file Excel dùng chung, mỗi thí nghiệm thêm một sheet" }
+      - { id: d, text: "Dashboard BI so conversion hai nhóm, không cần kiểm định" }
+  - id: tool-calculator
+    kind: knowledge
+    type: single
+    prompt: "Trưởng nhóm CRM muốn tự thử \"nếu baseline 30%, muốn thấy +3 điểm thì cần bao nhiêu người\" trước buổi họp. Đưa gì?"
+    options:
+      - { id: a, text: "Bộ code Python trong repo, kèm hướng dẫn cài uv và chạy" }
+      - { id: b, text: "Một bản readout PDF với đúng một con số sample size đã tính" }
+      - { id: c, text: "Nền tảng experimentation, tạo sẵn một thí nghiệm nháp" }
+      - { id: d, text: "Sheet hoặc calculator nhập baseline, MDE; số đã đối chiếu" }

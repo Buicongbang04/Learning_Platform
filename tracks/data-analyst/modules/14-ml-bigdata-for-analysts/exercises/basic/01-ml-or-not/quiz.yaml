@@ -1,0 +1,91 @@
+questions:
+  - id: ml-type-segments
+    kind: knowledge
+    type: single
+    prompt: "Head of CRM muốn chia 4 000 khách thành vài nhóm hành vi để thiết kế chương trình, chưa có nhãn nhóm nào. Đây là loại bài toán gì?"
+    options:
+      - { id: a, text: "Supervised classification, nhãn là tên nhóm" }
+      - { id: b, text: "Reinforcement learning, thưởng là doanh thu" }
+      - { id: c, text: "Unsupervised clustering, ví dụ k-means" }
+      - { id: d, text: "Supervised regression trên doanh thu khách" }
+  - id: rl-pricing
+    kind: knowledge
+    type: single
+    prompt: "Nhóm nào là ví dụ đúng của reinforcement learning?"
+    options:
+      - { id: a, text: "Hệ thống thử nhiều mức giá, nhận doanh thu, dồn dần lưu lượng về giá tốt" }
+      - { id: b, text: "Model học từ 2 năm đơn hàng có nhãn \"bị huỷ\" để đoán đơn sắp huỷ" }
+      - { id: c, text: "Gom sản phẩm thành nhóm theo mô tả để làm danh mục cho website" }
+      - { id: d, text: "Dự báo doanh số tuần sau của cửa hàng từ doanh số 104 tuần trước đó của chính nó" }
+  - id: why-not-ml
+    kind: knowledge
+    type: single
+    prompt: "CEO hỏi: \"Vì sao doanh thu tháng 3 giảm 12%?\" Bạn bắt đầu bằng gì?"
+    options:
+      - { id: a, text: "Train model dự báo doanh thu rồi xem feature importance" }
+      - { id: b, text: "Phân rã doanh thu theo thành phần và phân khúc, so với kỳ trước" }
+      - { id: c, text: "Chạy k-means trên toàn bộ khách hàng tháng 3 để tìm ra nhóm bất thường" }
+      - { id: d, text: "Dùng Deep Learning vì có quan hệ phi tuyến giữa các biến" }
+  - id: rule-vs-model
+    kind: data
+    type: single
+    prompt: "Đội CSKH gọi được khoảng 30% khách mỗi kỳ. Theo bảng, model hơn quy tắc bao nhiêu ở cùng cỡ danh sách?"
+    options:
+      - { id: a, text: "Phủ thêm khoảng 11 điểm % khách rời (55% lên 66%)" }
+      - { id: b, text: "Tỉ lệ rời trong số được gọi tăng từ 51% lên 73%" }
+      - { id: c, text: "Phủ thêm khoảng 39 điểm % khách rời (28% lên 66%)" }
+      - { id: d, text: "Không hơn, vì hai cách có cùng tỉ lệ rời khoảng 51%" }
+  - id: top-decile-lift
+    kind: data
+    type: single
+    prompt: "Gọi 10% khách điểm cao nhất thay vì gọi ngẫu nhiên: mỗi cuộc gọi trúng khách sắp rời nhiều hơn khoảng bao nhiêu lần?"
+    options:
+      - { id: a, text: "1.9 lần" }
+      - { id: b, text: "4.9 lần" }
+      - { id: c, text: "7.3 lần" }
+      - { id: d, text: "2.8 lần" }
+  - id: explain-to-business
+    kind: knowledge
+    type: single
+    prompt: "Stakeholder cần model churn mà họ hiểu và tự kiểm được bằng SQL. Thuật toán nào hợp nhất để bắt đầu?"
+    options:
+      - { id: a, text: "KNN, vì không cần train và dễ cài đặt" }
+      - { id: b, text: "Decision tree nông, luật viết lại được thành CASE WHEN" }
+      - { id: c, text: "Mạng nơ-ron nhiều lớp có dropout để tránh overfit và tự học tương tác" }
+      - { id: d, text: "K-means với k = 2, gọi cụm rủi ro là nhóm sẽ rời" }
+  - id: naive-bayes-text
+    kind: knowledge
+    type: single
+    prompt: "Cần phân loại nhanh 20 000 ticket hỗ trợ (văn bản ngắn) thành 5 chủ đề, có 1 000 ticket đã gán nhãn. Baseline nhanh và hợp lý nhất?"
+    options:
+      - { id: a, text: "Naive Bayes trên số đếm từ, so với gán nhãn tay" }
+      - { id: b, text: "K-means trên độ dài ticket rồi đặt tên cụm" }
+      - { id: c, text: "Logistic regression trên cột thời gian tạo ticket" }
+      - { id: d, text: "Tự train một Transformer từ đầu trên 1 000 ticket" }
+  - id: dl-tabular
+    kind: knowledge
+    type: single
+    prompt: "Vendor đề xuất Deep Learning để dự đoán churn trên bảng 7 000 khách, 20 cột. Phản hồi hợp lý nhất?"
+    options:
+      - { id: a, text: "Đồng ý, vì Deep Learning luôn chính xác hơn mọi model cổ điển khác" }
+      - { id: b, text: "Đồng ý nếu họ dùng TensorFlow thay vì PyTorch" }
+      - { id: c, text: "Từ chối mọi ML, quy tắc SQL luôn là đủ dùng" }
+      - { id: d, text: "Yêu cầu so với logistic regression và quy tắc trên cùng test" }
+  - id: data-size-tool
+    kind: knowledge
+    type: single
+    prompt: "Bạn cần phân tích 300 triệu dòng sự kiện (khoảng 12 GB Parquet) một lần trên laptop 16 GB RAM. Công cụ hợp lý?"
+    options:
+      - { id: a, text: "Xin dựng cụm Spark 10 máy cho dự án" }
+      - { id: b, text: "pandas đọc toàn bộ tệp vào RAM một lần" }
+      - { id: c, text: "DuckDB truy vấn thẳng trên tệp Parquet" }
+      - { id: d, text: "Excel với Power Query rồi tạo pivot table" }
+  - id: mpi-vs-mapreduce
+    kind: knowledge
+    type: multi
+    prompt: "Nhận định nào đúng về MPI so với MapReduce/Spark? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "MPI cho các tiến trình gửi nhận thông điệp trực tiếp, dùng nhiều trong HPC và huấn luyện DL phân tán" }
+      - { id: b, text: "MPI tự chia dữ liệu và tự chạy lại phần việc khi một máy hỏng, giống Spark" }
+      - { id: c, text: "Phép allreduce của MPI hay được dùng để cộng gradient giữa các GPU" }
+      - { id: d, text: "DA thường viết MPI để tăng tốc báo cáo SQL hằng ngày" }

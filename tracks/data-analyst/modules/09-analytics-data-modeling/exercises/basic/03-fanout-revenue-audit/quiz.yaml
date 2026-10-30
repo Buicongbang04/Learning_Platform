@@ -1,0 +1,55 @@
+questions:
+  - id: naive-inflation
+    kind: data
+    type: single
+    prompt: "Join bảng dòng hàng hợp lệ với `naive_dim` (DISTINCT StockCode, Description) làm tổng doanh thu tăng bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 3.7%" }
+      - { id: b, text: "Khoảng 12.3%" }
+      - { id: c, text: "Khoảng 68 lần" }
+      - { id: d, text: "Không đổi" }
+  - id: country-spread
+    kind: data
+    type: single
+    prompt: "Trong 12 quốc gia doanh thu lớn nhất, quốc gia nào bị đếm thừa nhiều nhất khi join `naive_dim`?"
+    options:
+      - { id: a, text: "United Kingdom" }
+      - { id: b, text: "Japan" }
+      - { id: c, text: "Netherlands" }
+      - { id: d, text: "Spain" }
+  - id: header-multiple
+    kind: data
+    type: single
+    prompt: "Gắn `invoice_total` vào từng dòng hàng rồi cộng, tổng gấp bao nhiêu lần doanh thu thật?"
+    options:
+      - { id: a, text: "Khoảng 68 lần" }
+      - { id: b, text: "Khoảng 26.6 lần" }
+      - { id: c, text: "Khoảng 15 lần" }
+      - { id: d, text: "Khoảng 1.12 lần" }
+  - id: aov-value
+    kind: data
+    type: single
+    prompt: "`aov(lines)` trên bộ thật bằng bao nhiêu, và trung bình `revenue` mỗi dòng bằng bao nhiêu (GBP)?"
+    options:
+      - { id: a, text: "aov 20.12; trung bình dòng 534.40" }
+      - { id: b, text: "aov 541.11; trung bình dòng 20.12" }
+      - { id: c, text: "aov 534.40; trung bình dòng 20.12" }
+      - { id: d, text: "aov 534.40; trung bình dòng 26.60" }
+  - id: repeated-scan
+    kind: knowledge
+    type: single
+    prompt: "Hoá đơn 555524 có 20 dòng cùng mã 22698, mỗi dòng 1 cái, cùng giờ. Bạn xử lý thế nào trong model?"
+    options:
+      - { id: a, text: "Xoá 19 dòng vì chắc chắn là lỗi trùng" }
+      - { id: b, text: "Giữ cả 20 dòng và hỏi nghiệp vụ về cách quét" }
+      - { id: c, text: "Gộp thành một dòng Quantity 1 cho gọn" }
+      - { id: d, text: "Bỏ cả hoá đơn ra khỏi fact cho an toàn" }
+  - id: fix-location
+    kind: knowledge
+    type: single
+    prompt: "Sửa lỗi dashboard sản phẩm đếm thừa ở đâu là bền nhất?"
+    options:
+      - { id: a, text: "Chia doanh thu trên dashboard cho 1.123" }
+      - { id: b, text: "Thêm DISTINCT vào truy vấn của dashboard" }
+      - { id: c, text: "Nhắc người xem rằng số đã bị đếm thừa" }
+      - { id: d, text: "Bảng sản phẩm một dòng mỗi mã, có test unique" }

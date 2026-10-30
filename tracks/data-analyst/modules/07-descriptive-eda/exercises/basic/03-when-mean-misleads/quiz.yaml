@@ -1,0 +1,64 @@
+questions:
+  - id: near-mean
+    kind: data
+    type: single
+    prompt: "Bao nhiêu phần trăm khách Telco có cước tháng trong khoảng mean ± 5 USD (59.76–69.76)?"
+    options:
+      - { id: a, text: "Khoảng 7.6%" }
+      - { id: b, text: "Khoảng 11.6%" }
+      - { id: c, text: "Khoảng 50%" }
+      - { id: d, text: "Khoảng 68%" }
+  - id: report-charges
+    kind: knowledge
+    type: single
+    prompt: "Marketing hỏi \"khách trả bao nhiêu tiền cước mỗi tháng?\" để thiết kế gói mới. Bạn báo gì?"
+    options:
+      - { id: a, text: "Mean 64.76 USD, vì nó tính đủ mọi khách" }
+      - { id: b, text: "Median 70.35 USD, vì nó không bị lệch" }
+      - { id: c, text: "Theo nhóm: không internet 21, DSL 58, cáp quang 92" }
+      - { id: d, text: "Mode 20.05 USD, vì đó là mức hay gặp nhất" }
+  - id: trimmed-distance
+    kind: data
+    type: single
+    prompt: "`CompetitionDistance` có mean 5 405 m và median 2 325 m. Trimmed mean 10% là bao nhiêu?"
+    options:
+      - { id: a, text: "4 933 m" }
+      - { id: b, text: "5 020 m" }
+      - { id: c, text: "6 883 m" }
+      - { id: d, text: "3 775 m" }
+  - id: above-mean
+    kind: data
+    type: single
+    prompt: "Bao nhiêu phần trăm cửa hàng (có số liệu) cách đối thủ xa hơn mean 5 405 m?"
+    options:
+      - { id: a, text: "Khoảng 10%" }
+      - { id: b, text: "Khoảng 29%" }
+      - { id: c, text: "Khoảng 50%" }
+      - { id: d, text: "Khoảng 71%" }
+  - id: top10-store
+    kind: data
+    type: single
+    prompt: "Doanh số TB mỗi cửa hàng (ngày mở cửa): mean 6 935 EUR. Bỏ 10 cửa hàng lớn nhất (dưới 1% số cửa hàng) thì mean còn bao nhiêu?"
+    options:
+      - { id: a, text: "6 921 EUR, gần như không đổi" }
+      - { id: b, text: "6 590 EUR, bằng median" }
+      - { id: c, text: "6 827 EUR, giảm khoảng 1.6%" }
+      - { id: d, text: "5 774 EUR, giảm khoảng 17%" }
+  - id: forecast-total
+    kind: knowledge
+    type: single
+    prompt: "Finance cần dự báo doanh số tháng tới của cả chuỗi từ doanh số ngày lịch sử. Thống kê nào là nền đúng?"
+    options:
+      - { id: a, text: "Median doanh số ngày mở cửa nhân số cửa hàng và số ngày" }
+      - { id: b, text: "Mean mọi dòng (kể cả ngày đóng cửa) nhân số cửa hàng-ngày" }
+      - { id: c, text: "Trimmed mean 10% của ngày mở cửa nhân số cửa hàng-ngày" }
+      - { id: d, text: "Mode doanh số ngày nhân số cửa hàng và số ngày trong tháng" }
+  - id: drop-outliers
+    kind: knowledge
+    type: single
+    prompt: "Một đồng nghiệp đề xuất xoá cửa hàng 817 (doanh số TB 21 757 EUR/ngày, lớn nhất chuỗi) khỏi dữ liệu \"vì là outlier\". Bạn trả lời thế nào?"
+    options:
+      - { id: a, text: "Đồng ý, outlier luôn nên xoá trước khi phân tích" }
+      - { id: b, text: "Giữ trong tổng; dùng thống kê robust khi hỏi điển hình" }
+      - { id: c, text: "Đồng ý, nhưng chỉ xoá khi tính tổng doanh số chuỗi" }
+      - { id: d, text: "Thay doanh số của nó bằng mean của các cửa hàng khác" }

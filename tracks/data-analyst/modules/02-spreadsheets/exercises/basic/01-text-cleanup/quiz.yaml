@@ -1,0 +1,55 @@
+questions:
+  - id: spaces-count
+    kind: data
+    type: single
+    prompt: "Trong 300 dòng của workbook, bao nhiêu dòng có mô tả gốc thừa khoảng trắng (Summary!B2)?"
+    options:
+      - { id: a, text: "17 dòng" }
+      - { id: b, text: "95 dòng" }
+      - { id: c, text: "83 dòng" }
+      - { id: d, text: "300 dòng" }
+  - id: case-codes
+    kind: data
+    type: single
+    prompt: "Trên toàn sheet `Year 2010-2011`, có 4 070 mã hàng khác nhau. Viết HOA hết thì còn bao nhiêu mã?"
+    options:
+      - { id: a, text: "3 958, vì 112 mã có cả dạng hoa và thường" }
+      - { id: b, text: "4 070, UPPER không đổi gì" }
+      - { id: c, text: "4 203, bằng đúng số mô tả sản phẩm khác nhau sau TRIM" }
+      - { id: d, text: "117, số mã có chữ thường" }
+  - id: proper-quote
+    kind: knowledge
+    type: single
+    prompt: "`PROPER(\"POPPY'S PLAYHOUSE\")` trả về gì, và nên dùng cột Description_clean cho việc nào?"
+    options:
+      - { id: a, text: "Poppy's Playhouse; dùng làm khoá ghép bảng" }
+      - { id: b, text: "Poppy'S Playhouse; chỉ dùng để hiển thị" }
+      - { id: c, text: "POPPY'S PLAYHOUSE; PROPER bỏ qua dấu nháy" }
+      - { id: d, text: "Poppy'S Playhouse; dùng làm khoá ghép bảng" }
+  - id: nbsp
+    kind: knowledge
+    type: single
+    prompt: "Mô tả copy từ trang web có ký tự non-breaking space (CHAR(160)) ở cuối. TRIM xử lý thế nào?"
+    options:
+      - { id: a, text: "TRIM bỏ được, vì nó bỏ mọi loại khoảng trắng kể cả ký tự đặc biệt" }
+      - { id: b, text: "TRIM đổi nó thành dấu cách thường" }
+      - { id: c, text: "TRIM báo lỗi #VALUE!" }
+      - { id: d, text: "TRIM không bỏ; thay CHAR(160) bằng dấu cách rồi mới TRIM" }
+  - id: substitute-vs-replace
+    kind: knowledge
+    type: single
+    prompt: "Vì sao cột Customer_masked dùng REPLACE mà cột Country_clean dùng SUBSTITUTE?"
+    options:
+      - { id: a, text: "REPLACE nhanh hơn trên số, SUBSTITUTE nhanh hơn trên text" }
+      - { id: b, text: "SUBSTITUTE không chạy trên cột có ô trống" }
+      - { id: c, text: "Che mã thay theo vị trí; đổi tên nước thay theo nội dung" }
+      - { id: d, text: "REPLACE chỉ có ở Excel, SUBSTITUTE có ở mọi nơi" }
+  - id: keep-raw
+    kind: knowledge
+    type: multi
+    prompt: "Vì sao bài giữ cột gốc và thêm cột sạch bên cạnh thay vì sửa đè (Find & Replace) lên cột gốc? Chọn mọi lý do đúng."
+    options:
+      - { id: a, text: "Người review đối chiếu được gốc và kết quả từng dòng" }
+      - { id: b, text: "Dán dữ liệu mới vào cột gốc thì công thức làm sạch tự chạy lại" }
+      - { id: c, text: "Sửa đè làm file nhỏ hơn nên Excel chậm hơn" }
+      - { id: d, text: "Quy tắc làm sạch sai thì sửa công thức, không mất dữ liệu gốc" }

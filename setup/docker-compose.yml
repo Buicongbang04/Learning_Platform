@@ -5,7 +5,7 @@
 # Bật theo nhóm:
 #   docker compose -f setup/docker-compose.yml --profile nosql up -d
 # Nhóm: sql (postgres), nosql (mongo, redis, cassandra, neo4j), lake (minio),
-#       stream (kafka), bi (metabase + postgres), cloud (localstack), all (tất cả)
+#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), all (tất cả)
 # Tắt (giữ dữ liệu):     docker compose -f setup/docker-compose.yml --profile all down
 # Tắt và xoá dữ liệu:    docker compose -f setup/docker-compose.yml --profile all down -v
 #
@@ -159,7 +159,7 @@ services:
       MB_DB_FILE: /metabase-data/metabase.db
       JAVA_OPTS: "-Xmx1g"
     ports:
-      - "${METABASE_PORT:-3000}:3000"
+      - "127.0.0.1:${METABASE_PORT:-3000}:3000"
     volumes:
       - metabase_data:/metabase-data
     healthcheck:
@@ -168,6 +168,43 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
+
+  superset:
+    # Apache Superset 6.1.0 + driver psycopg2 (xem bi/Dockerfile.superset). Metadata lưu SQLite trong volume.
+    # Đăng nhập admin / admin. Lần đầu mất ~1-2 phút để db upgrade + init.
+    build:
+      context: ./bi
+      dockerfile: Dockerfile.superset
+    image: de-learning-superset:6.1.0
+    profiles: [bi, all]
+    environment:
+      FLASK_APP: "superset.app:create_app()"
+      SUPERSET_CONFIG_PATH: /app/superset_config.py
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-de-learning-local-only-secret-key-change-me-0123456789}
+      SUPERSET_LOAD_EXAMPLES: "no"
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        superset db upgrade
+        # Chỉ bỏ qua lỗi "admin đã tồn tại"; lỗi khác dừng container.
+        if ! out=$$(superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@example.com 2>&1); then
+          echo "$$out" | grep -qi "already exist" || { echo "$$out"; exit 1; }
+        fi
+        superset init
+        exec /usr/bin/run-server.sh
+    ports:
+      - "127.0.0.1:${SUPERSET_PORT:-8088}:8088"
+    volumes:
+      - superset_data:/app/superset_home
+      - ./bi/superset_config.py:/app/superset_config.py:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail -s http://localhost:8088/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
 
   localstack:
     # Giả lập API AWS (S3, IAM, STS...) trên máy local cho module 11-cloud, không tốn tiền.
@@ -203,4 +240,5 @@ volumes:
   minio_data:
   kafka_data:
   metabase_data:
+  superset_data:
   localstack_data:

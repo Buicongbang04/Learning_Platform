@@ -1,0 +1,73 @@
+questions:
+  - id: negative-orders
+    kind: data
+    type: single
+    prompt: "Với giả định trong notebook, bao nhiêu đơn có contribution âm, và tổng phần lỗ đó lớn cỡ nào?"
+    options:
+      - { id: a, text: "Khoảng 5% số đơn, tổng lỗ tới khoảng 190 nghìn GBP" }
+      - { id: b, text: "Khoảng 20% số đơn, tổng lỗ khoảng 4 nghìn GBP" }
+      - { id: c, text: "Khoảng 5% số đơn, tổng lỗ chỉ khoảng 4 nghìn GBP" }
+      - { id: d, text: "Không đơn nào âm vì gross margin là 40%" }
+  - id: breakeven-median
+    kind: data
+    type: single
+    prompt: "Đơn có 15 dòng hàng (số dòng median) cần giá trị tối thiểu bao nhiêu để không lỗ?"
+    options:
+      - { id: a, text: "Khoảng 31 GBP" }
+      - { id: b, text: "Khoảng 12 GBP" }
+      - { id: c, text: "Khoảng 20 GBP" }
+      - { id: d, text: "Khoảng 304 GBP" }
+  - id: min-order
+    kind: data
+    type: single
+    prompt: "Kịch bản \"đơn tối thiểu 25 GBP\" (khách bị chặn bỏ đi) làm contribution cả năm đổi thế nào?"
+    options:
+      - { id: a, text: "Tăng khoảng 190 nghìn GBP, đáng làm ngay" }
+      - { id: b, text: "Tăng khoảng 4 nghìn GBP, chừng 0.1%" }
+      - { id: c, text: "Giảm khoảng 12 nghìn GBP vì mất doanh thu" }
+      - { id: d, text: "Không đổi vì đơn nhỏ không có giá vốn" }
+  - id: price-breakeven
+    kind: data
+    type: single
+    prompt: "Tăng giá 5%, số đơn được phép giảm tối đa bao nhiêu để contribution không giảm?"
+    options:
+      - { id: a, text: "5%" }
+      - { id: b, text: "Khoảng 35%" }
+      - { id: c, text: "8%" }
+      - { id: d, text: "Khoảng 12%" }
+  - id: tornado
+    kind: data
+    type: single
+    prompt: "Trong tornado (mỗi giả định ±20%), kết luận nhạy nhất với giả định nào?"
+    options:
+      - { id: a, text: "Tỉ lệ giá vốn, chênh khoảng ±1.28 triệu GBP" }
+      - { id: b, text: "Chi phí mỗi đơn, chênh khoảng ±32 nghìn GBP" }
+      - { id: c, text: "Phí thanh toán, chênh khoảng ±43 nghìn GBP" }
+      - { id: d, text: "Chi phí mỗi dòng, chênh khoảng ±27 nghìn GBP" }
+  - id: export-uk
+    kind: data
+    type: single
+    prompt: "So contribution trung bình mỗi đơn của Export và UK (cùng giả định 8 GBP mỗi đơn)?"
+    options:
+      - { id: a, text: "UK cao gấp đôi Export" }
+      - { id: b, text: "Export khoảng 308, UK khoảng 176 GBP" }
+      - { id: c, text: "Hai thị trường gần bằng nhau, khoảng 188 GBP" }
+      - { id: d, text: "Export âm vì cước quốc tế" }
+  - id: cogs-fixed
+    kind: knowledge
+    type: single
+    prompt: "Vì sao khi tăng giá, giá vốn trong `unit_economics` vẫn tính trên doanh thu gốc?"
+    options:
+      - { id: a, text: "Để contribution khi tăng giá ra số nhỏ hơn cho an toàn" }
+      - { id: b, text: "Vì phí thanh toán đã tính trên doanh thu mới rồi" }
+      - { id: c, text: "Giá vốn theo số lượng hàng, tăng giá bán không làm hàng đắt hơn" }
+      - { id: d, text: "Vì bộ dữ liệu không có cột giá vốn nên tính cách nào cũng được" }
+  - id: present-assumption
+    kind: knowledge
+    type: single
+    prompt: "Bạn gửi CFO câu \"tăng giá 5% được mất tới 12% đơn\". Cách trình bày nào đúng nhất?"
+    options:
+      - { id: a, text: "Ghi 12.2% không kèm gì, vì con số đã tính từ dữ liệu thật" }
+      - { id: b, text: "Kèm giả định, và khoảng 11–14% khi giá vốn 55–65%" }
+      - { id: c, text: "Bỏ con số, chỉ nói tăng giá luôn có lợi hơn" }
+      - { id: d, text: "Làm tròn thành 10% cho dễ nhớ, không nhắc giả định" }

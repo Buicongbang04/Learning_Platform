@@ -1,0 +1,73 @@
+questions:
+  - id: top-item
+    kind: data
+    type: single
+    prompt: "Mã hàng nào có mặt trong nhiều giỏ nhất, và trong bao nhiêu phần trăm giỏ?"
+    options:
+      - { id: a, text: "JUMBO BAG RED RETROSPOT, có trong 10.6% giỏ" }
+      - { id: b, text: "REGENCY CAKESTAND 3 TIER, có mặt trong 10.1% số giỏ" }
+      - { id: c, text: "WHITE HANGING HEART T-LIGHT HOLDER, 11.1% giỏ" }
+      - { id: d, text: "PARTY BUNTING, có trong 8.5% giỏ hàng" }
+  - id: top-lift
+    kind: data
+    type: single
+    prompt: "Luật lift cao nhất (min support 2%) là giữa hai màu tách trà Regency. Trong giỏ có màu hồng (PINK), bao nhiêu phần trăm có màu xanh (GREEN)?"
+    options:
+      - { id: a, text: "82.6%, lift 16.1" }
+      - { id: b, text: "62.4%, lift 16.1" }
+      - { id: c, text: "3.2%, lift 16.1" }
+      - { id: d, text: "82.6%, lift 1.7" }
+  - id: asymmetric
+    kind: knowledge
+    type: single
+    prompt: "PINK ⇒ GREEN có confidence 82.6%, GREEN ⇒ PINK chỉ 62.4%, cùng lift 16.1. Vì sao?"
+    options:
+      - { id: a, text: "mlxtend làm tròn khác nhau theo chiều của luật" }
+      - { id: b, text: "Lift tính sai, đáng lẽ cũng phải khác nhau theo chiều" }
+      - { id: c, text: "Giỏ có PINK ít hơn giỏ có GREEN; lift chia cả hai tỉ lệ nền" }
+      - { id: d, text: "Khách mua PINK trước rồi mới mua GREEN trong cùng hoá đơn" }
+  - id: popular-pair
+    kind: data
+    type: single
+    prompt: "Luật JUMBO BAG RED RETROSPOT ⇒ WHITE HANGING HEART T-LIGHT HOLDER có confidence 19.1% và lift 1.7. Đọc thế nào?"
+    options:
+      - { id: a, text: "Cơ hội bán kèm lớn nhất vì hai món đều bán chạy nhất" }
+      - { id: b, text: "Hai món phổ biến gặp nhau thường hơn ngẫu nhiên một chút" }
+      - { id: c, text: "Hai món thay thế nhau, nên bày xa nhau trong catalogue" }
+      - { id: d, text: "Không đọc được vì confidence dưới 50% là không có ý nghĩa" }
+  - id: min-support
+    kind: data
+    type: single
+    prompt: "Số luật một-một với min support 3%, 2% và 1% lần lượt là bao nhiêu?"
+    options:
+      - { id: a, text: "176, 340 và 1 788 luật" }
+      - { id: b, text: "20, 106 và 176 luật" }
+      - { id: c, text: "176, 1 788 và 20 000 luật" }
+      - { id: d, text: "20, 176 và 1 788 luật" }
+  - id: halves
+    kind: data
+    type: single
+    prompt: "Chạy riêng hai nửa (12/2010-06/2011 và 07-12/2011, min support 2%). Số luật mỗi nửa và số luật chung là bao nhiêu?"
+    options:
+      - { id: a, text: "172 và 340 luật, chung 106" }
+      - { id: b, text: "176 và 176 luật, chung 176" }
+      - { id: c, text: "340 và 172 luật, chung 20" }
+      - { id: d, text: "106 và 172 luật, chung 340" }
+  - id: variant-action
+    kind: knowledge
+    type: single
+    prompt: "Luật lift cao nhất đều là các biến thể màu của cùng một sản phẩm, và khách phần lớn là cửa hàng mua sỉ. Hành động hợp lý nhất?"
+    options:
+      - { id: a, text: "Gợi ý màu còn lại cho người vừa thêm một màu vào giỏ" }
+      - { id: b, text: "Giảm giá màu ít bán để cân bằng số lượng giữa các màu" }
+      - { id: c, text: "Bỏ các luật này vì lift quá cao nên chắc là lỗi dữ liệu" }
+      - { id: d, text: "Bán theo bộ nhiều màu, bày thành set trong catalogue" }
+  - id: prove-uplift
+    kind: knowledge
+    type: single
+    prompt: "Merchandiser muốn biết widget \"thường mua kèm\" dựa trên luật có thật sự tăng doanh thu không. Cách đo đúng là gì?"
+    options:
+      - { id: a, text: "So doanh thu trước và sau khi bật widget cho mọi người" }
+      - { id: b, text: "A/B test: chia ngẫu nhiên người xem, đo doanh thu mỗi người" }
+      - { id: c, text: "Đếm số lần khách bấm vào widget trong tuần đầu ra mắt" }
+      - { id: d, text: "Xem confidence của luật có tăng sau khi bật widget không" }

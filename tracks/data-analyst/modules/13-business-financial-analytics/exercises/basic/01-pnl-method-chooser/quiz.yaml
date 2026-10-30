@@ -1,0 +1,109 @@
+questions:
+  - id: gross-margin
+    kind: knowledge
+    type: single
+    prompt: "Với P&L thu nhỏ trong đề, gross margin là bao nhiêu?"
+    options:
+      - { id: a, text: "38.0%" }
+      - { id: b, text: "40.0%" }
+      - { id: c, text: "43.0%" }
+      - { id: d, text: "31.7%" }
+  - id: contribution-lines
+    kind: knowledge
+    type: single
+    prompt: "Để ra contribution (lợi nhuận góp) từ gross profit, cần trừ thêm những dòng nào?"
+    options:
+      - { id: a, text: "Marketing và lương văn phòng, thuê kho" }
+      - { id: b, text: "Chỉ lương văn phòng, thuê kho" }
+      - { id: c, text: "Chi phí giao hàng và phí thanh toán" }
+      - { id: d, text: "Hàng trả lại và giá vốn hàng bán" }
+  - id: operating-margin
+    kind: knowledge
+    type: single
+    prompt: "Operating margin (lợi nhuận hoạt động trên doanh thu thuần) của quý này là bao nhiêu?"
+    options:
+      - { id: a, text: "8.1%" }
+      - { id: b, text: "31.7%" }
+      - { id: c, text: "21.1%" }
+      - { id: d, text: "8.5%" }
+  - id: markup-margin
+    kind: knowledge
+    type: single
+    prompt: "Phòng mua hàng nói \"mình cộng 50% lên giá vốn\" (markup 50%). Gross margin trên giá bán là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 33%" }
+      - { id: b, text: "50%" }
+      - { id: c, text: "Khoảng 67%" }
+      - { id: d, text: "150%" }
+  - id: price-breakeven
+    kind: knowledge
+    type: single
+    prompt: "Một sản phẩm có contribution margin 40% (mọi chi phí biến đổi tính theo đơn vị). Tăng giá 5% thì số lượng được giảm tối đa bao nhiêu để contribution không đổi?"
+    options:
+      - { id: a, text: "5.0%" }
+      - { id: b, text: "12.5%" }
+      - { id: c, text: "Khoảng 11.1%" }
+      - { id: d, text: "Khoảng 4.5%" }
+  - id: why-revenue-up
+    kind: knowledge
+    type: single
+    prompt: "Giám đốc kinh doanh: \"Doanh thu quý này tăng 6%. Nhờ bán nhiều hơn, giá cao hơn, hay khách chuyển sang hàng đắt hơn?\" Phương pháp nào?"
+    options:
+      - { id: a, text: "Price-volume-mix bridge theo sản phẩm" }
+      - { id: b, text: "Dự báo seasonal naive cho quý tiếp theo" }
+      - { id: c, text: "Hồi quy doanh thu theo nhiệt độ" }
+      - { id: d, text: "Cảnh báo KPI với ngưỡng mùa vụ" }
+  - id: mix-rate
+    kind: knowledge
+    type: single
+    prompt: "Chi tiêu trung bình mỗi khách toàn chuỗi giảm 2%, nhưng ở cả bốn loại cửa hàng con số này đều tăng. Điều gì đang xảy ra?"
+    options:
+      - { id: a, text: "Dữ liệu sai, vì không thể giảm khi mọi nhóm đều tăng" }
+      - { id: b, text: "Hiệu ứng mix: khách dồn sang loại cửa hàng giỏ nhỏ" }
+      - { id: c, text: "Hiệu ứng giá: mọi cửa hàng đã giảm giá bán" }
+      - { id: d, text: "Mùa vụ: so sánh sai kỳ, nên đổi sang so cùng kỳ" }
+  - id: forecast-method
+    kind: knowledge
+    type: single
+    prompt: "FP&A cần dự báo doanh số tuần cho 8 tuần tới; có 2.5 năm lịch sử, mùa vụ năm rõ. Bước đầu tiên hợp lý nhất?"
+    options:
+      - { id: a, text: "Fit ngay một model LightGBM với nhiều feature" }
+      - { id: b, text: "Lấy trung bình 4 tuần gần nhất rồi gửi đi" }
+      - { id: c, text: "Hỏi FP&A con số họ mong muốn rồi chỉnh cho khớp số đó" }
+      - { id: d, text: "Seasonal naive làm baseline, backtest nhiều điểm cắt" }
+  - id: whatif-tool
+    kind: knowledge
+    type: single
+    prompt: "CFO muốn trong buổi họp tự đổi giả định (giá, giá vốn, số đơn) và thấy lợi nhuận đổi ngay. Bạn giao gì?"
+    options:
+      - { id: a, text: "Spreadsheet có ô giả định riêng và bảng kịch bản" }
+      - { id: b, text: "Notebook Python, CFO sửa code trong buổi họp" }
+      - { id: c, text: "Dashboard BI chỉ hiện số thực tế của tháng trước" }
+      - { id: d, text: "Ảnh chụp bảng kịch bản dán vào slide" }
+  - id: alert-method
+    kind: knowledge
+    type: single
+    prompt: "KPI đơn hàng mỗi ngày dao động mạnh theo thứ trong tuần và theo mùa. Quy tắc cảnh báo nào hợp lý?"
+    options:
+      - { id: a, text: "Báo khi dưới một ngưỡng cố định đặt từ trung bình năm" }
+      - { id: b, text: "Báo khi thấp hơn hôm qua quá 30%" }
+      - { id: c, text: "So với median cùng thứ các tuần trước, ngưỡng robust" }
+      - { id: d, text: "Không cảnh báo, chỉ xem dashboard cuối tháng" }
+  - id: alert-tool
+    kind: knowledge
+    type: single
+    prompt: "Công ty cần cảnh báo hằng ngày cho 20 KPI nằm trong warehouse, gửi vào kênh chat của từng team. Cách nào bền nhất?"
+    options:
+      - { id: a, text: "Một notebook, DA mở và chạy tay mỗi sáng" }
+      - { id: b, text: "Truy vấn lên lịch (BI alert hoặc job SQL) có runbook" }
+      - { id: c, text: "Gửi file Excel tổng hợp 20 KPI qua email mỗi cuối tuần" }
+      - { id: d, text: "Mỗi team tự mở dashboard khi thấy cần thiết" }
+  - id: promo-eval
+    kind: knowledge
+    type: single
+    prompt: "Dashboard ghi \"ngày khuyến mãi bán nhiều hơn 39%\". Câu nào đúng nhất về con số này?"
+    options:
+      - { id: a, text: "Đó là doanh thu tăng thêm nhờ khuyến mãi, đem báo ngay" }
+      - { id: b, text: "Đó là lợi nhuận tăng thêm, vì doanh thu tăng 39%" }
+      - { id: c, text: "Con số sai, vì khuyến mãi luôn làm giảm doanh thu" }
+      - { id: d, text: "Cần so cùng thứ, xét kéo cầu, và đối chứng để biết" }

@@ -300,14 +300,20 @@ Bộ có sẵn trong thư viện thì dùng thẳng, không qua registry: `stats
 
 ### Bộ dữ liệu thật cho track Data Analyst
 
-Ba bộ mới (cùng cách tải: `uv run python data/download_dataset.py <tên>`; lần chạy thứ hai không tải lại). Module 08 (bài intermediate 03, funnel)
-dùng Olist thật; capstone dùng dunnhumby (`data/download_olist.py`, không thêm khoá). Số dòng dưới đây đếm thật sau khi tải (2026-10-29), là số tham chiếu cho các bài.
+Bảy bộ (cùng cách tải: `uv run python data/download_dataset.py <tên>`; lần chạy thứ hai không tải lại). Module 08 (bài intermediate 03, funnel)
+dùng Olist thật; capstone dùng dunnhumby (`data/download_olist.py`, không thêm khoá). Số dòng dưới đây đếm thật sau khi tải (2026-10-29; bốn bộ `grocery-sales-synthetic`, `marketing-ab`, `ecommerce-events`, `owid-co2` đếm 2026-10-30), là số tham chiếu cho các bài.
 
 | Tên | Nội dung | Nguồn | Giấy phép | Module |
 | --- | --- | --- | --- | --- |
 | `bike-sharing-uci` | Thuê xe Capital Bikeshare 2011-2012 kèm thời tiết | [UCI #275](https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset) | CC BY 4.0 | 08 |
 | `online-retail-ii` | Giao dịch cửa hàng online quà tặng ở Anh, 2009-12-01 .. 2011-12-09 | [UCI #502](https://archive.ics.uci.edu/dataset/502/online+retail+ii) | CC BY 4.0 | 08, cohort/RFM |
 | `dunnhumby-complete-journey` | 2 500 hộ gia đình siêu thị trong 2 năm, 8 tệp CSV | [Kaggle](https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey) | ODbL (database) / DbCL v1.0 (contents) | capstone |
+| `grocery-sales-synthetic` | Siêu thị **sinh giả** 7 bảng (categories, cities, countries, customers, employees, products, sales) | [Google Drive](https://drive.google.com/drive/folders/1rtawsOtllVE3FUwRZx7slywGLLU7mvol) | Không rõ: chỉ dùng cục bộ, không commit trích mẫu | 06, 09 |
+| `marketing-ab` | A/B test quảng cáo vs PSA, 588k người dùng | [Kaggle](https://www.kaggle.com/datasets/faviovaz/marketing-ab-testing) | CC0 | 11 |
+| `ecommerce-events` | Sự kiện web thật view/addtocart/transaction (Retailrocket, bản làm sạch) | [Kaggle](https://www.kaggle.com/datasets/cianaellington/retail-rocket-cleaned-events-dataset) | Kaggle gắn CC0, nhưng là bản làm sạch lại của Retailrocket, gốc CC BY-NC-SA 4.0 (phi thương mại, chia sẻ giống nhau): chỉ dùng học tập, không thương mại, không commit trích mẫu | 12 |
+| `owid-co2` | CO2 và phát thải theo quốc gia-năm (Our World in Data) | [GitHub](https://github.com/owid/co2-data) (ghim commit `382ee6c662b0`, 2026-06-02) | CC BY 4.0 | 04 |
+
+Market basket (module 12) dùng lại `online-retail-ii`. Module 05 (scraping) dùng sandbox `books.toscrape.com`, không qua registry.
 
 Tệp giữ lại và số dòng (không tính dòng tiêu đề):
 
@@ -325,6 +331,16 @@ Tệp giữ lại và số dòng (không tính dòng tiêu đề):
 | `dunnhumby-complete-journey` | `coupon_redempt.csv` | 2 318 |
 | `dunnhumby-complete-journey` | `hh_demographic.csv` | 801 |
 | `dunnhumby-complete-journey` | `campaign_desc.csv` | 30 |
+| `grocery-sales-synthetic` | `sales.csv` (~517 MB) | 6 758 125 |
+| `grocery-sales-synthetic` | `customers.csv` | 98 759 |
+| `grocery-sales-synthetic` | `products.csv` | 452 |
+| `grocery-sales-synthetic` | `countries.csv` | 206 |
+| `grocery-sales-synthetic` | `cities.csv` | 96 |
+| `grocery-sales-synthetic` | `employees.csv` | 23 |
+| `grocery-sales-synthetic` | `categories.csv` | 11 |
+| `marketing-ab` | `marketing_AB.csv` | 588 101 |
+| `ecommerce-events` | `clean_events.csv` (~258 MB) | 2 755 641 |
+| `owid-co2` | `owid-co2-data.csv` | 50 411 |
 
 Ghi chú:
 
