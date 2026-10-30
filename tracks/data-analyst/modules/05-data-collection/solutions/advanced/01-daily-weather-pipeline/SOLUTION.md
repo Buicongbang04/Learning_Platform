@@ -27,7 +27,7 @@ Bản tham chiếu (không commit) chạy được với API thật: `--backfill
 
 - **Mục đích**: `weather_daily` cho dashboard doanh số theo thời tiết của team vận hành; cần số của hôm qua (D-1) trước 8h sáng ngày D.
 - **Lịch**: 6h sáng hằng ngày, lấy lại 7 ngày gần nhất (dữ liệu gần đây được nguồn sửa); upsert nên lấy lại không nhân đôi.
-- **Chạy lại / backfill**: `--day`, `--backfill START END`; an toàn vì transaction theo ngày và upsert theo khoá.
+- **Chạy lại / backfill**: `--day`, `--last 14` (14 ngày gần nhất), `--backfill START END`; an toàn vì transaction theo ngày và upsert theo khoá.
 - **Giám sát**: run `failed` chưa chạy lại thành công, `missing_days` 14 ngày gần nhất khác rỗng, run `running` quá 30
   phút, giá trị ngoài khoảng hợp lý; ai nhận, ai dự phòng.
 - **Raw và metadata**: lưu ở đâu, giữ bao lâu, dùng sha256 + `fetched_at` để trả lời "vì sao số đổi", parse lại từ raw.

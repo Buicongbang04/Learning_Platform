@@ -186,7 +186,7 @@ Lấy từ nguồn chính thức có giấy phép: World Bank API (dân số `SP
 
 Năm 2023: Indonesia khoảng 195 triệu người dùng internet, Philippines khoảng 90 triệu, Việt Nam khoảng 78 triệu, Thái Lan
 khoảng 64 triệu. Myanmar thiếu tỉ lệ internet 2021–2023: để trống và ghi chú, không điền 0. Trình bày: quy mô cạnh sức mua
-(GDP/người của Thái Lan, Malaysia gấp 1.5–2.5 lần Indonesia, Philippines, Việt Nam), và nói rõ dân số online là chỉ số quy
+(GDP/người của Thái Lan, Malaysia gấp khoảng 1.5–3 lần Indonesia, Philippines, Việt Nam), và nói rõ dân số online là chỉ số quy
 mô, chưa phải độ hấp dẫn: còn logistics, quy định TMĐT, đối thủ, chi phí thu hút khách. Câu trả lời yếu: scrape một bảng
 Wikipedia và đưa một bảng xếp hạng theo dân số.
 

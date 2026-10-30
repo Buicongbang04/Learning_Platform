@@ -11,7 +11,7 @@ files:
     note: Không sửa; dùng response thật đã lưu, không gọi mạng
 run:
   - uv run pytest tracks/data-analyst/modules/05-data-collection/exercises/advanced/01-daily-weather-pipeline -q
-  - uv run python tracks/data-analyst/modules/05-data-collection/exercises/advanced/01-daily-weather-pipeline/starter/pipeline.py --backfill 2026-10-01 2026-10-21
+  - uv run python tracks/data-analyst/modules/05-data-collection/exercises/advanced/01-daily-weather-pipeline/starter/pipeline.py --last 14
 ---
 
 ## Mục tiêu
@@ -39,7 +39,8 @@ mỗi request một thành phố một ngày, ba biến `temperature_2m_max`, `t
 4. `missing_days(db_path, start, end, cities)`: ngày chưa đủ mọi thành phố.
 5. Viết `starter/RUNBOOK.md` đủ 6 mục theo thứ tự có sẵn (250–1 200 từ). Quyết định lịch chạy, lookback, cảnh báo,
    điều kiện bàn giao là phần chính được chấm.
-6. Chạy thật vài ngày bằng lệnh `--backfill` ở mục `run` (ghi vào `data/raw_api/weather-daily/` và `data/clean/weather.sqlite`, cả hai nằm trong `.gitignore`).
+6. Chạy thật 14 ngày gần nhất bằng lệnh `--last 14` ở mục `run` (tới hôm qua; muốn khoảng cố định thì dùng
+   `--backfill START END`, ví dụ `--backfill 2026-10-01 2026-10-21`; cell/lệnh này cần mạng) (ghi vào `data/raw_api/weather-daily/` và `data/clean/weather.sqlite`, cả hai nằm trong `.gitignore`).
 
 ## Tiêu chí đạt
 

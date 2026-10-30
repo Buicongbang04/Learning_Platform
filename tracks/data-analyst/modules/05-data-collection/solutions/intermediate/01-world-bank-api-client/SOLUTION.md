@@ -35,7 +35,7 @@ Mỗi chỉ số 90 bản ghi (10 nước × 9 năm), 2 request với `per_page=
 chạy sau có thể lệch nhẹ; vì vậy notebook lưu `lastupdated` cạnh JSON thô.
 
 Đọc cho slide: quy mô online lớn nhất là Indonesia, nhưng GDP/người của Indonesia, Philippines, Việt Nam gần nhau
-(3 800–4 900 USD); Thái Lan và Malaysia nhỏ hơn về quy mô nhưng sức mua gấp 1.5–2.5 lần. "Dân số online" là chỉ số quy
+(3 800–4 900 USD); Thái Lan và Malaysia nhỏ hơn về quy mô nhưng sức mua gấp khoảng 1.5–3 lần. "Dân số online" là chỉ số quy
 mô, không phải chỉ số hấp dẫn: slide nên đặt nó cạnh sức mua, chi phí logistics, quy định TMĐT, đối thủ.
 
 ## Giải thích trắc nghiệm
@@ -44,7 +44,8 @@ mô, không phải chỉ số hấp dẫn: slide nên đặt nó cạnh sức mu
   `per_page` khi response quá lớn hoặc API giới hạn kích thước trang.
 - **largest-online (c)**: 281.2 triệu × 69.2% ≈ 194.6 triệu.
 - **vn-internet (a)**: 45.0% (2015) lên 78.1% (2023).
-- **richest-not-largest (d)**: Singapore có GDP/người 86 383 USD, cao nhất, nhưng dân số online chỉ 5.6 triệu, thứ 7
+- **richest-not-largest (d)**: Singapore có GDP/người 86 383 USD, cao nhất, nhưng dân số online chỉ vài triệu (5.6 triệu
+  khi tải), ở nửa cuối bảng. Thứ hạng chính xác có thể đổi khi World Bank sửa số; kết luận "giàu nhất không phải lớn nhất" thì không. Bảng lúc tải: thứ 7
   trên 9 nước có số liệu.
 - **missing-value (b)**: `0` là một số khẳng định sai; trung bình nước khác là bịa; bỏ nước khỏi bảng che mất một
   thị trường 54 triệu dân. Để trống và ghi chú nguồn thiếu.

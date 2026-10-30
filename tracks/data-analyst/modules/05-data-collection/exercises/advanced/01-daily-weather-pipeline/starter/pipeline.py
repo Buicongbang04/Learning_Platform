@@ -2,6 +2,7 @@
 
 Chạy một ngày:      uv run python <thư mục bài>/starter/pipeline.py --day 2026-10-20
 Backfill ngày thiếu: uv run python <thư mục bài>/starter/pipeline.py --backfill 2026-10-01 2026-10-21
+14 ngày gần nhất:   uv run python <thư mục bài>/starter/pipeline.py --last 14   (từ hôm nay - 14 tới hôm qua)
 
 Phần cho sẵn: hằng số, schema, `build_params`, `http_fetch`, `connect`, `main`.
 Phần bạn viết (TODO): `save_raw`, `parse_day`, `run_day`, `missing_days`.
@@ -119,11 +120,15 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--day", help="YYYY-MM-DD")
     group.add_argument("--backfill", nargs=2, metavar=("START", "END"))
+    group.add_argument("--last", type=int, metavar="N", help="backfill N ngày gần nhất, tới hôm qua")
     parser.add_argument("--root", default=".", help="gốc repo (mặc định thư mục hiện tại)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     root = Path(args.root)
     raw_dir, db_path = root / "data/raw_api/weather-daily", root / "data/clean/weather.sqlite"
+    if args.last:
+        today = date.today()
+        args.backfill = [(today - timedelta(days=args.last)).isoformat(), (today - timedelta(days=1)).isoformat()]
     days = [args.day] if args.day else missing_days(db_path, *args.backfill)
     results = [run_day(d, http_fetch, raw_dir, db_path) for d in days]
     return 0 if all(r["status"] == "success" for r in results) else 1

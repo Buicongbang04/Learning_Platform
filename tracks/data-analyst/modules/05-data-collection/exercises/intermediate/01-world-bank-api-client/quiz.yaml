@@ -11,7 +11,7 @@ questions:
   - id: largest-online
     kind: data
     type: single
-    prompt: "Năm 2023, nước nào có dân số online (dân số × % dùng internet) lớn nhất ASEAN, khoảng bao nhiêu?"
+    prompt: "Năm 2023 (World Bank, lastupdated 2026-10-08), nước nào có dân số online (dân số × % dùng internet) lớn nhất ASEAN, khoảng bao nhiêu?"
     options:
       - { id: a, text: "Việt Nam, khoảng 78 triệu" }
       - { id: b, text: "Philippines, khoảng 90 triệu" }
@@ -20,7 +20,7 @@ questions:
   - id: vn-internet
     kind: data
     type: single
-    prompt: "Tỉ lệ dân Việt Nam dùng internet thay đổi thế nào từ 2015 tới 2023?"
+    prompt: "Tỉ lệ dân Việt Nam dùng internet thay đổi thế nào từ 2015 tới 2023 (World Bank, lastupdated 2026-10-08)?"
     options:
       - { id: a, text: "Từ khoảng 45% lên khoảng 78%" }
       - { id: b, text: "Từ khoảng 70% lên khoảng 95%" }
@@ -29,12 +29,12 @@ questions:
   - id: richest-not-largest
     kind: data
     type: single
-    prompt: "Nước có GDP/người cao nhất ASEAN năm 2023 đứng thứ mấy về dân số online?"
+    prompt: "Nước có GDP/người cao nhất ASEAN năm 2023 nằm ở đâu trên bảng xếp hạng dân số online?"
     options:
-      - { id: a, text: "Singapore, đứng thứ 3 sau Indonesia và Thái Lan" }
-      - { id: b, text: "Brunei, đứng thứ 1 vì 99% dùng internet" }
-      - { id: c, text: "Malaysia, đứng thứ 2 sau Indonesia" }
-      - { id: d, text: "Singapore, đứng thứ 7 với khoảng 5.6 triệu" }
+      - { id: a, text: "Singapore, trong top 3 cùng Indonesia và Thái Lan" }
+      - { id: b, text: "Brunei, đứng đầu vì gần 100% dùng internet" }
+      - { id: c, text: "Malaysia, đứng thứ hai ngay sau Indonesia" }
+      - { id: d, text: "Singapore, chỉ vài triệu, ở nửa cuối bảng" }
   - id: missing-value
     kind: knowledge
     type: single

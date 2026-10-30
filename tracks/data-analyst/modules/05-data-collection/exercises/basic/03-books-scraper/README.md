@@ -33,7 +33,7 @@ Team pricing muốn theo dõi giá đối thủ; bạn dựng bản mẫu trên 
 4. `robots_allows(robots_txt, url, agent)`: dùng `urllib.robotparser`, `None` (không có tệp) là cho phép.
 5. `crawl(fetch, start_url, max_pages, delay, sleep)`: theo nút next, nghỉ `delay` giây giữa các request, dừng ở trang
    cuối, ở `max_pages`, hoặc khi gặp lại URL đã tải; bỏ trùng theo `url`.
-6. Chạy các cell `explore`: kiểm `robots.txt`, crawl cả danh mục (khoảng 1–2 phút), so giá theo số sao. Báo cáo bài
+6. Chạy các cell `explore` (cell explore cần mạng; test thì không): kiểm `robots.txt`, crawl cả danh mục (khoảng 1–2 phút), so giá theo số sao. Báo cáo bài
    học: làm phần trắc nghiệm trong app sau khi chạy notebook.
 
 ## Tiêu chí đạt

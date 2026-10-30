@@ -32,7 +32,7 @@ Head of Expansion của một công ty TMĐT Việt Nam cần bảng cho slide c
 3. `to_tidy(records)`: bảng `iso3, country, indicator, year, value`, bỏ nhóm nước, giữ `NaN`.
 4. `online_population(tidy, year)`: mỗi nước một dòng, `online_population = population * internet_pct / 100`.
 5. `redact(url)`: che giá trị `api_key`, `key`, `token` trong URL trước khi log.
-6. Chạy các cell `explore`: gọi API thật (11 request), lưu JSON thô kèm `fetched_at` và `lastupdated` vào
+6. Chạy các cell `explore` (cell explore cần mạng; test thì không): gọi API thật (11 request), lưu JSON thô kèm `fetched_at` và `lastupdated` vào
    `data/raw_api/world-bank-asean/` (thư mục nằm trong `.gitignore`), dựng bảng và biểu đồ. Báo cáo bài học: làm phần trắc nghiệm trong app sau khi chạy
    notebook.
 
