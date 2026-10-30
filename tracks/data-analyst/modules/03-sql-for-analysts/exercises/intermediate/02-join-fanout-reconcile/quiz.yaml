@@ -13,9 +13,9 @@ questions:
     type: single
     prompt: "Theo `revenue_by_income`, nhóm `Unknown` (hộ không có nhân khẩu học) chiếm bao nhiêu doanh thu?"
     options:
-      - { id: a, text: "Khoảng 12%" }
-      - { id: b, text: "Khoảng 32%" }
-      - { id: c, text: "Khoảng 44%" }
+      - { id: a, text: "Khoảng 44%" }
+      - { id: b, text: "Khoảng 12%" }
+      - { id: c, text: "Khoảng 32%" }
       - { id: d, text: "Khoảng 68%" }
   - id: inner-coverage
     kind: data
@@ -23,9 +23,9 @@ questions:
     prompt: "Câu starter của `revenue_by_income` (INNER JOIN với `hh_demographic`) có tổng doanh thu bằng bao nhiêu phần trăm doanh thu thật?"
     options:
       - { id: a, text: "100%, chỉ thiếu dòng Unknown" }
-      - { id: b, text: "Khoảng 56%" }
-      - { id: c, text: "Khoảng 32%" }
-      - { id: d, text: "Hơn 100% vì bị nhân bản" }
+      - { id: b, text: "Khoảng 32%" }
+      - { id: c, text: "Hơn 100% vì bị nhân bản" }
+      - { id: d, text: "Khoảng 56%" }
   - id: per-household
     kind: data
     type: single
@@ -40,8 +40,8 @@ questions:
     type: single
     prompt: "Cộng cột `revenue` của 4 dòng `campaign_type_revenue` được khoảng 16.4 triệu, gấp đôi doanh thu thật 8.06 triệu. Vì sao?"
     options:
-      - { id: a, text: "Truy vấn vẫn còn nhân bản doanh thu theo số campaign mà mỗi hộ nhận được trong kỳ" }
-      - { id: b, text: "Một hộ nhận nhiều loại campaign có mặt ở nhiều dòng; bảng này không cộng dọc được" }
+      - { id: a, text: "Một hộ nhận nhiều loại campaign có mặt ở nhiều dòng; bảng này không cộng dọc được" }
+      - { id: b, text: "Truy vấn vẫn còn nhân bản doanh thu theo số campaign mà mỗi hộ nhận được trong kỳ" }
       - { id: c, text: "Nhóm None bị tính hai lần" }
       - { id: d, text: "SALES_VALUE đã gồm cả giảm giá" }
   - id: detect-fanout
@@ -50,9 +50,9 @@ questions:
     prompt: "Cách nhanh nhất để biết trước một join có nhân bản dòng hay không?"
     options:
       - { id: a, text: "Chạy thử join rồi xem truy vấn có báo lỗi khoá trùng hay không" }
-      - { id: b, text: "So count(*) với count(DISTINCT khoá) ở bảng bên phải" }
-      - { id: c, text: "Đổi INNER JOIN thành LEFT JOIN" }
-      - { id: d, text: "Thêm DISTINCT vào SELECT cuối cùng" }
+      - { id: b, text: "Đổi INNER JOIN thành LEFT JOIN" }
+      - { id: c, text: "Thêm DISTINCT vào SELECT cuối cùng" }
+      - { id: d, text: "So count(*) với count(DISTINCT khoá) ở bảng bên phải" }
   - id: distinct-hides
     kind: knowledge
     type: single
@@ -68,6 +68,6 @@ questions:
     prompt: "`WHERE household_key NOT IN (SELECT household_key FROM campaign_table)`. Nếu `campaign_table` có một dòng `household_key` NULL, kết quả là gì?"
     options:
       - { id: a, text: "Như khi không có NULL" }
-      - { id: b, text: "Không trả dòng nào" }
-      - { id: c, text: "Trả mọi hộ" }
+      - { id: b, text: "Trả mọi hộ" }
+      - { id: c, text: "Không trả dòng nào" }
       - { id: d, text: "Báo lỗi kiểu dữ liệu" }

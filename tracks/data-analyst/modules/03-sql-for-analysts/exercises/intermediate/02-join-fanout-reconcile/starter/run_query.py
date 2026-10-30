@@ -18,6 +18,8 @@ ROOT = next(p for p in HERE.parents if (p / "pyproject.toml").exists())
 sys.path.insert(0, str(ROOT))
 from data.download_dataset import ensure  # noqa: E402
 
+# Bản chuẩn của loader dunnhumby: exercises/intermediate/02-join-fanout-reconcile/tests/test_fanout.py.
+# Bản trong starter/run_query.py chép y hệt; sửa thì sửa cả hai.
 DH_TABLES = ("transaction_data", "hh_demographic", "campaign_table", "campaign_desc")
 
 

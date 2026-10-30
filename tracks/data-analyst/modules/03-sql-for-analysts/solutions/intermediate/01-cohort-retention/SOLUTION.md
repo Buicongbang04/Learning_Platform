@@ -1,5 +1,7 @@
 # Lời giải: cohort retention bằng SQL
 
+> `starter/run_query.py` là helper để chạy thử SQL trên dữ liệu thật, không được chấm và không có bản lời giải: giữ nguyên.
+
 ## Cách làm
 
 1. **`valid`** lọc dòng hợp lệ có `customer_id`. Cohort tính trên dòng hợp lệ, nên khách chỉ có hoá đơn huỷ
@@ -33,27 +35,27 @@ tạo cohort vì tháng chưa đủ).
 
 ## Đáp án trắc nghiệm
 
-- **dec-cohort-size (b)**: **cắt trái (left-censoring)**. Dữ liệu bắt đầu 01/12/2009, nên mọi khách mua tháng
+- **dec-cohort-size (c)**: **cắt trái (left-censoring)**. Dữ liệu bắt đầu 01/12/2009, nên mọi khách mua tháng
   12/2009 đều "mua lần đầu" trong dữ liệu, kể cả khách đã mua từ nhiều năm trước. Cohort 12/2009 thực chất là
   "mọi khách đang hoạt động", retention cao hơn hẳn các cohort khác (35% so với ~20%). Tháng 12/2010 có 885 khách
   có mã, nhưng 809 người đã mua trong năm trước nên chỉ 76 khách mới. Khi trình bày: tách riêng hoặc bỏ cohort
   đầu, và nói rõ các cohort đầu năm 2010 cũng còn lẫn khách cũ quay lại sau hơn một năm.
-- **peak-k (c)**: k = 11 là tháng 11/2010, 49.5%: mùa đặt quà Giáng sinh của khách sỉ. Retention theo k trộn
+- **peak-k (a)**: k = 11 là tháng 11/2010, 49.5%: mùa đặt quà Giáng sinh của khách sỉ. Retention theo k trộn
   hiệu ứng "tuổi" của cohort với **mùa vụ** của tháng lịch; đọc theo đường chéo (cùng tháng lịch) để thấy mùa vụ.
-- **oct-m1 (c)**: 32.1%. Cohort 10/2011 có m1 cao vì tháng 1 của nó là 11/2011, đúng cao điểm mùa vụ: chưa chắc
+- **oct-m1 (d)**: 32.1%. Cohort 10/2011 có m1 cao vì tháng 1 của nó là 11/2011, đúng cao điểm mùa vụ: chưa chắc
   khách mới gần đây "tốt hơn".
-- **weighted-m1 (c)**: 23.5%. Trung bình có trọng số cao hơn vì cohort 12/2009 (955 khách, m1 35.3%) nặng nhất.
+- **weighted-m1 (b)**: 23.5%. Trung bình có trọng số cao hơn vì cohort 12/2009 (955 khách, m1 35.3%) nặng nhất.
   Trung bình của các tỉ lệ khác tỉ lệ của tổng; chọn cái nào phụ thuộc câu hỏi ("một cohort điển hình" hay "một
   khách mới điển hình"), và cohort cắt trái nên bỏ khỏi cả hai.
-- **null-vs-zero (b)**: `NULL` là "chưa tới lúc đo", `0` là "đo rồi, không ai quay lại". Trên heatmap, ô chưa
+- **null-vs-zero (a)**: `NULL` là "chưa tới lúc đo", `0` là "đo rồi, không ai quay lại". Trên heatmap, ô chưa
   quan sát được phải để trống.
-- **distinct-activity (b)**: đếm dòng thay vì khách, retention có thể vượt 100%.
+- **distinct-activity (d)**: đếm dòng thay vì khách, retention có thể vượt 100%.
 - **not-monotonic (b)**: định nghĩa của track là active **đúng** tháng k, không phải "còn sống tới tháng k"
   (unbounded retention: active ở tháng k hoặc bất kỳ tháng nào sau đó, luôn giảm dần). Hai định nghĩa đều đúng,
   phải ghi rõ đang dùng cái nào.
 - **compare-cohorts (c)**: so cohort 03/2011 với cohort 03/2010 ở cùng k thì cùng tuổi và cùng mùa vụ; chỉ dùng ô
-  đã quan sát được. m12 (a) chưa có cho cohort 2011; so theo tháng lịch (b) trộn cohort tuổi khác nhau; trung
-  bình mọi ô (d) trộn k khác nhau và cohort 2011 có ít ô hơn.
+  đã quan sát được. So m12 thì chưa có cho cohort 2011; so theo tháng lịch trộn cohort tuổi khác nhau; trung
+  bình mọi ô trộn k khác nhau và cohort 2011 có ít ô hơn.
 
 ## Sai lầm hay gặp
 

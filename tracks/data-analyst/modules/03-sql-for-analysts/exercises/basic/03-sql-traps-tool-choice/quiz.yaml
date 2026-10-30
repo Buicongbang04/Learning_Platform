@@ -5,9 +5,9 @@ questions:
     prompt: "Bảng `t(customer_id)` có 5 dòng: 1, 1, 2, NULL, NULL. `SELECT count(*), count(customer_id), count(DISTINCT customer_id) FROM t` trả gì?"
     options:
       - { id: a, text: "5, 5, 3" }
-      - { id: b, text: "5, 3, 2" }
-      - { id: c, text: "3, 3, 2" }
-      - { id: d, text: "5, 3, 3" }
+      - { id: b, text: "3, 3, 2" }
+      - { id: c, text: "5, 3, 3" }
+      - { id: d, text: "5, 3, 2" }
   - id: avg-null
     kind: knowledge
     type: single
@@ -23,8 +23,8 @@ questions:
     prompt: "`customers` có 100 khách, 60 khách có đơn. `SELECT count(DISTINCT c.id) FROM customers c LEFT JOIN orders o ON o.customer_id = c.id WHERE o.status = 'delivered'` đếm được gì?"
     options:
       - { id: a, text: "Luôn là 100, vì LEFT JOIN giữ mọi khách" }
-      - { id: b, text: "Chỉ khách có ít nhất một đơn delivered (tối đa 60)" }
-      - { id: c, text: "Khách có đơn delivered cộng khách chưa có đơn nào" }
+      - { id: b, text: "Khách có đơn delivered cộng khách chưa có đơn nào" }
+      - { id: c, text: "Chỉ khách có ít nhất một đơn delivered (tối đa 60)" }
       - { id: d, text: "Báo lỗi vì WHERE dùng cột của bảng bên phải" }
   - id: not-equal-null
     kind: knowledge
@@ -41,16 +41,16 @@ questions:
     prompt: "`orders(order_id, shipping_fee)`: đơn A phí 5, đơn B phí 3. `order_items`: A có 3 dòng, B có 1 dòng. `SELECT sum(o.shipping_fee) FROM orders o JOIN order_items i USING (order_id)` trả gì?"
     options:
       - { id: a, text: "8" }
-      - { id: b, text: "18" }
-      - { id: c, text: "15" }
+      - { id: b, text: "15" }
+      - { id: c, text: "18" }
       - { id: d, text: "4" }
   - id: timestamp-between
     kind: knowledge
     type: single
     prompt: "Cột `ts` là TIMESTAMP, có dòng `2011-11-30 14:00`. `WHERE ts BETWEEN '2011-11-01' AND '2011-11-30'` có lấy dòng đó không?"
     options:
-      - { id: a, text: "Có, vì BETWEEN tính cả hai đầu" }
-      - { id: b, text: "Không, vì mốc cuối là 2011-11-30 00:00" }
+      - { id: a, text: "Không, vì mốc cuối là 2011-11-30 00:00" }
+      - { id: b, text: "Có, vì BETWEEN tính cả hai đầu" }
       - { id: c, text: "Có, nhưng chỉ trong DuckDB" }
       - { id: d, text: "Báo lỗi vì so TIMESTAMP với chuỗi" }
   - id: tool-csv-laptop
@@ -59,9 +59,9 @@ questions:
     prompt: "Bạn nhận 3 tệp CSV tổng 2 GB từ đối tác, cần vài truy vấn group by/join trong chiều nay, công ty chưa có warehouse. Chọn gì?"
     options:
       - { id: a, text: "Mở bằng Excel rồi dùng pivot table" }
-      - { id: b, text: "DuckDB đọc thẳng các tệp CSV trên máy" }
-      - { id: c, text: "Dựng Postgres trên Docker rồi nạp dữ liệu" }
-      - { id: d, text: "Xin cấp một cluster Spark" }
+      - { id: b, text: "Dựng Postgres trên Docker rồi nạp dữ liệu" }
+      - { id: c, text: "Xin cấp một cluster Spark" }
+      - { id: d, text: "DuckDB đọc thẳng các tệp CSV trên máy" }
   - id: tool-prod-db
     kind: knowledge
     type: single
@@ -76,9 +76,9 @@ questions:
     type: single
     prompt: "Truy vấn retention bạn viết được team CRM hỏi lại mỗi tuần, nhiều người cần xem. Bước hợp lý tiếp theo là gì?"
     options:
-      - { id: a, text: "Gửi tệp .sql cho từng người tự chạy" }
-      - { id: b, text: "Mỗi sáng thứ Hai chạy tay truy vấn rồi dán bảng kết quả vào email gửi cả team CRM" }
-      - { id: c, text: "Đưa thành model/view trong warehouse và dựng dashboard BI trên đó" }
+      - { id: a, text: "Đưa thành model/view trong warehouse và dựng dashboard BI trên đó" }
+      - { id: b, text: "Gửi tệp .sql cho từng người tự chạy" }
+      - { id: c, text: "Mỗi sáng thứ Hai chạy tay truy vấn rồi dán bảng kết quả vào email gửi cả team CRM" }
       - { id: d, text: "Chép kết quả vào Google Sheets và chia sẻ link" }
   - id: tool-sql-vs-pandas
     kind: knowledge
@@ -86,6 +86,6 @@ questions:
     prompt: "Bảng sự kiện 500 triệu dòng nằm trong Snowflake. Bạn cần funnel theo tuần rồi vẽ chart và chạy kiểm định thống kê. Cách chia việc nào hợp lý?"
     options:
       - { id: a, text: "Kéo cả 500 triệu dòng về pandas trên laptop rồi làm funnel, chart, kiểm định ở một chỗ cho gọn" }
-      - { id: b, text: "Tổng hợp funnel theo tuần bằng SQL trong Snowflake, kéo bảng nhỏ về Python để vẽ và kiểm định" }
-      - { id: c, text: "Làm hết bằng SQL, kể cả kiểm định thống kê" }
+      - { id: b, text: "Làm hết bằng SQL, kể cả kiểm định thống kê" }
+      - { id: c, text: "Tổng hợp funnel theo tuần bằng SQL trong Snowflake, kéo bảng nhỏ về Python để vẽ và kiểm định" }
       - { id: d, text: "Xuất ra CSV rồi mở bằng Excel" }

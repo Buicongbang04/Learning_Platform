@@ -1,5 +1,7 @@
 # Lời giải: join nhân bản doanh thu, NULL làm rơi dòng, reconcile
 
+> `starter/run_query.py` là helper để chạy thử SQL trên dữ liệu thật, không được chấm và không có bản lời giải: giữ nguyên.
+
 ## Cách làm
 
 ### Bước 0: biết grain trước khi join
@@ -61,19 +63,19 @@ giữ cạnh mọi báo cáo quan trọng: chạy lại mỗi lần sửa truy v
 ## Đáp án trắc nghiệm
 
 - **inflation (c)**: 5.44 lần.
-- **unknown-share (c)**: 44.2%. Báo cáo "theo thu nhập" mà bỏ nhóm này là báo cáo về 56% doanh thu.
-- **inner-coverage (b)**: 55.8%. Mọi tỉ trọng trong báo cáo INNER JOIN đều tính trên mẫu số sai; phương án (d)
+- **unknown-share (a)**: 44.2%. Báo cáo "theo thu nhập" mà bỏ nhóm này là báo cáo về 56% doanh thu.
+- **inner-coverage (d)**: 55.8%. Mọi tỉ trọng trong báo cáo INNER JOIN đều tính trên mẫu số sai; phương án "hơn 100%"
   sai vì `hh_demographic` duy nhất theo hộ, không nhân bản.
 - **per-household (b)**: **selection bias**. Campaign được gửi tới hộ đã chọn trước (thường là hộ mua nhiều): 1 584
   hộ nhận campaign làm ra 88% doanh thu. So hộ nhận với hộ không nhận là so hai nhóm khác nhau từ đầu. Muốn đo hiệu
   quả cần so trước/sau trong cùng nhóm hộ, nhóm đối chứng, hoặc thiết kế thí nghiệm (module 11, capstone M6).
-- **sum-over-types (b)**: 942 143.58 + 6 935 414.78 + 5 672 399.85 + 2 856 103.03 = 16 406 061.24. Mỗi dòng đúng;
+- **sum-over-types (a)**: 942 143.58 + 6 935 414.78 + 5 672 399.85 + 2 856 103.03 = 16 406 061.24. Mỗi dòng đúng;
   cộng dọc thì sai. Ghi rõ dưới bảng: "một hộ có thể thuộc nhiều nhóm, không cộng các dòng".
-- **detect-fanout (b)**: khoá không duy nhất ở bảng được join là dấu hiệu nhân bản. Thêm `DISTINCT` ở cuối (d)
+- **detect-fanout (d)**: khoá không duy nhất ở bảng được join là dấu hiệu nhân bản. Thêm `DISTINCT` ở cuối
   che triệu chứng ở phép đếm nhưng không sửa tổng.
 - **distinct-hides (b)**: `count(DISTINCT)` đếm đúng hộ, còn `sum(SALES_VALUE)` cộng mọi dòng đã nhân. Bảng sai
   trông "hợp lý" vì cột số hộ đúng.
-- **not-in-null (b)**: `x NOT IN (..., NULL)` là `x <> a AND ... AND x <> NULL`; `x <> NULL` là `NULL` nên cả biểu
+- **not-in-null (c)**: `x NOT IN (..., NULL)` là `x <> a AND ... AND x <> NULL`; `x <> NULL` là `NULL` nên cả biểu
   thức không bao giờ `TRUE`. `campaign_table` thật không có NULL, nhưng đây là lý do mặc định dùng `NOT EXISTS`.
 
 ## Sai lầm hay gặp

@@ -1,5 +1,7 @@
 # Lời giải: KPI tháng, MoM/YoY và so sánh khi tháng chưa đủ ngày
 
+> `starter/run_query.py` là helper để chạy thử SQL trên dữ liệu thật, không được chấm và không có bản lời giải: giữ nguyên.
+
 ## Cách làm
 
 ### `monthly_kpis.sql`
@@ -51,24 +53,24 @@
 
 ## Đáp án trắc nghiệm
 
-- **naive-mom-dec (a)**: 638 810.68 / 1 509 496.33 - 1 = -57.7%. Con số đúng về số học, sai về ý nghĩa.
-- **lfl-prev-month (c)**: 638 810.68 / 454 238.30 - 1 = +40.6%. Cùng 9 ngày đầu tháng, tháng 12 cao hơn.
-- **ytd-growth (b)**: 9 842 956.40 / 9 480 206.26 - 1 = +3.8%. Luỹ kế năm là cách so ít nhạy với một tháng dở
+- **naive-mom-dec (c)**: 638 810.68 / 1 509 496.33 - 1 = -57.7%. Con số đúng về số học, sai về ý nghĩa.
+- **lfl-prev-month (a)**: 638 810.68 / 454 238.30 - 1 = +40.6%. Cùng 9 ngày đầu tháng, tháng 12 cao hơn.
+- **ytd-growth (d)**: 9 842 956.40 / 9 480 206.26 - 1 = +3.8%. Luỹ kế năm là cách so ít nhạy với một tháng dở
   dang nhất, vì tháng dở dang chỉ là một phần nhỏ của tổng.
-- **worst-yoy (d)**: 04/2011 -21.1% (một phần do lịch: Phục sinh và ngày nghỉ lễ, chỉ 21 ngày bán so với 23).
+- **worst-yoy (b)**: 04/2011 -21.1% (một phần do lịch: Phục sinh và ngày nghỉ lễ, chỉ 21 ngày bán so với 23).
   12/2011 có YoY -22.5% thấp hơn nhưng là tháng chưa đủ, nên bị loại bởi điều kiện `is_complete`.
-- **ceo-answer (b)**: tháng 12 mới có 8 ngày bán (dữ liệu tới 12:50 ngày 9/12). So cùng 9 ngày đầu tháng: +40.6%
-  so với tháng 11, +45.6% so với cùng kỳ năm trước. Phương án (c) đúng một phần (mùa vụ) nhưng không trả lời cách
-  đo; (d) bỏ lỡ việc so sánh công bằng làm được ngay. Lưu ý thêm: con số +45.6% là doanh thu **gộp**, trong
+- **ceo-answer (a)**: tháng 12 mới có 8 ngày bán (dữ liệu tới 12:50 ngày 9/12). So cùng 9 ngày đầu tháng: +40.6%
+  so với tháng 11, +45.6% so với cùng kỳ năm trước. Phương án "tháng 12 năm nào cũng cao điểm" đúng một phần (mùa vụ) nhưng không trả lời cách
+  đo; "phải đợi hết tháng" bỏ lỡ việc so sánh công bằng làm được ngay. Lưu ý thêm: con số +45.6% là doanh thu **gộp**, trong
   đó có một hoá đơn 168 nghìn GBP bị huỷ 12 phút sau (xem module 08, bài Advanced 01). Bài sau về reconcile sẽ
   luyện thói quen kiểm con số trước khi gửi.
-- **nullif-why (b)**: trong DuckDB 2.0 phép `/` trả `inf` khi chia số khác 0 cho 0 và `nan` khi `0 / 0`;
+- **nullif-why (d)**: trong DuckDB 2.0 phép `/` trả `inf` khi chia số khác 0 cho 0 và `nan` khi `0 / 0`;
   PostgreSQL báo lỗi "division by zero". `NULLIF` làm hành vi rõ ràng và giống nhau ở mọi engine: `NULL` nghĩa là
   "không xác định", và các hàm tổng hợp bỏ qua nó thay vì bị `inf` làm hỏng.
 - **lag-needs-spine (b)**: không có dòng 02/2011 thì từ 05/2011 lùi 12 **dòng** rơi vào 04/2010. LAG đếm dòng,
   không đếm tháng; truy vấn không báo lỗi, chỉ ra số sai.
 - **inclusive-end (c)**: khoảng nửa mở `>= ngày đầu AND < ngày sau ngày cuối` đúng với mọi kiểu thời gian.
-  (a) và (b) so TIMESTAMP với `'2011-11-09'` tức 00:00 ngày 9, mất cả ngày 9; (d) lấy cả tháng 11.
+  Hai phương án dùng `BETWEEN` và `<=` so TIMESTAMP với `'2011-11-09'` tức 00:00 ngày 9, mất cả ngày 9; `date_trunc` lấy cả tháng 11.
 
 ## Sai lầm hay gặp
 

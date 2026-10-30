@@ -1,5 +1,7 @@
 # Lời giải: top 3 mỗi quốc gia và Pareto/ABC
 
+> `starter/run_query.py` là helper để chạy thử SQL trên dữ liệu thật, không được chấm và không có bản lời giải: giữ nguyên.
+
 ## Cách làm
 
 ### `top3_per_country.sql`
@@ -46,16 +48,16 @@
   Singapore, Hong Kong, Portugal là `M`. Báo cáo "sản phẩm bán chạy nhất ở Đức là phí gửi hàng" là lỗi định nghĩa,
   không phải insight.
 - **uk-top-share (a)**: 1.7%. UK có hàng nghìn mặt hàng, doanh thu rất phân tán; top 3 cộng lại chỉ khoảng 4%.
-- **class-a-count (b)**: 834 mặt hàng, 21% danh mục.
+- **class-a-count (d)**: 834 mặt hàng, 21% danh mục.
 - **rank-rows (b)**: 121 dòng: ở vài nước nhỏ có nhiều mặt hàng hoà doanh thu quanh hạng 3, `rank` giữ tất cả.
   `rank` không bao giờ cho ít dòng hơn `row_number`.
-- **jar-outlier (b)**: hoá đơn 541431 (khách 12346, 18/01/2011 10:01) mua 74 215 cái × 1.04 = 77 183.60 GBP,
+- **jar-outlier (a)**: hoá đơn 541431 (khách 12346, 18/01/2011 10:01) mua 74 215 cái × 1.04 = 77 183.60 GBP,
   bị huỷ bằng C541433 lúc 10:17. Định nghĩa doanh thu gộp của track giữ dòng mua này. Xếp hạng sản phẩm để quyết
   định nhập hàng thì nên loại các cặp mua/huỷ như vậy hoặc xếp theo số khách mua; ít nhất phải ghi chú.
-- **share-before-filter (b)**: chia cho tổng của 3 dòng thì 3 tỉ trọng luôn cộng bằng 100%; UK sẽ trông như
+- **share-before-filter (d)**: chia cho tổng của 3 dòng thì 3 tỉ trọng luôn cộng bằng 100%; UK sẽ trông như
   "22423 chiếm 42%" thay vì 1.7%.
-- **rows-vs-range (a)**: frame mặc định `RANGE` gộp các dòng ngang giá trị.
-- **abc-use (b)**: nhóm C có thể là hàng mới ra (chưa đủ thời gian), hàng mùa vụ (chỉ bán tháng 11-12), hoặc hàng
+- **rows-vs-range (b)**: frame mặc định `RANGE` gộp các dòng ngang giá trị.
+- **abc-use (c)**: nhóm C có thể là hàng mới ra (chưa đủ thời gian), hàng mùa vụ (chỉ bán tháng 11-12), hoặc hàng
   khách mua kèm hàng A (cắt đi làm mất đơn A). ABC theo doanh thu là điểm bắt đầu, không phải quyết định.
 
 ## Sai lầm hay gặp

@@ -7,6 +7,8 @@ from testkit import Exercise
 
 ex = Exercise(__file__)
 
+# Bản chuẩn của loader dunnhumby: exercises/intermediate/02-join-fanout-reconcile/tests/test_fanout.py.
+# Bản trong starter/run_query.py chép y hệt; sửa thì sửa cả hai.
 DH_TABLES = ("transaction_data", "hh_demographic", "campaign_table", "campaign_desc")
 
 

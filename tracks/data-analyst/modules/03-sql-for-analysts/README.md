@@ -86,8 +86,13 @@ flowchart LR
 ### Nạp dữ liệu và định nghĩa ở một chỗ
 
 DuckDB đọc thẳng xlsx bằng extension `excel` (tự cài lần đầu, cần mạng), CSV và Parquet bằng `read_csv`,
-`read_parquet`. Đoạn dưới nạp cả hai sheet Online Retail II vào một bảng (khoảng 8 giây, so với khoảng 50 giây nếu
+`read_parquet`. Đoạn dưới nạp cả hai sheet Online Retail II vào một bảng (khoảng 8 giây, so với khoảng 50-90 giây nếu
 đọc bằng pandas), rồi tạo view `valid` chứa định nghĩa dòng hợp lệ dùng cho cả module.
+
+**Máy offline** (không cài được extension `excel`): đoạn dưới báo lỗi ở `read_xlsx`. Test và `starter/run_query.py`
+của các bài tự chuyển sang đọc bằng pandas, nên **lần đầu** chậm (60-90 giây); sau đó bảng đã nạp được lưu cache
+parquet trong thư mục tạm của hệ điều hành (`<tmp>/da-cache/`, khoá theo thời điểm sửa và kích thước tệp xlsx), các
+lần sau, ở mọi bài, đọc cache trong khoảng 1 giây. Cache không nằm trong `data/raw`; xoá thư mục `da-cache` là nạp lại.
 
 ```python
 import sys

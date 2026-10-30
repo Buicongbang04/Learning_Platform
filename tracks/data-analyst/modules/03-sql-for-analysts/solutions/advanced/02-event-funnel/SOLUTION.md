@@ -1,5 +1,7 @@
 # Hướng làm: funnel theo visitor và theo phiên
 
+> `starter/run_query.py` là helper để chạy thử SQL trên dữ liệu thật, không được chấm và không có bản lời giải: giữ nguyên.
+
 Bài Advanced không có một đáp án duy nhất ở phần memo. Hai truy vấn có kết quả xác định (test chấm); dưới đây là
 cách viết, con số tham chiếu, các quyết định cần cân nhắc và rubric.
 

@@ -18,6 +18,8 @@ ROOT = next(p for p in HERE.parents if (p / "pyproject.toml").exists())
 sys.path.insert(0, str(ROOT))
 from data.download_dataset import ensure  # noqa: E402
 
+# Bản chuẩn của loader ecommerce-events: exercises/advanced/02-event-funnel/tests/test_funnel.py.
+# Bản trong starter/run_query.py chép y hệt; sửa thì sửa cả hai.
 def load_events(con: duckdb.DuckDBPyConnection, folder: Path) -> None:
     """Bảng `events`: mỗi dòng một sự kiện view / addtocart / transaction của một visitor."""
     path = str(folder / "clean_events.csv").replace("'", "''")

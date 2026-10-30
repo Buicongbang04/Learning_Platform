@@ -1,5 +1,7 @@
 # Hướng làm: ba câu hỏi của CEO
 
+> `starter/run_query.py` là helper để chạy thử SQL trên dữ liệu thật, không được chấm và không có bản lời giải: giữ nguyên.
+
 Bài Advanced không có một đáp án duy nhất. Dưới đây là cách viết ba truy vấn, con số tham chiếu trên bộ thật,
 các quyết định cần cân nhắc, memo mẫu và rubric.
 
