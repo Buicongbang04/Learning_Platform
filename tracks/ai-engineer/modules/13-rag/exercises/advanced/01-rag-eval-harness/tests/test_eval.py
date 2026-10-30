@@ -91,6 +91,24 @@ def test_faithfulness_broken_json_is_nan(nb, reply):
     assert isinstance(score, float) and math.isnan(score), f"{reply!r} phải cho nan, không crash"
 
 
+class DownLLM(FakeLLM):
+    """Judge không gọi được: Ollama tắt, quá thời gian chờ, gateway trả 504."""
+
+    def chat(self, messages, **kwargs):
+        import llmkit
+
+        self.calls.append(messages)
+        raise llmkit.LLMError("HTTP 504 Gateway Timeout")
+
+
+def test_judges_survive_llm_errors(nb):
+    down = DownLLM()
+    faith = nb.judge_faithfulness(ANSWER, PASSAGES, down)
+    rel = nb.judge_relevance("?", ANSWER, down)
+    assert math.isnan(faith) and math.isnan(rel), "llm.chat ném LLMError thì trả nan, không crash"
+    assert len(down.calls) == 2
+
+
 # ---------- Judge relevance ----------
 
 @pytest.mark.parametrize("score, expected", [(5, 1.0), (4, 0.75), (1, 0.0)])

@@ -20,7 +20,7 @@ questions:
   - id: a
     text: MRR tăng hơn 0.1, độ trễ chỉ tăng vài phần trăm
   - id: b
-    text: MRR gần như không đổi, độ trễ tăng gần 10 lần
+    text: MRR gần như không đổi, độ trễ tăng nhiều lần
   - id: c
     text: MRR giảm mạnh, vì cross-encoder không đọc tiếng Việt
   - id: d
@@ -44,7 +44,7 @@ questions:
   prompt: Đổi nguồn từ "cả điều cắt 1 500 ký tự" sang "5 khoản", số câu qwen2.5:3b từ chối dù điều đúng có trong nguồn đổi thế nào?
   options:
   - id: a
-    text: Giảm rõ, khoảng một nửa
+    text: Giảm rõ rệt
   - id: b
     text: Không đổi, vì model giống nhau
   - id: c

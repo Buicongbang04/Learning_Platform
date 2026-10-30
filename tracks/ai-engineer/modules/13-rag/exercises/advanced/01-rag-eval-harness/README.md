@@ -33,8 +33,8 @@ Thời gian trên là thời gian làm bài (code, chạy, đọc mẫu, tự ch
 Judge nên mạnh hơn model sinh. Cả bảng là khoảng 300 lượt gọi judge:
 
 - `qwen2.5:7b` (khuyên dùng) chạy tốt trên PC GPU 12GB; trên laptop GPU 4GB nó vẫn chạy (một phần trên CPU) nhưng
-  chậm, ước khoảng 1 giờ cho cả bảng.
-- Chỉ có laptop: `qwen2.5:3b` làm judge (ước khoảng 25 phút), và ghi rõ giới hạn đó trong báo cáo: 3B là cùng model
+  chậm (chưa đo trên bản tham chiếu, ước khoảng 1 giờ cho cả bảng).
+- Chỉ có laptop: `qwen2.5:3b` làm judge (chưa đo, ước khoảng 25 phút), và ghi rõ giới hạn đó trong báo cáo: 3B là cùng model
   sinh câu trả lời, và nó dễ dãi với nguồn sai (mục 6 lý thuyết).
 - Tuỳ chọn: judge mạnh hơn qua một gateway tương thích OpenAI (OmniRoute, Gemini...). Khai báo trong `setup/.env`
   `OMNIROUTE_BASE_URL` (kết thúc bằng `/v1`), `OMNIROUTE_API_KEY`, `OMNIROUTE_MODEL`, rồi bỏ comment đoạn tạo
@@ -47,7 +47,8 @@ Cần cache của ba bài Intermediate trong `data/raw/zalo-legal/cache/`: làm 
    - `recall_at_k`, `mrr_at_k`: dán lời giải bài Basic 03 (notebook tự chứa, không import chéo bài).
    - `judge_faithfulness(answer: str, passages: list[str], llm) -> float`: judge tách câu trả lời thành khẳng định,
      đánh dấu từng khẳng định có được nguồn ủng hộ; trả tỉ lệ được ủng hộ trong [0, 1]. Gọi `llm.chat` một lần với
-     `json_schema=FAITHFULNESS_SCHEMA`. JSON hỏng, sai kiểu, không có khẳng định nào thì trả `nan`, không crash.
+     `json_schema=FAITHFULNESS_SCHEMA`. JSON hỏng, sai kiểu, không có khẳng định nào, hoặc lời gọi judge lỗi
+     (`llmkit.LLMError`: Ollama tắt, gateway 504) thì trả `nan`, không crash.
    - `judge_relevance(question: str, answer: str, llm) -> float`: điểm 1..5 có mô tả từng mức qua
      `json_schema=RELEVANCE_SCHEMA`, trả `(score - 1) / 4`; JSON hỏng hoặc điểm ngoài 1..5 thì `nan`.
    - `run_eval(configs: dict[str, Callable], questions) -> pd.DataFrame`: một dòng mỗi cấu hình, cột đúng `COLUMNS`
@@ -63,8 +64,9 @@ Cần cache của ba bài Intermediate trong `data/raw/zalo-legal/cache/`: làm 
 
 **Một `REPORT.md` tốt** để trưởng nhóm quyết định được trong 5 phút:
 
-- Mở bằng **khuyến nghị có số**: "dùng hybrid + khoản: context_hit 0.86 so với 0.80, từ chối giảm từ 30% xuống 12%,
-  độ trễ 3 giây; rerank thêm 35 giây mỗi câu mà MRR chỉ tăng trong mức nhiễu", không mở bằng định nghĩa RAG.
+- Mở bằng **khuyến nghị có số**, ví dụ minh hoạ với số bịa: "dùng cấu hình X: context_hit 0.9 so với 0.7, từ chối
+  giảm từ 40% xuống 10%, độ trễ N giây; cấu hình Y thêm M giây mỗi câu mà MRR chỉ tăng trong mức nhiễu". Không mở bằng
+  định nghĩa RAG.
 - Bảng `run_eval` đủ cột, và câu đọc bảng tách **chênh lệch thật** khỏi **nhiễu của 50 câu**: một câu là 0.02 điểm
   recall, nên chênh lệch 0.02 tới 0.04 chưa nói được gì.
 - Mục **judge có đáng tin không** là phần người đọc kỹ nhất: kết quả thí nghiệm nguồn sai, tỉ lệ đồng ý với nhãn của
@@ -77,7 +79,7 @@ Cần cache của ba bài Intermediate trong `data/raw/zalo-legal/cache/`: làm 
 - `recall_at_k`, `mrr_at_k` khớp ví dụ tính tay ở mục 6 lý thuyết.
 - `judge_faithfulness` với `FakeLLM`: 3 khẳng định, 2 được ủng hộ cho 2/3; prompt chứa câu trả lời và mọi đoạn nguồn;
   truyền `json_schema=FAITHFULNESS_SCHEMA`; 8 kiểu câu trả lời hỏng (không phải JSON, JSON cắt cụt, thiếu khoá, sai
-  kiểu, danh sách rỗng...) đều cho `nan`.
+  kiểu, danh sách rỗng...) đều cho `nan`; `llm.chat` ném `llmkit.LLMError` thì cả hai judge cho `nan`.
 - `judge_relevance`: điểm 5, 4, 1 cho 1.0, 0.75, 0.0; điểm 9, 0, 3.5, `"năm"`, `true` hay JSON hỏng cho `nan`.
 - `run_eval` trên hai cấu hình giả: cột đúng `COLUMNS` theo thứ tự, mỗi cấu hình gọi đúng một lần mỗi câu, số liệu
   từng cột đúng (kể cả trung vị độ trễ, `judge_nan`), câu từ chối không tới judge; judge luôn trả chuỗi hỏng thì bảng
@@ -92,7 +94,8 @@ Cần cache của ba bài Intermediate trong `data/raw/zalo-legal/cache/`: làm 
 Bọc **cả** `json.loads` lẫn phần đọc khoá trong một `try` bắt `ValueError`, `KeyError`, `TypeError`
 (`json.JSONDecodeError` là con của `ValueError`), rồi kiểm kiểu sau đó: `isinstance(True, int)` là `True` trong Python,
 nên điểm `true` phải bị loại riêng. Trong `run_eval`, gom điểm judge vào list rồi tự lấy trung bình phần không phải
-`nan`; `statistics.median` cho trung vị độ trễ.
+`nan`; `statistics.median` cho trung vị độ trễ. Lời gọi judge cũng có thể ném `llmkit.LLMError` (Ollama tắt, quá thời
+gian chờ, gateway trả 504): bắt nó trong cùng `try` để một lượt gọi lỗi chỉ thành một `nan` được đếm ở `judge_nan`.
 
 ### Gợi ý 2
 

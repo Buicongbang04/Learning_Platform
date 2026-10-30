@@ -20,7 +20,8 @@ của một bản tham chiếu để bạn so, và rubric chấm `REPORT.md`.
 Bản tham chiếu không có nhãn người cho 20 câu (đó là phần việc của bạn); thay vào đó nó so hai judge với nhau, như
 bảng dưới. Bạn nên làm cả hai.
 
-Lỗi hay gặp: bắt `json.JSONDecodeError` nhưng quên `KeyError`/`TypeError` (JSON hợp lệ mà sai cấu trúc vẫn crash);
+Lỗi hay gặp: bắt `json.JSONDecodeError` nhưng quên `KeyError`/`TypeError` (JSON hợp lệ mà sai cấu trúc vẫn crash) hay
+`llmkit.LLMError` (một lượt gateway 504 hay Ollama quá thời gian chờ làm hỏng cả lần chạy một giờ);
 `isinstance(True, int)` là `True` nên `"score": true` lọt qua; lấy trung bình bằng `np.mean` làm cả cột thành `nan`
 khi có một câu hỏng; gửi câu từ chối cho judge; đo độ trễ bằng thời gian gọi hàm khi câu trả lời đã cache (ra 0.0 s).
 
