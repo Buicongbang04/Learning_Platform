@@ -24,10 +24,12 @@ import linecache
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -120,20 +122,62 @@ def _load(path: Path, unique: str, execute, spec=None) -> ModuleType:
     return module
 
 
+_RECALC_CACHE: dict[tuple, Any] = {}  # (đường dẫn, mtime_ns, size) -> openpyxl workbook đã tính lại
+
+
+def _open_workbook(path: Path, **kwargs):
+    import openpyxl
+    from openpyxl.utils.exceptions import InvalidFileException
+
+    try:
+        return openpyxl.load_workbook(path, **kwargs)
+    except (zipfile.BadZipFile, InvalidFileException, KeyError, OSError) as exc:
+        pytest.fail(f"Không mở được workbook {path.name} ({exc}) — lưu lại tệp/đóng Excel rồi chạy lại")
+
+
+def _recalculate(path: Path):
+    """Chép sang thư mục tạm, để LibreOffice tính lại rồi đọc giá trị (data_only)."""
+    soffice = shutil.which("soffice")
+    if not soffice:
+        pytest.skip("Cần LibreOffice (soffice) để tính lại công thức")
+    with tempfile.TemporaryDirectory(prefix="wbcalc-") as tmp:
+        src = Path(tmp) / "in" / path.name
+        out = Path(tmp) / "out"
+        src.parent.mkdir()
+        out.mkdir()
+        shutil.copy(path, src)
+        cmd = [
+            soffice, f"-env:UserInstallation=file://{tmp}/profile", "--headless",
+            "--convert-to", "xlsx:Calc MS Excel 2007 XML", "--outdir", str(out), str(src),
+        ]
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True
+        )
+        try:
+            _, stderr = proc.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)  # soffice sinh process con (soffice.bin)
+            _, stderr = proc.communicate()
+            pytest.fail(f"LibreOffice quá 120 giây khi tính lại {path.name}. stderr: {stderr.strip()}")
+        result = out / src.name
+        if proc.returncode != 0 or not result.exists():
+            pytest.fail(
+                f"LibreOffice không tính lại được {path.name} (exit {proc.returncode}, "
+                f"{'có' if result.exists() else 'không có'} tệp kết quả). stderr: {stderr.strip()}"
+            )
+        return _open_workbook(result, data_only=True)
+
+
 class WorkbookView:
     """Workbook .xlsx của người học: đọc công thức (không cần LibreOffice) và giá trị đã tính lại."""
 
     def __init__(self, path: Path):
         self.path = path
         self._formulas = None
-        self._values = None
-        self._values_mtime = None
 
     def _formula_book(self):
         if self._formulas is None:
-            import openpyxl
-
-            self._formulas = openpyxl.load_workbook(self.path)  # data_only=False: giữ chuỗi công thức
+            self._formulas = _open_workbook(self.path)  # data_only=False: giữ chuỗi công thức
         return self._formulas
 
     @property
@@ -147,42 +191,22 @@ class WorkbookView:
 
     def formula(self, sheet: str, cell: str) -> str | None:
         """Chuỗi công thức (`"=SUM(A1:A3)"`) nếu ô là công thức, ngược lại `None` (ô gõ cứng hoặc trống)."""
-        raw = self._sheet(self._formula_book(), sheet)[cell].value
-        if isinstance(raw, str) and raw.startswith("="):
-            return raw
-        if raw is not None and not isinstance(raw, (str, int, float, bool)) and hasattr(raw, "text"):
-            return raw.text  # ArrayFormula
-        return None
+        c = self._sheet(self._formula_book(), sheet)[cell]
+        if c.data_type != "f":
+            return None
+        raw = c.value
+        return raw if isinstance(raw, str) else getattr(raw, "text", None)  # ArrayFormula có .text
 
     def pivot_tables(self, sheet: str) -> list:
         return list(getattr(self._sheet(self._formula_book(), sheet), "_pivots", []))
 
     def value(self, sheet: str, cell: str) -> Any:
-        """Giá trị đã tính lại bằng LibreOffice (cache theo mtime của tệp)."""
-        import openpyxl
-
-        mtime = self.path.stat().st_mtime_ns
-        if self._values is None or self._values_mtime != mtime:
-            soffice = shutil.which("soffice")
-            if not soffice:
-                pytest.skip("Cần LibreOffice (soffice) để tính lại công thức")
-            with tempfile.TemporaryDirectory(prefix="wbcalc-") as tmp:
-                src = Path(tmp) / "in" / self.path.name
-                out = Path(tmp) / "out"
-                src.parent.mkdir()
-                out.mkdir()
-                shutil.copy(self.path, src)
-                cmd = [
-                    soffice, f"-env:UserInstallation=file://{tmp}/profile", "--headless",
-                    "--convert-to", "xlsx:Calc MS Excel 2007 XML", "--outdir", str(out), str(src),
-                ]
-                try:
-                    subprocess.run(cmd, check=True, capture_output=True, timeout=120)
-                except (subprocess.SubprocessError, OSError) as exc:
-                    pytest.fail(f"LibreOffice không tính lại được {self.path.name}: {exc}")
-                self._values = openpyxl.load_workbook(out / src.name, data_only=True)
-            self._values_mtime = mtime
-        return self._sheet(self._values, sheet)[cell].value
+        """Giá trị đã tính lại bằng LibreOffice (cache cấp module theo đường dẫn + mtime + size)."""
+        stat = self.path.stat()
+        key = (str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
+        if key not in _RECALC_CACHE:
+            _RECALC_CACHE[key] = _recalculate(self.path)
+        return self._sheet(_RECALC_CACHE[key], sheet)[cell].value
 
 
 class Exercise:

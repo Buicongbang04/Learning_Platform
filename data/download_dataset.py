@@ -177,15 +177,15 @@ DATASETS: dict[str, Dataset] = {
     ),
     "ecommerce-events": Dataset(
         "kaggle", "cianaellington/retail-rocket-cleaned-events-dataset", ["clean_events.csv"],
-        license="CC0: Public Domain (ghi trên Kaggle, đã kiểm 2026-10-30); bản làm sạch từ Retailrocket recommender dataset",
+        license="Kaggle gắn CC0 nhưng đây là bản làm sạch lại của Retailrocket, gốc CC BY-NC-SA 4.0 (phi thương mại, chia sẻ giống nhau); chỉ dùng học tập, không thương mại, không commit trích mẫu",
         homepage="https://www.kaggle.com/datasets/cianaellington/retail-rocket-cleaned-events-dataset",
         about="Sự kiện web thật (view, addtocart, transaction) của một cửa hàng online, 2015-05..2015-09, ~2,75 triệu dòng: funnel view -> cart -> purchase",
     ),
     "owid-co2": Dataset(
-        "url", "https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv", ["owid-co2-data.csv"],
+        "url", "https://raw.githubusercontent.com/owid/co2-data/382ee6c662b0ece26e111f263b44c029afad7787/owid-co2-data.csv", ["owid-co2-data.csv"],
         license="CC BY 4.0 (Our World in Data, Global Carbon Project...); ghi nguồn khi dùng",
         homepage="https://github.com/owid/co2-data",
-        about="CO2 và phát thải theo quốc gia-năm (~50k dòng, 1750..): dữ liệu công khai để đối chiếu pandas/R",
+        about="CO2 và phát thải theo quốc gia-năm (50 411 dòng, 1750..): dữ liệu công khai để đối chiếu pandas/R. URL ghim vào commit 382ee6c662b0 (2026-06-02) nên số liệu không trôi",
     ),
 }
 
