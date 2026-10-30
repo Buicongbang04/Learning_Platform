@@ -69,6 +69,15 @@ def test_chunk_fixed_rebuilds_original(ck, size, overlap):
         assert nxt[:overlap] == prev[size - overlap :]
 
 
+def test_chunk_fixed_does_not_normalize(ck):
+    # chunk_fixed cắt đúng chuỗi được đưa vào, theo code point: NFD và khoảng trắng lộn xộn giữ nguyên từng ký tự
+    raw = "  " + unicodedata.normalize("NFD", ARTICLE).replace("\n", " \r\n\t ") + "  "
+    chunks = ck.chunk_fixed(raw, 60, 15)
+    assert _rebuild(chunks, 15) == raw
+    assert all(len(c) == 60 for c in chunks[:-1])
+    assert len(chunks) == math.ceil((len(raw) - 15) / (60 - 15))
+
+
 @pytest.mark.parametrize("length,size,overlap", [(1000, 100, 20), (1000, 500, 50), (100, 10, 0), (101, 10, 0), (95, 50, 10), (90, 50, 10)])
 def test_chunk_fixed_count(ck, length, size, overlap):
     # không sinh chunk thừa nằm trọn trong chunk trước: số chunk đúng bằng ceil((L - O) / (S - O))
@@ -130,11 +139,14 @@ def test_chunk_legal_khoan_marker_must_start_line_and_be_followed_by_space(ck):
             "1. Cấp mới giấy phép, mức thu là",
             "150.000 đồng một lần cấp.",
             "2. Cấp lại do mất hoặc hư hỏng, mức thu bằng 50% mức quy định tại khoản 1. Điều này áp dụng cả khi đổi.",
+            "Trường hợp đổi giấy phép thì nộp như khoản 1. Lệ phí nộp một lần khi nhận hồ sơ.",
         ]
     )
     chunks = ck.chunk_legal(article, max_chars=1000)
+    # "khoản 1. " giữa dòng không mở khoản mới: mẫu phải khớp ở đầu dòng
     assert len(chunks) == 2
     assert chunks[0] == "Điều 9. Mức thu lệ phí cấp giấy phép\n1. Cấp mới giấy phép, mức thu là\n150.000 đồng một lần cấp."
+    assert chunks[1].endswith("\nTrường hợp đổi giấy phép thì nộp như khoản 1. Lệ phí nộp một lần khi nhận hồ sơ.")
 
 
 def test_chunk_legal_article_without_khoan(ck):

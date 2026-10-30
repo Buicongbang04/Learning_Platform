@@ -63,7 +63,7 @@ Hai nhánh hỏng ở chỗ khác nhau:
 
 Văn bản luật có nhiều thứ thuộc loại thứ hai, câu hỏi người dân lại hay diễn đạt kiểu thứ nhất, nên hai nhánh bổ sung cho
 nhau. Fuse bằng **RRF** $$\sum_r \frac{1}{60 + \mathrm{rank}_r(d)}$$ vì nó chỉ dùng thứ hạng, không phải chuẩn hoá hai thang
-điểm khác nhau. Trên lát cắt 100 câu của module: BM25 âm tiết MRR@10 0.687, dense `bge-m3` 0.751, hybrid 0.773;
+điểm khác nhau. Trên lát cắt 100 câu của module: BM25 âm tiết MRR@10 0.686, dense `bge-m3` 0.751, hybrid 0.773;
 thêm bigram âm tiết vào nhánh BM25 thì hybrid lên 0.825 và R@1 từ 0.64 (dense) lên 0.74. Ứng viên tốt nói thêm hybrid không
 tự động thắng: RRF với một nhánh yếu có thể kéo thứ hạng xuống, nên đo từng cấu hình.
 

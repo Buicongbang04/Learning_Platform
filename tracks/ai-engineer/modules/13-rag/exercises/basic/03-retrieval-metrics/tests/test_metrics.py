@@ -101,3 +101,5 @@ def test_rejects_bad_input(m, name):
         fn([["A"], ["B"]], [{"A"}], 3)  # số truy vấn không khớp
     with pytest.raises(ValueError):
         fn([["A"]], [{"A"}], 0)  # k < 1
+    with pytest.raises(ValueError):
+        fn([], [], 3)  # không có truy vấn nào: trung bình trên 0 truy vấn không xác định

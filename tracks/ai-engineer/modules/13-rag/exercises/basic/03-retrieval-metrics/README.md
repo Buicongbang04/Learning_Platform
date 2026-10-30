@@ -34,7 +34,8 @@ về cho truy vấn `i` theo thứ tự xếp hạng (không trùng, có thể n
    $$\mathrm{Rel}_q$$ đứng đầu, kể cả tài liệu đúng mà hệ thống **không** trả về, cắt ở $$k$$.
 
 `k` lớn hơn độ dài danh sách không phải lỗi. Ném `ValueError` khi: một truy vấn có tập đúng rỗng (recall và nDCG không
-xác định), số danh sách `retrieved` khác số tập `relevant`, hoặc `k < 1`.
+xác định), không có truy vấn nào (`retrieved` rỗng: trung bình trên 0 truy vấn không xác định), số danh sách
+`retrieved` khác số tập `relevant`, hoặc `k < 1`.
 
 Ví dụ ở lý thuyết: đúng {A, B}, trả về [C, A, D, B, E]: recall@3 = 0.5, MRR = 0.5, nDCG@5 = 0.6509.
 
@@ -43,7 +44,7 @@ Ví dụ ở lý thuyết: đúng {A, B}, trả về [C, A, D, B, E]: recall@3 =
 - Ba hàm khớp giá trị tính tay trên 3 truy vấn với `k = 3` và `k = 5` (dài hơn danh sách của hai truy vấn).
 - Recall chia cho số tài liệu đúng; MRR chỉ tính tài liệu đúng đầu tiên, trong top-$$k$$, và lấy trung bình.
 - nDCG: IDCG tính từ toàn bộ tập đúng nhưng cắt ở $$k$$; khớp `sklearn.metrics.ndcg_score` trên 20 truy vấn ngẫu nhiên.
-- `k` lớn hơn danh sách và danh sách rỗng không lỗi; truy vấn không có tài liệu đúng, số truy vấn lệch, `k < 1` ném `ValueError`.
+- `k` lớn hơn danh sách và danh sách rỗng không lỗi; truy vấn không có tài liệu đúng, không có truy vấn nào, số truy vấn lệch, `k < 1` ném `ValueError`.
 
 ## Gợi ý
 

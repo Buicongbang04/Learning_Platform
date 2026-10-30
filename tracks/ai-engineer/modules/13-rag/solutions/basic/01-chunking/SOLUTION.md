@@ -29,7 +29,7 @@ Một điểm như `b) Buông cả hai tay hoặc dùng chân điều khiển xe
 nhiêu. Mức phạt nằm ở phần dẫn của khoản (`2. Phạt tiền từ 300.000 đồng đến 500.000 đồng ... sau đây:`), loại phương
 tiện nằm ở tiêu đề Điều. Ghép cả hai vào chunk làm câu hỏi "buông hai tay khi đi xe đạp điện bị phạt bao nhiêu" khớp
 được cả BM25 lẫn embedding, và chunk có địa chỉ trích dẫn "điểm b khoản 2 Điều 5". Trên lát cắt Zalo ở mục 2 lý
-thuyết, chunk theo khoản có tiêu đề thắng chunk cố định cùng cỡ 15 điểm MRR@10.
+thuyết, chunk theo khoản có tiêu đề thắng chunk cố định cùng cỡ 18 điểm MRR@10 (0.809 so với 0.628).
 
 Cái giá: phần dẫn bị lặp ở mỗi điểm, nên tổng số ký tự phải embed tăng. Với ngưỡng 1 500 ký tự, chỉ khoản thật sự
 dài mới bị tách, nên phần lặp nhỏ.

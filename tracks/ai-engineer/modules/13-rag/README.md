@@ -269,13 +269,13 @@ chunk của nó** (để so với nhãn ở mức điều):
 | Đơn vị embed | Số vector | Ký tự TB | R@1 | R@5 | R@10 | MRR@10 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Cả điều (tiêu đề + nội dung) | 3 541 | 1 232 | 0.640 | 0.860 | 0.950 | 0.751 |
-| Theo khoản, giữ tiêu đề Điều, tối đa 1 500 ký tự | 12 309 | 402 | **0.700** | **0.910** | **0.960** | **0.783** |
+| Theo khoản (khoản dài hơn 1 500 ký tự tách theo điểm), giữ tiêu đề Điều | 13 310 | 395 | **0.730** | **0.930** | **0.960** | **0.809** |
 | Cố định 500 ký tự, overlap 50, không tiêu đề | 10 614 | 423 | 0.500 | 0.780 | 0.900 | 0.628 |
 
-Hai cách chunk có cùng cỡ trung bình (khoảng 400 ký tự) nhưng cho kết quả cách nhau 15 điểm MRR. Khác biệt không nằm ở
+Hai cách chunk có cùng cỡ trung bình (khoảng 400 ký tự) nhưng cho kết quả cách nhau 18 điểm MRR. Khác biệt không nằm ở
 kích thước mà ở **ranh giới và ngữ cảnh**: chunk theo khoản là một quy định trọn vẹn có tiêu đề Điều đi kèm; chunk cố định
 cắt giữa câu và không biết mình thuộc điều nào. Chunk theo khoản cũng thắng cả điều vì tách được điều dài thành nhiều ý,
-mỗi ý một vector sắc nét. Cái giá: số vector gấp 3.5 lần (embed 12 309 chunk mất 203 giây, 61 chunk/giây vì chunk ngắn).
+mỗi ý một vector sắc nét. Cái giá: số vector gấp 3.8 lần (embed 13 310 chunk mất 231 giây, 58 chunk/giây vì chunk ngắn).
 Mỗi lượt embed chunk ở trên có đúng **một** đoạn làm `bge-m3` trả `NaN` (mục trên).
 
 ### Unicode NFC
@@ -375,9 +375,9 @@ Hai cách đáp lại, đo trên lát cắt (cùng $$k_1 = 1.5$$, $$b = 0.75$$):
 
 | Tokenizer BM25 | R@1 | R@10 | MRR@10 |
 | --- | --- | --- | --- |
-| Âm tiết (`\w+` sau NFC, lower) | 0.540 | 0.930 | 0.687 |
-| Âm tiết + bigram âm tiết liền kề | **0.670** | **0.960** | **0.766** |
-| Tách từ bằng pyvi | 0.630 | 0.940 | 0.722 |
+| Âm tiết (`\w+` sau NFC, lower) | 0.540 | 0.930 | 0.686 |
+| Âm tiết + bigram âm tiết liền kề | **0.660** | **0.960** | **0.761** |
+| Tách từ bằng pyvi | 0.620 | 0.940 | 0.718 |
 
 - **Tách từ** (pyvi, underthesea, VnCoreNLP): "giấy_phép lái_xe" thành 2 token có nghĩa. Cải thiện rõ so với âm tiết,
   nhưng thêm một thư viện, chậm hơn (pyvi mất 8.4 giây cho 3 541 điều, so với 0.25 giây dựng index âm tiết), và lỗi tách
@@ -443,10 +443,10 @@ mạnh nhất". Bài Intermediate 01 cho bạn tự cài `rrf_fuse` và kiểm v
 
 | Phương pháp | R@1 | R@5 | R@10 | MRR@10 | nDCG@10 |
 | --- | --- | --- | --- | --- | --- |
-| BM25 âm tiết | 0.540 | 0.880 | 0.930 | 0.687 | 0.747 |
+| BM25 âm tiết | 0.540 | 0.880 | 0.930 | 0.686 | 0.746 |
 | Dense `bge-m3` | 0.640 | 0.860 | 0.950 | 0.751 | 0.800 |
 | Hybrid RRF (BM25 âm tiết + dense) | 0.660 | 0.900 | 0.960 | 0.773 | 0.819 |
-| Hybrid RRF (BM25 âm tiết + bigram, + dense) | **0.740** | **0.930** | **0.970** | **0.825** | **0.861** |
+| Hybrid RRF (BM25 âm tiết + bigram, + dense) | **0.740** | **0.930** | **0.970** | **0.825** | **0.860** |
 
 Độ trễ: BM25 tự viết bằng Python thuần mất 7 tới 8 ms một câu trên 3 541 điều; embed câu hỏi 10 tới 30 ms; nhân ma trận
 với 3 541 vector không đáng kể. Đọc bảng:
@@ -455,8 +455,8 @@ với 3 541 vector không đáng kể. Đọc bảng:
   Nhánh BM25 càng tốt (thêm bigram), hybrid càng tốt: fusion không thay được việc làm từng nhánh cho đúng.
 - R@10 đã 0.95 trở lên mà R@1 chỉ 0.54 tới 0.74: đoạn đúng thường **có mặt** nhưng **không đứng đầu**. Đó là chỗ của
   rerank (mục 4).
-- Kết hợp không phải lúc nào cũng cộng dồn: RRF giữa BM25 âm tiết và dense **theo khoản** (MRR 0.765) còn thấp hơn dense theo
-  khoản một mình (0.783), vì nhánh BM25 yếu kéo thứ hạng xuống. Mỗi thay đổi phải đo lại, không suy ra từ bảng khác.
+- Kết hợp không phải lúc nào cũng cộng dồn: RRF giữa BM25 âm tiết và dense **theo khoản** (MRR 0.771) còn thấp hơn dense theo
+  khoản một mình (0.809), vì nhánh BM25 yếu kéo thứ hạng xuống. Mỗi thay đổi phải đo lại, không suy ra từ bảng khác.
 - Lát cắt chỉ có 100 câu: chênh lệch 0.01 tới 0.02 là nhiễu (mỗi câu đóng góp 0.01 vào R@1). Bài Intermediate 01 đo trên 300
   câu và corpus lớn hơn.
 
