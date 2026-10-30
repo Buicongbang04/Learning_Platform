@@ -75,8 +75,11 @@ train accuracy 0.899 lên 0.993, test 0.888 xuống 0.819.
 
 Phát hiện: in phân phối phần tử ngoài đường chéo (mean, std), so train và test accuracy, đo kernel-target alignment. Xử
 lý: giảm bandwidth (scale input) như chỉnh $$\gamma$$ của RBF, dùng kernel "projected" lên vài qubit, ít layer encoding hơn.
-Lưu ý: khi đã chỉnh để kernel hết co, nó thường gần một kernel trơn mà phương pháp cổ điển cũng làm được. Trên phần cứng
-thì tệ hơn: phân biệt giá trị kernel nhỏ cần số shots tăng theo bình phương nghịch đảo.
+Lưu ý: kernel cổ điển có bandwidth cố định cũng co (RBF $$\gamma = 1$$ cố định: 0.257 ở 2 chiều còn 0.003 ở 10 chiều; angle kernel không
+entanglement co gần y như ZZ); RBF mặc định của scikit-learn không co vì `gamma="scale"` chia cho số chiều. So công bằng thì scale
+feature map lượng tử theo $$n$$ trước, rồi mới quy phần co còn lại cho mạch. Khi đã chỉnh để kernel hết co, nó thường gần một kernel
+trơn mà phương pháp cổ điển cũng làm được. Trên phần cứng còn thêm shots: độ lệch chuẩn $$\sqrt{k(1-k)/S}$$, nên giữ sai số tương đối
+cần $$S \propto 1/k$$, phân biệt hai giá trị chênh $$\delta$$ cần $$S \propto k/\delta^2$$.
 
 ## Barren plateau là gì? Những yếu tố nào gây ra nó?
 
@@ -119,7 +122,8 @@ Mỗi kỳ vọng có sai số $$\sqrt{(1 - \langle P\rangle^2)/S}$$, nên sai s
 NISQ (Preskill 2018): vài chục tới vài trăm qubit vật lý, gate có lỗi (cỡ $$10^{-3}$$ với gate hai qubit tốt nhất), không sửa lỗi.
 Mạch chỉ chạy được tới độ sâu mà lỗi tích luỹ còn chấp nhận được, nên thuật toán phải nông, thường là variational. Error
 correction mã hoá một qubit logic vào nhiều qubit vật lý và phát hiện/sửa lỗi liên tục; chỉ có lợi khi lỗi vật lý dưới một
-ngưỡng. Google (2024) lần đầu cho thấy lỗi logic giảm khi tăng kích thước surface code. Đó là cột mốc kỹ thuật quan trọng,
+ngưỡng. Google (2023) đã cho thấy lỗi logic giảm khi tăng surface code từ distance 3 lên 5; Google (2024) lần đầu chạy rõ ràng
+dưới ngưỡng, lỗi logic giảm theo hàm mũ (hệ số $$\Lambda > 2$$ mỗi lần tăng distance thêm 2). Đó là cột mốc kỹ thuật quan trọng,
 nhưng số qubit logic cần cho Shor hay cho các thuật toán QML có tăng tốc chứng minh được còn cách hiện tại vài bậc độ lớn.
 Với AI Engineer, thông số đáng theo dõi là số qubit **logic** và tỉ lệ lỗi logic, không phải số qubit vật lý trong thông cáo
 báo chí.

@@ -57,7 +57,7 @@ questions:
   prompt: Khi kernel tiến về ma trận đơn vị, chuyện gì xảy ra với SVM?
   options:
   - id: a
-    text: SVM gán mọi điểm vào lớp đông nhất vì kernel không phân biệt được
+    text: SVM tự bỏ kernel đã cho và chuyển sang dùng kernel tuyến tính mặc định
   - id: b
     text: Mọi điểm train thành support vector riêng, thuộc lòng, không tổng quát
   - id: c

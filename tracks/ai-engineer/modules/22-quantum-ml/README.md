@@ -51,7 +51,7 @@ bài toán.
 | --- | --- | --- | --- |
 | Shor (1994) | phân tích thừa số, logarit rời rạc | siêu đa thức (hàm mũ thành đa thức) | hàng nghìn qubit logic đã sửa lỗi |
 | Grover (1996) | tìm kiếm không cấu trúc | căn bậc hai: $$O(\sqrt{N})$$ thay vì $$O(N)$$ | qubit sửa lỗi, mạch rất sâu |
-| Mô phỏng hệ lượng tử | hoá học, vật liệu | hàm mũ với nhiều hệ | lĩnh vực có triển vọng gần nhất |
+| Mô phỏng hệ lượng tử | hoá học, vật liệu | được kỳ vọng, **chưa chứng minh** là hàm mũ cho bài toán hoá học thực tế (Lee et al. 2023) | lĩnh vực có triển vọng gần nhất |
 | HHL (2009) | hệ phương trình tuyến tính | hàm mũ **có điều kiện**: nạp dữ liệu, đọc kết quả, condition number | qubit sửa lỗi, QRAM |
 | **Variational / kernel QML** | phân loại, hồi quy | **chưa có bằng chứng** trên dữ liệu cổ điển thực tế | chạy được trên phần cứng nhiễu hôm nay |
 
@@ -203,12 +203,12 @@ $$2^n \times 2^n$$ bằng `np.kron` rồi nhân: với 20 qubit ma trận đó c
 vector như một tensor $$2 \times 2 \times \dots \times 2$$ và chỉ nhân ma trận $$2 \times 2$$ (hoặc $$4 \times 4$$) vào trục của các wire liên quan,
 chi phí $$O(2^n)$$ mỗi gate. Nhưng bộ nhớ thì không tránh được:
 
-| Số qubit | Bộ nhớ statevector (complex128) | Thời gian một gate H, simulator numpy của bài Basic 01 |
+| Số qubit | Bộ nhớ statevector (complex128) | Thời gian một gate H, simulator numpy của bài Basic 01 (bậc độ lớn, máy dùng chung) |
 | --- | --- | --- |
-| 10 | 16 KB | khoảng 1 ms |
-| 20 | 16 MB | khoảng 26 ms |
-| 24 | 256 MB | khoảng 0.6 s |
-| 26 | 1 GB | khoảng 1.4 s |
+| 10 | 16 KB | cỡ 1 ms |
+| 20 | 16 MB | cỡ 10 ms |
+| 24 | 256 MB | cỡ 0.1–1 s |
+| 26 | 1 GB | cỡ 1 s |
 | 30 | 16 GB | (không chạy trên laptop) |
 | 50 | 16 PB | (không chạy trên siêu máy tính nào dưới dạng statevector) |
 
@@ -414,7 +414,9 @@ trực giao (kernel gần ma trận đơn vị, SVM thuộc lòng train). Đây 
 Trên Iris, kernel ZZ ở scale tốt nhất **ngang** SVM RBF và thua nhẹ logistic regression. Trên moons (2 qubit), tốt nhất
 chỉ đạt 0.843 (scale 0.3), ngang logistic regression (0.847), còn SVM RBF đạt 0.970: feature map ZZ không hợp với hình dạng
 dữ liệu này, và không có lý do gì để nó hợp. **Centered kernel-target alignment** (Cortes et al. 2012) chọn được vùng
-scale tốt mà không cần train SVM (đỉnh ở 0.5 trên Iris, ở 0.1 trên moons), nhưng không chọn đúng từng điểm.
+scale tốt mà không cần train SVM (đỉnh ở 0.5 trên Iris, ở 0.1 trên moons), nhưng không chọn đúng từng điểm. Lưu ý: bảng
+trên chọn "scale tốt nhất" bằng chính accuracy trên fold test, nên con số của kernel ZZ hơi lạc quan; bài Advanced chọn
+scale trên fold train (nested) và cho cùng ngân sách tuning cho RBF.
 
 ### Concentration: thêm qubit thì kernel co về ma trận đơn vị
 
@@ -431,8 +433,19 @@ Breast cancer (569 mẫu), giảm còn $$n$$ thành phần PCA cho $$n$$ qubit, 
 Thêm qubit làm hai điểm bất kỳ gần như trực giao trong không gian $$2^n$$ chiều: kernel co về ma trận đơn vị, train tăng tới
 0.993 còn test tụt còn 0.819. Đây là **exponential concentration** (Thanasilp et al. 2022): với feature map đủ "biểu cảm",
 các giá trị kernel tập trung quanh một hằng số với độ lệch giảm theo hàm mũ của $$n$$. Giảm scale về 0.3 cứu được (test 0.951
-ở 10 qubit), nhưng khi đó kernel gần với một kernel trơn mà phương pháp cổ điển cũng làm được. Trên phần cứng, phần tệ nhất
-là ở chỗ khác: phân biệt các giá trị kernel cỡ $$10^{-2}$$ cần số shots tăng theo bình phương nghịch đảo của chúng.
+ở 10 qubit), nhưng khi đó kernel gần với một kernel trơn mà phương pháp cổ điển cũng làm được.
+
+Concentration không riêng gì lượng tử: **mọi kernel có bandwidth cố định** đều co khi số chiều tăng. Trên cùng dữ liệu, trung
+bình ngoài đường chéo của RBF với $$\gamma = 1$$ cố định giảm từ 0.257 (2 chiều) còn 0.003 (10 chiều), của angle kernel không có
+entanglement ở scale 1.0 giảm từ 0.517 còn 0.067, gần y như kernel ZZ. SVM RBF ở bảng trên không co vì scikit-learn mặc định
+`gamma="scale"` $$= 1/(n \cdot \mathrm{Var}(x))$$, tự chia bandwidth cho số chiều (trung bình ngoài đường chéo giữ quanh 0.27). Cách so công
+bằng là cho feature map lượng tử cùng đặc quyền đó: scale input theo $$n$$ (ví dụ tỉ lệ $$1/\sqrt{n}$$), rồi mới xem phần co còn lại có
+phải do mạch lượng tử không. Thanasilp et al. (2022) chỉ ra các nguồn co riêng của kernel lượng tử (biểu cảm, entanglement toàn
+cục, nhiễu) tồn tại ngay cả khi đã chỉnh như vậy.
+
+Trên phần cứng còn thêm chi phí shots. Ước lượng một phần tử $$k$$ từ $$S$$ shots có độ lệch chuẩn $$\sqrt{k(1-k)/S}$$: muốn sai số
+**tương đối** cố định cần $$S \propto 1/k$$; muốn phân biệt hai phần tử cỡ $$k$$ chênh nhau $$\delta$$ cần $$S \propto k/\delta^2$$. Kernel co cụm cho
+$$k$$ nhỏ và $$\delta$$ còn nhỏ hơn, nên số shots tăng nhanh.
 
 ### Shots
 
@@ -455,7 +468,7 @@ mũ, bằng một thuật toán cổ điển dùng lấy mẫu; nhiều thuật 
 
 | Rào cản | Nội dung | Con số trong module |
 | --- | --- | --- |
-| **Nhiễu (NISQ)** | gate hai qubit hiện tốt nhất sai cỡ $$10^{-3}$$ mỗi lần; qubit mất trạng thái sau một khoảng thời gian; mạch sâu tích luỹ lỗi. Sửa lỗi (error correction) cần nhiều qubit vật lý cho một qubit logic; Google (2024) lần đầu cho thấy lỗi logic giảm khi tăng kích thước mã surface code, còn rất xa quy mô cho ML | depolarizing $$p = 0.05$$ sau mỗi gate làm độ tương phản kernel 2 qubit (đường chéo trừ ngoài đường chéo) giảm từ 0.080 còn 0.036 |
+| **Nhiễu (NISQ)** | gate hai qubit hiện tốt nhất sai cỡ $$10^{-3}$$ mỗi lần; qubit mất trạng thái sau một khoảng thời gian; mạch sâu tích luỹ lỗi. Sửa lỗi (error correction) cần nhiều qubit vật lý cho một qubit logic; Google (2023) đã cho thấy lỗi logic giảm khi tăng surface code từ distance 3 lên 5; Google (2024) lần đầu chạy rõ ràng **dưới ngưỡng**, lỗi logic giảm theo hàm mũ (hệ số $$\Lambda > 2$$ mỗi lần tăng distance 2); còn rất xa quy mô cho ML | depolarizing $$p = 0.05$$ sau mỗi khối của feature map làm độ tương phản kernel 2 qubit (đường chéo trừ ngoài đường chéo) giảm từ 0.080 còn 0.036 |
 | **Barren plateau** | phương sai gradient giảm theo hàm mũ của số qubit với ansatz ngẫu nhiên đủ sâu, hoặc với cost global (McClean et al. 2018; Cerezo et al. 2021); nhiễu tự nó cũng gây plateau (Wang et al. 2021) | cost global: phương sai $$2.4\times10^{-1}$$ ở 2 qubit còn $$7.6 \times 10^{-4}$$ ở 10 qubit, giảm khoảng một nửa mỗi qubit |
 | **Shots và nạp dữ liệu** | mọi kỳ vọng là ước lượng có sai số $$1/\sqrt{S}$$; mỗi mẫu dữ liệu phải nạp lại bằng gate cho từng mạch; không có QRAM thực tế | 6.6 triệu lần đo cho một bước gradient VQC trên 200 mẫu |
 | **Dequantization và mô phỏng cổ điển** | mạch ít entanglement, kernel tích, nhiều thuật toán đại số tuyến tính có bản cổ điển tương đương; Cerezo et al. (2023) lập luận rằng nhiều mô hình được **chứng minh** không có barren plateau thì cũng mô phỏng cổ điển hiệu quả được | angle kernel 16 qubit: công thức đóng nhanh hơn simulator khoảng 200 lần, sai lệch $$10^{-15}$$ |
@@ -504,7 +517,8 @@ nó có tốt hơn không" (Schuld & Killoran 2022 bàn kỹ vì sao "lợi th�
 - M. Schuld, F. Petruccione, [Machine Learning with Quantum Computers](https://link.springer.com/book/10.1007/978-3-030-83098-4), Springer 2021.
 - [Tài liệu PennyLane](https://docs.pennylane.ai/en/stable/); [parameter-shift rule](https://pennylane.ai/qml/glossary/parameter_shift); [data re-uploading classifier](https://pennylane.ai/qml/demos/tutorial_data_reuploading_classifier); [kernel-based training](https://pennylane.ai/qml/demos/tutorial_kernels_module).
 - J. Preskill, [Quantum Computing in the NISQ era and beyond](https://arxiv.org/abs/1801.00862), 2018.
-- K. Mitarai et al., M. Schuld et al., [Evaluating analytic gradients on quantum hardware](https://arxiv.org/abs/1811.11184), 2019.
+- K. Mitarai et al., [Quantum circuit learning](https://arxiv.org/abs/1803.00745), 2018.
+- M. Schuld et al., [Evaluating analytic gradients on quantum hardware](https://arxiv.org/abs/1811.11184), 2019.
 - A. Pérez-Salinas et al., [Data re-uploading for a universal quantum classifier](https://arxiv.org/abs/1907.02085), 2020.
 - M. Schuld, R. Sweke, J. J. Meyer, [The effect of data encoding on the expressive power of variational quantum machine learning models](https://arxiv.org/abs/2008.08605), 2021.
 - M. Schuld, [Supervised quantum machine learning models are kernel methods](https://arxiv.org/abs/2101.11020), 2021.
@@ -519,4 +533,6 @@ nó có tốt hơn không" (Schuld & Killoran 2022 bàn kỹ vì sao "lợi th�
 - E. Tang, [A quantum-inspired classical algorithm for recommendation systems](https://arxiv.org/abs/1807.04271), 2019.
 - J. Bowles, S. Ahmed, M. Schuld, [Better than classical? The subtle art of benchmarking quantum machine learning models](https://arxiv.org/abs/2403.07059), 2024.
 - M. Schuld, N. Killoran, [Is quantum advantage the right goal for quantum machine learning?](https://arxiv.org/abs/2203.01340), 2022.
+- Google Quantum AI, [Suppressing quantum errors by scaling a surface code logical qubit](https://arxiv.org/abs/2207.06431), Nature 2023.
 - Google Quantum AI, [Quantum error correction below the surface code threshold](https://arxiv.org/abs/2408.13687), 2024.
+- S. Lee et al., [Evaluating the evidence for exponential quantum advantage in ground-state quantum chemistry](https://arxiv.org/abs/2208.02199), Nature Communications 2023.

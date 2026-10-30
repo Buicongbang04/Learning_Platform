@@ -174,7 +174,7 @@ def test_expval_z_per_wire(sv):
 
 
 def test_sample_counts_format_and_statistics(sv):
-    # (|00> + |11>)/sqrt2 sau khi xoay thêm: xác suất 4 chuỗi khác nhau
+    # RY(2) trên wire 0 rồi CNOT: cos(1)|00> + sin(1)|11>, chỉ '00' và '11' có xác suất khác 0
     s = sv.apply_gate(sv.zero_state(2), sv.ry(2.0), [0], 2)
     s = sv.apply_gate(s, sv.CNOT, [0, 1], 2)
     counts = sv.sample_counts(s, 10_000, np.random.default_rng(0))

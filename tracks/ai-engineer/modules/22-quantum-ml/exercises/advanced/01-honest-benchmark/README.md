@@ -38,7 +38,7 @@ phút.
    - **Barren plateau**: $$n = 2..10$$, $$L \in \{1, 5, 20\}$$, global và local; độ dốc của $$\log_2$$ phương sai theo $$n$$.
    - **Dequantization**: `angle_kernel_classical` khớp kernel PennyLane; thời gian theo số qubit (4 tới 16).
    - **Benchmark**: Iris, moons, breast cancer PCA-4; kernel ZZ, kernel angle (cổ điển), SVM RBF, logistic regression; 5-fold,
-     **cùng ngân sách tuning**; mean ± std, thời gian, `paired_ci` của ZZ so với model cổ điển tốt nhất.
+     **cùng ngân sách tuning**; mean ± std, thời gian, `paired_ci` của ZZ so với SVM RBF và so với kernel angle (ablation bỏ entanglement).
    - **Nhiễu + shots**: kernel ZZ trên moons 150 điểm với `default.mixed` và `DepolarizingChannel`, $$p \in \{0, 0.05\}$$, shots
      $$\{\infty, 100, 30\}$$; báo accuracy và độ tương phản kernel.
 3. Viết `starter/MEMO.md` theo khung, rồi làm phần trắc nghiệm của bài trong app.
@@ -55,7 +55,7 @@ phút.
 ## Tiêu chí đạt
 
 - `gradient_variance`: một qubit cho phương sai 0.5 (±0.03); khớp từng mẫu với tính toán bằng PennyLane cho cả hai cost; cost global
-  6 qubit thấp hơn 2 qubit ít nhất 16 lần với 5 layer; cost local 1 layer ở 8 qubit vẫn trên 0.3; tất định theo seed.
+  8 qubit thấp hơn 2 qubit ít nhất 16 lần với 5 layer; cost local 1 layer ở 8 qubit vẫn trên 0.3; tất định theo seed.
 - `angle_kernel_classical` khớp statevector tới $$10^{-12}$$ và chạy được với 40 chiều.
 - `paired_ci` đúng mean, std (ddof 1), khoảng Student-t; khoảng rộng ra khi tăng `confidence`.
 - `MEMO.md` không còn TODO, ít nhất 500 từ, có các mục `## Khuyến nghị`, `## Bằng chứng`, `## Khi nào nên xem lại` và ít nhất một bảng.
