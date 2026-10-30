@@ -10,7 +10,8 @@ Bộ tài liệu tự học **Data Engineer** và **AI & Data Scientist** bằng
 | --- | --- | --- | --- |
 | [Data Engineer](tracks/data-engineer/README.md) | Đang có | 12 module (00–11), 102 bài tập, lab CDC và cloud, capstone [Olist Data Platform](tracks/data-engineer/capstone/README.md) 12 milestone | [roadmap.sh/data-engineer](https://roadmap.sh/data-engineer) |
 | [AI & Data Scientist](tracks/data-science/README.md) | Đang có | 15 module từ toán, thống kê, A/B testing, causal inference tới ML, deep learning, MLOps và ML system design; 120 bài tập; capstone [Olist Customer Experience](tracks/data-science/capstone/README.md) 7 milestone | [roadmap.sh/ai-data-scientist](https://roadmap.sh/ai-data-scientist) |
-| Data Analyst, AI Engineer, DevOps, MLOps | Sắp có | Đã có chỗ trong app, thêm nội dung vào `tracks/` là dùng được | |
+| [Data Analyst](tracks/data-analyst/README.md) | Đang có | 15 module từ tư duy phân tích, Excel, SQL, Python tới trực quan hoá, BI, experimentation, product/business analytics và storytelling; 108 bài tập; capstone [dunnhumby Complete Journey](tracks/data-analyst/capstone/README.md) 7 milestone | [roadmap.sh/data-analyst](https://roadmap.sh/data-analyst) |
+| AI Engineer, DevOps, MLOps | Sắp có | Đã có chỗ trong app, thêm nội dung vào `tracks/` là dùng được | |
 
 Mỗi module gồm:
 
