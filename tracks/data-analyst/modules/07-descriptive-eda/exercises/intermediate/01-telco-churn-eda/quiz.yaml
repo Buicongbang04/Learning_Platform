@@ -1,0 +1,73 @@
+questions:
+  - id: blank-totals
+    kind: data
+    type: single
+    prompt: "11 ô `TotalCharges` trống là khách thế nào, và nên xử lý ra sao khi so `TotalCharges` giữa hai nhóm?"
+    options:
+      - { id: a, text: "Khách bị lỗi hệ thống ngẫu nhiên; xoá hẳn 11 khách khỏi mọi bảng" }
+      - { id: b, text: "Khách đã rời bỏ chưa thanh toán; điền bằng cước tháng của họ" }
+      - { id: c, text: "Khách có tenure 0, chưa có hoá đơn; để NaN và ghi chú phạm vi" }
+      - { id: d, text: "Khách hợp đồng hai năm trả trước; điền bằng 24 lần cước tháng" }
+  - id: m2m-share
+    kind: data
+    type: single
+    prompt: "Khách month-to-month chiếm bao nhiêu phần trăm trong số khách rời bỏ?"
+    options:
+      - { id: a, text: "Khoảng 43%" }
+      - { id: b, text: "Khoảng 55%" }
+      - { id: c, text: "Khoảng 74%" }
+      - { id: d, text: "Khoảng 89%" }
+  - id: high-rate-small-share
+    kind: data
+    type: single
+    prompt: "Nhóm nào có tỉ lệ churn trên 40% nhưng chỉ chiếm khoảng một phần tư số khách rời bỏ?"
+    options:
+      - { id: a, text: "Người cao tuổi (`SeniorCitizen = Yes`)" }
+      - { id: b, text: "Khách dùng internet cáp quang" }
+      - { id: c, text: "Khách thanh toán bằng electronic check" }
+      - { id: d, text: "Khách đã gắn bó 49 tới 72 tháng" }
+  - id: tenure-median
+    kind: data
+    type: single
+    prompt: "Median `tenure` của khách ở lại và khách rời bỏ là bao nhiêu tháng?"
+    options:
+      - { id: a, text: "32 và 18 tháng" }
+      - { id: b, text: "38 và 10 tháng" }
+      - { id: c, text: "29 và 1 tháng" }
+      - { id: d, text: "55 và 27 tháng" }
+  - id: totalcharges-confound
+    kind: data
+    type: single
+    prompt: "Khách rời bỏ có median `TotalCharges` 704 USD so với 1 684 của khách ở lại. So trong từng nhóm tenure thì sao, và kết luận gì?"
+    options:
+      - { id: a, text: "Vẫn thấp hơn ở mọi nhóm: khách chi ít thì dễ rời" }
+      - { id: b, text: "Không khác nhau ở mọi nhóm: TotalCharges vô dụng" }
+      - { id: c, text: "Cao hơn ở mọi nhóm: chênh lệch tổng do tenure gây ra" }
+      - { id: d, text: "Thấp hơn ở nhóm mới, cao hơn ở nhóm lâu: không kết luận" }
+  - id: target-segment
+    kind: data
+    type: single
+    prompt: "Phân khúc month-to-month dùng cáp quang có bao nhiêu khách, tỉ lệ churn và tỉ trọng trong số khách rời bỏ là bao nhiêu?"
+    options:
+      - { id: a, text: "2 128 khách, churn 54.6%, chiếm 62.2% số khách rời" }
+      - { id: b, text: "3 875 khách, churn 42.7%, chiếm 88.6% số khách rời" }
+      - { id: c, text: "1 994 khách, churn 51.4%, chiếm 54.8% số khách rời" }
+      - { id: d, text: "3 096 khách, churn 41.9%, chiếm 69.4% số khách rời" }
+  - id: gender
+    kind: data
+    type: single
+    prompt: "Tỉ lệ churn theo giới tính là 26.9% (nữ) và 26.2% (nam). Bạn đưa gì vào báo cáo?"
+    options:
+      - { id: a, text: "Nữ churn cao hơn, nên nhắm chương trình vào khách nữ" }
+      - { id: b, text: "Một dòng: giới tính gần như không liên quan tới churn" }
+      - { id: c, text: "Một chart riêng cho giới tính để lãnh đạo tự đánh giá" }
+      - { id: d, text: "Nam churn thấp hơn, nên tăng quảng cáo cho khách nam" }
+  - id: causal-next
+    kind: knowledge
+    type: single
+    prompt: "Bảng cho thấy hợp đồng hai năm churn 2.8%. Có nên kết luận \"chuyển khách sang hợp đồng hai năm sẽ giảm churn xuống 2.8%\" không?"
+    options:
+      - { id: a, text: "Có, vì 1 695 khách là đủ lớn để chắc chắn" }
+      - { id: b, text: "Có, nếu tỉ lệ này ổn định qua nhiều tháng" }
+      - { id: c, text: "Không, cần thêm bảng tỉ lệ cho nhiều biến hơn" }
+      - { id: d, text: "Không, đó là tương quan; cần thử nghiệm ưu đãi" }

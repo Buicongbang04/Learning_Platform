@@ -1,0 +1,7 @@
+near-mean: [a]
+report-charges: [c]
+trimmed-distance: [d]
+above-mean: [b]
+top10-store: [c]
+forecast-total: [b]
+drop-outliers: [b]

@@ -1,0 +1,7 @@
+freq-table-mean: [b]
+churn-overall: [d]
+sales-per-customer: [a]
+why-ratio-gap: [b]
+ddof-weights: [c]
+bucket-midpoint: [c]
+excel-weighted: [b]

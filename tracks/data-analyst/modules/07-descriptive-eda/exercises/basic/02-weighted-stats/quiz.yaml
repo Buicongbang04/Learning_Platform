@@ -1,0 +1,64 @@
+questions:
+  - id: freq-table-mean
+    kind: data
+    type: single
+    prompt: "Bảng tần suất `tenure` có 73 giá trị (0 tới 72 tháng). Một đồng nghiệp lấy mean cột `tenure` của bảng đó. Kết quả của họ và mean đúng là bao nhiêu?"
+    options:
+      - { id: a, text: "Họ ra 29.00; mean đúng là 32.37 tháng" }
+      - { id: b, text: "Họ ra 36.00; mean đúng là 32.37 tháng" }
+      - { id: c, text: "Họ ra 32.37; mean đúng là 36.00 tháng" }
+      - { id: d, text: "Cả hai cùng ra 32.37 tháng, không lệch" }
+  - id: churn-overall
+    kind: data
+    type: single
+    prompt: "Tỉ lệ churn ba loại hợp đồng là 42.7%, 11.3%, 2.8% (mean ba tỉ lệ 18.9%). Tỉ lệ churn của toàn bộ khách là bao nhiêu, và vì sao khác?"
+    options:
+      - { id: a, text: "18.9%, vì mỗi loại hợp đồng là một nhóm ngang hàng" }
+      - { id: b, text: "11.3%, vì đó là median của ba tỉ lệ theo hợp đồng" }
+      - { id: c, text: "42.7%, vì month-to-month là nhóm có nhiều khách nhất" }
+      - { id: d, text: "26.5%, vì nhóm churn cao nhất cũng là nhóm đông nhất" }
+  - id: sales-per-customer
+    kind: data
+    type: single
+    prompt: "CFO hỏi \"mỗi khách vào cửa hàng mang lại bao nhiêu doanh thu cho chuỗi?\". Con số nào đúng?"
+    options:
+      - { id: a, text: "9.12 EUR: tổng doanh số chia tổng số khách" }
+      - { id: b, text: "9.49 EUR: mean tỉ số của các cửa hàng-ngày" }
+      - { id: c, text: "9.25 EUR: median tỉ số của các cửa hàng-ngày" }
+      - { id: d, text: "8.86 EUR: median có trọng số theo số khách" }
+  - id: why-ratio-gap
+    kind: knowledge
+    type: single
+    prompt: "Vì sao mean các tỉ số (9.49) cao hơn tổng/tổng (9.12)?"
+    options:
+      - { id: a, text: "Vì mean các tỉ số đã tính cả những ngày cửa hàng đóng cửa" }
+      - { id: b, text: "Ngày đông khách có EUR/khách thấp hơn nhưng chỉ được một phiếu" }
+      - { id: c, text: "Vì tổng/tổng bỏ qua những cửa hàng-ngày có ít khách đến mua" }
+      - { id: d, text: "Do sai số làm tròn số thực khi chia hai số nguyên rất lớn" }
+  - id: ddof-weights
+    kind: knowledge
+    type: single
+    prompt: "Với trọng số tần suất (w = số khách có giá trị đó), SD mẫu chia cho gì?"
+    options:
+      - { id: a, text: "Số dòng (giá trị khác nhau) của bảng tần suất trừ 1" }
+      - { id: b, text: "Số dòng (giá trị khác nhau) của bảng tần suất" }
+      - { id: c, text: "Tổng trọng số trừ 1 (số khách − 1)" }
+      - { id: d, text: "Tổng bình phương của các trọng số" }
+  - id: bucket-midpoint
+    kind: knowledge
+    type: single
+    prompt: "Team BI đổi bảng thành 6 nhóm 12 tháng (0-12, 13-24, ...) kèm số khách. Lấy điểm giữa mỗi nhóm làm x và số khách làm w thì mean ra 32.48. Đánh giá nào đúng?"
+    options:
+      - { id: a, text: "Sai hoàn toàn, vì mean không thể tính được từ bảng đã chia nhóm" }
+      - { id: b, text: "Đúng tuyệt đối, vì điểm giữa luôn bằng mean trong nhóm" }
+      - { id: c, text: "Gần đúng (32.37 thật), sai số do giả định khách đều trong nhóm" }
+      - { id: d, text: "Gần đúng, nhưng chỉ khi bỏ đi nhóm có nhiều khách nhất ra ngoài" }
+  - id: excel-weighted
+    kind: knowledge
+    type: single
+    prompt: "Trong Excel, cột B là giá trị, cột C là số khách (dòng 2 tới 74). Công thức mean có trọng số là gì?"
+    options:
+      - { id: a, text: "`=AVERAGE(B2:B74)`" }
+      - { id: b, text: "`=SUMPRODUCT(B2:B74, C2:C74) / SUM(C2:C74)`" }
+      - { id: c, text: "`=AVERAGE(B2:B74 * C2:C74) / COUNT(C2:C74)`" }
+      - { id: d, text: "`=SUM(B2:B74) * SUM(C2:C74) / COUNT(B2:B74)`" }

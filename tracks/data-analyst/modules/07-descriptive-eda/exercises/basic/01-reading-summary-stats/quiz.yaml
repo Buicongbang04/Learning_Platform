@@ -1,0 +1,91 @@
+questions:
+  - id: tenure-shape
+    kind: data
+    type: single
+    prompt: "`tenure` có skew 0.24 và kurt −1.39. Kết luận nào hợp lý nhất trước khi vẽ?"
+    options:
+      - { id: a, text: "Gần chuẩn một đỉnh, báo mean 32 ± 25 tháng cho stakeholder là đủ" }
+      - { id: b, text: "Đuôi phải rất dài, nên báo median thay cho mean" }
+      - { id: c, text: "Phẳng hoặc nhiều đỉnh, phải vẽ histogram trước khi báo" }
+      - { id: d, text: "Có nhiều outlier cực lớn kéo mean lên quá cao" }
+  - id: monthly-mean-below-median
+    kind: data
+    type: single
+    prompt: "`MonthlyCharges` có mean 64.76 thấp hơn median 70.35. Giải thích nào đúng với dữ liệu?"
+    options:
+      - { id: a, text: "Một nhóm lớn khách trả cước rất thấp, quanh 20 USD, kéo mean xuống" }
+      - { id: b, text: "Có vài khách trả cước rất cao nên mean bị kéo lên trên phía median" }
+      - { id: c, text: "pandas tính mean trên ít dòng hơn median do có ô bị thiếu" }
+      - { id: d, text: "Mean và median gần bằng nhau, nên phân phối là phân phối chuẩn" }
+  - id: totalcharges-count
+    kind: data
+    type: single
+    prompt: "Cột `TotalCharges` có count 7 032, thấp hơn 7 043 khách. Mean 2 283.30 được tính thế nào?"
+    options:
+      - { id: a, text: "Trên 7 043 khách, 11 ô trống được tính như 0 USD" }
+      - { id: b, text: "Trên 7 032 khách, 11 ô trống bị bỏ qua lặng lẽ" }
+      - { id: c, text: "Trên 7 043 khách, 11 ô trống được điền bằng mean" }
+      - { id: d, text: "Không tính được, pandas báo lỗi khi gặp NaN" }
+  - id: which-sales-mean
+    kind: data
+    type: single
+    prompt: "Head of Ops hỏi: \"Một ngày bán hàng bình thường của một cửa hàng thu bao nhiêu?\". Con số nào trả lời đúng câu này?"
+    options:
+      - { id: a, text: "Mean mọi dòng, 5 773.8 EUR" }
+      - { id: b, text: "Median mọi dòng, 5 744 EUR" }
+      - { id: c, text: "Mean ngày mở cửa, 6 956.0 EUR" }
+      - { id: d, text: "Median ngày mở cửa, 6 369 EUR" }
+  - id: skew-drops-with-zeros
+    kind: knowledge
+    type: single
+    prompt: "Skew của `Sales` là 1.59 trên ngày mở cửa nhưng chỉ 0.64 trên mọi dòng. Vì sao?"
+    options:
+      - { id: a, text: "Mọi dòng có nhiều dữ liệu hơn nên skew chính xác hơn" }
+      - { id: b, text: "17% dòng là số 0 tạo một đỉnh ở bên trái, cân lại đuôi phải" }
+      - { id: c, text: "Ngày đóng cửa có doanh số rất cao nên làm giảm hẳn độ lệch phải" }
+      - { id: d, text: "Skew không đổi; khác biệt là do làm tròn khi in bảng" }
+  - id: middle-half
+    kind: data
+    type: single
+    prompt: "Dựa vào bảng 2, câu nào mô tả đúng 50% ngày mở cửa ở giữa?"
+    options:
+      - { id: a, text: "Doanh số từ 3 852 tới 10 060 EUR, tức mean ± 1 SD" }
+      - { id: b, text: "Doanh số từ 3 727 tới 7 856 EUR, tức p25 tới p75" }
+      - { id: c, text: "Doanh số từ 46 tới 41 551 EUR, tức min tới max" }
+      - { id: d, text: "Doanh số từ 4 859 tới 8 360 EUR, tức p25 tới p75" }
+  - id: customers-kurt
+    kind: knowledge
+    type: single
+    prompt: "`Customers` (ngày mở cửa) có excess kurtosis 13.32. Đọc như thế nào?"
+    options:
+      - { id: a, text: "Đuôi nặng: có ngày đông khách bất thường, kiểm chúng trước khi dùng mean" }
+      - { id: b, text: "Phân phối rất nhọn quanh median, hầu hết các ngày có đúng 676 khách hàng" }
+      - { id: c, text: "Dữ liệu hai đỉnh rõ rệt, cửa hàng lớn và cửa hàng nhỏ" }
+      - { id: d, text: "Lỗi tính toán: kurtosis của số đếm không thể lớn hơn 3" }
+  - id: cv-two-stores
+    kind: data
+    type: single
+    prompt: "Cửa hàng 817 bán TB 21 757 EUR/ngày, SD 4 675; cửa hàng 198 bán TB 2 901, SD 1 598. Doanh số ngày của cửa hàng nào biến động nhiều hơn so với quy mô?"
+    options:
+      - { id: a, text: "Cửa hàng 817, vì SD lớn gần gấp ba" }
+      - { id: b, text: "Hai cửa hàng như nhau, vì cùng có SD dương" }
+      - { id: c, text: "Cửa hàng 198, vì CV 0.55 so với 0.21" }
+      - { id: d, text: "Không so được khi hai cửa hàng khác loại" }
+  - id: excel-std
+    kind: knowledge
+    type: single
+    prompt: "Bạn tính SD doanh thu 12 tháng bằng pandas `std()`, đồng nghiệp dùng Excel `STDEV.P` trên cùng 12 số. Kết quả thế nào?"
+    options:
+      - { id: a, text: "Bằng nhau, vì cả hai đều là độ lệch chuẩn" }
+      - { id: b, text: "Của đồng nghiệp lớn hơn, vì Excel chia cho n − 1" }
+      - { id: c, text: "Khác nhau tuỳ dữ liệu, có lúc lớn có lúc nhỏ" }
+      - { id: d, text: "Của bạn lớn hơn, vì pandas mặc định chia n − 1" }
+  - id: warehouse-median
+    kind: knowledge
+    type: single
+    prompt: "Bảng giao dịch 2 tỉ dòng nằm trên Postgres-compatible warehouse. Bạn cần median giá trị đơn theo ngày cho báo cáo tuần, lặp lại mỗi tuần. Cách nào hợp nhất?"
+    options:
+      - { id: a, text: "Xuất cả bảng ra CSV rồi `groupby().median()` bằng pandas" }
+      - { id: b, text: "`percentile_cont(0.5) WITHIN GROUP` trong một view trên warehouse" }
+      - { id: c, text: "`AVG(order_value)` theo ngày, vì median thường gần bằng mean" }
+      - { id: d, text: "Lấy mẫu 1 triệu dòng vào Excel rồi dùng hàm `MEDIAN` mỗi tuần một lần" }
