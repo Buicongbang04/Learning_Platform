@@ -267,7 +267,7 @@ export function ExercisePage() {
             <section aria-label="Code" className={cx(card, "h-[85vh] shrink-0 overflow-hidden lg:h-full")}>
               <Workspace key={exercise.key} exercise={exercise} done={done} onMarkDone={() => setDone(true)} />
             </section>
-            <QuizCard key={exercise.key} exercise={exercise} trackId={track.id} variant={quizVariantOf(exercise)} />
+            <QuizCard key={exercise.key} exercise={exercise} trackId={track.id} variant={quizVariantOf(exercise)} hideUntilReady />
           </div>
         ) : (
           <section aria-label="Làm bài" className={cx("min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto", split.dragging && "select-none")}>

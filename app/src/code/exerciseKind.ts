@@ -35,3 +35,12 @@ export function quizVariantOf(exercise: Pick<Exercise, "files">): "optional" | "
   const hasTests = exercise.files.some((file) => file.path.startsWith("tests/"));
   return !hasTests && starters.length > 0 && starters.every((file) => isBinaryPath(file.path)) ? "main" : "optional";
 }
+
+/**
+ * Có render QuizCard không. Bài code (`hideUntilReady`) chỉ hiện thẻ khi đã có quiz.yaml và tải xong:
+ * không nháy "Đang tải câu hỏi…" và không hiện lỗi cho bài không có trắc nghiệm.
+ */
+export function quizCardShown(status: "loading" | "none" | "ready" | "error", hideUntilReady: boolean, hasNoneNotice = false): boolean {
+  if (status === "none") return hasNoneNotice;
+  return !hideUntilReady || status === "ready";
+}

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
-import { exerciseKind, isBinaryPath, quizVariantOf } from "./exerciseKind.ts";
+import { exerciseKind, isBinaryPath, quizCardShown, quizVariantOf } from "./exerciseKind.ts";
 
 test("notebook DS vẫn là notebook", () => assert.equal(exerciseKind({ files: [{ path: "starter/eda.ipynb" }, { path: "starter/MEMO.md" }] }), "notebook"));
 test("bài .py là code", () => assert.equal(exerciseKind({ files: [{ path: "starter/load.py" }, { path: "tests/test_x.py", note: "Không sửa" }] }), "code"));
@@ -63,4 +63,13 @@ test("quizVariantOf: bài chỉ có tệp nhị phân, không có test -> main; 
 test("isBinaryPath nhận .xlsx/.ods/.pdf/ảnh", () => {
   assert.ok(isBinaryPath("starter/a.xlsx") && isBinaryPath("starter/a.ODS") && isBinaryPath("starter/a.pdf") && isBinaryPath("starter/a.png"));
   assert.ok(!isBinaryPath("starter/a.py"));
+});
+
+test("quizCardShown: bài code ẩn khi loading/error/none, chỉ hiện khi ready; notebook giữ nguyên", () => {
+  for (const status of ["loading", "none", "error"] as const) assert.equal(quizCardShown(status, true), false, status);
+  assert.equal(quizCardShown("ready", true), true);
+  assert.equal(quizCardShown("loading", false), true);
+  assert.equal(quizCardShown("error", false), true);
+  assert.equal(quizCardShown("none", false), false);
+  assert.equal(quizCardShown("none", false, true), true);
 });

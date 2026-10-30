@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isBinaryDoc, isText, readExerciseFiles, resolveStarterFile } from "./workspace.ts";
@@ -38,4 +38,10 @@ test("resolveStarterFile: chỉ nhận tệp trong starter/", () => {
   assert.throws(() => resolveStarterFile(root, "tests/test_x.py"));
   assert.throws(() => resolveStarterFile(root, "starter/../tests/test_x.py"));
   assert.throws(() => resolveStarterFile(root, 5));
+});
+
+test("resolveStarterFile: symlink trỏ ra ngoài starter/ bị chặn", () => {
+  const root = exercise();
+  symlinkSync(join(root, "tests", "test_x.py"), join(root, "starter", "link.py"));
+  assert.throws(() => resolveStarterFile(root, "starter/link.py"));
 });

@@ -114,11 +114,12 @@ export function useWorkspace(dir: string) {
   );
 
   const openExternal = useCallback(
-    async (path: string) => {
+    async (path: string): Promise<string | null> => {
       try {
         await request("/api/workspace/open-file", { dir, path });
+        return null;
       } catch (reason) {
-        setError((reason as Error).message);
+        return (reason as Error).message;
       }
     },
     [dir],

@@ -102,16 +102,22 @@ export function OpenInVsCode({ path, className, showLabel = false }: { path: str
   );
 }
 
-function BinaryFileNotice({ path, onOpen }: { path: string; onOpen: () => void }) {
+function BinaryFileNotice({ path, onOpen }: { path: string; onOpen: () => Promise<string | null> }) {
+  const [error, setError] = useState<string | null>(null);
   return (
     <div className="flex h-full flex-col items-start justify-center gap-3 px-5 py-4 text-sm">
       <p className="font-medium">Tệp nhị phân — mở bằng LibreOffice/Excel</p>
       <p className="text-muted">App không soạn được loại tệp này. Mở, làm bài rồi lưu lại ngay trong tệp, sau đó bấm "Chạy test".</p>
       <CodeLine text={path} />
-      <button type="button" className={button.outline} onClick={onOpen}>
+      <button type="button" className={button.outline} onClick={() => void onOpen().then(setError)}>
         <ExternalLink className="size-4 shrink-0" aria-hidden />
         Mở bằng ứng dụng mặc định
       </button>
+      {error && (
+        <p role="alert" className="text-xs text-error-text">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -180,7 +186,7 @@ export function Workspace({ exercise, done, onMarkDone }: { exercise: Exercise; 
 
       <div className="min-h-0 grow-(--split-a) basis-0">
         {file.binary ? (
-          <BinaryFileNotice path={`${exercise.dir}/${file.path}`} onOpen={() => void ws.openExternal(file.path)} />
+          <BinaryFileNotice path={`${exercise.dir}/${file.path}`} onOpen={() => ws.openExternal(file.path)} />
         ) : (
           <CodeEditor
             path={file.path}

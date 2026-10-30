@@ -1,7 +1,7 @@
 import type { Plugin } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile, spawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 
 const EXERCISE_DIR = /^tracks\/[\w.-]+\/modules\/[\w.-]+\/exercises\/(basic|intermediate|advanced)\/[\w.-]+$/;
@@ -39,7 +39,10 @@ export const isText = (path: string) => !isBinaryDoc(path) && !/\.(duckdb|parque
 export function resolveStarterFile(root: string, path: unknown): string {
   if (typeof path !== "string" || !path.startsWith("starter/")) throw new HttpError(400, "Chỉ sửa được tệp trong starter/");
   const full = resolve(root, path);
-  if (!full.startsWith(resolve(root, "starter") + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
+  const starter = resolve(root, "starter");
+  if (!full.startsWith(starter + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
+  // Chặn symlink trỏ ra ngoài starter/ (tệp chưa tồn tại thì để các bước sau báo 404).
+  if (existsSync(full) && !realpathSync(full).startsWith(realpathSync(starter) + sep)) throw new HttpError(400, "Đường dẫn tệp không hợp lệ");
   return full;
 }
 
