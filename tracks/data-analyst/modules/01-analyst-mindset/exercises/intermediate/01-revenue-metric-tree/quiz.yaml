@@ -1,0 +1,73 @@
+questions:
+  - id: known-share
+    kind: data
+    type: single
+    prompt: "Theo `monthly_tree`, doanh thu của các dòng có `Customer ID` chiếm bao nhiêu phần trăm doanh thu gộp cả năm?"
+    options:
+      - { id: a, text: "Khoảng 65%" }
+      - { id: b, text: "Khoảng 75%" }
+      - { id: c, text: "Khoảng 84%" }
+      - { id: d, text: "Khoảng 97%" }
+  - id: nov-guest-share
+    kind: data
+    type: single
+    prompt: "Tháng 10 → 11/2011, doanh thu gộp tăng khoảng 355 nghìn GBP (+30.7%). Nhánh không có `Customer ID` đóng góp khoảng bao nhiêu phần mức tăng đó?"
+    options:
+      - { id: a, text: "Khoảng 10%" }
+      - { id: b, text: "Khoảng 35%" }
+      - { id: c, text: "Khoảng 65%" }
+      - { id: d, text: "Hơn 100%" }
+  - id: nov-negative-branch
+    kind: data
+    type: single
+    prompt: "Cũng tháng 10 → 11/2011, nhánh nào của khách có mã có đóng góp **âm**?"
+    options:
+      - { id: a, text: "AOV" }
+      - { id: b, text: "Số khách" }
+      - { id: c, text: "Tần suất" }
+      - { id: d, text: "Không nhánh nào âm" }
+  - id: dec-jan-flat
+    kind: data
+    type: single
+    prompt: "Tháng 12/2010 → 1/2011, doanh thu khách có mã gần như không đổi (−0.6%). Phân rã cho thấy gì?"
+    options:
+      - { id: a, text: "Cả ba nhánh gần như không đổi" }
+      - { id: b, text: "Khách và tần suất giảm mạnh, AOV tăng bù lại" }
+      - { id: c, text: "Khách tăng mạnh, tần suất và AOV giảm bù lại" }
+      - { id: d, text: "Chỉ có nhánh không mã thay đổi đáng kể" }
+  - id: jan-big-invoice
+    kind: data
+    type: single
+    prompt: "Hoá đơn lớn nhất tháng 1/2011 (541431, khoảng 77 nghìn GBP, một dòng 74 215 hũ gốm) đẩy AOV tháng 1 lên. Kiểm dữ liệu gốc thấy gì về hoá đơn này?"
+    options:
+      - { id: a, text: "Khách sỉ quen, mua lặp lại hằng tháng" }
+      - { id: b, text: "Bị huỷ ngay bằng hoá đơn C541433" }
+      - { id: c, text: "Không có Customer ID, nằm ở nhánh không mã" }
+      - { id: d, text: "Giá ghi sai, đúng ra 0.104 GBP mỗi hũ" }
+  - id: lmdi-why
+    kind: knowledge
+    type: single
+    prompt: "Phân rã tháng 10 → 11/2011 bằng cách thay lần lượt từng thành phần cho đóng góp AOV khoảng −270 nghìn GBP (thay khách trước) hoặc −196 nghìn GBP (thay AOV trước). Vì sao bài dùng LMDI?"
+    options:
+      - { id: a, text: "LMDI luôn cho đóng góp nhỏ hơn, an toàn hơn" }
+      - { id: b, text: "Thay lần lượt không cộng đúng bằng mức thay đổi" }
+      - { id: c, text: "LMDI không cần biết doanh thu của hai tháng" }
+      - { id: d, text: "LMDI cộng đúng tổng và không phụ thuộc thứ tự" }
+  - id: dec-2011
+    kind: knowledge
+    type: single
+    prompt: "Phân rã tháng 11 → 12/2011 cho doanh thu −57.7%, số khách −63%. Nên làm gì với con số này?"
+    options:
+      - { id: a, text: "Không báo; tháng 12 mới có dữ liệu tới ngày 9" }
+      - { id: b, text: "Báo CEO: AOV tăng 52%, tín hiệu tốt" }
+      - { id: c, text: "Báo CEO: khách đang rời bỏ cửa hàng" }
+      - { id: d, text: "Nhân doanh thu tháng 12 với 31/9 rồi báo" }
+  - id: next-question
+    kind: knowledge
+    type: single
+    prompt: "Sau phân rã tháng 10 → 11/2011, câu hỏi tiếp theo đáng hỏi nhất cho CEO là gì?"
+    options:
+      - { id: a, text: "Hai hoá đơn không mã khoảng 51 và 53 nghìn GBP là của ai?" }
+      - { id: b, text: "Có nên đổi màu biểu đồ waterfall cho dễ nhìn hơn?" }
+      - { id: c, text: "Doanh thu tháng 11 có lớn hơn tháng 10 hay không?" }
+      - { id: d, text: "Có nên bỏ hẳn dòng không có Customer ID khỏi dữ liệu?" }

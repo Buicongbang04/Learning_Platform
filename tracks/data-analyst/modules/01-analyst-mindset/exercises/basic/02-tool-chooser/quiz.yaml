@@ -1,0 +1,100 @@
+questions:
+  - id: finance-scenarios
+    kind: knowledge
+    type: single
+    prompt: "Kế toán trưởng cần một bảng 3 kịch bản giá (giữ giá, tăng 5%, tăng 10%) cho 150 sản phẩm, tự sửa giả định và xem lợi nhuận đổi ngay, dùng trong một buổi họp ngân sách. Công cụ nào?"
+    options:
+      - { id: a, text: "Streamlit app có thanh trượt giá" }
+      - { id: b, text: "Workbook Excel / Google Sheets" }
+      - { id: c, text: "Dashboard Power BI có tham số" }
+      - { id: d, text: "Notebook Python, gửi kèm ảnh kết quả" }
+  - id: warehouse-mau
+    kind: knowledge
+    type: single
+    prompt: "Bảng event 2 tỉ dòng nằm trên BigQuery. Head of Growth cần số người dùng hoạt động theo quốc gia của 12 tháng qua, một lần cho slide. Bước đầu tiên hợp nhất?"
+    options:
+      - { id: a, text: "Xuất cả bảng ra CSV rồi tổng hợp bằng pandas" }
+      - { id: b, text: "Xuất mẫu 1 triệu dòng vào Excel" }
+      - { id: c, text: "Truy vấn SQL tổng hợp ngay trên BigQuery" }
+      - { id: d, text: "Dựng dashboard Looker Studio trước" }
+  - id: messy-monthly
+    kind: knowledge
+    type: single
+    prompt: "Mỗi tháng bạn ghép 3 file CSV từ đối tác (encoding khác nhau, cột đổi tên thất thường) với dữ liệu thời tiết từ API, làm sạch rồi tính một bảng KPI. Sếp muốn đồng nghiệp review được cách tính. Công cụ nào?"
+    options:
+      - { id: a, text: "Python (notebook hoặc script) trong git" }
+      - { id: b, text: "Excel, mỗi tháng copy-paste dữ liệu vào file mẫu" }
+      - { id: c, text: "Dashboard Metabase nối thẳng CSV" }
+      - { id: d, text: "Hỏi chatbot làm sạch rồi dán kết quả" }
+  - id: store-managers
+    kind: knowledge
+    type: single
+    prompt: "40 quản lý cửa hàng cần xem doanh số hôm qua của cửa hàng mình mỗi sáng, tự lọc theo ngành hàng; mỗi người chỉ được thấy cửa hàng của mình. Công ty dùng Microsoft 365 và đã có license. Công cụ nào?"
+    options:
+      - { id: a, text: "Gửi email file Excel cho từng người" }
+      - { id: b, text: "Streamlit app tự viết đăng nhập" }
+      - { id: c, text: "Notebook chạy cron, gửi ảnh chart" }
+      - { id: d, text: "Power BI có row-level security" }
+  - id: startup-selfserve
+    kind: knowledge
+    type: single
+    prompt: "Startup 25 người, dữ liệu trong Postgres, chưa có ngân sách cho BI. PM và team sales muốn tự hỏi các câu đơn giản (số đơn theo tuần, top khách) mà không phải nhờ DA. Công cụ nào?"
+    options:
+      - { id: a, text: "Tableau Cloud, mua license cho cả công ty" }
+      - { id: b, text: "Metabase tự host, nối vào Postgres" }
+      - { id: c, text: "Cấp quyền SQL cho PM và team sales" }
+      - { id: d, text: "DA nhận yêu cầu qua Slack rồi trả số" }
+  - id: two-revenue-numbers
+    kind: knowledge
+    type: single
+    prompt: "Dashboard của marketing và báo cáo của tài chính ghi hai con số \"doanh thu tháng 3\" lệch nhau 4%. Mỗi bên tự viết SQL riêng. Cách khắc phục bền nhất?"
+    options:
+      - { id: a, text: "Chuyển cả hai báo cáo sang cùng một công cụ BI" }
+      - { id: b, text: "Ghi chú dưới dashboard rằng số có thể lệch" }
+      - { id: c, text: "Định nghĩa metric một lần trong dbt / semantic layer" }
+      - { id: d, text: "Bỏ số của marketing, chỉ giữ số tài chính" }
+  - id: ops-allocation-tool
+    kind: knowledge
+    type: single
+    prompt: "Đội vận hành xe đạp muốn tải lên danh sách trạm sáng nay, chạy quy tắc điều xe do bạn viết bằng Python (có tham số tuỳ chỉnh), rồi xem bảng và bản đồ kết quả. Khoảng 6 người dùng nội bộ. Công cụ nào?"
+    options:
+      - { id: a, text: "Streamlit app chạy logic Python" }
+      - { id: b, text: "Dashboard Superset trên bảng tổng hợp" }
+      - { id: c, text: "Workbook Excel có macro VBA" }
+      - { id: d, text: "Gửi notebook để họ tự chạy cell" }
+  - id: app-funnel
+    kind: knowledge
+    type: single
+    prompt: "PM của một ứng dụng di động muốn tự xem funnel đăng ký và retention theo tuần của từng phiên bản app. Event đã được gửi vào Amplitude đầy đủ. Công cụ nào hợp nhất cho nhu cầu hằng ngày của PM?"
+    options:
+      - { id: a, text: "DA viết SQL mỗi lần PM cần số" }
+      - { id: b, text: "Amplitude: funnel, retention có sẵn" }
+      - { id: c, text: "Notebook Python vẽ funnel hằng tuần" }
+      - { id: d, text: "Power BI nối vào export của Amplitude" }
+  - id: r-research-team
+    kind: knowledge
+    type: single
+    prompt: "Bạn chuyển sang hỗ trợ một nhóm nghiên cứu lâm sàng. Toàn bộ phân tích thống kê, kiểm định và biểu đồ của họ đã viết bằng R (tidyverse, ggplot2) và được kiểm duyệt. Họ cần thêm một bảng phân tích theo nhóm tuổi. Bạn làm bằng gì?"
+    options:
+      - { id: a, text: "Viết lại toàn bộ pipeline sang Python" }
+      - { id: b, text: "Làm bảng mới trong Excel rồi gửi riêng" }
+      - { id: c, text: "Dựng dashboard Tableau cho nhóm" }
+      - { id: d, text: "R, theo đúng codebase đang có" }
+  - id: laptop-csv
+    kind: knowledge
+    type: single
+    prompt: "Bạn có hai file CSV 400 MB và 30 MB trên laptop, cần join và tổng hợp vài lần trong buổi chiều để trả lời một câu hỏi ad-hoc. Bạn quen SQL. Công cụ nào nhanh và gọn nhất?"
+    options:
+      - { id: a, text: "Dựng Postgres bằng Docker rồi nạp file" }
+      - { id: b, text: "Mở cả hai file bằng Excel" }
+      - { id: c, text: "DuckDB: SQL chạy thẳng trên file CSV" }
+      - { id: d, text: "Tải lên warehouse công ty rồi truy vấn" }
+  - id: llm-customer-data
+    kind: knowledge
+    type: single
+    prompt: "Bạn muốn nhờ một chatbot LLM công cộng viết câu SQL phân khúc khách hàng. Bảng có tên, email, số điện thoại của khách. Cách làm nào đúng?"
+    options:
+      - { id: a, text: "Dán 1 000 dòng mẫu để chatbot hiểu dữ liệu" }
+      - { id: b, text: "Chỉ gửi schema (tên cột, kiểu), không dữ liệu thật" }
+      - { id: c, text: "Dán toàn bộ bảng sau khi xoá riêng cột tên khách hàng" }
+      - { id: d, text: "Không dùng LLM cho bất kỳ việc gì liên quan" }

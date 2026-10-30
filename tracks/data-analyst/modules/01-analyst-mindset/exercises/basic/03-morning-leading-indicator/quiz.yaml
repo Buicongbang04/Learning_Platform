@@ -1,0 +1,73 @@
+questions:
+  - id: lagging-kpi
+    kind: knowledge
+    type: single
+    prompt: "Trong bài, chỉ số nào là lagging indicator của đội vận hành?"
+    options:
+      - { id: a, text: "Lượt thuê trước 10h sáng hôm nay" }
+      - { id: b, text: "Tổng lượt thuê cả ngày hôm nay" }
+      - { id: c, text: "Dự báo thời tiết buổi chiều" }
+      - { id: d, text: "Tỉ lệ buổi sáng theo loại ngày" }
+  - id: workday-share
+    kind: data
+    type: single
+    prompt: "Theo `morning_share`, lượt thuê trước 10h chiếm khoảng bao nhiêu phần trăm tổng lượt của một ngày làm việc?"
+    options:
+      - { id: a, text: "Khoảng 14%" }
+      - { id: b, text: "Khoảng 22%" }
+      - { id: c, text: "Khoảng 26%" }
+      - { id: d, text: "Khoảng 35%" }
+  - id: segmented-vs-pooled
+    kind: data
+    type: single
+    prompt: "Sai số tương đối trung vị của dự báo lúc 10h khi dùng tỉ lệ riêng cho từng loại ngày, so với khi dùng một tỉ lệ chung cho mọi ngày?"
+    options:
+      - { id: a, text: "Khoảng 9%, so với khoảng 25%" }
+      - { id: b, text: "Khoảng 9%, so với khoảng 11%" }
+      - { id: c, text: "Khoảng 15%, so với khoảng 25%" }
+      - { id: d, text: "Gần như bằng nhau, khoảng 9%" }
+  - id: pooled-weekend
+    kind: knowledge
+    type: single
+    prompt: "Nếu dùng một tỉ lệ chung (khoảng 22%) cho mọi ngày, dự báo cho ngày cuối tuần thường sai theo hướng nào?"
+    options:
+      - { id: a, text: "Cao hơn thực tế, vì cuối tuần đông khách" }
+      - { id: b, text: "Không lệch hướng nào, chỉ nhiễu hơn" }
+      - { id: c, text: "Thấp hơn thực tế, vì sáng cuối tuần vắng" }
+      - { id: d, text: "Cao hơn thực tế, vì tỉ lệ chung quá nhỏ" }
+  - id: worst-day
+    kind: data
+    type: single
+    prompt: "Ngày nào có sai số tương đối lớn nhất (dự báo gấp gần 4 lần thực tế) khi dùng tỉ lệ theo loại ngày?"
+    options:
+      - { id: a, text: "29/10/2012 (bão Sandy)" }
+      - { id: b, text: "25/12/2012 (Giáng sinh)" }
+      - { id: c, text: "27/08/2011 (bão Irene)" }
+      - { id: d, text: "22/04/2012 (mưa cả ngày)" }
+  - id: storm-signal
+    kind: knowledge
+    type: single
+    prompt: "Ngày bão, buổi sáng vẫn bình thường rồi chiều gần như không ai thuê. Cách cải thiện hợp lý nhất cho đội vận hành?"
+    options:
+      - { id: a, text: "Bỏ chỉ số buổi sáng, chờ tổng cuối ngày" }
+      - { id: b, text: "Thêm dự báo thời tiết chiều làm tín hiệu" }
+      - { id: c, text: "Dùng trung bình thay cho trung vị sai số" }
+      - { id: d, text: "Dời giờ quyết định sang 8h cho sớm hơn" }
+  - id: cutoff-tradeoff
+    kind: data
+    type: single
+    prompt: "Đổi mốc từ 10h sang 12h thì sai số trung vị thay đổi thế nào, và phải đánh đổi gì?"
+    options:
+      - { id: a, text: "Giảm còn khoảng 7%, nhưng biết muộn hơn 2 giờ" }
+      - { id: b, text: "Tăng lên khoảng 11%, vì buổi trưa nhiễu" }
+      - { id: c, text: "Giảm còn khoảng 2%, không phải đánh đổi gì" }
+      - { id: d, text: "Không đổi, vì tỉ lệ buổi sáng vẫn như cũ" }
+  - id: median-not-mean
+    kind: knowledge
+    type: single
+    prompt: "Vì sao bài dùng sai số tương đối trung vị thay vì trung bình?"
+    options:
+      - { id: a, text: "Trung vị luôn nhỏ hơn nên dự báo trông tốt hơn" }
+      - { id: b, text: "Trung bình không tính được khi có ngày tổng là 0" }
+      - { id: c, text: "Vài ngày bão có sai số hàng trăm % kéo trung bình" }
+      - { id: d, text: "Đội vận hành chỉ hiểu khái niệm trung vị" }
