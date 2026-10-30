@@ -90,8 +90,11 @@ Ví dụ trên Bike Sharing: lượt thuê trước 10h sáng làm chỉ số d�
 tương quan 0.79; tách theo loại ngày thì 0.94 (ngày làm việc) và 0.89 (cuối tuần), vì trước 10h chiếm 26.1%
 lượt của ngày làm việc nhưng chỉ 13.7% của cuối tuần. Dự báo tổng ngày = lượt buổi sáng chia tỉ lệ đúng loại
 ngày cho sai số tuyệt đối trung vị khoảng 9%; dùng một tỉ lệ chung cho mọi ngày thì khoảng 25%. Những ngày
-dự báo sai nặng nhất là ngày bão (Irene 27/8/2011, Sandy 29/10/2012): buổi sáng bình thường rồi bão tới. Kết
-luận: leading indicator phải kiểm theo phân khúc, và luôn có sự kiện mà nó không thấy trước.
+dự báo sai nặng nhất có hai loại khác nhau. Ngày 27/8/2011 (bão Irene) buổi sáng bình thường (610 lượt trước 10h)
+rồi bão tới, cả ngày chỉ 1 115 lượt: sự kiện xảy ra sau 10h mà chỉ số không thể thấy trước. Ngày 29/10/2012 (bão
+Sandy) thì khác: `hour.csv` chỉ có đúng một dòng (giờ 0, 22 lượt), các giờ còn lại thiếu, nên sai số 283% là do
+**thiếu dữ liệu**, không phải do chỉ số. Kết luận: leading indicator phải kiểm theo phân khúc, phải kiểm độ phủ dữ
+liệu (số giờ có dòng mỗi ngày) trước khi tin vào sai số, và luôn có sự kiện mà nó không thấy trước.
 
 ## Vẽ metric tree cho doanh thu của một cửa hàng online. Dùng nó thế nào khi doanh thu thay đổi?
 

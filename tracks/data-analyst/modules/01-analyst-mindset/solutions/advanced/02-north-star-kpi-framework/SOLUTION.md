@@ -25,7 +25,8 @@ cho đội vận hành kèm số ngày xấu trời.
 
 ## Bộ KPI mẫu (rút gọn)
 
-- **North star**: lượt thuê của thành viên mỗi tuần (28 ngày tới 31/10/2012: 147 120, +63.4% so với cùng kỳ). Thành
+- **North star**: lượt thuê của thành viên mỗi tuần (28 ngày tới 31/10/2012: tổng 147 120 lượt, tức trung bình
+  36 780 lượt mỗi tuần, +63.4% so với cùng 28 ngày năm trước, 22 509 lượt mỗi tuần). Thành
   viên trả phí định kỳ, dùng xe cho việc hằng ngày; lượt của họ là giá trị nhận được và dẫn tới gia hạn. Không chọn
   tổng lượt (bị thời tiết, khách du lịch chi phối) hay doanh thu (đến chậm, tăng bằng tăng giá được).
 - **Input**: thành viên hoạt động (marketing, gia hạn); lượt mỗi thành viên (mạng lưới trạm, app); tỉ lệ vãng lai chuyển

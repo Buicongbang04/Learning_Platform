@@ -23,9 +23,15 @@
   ở từng nhóm.
 - **Kiểm ngoài mẫu**: tỉ lệ ước từ 2011 (13.45%, 26.02%) dự báo 2012 với sai số trung vị 8.00%. Tỉ lệ ổn định
   giữa hai năm dù lượt thuê tăng 65%: chỉ số dùng được cho năm sau mà không phải ước lại liên tục.
-- **Ngày chỉ số không thấy trước**: 27/08/2011 (bão Irene: buổi sáng 610 lượt, dự báo 4 453, thực tế 1 115),
-  29/10/2012 (bão Sandy, cả ngày 22 lượt), 22/04/2012 (mưa cả ngày, cuối tuần). Sự kiện xảy ra **sau** 10h thì
-  tín hiệu trước 10h không thể biết. Cần thêm tín hiệu khác: dự báo thời tiết buổi chiều.
+- **Ngày chỉ số không thấy trước**: 27/08/2011 (bão Irene: buổi sáng 610 lượt, sau 10h chỉ thêm 505, dự báo
+  4 453, thực tế 1 115) và 22/04/2012 (mưa cả ngày, cuối tuần). Sự kiện xảy ra **sau** 10h thì tín hiệu trước 10h
+  không thể biết. Cần thêm tín hiệu khác: dự báo thời tiết buổi chiều.
+- **Ngày sai do dữ liệu, không do chỉ số**: 29/10/2012 (bão Sandy) đứng thứ hai về sai số (283%), nhưng `hour.csv`
+  chỉ có **một dòng** cho ngày này (giờ 0, 22 lượt): hệ thống chỉ ghi giờ 0, các giờ còn lại thiếu. "Buổi sáng"
+  và "cả ngày" đều là 22, dự báo 22 / 0.2614 ≈ 84. Ngày 30/10/2012 chỉ có các giờ 13–23 (một trong 3 ngày
+  `morning = 0`). Bài học: **kiểm độ phủ giờ trước khi tin vào sai số**. Bộ dữ liệu có 76 ngày thiếu ít nhất một
+  giờ, 3 ngày có dưới 12 giờ; một bảng "số giờ có dữ liệu mỗi ngày" cạnh bảng sai số giúp tách lỗi chỉ số khỏi
+  lỗi ghi nhận.
 - **Đánh đổi sớm và chính xác**: trước 8h sai số 11.5%, trước 10h 8.9%, trước 12h 6.8%. Chọn mốc là quyết định
   của đội vận hành (xe tải cần bao lâu để điều xe), không phải của DA; DA đưa bảng đánh đổi.
 - **Trung vị** vì phân phối sai số lệch: 79.8% ngày sai trong ±20%, nhưng vài ngày bão sai 200–300% kéo trung
@@ -57,7 +63,7 @@ chiều: những ngày đó xem dự báo thời tiết."
 - `pooled-weekend` (c) **thấp hơn thực tế**: sáng cuối tuần chỉ chiếm 13.7% lượt cả ngày, chia cho 22% thì ra
   tổng quá nhỏ. (a) và (d) sai hướng; (b) bỏ qua sai lệch có hệ thống.
 - `worst-day` (c) **27/08/2011, bão Irene**: dự báo 4 453, thực tế 1 115 (sai 299%). 29/10/2012 (a) đứng thứ hai
-  (283%); 25/12/2012 (b) không nằm trong top 5.
+  (283%), nhưng sai số đó do dữ liệu chỉ có giờ 0 (xem trên); 25/12/2012 (b) không nằm trong top 5.
 - `storm-signal` (b): thêm tín hiệu thấy được chuyện xảy ra sau 10h. Bỏ chỉ số (a) là bỏ thứ đúng 80% số ngày;
   (c) chỉ đổi cách đo; dời sang 8h (d) làm sai số tăng và vẫn không thấy bão buổi chiều.
 - `cutoff-tradeoff` (a): **khoảng 7%** (6.8%), đổi lại biết muộn hai giờ.
