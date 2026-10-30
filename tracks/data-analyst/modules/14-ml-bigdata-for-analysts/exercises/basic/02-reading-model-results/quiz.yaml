@@ -1,0 +1,73 @@
+questions:
+  - id: tree-vs-baseline
+    kind: data
+    type: single
+    prompt: "Trên tập test 1 761 khách, tree có accuracy 77.7%. Nó hơn model \"luôn đoán ở lại\" bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 28 điểm, vì đoán ngẫu nhiên chỉ đúng 50%" }
+      - { id: b, text: "Khoảng 51 điểm, vì baseline là tỉ lệ churn 26.5%" }
+      - { id: c, text: "Khoảng 4 điểm, vì baseline đã đúng 73.5%" }
+      - { id: d, text: "Không so được vì baseline không có precision" }
+  - id: tree-recall
+    kind: data
+    type: single
+    prompt: "Ở ngưỡng mặc định 0.5, tree bắt được bao nhiêu trong 467 khách rời bỏ của tập test?"
+    options:
+      - { id: a, text: "208 khách (45%)" }
+      - { id: b, text: "141 khách (30%)" }
+      - { id: c, text: "348 khách (75%)" }
+      - { id: d, text: "363 khách (78%)" }
+  - id: rule-reading
+    kind: data
+    type: single
+    prompt: "Quy tắc đang dùng (month-to-month và tenure tối đa 12 tháng), trên 7 043 khách. Nhận định nào đúng?"
+    options:
+      - { id: a, text: "Gắn cờ 28% khách, 74% số đó rời bỏ, phủ 74% khách rời" }
+      - { id: b, text: "Accuracy 74.2%, nên quy tắc gần như vô dụng" }
+      - { id: c, text: "Gắn cờ 15% khách, 51% số đó rời bỏ, phủ 30% khách rời" }
+      - { id: d, text: "Gắn cờ 28% khách, 51% số đó rời bỏ, phủ 55% khách rời" }
+  - id: two-year-97
+    kind: data
+    type: single
+    prompt: "Một vendor báo model của họ \"đúng 97%\" trên nhóm hợp đồng hai năm. Bạn đọc con số này thế nào?"
+    options:
+      - { id: a, text: "Model rất tốt, có thể triển khai ngay cho riêng nhóm khách này" }
+      - { id: b, text: "Chưa nói gì: luôn đoán ở lại đã đúng 97.2% ở nhóm này" }
+      - { id: c, text: "Model bị overfit vì accuracy cao hơn 95%" }
+      - { id: d, text: "Nhóm 1 695 khách là quá nhỏ để đo accuracy" }
+  - id: same-precision
+    kind: data
+    type: single
+    prompt: "Trên tập test, tree ở ngưỡng 0.3 và quy tắc có precision gần bằng nhau (51.8% và 51.7%). Khác nhau ở đâu?"
+    options:
+      - { id: a, text: "Tree gắn cờ 672 khách, bắt 348; quy tắc gắn cờ 476, bắt 246" }
+      - { id: b, text: "Tree gắn cờ 208 khách, bắt 141; quy tắc gắn cờ 476, bắt 246" }
+      - { id: c, text: "Hai cách gắn cờ cùng số khách và bắt cùng số khách rời" }
+      - { id: d, text: "Quy tắc gắn cờ 672 khách, bắt 348; tree gắn cờ 476, bắt 246" }
+  - id: precision-meaning
+    kind: knowledge
+    type: single
+    prompt: "Trong chiến dịch gọi giữ chân, precision 0.68 nghĩa là gì?"
+    options:
+      - { id: a, text: "68% khách sắp rời bỏ đã được đội CSKH gọi tới trước" }
+      - { id: b, text: "Model dự đoán đúng với 68% tổng số khách" }
+      - { id: c, text: "68% cuộc gọi trúng khách thật sự sắp rời bỏ" }
+      - { id: d, text: "68% khách được gọi sẽ ở lại nhờ cuộc gọi" }
+  - id: lower-threshold
+    kind: knowledge
+    type: single
+    prompt: "Hạ ngưỡng gắn cờ từ 0.5 xuống 0.3 (cùng model) thường làm gì?"
+    options:
+      - { id: a, text: "Accuracy luôn tăng vì bắt thêm khách rời" }
+      - { id: b, text: "Recall giảm, precision tăng, ít khách bị gắn cờ" }
+      - { id: c, text: "Không đổi gì vì model vẫn là model cũ" }
+      - { id: d, text: "Recall tăng, precision giảm, nhiều khách bị gắn cờ" }
+  - id: ask-ds-team
+    kind: knowledge
+    type: multi
+    prompt: "Trước khi tin con số 77.7%, những câu nào đáng hỏi đội DS? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Tập test chia ngẫu nhiên hay theo thời gian, có giống cách dùng thật không?" }
+      - { id: b, text: "Có cột nào chỉ có giá trị sau khi khách đã rời (leakage) không?" }
+      - { id: c, text: "Model viết bằng thư viện nào, Python hay R?" }
+      - { id: d, text: "Ở số cuộc gọi đội CSKH làm được, precision và recall là bao nhiêu?" }

@@ -1,0 +1,73 @@
+questions:
+  - id: champions-share
+    kind: data
+    type: single
+    prompt: "Với k = 4, nhóm Champions chiếm bao nhiêu khách và bao nhiêu doanh thu của khách có mã?"
+    options:
+      - { id: a, text: "37.5% khách, 6.3% doanh thu" }
+      - { id: b, text: "27.4% khách, 24.0% doanh thu" }
+      - { id: c, text: "18.7% khách, 5.0% doanh thu" }
+      - { id: d, text: "16.4% khách, 64.7% doanh thu" }
+  - id: at-risk-why
+    kind: data
+    type: single
+    prompt: "Cụm At risk có recency median 54 ngày, 4 hoá đơn, median chung là 50 ngày và 2 hoá đơn. Vì sao gọi là At risk?"
+    options:
+      - { id: a, text: "Mua nhiều lần hơn mức chung nhưng lần cuối đã lâu hơn mức chung" }
+      - { id: b, text: "Mua ít lần hơn mức chung, và lần mua cuối cùng đã lâu hơn mức chung" }
+      - { id: c, text: "Doanh thu median thấp nhất trong bốn cụm của k-means" }
+      - { id: d, text: "Mua nhiều lần hơn mức chung và lần cuối gần hơn mức chung" }
+  - id: why-not-k2
+    kind: data
+    type: single
+    prompt: "Silhouette cao nhất ở k = 2 (0.434), k = 4 chỉ 0.336. Vì sao bài vẫn chọn k = 4?"
+    options:
+      - { id: a, text: "Silhouette càng thấp thì các cụm càng tách bạch và càng dễ dùng hơn" }
+      - { id: b, text: "Hai nhóm \"tốt / còn lại\" không đủ để CRM làm 3–5 chương trình" }
+      - { id: c, text: "k-means không chạy được với k = 2 trên ba cột RFM" }
+      - { id: d, text: "Inertia ở k = 4 bằng 0 nên k = 4 là tối ưu tuyệt đối" }
+  - id: no-scaling
+    kind: data
+    type: single
+    prompt: "Chạy k-means k = 4 trên RFM thô (không log, không chuẩn hoá) cho cụm cỡ 4 300 / 5 / 31 / 2 khách. Vì sao?"
+    options:
+      - { id: a, text: "Recency tính bằng ngày nên có giá trị lớn nhất và lấn át hai cột còn lại" }
+      - { id: b, text: "Dữ liệu thô có NaN nên k-means bỏ gần hết số khách" }
+      - { id: c, text: "Doanh thu có số lớn và đuôi dài nên chi phối khoảng cách" }
+      - { id: d, text: "k-means cần đúng 4 cột đầu vào nên chia lệch nhóm" }
+  - id: stability
+    kind: data
+    type: single
+    prompt: "Đổi `random_state` từ 0 sang 7, bao nhiêu phần trăm khách giữ cùng tên segment?"
+    options:
+      - { id: a, text: "Khoảng 25%: nhãn số đổi hoàn toàn" }
+      - { id: b, text: "Khoảng 99%: segment gần như không đổi" }
+      - { id: c, text: "Khoảng 64%: chỉ có nhóm Champions giữ nguyên" }
+      - { id: d, text: "Khoảng 82%: At risk tách đôi ra" }
+  - id: always-k
+    kind: knowledge
+    type: single
+    prompt: "Nhận định nào về k-means là đúng?"
+    options:
+      - { id: a, text: "Luôn trả đúng k cụm, kể cả khi dữ liệu không có cụm thật" }
+      - { id: b, text: "Tự tìm ra số cụm tối ưu nếu được chạy đủ nhiều vòng lặp và nhiều seed" }
+      - { id: c, text: "Không bị ảnh hưởng bởi thang đo của các cột đầu vào" }
+      - { id: d, text: "Học từ nhãn churn có sẵn để chia nhóm khách hàng" }
+  - id: new-customers
+    kind: knowledge
+    type: single
+    prompt: "Tháng sau có 300 khách mới. Gán segment cho họ thế nào để CRM không bị xáo trộn?"
+    options:
+      - { id: a, text: "Chạy lại k-means trên toàn bộ khách rồi so nhãn số với tháng trước" }
+      - { id: b, text: "Gán hết khách mới vào New / promising, không cần tính gì thêm" }
+      - { id: c, text: "Đổi thang bằng mean/SD đã lưu rồi gán vào tâm cụm gần nhất" }
+      - { id: d, text: "Chạy k-means riêng trên 300 khách mới với k = 4" }
+  - id: hibernating-action
+    kind: knowledge
+    type: single
+    prompt: "Hibernating là 37.5% khách nhưng 6.3% doanh thu. Đề xuất nào hợp lý nhất cho nhóm này?"
+    options:
+      - { id: a, text: "Quản lý tài khoản riêng, gọi điện cho từng khách" }
+      - { id: b, text: "Xoá khỏi danh sách vì không đem lại doanh thu" }
+      - { id: c, text: "Ưu đãi giảm giá sâu cho cả nhóm ngay lập tức" }
+      - { id: d, text: "Email kích hoạt chi phí thấp, đo bằng nhóm đối chứng" }

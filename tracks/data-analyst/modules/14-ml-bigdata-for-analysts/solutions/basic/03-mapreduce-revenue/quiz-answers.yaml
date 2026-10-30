@@ -1,0 +1,8 @@
+uk-share: [c]
+top3-countries: [b]
+stopword: [b]
+float-diff: [c]
+parallel-slower: [d]
+mean-mapreduce: [d]
+median-distributed: [a]
+when-spark: [a, c]

@@ -1,0 +1,73 @@
+questions:
+  - id: uk-share
+    kind: data
+    type: single
+    prompt: "United Kingdom chiếm bao nhiêu phần trăm doanh thu gộp năm 2010-2011 (dòng hợp lệ, mọi khách)?"
+    options:
+      - { id: a, text: "Khoảng 61%" }
+      - { id: b, text: "Khoảng 74%" }
+      - { id: c, text: "Khoảng 85%" }
+      - { id: d, text: "Khoảng 96%" }
+  - id: top3-countries
+    kind: data
+    type: single
+    prompt: "Ba nước có doanh thu cao nhất, theo thứ tự?"
+    options:
+      - { id: a, text: "United Kingdom, Germany, France" }
+      - { id: b, text: "United Kingdom, Netherlands, EIRE" }
+      - { id: c, text: "United Kingdom, EIRE, Netherlands" }
+      - { id: d, text: "Netherlands, United Kingdom, EIRE" }
+  - id: stopword
+    kind: data
+    type: single
+    prompt: "Top 5 từ trong tên sản phẩm là set, of, bag, red, heart. Trước khi gửi danh sách cho merchandising, bạn làm gì?"
+    options:
+      - { id: a, text: "Gửi nguyên, vì số đếm được kiểm khớp từng từ" }
+      - { id: b, text: "Bỏ từ chức năng như of, rồi xem cụm từ (red heart)" }
+      - { id: c, text: "Đếm lại bằng Spark để chắc kết quả đúng hơn" }
+      - { id: d, text: "Chỉ giữ từ xuất hiện ở đúng một khối dữ liệu" }
+  - id: float-diff
+    kind: knowledge
+    type: single
+    prompt: "Doanh thu theo nước tính bằng map-reduce 4 khối lệch kết quả groupby cỡ 0.000000002 GBP. Vì sao?"
+    options:
+      - { id: a, text: "Vài dòng ở ranh giới khối bị map hai lần" }
+      - { id: b, text: "multiprocessing làm tròn số khi gửi khối" }
+      - { id: c, text: "Số thực được cộng theo thứ tự khác nhau" }
+      - { id: d, text: "groupby bỏ qua dòng không có Customer ID" }
+  - id: parallel-slower
+    kind: knowledge
+    type: single
+    prompt: "Trên 530 nghìn dòng, chạy 2-4 worker chậm hơn một lần groupby. Lý do chính là gì?"
+    options:
+      - { id: a, text: "Máy chỉ có một nhân CPU nên các worker phải chờ nhau" }
+      - { id: b, text: "GIL của Python chặn mọi tiến trình con chạy cùng lúc" }
+      - { id: c, text: "pandas groupby chạy trên GPU nên luôn nhanh hơn CPU" }
+      - { id: d, text: "Tạo tiến trình và gửi dữ liệu tốn hơn phần tính toán" }
+  - id: mean-mapreduce
+    kind: knowledge
+    type: single
+    prompt: "Muốn tính doanh thu trung bình mỗi dòng theo nước bằng MapReduce. Map nên trả gì cho mỗi nước?"
+    options:
+      - { id: a, text: "Trung bình của khối; reduce lấy trung bình các trung bình" }
+      - { id: b, text: "Median của khối; reduce lấy median các median" }
+      - { id: c, text: "Danh sách mọi dòng; reduce gọi groupby một lần nữa" }
+      - { id: d, text: "Cặp (tổng doanh thu, số dòng); reduce cộng rồi mới chia" }
+  - id: median-distributed
+    kind: knowledge
+    type: single
+    prompt: "Vì sao Spark SQL thường tính median theo nhóm bằng hàm xấp xỉ (approx_percentile)?"
+    options:
+      - { id: a, text: "Median không tách thành kết quả từng phần cộng được" }
+      - { id: b, text: "Spark không hỗ trợ sắp xếp dữ liệu trên nhiều máy" }
+      - { id: c, text: "Median chính xác chỉ tính được trên số nguyên" }
+      - { id: d, text: "Kết quả chính xác bị cấm trong hệ phân tán" }
+  - id: when-spark
+    kind: knowledge
+    type: multi
+    prompt: "Tình huống nào là lý do hợp lý để chuyển báo cáo này sang Spark? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Dữ liệu giao dịch đã nằm trong lakehouse Delta hàng TB, công ty đã dùng Databricks" }
+      - { id: b, text: "Muốn báo cáo 1 triệu dòng hiện tại chạy nhanh hơn trên laptop" }
+      - { id: c, text: "Dữ liệu tăng tới mức một máy không đọc hết trong thời gian chấp nhận được" }
+      - { id: d, text: "Vì Spark là công cụ big data, dùng nó trông chuyên nghiệp hơn" }
