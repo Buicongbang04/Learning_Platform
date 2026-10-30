@@ -1,0 +1,73 @@
+questions:
+  - id: median-wait
+    kind: data
+    type: single
+    prompt: "Trung vị thời gian từ lần xem đầu tới lần mua đầu (trong số người mua) là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 23 phút (0.4 giờ)" }
+      - { id: b, text: "Gần 10 giờ (khoảng 9.9 giờ)" }
+      - { id: c, text: "Khoảng 4 ngày (101 giờ)" }
+      - { id: d, text: "Khoảng 9 ngày (220 giờ)" }
+  - id: window-7d
+    kind: data
+    type: single
+    prompt: "Cửa sổ 7 ngày giữ lại bao nhiêu phần trăm người mua (mua trong 7 ngày kể từ lần xem đầu)?"
+    options:
+      - { id: a, text: "62.8%" }
+      - { id: b, text: "79.6%" }
+      - { id: c, text: "88.6%" }
+      - { id: d, text: "95.3%" }
+  - id: mature-weeks
+    kind: data
+    type: single
+    prompt: "Với cửa sổ 7 ngày và dữ liệu tới 18/09/2015, bao nhiêu tuần (trong 21 tuần) đã chín?"
+    options:
+      - { id: a, text: "16 tuần" }
+      - { id: b, text: "19 tuần" }
+      - { id: c, text: "20 tuần" }
+      - { id: d, text: "21 tuần" }
+  - id: best-week
+    kind: data
+    type: single
+    prompt: "Tuần đã chín có buy rate 7 ngày cao nhất là tuần 27/04 (0.79%). Vì sao không nên lấy nó làm mốc \"tuần tốt nhất\"?"
+    options:
+      - { id: a, text: "Tuần đó chỉ có một ngày dữ liệu và lần xem đầu bị cắt trái" }
+      - { id: b, text: "Tuần đó đông visitor hơn hẳn nên tỉ lệ bị pha loãng mạnh" }
+      - { id: c, text: "Cửa sổ 7 ngày của tuần đó chưa đủ thời gian để quan sát" }
+      - { id: d, text: "Tuần đó trùng một đợt khuyến mãi lớn được ghi trong log" }
+  - id: no-window
+    kind: knowledge
+    type: single
+    prompt: "Không dùng cửa sổ, buy rate tuần 04/05 là 1.01%; với cửa sổ 7 ngày là 0.76%. Đường không cửa sổ giảm dần về cuối kỳ. Vì sao?"
+    options:
+      - { id: a, text: "Tuần đầu có nhiều bot hơn, sau đó bot được lọc bớt" }
+      - { id: b, text: "Cửa sổ 7 ngày bỏ cả người mua ngay trong ngày đầu" }
+      - { id: c, text: "Không có cửa sổ thì một visitor bị đếm ở nhiều tuần" }
+      - { id: d, text: "Visitor vào sớm có hơn 4 tháng để mua, vào muộn chỉ vài ngày" }
+  - id: monday-report
+    kind: knowledge
+    type: single
+    prompt: "Dữ liệu có tới hết thứ Sáu 11/09/2015. Với cửa sổ 7 ngày và quy tắc `tuần + 7 ngày + window <= data_end`, tuần vào gần nhất báo được là tuần nào?"
+    options:
+      - { id: a, text: "Tuần bắt đầu 07/09" }
+      - { id: b, text: "Tuần bắt đầu 31/08" }
+      - { id: c, text: "Tuần bắt đầu 24/08" }
+      - { id: d, text: "Tuần bắt đầu 17/08" }
+  - id: last-week
+    kind: knowledge
+    type: single
+    prompt: "Tuần 14/09 có buy rate 7 ngày 0.49%, thấp nhất bảng. Bạn đưa con số này vào báo cáo tuần thế nào?"
+    options:
+      - { id: a, text: "Báo giảm mạnh và đề nghị team checkout điều tra ngay" }
+      - { id: b, text: "Không báo như số chính thức; đánh dấu tuần chưa chín" }
+      - { id: c, text: "Báo cùng các tuần khác, chú thích là có thể thiếu dữ liệu" }
+      - { id: d, text: "Thay bằng trung bình 19 tuần đã chín cho đồ thị liền mạch" }
+  - id: popular-no-cart
+    kind: data
+    type: single
+    prompt: "Trong 73 sản phẩm có ít nhất 500 người xem, bao nhiêu sản phẩm không có một lượt thêm giỏ nào?"
+    options:
+      - { id: a, text: "Không có sản phẩm nào" }
+      - { id: b, text: "2 sản phẩm" }
+      - { id: c, text: "9 sản phẩm" }
+      - { id: d, text: "23 sản phẩm" }
