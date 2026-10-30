@@ -1,0 +1,73 @@
+questions:
+  - id: basket-size
+    kind: data
+    type: single
+    prompt: "`sales_profile` trên bộ thật: một giao dịch (`TransactionNumber`) có nhiều nhất bao nhiêu dòng?"
+    options:
+      - { id: a, text: "25 dòng" }
+      - { id: b, text: "1 dòng" }
+      - { id: c, text: "5 dòng" }
+      - { id: d, text: "168 dòng" }
+  - id: quantity-p
+    kind: data
+    type: single
+    prompt: "Kiểm định chi-square cho số dòng theo `Quantity` (1 tới 25) so với phân phối đều cho p-value khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Gần 0.00" }
+      - { id: b, text: "Khoảng 0.05" }
+      - { id: c, text: "Khoảng 0.51" }
+      - { id: d, text: "Đúng 1.00" }
+  - id: daily-dispersion
+    kind: data
+    type: single
+    prompt: "Chỉ số phân tán (phương sai / trung bình) của số dòng mỗi ngày trong Grocery Sales là khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 388, như dunnhumby" }
+      - { id: b, text: "Khoảng 9.2" }
+      - { id: c, text: "Khoảng 92" }
+      - { id: d, text: "Khoảng 0.92" }
+  - id: missing-date
+    kind: data
+    type: single
+    prompt: "Tỉ lệ dòng thiếu `SalesDate` là bao nhiêu, và con số đó gợi ý gì?"
+    options:
+      - { id: a, text: "Khoảng 1.0%, tròn và đều mọi chiều: giống bị đục lỗ ngẫu nhiên" }
+      - { id: b, text: "Khoảng 0.1%, quá nhỏ nên không cần ghi chú gì trong báo cáo" }
+      - { id: c, text: "Khoảng 9.9%, tập trung vào tháng 5 vì tháng đó chưa kết thúc" }
+      - { id: d, text: "Khoảng 25%, giống tỉ lệ thiếu mã khách của bộ Online Retail II" }
+  - id: weekday-trap
+    kind: knowledge
+    type: single
+    prompt: "Chi-square trên **tổng** số dòng theo thứ trong tuần cho p-value gần 0. Vì sao chưa kết luận có mùa vụ tuần?"
+    options:
+      - { id: a, text: "Vì chi-square chỉ dùng được cho biến có ít nhất 20 nhóm" }
+      - { id: b, text: "Vì 1% dòng thiếu ngày làm tổng theo từng thứ bị lệch đi ngẫu nhiên" }
+      - { id: c, text: "Vì thứ Hai-Tư có 19 ngày, các thứ khác 18: so trung bình/ngày" }
+      - { id: d, text: "Vì p-value nhỏ nghĩa là dữ liệu đều, không phải là không đều" }
+  - id: p-meaning
+    kind: knowledge
+    type: single
+    prompt: "p-value 0.51 của kiểm định đều cho `Quantity` nói gì?"
+    options:
+      - { id: a, text: "Không bác bỏ được 'đều'; dữ liệu thật cỡ này gần như luôn bị bác bỏ" }
+      - { id: b, text: "Chứng minh Quantity được sinh từ phân phối đều với xác suất 51%" }
+      - { id: c, text: "Có 51% khả năng dữ liệu này là dữ liệu thật của một siêu thị" }
+      - { id: d, text: "Mẫu quá nhỏ để kiểm định, cần thêm dữ liệu rồi chạy lại phép thử này" }
+  - id: reports-possible
+    kind: knowledge
+    type: single
+    prompt: "Trong 5 báo cáo Giám đốc vận hành xin, bao nhiêu báo cáo nên giao kèm insight từ bộ này?"
+    options:
+      - { id: a, text: "5, kèm chú thích dữ liệu là bản mẫu" }
+      - { id: b, text: "3: giờ cao điểm, VIP, xếp hạng nhân viên" }
+      - { id: c, text: "1: doanh thu, tự tính lại từ Price" }
+      - { id: d, text: "0, nói rõ vì sao và cần dữ liệu gì" }
+  - id: reply
+    kind: knowledge
+    type: single
+    prompt: "Dòng đầu email trả lời Giám đốc vận hành nên là gì?"
+    options:
+      - { id: a, text: "Em gửi anh 5 dashboard, có vài điểm dữ liệu cần lưu ý ở phụ lục cuối" }
+      - { id: b, text: "Bộ này là dữ liệu sinh giả, không báo cáo insight; cần xuất POS thật" }
+      - { id: c, text: "Dữ liệu có 1% thiếu ngày, em đã làm sạch và sẽ gửi báo cáo tuần sau" }
+      - { id: d, text: "Số liệu cho thấy mọi giờ, mọi nhân viên đều hiệu quả như nhau" }

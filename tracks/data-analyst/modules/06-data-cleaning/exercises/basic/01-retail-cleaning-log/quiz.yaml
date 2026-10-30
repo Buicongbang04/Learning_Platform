@@ -1,0 +1,73 @@
+questions:
+  - id: most-rows
+    kind: data
+    type: single
+    prompt: "Trên sheet `Year 2009-2010`, bước nào loại nhiều dòng nhất?"
+    options:
+      - { id: a, text: "cancelled" }
+      - { id: b, text: "fee_code" }
+      - { id: c, text: "exact_duplicate" }
+      - { id: d, text: "non_positive_price" }
+  - id: most-money
+    kind: data
+    type: single
+    prompt: "Bước nào loại khoản doanh thu **dương** lớn nhất (cột `revenue_removed`)?"
+    options:
+      - { id: a, text: "cancelled" }
+      - { id: b, text: "exact_duplicate" }
+      - { id: c, text: "fee_code" }
+      - { id: d, text: "non_positive_quantity" }
+  - id: top-fee
+    kind: data
+    type: single
+    prompt: "Trong các dòng hợp lệ, mã phí nào mang nhiều doanh thu nhất?"
+    options:
+      - { id: a, text: "POST (phí ship)" }
+      - { id: b, text: "DOT (phí dotcom)" }
+      - { id: c, text: "AMAZONFEE (phí sàn)" }
+      - { id: d, text: "M (dòng nhập tay)" }
+  - id: revenue-gap
+    kind: data
+    type: single
+    prompt: "Doanh thu theo định nghĩa dùng chung (3 quy tắc đầu) là 10 305 892 GBP. Doanh thu hàng hoá sau đủ 5 bước thấp hơn khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 0.3%" }
+      - { id: b, text: "Khoảng 4.9%" }
+      - { id: c, text: "Khoảng 9.5%" }
+      - { id: d, text: "Khoảng 20%" }
+  - id: missing-customer
+    kind: data
+    type: single
+    prompt: "Sau 5 bước, bao nhiêu phần trăm dòng còn lại không có `Customer ID`?"
+    options:
+      - { id: a, text: "Khoảng 2.5%" }
+      - { id: b, text: "Khoảng 10.0%" }
+      - { id: c, text: "Khoảng 20.5%" }
+      - { id: d, text: "Khoảng 35.0%" }
+  - id: normalize-first
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `clean_with_log` phải gọi `normalize` trước khi kiểm `fee_code` và `exact_duplicate`?"
+    options:
+      - { id: a, text: "Để mã `m` khớp `M` và hai dòng chỉ khác khoảng trắng bị coi là trùng" }
+      - { id: b, text: "Vì `duplicated()` của pandas báo lỗi khi gặp cột kiểu `object` lẫn int và str" }
+      - { id: c, text: "Để Customer ID thành số nguyên, nhờ vậy các dòng thiếu mã khách bị loại hết" }
+      - { id: d, text: "Vì viết hoa mô tả sản phẩm làm giảm số dòng trùng, nên doanh thu cao hơn" }
+  - id: keep-missing
+    kind: knowledge
+    type: single
+    prompt: "Báo cáo doanh thu theo quốc gia. Làm gì với dòng thiếu `Customer ID`?"
+    options:
+      - { id: a, text: "Bỏ, vì dòng thiếu một cột bắt buộc là dòng bẩn" }
+      - { id: b, text: "Điền 0 rồi tính như một khách vãng lai duy nhất" }
+      - { id: c, text: "Điền mã khách xuất hiện nhiều nhất" }
+      - { id: d, text: "Giữ: doanh thu không cần biết khách là ai" }
+  - id: duplicate-check
+    kind: knowledge
+    type: single
+    prompt: "Trước khi khẳng định 6 830 dòng trùng hoàn toàn là lỗi, kiểm gì là hợp lý nhất?"
+    options:
+      - { id: a, text: "Không cần kiểm gì: trùng mọi cột thì chắc chắn là lỗi nhập" }
+      - { id: b, text: "Đếm lại sau khi đổi mọi cột sang kiểu chuỗi viết hoa" }
+      - { id: c, text: "Hỏi hệ thống nguồn: một món quét hai lần có tạo hai dòng?" }
+      - { id: d, text: "Bỏ luôn cả hai dòng trùng để chắc chắn không đếm sai" }

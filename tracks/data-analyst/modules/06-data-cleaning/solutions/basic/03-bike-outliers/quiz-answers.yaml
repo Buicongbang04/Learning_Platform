@@ -1,0 +1,7 @@
+daily-iqr: [a]
+hourly-iqr: [b]
+lowest-day-hours: [c]
+demand-drops: [d]
+sensor-fix: [b]
+zscore-miss: [a]
+purpose: [c]
