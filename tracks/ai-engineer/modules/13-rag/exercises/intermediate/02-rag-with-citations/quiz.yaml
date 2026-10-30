@@ -15,42 +15,42 @@ questions:
 - id: gate-ood
   kind: data
   type: single
-  prompt: Với `MIN_SCORE = 0.5`, cổng điểm chặn bao nhiêu trong 5 câu ngoài phạm vi trước khi gọi LLM?
+  prompt: So điểm khoản cao nhất (cosine) của 5 câu ngoài phạm vi với 20 câu thật của tập ghim, kết quả thế nào?
   options:
   - id: a
-    text: 5 câu, không câu nào tới LLM
+    text: Hai nhóm chồng lên nhau, không ngưỡng nào tách được
   - id: b
-    text: 4 câu, câu giá vàng lọt qua cổng
+    text: Mọi câu ngoài phạm vi thấp hơn mọi câu thật, cách khoảng 0.1
   - id: c
-    text: 2 câu, ba câu còn lại tới LLM
+    text: Câu ngoài phạm vi cao hơn vì câu hỏi ngắn và chung chung
   - id: d
-    text: 0 câu, cosine đều trên 0.6
+    text: Cả hai nhóm đều dưới 0.5, cổng chặn luôn cả câu thật
 - id: theory-repro
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Tái hiện thí nghiệm mục 5 lý thuyết (3 nguồn cả điều cắt ở 1 500 ký tự, có điều đúng), `qwen2.5:3b` trả lời gì?
+  prompt: Ở thí nghiệm mục 5 (3 nguồn cả điều cắt ở 1 500 ký tự, có điều đúng), model 3B từ chối. Điều đó cho thấy gì?
   options:
   - id: a
-    text: Không, theo khoản 4 Điều 7 và trích [2]
+    text: Nguồn không có căn cứ nào nên từ chối là hành vi đúng
   - id: b
-    text: Có, Công an xã được phạt và trích [1]
+    text: Model đã bịa câu trả lời rồi tự sửa thành câu từ chối
   - id: c
-    text: Đúng câu từ chối, không trích nguồn nào
+    text: Prompt chống bịa chặt khiến model nhỏ từ chối quá tay
   - id: d
-    text: Trả lời có trích [4], một số ngoài khoảng
+    text: Retrieval sai vì điều đúng không có mặt trong prompt
 - id: refuse-with-gold
   kind: data
   type: single
-  prompt: Trong 20 câu với nguồn là khoản, bao nhiêu câu model từ chối dù điều đúng có trong nguồn (lý thuyết, cả điều cắt cụt, là 6)?
+  prompt: Lý thuyết (cả điều cắt ở 1 500 ký tự) có 6 câu từ chối dù điều đúng nằm trong nguồn. Với nguồn là khoản, số câu như vậy thế nào?
   options:
   - id: a
-    text: '0'
+    text: Về 0, model không còn từ chối câu nào
   - id: b
-    text: '2'
+    text: Ít hơn hẳn, nhưng vẫn còn vài câu
   - id: c
-    text: '6'
+    text: Vẫn khoảng 6, đơn vị nguồn không đổi gì
   - id: d
-    text: '9'
+    text: Nhiều hơn, vì khoản ngắn thiếu ngữ cảnh
 - id: gate-first
   kind: knowledge
   type: single
@@ -59,20 +59,20 @@ questions:
   - id: a
     text: LLM không hiểu được chỉ thị từ chối bằng tiếng Việt
   - id: b
-    text: Rẻ, và nội dung tài liệu trong prompt không lách được
+    text: Ollama báo lỗi nếu prompt chứa nguồn có điểm quá thấp
   - id: c
     text: Để điểm cosine của câu hỏi cao hơn khi gọi lại LLM
   - id: d
-    text: Ollama báo lỗi nếu prompt chứa nguồn có điểm quá thấp
+    text: Rẻ, và nội dung tài liệu trong prompt không lách được
 - id: short-ids
   kind: knowledge
   type: single
   prompt: Vì sao bắt model trích `[2]` thay vì chép số hiệu "47/2011/TT-BCA"?
   options:
   - id: a
-    text: Số ngắn tốn ít token hơn nên câu trả lời nhanh gấp đôi
-  - id: b
     text: Model nhỏ hay chép sai số hiệu; [2] thì code map ngược được
+  - id: b
+    text: Số ngắn tốn ít token hơn nên câu trả lời nhanh gấp đôi
   - id: c
     text: Số hiệu văn bản có dấu "/" làm hỏng định dạng JSON đầu ra
   - id: d

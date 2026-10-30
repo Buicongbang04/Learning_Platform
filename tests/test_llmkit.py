@@ -201,3 +201,15 @@ def test_ollama_embed_4xx_not_retried():
     with pytest.raises(LLMError, match="ollama pull bge-m3"):
         OllamaClient(transport=_transport(handler)).embed(["a", "b"])
     assert len(calls) == 1
+
+
+def test_ollama_embed_empty_batch_500_raises_llm_error():
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content)["input"])
+        return httpx.Response(500, json={"error": "boom"})
+
+    with pytest.raises(LLMError, match="HTTP 500"):
+        OllamaClient(transport=_transport(handler)).embed([])
+    assert calls == [[]]

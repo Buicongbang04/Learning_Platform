@@ -166,7 +166,7 @@ class OllamaClient(_HTTPClient):
         try:
             data = self._post("/api/embed", {"model": used, "input": texts}, used)
         except _ServerError:
-            if len(texts) == 1:
+            if len(texts) <= 1:
                 raise
             # Ollama (vd. bge-m3) đôi khi trả NaN cho một văn bản và làm hỏng cả lô bằng HTTP 500:
             # gửi lại từng văn bản để chỉ văn bản lỗi mới báo lỗi.
