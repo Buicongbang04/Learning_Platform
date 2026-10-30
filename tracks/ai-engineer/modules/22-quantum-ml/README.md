@@ -360,7 +360,7 @@ Lần chia đầu tiên (seed 0), VQC $$L = 4$$ đạt 0.98, SVM RBF 0.96. Một
 
 | Model | Test acc (5 lần chia) | Thời gian fit một lần |
 | --- | --- | --- |
-| VQC 2 qubit, L = 4 (16 tham số) | 0.946 ± 0.022 | khoảng 2–3 s (backprop simulator), khoảng 15–25 s (parameter-shift) |
+| VQC 2 qubit, L = 4 (16 tham số) | 0.946 ± 0.022 | vài giây (backprop simulator), 15–25 s (parameter-shift); đo lúc máy bận có thể gấp đôi |
 | Logistic regression | 0.834 ± 0.021 | vài ms |
 | SVM RBF (mặc định) | 0.968 ± 0.016 | khoảng 2 ms |
 | MLP 16 neuron, siêu tham số mặc định | 0.812 ± 0.031 | khoảng 0.3 s |
