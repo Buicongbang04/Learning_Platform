@@ -1,0 +1,55 @@
+questions:
+  - id: refund-risk
+    kind: knowledge
+    type: single
+    prompt: "Vì sao agent tự gọi issue_refund dựa trên nội dung email là lỗi chặn ship?"
+    options:
+      - { id: a, text: "Email do người ngoài viết có thể chứa chỉ thị gọi tool (prompt injection gián tiếp)" }
+      - { id: b, text: "Tool hoàn tiền làm tăng độ trễ p95 của agent lên quá SLO đã cam kết với khách hàng" }
+      - { id: c, text: "Model fine-tune không gọi được tool vì đã mất khả năng function calling khi train" }
+      - { id: d, text: "Hoàn tiền tự động làm giảm tỉ lệ trúng của semantic cache nên chi phí API tăng mạnh" }
+  - id: cost-propagation
+    kind: knowledge
+    type: single
+    prompt: "Claim chi phí tháng (0.0068 × 600 000 × 30 = 122 400) qua được check_claims. Kết luận đúng là gì?"
+    options:
+      - { id: a, text: "Con số đúng vì check_claims đã kiểm, giữ nguyên trong doc và ghi vào báo cáo" }
+      - { id: b, text: "Nhân đúng nhưng dùng chi phí/request sai; thật là 180 000, vượt ngân sách" }
+      - { id: c, text: "Sai vì một tháng phải tính 31 ngày, nên con số đúng là 126 480 USD/tháng" }
+      - { id: d, text: "Sai vì phải chia thêm cho 1 000 000 lần nữa để đổi từ token ra triệu token" }
+  - id: kv-claim
+    kind: knowledge
+    type: single
+    prompt: "Doc tính KV cache 2 × 28 × 28 × 128 × 2 = 401 408 byte/token cho Qwen2.5-7B. Lỗi ở đâu?"
+    options:
+      - { id: a, text: "Thiếu hệ số 2 cho cả K và V ở mỗi layer của model" }
+      - { id: b, text: "head_dim của Qwen2.5-7B là 256, không phải 128" }
+      - { id: c, text: "Dùng số attention head (28) thay cho số KV head (4)" }
+      - { id: d, text: "KV cache phải tính theo số tham số chứ không theo layer" }
+  - id: retry-storm
+    kind: knowledge
+    type: single
+    prompt: "'Khi gọi lỗi, thử lại ngay tối đa 5 lần'. Khi provider đang quá tải, điều gì xảy ra?"
+    options:
+      - { id: a, text: "Không ảnh hưởng gì vì provider đã cam kết SLA 99.9% mỗi tháng" }
+      - { id: b, text: "Lưu lượng tới provider tăng tới 6 lần đúng lúc nó yếu nhất" }
+      - { id: c, text: "Chi phí giảm vì các request lỗi không bị provider tính tiền" }
+      - { id: d, text: "p50 giảm vì các request thành công được ưu tiên xử lý trước" }
+  - id: judge-self
+    kind: knowledge
+    type: single
+    prompt: "Dùng chính model đã fine-tune chấm 500 email, điểm 4.6/5 'tương đương độ chính xác 95%'. Vấn đề chính?"
+    options:
+      - { id: a, text: "500 email là quá nhiều, chỉ cần 50 email là đủ để kết luận" }
+      - { id: b, text: "LLM-as-judge chỉ chấm được tiếng Anh, không chấm tiếng Việt" }
+      - { id: c, text: "Thang điểm nên là 1–10 để mịn hơn và dễ đổi ra phần trăm" }
+      - { id: d, text: "Model tự chấm mình có thiên lệch; thang 1–5 không phải độ chính xác" }
+  - id: blockers
+    kind: knowledge
+    type: multi
+    prompt: "Những quyết định nào trong doc là lỗi CHẶN SHIP (mất tiền hoặc lộ dữ liệu)?"
+    options:
+      - { id: a, text: "Agent tự hoàn tới 12 triệu đồng không cần duyệt" }
+      - { id: b, text: "Semantic cache dùng chung cho cả câu trả lời cá nhân" }
+      - { id: c, text: "Log số hộ chiếu sang SaaS nước ngoài, lưu vô thời hạn" }
+      - { id: d, text: "Ước lượng thừa GPU cho phương án self-host dự phòng" }

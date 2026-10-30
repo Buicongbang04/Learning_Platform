@@ -1,0 +1,14 @@
+# Mỗi con số design doc khẳng định là một claim: inputs lấy ĐÚNG như doc ghi, claimed là kết quả doc đưa ra.
+# kind và inputs bắt buộc: xem README bài. Thêm đủ các claim định lượng của mục 4 (ít nhất 6, ít nhất 5 kind).
+claims:
+  - id: C1
+    kind: cost_per_1k
+    where: "mục 4, Chi phí API"
+    inputs: {input_tokens: 3000, output_tokens: 400, input_price: 2.0, output_price: 10.0}
+    claimed: 6.80
+  - id: C2
+    kind: monthly_cost
+    where: "mục 4, Chi phí API"
+    inputs: {cost_per_request: 0.0068, requests_per_day: 600000, days: 30}
+    claimed: 122400
+  # TODO: các claim còn lại (đồng thời, trọng số, KV cache, số GPU)
