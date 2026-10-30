@@ -41,6 +41,10 @@ def clean_retail(frames: list[pd.DataFrame]) -> pd.DataFrame:
 
 
 def main() -> None:
+    for path, name in ((RETAIL, "online-retail-ii"), (BIKE, "bike-sharing-uci")):
+        if not path.exists():
+            raise SystemExit(f"Thiếu {path}. Tải bằng: uv run python data/download_dataset.py {name}")
+    print("Đọc xlsx Online Retail II: cần ~1 GB+ RAM, mất ~1 phút...")
     engine = create_engine(testkit.POSTGRES_DSN.replace("postgresql://", "postgresql+psycopg://", 1))
     with engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS da"))

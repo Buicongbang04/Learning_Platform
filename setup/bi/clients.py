@@ -34,6 +34,13 @@ SUPERSET_ADMIN_PASSWORD = os.environ.get("SUPERSET_ADMIN_PASSWORD", "admin")
 PG_DOCKER = {"host": "postgres", "port": 5432, "dbname": "de", "user": "de", "password": "de"}
 
 
+_SETUP_HINT = (
+    "Metabase đã setup với tài khoản khác (vd. bạn tự setup ở module DE 09). Đặt biến môi trường "
+    "METABASE_ADMIN_EMAIL và METABASE_ADMIN_PASSWORD cho khớp tài khoản đó; nếu không cần dữ liệu Metabase cũ, "
+    "dừng metabase rồi xoá volume de-learning_metabase_data để setup lại."
+)
+
+
 class _Session(requests.Session):
     """requests.Session nhận đường dẫn tương đối (`/api/...`) và nối vào `base_url`."""
 
@@ -62,10 +69,7 @@ def metabase_setup_admin(session: requests.Session | None = None) -> bool:
         return False
     token = s.get("/api/session/properties").json().get("setup-token")
     if not token:
-        raise RuntimeError(
-            "Metabase đã setup với tài khoản khác. Đặt METABASE_ADMIN_EMAIL / METABASE_ADMIN_PASSWORD "
-            "cho khớp, hoặc xoá volume de-learning_metabase_data để setup lại."
-        )
+        raise RuntimeError(_SETUP_HINT)
     r = s.post(
         "/api/setup",
         json={
@@ -80,6 +84,8 @@ def metabase_setup_admin(session: requests.Session | None = None) -> bool:
             "prefs": {"site_name": "DE Learning", "site_locale": "en", "allow_tracking": False},
         },
     )
+    if r.status_code in (400, 403):
+        raise RuntimeError(_SETUP_HINT)
     r.raise_for_status()
     return True
 

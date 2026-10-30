@@ -121,6 +121,7 @@ docker compose -f setup/airflow/docker-compose.yml down
 | 08 DevOps | tuỳ bài | Terraform cài riêng (mục 6) |
 | 09 Serving & BI | postgres, metabase | Streamlit chạy local |
 | 10 Security & Governance | postgres | |
+| DA module 10 (BI) | profile `bi`: postgres, metabase, superset | Xem mục 11 |
 | 11 Cloud | localstack hoặc minio (tuỳ chọn) | Phần lớn bài là hàm thuần/Terraform, không cần Docker. Bài S3 chạy offline bằng `moto` nếu có, không cần tài khoản cloud |
 | Capstone | theo milestone | Xem `tracks/data-engineer/capstone/README.md` |
 
@@ -313,6 +314,8 @@ uv run pytest tests/test_bi_services.py -q
   (lần đầu mất 1-2 phút để khởi tạo).
 - Đổi cổng khi trùng: thêm `METABASE_PORT=3001`, `SUPERSET_PORT=8089` vào `setup/.env` (tệp này git-ignore).
   Đổi `SUPERSET_SECRET_KEY` bằng biến môi trường nếu muốn khoá khác mặc định (chỉ dùng local).
+- Nếu đã tự setup Metabase ở module DE 09 với mật khẩu khác, đặt `METABASE_ADMIN_EMAIL` và `METABASE_ADMIN_PASSWORD` cho khớp (bài DE dùng `admin@example.com`) trước khi chạy `init_bi.py` / test.
+- Metabase và Superset chỉ mở trên `127.0.0.1` (không lộ ra LAN).
 - Hai công cụ nối Postgres bằng host `postgres:5432` (mạng Docker), không phải `localhost:<POSTGRES_PORT>`.
 - Gọi API từ code: `setup/bi/clients.py` có `metabase_session()` và `superset_session()`.
 - Tắt khi xong (giữ dữ liệu): `docker compose -f setup/docker-compose.yml stop superset metabase`.

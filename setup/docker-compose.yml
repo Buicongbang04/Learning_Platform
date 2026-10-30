@@ -159,7 +159,7 @@ services:
       MB_DB_FILE: /metabase-data/metabase.db
       JAVA_OPTS: "-Xmx1g"
     ports:
-      - "${METABASE_PORT:-3000}:3000"
+      - "127.0.0.1:${METABASE_PORT:-3000}:3000"
     volumes:
       - metabase_data:/metabase-data
     healthcheck:
@@ -185,13 +185,17 @@ services:
     command:
       - sh
       - -c
-      - >-
-        superset db upgrade &&
-        (superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@example.com || true) &&
-        superset init &&
-        /usr/bin/run-server.sh
+      - |
+        set -e
+        superset db upgrade
+        # Chỉ bỏ qua lỗi "admin đã tồn tại"; lỗi khác dừng container.
+        if ! out=$$(superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@example.com 2>&1); then
+          echo "$$out" | grep -q -i "already exist\|exist" || { echo "$$out"; exit 1; }
+        fi
+        superset init
+        exec /usr/bin/run-server.sh
     ports:
-      - "${SUPERSET_PORT:-8088}:8088"
+      - "127.0.0.1:${SUPERSET_PORT:-8088}:8088"
     volumes:
       - superset_data:/app/superset_home
       - ./bi/superset_config.py:/app/superset_config.py:ro

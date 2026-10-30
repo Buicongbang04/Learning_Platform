@@ -31,7 +31,10 @@ def need_bi():
 def metabase():
     import clients
 
-    return clients.metabase_session()
+    try:
+        return clients.metabase_session()
+    except RuntimeError as e:
+        pytest.skip(str(e))
 
 
 @pytest.fixture(scope="module")
@@ -66,3 +69,13 @@ def test_superset_login_va_thay_database_de(superset):
     schemas = superset.get(f"/api/v1/database/{de[0]['id']}/schemas/")
     assert schemas.ok
     assert "da" in schemas.json()["result"], "Superset không thấy schema `da`. Chạy: uv run python setup/bi/load_da.py"
+
+
+def test_bang_da_co_dong(metabase):
+    de = [d for d in (lambda r: r["data"] if isinstance(r, dict) else r)(metabase.get("/api/database").json()) if d["name"] == "de"]
+    assert de, "Chưa có database `de`. Chạy: uv run python setup/bi/init_bi.py"
+    q = {"database": de[0]["id"], "type": "native", "native": {"query": ""}}
+    for t in ("online_retail_ii", "bike_hour"):
+        q["native"]["query"] = f"SELECT count(*) FROM da.{t}"
+        r = metabase.post("/api/dataset", json=q).json()
+        assert r["data"]["rows"][0][0] > 0, f"da.{t} rỗng. Chạy: uv run python setup/bi/load_da.py"
