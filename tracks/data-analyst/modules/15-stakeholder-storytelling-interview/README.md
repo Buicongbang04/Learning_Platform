@@ -343,8 +343,11 @@ Dán dữ liệu vào một dịch vụ AI bên ngoài là **chuyển dữ liệ
 - **Chính sách công ty**: công cụ nào được duyệt (bản enterprise thường cam kết không dùng dữ liệu để
   train, có hợp đồng xử lý dữ liệu), công cụ nào cấm.
 - **Dữ liệu cá nhân**: tên, email, số điện thoại, địa chỉ, mã khách gắn được với người thật. Ở Việt Nam,
-  dữ liệu cá nhân được bảo vệ theo Nghị định 13/2023/NĐ-CP và Luật Bảo vệ dữ liệu cá nhân (hiệu lực từ
-  01/01/2026); EU có GDPR. Gửi cho bên thứ ba cần cơ sở pháp lý, không phải "cho nhanh".
+  tính tới 10/2026, khung chính là Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 (thông qua 26/06/2025, hiệu lực
+  01/01/2026) và Nghị định 356/2025/NĐ-CP hướng dẫn luật (ban hành 31/12/2025, hiệu lực 01/01/2026, thay Nghị định
+  13/2023/NĐ-CP); EU có GDPR. Gửi cho bên thứ ba cần cơ sở pháp lý, không phải "cho nhanh". Đây là kiến thức tham
+  khảo, không phải tư vấn pháp lý: văn bản có thể được sửa đổi, nên kiểm văn bản hiện hành và hỏi bộ phận pháp chế
+  trước khi quyết định.
 - **Dữ liệu kinh doanh nhạy cảm**: doanh thu chưa công bố, giá vốn, hợp đồng, kế hoạch sản phẩm.
 - **Bí mật kỹ thuật**: chuỗi kết nối, API key, mật khẩu trong notebook (module 05).
 
@@ -379,6 +382,8 @@ bảng là gì. Danh sách kiểm sau khi nhận code hoặc số từ AI:
 7. **Ngôn ngữ kết luận**: AI có biến tương quan thành nhân quả khi viết lại không?
 
 ### Chọn công cụ AI cho việc phân tích
+
+Tên sản phẩm trong bảng tính tới 10/2026; các hãng đổi tên và gói dịch vụ thường xuyên, nên kiểm lại trước khi chọn.
 
 | Công cụ | Dùng khi nào | Mạnh | Yếu | Loại công ty hay dùng |
 | --- | --- | --- | --- | --- |
@@ -585,6 +590,10 @@ AI/LLM và dữ liệu:
 
 - [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/): rò rỉ thông tin nhạy cảm, tin quá mức vào output.
 - [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework).
+- Bộ Công an. [Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15](https://mps.gov.vn/chinh-sach-phap-luat/co-so-du-lieu-van-ban/luat-bao-ve-du-lieu-ca-nhan-1753688803)
+  (văn bản và tình trạng hiệu lực).
+- EY Việt Nam. [Nghị định 356/2025/NĐ-CP quy định chi tiết Luật Bảo vệ dữ liệu cá nhân](https://www.ey.com/vi_vn/technical/tax/tax-and-law-updates/nghi-dinh-so-356-2025-nd-cp-quy-dinh-chi-tiet-mot-so-dieu-va-bien-phap-thi-hanh-luat-bao-ve-du-lieu-ca-nhan)
+  (tóm tắt; nghị định thay Nghị định 13/2023/NĐ-CP từ 01/01/2026).
 - [Ollama](https://ollama.com/): chạy model cục bộ khi dữ liệu không được rời máy.
 
 Phỏng vấn:

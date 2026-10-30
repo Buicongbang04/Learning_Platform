@@ -148,8 +148,10 @@ thường" mà không đọc data dictionary.
 
 Không dán khi chưa được phép:
 
-- **Dữ liệu cá nhân**: tên, email, số điện thoại, địa chỉ, mã khách gắn được với người thật. Ở Việt Nam có Nghị
-  định 13/2023/NĐ-CP và Luật Bảo vệ dữ liệu cá nhân (hiệu lực 01/01/2026); EU có GDPR.
+- **Dữ liệu cá nhân**: tên, email, số điện thoại, địa chỉ, mã khách gắn được với người thật. Ở Việt Nam, tính tới
+  10/2026: Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 và Nghị định 356/2025/NĐ-CP hướng dẫn luật (cùng hiệu lực
+  01/01/2026, nghị định thay Nghị định 13/2023/NĐ-CP); EU có GDPR. Đây là kiến thức tham khảo, không phải tư vấn pháp
+  lý: kiểm văn bản hiện hành và hỏi pháp chế.
 - **Dữ liệu kinh doanh nhạy cảm**: doanh thu chưa công bố, giá vốn, hợp đồng, kế hoạch.
 - **Bí mật kỹ thuật**: chuỗi kết nối, API key, mật khẩu.
 
