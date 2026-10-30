@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
-import { exerciseKind } from "./exerciseKind.ts";
+import { exerciseKind, isBinaryPath, quizVariantOf } from "./exerciseKind.ts";
 
 test("notebook DS vẫn là notebook", () => assert.equal(exerciseKind({ files: [{ path: "starter/eda.ipynb" }, { path: "starter/MEMO.md" }] }), "notebook"));
 test("bài .py là code", () => assert.equal(exerciseKind({ files: [{ path: "starter/load.py" }, { path: "tests/test_x.py", note: "Không sửa" }] }), "code"));
@@ -50,4 +50,17 @@ test("mọi README bài tập có frontmatter parse được và `files` là m�
   walk(root);
   assert.ok(count > 0);
   assert.deepEqual(bad, []);
+});
+
+test("quizVariantOf: bài chỉ có tệp nhị phân, không có test -> main; còn lại optional", () => {
+  assert.equal(quizVariantOf({ files: [{ path: "starter/sales.xlsx" }] }), "main");
+  assert.equal(quizVariantOf({ files: [{ path: "starter/sales.xlsx" }, { path: "tests/test_x.py" }] }), "optional");
+  assert.equal(quizVariantOf({ files: [{ path: "starter/load.py" }, { path: "tests/test_x.py" }] }), "optional");
+  assert.equal(quizVariantOf({ files: [{ path: "starter/load.py" }] }), "optional");
+  assert.equal(quizVariantOf({ files: [{ path: "starter/a.xlsx" }, { path: "starter/b.py" }] }), "optional");
+});
+
+test("isBinaryPath nhận .xlsx/.ods/.pdf/ảnh", () => {
+  assert.ok(isBinaryPath("starter/a.xlsx") && isBinaryPath("starter/a.ODS") && isBinaryPath("starter/a.pdf") && isBinaryPath("starter/a.png"));
+  assert.ok(!isBinaryPath("starter/a.py"));
 });

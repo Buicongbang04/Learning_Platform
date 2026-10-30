@@ -8,8 +8,8 @@ import { ExerciseList, Notes } from "../components/shared";
 import { Markdown } from "../components/Markdown";
 import { badge, button, card, CodeLine, cx, ErrorBlock, LoadingBlock } from "../components/ui";
 import { Workspace } from "../code/Workspace";
-import { exerciseKind } from "../code/exerciseKind";
-import { NotebookPanel } from "../code/NotebookPanel";
+import { exerciseKind, quizVariantOf } from "../code/exerciseKind";
+import { NotebookPanel, QuizCard } from "../code/NotebookPanel";
 import { QuizOnlyPanel } from "../code/QuizOnlyPanel";
 import { useSplit } from "../code/useSplit";
 import { exerciseLink, moduleLink, trackLink } from "../links";
@@ -263,9 +263,12 @@ export function ExercisePage() {
           <div className="absolute inset-y-6 left-1/2 w-1 -translate-x-1/2 rounded-full transition-colors group-hover:bg-primary group-focus-visible:bg-primary group-data-dragging:bg-primary" />
         </div>
         {kind === "code" ? (
-          <section aria-label="Code" className={cx(card, "h-[85vh] min-w-0 overflow-hidden lg:h-auto lg:flex-1", split.dragging && "select-none")}>
-            <Workspace key={exercise.key} exercise={exercise} done={done} onMarkDone={() => setDone(true)} />
-          </section>
+          <div className={cx("flex min-w-0 flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto", split.dragging && "select-none")}>
+            <section aria-label="Code" className={cx(card, "h-[85vh] shrink-0 overflow-hidden lg:h-full")}>
+              <Workspace key={exercise.key} exercise={exercise} done={done} onMarkDone={() => setDone(true)} />
+            </section>
+            <QuizCard key={exercise.key} exercise={exercise} trackId={track.id} variant={quizVariantOf(exercise)} />
+          </div>
         ) : (
           <section aria-label="Làm bài" className={cx("min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto", split.dragging && "select-none")}>
             {kind === "notebook" ? (

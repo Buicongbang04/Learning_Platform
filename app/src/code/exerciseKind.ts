@@ -21,3 +21,17 @@ export function exerciseKind(exercise: KindInput): ExerciseKind {
 export function isNotebookExercise(exercise: KindInput): boolean {
   return exerciseKind(exercise) === "notebook";
 }
+
+/** Tệp văn phòng/ảnh: không soạn trong app, mở bằng ứng dụng ngoài (khớp `isBinaryDoc` ở server/workspace.ts). */
+export const isBinaryPath = (path: string) => /\.(xlsx|xlsm|xls|ods|docx|pdf|png|jpe?g|gif)$/i.test(path);
+
+/**
+ * Thẻ trắc nghiệm dưới Workspace của bài code: "main" khi bài chỉ có tệp nhị phân (vd. .xlsx) trong starter/ và không có
+ * tệp text nào để làm hay test để chạy (trắc nghiệm là phần chấm chính); còn lại "optional". Có hiện thẻ hay không
+ * do `quiz.yaml` quyết định (QuizCard tự ẩn khi server trả 404).
+ */
+export function quizVariantOf(exercise: Pick<Exercise, "files">): "optional" | "main" {
+  const starters = exercise.files.filter((file) => file.path.startsWith("starter/"));
+  const hasTests = exercise.files.some((file) => file.path.startsWith("tests/"));
+  return !hasTests && starters.length > 0 && starters.every((file) => isBinaryPath(file.path)) ? "main" : "optional";
+}
