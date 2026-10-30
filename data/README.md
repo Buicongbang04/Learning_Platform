@@ -343,9 +343,9 @@ Không có `legal_corpus.json` lồng `articles` như dự kiến ban đầu; re
 | --- | --- | --- | --- | --- |
 | `cifar10` | 50 000 train + 10 000 test, 32x32x3, 10 lớp; parquet `plain_text/{train,test}-00000-of-00001.parquet`, cột `img` (`{bytes}` PNG), `label` (137 MB) | [HF uoft-cs/cifar10](https://huggingface.co/datasets/uoft-cs/cifar10) (mirror vì www.cs.toronto.edu tải ~1 MB/phút) | Thẻ HF `unknown`; Krizhevsky 2009 cho nghiên cứu/học tập | 02, 03, 06 |
 | `oxford-pets` | 3 680 train + 3 669 test = 7 349 ảnh, 37 giống; cột `image` (`{bytes}`), `label`, `image_id`, `label_cat_dog` (754 MB); không có trimap | [HF timm/oxford-iiit-pet](https://huggingface.co/datasets/timm/oxford-iiit-pet) (mirror vì thor.robots.ox.ac.uk ~1 MB/phút) | CC BY-SA 4.0 | 03 |
-| `penn-fudan` | 170 ảnh (`PennFudanPed/PNGImages`), 170 mask (`PedMasks`), `Annotation/*.txt`, 345 người (53 MB) | [UPenn](https://www.cis.upenn.edu/~jshi/ped_html/) | Công bố cho nghiên cứu, không ghi giấy phép | 03 |
+| `penn-fudan` | (đã giải nén) 170 ảnh (`data/raw/penn-fudan/PennFudanPed/PNGImages`), 170 mask (`PedMasks`), `Annotation/*.txt`, 345 người (53 MB) | [UPenn](https://www.cis.upenn.edu/~jshi/ped_html/) | Công bố cho nghiên cứu, không ghi giấy phép | 03 |
 | `uit-vsfc` | 11 426 train + 1 583 validation + 3 166 test; cột `sentence`, `sentiment` (0 negative, 1 neutral, 2 positive; train 5 325/458/5 643), `topic` (0 lecturer, 1 training_program, 2 facility, 3 others); parquet ở `default/<split>/0000.parquet` | [HF uitnlp/vietnamese_students_feedback](https://huggingface.co/datasets/uitnlp/vietnamese_students_feedback), nhánh `refs/convert/parquet` | Thẻ HF `unknown`; UIT-NLP cho nghiên cứu/học tập | 04, 11, 12, 20 |
-| `iwslt15-en-vi` | `train.en/.vi` 133 317 cặp, `tst2012.*` 1 553 cặp (dev), `tst2013.*` 1 268 cặp (test); văn bản thô một câu mỗi dòng, đã tách từ (31 MB) | [stefan-it/nmt-en-vi](https://github.com/stefan-it/nmt-en-vi) (mirror; nlp.stanford.edu không truy cập được từ máy này) | IWSLT 2015 (TED), Stanford NLP công bố cho nghiên cứu | 04 |
+| `iwslt15-en-vi` | (đã giải nén, đường dẫn `data/raw/iwslt15-en-vi/train.en` ...) `train.en/.vi` 133 317 cặp, `tst2012.*` 1 553 cặp (dev), `tst2013.*` 1 268 cặp (test); văn bản thô một câu mỗi dòng, đã tách từ (31 MB) | [stefan-it/nmt-en-vi](https://github.com/stefan-it/nmt-en-vi) (mirror; nlp.stanford.edu không truy cập được từ máy này) | IWSLT 2015 (TED), Stanford NLP công bố cho nghiên cứu | 04 |
 | `wikipedia-vi` | 2 trong 4 shard `20231101.vi`: `train-00001-of-00004.parquet` và `train-00002-of-00004.parquet`, mỗi shard 322 170 bài (644 340 bài, 117 MB); cột `id`, `url`, `title`, `text` | [HF wikimedia/wikipedia](https://huggingface.co/datasets/wikimedia/wikipedia) | CC BY-SA 3.0 + GFDL | 04, 05, 10 |
 | `openorca-viet` | 121 178 dòng JSONL `instruction` (system prompt), `input`, `output`; Orca tiếng Việt từ vi-FLAN (280 MB) | [HF vilm/OpenOrca-Viet](https://huggingface.co/datasets/vilm/OpenOrca-Viet) | Apache-2.0 (output do GPT-4/PaLM-2/Claude sinh, theo điều khoản nhà cung cấp) | 14 |
 | `gsm8k` | 7 473 train + 1 319 test; cột `question`, `answer` (đáp số sau `####`) | [HF openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) | MIT | 15 |
@@ -358,7 +358,7 @@ Không qua registry: `FashionMNIST` (đã có ở `data/raw/fashion-mnist/Fashio
 
 #### Thư viện giai đoạn 3 ↔ module
 
-Ghim `==` ở `pyproject.toml` gốc (CPU). `huggingface-hub` hạ về `>=1.32.0,<2.0` (lock: 1.33.0) vì `diffusers` 0.41.0, bản mới nhất đủ 2 tuần, đòi `<2.0`; nâng lại khi `diffusers` 0.42.x đủ 2 tuần (từ 2026-11-06).
+Ghim `==` ở `pyproject.toml` gốc (CPU). Mở parquet: `pd.read_parquet("data/raw/<tên>/<đường dẫn>")`, ví dụ `data/raw/uit-vsfc/default/train/0000.parquet`. Quy tắc 2 tuần: `constraint-dependencies` trong hai `pyproject.toml` chặn phụ thuộc gián tiếp phát hành sau 2026-10-16; bỏ khối này rồi `uv lock --upgrade` khi các bản đó đủ 2 tuần tuổi (từ 2026-11-13). `huggingface-hub` hạ về `>=1.32.0,<2.0` (lock: 1.33.0) vì `diffusers` 0.41.0, bản mới nhất đủ 2 tuần, đòi `<2.0`; nâng lại khi `diffusers` 0.42.x đủ 2 tuần (từ 2026-11-06).
 
 | Thư viện (phiên bản) | Module |
 | --- | --- |
@@ -374,7 +374,9 @@ Ghim `==` ở `pyproject.toml` gốc (CPU). `huggingface-hub` hạ về `>=1.32.
 | `faster-whisper` 1.2.1, `soundfile` 0.14.0, `jiwer` 4.0.0 | 18 |
 | `opentelemetry-sdk` 1.45.1 | 20 |
 | `pennylane` 0.45.1 | 22 |
-| `bitsandbytes`, `vllm` (chỉ GPU, `setup/gpu`) | 10, 14, 20 |
+| `llama-cpp-python` 0.3.36, **nhóm tuỳ chọn** `uv sync --group llama` (build từ source, cần gcc/g++/cmake, ~4 phút; không có thì dùng Ollama hoặc binary `llama.cpp` server) | 10, 20 |
+| `bitsandbytes` (chỉ GPU, `setup/gpu`) | 10, 14 |
+| `vllm`: không cài được (xung đột `transformers`: vLLM 0.31.0 đòi `<5.18`, env cần `>=5.22`), dùng `llama.cpp` server/Ollama | 20 |
 
 Bộ Kaggle tải qua `kagglehub` (client chính thức, cache ở `~/.cache/kagglehub`). Bộ có giấy phép
 không rõ thì không trích mẫu vào repo: fixtures của test được sinh trong test.

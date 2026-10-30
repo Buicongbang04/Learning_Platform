@@ -87,9 +87,12 @@ dependencies = [
     "pennylane==0.45.1",
     "opentelemetry-sdk==1.45.1",
     "gguf==0.19.0",
-    "llama-cpp-python==0.3.36",
     "imageio[ffmpeg]==2.38.1",
 ]
+
+[dependency-groups]
+# Build từ source (cần gcc, g++, cmake, ~4 phút), không có wheel CPU dựng sẵn: cài bằng `uv sync --group llama`
+llama = ["llama-cpp-python==0.3.36"]
 
 [tool.uv]
 package = false

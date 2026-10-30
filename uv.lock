@@ -950,7 +950,6 @@ dependencies = [
     { name = "langgraph-checkpoint-sqlite" },
     { name = "lightgbm" },
     { name = "linearmodels" },
-    { name = "llama-cpp-python" },
     { name = "matplotlib" },
     { name = "mcp" },
     { name = "mlflow" },
@@ -1003,6 +1002,11 @@ dependencies = [
     { name = "uvicorn" },
 ]
 
+[package.dev-dependencies]
+llama = [
+    { name = "llama-cpp-python" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "accelerate", specifier = "==1.15.0" },
@@ -1040,7 +1044,6 @@ requires-dist = [
     { name = "langgraph-checkpoint-sqlite", specifier = "==3.1.2" },
     { name = "lightgbm", specifier = ">=4.7.0" },
     { name = "linearmodels", specifier = "==7.0" },
-    { name = "llama-cpp-python", specifier = "==0.3.36" },
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "mcp", specifier = "==2.3.0" },
     { name = "mlflow", specifier = "==3.17.1" },
@@ -1090,6 +1093,9 @@ requires-dist = [
     { name = "ultralytics", specifier = "==8.4.178" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
+
+[package.metadata.requires-dev]
+llama = [{ name = "llama-cpp-python", specifier = "==0.3.36" }]
 
 [[package]]
 name = "databricks-sdk"
