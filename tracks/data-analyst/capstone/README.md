@@ -206,15 +206,53 @@ flowchart LR
 
 ## Milestone
 
-Mỗi milestone được gắn với module mà nó cần (`after`), nên chỉ đòi kiến thức các module trước đó. Các tệp
-milestone sẽ được thêm cùng nội dung module; hiện mới có danh sách gợi ý dưới đây.
+Mỗi milestone được gắn với module mà nó cần (`after`): app mở milestone khi bạn tới module đó, và
+milestone chỉ đòi kiến thức của các module trước nó. Mỗi milestone dùng lại sản phẩm của milestone trước.
 
-| # | Milestone | Sau module | Nội dung chính |
-| --- | --- | --- | --- |
-| 1 | Nạp dữ liệu, làm sạch, data dictionary | 06 | Nạp 8 bảng (causal bằng DuckDB), kiểm khoá và tính toàn vẹn, xử lý dòng `SALES_VALUE = 0`, viết data dictionary |
-| 2 | Trả lời câu hỏi business bằng SQL | 03 và 07 | Tình huống 1 đến 4: doanh thu theo thời gian và tỷ trọng ngành hàng, xếp hạng sản phẩm, repeat vs one-time, AOV, basket size, hiệu suất theo `STORE_ID`; kèm EDA |
-| 3 | Star schema và định nghĩa metric dùng chung | 09 | `fact_sales`, `dim_product`, `dim_household`, `dim_date`; khai báo grain, kiểm chất lượng, ghi `METRICS.md` |
-| 4 | Dashboard | 10 | Một dashboard trên Metabase hoặc Superset, một trên Streamlit; cùng số, so sánh hai công cụ |
-| 5 | Phân khúc RFM, cohort retention, market basket | 12 | Tình huống 3 (RFM, phân khúc sâu hơn) và 5 (nhóm nhân khẩu học), cộng cohort theo tuần đầu mua và luật kết hợp |
-| 6 | Hiệu quả campaign/coupon | 11 và 13 | Đọc như một thí nghiệm có giới hạn: nhóm được gán vs không, hạn chế chọn mẫu, kết luận thận trọng |
-| 7 | Memo và thuyết trình cho ban điều hành | 15 | Một trang memo, 5 slide, khuyến nghị có số liệu, nêu rõ giả định và giới hạn |
+```mermaid
+flowchart TB
+    M06m[Module 06<br/>Làm sạch dữ liệu] -.-> C1[M01 Nạp, làm sạch,<br/>data dictionary]
+    M07m[Module 07<br/>Thống kê mô tả & EDA] -.-> C2[M02 Tình huống 1–4<br/>bằng SQL]
+    M09m[Module 09<br/>Data modeling] -.-> C3[M03 Star schema<br/>& METRICS.md]
+    M10m[Module 10<br/>BI & Dashboard] -.-> C4[M04 Metabase/Superset<br/>+ Streamlit]
+    M12m[Module 12<br/>Product & customer] -.-> C5[M05 RFM, cohort,<br/>basket, nhân khẩu học]
+    M13m[Module 13<br/>Business & financial] -.-> C6[M06 Campaign/coupon]
+    M15m[Module 15<br/>Stakeholder & storytelling] -.-> C7[M07 Memo & 5 slide]
+    C1 --> C2 --> C3
+    C3 --> C4
+    C3 --> C5
+    C5 --> C6
+    C4 --> C7
+    C5 --> C7
+    C6 --> C7
+```
+
+| # | Milestone | Sau module | Dùng lại | Tạo ra |
+| --- | --- | --- | --- | --- |
+| M01 | [Nạp dữ liệu, làm sạch, data dictionary](milestones/m01-load-clean-dictionary.md) | `06-data-cleaning` | 8 CSV | `dunnhumby.duckdb`, `DATA_DICTIONARY.md`, `CLEANING_LOG.md` |
+| M02 | [Trả lời tình huống 1–4 bằng SQL](milestones/m02-sql-business-questions.md) | `07-descriptive-eda` (SQL từ module 03) | M01 | `sql/m02/`, `SQL_ANSWERS.md` |
+| M03 | [Star schema và định nghĩa metric dùng chung](milestones/m03-star-schema-metrics.md) | `09-analytics-data-modeling` | M01, M02 | star schema có test, `METRICS.md` |
+| M04 | [Dashboard Metabase/Superset và Streamlit](milestones/m04-dashboards.md) | `10-bi-dashboards` | M03 | hai dashboard cùng số, `DASHBOARD.md` |
+| M05 | [RFM, cohort retention, market basket, nhân khẩu học](milestones/m05-segmentation-cohort-basket.md) | `12-product-customer-analytics` | M03 | `SEGMENTS.md` (tình huống 3 và 5) |
+| M06 | [Hiệu quả campaign/coupon](milestones/m06-campaign-coupon.md) | `13-business-financial-analytics` (DiD từ module 11) | M03, M05 | `CAMPAIGN.md`, đề xuất thí nghiệm |
+| M07 | [Memo và thuyết trình cho ban điều hành](milestones/m07-exec-memo.md) | `15-stakeholder-storytelling-interview` | M01–M06 | `NUMBERS.md`, `MEMO.md`, 5 slide, README portfolio |
+
+## Code của capstone
+
+Code nằm ở [`project/`](project/). Khung gợi ý (bạn tự tạo dần, chi tiết trong `project/README.md`):
+
+```
+project/
+├── src/dunnhumby_da/  # load, export_pg, segments, campaign: hàm dùng chung có test
+├── sql/               # checks/ (M01), m02/, m05/, m06/
+├── dbt/               # M03: star schema + test
+├── notebooks/         # m01, m02, m05, m06
+├── dashboards/        # M04: Streamlit + tệp xuất BI
+├── reports/           # DATA_DICTIONARY, CLEANING_LOG, SQL_ANSWERS, MODEL, METRICS, DASHBOARD,
+│                      # SEGMENTS, CAMPAIGN, NUMBERS, MEMO, QA_PREP, slides
+├── artifacts/         # dunnhumby.duckdb, parquet: không commit
+└── tests/             # uv run pytest tracks/data-analyst/capstone/project/tests -q
+```
+
+Capstone không có lời giải mẫu. Mỗi milestone có bảng số tham chiếu (tính bằng DuckDB trên dữ liệu thật)
+để bạn đối chiếu; lệch thì tìm lý do và ghi lại, đừng chỉnh cho khớp.
