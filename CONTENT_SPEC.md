@@ -276,5 +276,6 @@ Mỗi milestone gồm: `# Tiêu đề`, `## Mục tiêu`, `## Việc cần làm`
 | minio | 9000 (S3 API), 9001 (console) | `minioadmin` / `minioadmin` |
 | kafka | 9094 (từ máy host) | không |
 | airflow | 8080 | `airflow` / `airflow` |
-| metabase | 3000 | tạo lúc mở lần đầu |
+| metabase | 3000 | `admin@example.com` / `DeLearning-Admin1` (tạo bằng `setup/bi/init_bi.py`) |
+| superset | 8088 | `admin` / `admin` |
 | localstack | 4566 (giả lập AWS: s3, iam, sts) | access key `test` / `test` |

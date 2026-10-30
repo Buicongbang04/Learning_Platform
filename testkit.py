@@ -63,6 +63,7 @@ SERVICES = {
     "minio": ("MINIO_HOST", "localhost", "MINIO_PORT", 9000),
     "kafka": ("KAFKA_HOST", "localhost", "KAFKA_PORT", 9094),
     "metabase": ("METABASE_HOST", "localhost", "METABASE_PORT", 3000),
+    "superset": ("SUPERSET_HOST", "localhost", "SUPERSET_PORT", 8088),
     "airflow": ("AIRFLOW_HOST", "localhost", "AIRFLOW_PORT", 8080),
     "localstack": ("LOCALSTACK_HOST", "localhost", "LOCALSTACK_PORT", 4566),
 }

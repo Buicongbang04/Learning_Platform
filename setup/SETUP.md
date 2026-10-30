@@ -80,7 +80,7 @@ docker compose -f setup/docker-compose.yml --profile all down -v
 | `nosql` | mongo, redis, cassandra, neo4j |
 | `lake` | minio |
 | `stream` | kafka |
-| `bi` | metabase, postgres |
+| `bi` | metabase, superset, postgres |
 | `cloud` | localstack |
 | `all` | tất cả |
 
@@ -96,7 +96,8 @@ Thông số kết nối:
 | minio | S3 API `http://localhost:9000`, console http://localhost:9001 | `minioadmin` / `minioadmin` |
 | localstack | `http://localhost:4566` (endpoint chung cho mọi API AWS giả lập) | key bất kỳ, vd. `test` / `test`, region `us-east-1` |
 | kafka | `localhost:9094` (container khác dùng `kafka:9092`) | không |
-| metabase | http://localhost:3000 | tạo tài khoản lúc mở lần đầu. Kết nối Postgres bằng host `postgres`, cổng 5432 |
+| metabase | http://localhost:3000 (`METABASE_PORT`) | `admin@example.com` / `DeLearning-Admin1`, tạo bằng `setup/bi/init_bi.py`. Kết nối Postgres bằng host `postgres`, cổng 5432 |
+| superset | http://localhost:8088 (`SUPERSET_PORT`) | `admin` / `admin`. Kết nối Postgres bằng `postgresql+psycopg2://de:de@postgres:5432/de` |
 | airflow | http://localhost:8080 | `airflow` / `airflow` (xem `setup/airflow/README.md`) |
 
 Airflow chạy ở compose riêng:
@@ -213,7 +214,7 @@ bằng biến môi trường (`POSTGRES_PORT`, `POSTGRES_DSN`, `KAFKA_BOOTSTRAP`
 ### Cổng đã bị dùng (`bind: address already in use`)
 
 ```bash
-sudo ss -ltnp | grep -E ':(5432|6379|27017|9042|7687|9000|9094|3000|8080)\b'
+sudo ss -ltnp | grep -E ':(5432|6379|27017|9042|7687|9000|9094|3000|8088|8080)\b'
 ```
 
 - Có Postgres cài sẵn trên máy: `sudo systemctl stop postgresql`, hoặc đổi cổng host trong
@@ -236,7 +237,7 @@ Nếu container chết với exit code 137: thiếu RAM (xem mục dưới). Hea
 
 ```bash
 docker stats --no-stream                                          # xem ai ăn RAM
-docker compose -f setup/docker-compose.yml stop cassandra neo4j metabase
+docker compose -f setup/docker-compose.yml stop cassandra neo4j metabase superset
 ```
 
 - Chỉ bật dịch vụ của module đang học.
@@ -298,3 +299,20 @@ Nút "Mở trong VS Code" trên trang bài tập chạy lệnh `code <đường 
 1. Cài [VS Code](https://code.visualstudio.com/) và extension **Jupyter** (`ms-toolsai.jupyter`).
 2. Đảm bảo lệnh `code` có trong PATH: mở VS Code, `Ctrl+Shift+P` → "Shell Command: Install 'code' command in PATH" (Linux/macOS cài từ gói chính thức thường đã có sẵn). Kiểm tra bằng `code --version`.
 3. Trong notebook, bấm **Select Kernel** → **Python Environments** → chọn `.venv` ở gốc repo (`uv sync` tạo ra; `ipykernel` đã nằm trong dependencies).
+
+## 11. BI (Metabase + Superset) cho module 10 Data Analyst
+
+```bash
+docker compose -f setup/docker-compose.yml --profile bi up -d postgres metabase superset   # lần đầu build image Superset
+uv run python setup/bi/load_da.py    # nạp da.online_retail_ii (~1,02 triệu dòng) và da.bike_hour (17.379 dòng) vào Postgres
+uv run python setup/bi/init_bi.py    # tạo admin Metabase + thêm database `de` vào Metabase và Superset (chạy lại không sao)
+uv run pytest tests/test_bi_services.py -q
+```
+
+- Metabase: http://localhost:3000, `admin@example.com` / `DeLearning-Admin1`. Superset: http://localhost:8088, `admin` / `admin`
+  (lần đầu mất 1-2 phút để khởi tạo).
+- Đổi cổng khi trùng: thêm `METABASE_PORT=3001`, `SUPERSET_PORT=8089` vào `setup/.env` (tệp này git-ignore).
+  Đổi `SUPERSET_SECRET_KEY` bằng biến môi trường nếu muốn khoá khác mặc định (chỉ dùng local).
+- Hai công cụ nối Postgres bằng host `postgres:5432` (mạng Docker), không phải `localhost:<POSTGRES_PORT>`.
+- Gọi API từ code: `setup/bi/clients.py` có `metabase_session()` và `superset_session()`.
+- Tắt khi xong (giữ dữ liệu): `docker compose -f setup/docker-compose.yml stop superset metabase`.
