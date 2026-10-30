@@ -4,7 +4,7 @@
 
 **Goal:** Hoàn thiện track `ai-engineer`: soạn 21 module còn lại (00, 02–12, 14–22) cùng chuẩn với hai module mẫu 01 và 13, và capstone "Trợ lý pháp luật tiếng Việt" gồm 9 milestone.
 
-**Architecture:** Không đổi app hay testkit. Mỗi module là một task độc lập (thư mục riêng), làm **tuần tự** nên mỗi task tự thêm dependency (`pyproject.toml` gốc cho thư viện chạy CPU; `setup/gpu/pyproject.toml` cho thư viện chỉ chạy GPU) và bộ dữ liệu (registry `data/download_dataset.py`) mà module cần. Task cuối là capstone.
+**Architecture:** Không đổi app hay testkit. **Task 0** thêm một lần mọi dependency (`pyproject.toml` gốc cho thư viện chạy CPU; `setup/gpu/pyproject.toml` cho thư viện chỉ chạy GPU) và mọi bộ dữ liệu (registry `data/download_dataset.py`) cho cả giai đoạn. Sau đó mỗi module là một task độc lập (thư mục riêng), chạy **song song 3–4 module**, mỗi module trong worktree + nhánh riêng tách từ `ai-engineer`, merge về từng module một. Module task không sửa tệp dùng chung; thiếu gì thì báo controller (thêm qua một commit nhỏ trên `ai-engineer` rồi module rebase). Task cuối là capstone.
 
 **Tech Stack:** như giai đoạn 1–2 (`llmkit`, `testkit`, `setup/gpu`), cộng thư viện theo từng module ở bảng dưới.
 
@@ -35,6 +35,17 @@
 5. Bài cần 12GB thiếu đường lui laptop → người học không có PC bị kẹt. Mỗi bài `GPU 12GB (PC)` ghi rõ cấu hình nhỏ cho laptop.
 
 ---
+
+### Task 0: Dependency và bộ dữ liệu dùng chung cho cả giai đoạn
+
+**Files:** `pyproject.toml`, `uv.lock`, `setup/gpu/pyproject.toml`, `setup/gpu/uv.lock`, `data/download_dataset.py` (chỉ thêm vào `DATASETS`, thêm loại nguồn nếu cần kèm test), `data/README.md`, `tests/test_download_dataset.py`.
+
+**Interfaces (Produces):** tên bộ dữ liệu trong `DATASETS` mà Task 1–22 dùng qua `ex.dataset("<tên>")`, và dependency import được. Ghi bảng "bộ dữ liệu ↔ module" và "thư viện ↔ module" vào `data/README.md` và vào báo cáo để controller đưa cho từng module task.
+
+- [ ] **Step 1:** Với mỗi dòng của bảng module (cột dữ liệu), chọn bộ thật cụ thể, kiểm giấy phép, **tải thử thật** vào `data/raw/<tên>/`, đếm dòng/ảnh, ghi số. Bộ cần đăng ký/token (MC-OCR, gated HF) → ghi lại, báo controller, không tự thay. Bộ có sẵn trong thư viện (torchvision, gymnasium, sklearn) không cần registry nhưng ghi vào bảng. Model lớn không tải ở bước này.
+- [ ] **Step 2:** Thêm dependency chạy CPU vào root (gợi ý: gymnasium[classic-control,box2d], ale-py, opencv-python-headless, ultralytics, peft, trl, datasets, accelerate, diffusers, tiktoken, tokenizers, langchain-core, langchain-ollama, langgraph, faiss-cpu, chromadb, qdrant-client, lancedb, mcp, faster-whisper, pennylane, opentelemetry-sdk, llama-cpp-python hoặc gguf, imageio[ffmpeg]) — giữ torch +cpu từ index pytorch-cpu, phiên bản ≥ 2 tuần tuổi; thư viện chỉ GPU (bitsandbytes, vLLM nếu cài được trên driver 550) vào `setup/gpu`. Gói nào không cài được thì ghi lại và chọn thay thế.
+- [ ] **Step 3:** `uv run python -c "import …"` cho mọi gói mới; `uv run python -c "import torch; print(torch.__version__)"` có `+cpu`; `uv run pytest tests -q` PASS; `SOLUTION=1 uv run pytest tracks -q` không giảm (DE+DS 1662 pass + AI Engineer hiện có).
+- [ ] **Step 4:** Commit `"data: dependency và bộ dữ liệu thật cho giai đoạn 3 track AI Engineer"`.
 
 ### Task 1–21: Mỗi module một task
 
@@ -73,7 +84,7 @@
 | 20 | `21-ai-system-design` | khung đóng bài toán, chọn prompt/RAG/fine-tune/agent, ước lượng capacity/chi phí, ≥6 case phỏng vấn; bài: máy tính chi phí/độ trễ, design doc chấm rubric | — | CPU |
 | 21 | `22-quantum-ml` | qubit, gate, mạch, đo; variational circuit, quantum kernel trên simulator (PennyLane); tự viết simulator statevector nhỏ bằng numpy; đánh giá thẳng thắn hiện trạng; ghi "cập nhật dần" | Iris / moons (sklearn) | CPU |
 
-Thứ tự thực hiện như cột Task. Trước Task 5 (module 05), báo người học setup truy cập PC (SSH hoặc `OLLAMA_HOST`) nếu muốn số liệu 12GB được kiểm thật; không có thì làm bản thu nhỏ.
+Chạy song song theo đợt 3–4 module (ghép module nặng CPU/GPU với module nhẹ), mỗi module worktree riêng. Trước Task 5 (module 05), báo người học setup truy cập PC (SSH hoặc `OLLAMA_HOST`) nếu muốn số liệu 12GB được kiểm thật; không có thì làm bản thu nhỏ.
 
 ### Task 22: Capstone "Trợ lý pháp luật tiếng Việt"
 
