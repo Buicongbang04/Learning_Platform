@@ -160,3 +160,14 @@ def test_corrupt_workbook_fails_clearly(tmp_path, monkeypatch):
     (starter / "b.xlsx").write_bytes(b"not a zip")
     with pytest.raises(pytest.fail.Exception, match="Không mở được workbook"):
         ex.workbook("b.xlsx").formula("Data", "A1")
+
+
+def test_pivot_tables_bao_loi_khi_openpyxl_doi_api(tmp_path, monkeypatch):
+    ex, starter, _ = make_exercise(tmp_path, monkeypatch)
+    write_book(starter / "b.xlsx")
+    wb = ex.workbook("b.xlsx")
+    sheet = wb._formula_book()["Data"]
+    if hasattr(sheet, "_pivots"):
+        del sheet._pivots
+    with pytest.raises(RuntimeError, match="_pivots"):
+        wb.pivot_tables("Data")
