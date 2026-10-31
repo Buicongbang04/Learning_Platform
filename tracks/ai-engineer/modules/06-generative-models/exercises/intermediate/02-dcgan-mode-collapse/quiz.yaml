@@ -1,0 +1,105 @@
+questions:
+- id: ring-k5
+  kind: data
+  type: single
+  prompt: Trên vòng 8 Gauss, khi G được cập nhật 5 lần mỗi vòng (D 1 lần), mẫu sinh của các seed trông thế nào?
+  options:
+  - id: a
+    text: Phủ đủ 8 mode như bản thường
+  - id: b
+    text: Co về một vùng nhỏ, gần như không phủ mode nào
+  - id: c
+    text: Trải đều thành một vòng tròn liền, không tách mode
+  - id: d
+    text: Phủ đúng 4 mode xen kẽ nhau
+- id: ring-hopping
+  kind: data
+  type: single
+  prompt: Theo dõi số mode được phủ mỗi 500 vòng với loss non-saturating, đường đó trông thế nào?
+  options:
+  - id: a
+    text: Tăng đơn điệu từ 1 lên 8
+  - id: b
+    text: Lên xuống trước khi ổn định ở 8
+  - id: c
+    text: Đứng yên ở 8 ngay từ 500 vòng đầu
+  - id: d
+    text: Giảm dần từ 8 về 1
+- id: wgan-tradeoff
+  kind: data
+  type: single
+  prompt: So với non-saturating cùng 3 000 vòng, WGAN-GP (critic 5 bước mỗi vòng) cho kết quả thế nào trên vòng 8 Gauss?
+  options:
+  - id: a
+    text: Phủ 8 mode, ít mẫu chất lượng cao hơn
+  - id: b
+    text: Phủ ít mode hơn nhưng mẫu sắc hơn
+  - id: c
+    text: Kém hơn rõ rệt ở cả hai chỉ số
+  - id: d
+    text: Giống hệt nhau ở mọi seed
+- id: strong-d
+  kind: data
+  type: single
+  prompt: Khi lr của D gấp 10 lần lr của G, loss minimax gốc (saturating) cho mẫu DCGAN ra sao so với non-saturating?
+  options:
+  - id: a
+    text: Tốt hơn, vì loss gốc đúng với lý thuyết
+  - id: b
+    text: Như nhau, vì hai loss cùng điểm cân bằng
+  - id: c
+    text: Tệ hẳn, còn vài lớp và D(G(z)) về 0
+  - id: d
+    text: Loss ra NaN ngay trong epoch đầu tiên
+- id: detach
+  kind: knowledge
+  type: single
+  prompt: Ở bước cập nhật D, vì sao đưa fake.detach() thay vì fake vào D?
+  options:
+  - id: a
+    text: Để loss của D không tạo gradient về tham số G
+  - id: b
+    text: Để giảm bộ nhớ GPU của D xuống một nửa
+  - id: c
+    text: Vì BatchNorm của D không nhận tensor cần gradient
+  - id: d
+    text: Để D nhìn thấy ảnh giả ở chế độ eval
+- id: loss-signal
+  kind: knowledge
+  type: single
+  prompt: Loss của G giảm đều và tiến gần 0 trong lúc train GAN. Bạn kết luận gì?
+  options:
+  - id: a
+    text: G đang tốt lên, có thể dừng sớm
+  - id: b
+    text: Chưa đủ; cần chỉ số có đáp án (histogram, FID)
+  - id: c
+    text: D đang thua, cần tăng lr của D lên
+  - id: d
+    text: Mode collapse chắc chắn đã xảy ra rồi
+- id: bn-bias
+  kind: knowledge
+  type: single
+  prompt: Vì sao conv đứng ngay trước BatchNorm trong DCGAN dùng bias=False?
+  options:
+  - id: a
+    text: BN trừ mean theo batch nên bias bị triệt tiêu
+  - id: b
+    text: Bias làm conv transpose sinh vân bàn cờ
+  - id: c
+    text: PyTorch không cho conv có bias trước BatchNorm
+  - id: d
+    text: Để khởi tạo N(0, 0.02²) không áp lên bias
+- id: hist-bias
+  kind: data
+  type: single
+  prompt: Với cấu hình DCGAN chuẩn, histogram lớp của 10 000 mẫu sinh cho thấy gì?
+  options:
+  - id: a
+    text: Đều gần 1 000 mỗi lớp, KL gần bằng 0
+  - id: b
+    text: Lệch rõ, có lớp gần 1/3 số mẫu, có lớp gần vắng
+  - id: c
+    text: Chỉ có đúng một lớp chữ số duy nhất
+  - id: d
+    text: Không đo được, vì giám khảo chỉ chấm ảnh thật thôi
