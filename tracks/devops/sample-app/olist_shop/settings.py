@@ -9,7 +9,7 @@ def _env(name: str, default: str):
 @dataclass(frozen=True)
 class Settings:
     database_url: str = _env("DATABASE_URL", "sqlite:///./olist_shop.db")
-    redis_url: str = _env("REDIS_URL", "redis://localhost:16379/0")
+    redis_url: str = _env("REDIS_URL", "redis://localhost:26379/0")
     log_level: str = _env("LOG_LEVEL", "INFO")
     app_version: str = _env("APP_VERSION", "dev")
     worker_metrics_port: int = field(

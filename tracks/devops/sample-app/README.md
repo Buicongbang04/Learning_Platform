@@ -7,7 +7,7 @@ dựa vào nó.
 
 ```mermaid
 flowchart LR
-    client[Client / curl] -->|HTTP :18000| api[api - FastAPI]
+    client[Client / curl] -->|HTTP :28000| api[api - FastAPI]
     api -->|SQL| pg[(postgres:16)]
     api -->|RPUSH olist:jobs| redis[(redis:7)]
     worker[worker] -->|BLPOP olist:jobs| redis
@@ -48,16 +48,19 @@ Worker phơi metrics `jobs_processed_total`, `jobs_failed_total` ở cổng `WOR
 | Biến | Mặc định | Ghi chú |
 | --- | --- | --- |
 | `DATABASE_URL` | `sqlite:///./olist_shop.db` | Compose đặt `postgresql+psycopg://olist:olist@postgres:5432/olist` |
-| `REDIS_URL` | `redis://localhost:16379/0` | Compose đặt `redis://redis:6379/0` |
+| `REDIS_URL` | `redis://localhost:26379/0` | Compose đặt `redis://redis:6379/0` |
 | `LOG_LEVEL` | `INFO` | |
 | `APP_VERSION` | `dev` | Trả trong `/healthz`, dùng để kiểm bản đang chạy sau deploy |
 | `WORKER_METRICS_PORT` | `9101` | Chỉ worker dùng |
-| `OLIST_SHOP_PG_PORT` / `OLIST_SHOP_REDIS_PORT` / `OLIST_SHOP_API_PORT` | `15432` / `16379` / `18000` | Cổng trên máy host |
+| `OLIST_SHOP_PG_PORT` / `OLIST_SHOP_REDIS_PORT` / `OLIST_SHOP_API_PORT` | `25432` / `26379` / `28000` | Cổng trên máy host |
 | `DEVOPS_CPUSET` | rỗng | Ghim core cho mọi container, ví dụ `12-35` trên máy dùng chung |
 
-Cổng host cố ý tránh `5432`, `6379`, `8000`, `8080`, `9000`, `9001` để không đụng project khác. Nếu
-`15432` đã bị chiếm (ví dụ stack của track DE trong `setup/` đặt `POSTGRES_PORT=15432`), sao chép
+Cổng host cố ý tránh `5432`, `6379`, `8000`, `8080`, `9000`, `9001` và cả `15432`, `16379` (cổng mà
+stack của track DE trong `setup/` hay được đổi sang) để không đụng project khác. Nếu vẫn trùng, sao chép
 `.env.example` thành `.env` và đổi cổng.
+
+`api` và `worker` có `restart: unless-stopped`. Lần đầu chạy trên volume mới, cả hai cùng tạo bảng; nếu
+Postgres báo trùng bảng, worker thử lại vài lần, còn nếu vẫn chết thì Docker khởi động lại nó.
 
 ## Log
 
@@ -76,22 +79,22 @@ Các lệnh dưới chạy trong `tracks/devops/sample-app`. Trên máy dùng ch
 ```bash
 cd tracks/devops/sample-app
 DEVOPS_CPUSET=12-35 nice -n 15 docker compose up -d --build
-curl -s localhost:18000/readyz
+curl -s localhost:28000/readyz
 ```
 
 Nạp dữ liệu. Nếu chưa có `data/raw/olist` (từ `data/download_olist.py`), sinh dữ liệu giả cùng schema:
 
 ```bash
 uv run python ../../../data/generate_olist.py --orders 5000 --out /tmp/olist
-DATABASE_URL=postgresql+psycopg://olist:olist@localhost:15432/olist \
+DATABASE_URL=postgresql+psycopg://olist:olist@localhost:25432/olist \
   uv run python -m olist_shop.seed /tmp/olist --limit-orders 5000
 ```
 
 Seed xoá dữ liệu cũ rồi nạp lại, chạy nhiều lần vẫn ra cùng kết quả. Tính doanh thu rồi xem kết quả:
 
 ```bash
-curl -s -X POST localhost:18000/jobs/recompute
-curl -s localhost:18000/stats/revenue-by-state
+curl -s -X POST localhost:28000/jobs/recompute
+curl -s localhost:28000/stats/revenue-by-state
 docker compose logs worker
 ```
 

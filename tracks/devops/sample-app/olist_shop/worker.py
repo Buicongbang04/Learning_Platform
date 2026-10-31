@@ -6,6 +6,7 @@ import time
 import redis
 from prometheus_client import CollectorRegistry, Counter, start_http_server
 from sqlalchemy import Engine, delete, func, insert, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from olist_shop import db, log
 from olist_shop.jobs import QUEUE, RECOMPUTE_REVENUE
@@ -57,6 +58,18 @@ def make_redis(url: str) -> redis.Redis:
     return redis.Redis.from_url(url, socket_connect_timeout=2, socket_timeout=BLPOP_TIMEOUT + 5)
 
 
+def ensure_schema(engine: Engine, attempts: int = 10, delay: float = 1.0) -> None:
+    for attempt in range(1, attempts + 1):
+        try:
+            db.init(engine)
+            return
+        except SQLAlchemyError:
+            if attempt == attempts:
+                raise
+            logger.warning("tạo bảng lỗi, thử lại", extra={"attempt": attempt}, exc_info=True)
+            time.sleep(delay * attempt)
+
+
 def run_once(redis_client: redis.Redis, engine: Engine) -> int:
     raw = redis_client.lpop(QUEUE)
     if raw is None:
@@ -69,7 +82,7 @@ def main() -> None:
     settings = Settings()
     log.configure(settings.log_level)
     engine = db.make_engine(settings.database_url)
-    db.init(engine)
+    ensure_schema(engine)
     redis_client = make_redis(settings.redis_url)
     start_http_server(settings.worker_metrics_port, registry=REGISTRY)
     stopping = False

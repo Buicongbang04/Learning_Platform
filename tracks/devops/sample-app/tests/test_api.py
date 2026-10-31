@@ -18,7 +18,7 @@ def test_settings_defaults(monkeypatch):
         monkeypatch.delenv(key, raising=False)
     s = Settings()
     assert s.database_url == "sqlite:///./olist_shop.db"
-    assert s.redis_url == "redis://localhost:16379/0"
+    assert s.redis_url == "redis://localhost:26379/0"
     assert s.log_level == "INFO"
     assert s.app_version == "dev"
 
@@ -150,6 +150,6 @@ def test_ports_avoid_common_defaults():
             m = re.fullmatch(r"\$\{OLIST_SHOP_\w+_PORT:-(\d+)\}", host)
             assert m, f"{name}: cổng host phải lấy từ biến OLIST_SHOP_*_PORT: {port}"
             defaults.append(int(m.group(1)))
-    assert sorted(defaults) == [15432, 16379, 18000]
-    assert not set(defaults) & {5432, 6379, 8000, 8080, 9000, 9001}
+    assert sorted(defaults) == [25432, 26379, 28000]
+    assert not set(defaults) & {5432, 6379, 8000, 8080, 9000, 9001, 15432, 16379}
 
