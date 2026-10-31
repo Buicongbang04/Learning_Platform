@@ -16,15 +16,15 @@
 | --- | --- | --- |
 | Lịch | Tổng −9.0%, nhưng **mỗi ngày −12.0%** (tháng 10 có 31 ngày, tháng 9 có 30) | Không giải thích; số ngày còn làm mức giảm thật lớn hơn |
 | Mùa vụ | Năm 2011 cùng chuyển tháng: mỗi ngày **−6.2%** | Giải thích khoảng một nửa |
-| Thời tiết | Ngày quang 22 → 14, ngày mây 8 → 15, ngày xấu 0 → 2 (bão Sandy 29/10, 22 lượt; 30/10, 1 096 lượt). Trong cùng loại thời tiết: quang **−2.6%**, mây −4.2% | Giải thích phần lớn phần còn lại |
+| Thời tiết | Ngày quang 22 → 14, ngày mây 8 → 15, ngày xấu 0 → 2 (bão Sandy 29–30/10; hai ngày này thiếu giờ trong dữ liệu: 29/10 chỉ có giờ 0, 22 lượt; 30/10 chỉ có giờ 13–23, 1 096 lượt, nên không phải cầu thật đo được). Trong cùng loại thời tiết: quang **−2.6%**, mây −4.2% | Giải thích phần lớn phần còn lại |
 | Phân khúc | `casual` −21.1% (46.8% mức giảm, dù chỉ 20% lượt); `registered` −6.0% | Vãng lai giảm mạnh hơn, đúng kiểu nhạy thời tiết |
 
 Hai cách kiểm chéo cho cùng câu chuyện:
 
 - **Giữ cơ cấu thời tiết của tháng 9** (73% quang, 27% mây) với lượt trung bình từng loại thời tiết của tháng 10:
   7 069 lượt/ngày so với 7 286, **−3.0%**. Phần còn lại của mức −12% là do tháng 10 xấu trời hơn.
-- **Bỏ hai ngày bão**: tháng 10 còn 6 818 lượt/ngày, **−6.4%** so với tháng 9, gần đúng bằng mức mùa vụ năm trước
-  (−6.2%).
+- **Bỏ hai ngày bão** (cũng là hai ngày thiếu giờ dữ liệu): tháng 10 còn 6 818 lượt/ngày, **−6.4%** so với
+  tháng 9, gần đúng bằng mức mùa vụ năm trước (−6.2%).
 
 Lưu ý: hai cách tách mùa vụ và thời tiết không cộng lại gọn gàng (mùa vụ năm 2011 cũng lẫn thời tiết của năm đó);
 đủ để quyết định thì không cần tách chính xác hơn.
@@ -33,9 +33,9 @@ Lưu ý: hai cách tách mùa vụ và thời tiết không cộng lại gọn g
 
 "**Không có dấu hiệu khách bỏ dịch vụ.** Lượt thuê mỗi ngày tháng 10 thấp hơn tháng 9 khoảng 12%, trong đó khoảng
 một nửa là mùa vụ (năm ngoái cùng kỳ giảm 6%) và phần lớn phần còn lại là thời tiết: tháng 10 có 14 ngày quang so
-với 22, và bão Sandy làm mất gần hết lượt của hai ngày 29–30/10. So những ngày cùng thời tiết, tháng 10 chỉ thấp
-hơn 3–4%. Giới hạn: dữ liệu ngày không cho biết số thành viên đang hoạt động; muốn chắc về churn cần dữ liệu theo
-tài khoản."
+với 22, và hai ngày bão Sandy 29–30/10 gần như trống số liệu (dữ liệu chỉ ghi 1 và 11 giờ của hai ngày đó), làm
+tổng tháng thấp thêm. So những ngày cùng thời tiết, tháng 10 chỉ thấp hơn 3–4%. Giới hạn: dữ liệu ngày không cho
+biết số thành viên đang hoạt động; muốn chắc về churn cần dữ liệu theo tài khoản."
 
 Thứ tự kết luận → bằng chứng → giới hạn, con số nào cũng có tham chiếu.
 
