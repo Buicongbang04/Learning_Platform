@@ -1,0 +1,79 @@
+questions:
+- id: test-size
+  kind: data
+  type: single
+  prompt: Tập `tst2013` của IWSLT'15 en-vi có bao nhiêu cặp câu?
+  options:
+  - id: a
+    text: '1 268'
+  - id: b
+    text: '1 553'
+  - id: c
+    text: '2 821'
+  - id: d
+    text: '133 317'
+- id: old-tone
+  kind: data
+  type: single
+  prompt: Phía tiếng Việt của IWSLT'15 (train.vi) đặt dấu thanh theo kiểu nào?
+  options:
+  - id: a
+    text: Toàn kiểu mới (hòa, hóa, thủy)
+  - id: b
+    text: Toàn kiểu cũ (hoà, hoá, thuỷ)
+  - id: c
+    text: Trộn đều hai kiểu, mỗi kiểu khoảng một nửa
+  - id: d
+    text: Không có dấu thanh, đã bỏ dấu toàn bộ
+- id: checkpoint
+  kind: knowledge
+  type: single
+  prompt: Chọn checkpoint tốt nhất theo tập nào?
+  options:
+  - id: a
+    text: tst2013, vì đó chính là tập báo cáo cuối cùng
+  - id: b
+    text: tst2012 (dev), tst2013 chỉ dùng một lần ở cuối
+  - id: c
+    text: Tập train, theo train loss thấp nhất
+  - id: d
+    text: Gộp tst2012 với tst2013 cho số liệu ổn định hơn
+- id: length-penalty
+  kind: knowledge
+  type: single
+  prompt: Beam search không chuẩn hoá độ dài thì bản dịch thường ra sao?
+  options:
+  - id: a
+    text: Quá ngắn, vì mỗi token thêm làm tổng log-xác suất giảm
+  - id: b
+    text: Quá dài, vì beam luôn chọn câu có nhiều token hơn
+  - id: c
+    text: Giống hệt greedy vì điểm được cộng theo cùng cách
+  - id: d
+    text: Lặp vô hạn vì không bao giờ sinh được eos
+- id: case-mismatch
+  kind: knowledge
+  type: single
+  prompt: Hypothesis giữ chữ hoa nhưng bạn so với reference đã `lower()`. Điều gì xảy ra?
+  options:
+  - id: a
+    text: sacrebleu tự lowercase cả hai nên không sao
+  - id: b
+    text: BLEU thấp đi vô lý vì "Tôi" khác "tôi"
+  - id: c
+    text: BLEU cao hơn thật vì ít token bị so hơn
+  - id: d
+    text: sacrebleu báo lỗi vì hai phía khác kiểu chữ
+- id: hallucination
+  kind: knowledge
+  type: single
+  prompt: Bản dịch trôi chảy nhưng nói chuyện khác hẳn câu nguồn. Giải thích nào hợp lý nhất?
+  options:
+  - id: a
+    text: BPE vocab quá lớn nên model không đọc được câu nguồn
+  - id: b
+    text: Decoder là LM mạnh, attention chưa căn đúng nguồn
+  - id: c
+    text: Beam size quá nhỏ nên không tìm được câu đúng
+  - id: d
+    text: BLEU tính sai vì thiếu chữ ký sacrebleu

@@ -1,0 +1,79 @@
+questions:
+- id: compare-ppl
+  kind: knowledge
+  type: single
+  prompt: Model byte có perplexity theo token 3.5, model BPE 8 000 có 60. Kết luận nào đúng?
+  options:
+  - id: a
+    text: Model byte tốt hơn hẳn vì perplexity nhỏ hơn nhiều lần
+  - id: b
+    text: Chưa kết luận được, phải quy về bits-per-character
+  - id: c
+    text: Model BPE tốt hơn vì vocab lớn hơn nhiều
+  - id: d
+    text: Hai model ngang nhau vì cùng một kiến trúc LSTM
+- id: bpc-formula
+  kind: knowledge
+  type: single
+  prompt: Tổng NLL trên validation là 900 nat cho 1 200 ký tự văn bản. bpc là bao nhiêu?
+  options:
+  - id: a
+    text: '0.75'
+  - id: b
+    text: '1.08'
+  - id: c
+    text: '2.12'
+  - id: d
+    text: '0.52'
+- id: detach
+  kind: knowledge
+  type: single
+  prompt: Trong truncated BPTT, vì sao chuyền hidden state sang đoạn sau nhưng gọi `detach()`?
+  options:
+  - id: a
+    text: Giữ ngữ cảnh ở forward, chặn backprop dài vô hạn
+  - id: b
+    text: Để giảm số tham số LSTM phải học trong mỗi đoạn
+  - id: c
+    text: detach reset state về 0 cho mỗi đoạn mới
+  - id: d
+    text: Để GPU chạy song song các đoạn với nhau
+- id: chars-per-token
+  kind: data
+  type: single
+  prompt: Với tokenizer byte trên Wikipedia tiếng Việt, mỗi token ứng với khoảng bao nhiêu ký tự?
+  options:
+  - id: a
+    text: Khoảng 0.8
+  - id: b
+    text: Khoảng 1.0
+  - id: c
+    text: Khoảng 2.5
+  - id: d
+    text: Khoảng 4.0
+- id: temperature
+  kind: knowledge
+  type: single
+  prompt: Tăng temperature khi sinh văn bản thì sao?
+  options:
+  - id: a
+    text: Phân phối nhọn hơn, văn bản lặp lại nhiều hơn
+  - id: b
+    text: Phân phối phẳng hơn, đa dạng hơn nhưng dễ sai
+  - id: c
+    text: Model nhớ được ngữ cảnh dài hơn khi sinh
+  - id: d
+    text: Chỉ đổi tốc độ sinh, không đổi nội dung
+- id: unk-cheat
+  kind: knowledge
+  type: single
+  prompt: Model word-level có `<unk>` cho từ hiếm. Vì sao perplexity của nó dễ đẹp giả tạo?
+  options:
+  - id: a
+    text: Đoán `<unk>` dễ, mọi từ hiếm gộp thành một lớp
+  - id: b
+    text: Vocab nhỏ nên softmax tính nhanh và ổn định hơn
+  - id: c
+    text: Từ hiếm bị tự động bỏ khỏi tập validation
+  - id: d
+    text: Perplexity không định nghĩa được với `<unk>`
