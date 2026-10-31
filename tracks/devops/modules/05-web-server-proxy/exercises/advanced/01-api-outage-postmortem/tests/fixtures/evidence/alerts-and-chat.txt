@@ -1,0 +1,22 @@
+# Kênh #ops-olist-shop, thứ Tư 2026-10-28, giờ São Paulo (UTC-3). Đã lược bớt.
+
+13:52 [deploy-bot] CHG-3107 "Frontend v2: API chuyển về /api/, đồng bộ cấu hình Nginx từ staging" được duyệt bởi lead-frontend
+13:58 [ci] pipeline nginx-config #418: nginx -t OK, artifact olist-shop-nginx:2026.10.28-1 đã đẩy
+14:02 [deploy-bot] CHG-3107 đã rollout lên edge-1, edge-2 (reload, không downtime). Đóng change.
+14:03 [lb] target group edge-tg: 2/2 healthy
+14:06 [sentry] frontend-v2: "Failed to load cart: 502" 214 sự kiện trong 3 phút
+14:09 [cskh-lead] Nhiều khách báo không thêm được hàng vào giỏ, trang chủ vẫn vào được
+14:11 [synthetic] check "homepage 200" OK (vẫn xanh)
+14:12 [dev-frontend] Frontend v2 gọi /api/... ra 502, chắc API chết?
+14:14 [dev-backend] Pod/container api-1..api-4 đều Running, log API không có request nào từ 14:02
+14:18 [oncall] Mở SEV-2. LB báo 2/2 healthy, không hiểu vì sao
+14:20 [oncall] Nghi bản API 1.9.3 deploy sáng nay, rollback API về 1.9.2
+14:27 [oncall] Rollback API xong, vẫn 502
+14:29 [oncall] Xem error log Nginx trên edge-1 (đính kèm nginx-error.log)
+14:31 [oncall] Hotfix CHG-3110: sửa cổng upstream, reload edge-1, edge-2
+14:33 [sentry] 502 hết, giờ là "Failed to load cart: 404" và "order not found"
+14:35 [dev-backend] Log API có request nhưng path dạng /api/orders/..., API không có route đó
+14:41 [oncall] Hotfix CHG-3112: sửa proxy_pass, reload edge-1, edge-2
+14:44 [sentry] Lỗi frontend về mức nền
+14:47 [oncall] Xác nhận khôi phục, theo dõi thêm 30 phút
+15:20 [oncall] Đóng SEV-2. Đối tác thanh toán báo 37 webhook bị trả 502 trong sự cố, họ tự retry thành công lúc 14:50

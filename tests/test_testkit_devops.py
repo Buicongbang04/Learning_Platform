@@ -328,3 +328,67 @@ def test_sandbox_skips_when_probe_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(testkit.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "setting up uid map: Permission denied"))
     with pytest.raises(pytest.skip.Exception, match="user namespace"):
         testkit.run_sandboxed(["true"], writable=[tmp_path], cwd=tmp_path, env={})
+
+
+class FakeDocker:
+    def __init__(self, fail_run: bool = False):
+        self.calls: list[list[str]] = []
+        self.fail_run = fail_run
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(list(cmd))
+        failed = self.fail_run and cmd[1] == "run"
+        return subprocess.CompletedProcess(cmd, 1 if failed else 0, "", "boom" if failed else "")
+
+
+def test_docker_lab_run_args(monkeypatch, tmp_path):
+    monkeypatch.setenv("DEVOPS_CPUSET", "2-3")
+    lab = testkit.DockerLab()
+    args = lab.run_args("nginx", "nginx:1.30.6-alpine", "-g", "daemon off;", mounts=[(tmp_path / "a.conf", "/etc/nginx/nginx.conf")],
+                        publish=[(80, 41234)], env={"INSTANCE": "a"}, entrypoint="nginx")
+    assert args[:4] == ["docker", "run", "--rm", "-d"]
+    assert args[args.index("--name") + 1] == f"devops-ex-{lab.id}-nginx"
+    assert args[args.index("--label") + 1] == "devops-ex=1"
+    assert args[args.index("--network") + 1] == lab.network and lab.network.startswith("devops-ex-")
+    assert args[args.index("--cpuset-cpus") + 1] == "2-3"
+    assert args[args.index("-v") + 1] == f"{(tmp_path / 'a.conf').resolve()}:/etc/nginx/nginx.conf:ro"
+    assert args[args.index("-p") + 1] == "127.0.0.1:41234:80"
+    assert args[args.index("--entrypoint") + 1] == "nginx"
+    assert args[-3:] == ["nginx:1.30.6-alpine", "-g", "daemon off;"]
+    once = lab.run_args("check", "nginx:1.30.6-alpine", "-t", detach=False)
+    assert "-d" not in once and "--rm" in once
+
+
+def test_docker_lab_names_are_unique():
+    assert testkit.DockerLab().id != testkit.DockerLab().id
+
+
+def test_docker_lab_cleans_up_even_when_run_fails(monkeypatch):
+    fake = FakeDocker(fail_run=True)
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception):
+        with lab:
+            lab.start("api", "python:3.12.16-alpine3.24", ports=[8000])
+    removed = [c for c in fake.calls if c[1:3] == ["rm", "-f"]]
+    assert [f"devops-ex-{lab.id}-api"] in [c[3:] for c in removed]
+    assert fake.calls[-1] == ["docker", "network", "rm", lab.network]
+    assert all(c[1] != "rm" or c[3].startswith(f"devops-ex-{lab.id}") for c in fake.calls if c[1] == "rm")
+
+
+def test_docker_lab_publishes_on_loopback_free_port(monkeypatch):
+    fake = FakeDocker()
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    with testkit.DockerLab() as lab:
+        lab.start("web", "nginx:1.30.6-alpine", ports=[80, 443])
+        run = next(c for c in fake.calls if c[1] == "run")
+        published = [run[i + 1] for i, a in enumerate(run) if a == "-p"]
+        assert published == [f"127.0.0.1:{lab.port('web', 80)}:80", f"127.0.0.1:{lab.port('web', 443)}:443"]
+        assert lab.port("web", 80) != lab.port("web", 443)
+
+
+def test_require_image_missing_skips(monkeypatch):
+    patch_tool(monkeypatch, {"info": (0, "", ""), "image inspect nginx:1.30.6-alpine": (1, "", "No such image")})
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_image("nginx:1.30.6-alpine")
+    assert "docker pull nginx:1.30.6-alpine" in str(info.value)

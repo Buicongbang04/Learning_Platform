@@ -1,0 +1,83 @@
+questions:
+  - id: forward-vs-reverse
+    kind: knowledge
+    type: single
+    prompt: "Worker payment-sync của Olist Shop gọi API cổng thanh toán bên ngoài. Bộ phận bảo mật muốn mọi kết nối ra Internet đi qua một điểm có allowlist tên miền và log. Bạn cần đặt gì?"
+    options:
+      - { id: a, text: "Reverse proxy Nginx đặt trước worker, chặn request theo server_name" }
+      - { id: b, text: "Forward proxy (Squid, Envoy egress) mà worker dùng qua HTTPS_PROXY" }
+      - { id: c, text: "Load balancer L4 đặt trước cổng thanh toán để chia tải đều" }
+      - { id: d, text: "CDN đặt trước cổng thanh toán để cache các response của API đó" }
+  - id: l4-vs-l7
+    kind: knowledge
+    type: single
+    prompt: "Cần chia kết nối từ 40 service tới cụm PostgreSQL 3 node (một primary, hai replica chỉ đọc), có health check biết node nào là primary. Lựa chọn nào hợp nhất?"
+    options:
+      - { id: a, text: "Nginx trong khối http với upstream và proxy_pass tới cổng 5432" }
+      - { id: b, text: "HAProxy chế độ TCP với health check gọi endpoint báo vai trò node" }
+      - { id: c, text: "Caddy reverse_proxy vì nó có HTTPS tự động cho cả kết nối Postgres" }
+      - { id: d, text: "DNS round robin: ba bản ghi A trỏ tới ba node, TTL 300 giây" }
+  - id: small-team-auto-tls
+    kind: knowledge
+    type: single
+    prompt: "Team 2 người chạy một landing page và một API nhỏ trên một VM, muốn HTTPS tự gia hạn mà không viết cron hay quản lý certbot. Chọn web server nào?"
+    options:
+      - { id: a, text: "Caddy: tự xin và gia hạn cert ACME, cấu hình vài dòng" }
+      - { id: b, text: "Apache httpd với mod_ssl và cert mua theo năm từ CA" }
+      - { id: c, text: "Tomcat với keystore JKS, gia hạn bằng keytool hằng năm" }
+      - { id: d, text: "IIS trên Windows Server, gắn cert qua IIS Manager" }
+  - id: java-war
+    kind: knowledge
+    type: single
+    prompt: "Đối tác giao một ứng dụng Java dạng tệp .war dùng Servlet API và JSP. Nó cần chạy trong thứ gì?"
+    options:
+      - { id: a, text: "Nginx với module ngx_http_proxy, trỏ chỉ thị root vào tệp .war" }
+      - { id: b, text: "Một servlet container như Tomcat hoặc Jetty, có Nginx phía trước" }
+      - { id: c, text: "Caddy với php_fastcgi, vì JSP được dịch và chạy giống như PHP" }
+      - { id: d, text: "HAProxy, vì nó đọc và chạy được bytecode Java ngay trong request" }
+  - id: shared-hosting-htaccess
+    kind: knowledge
+    type: single
+    prompt: "Một nhà cung cấp hosting chia sẻ cho hàng trăm khách tự sửa rewrite rule trong thư mục của mình mà không có quyền reload server. Web server nào sinh ra cho mô hình này?"
+    options:
+      - { id: a, text: "Nginx, vì reload cấu hình không làm rớt các kết nối đang mở" }
+      - { id: b, text: "Envoy, vì cấu hình được đẩy động qua xDS từ control plane" }
+      - { id: c, text: "Apache httpd, vì đọc .htaccess theo thư mục mỗi request" }
+      - { id: d, text: "HAProxy, vì map file sửa được lúc chạy qua runtime API" }
+  - id: mesh-dynamic-config
+    kind: knowledge
+    type: single
+    prompt: "Một nền tảng có 300 microservice, endpoint thay đổi liên tục, cần retry, circuit breaking, mTLS và cấu hình đẩy từ control plane mà không reload. Proxy nào được thiết kế cho việc này?"
+    options:
+      - { id: a, text: "Envoy: cấu hình động qua xDS, nền của Istio và nhiều gateway" }
+      - { id: b, text: "Nginx open source với include và cron reload mỗi phút" }
+      - { id: c, text: "Apache httpd với mod_proxy_balancer và .htaccess ở mỗi service" }
+      - { id: d, text: "IIS với Application Request Routing cài trên mỗi node của nền tảng" }
+  - id: error-502-vs-504
+    kind: knowledge
+    type: single
+    prompt: "Nginx trả 504 cho GET /stats/revenue-by-state sau đúng 60 giây, các route khác bình thường. Điều này nói gì?"
+    options:
+      - { id: a, text: "Không kết nối được tới upstream: sai cổng hoặc tiến trình đã chết" }
+      - { id: b, text: "Upstream nhận request nhưng không trả lời trong proxy_read_timeout" }
+      - { id: c, text: "Client gửi request quá lớn, vượt giới hạn client_max_body_size đã đặt" }
+      - { id: d, text: "Rate limit của Nginx đã chặn request vì client gửi vượt quá burst" }
+  - id: passive-vs-active
+    kind: knowledge
+    type: single
+    prompt: "Upstream của Nginx open source có max_fails=3 fail_timeout=30s. Một backend treo hẳn lúc 3 giờ sáng khi không có traffic. Điều gì đúng?"
+    options:
+      - { id: a, text: "Nginx tự gọi /healthz mỗi 30 giây và rút backend ra ngay lúc nó bắt đầu treo" }
+      - { id: b, text: "Nginx chỉ biết khi request thật lỗi; người dùng sáng hôm sau chịu lỗi đầu" }
+      - { id: c, text: "Nginx đọc trạng thái container từ Docker API và bỏ backend đã dừng ra khỏi vòng" }
+      - { id: d, text: "max_fails=3 nghĩa là Nginx tự thử lại ba lần nên không người dùng nào thấy lỗi" }
+  - id: who-terminates-tls
+    kind: knowledge
+    type: multi
+    prompt: "Olist Shop đặt Nginx sau một load balancer cloud kết thúc TLS. Những việc nào bạn PHẢI làm để Nginx và API vẫn biết đúng IP và giao thức của client?"
+    options:
+      - { id: a, text: "Bật real_ip với set_real_ip_from là dải IP của load balancer, real_ip_header X-Forwarded-For" }
+      - { id: b, text: "Tin X-Forwarded-For từ mọi nguồn, vì client không tự đặt được header này" }
+      - { id: c, text: "Lấy X-Forwarded-Proto từ load balancer thay vì dùng $scheme của Nginx (luôn là http)" }
+      - { id: d, text: "Chặn ở firewall/security group để chỉ load balancer gọi được cổng của Nginx" }
+      - { id: e, text: "Tắt HSTS vì Nginx không còn phục vụ HTTPS trực tiếp" }

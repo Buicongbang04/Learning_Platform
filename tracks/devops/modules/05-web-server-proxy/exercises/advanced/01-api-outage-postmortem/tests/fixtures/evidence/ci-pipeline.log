@@ -1,0 +1,8 @@
+pipeline nginx-config #418  (trigger: merge CHG-3107)
+[1/4] lint        nginx -t -c nginx/olist-shop.conf (trong container nginx:1.30.6-alpine, upstream trỏ /etc/hosts giả)
+      nginx: the configuration file nginx/olist-shop.conf syntax is ok
+      nginx: configuration file nginx/olist-shop.conf test is successful
+[2/4] build       olist-shop-nginx:2026.10.28-1
+[3/4] push        registry.internal/olist-shop-nginx:2026.10.28-1
+[4/4] deploy      edge-1, edge-2: nginx -s reload  OK
+# Không có bước smoke test sau deploy. Staging được deploy cùng lúc với production theo pipeline này.
