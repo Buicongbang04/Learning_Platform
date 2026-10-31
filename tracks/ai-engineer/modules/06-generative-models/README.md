@@ -94,7 +94,7 @@ print("pixel sáng mỗi ảnh: thật", round((test > 0.5).sum(1).mean(), 1), "
 Model độc lập từng pixel đạt **206.0 nats/ảnh (0.379 bits/dim)** trên 10 000 ảnh test, tốt hơn hẳn mức đoán mò 543.4. Mẫu
 sinh từ nó có đúng số pixel sáng trung bình (102.5 so với 105.2 của ảnh thật) nhưng chỉ là một đám nhiễu hình bầu dục: model
 không biết pixel cạnh nhau phải sáng cùng nhau. Mọi model trong module này là các cách khác nhau để học **sự phụ thuộc giữa
-các chiều**. Con số 206 là mốc: VAE MLP ở bài Intermediate 01 đạt khoảng **99.8** nats/ảnh trên cùng dữ liệu.
+các chiều**. Con số 206 là mốc để bạn so các model ở bài Intermediate 01 (VAE MLP nhỏ xuống thấp hơn hẳn mốc này).
 
 Đơn vị hay dùng là **bits per dimension**: NLL tính bằng nats chia cho $$D\ln 2$$, với $$D$$ là số chiều (784 với MNIST, 3 072
 với CIFAR-10). Nó cho phép so model trên ảnh có kích thước khác nhau. Chú ý: likelihood trên pixel liên tục và trên pixel rời
