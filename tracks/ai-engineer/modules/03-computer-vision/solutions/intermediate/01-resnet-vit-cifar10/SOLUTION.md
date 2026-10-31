@@ -48,7 +48,20 @@ nên cột thời gian chỉ để thấy cỡ, không để so từng dòng:
 | Plain-56 (mở rộng, chỉ GPU) | 44.5 | 0.936 | 0.685 | 0.661 |
 | ResNet-56 (mở rộng, chỉ GPU) | 63.5 | 0.239 | 0.927 | 0.882 |
 
-«CPU_INT01»
+**Env gốc (CPU)**, cấu hình mặc định khi không có GPU: 10 000 ảnh train đầu, 4 epoch, `OMP_NUM_THREADS=4`, PC Xeon
+E5-2696 v3 rảnh (cả notebook chạy bằng nbconvert mất 298 s):
+
+| Model | s/epoch | Loss train cuối | Train acc | Test acc |
+| --- | --- | --- | --- | --- |
+| LeNet-5 | 1.0 | 1.573 | 0.456 | 0.456 |
+| Plain-20 | 13.2 | 1.646 | 0.396 | 0.385 |
+| ResNet-20 | 13.3 | 1.243 | 0.590 | 0.567 |
+| ResNet-20 không augment | 13.2 | 1.089 | 0.632 | 0.589 |
+| ViT d128×6, patch 4 | 18.9 | 1.575 | 0.441 | 0.428 |
+
+Ở ngân sách nhỏ này mọi model còn underfit: bản không augment thậm chí có test acc cao hơn (augmentation là regularizer, nó
+chỉ trả công khi train đủ lâu để model bắt đầu học thuộc), nhưng khoảng cách train/test của nó vẫn nở ra gấp đôi. Thứ bậc
+residual > plain và ResNet > ViT giữ nguyên ở cả hai cấu hình.
 
 Đọc kết quả:
 

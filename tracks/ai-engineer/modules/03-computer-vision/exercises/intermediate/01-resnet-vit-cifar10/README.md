@@ -25,7 +25,7 @@ Làm xong bạn giải thích được vì sao ResNet thay LeNet, và vì sao Vi
 **Phần cứng:** GPU 4GB · ~150 phút
 
 Thời gian trên là thời gian làm bài. Thí nghiệm có hai cấu hình chọn tự động: env gốc (CPU) train 10 000 ảnh, 4 epoch
-mỗi model, cả notebook khoảng 15–30 phút trên CPU 4 luồng tuỳ tải máy, đủ để kiểm code và thấy thứ bậc; kernel
+mỗi model, cả notebook khoảng 5 phút trên CPU 4 luồng của PC rảnh, 10–30 phút trên laptop tuỳ tải máy, đủ để kiểm code và thấy thứ bậc; kernel
 `ai-gpu` train đủ 50 000 ảnh, 15 epoch, thêm thí nghiệm 56 tầng (bảng số đo ở mục 2 lý thuyết). Lần đầu tải CIFAR-10
 (137 MB). Test chạy trên CPU với dữ liệu sinh trong test, vài giây.
 

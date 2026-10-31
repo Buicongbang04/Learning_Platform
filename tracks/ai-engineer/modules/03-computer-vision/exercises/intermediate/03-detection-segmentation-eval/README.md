@@ -24,8 +24,8 @@ confidence và NMS ảnh hưởng ra sao, và khi nào lỗi nằm ở nhãn ch�
 
 **Phần cứng:** CPU · ~120 phút
 
-Thời gian trên là thời gian làm bài. Chạy trọn notebook lời giải trên CPU mất khoảng 5–10 phút (YOLO chạy 170 ảnh ba
-lần và một lần segmentation); lần đầu tải thêm Penn-Fudan (53 MB) và hai tệp weights khoảng 6 MB mỗi tệp vào
+Thời gian trên là thời gian làm bài. Chạy trọn notebook lời giải trên CPU (YOLO chạy 170 ảnh ba lần, thêm một lần
+segmentation) mất khoảng 1 phút trên PC rảnh, tới khoảng 10 phút trên laptop đang bận; lần đầu tải thêm Penn-Fudan (53 MB) và hai tệp weights khoảng 6 MB mỗi tệp vào
 `~/.cache/ai-engineer/weights`. Không cần GPU.
 
 Đọc mục 5 và 6 phần lý thuyết. Mở `starter/det_eval.ipynb`:

@@ -31,13 +31,13 @@ questions:
   prompt: So ResNet-20 có và không augmentation. Khoảng cách train acc (10 000 ảnh train, không augment) trừ test acc thay đổi thế nào khi bỏ augmentation?
   options:
   - id: a
-    text: Gần như không đổi
+    text: Gần như không đổi, hai khoảng cách bằng nhau
   - id: b
     text: Không đo được vì loss ra NaN
   - id: c
-    text: Hẹp lại, test acc vượt train acc
+    text: Hẹp lại, test acc vượt cả train acc của model
   - id: d
-    text: Rộng ra rõ rệt
+    text: Rộng ra, train acc tăng nhiều hơn test acc
 - id: speed
   kind: data
   type: single
