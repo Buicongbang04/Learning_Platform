@@ -22,7 +22,7 @@ ablation có kiểm soát và ở việc tách tín hiệu khỏi nhiễu. Dư�
 | Bản đầy đủ | RMSNorm, RoPE base 10 000, SwiGLU 704, GQA 2 kv head, không bias, tie embedding | công thức Llama thu nhỏ; SwiGLU 704 ≈ $$\frac83 d$$ làm tròn bội 64 để tham số MLP gần bằng GELU $$4d$$ |
 | Ablation | đổi **một** thứ mỗi lần từ bản đầy đủ; mọi siêu tham số khác giữ nguyên | đọc được đóng góp riêng của từng thứ |
 | Độ nhiễu | mọi cấu hình chạy seed 0 và seed 1 (seed đổi khởi tạo và thứ tự batch) | chênh lệch nhỏ hơn độ lệch giữa hai seed của cùng cấu hình thì không kết luận |
-| Đo KV cache | prompt 32 token, greedy 64/256/768 token, kiểm hai cách ra cùng token; CPU 4 luồng và GPU | tách lợi ích thuật toán khỏi chi phí khởi chạy kernel |
+| Đo KV cache | `ModernGPT` riêng với `block_size` 1 024, trọng số ngẫu nhiên (không ảnh hưởng thời gian); prompt 32 token, greedy 64/256/768 token, kiểm hai cách ra cùng token (ở 64 token trên CPU và GPU, ở 768 token trên CPU); CPU 4 luồng và GPU | tách lợi ích thuật toán khỏi chi phí khởi chạy kernel |
 
 ## Kết quả tham chiếu
 
@@ -50,10 +50,10 @@ Hai seed của cùng cấu hình lệch nhau tới 0.006 bpc. Mỗi lần chạy
   lớn hơn nhiều (Shazeer 2020, perplexity sau 65 000 bước model T5 base); một lần chạy 3 000 bước model 5 triệu tham số không
   bác bỏ được nó, chỉ cho thấy nó không phải nguồn lợi ở đây. MHA tốt hơn GQA 0.007 nhưng có thêm 262 144 tham số (wk, wv đầy đủ):
   GQA đổi một chút chất lượng lấy cache nhỏ hơn 2 lần.
-- KV cache (prompt 32 token, greedy, hai cách ra cùng token; bản tham chiếu, PC, float32): CPU 4 luồng
+- KV cache (`ModernGPT` block 1 024 trọng số ngẫu nhiên, prompt 32 token, greedy, hai cách ra cùng token; PC, float32): CPU 4 luồng
   sinh 64 / 256 / 768 token mất 0.21 / 0.76 / 2.41 s có cache so với 0.41 / 2.71 / 18.84 s không cache (tuyến tính so với gần bậc
   hai, chậm hơn 7.8 lần ở 768 token). RTX 3060: 0.43 / 1.66 / 5.07 s so với 0.47 / 1.73 / 5.32 s, gần như không khác, và chậm hơn
-  CPU có cache: model 5 triệu tham số bị giới hạn bởi chi phí khởi chạy kernel, không phải phép tính. Báo cáo tốt nói được điều
+  CPU có cache: với model 5 triệu tham số, thời gian chủ yếu là dispatch phía host và launch kernel CUDA (GPU dùng chung lúc đo làm phồng thêm), không phải phép tính; CUDA Graphs (`torch.compile(mode="reduce-overhead")`) hoặc batching là cách khắc phục. Báo cáo tốt nói được điều
   này thay vì kết luận "cache không có tác dụng".
 
 ## Rubric

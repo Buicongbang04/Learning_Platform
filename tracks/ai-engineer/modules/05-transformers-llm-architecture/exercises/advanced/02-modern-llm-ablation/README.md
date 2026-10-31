@@ -37,8 +37,11 @@ chênh lệch nhỏ hơn và nhiễu hơn, nên càng cần hai seed.
 2. Dữ liệu, tokenizer, đánh giá như bài Intermediate 01. Baseline là `GPT` bài Basic 01 (GPT-2). Bản đầy đủ là `ModernGPT` mặc
    định (4 tầng, `n_embd` 256, 4 head, 2 kv head, SwiGLU 704). Ablation: đổi một thứ mỗi lần (`pos="learned"`, `norm="layer"`,
    `mlp="gelu"`, `n_kv_head` 4 và 1), cùng số bước, batch, learning rate. Chạy mọi cấu hình với ít nhất hai seed.
-3. KV cache: thời gian sinh 64, 256, 768 token có và không cache (kiểm cùng token), trên CPU và GPU nếu có; bảng bộ nhớ cache
-   của vài model thật bằng `kv_cache_bytes` (bài Basic 02).
+3. KV cache: dựng riêng một `ModernGPT` với `block_size` ≥ 1 024 (trọng số ngẫu nhiên cũng được, thời gian không phụ thuộc
+   trọng số) rồi đo thời gian sinh 64, 256, 768 token sau prompt 32 token, có và không cache, kiểm cùng token, trên CPU và GPU
+   nếu có. Model đã train có `block_size` 128: có cache thì vượt bảng cos/sin của RoPE, không cache thì `generate` cắt còn 128
+   token cuối nên chi phí thành tuyến tính, cả hai đều không đo được điều cần đo. Thêm bảng bộ nhớ cache của vài model thật bằng
+   `kv_cache_bytes` (bài Basic 02).
 4. Viết `starter/REPORT.md`, rồi làm phần trắc nghiệm của bài trong app.
 
 ## Tiêu chí đạt

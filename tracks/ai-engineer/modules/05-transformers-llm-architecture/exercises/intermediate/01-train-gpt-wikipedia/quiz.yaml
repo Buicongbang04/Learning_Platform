@@ -80,10 +80,10 @@ questions:
 - id: compare-budget
   kind: knowledge
   type: single
-  prompt: GPT mini bản CPU có bpc kém LSTM, bản GPU tốt hơn LSTM. Kết luận đúng nhất là gì?
+  prompt: Một bài blog báo Transformer 2 triệu tham số có bpc tệ hơn LSTM 10 triệu tham số, không nói số bước train. Kết luận đúng nhất là gì?
   options:
   - id: a
-    text: LSTM tốt hơn Transformer trên tiếng Việt
+    text: LSTM tốt hơn Transformer trên dữ liệu này
   - id: b
     text: So sánh phải kèm số tham số và ngân sách train
   - id: c

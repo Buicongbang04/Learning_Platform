@@ -57,5 +57,6 @@ Hugging Face); bài này dùng quy ước thứ hai, test phân biệt được 
 ### Gợi ý 2
 
 Khi có cache với $$P$$ token cũ và $$T$$ token mới, score có shape `(B, H, T, P + T)`: token mới $$t$$ nhìn được cột
-$$0 .. P + t$$. `torch.tril` có tham số `diagonal`. Vị trí dùng cho RoPE của token mới là $$P + t$$, và $$P$$ đọc được từ
-shape của cache. `expand` rồi `reshape` cho đúng thứ tự `repeat_interleave`; `repeat` (lặp cả khối) thì sai thứ tự.
+$$0 .. P + t$$: mask không còn vuông. Vị trí dùng cho RoPE của token mới là $$P + t$$, và $$P$$ đọc được từ shape của
+cache. Khi lặp K, V cho các head query cùng nhóm, để ý thứ tự: head query thứ $$h$$ phải dùng kv head $$h // (H/G)$$, không
+phải $$h \bmod G$$.

@@ -1,4 +1,16 @@
-"""GPT mini: Transformer decoder-only tự dựng bằng PyTorch (kiểu GPT-2, pre-norm, weight tying)."""
+"""GPT mini: Transformer decoder-only tự dựng bằng PyTorch (kiểu GPT-2, pre-norm, weight tying).
+
+Tên module con được giữ cố định (module 08 gắn hook vào `blocks[i].attn`, `blocks[i].mlp`, `ln_f`, `lm_head`;
+module 10 quantize các `nn.Linear`). Không dùng `nn.LayerNorm`, `nn.MultiheadAttention`,
+`F.scaled_dot_product_attention`, `F.layer_norm` trong tệp này.
+
+Ghi chú cho module dùng lại lớp này:
+- Ma trận attention (B, n_head, T, T) sau softmax đọc được bằng forward hook trên `blocks[i].attn.attn_dropout`
+  (output của hook là ma trận đó; dropout = 0 khi eval).
+- `lm_head.weight` là cùng một tensor với `tok_emb.weight`: quantize hoặc sửa `lm_head` sẽ đổi luôn embedding.
+- `generate` không có KV cache (mỗi bước forward lại tối đa `block_size` token); bản có cache là `ModernGPT` của module 05,
+  bài Advanced 02.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +33,8 @@ class GPTConfig:
 
 
 class LayerNorm(nn.Module):
+    """Chuẩn hoá theo trục cuối: (x - mean) / sqrt(var + eps) * weight + bias, var là phương sai lệch (chia D)."""
+
     def __init__(self, dim: int, eps: float = 1e-5):
         super().__init__()
         self.eps = eps
@@ -34,6 +48,12 @@ class LayerNorm(nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
+    """Multi-head self-attention có mask nhân quả.
+
+    `qkv` chiếu (B, T, C) thành (B, T, 3C), tách theo thứ tự q | k | v; mỗi phần chia thành n_head head liên tiếp
+    (head h là các cột h*head_dim .. (h+1)*head_dim). Score chia sqrt(head_dim). Vị trí t chỉ nhìn được 0..t.
+    """
+
     def __init__(self, config: GPTConfig):
         super().__init__()
         if config.n_embd % config.n_head:
@@ -71,6 +91,8 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
+    """Pre-norm: x + attn(ln1(x)), rồi + mlp(ln2(·))."""
+
     def __init__(self, config: GPTConfig):
         super().__init__()
         self.ln1 = LayerNorm(config.n_embd)
@@ -84,6 +106,12 @@ class Block(nn.Module):
 
 
 class GPT(nn.Module):
+    """tok_emb + pos_emb -> dropout -> các Block -> ln_f -> lm_head (dùng chung trọng số với tok_emb).
+
+    Khởi tạo: mọi Linear và Embedding N(0, 0.02), bias 0; riêng các trọng số `*.proj.weight` (lớp đổ về
+    residual stream) N(0, 0.02 / sqrt(2 * n_layer)).
+    """
+
     def __init__(self, config: GPTConfig):
         super().__init__()
         self.config = config
@@ -109,12 +137,17 @@ class GPT(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def num_params(self, non_embedding: bool = False) -> int:
+        """Số tham số (trọng số dùng chung chỉ đếm một lần); non_embedding=True thì trừ tok_emb và pos_emb."""
         n = sum(p.numel() for p in self.parameters())
         if non_embedding:
             n -= self.tok_emb.weight.numel() + self.pos_emb.weight.numel()
         return n
 
     def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None):
+        """idx (B, T) với T <= block_size (vượt thì ValueError). Trả (logits (B, T, V), loss hoặc None).
+
+        loss là cross-entropy trung bình trên mọi vị trí, bỏ qua vị trí có target -1.
+        """
         B, T = idx.shape
         if T > self.config.block_size:
             raise ValueError(f"chuỗi dài {T} vượt block_size {self.config.block_size}")
@@ -137,6 +170,12 @@ class GPT(nn.Module):
         top_k: int | None = None,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
+        """Sinh thêm max_new_tokens token, trả (B, T + max_new_tokens).
+
+        Mỗi bước chỉ đưa vào block_size token cuối, không có KV cache. temperature == 0: argmax; ngược lại chia
+        temperature, giữ top_k logits lớn nhất nếu top_k khác None, rồi torch.multinomial với `generator`. Chạy ở chế độ
+        eval và trả lại chế độ train/eval như trước khi gọi.
+        """
         was_training = self.training
         self.eval()
         for _ in range(max_new_tokens):

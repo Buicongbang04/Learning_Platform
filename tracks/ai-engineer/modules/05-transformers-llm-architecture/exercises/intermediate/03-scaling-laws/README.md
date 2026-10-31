@@ -40,7 +40,7 @@ Chinchilla. Sau đó làm phần trắc nghiệm của bài trong app.
 - `gpt_params` đúng cho model của bài Basic 01 (27 584 tham số với 2 tầng, `n_embd` 32, vocab 50, block 16), cho GPT mini
   5 240 320 tham số của module, và xấp xỉ 124 triệu cho cấu hình GPT-2 small.
 - `train_flops` theo $$6ND$$.
-- `fit_power_law` lấy lại đúng tham số từ dữ liệu sinh theo công thức (sai số $$\alpha$$ dưới 5%), và khớp tốt dữ liệu có nhiễu nhỏ.
+- `fit_power_law` lấy lại đúng tham số từ dữ liệu sinh theo công thức (sai số $$\alpha$$ dưới 5%), khớp tốt dữ liệu có nhiễu nhỏ, và chọn $$c$$ theo sai số trên $$y$$ (sai số không quá 5% so với dò lưới tham chiếu).
 - `chinchilla_loss` đúng hằng số đã công bố; `chinchilla_optimal` trả cặp $$(N, D)$$ thoả $$6ND = C$$ và $$D = 20N$$.
 
 ## Gợi ý

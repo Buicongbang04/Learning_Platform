@@ -38,8 +38,8 @@ PC RTX 3060 12GB, env `setup/gpu`, seed 0, ngày 2026-11-01, GPU dùng chung v�
 | Cấu hình PC | 13.8 triệu | 14 473 bài | 131.1 triệu (4.6 epoch) | 17.6 phút | 3.01 GB | 25.8 | 1.347 |
 
 Đường bpc của cấu hình PC theo bước: 1.754 (1 000), 1.544 (2 000), 1.472 (3 000), 1.424 (4 000), 1.395 (5 000), 1.369 (6 000),
-1.354 (7 000), 1.347 (8 000). Tốc độ khoảng 124 000 token/giây, tương đương khoảng 10 TFLOP/s thực tế theo $$6ND$$ (tính cả
-lớp output). Loss train cuối khoảng 2.9-3.0 nat so với validation 3.25: khoảng cách 0.3 nat sau 4.6 epoch, có dấu hiệu bắt đầu
+1.354 (7 000), 1.347 (8 000). Tốc độ trung bình khoảng 124 000 token/giây, tương đương khoảng 10 TFLOP/s theo $$6ND$$ (tính cả
+lớp output); đầu run khoảng 168 000 token/giây (14 TFLOP/s), về cuối chậm lại vì GPU dùng chung. Loss train cuối khoảng 2.9-3.0 nat so với validation 3.25: khoảng cách 0.3 nat sau 4.6 epoch, có dấu hiệu bắt đầu
 học thuộc; thêm dữ liệu (hai shard còn lại của Wikipedia tiếng Việt) có lợi hơn thêm bước.
 
 Nạp lại checkpoint `gpt-mini-v1` cho đúng bpc 1.3473. Mẫu sinh từ "Hà Nội là" (100 token, generator seed 0):

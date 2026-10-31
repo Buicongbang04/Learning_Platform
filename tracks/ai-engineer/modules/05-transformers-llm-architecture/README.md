@@ -106,7 +106,7 @@ key giống hệt nhau cho cùng output ở mọi vị trí; thứ tự do posit
 
 Một Block gồm attention (trộn thông tin **giữa** các token) và MLP $$d \to 4d \to d$$ (biến đổi **từng** token), mỗi phần bọc
 trong residual và LayerNorm. Chi phí attention là $$O(T^2 d)$$ phép tính và một ma trận score $$T \times T$$ cho mỗi head. Đo một
-lớp attention ($$d = 256$$, 4 head, batch 1, forward float32, PC RTX 3060, PyTorch 2.14, trung bình 5 lần chạy):
+lớp attention ($$d = 256$$, 4 head, batch 1, forward float32, PC RTX 3060 **dùng chung** với job khác lúc đo, PyTorch 2.14, trung bình 5 lần chạy):
 
 | T | Tự viết (ms) | SDPA (ms) | Bộ nhớ đỉnh tự viết (MB) | Bộ nhớ đỉnh SDPA (MB) |
 | --- | --- | --- | --- | --- |
@@ -117,8 +117,10 @@ lớp attention ($$d = 256$$, 4 head, batch 1, forward float32, PC RTX 3060, PyT
 | 8 192 | 93.51 | 24.27 | 2 136 | 40 |
 
 (Bộ nhớ đỉnh là phần tăng thêm so với trước khi gọi. Trên CPU 4 luồng, ở $$T$$ = 8 192 bản tự viết mất 1 236 ms, SDPA 156 ms.) Bản tự viết vật chất hoá ma trận score $$4 \times T \times T$$ float32: gấp đôi $$T$$ là gấp bốn bộ nhớ.
-`F.scaled_dot_product_attention` gọi kernel kiểu **FlashAttention** (Dao và cộng sự, 2022): tính softmax theo từng khối
-trong SRAM của GPU với một mẹo cộng dồn ổn định số, không bao giờ ghi ma trận $$T \times T$$ ra bộ nhớ. Số phép tính vẫn bậc
+`F.scaled_dot_product_attention` chọn kernel theo dtype và phần cứng. Với float32 như bảng trên, nó dùng kernel
+**memory-efficient** (cùng ý tưởng chia khối); FlashAttention thật (Dao và cộng sự, 2022) chỉ chạy với fp16/bf16, tức chế độ train
+bằng autocast của các bài trong module. Ý tưởng chung: tính softmax theo từng khối trong SRAM của GPU với một mẹo cộng dồn ổn
+định số, không bao giờ ghi ma trận $$T \times T$$ ra bộ nhớ. Số phép tính vẫn bậc
 hai, nhưng bộ nhớ tuyến tính và nhanh hơn nhiều lần vì bớt đọc ghi bộ nhớ. Bài tập tự viết attention để hiểu; code thật dùng SDPA.
 
 ## 2. GPT mini: kiến trúc, train và so với LSTM
@@ -179,6 +181,8 @@ Cùng 1 000 bài train và 100 bài validation của module 04 (validation 664 5
 | GPT mini 4 tầng, $$d$$ 256 (GPT-2) | 5.24 triệu | RTX 3060, 3.2 phút | 98.2 | 1.901 |
 | GPT mini bản Llama (mục 4) | 5.00 triệu | RTX 3060, 2.6 phút | 93.0 | 1.879 |
 
+(Thời gian là wall-clock trên GPU dùng chung với job khác, các lần chạy ở thời điểm khác nhau: chỉ so được thô.)
+
 Transformer một nửa số tham số vượt LSTM ở cùng ngân sách. Đừng đọc thành "Transformer luôn thắng": bản CPU của bài
 Intermediate 01 nhỏ hơn và train một nửa số bước, bạn sẽ tự đo xem nó đứng ở đâu. Đọc bảng như kỹ sư: mỗi dòng phải kèm số tham
 số và ngân sách. Bài Advanced 01 dùng cùng lớp GPT nhưng train trên **toàn bộ** bài dài của hai shard (95.5 triệu
@@ -226,9 +230,10 @@ Quy tắc 80/10/10 của BERT tồn tại vì `[MASK]` không bao giờ xuất h
 (PC RTX 3060, notebook lời giải cả bài 6 phút. Bài còn đo cách thứ hai, che 15% token cùng lúc, và cho cả hai model sinh văn
 bản; kết quả đó để bạn tự đo.)
 
-Giả thuyết "BERT điền chỗ trống giỏi hơn hẳn vì nhìn hai phía" chỉ đúng một phần ở ngân sách này: hơn 0.007, cỡ nhiễu. Lý do là
-**hiệu quả dữ liệu**: cùng 3 000 bước, BERT chỉ nhận loss trên khoảng 15% token, khoảng 1.8 triệu dự đoán so với 12.3 triệu của
-GPT. BERT gốc train 1 triệu bước batch 256 để bù; ELECTRA (2020) sinh ra để sửa sự lãng phí này (học trên **mọi** token bằng nhiệm
+Giả thuyết "BERT điền chỗ trống giỏi hơn hẳn vì nhìn hai phía" chỉ đúng một phần ở ngân sách này: hơn 0.007, cỡ nhiễu. Lý do khả dĩ
+là **hiệu quả dữ liệu**: cùng 3 000 bước, BERT chỉ nhận loss trên khoảng 15% token, khoảng 1.8 triệu dự đoán so với 12.3 triệu của
+GPT. Đây là giả thuyết, chưa được kiểm trong bài; cách kiểm: train BERT nhiều bước hơn khoảng 6.7 lần (cùng số dự đoán có loss
+với GPT) rồi so lại. BERT gốc train 1 triệu bước batch 256 để bù; ELECTRA (2020) sinh ra để sửa sự lãng phí này (học trên **mọi** token bằng nhiệm
 vụ "token này có bị thay không"). Bài học kỹ sư: giả thuyết hợp lý vẫn phải đo, và so hai mục tiêu train phải nói rõ ngân sách
 (bước, token, số vị trí có tín hiệu).
 
@@ -323,8 +328,10 @@ token; mỗi bước đọc toàn bộ trọng số và KV cache để làm rấ
 quantize (module 10) và GQA làm decode nhanh lên: ít byte phải đọc hơn.
 
 Không có cache, bước thứ $$t$$ phải forward lại cả $$t$$ token: sinh $$n$$ token tốn $$O(n^2)$$ token-forward. Với cache, mỗi bước chỉ
-chiếu token mới và attend vào K, V đã lưu. Đo trên GPT mini bản Llama (4 tầng, $$d$$ 256, 2 kv head), prompt 32 token, greedy (cả
-hai cách sinh ra **đúng cùng** token):
+chiếu token mới và attend vào K, V đã lưu. Đo trên `ModernGPT` của bài Advanced 02 (4 tầng, $$d$$ 256, 2 kv head) với `block_size`
+1 024 để 800 token vừa bảng RoPE, trọng số **khởi tạo ngẫu nhiên** (trọng số không ảnh hưởng thời gian, chỉ ảnh hưởng token
+nào được chọn), prompt 32 token, greedy. Hai cách sinh ra **đúng cùng** token, đã kiểm ở 64 token (CPU và GPU) và ở 768 token
+(CPU):
 
 | Token sinh ra | CPU 4 luồng, có cache (s) | CPU, không cache (s) | RTX 3060, có cache (s) | RTX 3060, không cache (s) |
 | --- | --- | --- | --- | --- |
@@ -336,9 +343,11 @@ hai cách sinh ra **đúng cùng** token):
 
 Trên CPU, cache cho đúng dáng thuật toán: không cache thì thời gian tăng gần bậc hai (768 token chậm hơn 7.8 lần), có cache thì
 tuyến tính, khoảng 3 ms mỗi token. Trên GPU, cache gần như không nhanh hơn, và cả hai đều **chậm hơn CPU có cache**: model 5 triệu
-tham số quá nhỏ, mỗi bước decode là vài chục kernel tí hon, thời gian bị chi phối bởi chi phí khởi chạy kernel và đồng bộ chứ không
-phải phép tính. Phải tới context dài hoặc model lớn, khi forward lại cả chuỗi thật sự tốn compute và băng thông, lợi ích của cache
-trên GPU mới hiện ra; với LLM thật, không có KV cache thì decode không dùng được. Đo trên phần cứng thật trước khi kết luận
+tham số quá nhỏ, mỗi bước decode là hàng chục phép toán tí hon, và phần lớn thời gian là chi phí phía host (Python và PyTorch
+dispatch từng op) cộng chi phí launch kernel CUDA, chứ không phải phép tính; GPU dùng chung lúc đo làm con số phồng thêm. Cách
+khắc phục thực tế: gom cả bước decode thành một CUDA Graph (`torch.compile(mode="reduce-overhead")` làm việc này), hoặc batch
+nhiều request để mỗi lần launch làm nhiều việc hơn. Phải tới context dài hoặc model lớn, khi forward lại cả chuỗi thật sự tốn
+compute và băng thông, lợi ích của cache trên GPU mới hiện ra; với LLM thật, không có KV cache thì decode không dùng được. Đo trên phần cứng thật trước khi kết luận
 "tối ưu này nhanh hơn".
 
 Bộ nhớ cache:
@@ -439,10 +448,13 @@ $$
 PC của bài Advanced 01 (6 tầng, $$d$$ 384, 10.6 triệu tham số non-embedding, 13.8 triệu tham số tính cả embedding dùng chung với
 lm_head; 8 000 bước × 64 × 256 = 131 triệu token). Với $$N$$ non-embedding như Kaplan, $$C \approx 8.4 \times 10^{15}$$ FLOP; nhưng
 với model tí hon vocab 8 000, phép nhân lm_head ($$d \times V$$ mỗi token, 3.1 triệu tham số) không nhỏ, tính cả nó thì
-$$C \approx 1.1 \times 10^{16}$$ FLOP. Lần chạy thật trên PC RTX 3060 (bf16 autocast, `torch.compile`) mất 17.6 phút, tức khoảng
-124 000 token/s, cỡ 10 TFLOP/s thực tế theo $$6ND$$ với $$N$$ 13.8 triệu (thời gian đo gồm cả compile và eval định kỳ, $$6ND$$ bỏ qua phép
-nhân của attention, nên đây là ước lượng thô). Làm ngược lại là cách kỹ sư ước lượng trước một lần train: $$6ND$$ chia cho
-FLOP/s thực đạt được.
+$$C \approx 1.1 \times 10^{16}$$ FLOP. Lần chạy thật trên PC RTX 3060 (bf16 autocast, `torch.compile`) mất 17.6 phút, trung bình khoảng
+124 000 token/s. Ở đầu run (bước 100 tới 1 000), tốc độ ổn định là khoảng 168 000 token/s (100 bước trong khoảng 9.8 s), tức cỡ
+14 TFLOP/s theo $$6ND$$ với $$N$$ 13.8 triệu; về cuối run, 100 bước mất khoảng 20 s vì GPU bị job khác dùng chung (thời gian cũng
+gồm compile và eval định kỳ). So với đỉnh của card theo thông số NVIDIA, khoảng 25 TFLOP/s bf16 trên tensor core (12.7 TFLOP/s
+float32 thường), đó là hơn một nửa đỉnh. $$6ND$$ còn bỏ qua phép nhân $$QK^\top$$ và $$AV$$ của attention, ở model này cộng thêm
+khoảng 9% ($$12 L T d$$ FLOP mỗi token khi train, đếm đủ không trừ phần bị mask, so với $$6N$$). Làm ngược lại là cách kỹ sư ước
+lượng trước một lần train: $$6ND$$ chia cho FLOP/s thực đạt được.
 
 Bài Intermediate 03 train 5 GPT mini chỉ khác $$d$$ (4 tầng, cùng số token) và khớp $$L(N) = c + aN^{-\alpha}$$:
 
@@ -456,12 +468,20 @@ Bài Intermediate 03 train 5 GPT mini chỉ khác $$d$$ (4 tầng, cùng số to
 
 (Kernel `ai-gpu`, PC RTX 3060, 2 000 bước batch 32 × 128 mỗi model, seed 0, cả notebook 10 phút.)
 
-Hàm khớp ra $$L \approx 0.34 + 7.6\,N^{-0.038}$$. Bản CPU của bài (5 model nhỏ hơn, 600 bước, context 64) ra $$c = 0$$ và số mũ
-0.036. Cả hai cho thấy cùng một điều: trong khoảng đo, loss gần như thẳng theo $$\log N$$ (mỗi lần nhân đôi $$N$$ bớt khoảng
-0.12-0.15 nat), chưa có dấu hiệu đi ngang, nên 5 điểm ngân sách nhỏ **không tách được** $$c$$ khỏi $$a$$ và $$\alpha$$; $$c$$ trôi về biên.
-Số mũ nhỏ hơn nhiều con số 0.076 của Kaplan vì mọi model ở đây cùng thấy một lượng token cố định và quá ít so với kích thước:
-loss bị giới hạn bởi dữ liệu và số bước chứ không chỉ bởi $$N$$. Bài học: muốn ước lượng một luật scaling, cần nhiều bậc độ lớn,
-mỗi điểm train đủ lâu, và nói rõ khoảng tin cậy; một đường khớp đẹp trên log-log không chứng minh gì về chỗ ngoài khoảng đo.
+Hàm khớp của notebook ra $$L \approx 0.34 + 7.6\,N^{-0.038}$$; bản CPU của bài (5 model nhỏ hơn, 600 bước, context 64) ra
+$$c = 0$$ (chạm biên dưới của lưới) và số mũ 0.036. Đừng đọc hai con số này như kết quả đo. Trong khoảng đo, loss gần như thẳng
+theo $$\log N$$ (mỗi lần nhân đôi $$N$$ bớt khoảng 0.12-0.15 nat), chưa có dấu hiệu đi ngang, nên 5 điểm **không tách được**
+$$c$$ khỏi $$\alpha$$: khớp lại dữ liệu GPU với $$c$$ cố định, sai số bình phương gần như không đổi khi $$c$$ đi từ 0 tới 2
+($$\alpha$$ từ 0.035 tới 0.060), và ở $$c = 3$$ thì $$\alpha = 0.093$$ mà sai số chỉ tệ hơn 4%. Vậy $$\alpha$$ chỉ biết được
+trong khoảng cỡ 0.035-0.09; $$c = 0.34$$ của bản GPU không có ý nghĩa.
+
+So với Kaplan chỉ hợp lệ ở $$c = 0$$, vì $$L(N) = (N_c/N)^{\alpha_N}$$ của Kaplan không có hằng số: khi đó số mũ 0.035-0.036 của
+ta nhỏ hơn 0.076. Một **giả thuyết** cho chênh lệch này: mọi model cùng thấy một lượng token cố định, quá ít so với kích thước
+model lớn, nên loss bị giới hạn bởi dữ liệu và số bước chứ không chỉ bởi $$N$$; thí nghiệm này không kiểm được giả thuyết đó.
+Thêm một biến gây nhiễu: notebook đổi learning rate từ 2e-3 sang 1e-3 giữa `n_embd` 128 và 192, đúng chỗ đường GPU chững lại
+(4.842 → 4.799). Bài học: muốn ước lượng một luật scaling cần nhiều bậc độ lớn, mỗi điểm train đủ lâu, siêu tham số dò riêng cho
+từng kích thước, và báo khoảng chứ không báo một con số; một đường khớp đẹp trên log-log không chứng minh gì về chỗ ngoài
+khoảng đo.
 
 ### Chinchilla: chia ngân sách thế nào
 

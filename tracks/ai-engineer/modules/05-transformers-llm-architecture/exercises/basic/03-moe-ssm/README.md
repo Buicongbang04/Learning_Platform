@@ -46,9 +46,9 @@ cố định thay vì KV cache lớn dần.
 
 ### Gợi ý 1
 
-Phẳng hoá input về `(N, dim)` trước. Với mỗi expert $$e$$, `(top_idx == e).nonzero(as_tuple=True)` cho cả chỉ số token
-và vị trí của $$e$$ trong top-k của token đó (để lấy đúng trọng số). `index_add_` cộng kết quả về đúng hàng. Với loss cân
-tải, `F.one_hot` đếm số lượt chọn.
+Phẳng hoá input về `(N, dim)` trước. Duyệt theo expert chứ không theo token: với mỗi expert, tìm những token đã chọn nó
+(và trọng số tương ứng trong top-k của token đó), chạy expert một lần trên nhóm ấy, rồi cộng kết quả về đúng hàng. Với loss
+cân tải, cần đếm mỗi expert được chọn bao nhiêu lượt.
 
 ### Gợi ý 2
 

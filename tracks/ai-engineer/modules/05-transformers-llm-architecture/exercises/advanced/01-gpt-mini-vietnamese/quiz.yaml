@@ -15,7 +15,7 @@ questions:
 - id: bpc-vs-lstm
   kind: data
   type: single
-  prompt: Sau khi train trên toàn bộ tập train lớn, bpc của GPT mini trên validation so với LSTM của module 04 (1.975) thế nào?
+  prompt: Với cấu hình GPU (laptop hoặc PC), sau khi train trên toàn bộ tập train lớn, bpc của GPT mini trên validation so với LSTM của module 04 (1.975) thế nào?
   options:
   - id: a
     text: Thấp hơn rõ rệt, dưới 1.7

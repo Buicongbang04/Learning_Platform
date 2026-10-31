@@ -46,6 +46,26 @@ def test_fit_power_law_noisy(nb):
     assert np.sqrt(np.mean((c + a * x ** -alpha - y) ** 2)) < 0.01
 
 
+
+def _sse(x, y, a, alpha, c):
+    return float(np.sum((c + a * x ** -alpha - y) ** 2))
+
+
+def _grid_best_sse(x, y):
+    best = math.inf
+    for c in np.linspace(0.0, y.min() * 0.999, 2000):
+        slope, intercept = np.polyfit(np.log(x), np.log(y - c), 1)
+        best = min(best, _sse(x, y, math.exp(intercept), -slope, c))
+    return best
+
+
+def test_fit_power_law_minimizes_error_on_y(nb):
+    rng = np.random.default_rng(4)
+    x = np.geomspace(1e4, 1e8, 8)
+    y = 2.0 + 50.0 * x ** -0.3 + rng.normal(0, 0.02, 8)
+    a, alpha, c = nb.fit_power_law(x, y)
+    assert _sse(x, y, a, alpha, c) <= 1.05 * _grid_best_sse(x, y)
+
 def test_chinchilla(nb):
     assert nb.chinchilla_loss(70e9, 1.4e12) == pytest.approx(1.69 + 406.4 / 70e9 ** 0.34 + 410.7 / 1.4e12 ** 0.28)
     assert nb.chinchilla_loss(70e9, 1.4e12) < nb.chinchilla_loss(280e9, 300e9)

@@ -8,8 +8,8 @@
   context 1 024) ra 124 439 808, khớp con số "124M" của OpenAI.
 - `train_flops`: $$6ND$$. Forward của một phép nhân ma trận $$d_{in} \times d_{out}$$ cho một token là $$2 d_{in} d_{out}$$ FLOP
   (nhân và cộng), tức $$2N$$ cho cả model; backward tính gradient theo cả input và trọng số, gấp đôi forward. Công thức bỏ qua phép
-  nhân $$QK^\top$$ và $$AV$$ của attention (khoảng $$6 L T d$$ FLOP mỗi token khi train): nhỏ khi context $$T$$ nhỏ hơn nhiều so với
-  $$12d$$, đáng kể khi context dài.
+  nhân $$QK^\top$$ và $$AV$$ của attention (tới khoảng $$12 L T d$$ FLOP mỗi token khi train nếu đếm đủ, không trừ phần bị mask
+  nhân quả): tỉ lệ so với $$6N$$ cỡ $$T / 6d$$, nhỏ khi context $$T$$ nhỏ hơn nhiều so với $$6d$$, đáng kể khi context dài.
 - `fit_power_law`: với $$c$$ cố định, khớp đường thẳng $$\log(y - c) = \log a - \alpha \log x$$ bằng `np.polyfit`; dò $$c$$ trên lưới
   2 000 điểm trong $$[0, \min y)$$, giữ $$c$$ có tổng bình phương sai số **trên $$y$$** nhỏ nhất. Chấm trên $$y$$ gốc vì
   đó là đại lượng cần khớp; sai số trong không gian $$\log(y - c)$$ của các $$c$$ khác nhau không cùng thang đo nên không so được.
@@ -31,15 +31,19 @@ Token mỗi tham số của model lớn nhất: 0.69 (CPU) và 1.15 (GPU), thấ
 
 Đọc kết quả:
 
-- Loss giảm gần như thẳng theo $$\log N$$, có nhiễu (bản GPU: 128 và 192 gần bằng nhau; bản CPU: 64 và 96 gần bằng nhau). Không
-  thấy đi ngang, nên $$c$$ không xác định được: bản CPU cho $$c = 0$$ (biên dưới của lưới), bản GPU cho 0.34. Hai số mũ
-  0.036 và 0.038 gần nhau nhưng đều nhỏ hơn 0.076 của Kaplan, vì mọi model bị giới hạn bởi số token cố định.
+- Loss giảm gần như thẳng theo $$\log N$$, có nhiễu. Không thấy đi ngang, nên $$c$$ không xác định được: bản CPU chạm biên
+  dưới $$c = 0$$ của lưới; bản GPU cho 0.34, không có ý nghĩa. $$\alpha$$ cũng không xác định được: khớp lại dữ liệu GPU với $$c$$
+  cố định, sai số bình phương gần như phẳng khi $$c$$ từ 0 tới 2 ($$\alpha$$ 0.035 → 0.060), ở $$c = 3$$ thì $$\alpha = 0.093$$ mà
+  sai số chỉ tệ hơn 4% (dữ liệu CPU: $$\alpha$$ 0.036 → 0.072 khi $$c$$ 0 → 3). Báo $$\alpha$$ trong khoảng cỡ 0.035-0.09.
+- Chỉ so với 0.076 của Kaplan ở $$c = 0$$ (luật của Kaplan không có hằng số): 0.035-0.036 nhỏ hơn. "Bị giới hạn bởi số token cố
+  định" chỉ là giả thuyết, thí nghiệm không kiểm nó.
+- Biến gây nhiễu: lr đổi từ 2e-3 sang 1e-3 giữa `n_embd` 128 và 192, đúng chỗ đường GPU chững lại (4.842 → 4.799).
 - Biểu đồ loss theo compute: ở cùng mức compute, model nhỏ có loss train thấp hơn; các đường không cắt nhau trong ngân sách này.
   Model lớn chỉ thắng vì tiêu nhiều compute hơn. Đây là phía compute nhỏ của đường bao Chinchilla.
 - Chinchilla: compute của Gopher $$6 \cdot 280 \cdot 10^9 \cdot 300 \cdot 10^9 = 5.04 \times 10^{23}$$ FLOP; quy tắc 20 token mỗi
   tham số khuyên 65 tỉ tham số và 1.30 nghìn tỉ token. Công thức loss cho Gopher 1.993, Chinchilla 1.937.
-- Mutant đổi tiêu chí chọn $$c$$ sang sai số trong không gian $$\log(y - c)$$ vẫn qua test (trên dữ liệu test hai tiêu chí chọn
-  gần cùng $$c$$); đây là lỗi về phương pháp, giải thích ở mục `fit_power_law` phía trên.
+- Chọn $$c$$ theo sai số trong không gian $$\log(y - c)$$ là lỗi phương pháp (giải thích ở mục `fit_power_law` phía trên); test
+  `test_fit_power_law_minimizes_error_on_y` bắt nó: trên dữ liệu của test, tiêu chí đó cho sai số trên $$y$$ gấp 1.95 lần.
 
 ## Bẫy thường gặp
 
