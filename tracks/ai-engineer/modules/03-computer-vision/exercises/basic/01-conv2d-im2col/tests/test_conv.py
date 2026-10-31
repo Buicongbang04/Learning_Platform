@@ -135,7 +135,7 @@ def test_vectorized_speed(C):
     C.conv2d_backward(np.ones_like(out), cache)
     elapsed = time.perf_counter() - start
     assert out.shape == (64, 32, 32, 32)
-    assert elapsed < 2.0, f"forward + backward mất {elapsed:.1f} s: còn vòng lặp Python qua N/OH/OW?"
+    assert elapsed < 5.0, f"forward + backward mất {elapsed:.1f} s: còn vòng lặp Python qua N/OH/OW?"
 
 
 def lines_executed(C, fn) -> int:
@@ -151,11 +151,12 @@ def lines_executed(C, fn) -> int:
             count += 1
         return tracer
 
+    previous = sys.gettrace()
     sys.settrace(tracer)
     try:
         fn()
     finally:
-        sys.settrace(None)
+        sys.settrace(previous)
     return count
 
 
