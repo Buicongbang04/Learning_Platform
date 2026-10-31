@@ -1,0 +1,64 @@
+questions:
+  - id: training-program-count
+    kind: data
+    type: single
+    prompt: "Theo count_feedback trên tập test UIT-VSFC, có bao nhiêu phản hồi về chương trình đào tạo (training_program)?"
+    options:
+      - { id: a, text: "Dưới 400" }
+      - { id: b, text: "Từ 400 tới 499" }
+      - { id: c, text: "Từ 500 tới 599" }
+      - { id: d, text: "Từ 600 trở lên" }
+  - id: training-program-negative-share
+    kind: data
+    type: single
+    prompt: "Trong các phản hồi về chương trình đào tạo, phản hồi tiêu cực chiếm khoảng bao nhiêu phần trăm?"
+    options:
+      - { id: a, text: "Dưới 50%" }
+      - { id: b, text: "Từ 50% tới 65%" }
+      - { id: c, text: "Từ 65% tới 80%" }
+      - { id: d, text: "Trên 80%" }
+  - id: positive-lecturer-share
+    kind: data
+    type: single
+    prompt: "Bao nhiêu phần trăm phản hồi tích cực của tập test nói về giảng viên (lecturer)?"
+    options:
+      - { id: a, text: "Dưới 60%" }
+      - { id: b, text: "Từ 60% tới 75%" }
+      - { id: c, text: "Từ 75% tới 85%" }
+      - { id: d, text: "Trên 85%" }
+  - id: error-as-result
+    kind: knowledge
+    type: single
+    prompt: "Vì sao execute_tool_call trả chuỗi \"ERROR: ...\" thay vì ném exception khi tham số sai?"
+    options:
+      - { id: a, text: "Model đọc được lỗi ở lượt sau và tự sửa tham số" }
+      - { id: b, text: "API Chat Completions cấm message tool có nội dung rỗng" }
+      - { id: c, text: "jsonschema không ném được exception khi gặp enum sai" }
+      - { id: d, text: "Exception làm Ollama tự gọi lại tool với tham số cũ" }
+  - id: missing-id
+    kind: knowledge
+    type: single
+    prompt: "Ollama không trả id cho tool call. Vì sao vòng lặp vẫn phải tự đặt id?"
+    options:
+      - { id: a, text: "Vì id được dùng làm khoá cache cho kết quả của tool" }
+      - { id: b, text: "Vì Ollama trả lỗi 400 nếu message tool thiếu tool_call_id" }
+      - { id: c, text: "Để ghép kết quả với lời gọi khi một lượt có nhiều call" }
+      - { id: d, text: "Vì jsonschema cần id để validate tham số của tool" }
+  - id: prompted-tradeoff
+    kind: knowledge
+    type: single
+    prompt: "Điều nào đúng về tool calling bằng prompt (prompted) so với native?"
+    options:
+      - { id: a, text: "Luôn đúng nhiều câu hơn native nhờ ép theo JSON schema" }
+      - { id: b, text: "Không tốn token mô tả tool vì schema được gửi riêng" }
+      - { id: c, text: "Chỉ chạy với model đã được fine-tune cho thẻ tool_call" }
+      - { id: d, text: "Chạy với mọi API chỉ có chữ, đổi lại tự lo giao thức" }
+  - id: fix-percentage
+    kind: knowledge
+    type: single
+    prompt: "Model 3B gọi percentage(10, 50) với số tự bịa thay vì đếm trước. Cách sửa nào chắc nhất?"
+    options:
+      - { id: a, text: "Tăng max_steps để model có thêm lượt suy nghĩ" }
+      - { id: b, text: "Thêm tool trả thẳng phần trăm theo chủ đề, cảm xúc" }
+      - { id: c, text: "Đặt temperature cao hơn để model thử nhiều cách" }
+      - { id: d, text: "Bỏ minimum khỏi schema của percentage cho dễ gọi" }

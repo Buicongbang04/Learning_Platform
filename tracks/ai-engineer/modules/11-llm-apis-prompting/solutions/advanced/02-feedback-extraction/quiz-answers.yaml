@@ -1,0 +1,6 @@
+facility-count: [a]
+actionable-rate: [a]
+cross-field-rule: [b]
+topic-accuracy: [c]
+nullable-required: [a]
+pii-risk: [d]

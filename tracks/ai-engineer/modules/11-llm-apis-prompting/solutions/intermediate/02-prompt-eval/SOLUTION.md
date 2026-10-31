@@ -37,7 +37,8 @@ ngày 2026-11-01, 150 câu ghim:
 | JSON schema | 0.852 | [0.791, 0.906] | 0.853 | 0.81 | 129 | 8.6 |
 
 So với zero-shot (bootstrap theo cặp, 2 000 lần): few-shot -0.064 [-0.143, +0.021], CoT +0.020 [-0.043, +0.084], JSON
-schema +0.049 [+0.001, +0.103]. Sàn nhiễu: chạy lại zero-shot y hệt trên GPU cho đúng cùng 150 câu trả lời; chạy cùng
+schema +0.049 [+0.001, +0.103]. Sàn nhiễu: chạy lại zero-shot y hệt trên GPU ngay sau đó cho đúng cùng 150 câu trả lời; cell chạy lại của notebook,
+chạy khoảng 75 phút sau trên cùng máy (GPU chia với job khác), cho 2/150 câu đổi nhãn (+0.014 [0.000, +0.035]); chạy cùng
 prompt chỉ trên CPU (`num_gpu` 0) làm 7 câu zero-shot và 8 câu JSON đổi nhãn, và trên CPU JSON schema chỉ hơn zero-shot
 +0.002 [-0.035, +0.042].
 

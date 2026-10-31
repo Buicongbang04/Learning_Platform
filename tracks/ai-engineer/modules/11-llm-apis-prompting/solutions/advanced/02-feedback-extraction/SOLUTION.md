@@ -21,7 +21,39 @@ mà không ghi model sinh, phần cứng; ước chi phí bằng số từ thay 
 
 ## Kết quả tham chiếu
 
-§§A02REF§§
+Bản tham chiếu (giữ ngoài repo) chạy trên 150 câu ghim, `qwen2.5:3b` qua Ollama 0.13.5, `temperature` 0, `seed` 0,
+`num_predict` 256, cùng system prompt mô tả từng khoá, ngày 2026-11-01, PC của track (RTX 3060 **dùng chung** với một job
+train khác; số giây chỉ để so tương đối). Phân phối chủ đề của tập ghim: lecturer 99, training_program 27, others 17,
+facility 7.
+
+| Cấu hình | Hợp lệ | Sai quy tắc | Gọi lại | Cảm xúc acc / macro-F1 | Chủ đề acc / macro-F1 | `actionable` | Vào / ra | p50 giây |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| chỉ dặn trong prompt | 150 / 150 | 0 | 0 | 0.713 / 0.665 | 0.747 / 0.676 | 15.3% | 266 / 53.7 | 1.02 |
+| JSON mode | 150 / 150 | 0 | 0 | 0.713 / 0.665 | 0.747 / 0.676 | 15.3% | 266 / 53.7 | 2.95 |
+| JSON schema | 150 / 150 | 0 | 0 | 0.713 / 0.665 | 0.747 / 0.676 | 15.3% | 266 / 53.7 | 2.01 |
+| JSON schema + gọi lại một lần | 150 / 150 | 0 | 0 | như trên | như trên | như trên | như trên | như trên |
+
+- Ba mức ép cho output giống nhau từng byte ở 149/150 câu. Với prompt mô tả khoá rõ và model này, ép schema không đổi
+  kết quả; nó là bảo hiểm cho model khác, input lạ, prompt dài hơn. Không câu nào sai quy tắc nghiệp vụ nên đường gọi
+  lại **không được kích hoạt** lần nào trên tập này: muốn kiểm nó, dựng ca lỗi bằng `FakeLLM` hoặc input cố ý mâu thuẫn.
+- F1 từng lớp (JSON schema): cảm xúc negative 0.730, neutral 0.381, positive 0.883; model chỉ chọn neutral 13/150 lần,
+  29 câu neutral thành negative, 9 thành positive. Chủ đề lecturer 0.836, training_program 0.576, facility 0.923, others
+  0.370; nhầm nhiều nhất là lecturer thành training_program (12) và others thành lecturer (10). Đoán toàn `lecturer`
+  đã được accuracy chủ đề 0.66, nên accuracy 0.747 nói rất ít.
+- So với prompt chỉ phân loại cảm xúc của Intermediate 02 (macro-F1 0.804), trích xuất 5 trường một lượt làm cảm xúc tụt
+  hẳn, gần như toàn bộ ở lớp neutral. Khuyến nghị của bản tham chiếu: lấy cảm xúc từ một lời gọi riêng (hoặc một bộ phân
+  loại đã train ở module 04), dùng lời gọi trích xuất cho chủ đề, khía cạnh và gợi ý.
+- **Tự chấm 30 câu đầu** (người viết bản tham chiếu chấm, một người, tiêu chí viết trước: `actionable` đúng khi phản hồi
+  nêu hoặc ngầm chỉ một việc cụ thể làm được, ví dụ "máy chiếu hơi mờ"; `aspects` đạt khi mọi cụm có trong câu và không
+  là chữ đệm): `actionable` đồng ý 27/30, cả 3 câu lệch đều là model bỏ sót việc ngầm định ("máy chiếu hơi mờ", "giờ lên
+  lớp không chắc chắn", "chỉ cần cho bài tập qua web"), không có câu model gắn `true` sai; 4/4 `suggestion` có mặt đều
+  dùng được; `aspects` đạt 23/30, lỗi chính là **đệm cho đủ 3 cụm** bằng chữ chép từ mô tả chủ đề trong prompt ("giảng
+  viên", "cách dạy") hoặc chữ vô nghĩa ("phản hồi").
+- Chi phí 10 000 phản hồi một học kỳ với 266 token vào và 53.7 token ra mỗi câu (token Qwen, ước lượng), giá kiểm
+  2026-11-01: Claude Haiku 5.5 khoảng 0.53 USD, Gemini 3.8 Flash khoảng 4.0 USD (giá tới 31/12/2026), gpt-6.1-terra
+  khoảng 5.4 USD, Claude Sonnet 5.5 khoảng 10.7 USD. Tiền không phải rào cản; rào cản là dữ liệu cá nhân: phản hồi có
+  thể nêu tên giảng viên, sinh viên, lớp, nên cần chính sách của trường trước khi gửi ra API ngoài, hoặc chạy model
+  local như bản tham chiếu.
 
 ## Rubric
 

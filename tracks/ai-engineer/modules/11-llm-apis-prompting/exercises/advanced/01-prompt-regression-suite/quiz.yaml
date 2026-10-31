@@ -1,0 +1,55 @@
+questions:
+  - id: sloppy-class
+    kind: data
+    type: single
+    prompt: "Bỏ dòng định nghĩa neutral khỏi system prompt zero-shot: F1 của lớp nào tụt nhiều nhất trên 150 câu ghim?"
+    options:
+      - { id: a, text: "negative" }
+      - { id: b, text: "neutral" }
+      - { id: c, text: "positive" }
+      - { id: d, text: "Ba lớp tụt gần như bằng nhau" }
+  - id: sloppy-neutral-count
+    kind: data
+    type: single
+    prompt: "Cũng thay đổi đó: số câu model đoán là neutral thay đổi thế nào so với baseline?"
+    options:
+      - { id: a, text: "Tăng rõ" }
+      - { id: b, text: "Gần như không đổi" }
+      - { id: c, text: "Giảm rõ" }
+      - { id: d, text: "Không còn câu nào được đoán neutral" }
+  - id: cache-key-content
+    kind: knowledge
+    type: single
+    prompt: "Vì sao khoá cache phải gồm nội dung prompt chứ không chỉ tên phiên bản?"
+    options:
+      - { id: a, text: "Để tệp cache nhỏ hơn khi có nhiều phiên bản" }
+      - { id: b, text: "Để không cần ghi model và tham số sinh vào khoá" }
+      - { id: c, text: "Sửa prompt mà giữ tên thì cổng đọc kết quả cũ" }
+      - { id: d, text: "Vì SHA-256 cần chuỗi đầu vào dài hơn 64 ký tự" }
+  - id: gate-no-significance
+    kind: knowledge
+    type: single
+    prompt: "Vì sao cổng không đòi ứng viên phải tốt hơn baseline có ý nghĩa thống kê?"
+    options:
+      - { id: a, text: "Với 150 câu, gần như mọi thay đổi sẽ bị chặn" }
+      - { id: b, text: "Bootstrap theo cặp không tính được cận dưới" }
+      - { id: c, text: "Model ở temperature 0 luôn cho cùng kết quả" }
+      - { id: d, text: "Macro-F1 không có khoảng tin cậy trên tập cân bằng" }
+  - id: class-drop-case
+    kind: knowledge
+    type: single
+    prompt: "Ứng viên có macro-F1 tụt 0.01 (CI chứa 0) nhưng F1 neutral tụt 0.15. Với cổng mặc định, kết quả là gì?"
+    options:
+      - { id: a, text: "Qua, vì tụt nhỏ hơn max_drop 0.02" }
+      - { id: b, text: "Chặn với lý do class_drop:neutral" }
+      - { id: c, text: "Chặn với lý do significant_drop" }
+      - { id: d, text: "Qua, vì khoảng tin cậy có chứa 0" }
+  - id: noise-floor
+    kind: knowledge
+    type: single
+    prompt: "Trên PC của track, chạy lại y hệt baseline trên cùng GPU cho 0 câu đổi nhãn. Muốn đo sàn nhiễu thật nên làm gì?"
+    options:
+      - { id: a, text: "Chạy lại thêm 10 lần trên cùng GPU" }
+      - { id: b, text: "Kết luận sàn nhiễu bằng 0 và hạ ngưỡng" }
+      - { id: c, text: "Tăng n_boot lên 20 000 lần lấy mẫu" }
+      - { id: d, text: "Chạy cùng prompt trên phần cứng khác, ví dụ chỉ CPU" }

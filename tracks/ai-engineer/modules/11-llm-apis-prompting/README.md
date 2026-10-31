@@ -95,8 +95,8 @@ na = httpx.post("http://localhost:11434/api/chat", timeout=300, json={
 print("Ollama:      ", na["message"]["content"], na["done_reason"], na["prompt_eval_count"], na["eval_count"])
 ```
 
-Kết quả: cả hai trả `negative`; endpoint tương thích OpenAI báo `finish_reason` `stop` và `usage` §§USAGE§§, API
-riêng báo `done_reason` `stop`, `prompt_eval_count` §§PEC§§, `eval_count` §§EC§§. Cùng model, cùng số token, khác tên
+Kết quả: cả hai trả `negative`; endpoint tương thích OpenAI báo `finish_reason` `stop` và `usage` `{'prompt_tokens': 40, 'completion_tokens': 2, 'total_tokens': 42}`, API
+riêng báo `done_reason` `stop`, `prompt_eval_count` 40, `eval_count` 2. Cùng model, cùng số token, khác tên
 trường. Đây là lý do `llmkit` của track có hai client (`OllamaClient`, `OpenAICompatClient`) sau cùng một hàm `chat`.
 
 ### Các phương ngữ
@@ -168,26 +168,41 @@ tok = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
 sentence = "Phản hồi: thầy rất nhiệt tình trong quá trình giảng dạy , luôn giúp đỡ sinh viên trong lúc làm bài cũng như mắc lỗi ."
 user = [{"role": "user", "content": sentence}]
 print("chỉ chữ:", len(tok(sentence)["input_ids"]))
-print("qua template, system mặc định:", len(tok.apply_chat_template(user, add_generation_prompt=True)))
+print("qua template, system mặc định:", len(tok.apply_chat_template(user, add_generation_prompt=True)["input_ids"]))
 with_system = [{"role": "system", "content": "Phân loại cảm xúc."}] + user
-print("qua template, system ngắn:", len(tok.apply_chat_template(with_system, add_generation_prompt=True)))
+print("qua template, system ngắn:", len(tok.apply_chat_template(with_system, add_generation_prompt=True)["input_ids"]))
 print(tok.apply_chat_template(with_system, add_generation_prompt=True, tokenize=False))
 ```
 
-§§TOKBLOCK§§
+```text
+chỉ chữ: 28
+qua template, system mặc định: 57
+qua template, system ngắn: 47
+<|im_start|>system
+Phân loại cảm xúc.<|im_end|>
+<|im_start|>user
+Phản hồi: thầy rất nhiệt tình trong quá trình giảng dạy , luôn giúp đỡ sinh viên trong lúc làm bài cũng như mắc lỗi .<|im_end|>
+<|im_start|>assistant
+```
+
+Câu 28 token thành 57 token khi không gửi system: 29 token là system mặc định của Qwen và các thẻ, bạn trả cho chúng ở
+mỗi request mà không thấy trong code. Gửi một system ngắn thì còn 47. Với prompt zero-shot đầy đủ của mục 7, template
+của `transformers` cho 141 token, đúng bằng `prompt_eval_count` Ollama báo cho cùng câu: 100 token system, 28 token câu,
+13 token thẻ và tên vai. (`transformers` 5 trả `apply_chat_template(...)` dạng dict có `input_ids`; bản 4 trả thẳng danh
+sách id.)
 
 Bảng token của các prompt trong module (đo bằng `prompt_eval_count` và `eval_count` của Ollama, trung bình trên 150 câu
 ghim, mục 7):
 
 | Prompt | Token vào | Token ra | Phần cố định (system, ví dụ) |
 | --- | --- | --- | --- |
-| zero-shot (định nghĩa nhãn + "đúng một từ") | 131 | 2.0 | khoảng §§ZSFIX§§ |
-| few-shot (thêm 6 ví dụ) | 284 | 2.0 | khoảng §§FSFIX§§ |
+| zero-shot (định nghĩa nhãn + "đúng một từ") | 131 | 2.0 | khoảng 113 |
+| few-shot (thêm 6 ví dụ) | 284 | 2.0 | khoảng 266 |
 | CoT-lite (một câu suy luận rồi nhãn) | 180 | 53.5 | |
 | JSON schema | 129 | 8.6 | |
-| Câu hỏi + 3 tool (bài Intermediate 01), native | §§TOOLWITH§§ | | so với §§TOOLWITHOUT§§ khi không gửi tool |
+| Câu hỏi + 3 tool (bài Intermediate 01), native | 517 | | 61 khi không gửi tool: mô tả 3 tool tốn khoảng 456 token mỗi request |
 
-Phần cố định chiếm phần lớn prompt: câu phản hồi trung bình chỉ khoảng §§SENTTOK§§ token. Đó là điều kiện lý tưởng cho
+Phần cố định chiếm phần lớn prompt: câu phản hồi trung bình chỉ khoảng 15 token. Đó là điều kiện lý tưởng cho
 prompt caching (mục 3), và là lý do một chỉ thị "ngắn gọn" trong system prompt có giá trị tiền thật khi nhân với một
 triệu request.
 
@@ -201,7 +216,7 @@ triệu request.
 | `usage` trong response | đúng, nhưng **sau** khi đã trả tiền | theo dõi, đối soát hoá đơn |
 | Số ký tự chia cho một hằng số | sai vài chục phần trăm | chỉ để ước cỡ |
 
-Trên 150 câu ghim, một câu trung bình §§CHARS§§ ký tự, §§QTOK§§ token Qwen2.5 và §§OTOK§§ token `o200k_base`: hai tokenizer
+Trên 150 câu ghim, một câu trung bình 52 ký tự, 14.6 token Qwen2.5 và 15.0 token `o200k_base`: hai tokenizer
 lớn cho số gần nhau với tiếng Việt, tokenizer 32k thì gấp đôi (module 09). Tokenizer của Claude không công bố; Anthropic
 ghi tokenizer của Opus 4.7 trở đi dùng 1 tới 1.35 lần số token của tokenizer cũ cho cùng văn bản. Ước chi phí cho một
 model đóng bằng tokenizer của model mở là ước lượng, và phải ghi như vậy.
@@ -293,9 +308,20 @@ flowchart LR
 
 Mọi thứ đổi theo request (ngày giờ, id người dùng, câu hỏi) đặt **sau** phần cố định; một dấu cách khác ở đầu system
 prompt làm mất cache của toàn bộ phần sau. Ollama cũng giữ KV cache của lần gọi trước trong cùng slot và chỉ tính phần
-prompt mới. Đo với một prompt few-shot 36 ví dụ (§§BIGTOK§§ token):
+prompt mới. Đo với một prompt few-shot 36 ví dụ (khoảng 1 010 token; 5 lần gọi liên tiếp, mỗi lần một câu khác ở cuối, `num_predict` 4):
 
-§§CACHETABLE§§
+| Lần gọi | `prompt_eval_count` | Thời gian xử lý prompt (ms) |
+| --- | --- | --- |
+| 1: prefix mới | 1 011 | 240.5 |
+| 2: cùng prefix, câu khác | 1 009 | 16.8 |
+| 3: cùng prefix, câu khác | 1 038 | 23.2 |
+| 4: thêm **một dấu cách** vào cuối system | 1 012 | 226.7 |
+| 5: cùng prefix với lần 4 | 1 023 | 17.6 |
+
+Cùng prefix thì phần prompt nhanh hơn khoảng 14 lần; một dấu cách khác trong system làm mất cache của mọi thứ sau nó
+(lần 4). Ollama 0.13.5 vẫn báo `prompt_eval_count` bằng độ dài cả prompt khi dùng cache, nên phải nhìn thời gian; API
+trả tiền thì báo riêng (Anthropic `cache_read_input_tokens`, OpenAI `prompt_tokens_details.cached_tokens`) để tính hoá
+đơn. Đo khi GPU đang chia với một job train khác: tỉ lệ giữa các lần đáng tin hơn số mili giây tuyệt đối.
 
 Bài Basic 02 tính điểm hoà vốn: với giá ghi 1.25 lần và đọc 0.1 lần giá vào, cache có lời sau **một** lần đọc; với ghi
 2 lần (cache 1 giờ), sau hai lần đọc. Lưu lượng thưa hơn thời gian sống của cache thì gần như mọi request là lần ghi,
@@ -391,7 +417,8 @@ nên xác suất model dành cho "tích cực" hay "Nhãn:" bị dồn lại cho
 - Bị cắt ở `max_tokens` vẫn ra JSON dở dang: kiểm `finish_reason`.
 - Ràng buộc có thể đổi phân phối theo cả hai chiều (ép model vào một token đầu nó không định viết). Mục 7 cho thấy
   hiệu ứng chất lượng của nó trên tập ghim nằm trong nhiễu.
-- Server có thể chỉ hỗ trợ một phần JSON Schema. Thử với Ollama 0.13.5:
+- Server có thể chỉ hỗ trợ một phần JSON Schema, và phần nó hỗ trợ có thể **bóp méo dữ liệu**. Thử với Ollama 0.13.5 một
+  yêu cầu mà prompt và schema mâu thuẫn:
 
 ```python
 import json
@@ -408,7 +435,20 @@ print(r["message"]["content"])
 print(json.loads(r["message"]["content"]))
 ```
 
-§§PROBE§§
+```text
+{
+  "tag": "cơ sở",
+  "score": 20
+}
+{'tag': 'cơ sở', 'score': 20}
+```
+
+Ollama 0.13.5 tôn trọng cả `maxLength` lẫn `minimum`/`maximum` trong lần thử này, và chính điều đó là bẫy: dữ liệu
+người dùng là "cơ sở vật chất và trang thiết bị" và 3, output là "cơ sở" và 20. JSON hợp lệ, đúng schema, validate phía
+client cũng không bắt được, nhưng giá trị là do bộ giải mã bẻ ra chứ không có trong input. Server khác (hoặc phiên bản
+khác) có thể bỏ qua các từ khoá này; trang structured output của từng nhà cung cấp liệt kê phần schema được hỗ trợ. Giới
+hạn nghiệp vụ (độ dài, khoảng giá trị) nên nằm ở code để **từ chối** dữ liệu sai, thay vì nhờ bộ giải mã bẻ dữ liệu cho
+vừa.
 
 Vì vậy code luôn **validate phía client** (`jsonschema`, `pydantic`, hoặc tự viết như bài Basic 03), kiểm thêm quy tắc
 nghiệp vụ mà schema không diễn đạt được (bài Advanced 02), và có đường gọi lại kèm thông báo lỗi.
@@ -418,7 +458,22 @@ nghiệp vụ mà schema không diễn đạt được (bài Advanced 02), và c
 Trích xuất 5 trường (cảm xúc, chủ đề, tối đa 3 khía cạnh, `actionable`, `suggestion`) từ 150 câu ghim, cùng system
 prompt mô tả từng khoá, ba mức ép:
 
-§§M3TABLE§§
+| Mức ép | Hợp lệ theo schema | Sai quy tắc nghiệp vụ | macro-F1 cảm xúc | macro-F1 chủ đề | Token vào / ra | p50 giây (GPU dùng chung) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Dặn trong prompt | 150 / 150 | 0 | 0.665 | 0.676 | 266 / 53.7 | 1.02 |
+| JSON mode (`format: "json"`) | 150 / 150 | 0 | 0.665 | 0.676 | 266 / 53.7 | 2.95 |
+| JSON Schema (`format: <schema>`) | 150 / 150 | 0 | 0.665 | 0.676 | 266 / 53.7 | 2.01 |
+
+Ba mức ép cho output giống nhau từng byte ở 149/150 câu (câu còn lại khác một từ trong `aspects`). Với `qwen2.5:3b`,
+`temperature` 0 và một system prompt mô tả rõ từng khoá, model đã tự viết đúng định dạng; ép schema **không đổi gì** ở
+đây. Giá trị của nó là bảo hiểm: model khác, prompt dài hơn, input lạ hay có injection thì phần "dặn trong prompt" mới
+vỡ. Độ trễ khác nhau đo khi GPU bị một job train khác chiếm và chạy ở các thời điểm khác nhau, nên không kết luận chế độ
+nào chậm hơn từ cột đó.
+
+Điều đáng chú ý hơn nằm ở cột cảm xúc: cùng model, cùng tập, trích xuất 5 trường một lượt cho macro-F1 cảm xúc 0.665,
+thấp hơn hẳn prompt chỉ phân loại cảm xúc ở mục 7 (0.804). F1 lớp neutral còn 0.381: model chỉ chọn neutral 13/150 lần,
+29 câu neutral thành negative. Gộp nhiều việc vào một prompt có giá; khi một trường quan trọng, tách nó thành lời gọi
+riêng (prompt chaining) và đo lại. Bài Advanced 02 đi sâu vào ứng dụng này.
 
 ## 6. Function calling
 
@@ -483,7 +538,27 @@ Vòng lặp này (bài Intermediate 01) có các quyết định thiết kế qu
 Đo trên 12 câu hỏi của bài Intermediate 01 (10 câu đáp án số, một câu cần `list_examples`, một câu ngoài phạm vi), cùng
 `qwen2.5:3b`, cùng vòng lặp:
 
-§§M4TABLE§§
+| Cách | Đúng / 12 | Bước trung bình | Tool call | Lỗi tool | Giây trung bình (GPU dùng chung) |
+| --- | --- | --- | --- | --- | --- |
+| Native (`tools` của Ollama) | 7 | 1.92 | 13 | 1 | 1.38 |
+| Prompted (`llmkit.chat` + JSON schema) | 6 | 1.92 | 11 | 1 | 3.86 |
+
+Chênh một câu trên 12 câu không nói được cách nào tốt hơn (bài Intermediate 02). Đọc từng câu thì rõ hơn:
+
+- **Cả bốn câu phần trăm đều sai ở cả hai cách.** Native gọi `percentage` với số **bịa** (`part` 10, `whole` 50) mà
+  không đếm trước; prompted đếm một lần rồi tự tính ra một con số không khớp gì. Model 3B không lập được kế hoạch hai
+  bước "đếm, đếm, chia". Cách sửa ở phía thiết kế tool: một tool `share(topic, sentiment)` trả thẳng phần trăm, để
+  việc nhiều bước nằm trong code.
+- **Câu "tổng bao nhiêu phản hồi"** sai ở cả hai: model gửi `topic: null`, schema chỉ cho chuỗi nên tool trả `ERROR`
+  (lỗi tool duy nhất của mỗi cách). Native quay ra hỏi lại người dùng; prompted trả lời "123456789". Schema chặt bắt được
+  tham số sai, nhưng thông báo lỗi chưa đủ để model nhỏ tự sửa; một schema cho phép `null` (đúng ý "không lọc") là thiết
+  kế tốt hơn.
+- **Câu ngoài phạm vi**: cả hai không gọi tool. Prompted trả `answer` rỗng vì schema không bắt buộc khoá `answer`: đúng
+  theo tiêu chí chấm, nhưng là lỗi trải nghiệm.
+- **Tự sửa sau lỗi** (cell cuối notebook, tham số `topic: "phòng học"`): prompted đọc thông báo lỗi và gọi lại với
+  `facility`, ra đúng 138; native xin lỗi và không gọi lại.
+- Native tốn 517 token prompt cho câu hỏi đầu tiên so với 61 khi không có tool (mục 2): mô tả tool là chi phí thật ở
+  mỗi lượt của vòng lặp.
 
 ### MCP: chuẩn hoá tool giữa các ứng dụng
 
@@ -536,7 +611,8 @@ ghim:
 
 | So sánh | Câu đổi nhãn | Hiệu macro-F1 [CI 95%] |
 | --- | --- | --- |
-| zero-shot chạy lại y hệt (GPU) | 0 / 150 | 0 |
+| zero-shot chạy lại y hệt ngay sau đó (GPU) | 0 / 150 | 0 |
+| zero-shot chạy lại y hệt khoảng 75 phút sau (GPU, tải GPU khác) | 2 / 150 | +0.014 [0.000, +0.035] |
 | CoT-lite chạy lại y hệt (GPU, 54 token ra) | 0 / 150 (cả 150 câu trả lời giống từng chữ) | 0 |
 | zero-shot, chỉ CPU (`num_gpu` 0) so với GPU | 7 / 150 | +0.012 [-0.022, +0.047] |
 | JSON schema, chỉ CPU so với GPU | 8 / 150 | -0.035 [-0.075, -0.000] |
@@ -544,7 +620,8 @@ ghim:
 
 Đọc hai bảng cùng nhau như một kỹ sư:
 
-- Trên cùng máy, cùng trạng thái, Ollama lặp lại hoàn hảo. Đổi **phần cứng** (cùng model, cùng prompt) làm 5% câu đổi
+- Chạy lại ngay trên cùng máy, Ollama lặp lại hoàn hảo; chạy lại hơn một giờ sau trên cùng máy (model có thể đã nạp
+  lại, GPU đang chia với job khác) thì 2 câu đổi nhãn. "Cùng máy" chưa đủ để coi là cùng điều kiện. Đổi **phần cứng** (cùng model, cùng prompt) làm 5% câu đổi
   nhãn, và có lần hiệu do phần cứng đã chạm biên "có ý nghĩa thống kê". Sàn nhiễu thật của benchmark này là cỡ 0.03 tới
   0.04 macro-F1, không phải 0.
 - Lợi thế +0.049 của JSON schema trên GPU **biến mất** trên CPU (+0.002). Một khoảng tin cậy vừa không chứa 0 trên một
@@ -556,7 +633,16 @@ ghim:
   con số không so thẳng được với bảng trên (tập khác phân phối), nhưng cho một mốc: zero-shot 3B không cần dữ liệu train
   nào đã ở cùng vùng chất lượng, và một baseline train vài giây vẫn là đối thủ phải đánh bại.
 
-§§APIROW§§
+### Một mốc từ model API
+
+Cùng biến thể JSON schema (prompt 638 byte) gửi qua gateway OmniRoute dùng chung của track, id router
+`auto/gemini-3.8-flash`, gọi ngày 2026-11-01 khoảng 01:45 (lúc đó router đi tới Gemini 3.8 Flash; id `auto/...` là
+router, model phía sau đổi được theo cấu hình, nên con số này chỉ đúng cho lần gọi đó), chỉ **10 câu đầu** của tập ghim
+(gateway dùng chung, không chạy cả tập): 9/10 đúng, 4.1 tới 7.3 giây mỗi lời gọi (gồm mạng và gateway), không lỗi.
+`qwen2.5:3b` zero-shot và JSON schema cũng 9/10 trên đúng 10 câu đó; cả ba cùng sai một câu nhãn neutral ("em nghĩ như
+vậy sẽ tốt hơn vì...", một góp ý mà nhãn neutral còn bàn được): `qwen2.5:3b` đoán positive, model API đoán negative.
+Mười câu không đủ để so hai model; nó chỉ cho thấy cùng một bộ đo chạy được với model API khi đổi `LLM_PROVIDER`, và
+rằng muốn so thật thì phải chạy cả 150 câu với chi phí đã ước ở mục 3.
 
 ### Từ thí nghiệm tới quy trình
 

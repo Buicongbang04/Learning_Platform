@@ -1,0 +1,55 @@
+questions:
+  - id: facility-count
+    kind: data
+    type: single
+    prompt: "Trong 150 câu ghim (50 câu mỗi nhãn cảm xúc, random_state=0), có bao nhiêu câu nhãn chủ đề là facility?"
+    options:
+      - { id: a, text: "Dưới 10" }
+      - { id: b, text: "Từ 10 tới 25" }
+      - { id: c, text: "Từ 26 tới 40" }
+      - { id: d, text: "Trên 40" }
+  - id: actionable-rate
+    kind: data
+    type: single
+    prompt: "Với prompt và schema của bạn trên 150 câu ghim, qwen2.5:3b gắn actionable = true cho khoảng bao nhiêu phần trăm câu?"
+    options:
+      - { id: a, text: "Dưới 30%" }
+      - { id: b, text: "Từ 30% tới 50%" }
+      - { id: c, text: "Từ 50% tới 70%" }
+      - { id: d, text: "Trên 70%" }
+  - id: cross-field-rule
+    kind: knowledge
+    type: single
+    prompt: "Vì sao vẫn cần check_record khi đã ép output bằng JSON schema?"
+    options:
+      - { id: a, text: "Ollama bỏ qua enum khi temperature đặt bằng 0" }
+      - { id: b, text: "Quy tắc giữa hai trường không nằm trong schema" }
+      - { id: c, text: "Thư viện jsonschema không đọc được giá trị null" }
+      - { id: d, text: "Output ép theo schema luôn bị cắt ở num_predict" }
+  - id: topic-accuracy
+    kind: knowledge
+    type: single
+    prompt: "Vì sao chỉ báo accuracy chủ đề trên tập ghim là gây hiểu nhầm?"
+    options:
+      - { id: a, text: "Tập ghim cân bằng theo chủ đề nên accuracy bằng macro-F1" }
+      - { id: b, text: "Nhãn chủ đề của UIT-VSFC không có trong tập test" }
+      - { id: c, text: "Chủ đề lecturer chiếm phần lớn, đoán toàn lecturer đã cao" }
+      - { id: d, text: "Accuracy không tính được khi có bản ghi không hợp lệ" }
+  - id: nullable-required
+    kind: knowledge
+    type: single
+    prompt: "Schema đặt suggestion là bắt buộc với kiểu [string, null] thay vì khoá tuỳ chọn. Lợi ích chính?"
+    options:
+      - { id: a, text: "Code phía sau luôn thấy khoá, null nói rõ là không có" }
+      - { id: b, text: "Model sinh ít token hơn hẳn khi câu không có gợi ý nào" }
+      - { id: c, text: "Ollama chỉ nhận schema mà mọi khoá đều bắt buộc" }
+      - { id: d, text: "Kiểu null làm constrained decoding chạy nhanh hơn" }
+  - id: pii-risk
+    kind: knowledge
+    type: single
+    prompt: "Trước khi gửi 10 000 phản hồi sinh viên tới một model API, rủi ro nào cần xử lý trước tiên?"
+    options:
+      - { id: a, text: "Chi phí token vượt quá ngân sách của cả một học kỳ" }
+      - { id: b, text: "Model API không hỗ trợ tốt tiếng Việt có dấu thanh" }
+      - { id: c, text: "JSON schema làm sai lệch nhãn cảm xúc" }
+      - { id: d, text: "Phản hồi có thể chứa tên người (dữ liệu cá nhân)" }

@@ -114,8 +114,8 @@ không, phần cứng khác, phiên bản kernel khác làm thứ tự cộng th
 09 mục 6). Thêm vào đó: nhà cung cấp cập nhật model sau cùng một alias, đổi chat template hay system prompt ẩn, A/B test
 phía server. Cách sống chung: ghim phiên bản model (id có ngày hoặc snapshot), log request/response, eval chịu được
 nhiễu (khoảng tin cậy, sàn nhiễu đo bằng cách chạy lại y hệt), và với tác vụ cần ổn định thì dùng structured output và
-output ngắn. Trên tập ghim của module, chạy lại y hệt zero-shot cho 0/150 câu đổi nhãn (output một từ), còn chuyển cùng
-model sang chỉ CPU thì có câu đổi nhãn (số ở mục 7 lý thuyết).
+output ngắn. Trên tập ghim của module, chạy lại y hệt zero-shot ngay sau đó cho 0/150 câu đổi nhãn (output một từ), chạy lại hơn
+một giờ sau trên cùng máy đã có vài câu đổi, còn chuyển cùng model sang chỉ CPU thì nhiều hơn (số ở mục 7 lý thuyết).
 
 ## Làm sao biết một thay đổi prompt thật sự tốt hơn?
 
