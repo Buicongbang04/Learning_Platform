@@ -74,11 +74,11 @@ Nginx, API và log. Ở worker, `request_id` là `job_id`.
 
 ## Chạy bằng Docker Compose
 
-Các lệnh dưới chạy trong `tracks/devops/sample-app`. Trên máy dùng chung, ghim core và hạ ưu tiên:
+Các lệnh dưới chạy trong `tracks/devops/sample-app`. Compose đọc `DEVOPS_CPUSET` bạn đã `export` (xem [Ghim CPU](../README.md#ghim-cpu-trên-máy-dùng-chung)) để ghim core; để trống thì không ghim. Lệnh build hạ ưu tiên bằng `nice`:
 
 ```bash
 cd tracks/devops/sample-app
-DEVOPS_CPUSET=12-35 nice -n 15 docker compose up -d --build
+nice -n 15 docker compose up -d --build
 curl -s localhost:28000/readyz
 ```
 

@@ -130,23 +130,45 @@ Từ module 10, bài cần Kubernetes dùng chung một cluster kind tên `devop
 khung lệnh như sau:
 
 ```bash
-nice -n 15 taskset -c 12-35 kind create cluster --name devops-lab
-docker update --cpuset-cpus 12-35 devops-lab-control-plane
+nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --name devops-lab
+docker update --cpuset-cpus "$DEVOPS_CPUSET" devops-lab-control-plane
 kubectl cluster-info --context kind-devops-lab
 kind delete cluster --name devops-lab
 ```
+
+`$DEVOPS_CPUSET` là dải core bạn chọn ở mục [Ghim CPU](#ghim-cpu-trên-máy-dùng-chung) bên dưới. Nếu bạn không
+ghim (máy ít core, `DEVOPS_CPUSET` rỗng hoặc `none`), bỏ `taskset -c "$DEVOPS_CPUSET"` và bỏ dòng `docker update`:
+`taskset` và `docker update` đều báo lỗi khi nhận dải rỗng hoặc dải vượt quá số core của máy.
 
 Test cần cluster tự skip khi `devops-lab` chưa chạy. Xoá cluster khi học xong để trả tài nguyên cho máy.
 
 ## Ghim CPU trên máy dùng chung
 
-Cluster, image lớn và stack observability có thể ăn hết CPU. Quy ước của track:
+Cluster, image lớn và stack observability có thể ăn hết CPU. Track dùng **một** biến cho mọi chỗ cần ghim:
+`DEVOPS_CPUSET`, dải core do chính bạn chọn theo máy của mình.
 
-- Lệnh nặng chạy trực tiếp trên máy (build, test, `kind create`) chạy với `nice -n 15 taskset -c 12-35`.
-- Container không kế thừa `nice` và `taskset` của lệnh gõ, nên phải ghim bằng `--cpuset-cpus` (hoặc `cpuset`
-  trong compose). Đặt `DEVOPS_CPUSET=12-35` để mọi container của track và test bài tập dùng dải core này;
-  test gọi `docker run` lấy cờ từ `testkit.docker_cpu_args()`, có `--rm` và dọn container trong `finally`.
-- Máy ít hơn 36 core: đặt dải phù hợp (ví dụ `DEVOPS_CPUSET=2-5`) hoặc `DEVOPS_CPUSET=none` để không ghim.
+Chọn dải thế nào:
+
+1. Xem máy có bao nhiêu core: `nproc` (core đánh số từ `0` tới `nproc - 1`).
+2. Chừa vài core đầu cho việc bạn đang làm (editor, trình duyệt, IDE), giao phần còn lại cho track. Ví dụ máy
+   8 core: `DEVOPS_CPUSET=2-7`; máy 16 core: `DEVOPS_CPUSET=4-15`; máy dùng chung 36 core: `DEVOPS_CPUSET=12-35`.
+3. Máy 4 core trở xuống: không cần ghim, đặt `DEVOPS_CPUSET=none` (hoặc để trống) và bỏ qua mọi lệnh `taskset`,
+   `--cpuset-cpus` trong hướng dẫn. Dải chỉ có một hai core sẽ làm cluster chậm tới mức test bị timeout.
+
+```bash
+nproc
+export DEVOPS_CPUSET=2-7
+taskset -c "$DEVOPS_CPUSET" true && echo "dải hợp lệ"
+```
+
+Quy ước của track:
+
+- Lệnh nặng chạy trực tiếp trên máy (build, test, `kind create`) chạy với `nice -n 15 taskset -c "$DEVOPS_CPUSET"`;
+  không ghim thì chỉ `nice -n 15`.
+- Container không kế thừa `nice` và `taskset` của lệnh gõ, nên phải ghim bằng `--cpuset-cpus "$DEVOPS_CPUSET"`
+  (hoặc `cpuset` trong compose, đọc cùng biến). Test gọi `docker run` lấy cờ từ `testkit.docker_cpu_args()`:
+  có `DEVOPS_CPUSET` thì dùng giá trị đó, `none` thì không ghim, không đặt thì chỉ ghim `12-35` khi máy có từ 36
+  core trở lên. Test luôn có `--rm` và dọn container trong `finally`.
 - Mỗi lúc chạy một việc nặng, tắt container và cluster sau mỗi đợt kiểm.
 
 Giải thích chi tiết ở mục "Ghim CPU" của [`setup/DEVOPS-TOOLS.md`](../../setup/DEVOPS-TOOLS.md).

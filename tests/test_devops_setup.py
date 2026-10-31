@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 from pathlib import Path
@@ -66,3 +67,48 @@ def test_devops_tools_links_point_to_existing_files():
         module_dir = target.parent
         if module_dir.exists():
             assert target.exists(), link
+
+
+MODULE_LINK = re.compile(r"tracks/devops/modules/([^/)#\s]+)")
+
+
+def undeclared_module_links(text: str, declared: set[str]) -> list[str]:
+    return sorted({m for m in MODULE_LINK.findall(text) if m not in declared})
+
+
+def _declared_modules() -> set[str]:
+    data = json.loads((ROOT / "tracks" / "devops" / "track.json").read_text(encoding="utf-8"))
+    return {m["id"] for m in data["modules"]}
+
+
+def test_devops_tools_links_use_declared_module_ids():
+    assert undeclared_module_links(TOOLS_DOC.read_text(encoding="utf-8"), _declared_modules()) == []
+
+
+def test_undeclared_module_link_detection():
+    declared = _declared_modules()
+    bad = "[Cài đặt](../tracks/devops/modules/04-networking-dns/README.md#0-cài-đặt)"
+    assert undeclared_module_links(bad, declared) == ["04-networking-dns"]
+    good = "[Cài đặt](../tracks/devops/modules/04-networking-protocols/README.md#0-cài-đặt)"
+    assert undeclared_module_links(good, declared) == []
+
+
+HARDCODED_CPUSET = re.compile(r"(?:taskset\s+-c|--cpuset-cpus[\s=])\s*[\"']?\d")
+
+
+def hardcoded_cpuset_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if HARDCODED_CPUSET.search(line)]
+
+
+def test_cpu_pinning_guidance_uses_devops_cpuset():
+    docs = [TOOLS_DOC, *sorted((ROOT / "tracks" / "devops").rglob("*.md"))]
+    found = [f"{p.relative_to(ROOT)}: {line}" for p in docs for line in hardcoded_cpuset_lines(p.read_text(encoding="utf-8"))]
+    assert found == []
+
+
+def test_hardcoded_cpuset_detection():
+    assert hardcoded_cpuset_lines("nice -n 15 taskset -c 12-35 kind create cluster")
+    assert hardcoded_cpuset_lines("docker update --cpuset-cpus 12-35 devops-lab-control-plane")
+    assert hardcoded_cpuset_lines('act --container-options "--cpuset-cpus=12-35"')
+    assert hardcoded_cpuset_lines('nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster') == []
+    assert hardcoded_cpuset_lines('docker update --cpuset-cpus "$DEVOPS_CPUSET" x') == []
