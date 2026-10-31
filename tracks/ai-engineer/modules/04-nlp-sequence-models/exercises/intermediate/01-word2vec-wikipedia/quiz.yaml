@@ -28,16 +28,16 @@ questions:
 - id: berlin
   kind: data
   type: single
-  prompt: 'Ở model ghép cụm, `pháp : paris :: đức : ?` cho từ nào ở vị trí 1?'
+  prompt: 'Ở model ghép cụm, 5 kết quả đầu của `pháp : paris :: đức : ?` chủ yếu là gì?'
   options:
   - id: a
-    text: dresden
+    text: Tên các nước châu Âu như áo, bỉ, hà_lan
   - id: b
-    text: berlin
+    text: Tên các thành phố châu Âu như lille, dresden
   - id: c
-    text: munich
+    text: Từ chỉ người như vua, tướng, hoàng_đế
   - id: d
-    text: đức
+    text: Các âm tiết rời như đức, pháp, quốc
 - id: loss-compare
   kind: data
   type: single

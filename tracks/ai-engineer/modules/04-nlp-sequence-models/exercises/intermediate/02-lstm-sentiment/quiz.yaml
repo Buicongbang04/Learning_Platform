@@ -15,16 +15,16 @@ questions:
 - id: best-epoch
   kind: data
   type: single
-  prompt: Train BiLSTM 6 epoch, epoch nào được chọn theo val macro-F1?
+  prompt: Val macro-F1 của BiLSTM qua 6 epoch diễn biến thế nào?
   options:
   - id: a
-    text: Epoch 2
+    text: Đạt đỉnh ở epoch 1 rồi giảm đều tới cuối
   - id: b
-    text: Epoch 4
+    text: Đạt đỉnh quanh epoch 4-5 rồi tụt ở epoch 6
   - id: c
-    text: Epoch 5
+    text: Tăng đều tới epoch 6, chưa bão hoà
   - id: d
-    text: Epoch 6
+    text: Gần như không đổi, quanh 0.67 suốt
 - id: biggest-confusion
   kind: data
   type: single
