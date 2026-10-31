@@ -43,7 +43,7 @@ lâu hơn vài lần. Làm bài Basic 03 và Intermediate 02 trước.
    Tuỳ chọn: CLI hoặc giao diện nhỏ đọc CSV phản hồi, xuất CSV kết quả.
 3. Viết `starter/REPORT.md` theo khung có sẵn, rồi làm phần trắc nghiệm của bài trong app.
 
-Lưu ý dữ liệu: tập ghim cân bằng theo **cảm xúc**, nên phân phối **chủ đề** trong đó vẫn lệch (phần lớn là giảng viên);
+Lưu ý dữ liệu: tập ghim cân bằng theo **cảm xúc**, nên phân phối **chủ đề** trong đó vẫn lệch;
 macro-F1 chủ đề dao động mạnh theo vài câu `facility` và `others`. Nhãn UIT-VSFC có nhiễu (mục 7 lý thuyết): trước khi
 nói model sai, đọc câu.
 

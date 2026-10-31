@@ -47,8 +47,9 @@ facility 7.
   tham chiếu; tiêu chí viết trước: `actionable` đúng khi phản hồi nêu hoặc ngầm chỉ một việc cụ thể làm được, ví dụ "máy chiếu hơi mờ"; `aspects` đạt khi mọi cụm có trong câu và không
   là chữ đệm): `actionable` đồng ý 27/30, cả 3 câu lệch đều là model bỏ sót việc ngầm định ("máy chiếu hơi mờ", "giờ lên
   lớp không chắc chắn", "chỉ cần cho bài tập qua web"), không có câu model gắn `true` sai; 4/4 `suggestion` có mặt đều
-  dùng được; `aspects` đạt 23/30, lỗi chính là **đệm cho đủ 3 cụm** bằng chữ chép từ mô tả chủ đề trong prompt ("giảng
-  viên", "cách dạy") hoặc chữ vô nghĩa ("phản hồi").
+  dùng được; `aspects` đạt 23/30 khi chấm nới (chấp nhận cụm chung như "giảng viên" nếu câu rõ ràng nói về giảng viên), chỉ
+  khoảng 19/30 nếu chấm chặt đúng tiêu chí; lỗi chính là **đệm cho đủ 3 cụm** bằng chữ chép từ mô tả chủ đề trong prompt
+  ("giảng viên", "cách dạy") hoặc chữ vô nghĩa ("phản hồi").
 - Chi phí 10 000 phản hồi một học kỳ với 266 token vào và 53.7 token ra mỗi câu (token Qwen, ước lượng), giá kiểm
   2026-11-01: Claude Haiku 5.5 khoảng 0.53 USD, Gemini 3.8 Flash khoảng 4.0 USD (giá tới 31/12/2026), gpt-6.1-terra
   khoảng 5.4 USD, Claude Sonnet 5.5 khoảng 10.7 USD. Tiền không phải rào cản; rào cản là dữ liệu cá nhân: phản hồi có
