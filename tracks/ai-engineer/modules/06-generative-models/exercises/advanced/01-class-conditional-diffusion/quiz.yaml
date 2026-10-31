@@ -1,0 +1,105 @@
+questions:
+- id: ref-best-fid
+  kind: data
+  type: single
+  prompt: Trong bản tham chiếu (5 000 mẫu, DDIM 50 bước), guidance w nào cho FID tốt nhất?
+  options:
+  - id: a
+    text: w = 0, không guidance
+  - id: b
+    text: w = 1
+  - id: c
+    text: w = 4, guidance mạnh nhất
+  - id: d
+    text: Bản không điều kiện
+- id: ref-acc-trend
+  kind: data
+  type: single
+  prompt: Class accuracy (theo ResNet-20) của bản tham chiếu thay đổi thế nào khi w tăng từ 0 tới 4?
+  options:
+  - id: a
+    text: Tăng đều, từ khoảng 0.70 lên gần 0.99
+  - id: b
+    text: Giảm đều, vì ảnh kém đa dạng dần theo w
+  - id: c
+    text: Tăng rồi giảm, tốt nhất ở w = 1
+  - id: d
+    text: Gần như không đổi quanh 0.90
+- id: ref-real-floor
+  kind: data
+  type: single
+  prompt: FID giữa 5 000 ảnh train thật và 10 000 ảnh test thật (cùng cài đặt Inception) là khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: Khoảng 7
+  - id: c
+    text: Khoảng 20, ngang model tốt nhất
+  - id: d
+    text: Khoảng 30
+- id: fid-vs-kid
+  kind: data
+  type: single
+  prompt: FID và KID của bản tham chiếu chọn guidance tốt nhất có giống nhau không?
+  options:
+  - id: a
+    text: Giống, cả hai chọn w = 1
+  - id: b
+    text: Khác, FID chọn w = 1 còn KID chọn w = 2
+  - id: c
+    text: Khác, FID chọn w = 4 còn KID chọn w = 0
+  - id: d
+    text: KID không đo được ở 5 000 mẫu
+- id: null-label
+  kind: knowledge
+  type: single
+  prompt: Vì sao nhãn rỗng phải là một hàng riêng của embedding (chỉ số 10) thay vì dùng lại class 0?
+  options:
+  - id: a
+    text: Dùng class 0 thì nhánh "không điều kiện" thật ra là có điều kiện máy bay
+  - id: b
+    text: nn.Embedding không cho phép hai mẫu trong batch dùng chung một chỉ số
+  - id: c
+    text: Để số tham số của model là số chẵn
+  - id: d
+    text: Vì CFG chỉ chạy được khi số lớp là số lẻ
+- id: cfg-cost
+  kind: knowledge
+  type: single
+  prompt: Sinh với classifier-free guidance (w khác 0) tốn bao nhiêu so với không guidance, cùng số bước DDIM?
+  options:
+  - id: a
+    text: Như nhau, vì trộn hai nhiễu chỉ là phép cộng
+  - id: b
+    text: Khoảng gấp đôi, vì mỗi bước chạy cả nhánh có điều kiện và nhánh rỗng
+  - id: c
+    text: Gấp mười, vì mỗi giá trị w phải train lại một model riêng từ đầu
+  - id: d
+    text: Ít hơn, vì guidance làm sampler hội tụ nhanh hơn
+- id: compare-paper
+  kind: knowledge
+  type: single
+  prompt: Bạn đo FID 20 và một paper báo FID 3 cho DDPM trên CIFAR-10. Kết luận nào đúng?
+  options:
+  - id: a
+    text: Model của bạn tệ hơn khoảng 7 lần
+  - id: b
+    text: Không so được nếu khác số mẫu, trọng số Inception, tập thật
+  - id: c
+    text: Paper nhầm, vì FID dưới 5 là không thể đạt được trên CIFAR-10 thật
+  - id: d
+    text: Bạn tốt hơn, vì FID càng cao càng tốt
+- id: steps-kid
+  kind: data
+  type: single
+  prompt: Bản tham chiếu so số bước DDIM bằng KID thay vì FID. Lý do chính là gì?
+  options:
+  - id: a
+    text: Bảng số bước dùng 2 000 mẫu, FID chệch theo số mẫu còn KID thì không
+  - id: b
+    text: KID tính nhanh hơn FID nhiều lần nên tiết kiệm được thời gian GPU đáng kể
+  - id: c
+    text: FID không tính được với DDIM
+  - id: d
+    text: KID luôn cho số đẹp hơn FID

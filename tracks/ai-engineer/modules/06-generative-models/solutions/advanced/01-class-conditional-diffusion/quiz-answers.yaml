@@ -1,0 +1,8 @@
+ref-best-fid: [b]
+ref-acc-trend: [a]
+ref-real-floor: [b]
+fid-vs-kid: [b]
+null-label: [a]
+cfg-cost: [b]
+compare-paper: [b]
+steps-kid: [a]
