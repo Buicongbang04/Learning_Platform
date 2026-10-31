@@ -1,0 +1,79 @@
+questions:
+- id: non-embedding-count
+  kind: data
+  type: single
+  prompt: '`gpt_params(8, 512, 8000, 256)` của bạn cho bao nhiêu tham số non-embedding?'
+  options:
+  - id: a
+    text: Khoảng 29.4 triệu
+  - id: b
+    text: Khoảng 16.8 triệu
+  - id: c
+    text: Khoảng 25.2 triệu
+  - id: d
+    text: Khoảng 33.5 triệu
+- id: tokens-per-param
+  kind: data
+  type: single
+  prompt: Trong thí nghiệm của bạn, model lớn nhất thấy bao nhiêu token cho mỗi tham số non-embedding?
+  options:
+  - id: a
+    text: Dưới 2 token
+  - id: b
+    text: Khoảng 20 token, đúng mức Chinchilla khuyên
+  - id: c
+    text: Khoảng 100 token, gấp 5 lần mức Chinchilla
+  - id: d
+    text: Trên 1 000 token, như Llama 3 8B được train
+- id: budget-split
+  kind: data
+  type: single
+  prompt: '`chinchilla_optimal(6e21)` của bạn chia ngân sách thế nào?'
+  options:
+  - id: a
+    text: Khoảng 70 tỉ tham số, 1.4 nghìn tỉ token
+  - id: b
+    text: Khoảng 1 tỉ tham số, 1 nghìn tỉ token
+  - id: c
+    text: Khoảng 20 tỉ tham số, 50 tỉ token
+  - id: d
+    text: Khoảng 7 tỉ tham số, 140 tỉ token
+- id: six-nd
+  kind: knowledge
+  type: single
+  prompt: Trong công thức $$C \approx 6ND$$, hệ số 6 đến từ đâu?
+  options:
+  - id: a
+    text: Mỗi Transformer mặc định có 6 tầng encoder như paper gốc
+  - id: b
+    text: Forward 2N FLOP mỗi token, backward gấp đôi
+  - id: c
+    text: Attention 3 ma trận Q, K, V nhân 2 cho K và V của cache
+  - id: d
+    text: Adam lưu 6 giá trị cho mỗi tham số
+- id: free-c
+  kind: knowledge
+  type: single
+  prompt: Khớp $$c + aN^{-\alpha}$$ từ 5 model nhỏ cho $$c = 0$$. Cách đọc đúng nhất?
+  options:
+  - id: a
+    text: Tiếng Việt không có phần loss không giảm được, khác hẳn tiếng Anh
+  - id: b
+    text: Model lớn hơn sẽ đạt loss 0 nếu đủ tham số
+  - id: c
+    text: 5 điểm nhỏ không tách được $$c$$; số mũ chỉ là ước lượng thô
+  - id: d
+    text: Hàm khớp sai, power law không áp dụng được cho model nhỏ
+- id: overtrain
+  kind: knowledge
+  type: single
+  prompt: Vì sao Llama 3 8B được train trên 15 nghìn tỉ token, gấp gần 100 lần mức Chinchilla khuyên?
+  options:
+  - id: a
+    text: Tính cả inference, model nhỏ train lâu rẻ hơn
+  - id: b
+    text: Công thức Chinchilla chỉ đúng cho dữ liệu tiếng Anh nên Meta bỏ qua
+  - id: c
+    text: Model 8B không thể học từ ít token hơn
+  - id: d
+    text: Để loss train về đúng 0
