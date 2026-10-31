@@ -16,15 +16,17 @@
 | --- | --- | --- |
 | Lịch | Tổng −9.0%, nhưng **mỗi ngày −12.0%** (tháng 10 có 31 ngày, tháng 9 có 30) | Không giải thích; số ngày còn làm mức giảm thật lớn hơn |
 | Mùa vụ | Năm 2011 cùng chuyển tháng: mỗi ngày **−6.2%** | Giải thích khoảng một nửa |
-| Thời tiết | Ngày quang 22 → 14, ngày mây 8 → 15, ngày xấu 0 → 2 (bão Sandy 29–30/10; hai ngày này thiếu giờ trong dữ liệu: 29/10 chỉ có giờ 0, 22 lượt; 30/10 chỉ có giờ 13–23, 1 096 lượt, nên không phải cầu thật đo được). Trong cùng loại thời tiết: quang **−2.6%**, mây −4.2% | Giải thích phần lớn phần còn lại |
+| Thời tiết | Ngày quang 22 → 14, ngày mây 8 → 15, ngày xấu 0 → 2 (02/10, 4 639 lượt; 29/10, 22 lượt). Bão Sandy 29–30/10: `hour.csv` không có dòng nào cho phần lớn giờ của hai ngày này (hệ thống ngừng hoặc không ghi nhận): 29/10 chỉ có giờ 0; 30/10 xếp loại mây, chỉ có giờ 13–23, 1 096 lượt. Số lượt hai ngày đó không phải cầu thật đo được. Trong cùng loại thời tiết: quang **−2.6%**, mây −4.2% (bỏ 30/10 thì mây **+1.4%**) | Giải thích phần lớn phần còn lại |
 | Phân khúc | `casual` −21.1% (46.8% mức giảm, dù chỉ 20% lượt); `registered` −6.0% | Vãng lai giảm mạnh hơn, đúng kiểu nhạy thời tiết |
 
 Hai cách kiểm chéo cho cùng câu chuyện:
 
 - **Giữ cơ cấu thời tiết của tháng 9** (73% quang, 27% mây) với lượt trung bình từng loại thời tiết của tháng 10:
-  7 069 lượt/ngày so với 7 286, **−3.0%**. Phần còn lại của mức −12% là do tháng 10 xấu trời hơn.
-- **Bỏ hai ngày bão** (cũng là hai ngày thiếu giờ dữ liệu): tháng 10 còn 6 818 lượt/ngày, **−6.4%** so với
-  tháng 9, gần đúng bằng mức mùa vụ năm trước (−6.2%).
+  7 069 lượt/ngày so với 7 286, **−3.0%**. Phần còn lại của mức −12% là do tháng 10 xấu trời hơn. Ngày 30/10 chỉ có
+  11 giờ dữ liệu nhưng nằm trong nhóm mây, nên kéo trung bình nhóm mây xuống; bỏ ngày này thì mức trên còn 7 162
+  lượt/ngày, **−1.7%**. Số trong notebook (và trắc nghiệm) tính trên đủ 31 ngày.
+- **Bỏ hai ngày Sandy 29–30/10** (cũng là hai ngày thiếu giờ dữ liệu): tháng 10 còn 6 818 lượt/ngày, **−6.4%** so
+  với tháng 9, gần đúng bằng mức mùa vụ năm trước (−6.2%).
 
 Lưu ý: hai cách tách mùa vụ và thời tiết không cộng lại gọn gàng (mùa vụ năm 2011 cũng lẫn thời tiết của năm đó);
 đủ để quyết định thì không cần tách chính xác hơn.
@@ -33,9 +35,9 @@ Lưu ý: hai cách tách mùa vụ và thời tiết không cộng lại gọn g
 
 "**Không có dấu hiệu khách bỏ dịch vụ.** Lượt thuê mỗi ngày tháng 10 thấp hơn tháng 9 khoảng 12%, trong đó khoảng
 một nửa là mùa vụ (năm ngoái cùng kỳ giảm 6%) và phần lớn phần còn lại là thời tiết: tháng 10 có 14 ngày quang so
-với 22, và hai ngày bão Sandy 29–30/10 gần như trống số liệu (dữ liệu chỉ ghi 1 và 11 giờ của hai ngày đó), làm
-tổng tháng thấp thêm. So những ngày cùng thời tiết, tháng 10 chỉ thấp hơn 3–4%. Giới hạn: dữ liệu ngày không cho
-biết số thành viên đang hoạt động; muốn chắc về churn cần dữ liệu theo tài khoản."
+với 22, và hai ngày bão Sandy 29–30/10 gần như trống số liệu (dữ liệu chỉ có 1 và 11 giờ của hai ngày đó), làm
+tổng tháng thấp thêm. So những ngày cùng thời tiết, tháng 10 chỉ thấp hơn khoảng 2–3%. Giới hạn: dữ liệu ngày không
+cho biết số thành viên đang hoạt động; muốn chắc về churn cần dữ liệu theo tài khoản."
 
 Thứ tự kết luận → bằng chứng → giới hạn, con số nào cũng có tham chiếu.
 
@@ -46,9 +48,9 @@ Thứ tự kết luận → bằng chứng → giới hạn, con số nào cũng
 | Tháng 9 / 10 năm 2012 | 218 573 / 198 841 lượt; 7 285.8 / 6 414.2 lượt mỗi ngày |
 | Năm 2011 cùng chuyển tháng | tổng −3.1%, mỗi ngày −6.2% |
 | `casual` / `registered` | −9 240 (−21.1%) / −10 492 (−6.0%) |
-| Cùng thời tiết 2012 | quang −2.6%, mây −4.2% |
+| Cùng thời tiết 2012 | quang −2.6%, mây −4.2% (bỏ 30/10: mây +1.4%) |
 | Cùng thời tiết 2011 | quang −5.3%, mây −16.7%, xấu −16.5% |
-| Tháng 10/2012 với cơ cấu thời tiết tháng 9 | 7 069 lượt/ngày, −3.0% |
+| Tháng 10/2012 với cơ cấu thời tiết tháng 9 | 7 069 lượt/ngày, −3.0% (bỏ 30/10: 7 162, −1.7%) |
 | Tháng 10/2012 bỏ 29–30/10 | 6 818 lượt/ngày, −6.4% |
 
 ## Đáp án trắc nghiệm
@@ -60,7 +62,7 @@ Thứ tự kết luận → bằng chứng → giới hạn, con số nào cũng
 - `clear-day-change` (b) **khoảng 3%** (−2.6%).
 - `casual-share` (d) **khoảng 47%**: gấp hơn hai lần tỉ trọng của nhóm, vì khách vãng lai đi chơi nên nhạy thời
   tiết và mùa hơn thành viên đi làm.
-- `mix-adjusted` (a) **khoảng 3%**.
+- `mix-adjusted` (a) **khoảng 3%** (−3.0% trên đủ 31 ngày; bỏ ngày thiếu giờ 30/10 thì −1.7%).
 - `conclusion` (c): mùa vụ và thời tiết giải thích phần lớn. (d) sai vì tháng dài hơn làm tổng **cao** hơn, không
   thấp hơn; (b) bỏ qua bằng chứng đã có, chờ thêm một tháng thì quá họp ban điều hành.
 - `limitation` (b): dữ liệu ngày là tổng lượt, không có mã khách, nên không đo được số thành viên hoạt động. Ba
