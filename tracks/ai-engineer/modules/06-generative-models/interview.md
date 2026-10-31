@@ -28,8 +28,8 @@ Số hạng KL không âm nên kỳ vọng đầu (ELBO) là cận dưới; bằ
 $$\mathbb{E}_q[\log p(x \mid z)] - \mathrm{KL}(q(z \mid x)\,\|\,p(z))$$: tái tạo trừ "chi phí" mã hoá. Cũng có thể suy bằng Jensen trên
 $$\log\mathbb{E}_q[p(x, z)/q]$$, nhưng cách trên cho biết **khoảng hở** chính là KL tới posterior thật.
 
-Để đo khoảng hở: cận IWAE $$\mathcal{L}_K$$ với $$K$$ mẫu. Trên VAE MLP latent 16 cho MNIST, $$-\mathcal{L}_1 = 103.5$$ và $$-\mathcal{L}_{100} = 99.8$$
-nats/ảnh: khoảng 3.7 nats là cái giá của posterior Gauss đường chéo. Muốn hẹp lại: posterior linh hoạt hơn (normalizing flow trên
+Để đo khoảng hở: cận IWAE $$\mathcal{L}_K$$ với $$K$$ mẫu; hiệu $$\mathcal{L}_K - \mathcal{L}_1$$ với $$K$$ lớn ước lượng cái giá của posterior Gauss đường
+chéo. Muốn hẹp lại: posterior linh hoạt hơn (normalizing flow trên
 $$q$$), hoặc train bằng chính $$\mathcal{L}_K$$ (IWAE).
 
 ## Reparameterization trick là gì, vì sao cần nó, và khi nào không dùng được?
@@ -45,8 +45,8 @@ estimator (VQ-VAE). Chi tiết hay hỏi thêm: encoder trả `logvar` chứ kh�
 ## Posterior collapse là gì? Phát hiện và xử lý thế nào?
 
 Khi số hạng KL quá mạnh hoặc decoder quá mạnh, decoder học cách bỏ qua $$z$$: $$q(z_j \mid x) = p(z_j)$$ với mọi $$x$$ ở một số chiều, KL các
-chiều đó bằng 0, chúng không mang thông tin. Đo bằng **active units**, số chiều có $$\mathrm{Var}_x(\mathbb{E}_q[z_j]) > 0.01$$, và KL theo từng chiều. Trên
-VAE-16 MNIST: $$\beta = 1$$ còn 16/16 chiều sống, $$\beta = 4$$ còn 12, $$\beta = 10$$ còn 6.
+chiều đó bằng 0, chúng không mang thông tin. Đo bằng **active units**, số chiều có $$\mathrm{Var}_x(\mathbb{E}_q[z_j]) > 0.01$$, và KL theo từng chiều. Số
+chiều sống giảm dần khi tăng $$\beta$$.
 
 Nguyên nhân hay gặp nhất trong code thật không phải lý thuyết mà là **bug thang đo**: tái tạo lấy trung bình trên pixel
 (`reduction="mean"`) trong khi KL cộng trên chiều latent, tương đương $$\beta$$ bằng số pixel. Cách chữa: sửa thang đo trước; rồi KL
@@ -125,9 +125,11 @@ Train một mạng vừa có điều kiện vừa không: với xác suất $$p_
 $$\tilde\varepsilon = (1 + w)\,\varepsilon(x_t, y) - w\,\varepsilon(x_t, \varnothing)$$. Theo Bayes, $$\varepsilon(x_t, y) - \varepsilon(x_t, \varnothing) \propto -\nabla\log p(y \mid x_t)$$, nên đây là
 classifier guidance với một classifier ngầm lấy từ chính model, khỏi train classifier trên ảnh nhiễu.
 
-Đánh đổi: $$w$$ tăng thì mẫu đúng class hơn, rõ hơn, nhưng **kém đa dạng** và lệch khỏi phân phối thật (sinh từ $$p(x)p(y \mid x)^{1+w}$$, không
-phải $$p(x \mid y)$$). Trên bài đồ chơi hai Gauss với nhiễu chính xác, $$w = 7$$ đẩy mean từ 1.0 ra 2.1 và giảm std theo hướng phân biệt lớp
-từ 0.49 xuống 0.24, trong khi hướng không liên quan class giữ nguyên. FID có dạng chữ U theo $$w$$, class accuracy tăng đều. Chi phí:
+Đánh đổi: $$w$$ tăng thì mẫu đúng class hơn, rõ hơn, nhưng **kém đa dạng** và lệch khỏi $$p(x \mid y)$$. Ở mỗi mức nhiễu, score đã trộn là score của
+$$p_t(x)\,p_t(y \mid x)^{1+w}$$, nhưng sampler **không** lấy mẫu từ phân phối nghiêng $$p(x)\,p(y \mid x)^{1+w}$$ ở $$t = 0$$ (Chidambaram et al., 2024; Bradley và
+Nakkiran, 2024). Trên bài đồ chơi hai Gauss với nhiễu chính xác, $$w = 7$$ đẩy mean từ 1.0 ra 2.1 và giảm std theo hướng phân biệt lớp từ 0.49
+xuống 0.24, trong khi phân phối nghiêng chỉ có mean 1.09 và std 0.43; hướng không liên quan class giữ nguyên. Các chỉ số phân phối như FID có
+dạng chữ U theo $$w$$, độ đúng class tăng đều. Chi phí:
 hai lần forward mỗi bước. Cảnh giác quy ước: nhiều thư viện dùng $$s = 1 + w$$.
 
 ## FID tính thế nào và những bẫy nào làm con số FID vô nghĩa?
@@ -177,7 +179,7 @@ không khớp, từ rẻ tới đắt:
 5. **Đo theo $$t$$**: loss tách theo khoảng $$t$$; ảnh $$\hat x_0$$ dự đoán từ $$x_t$$ của ảnh thật ở vài mức nhiễu. Nếu $$\hat x_0$$ đẹp mà sampler ra rác thì chắc
    chắn lỗi ở sampler.
 
-Bài Advanced 02 của module là đúng tình huống này với năm lỗi im lặng.
+Nguyên tắc chung: kiểm từng đoạn độc lập bằng phép thử rẻ và tất định trước khi train lại bất cứ thứ gì.
 
 ## Trong công việc thực tế, AI Engineer có cần tự viết DDPM không, hay chỉ dùng diffusers?
 

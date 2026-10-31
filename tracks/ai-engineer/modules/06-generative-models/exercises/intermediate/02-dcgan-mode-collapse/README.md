@@ -23,8 +23,8 @@ một lần train GAN và nói được nó có đang collapse hay không bằng
 
 **Phần cứng:** CPU · ~150 phút
 
-Thời gian trên là thời gian làm bài. Env gốc (CPU): phần 2D khoảng 4 phút, DCGAN 3 epoch trên 20 000 ảnh mỗi epoch cùng hai cấu hình đối
-chứng khoảng 8 phút; kernel `ai-gpu` (GPU 4GB) chạy DCGAN 15 epoch trên đủ 60 000 ảnh, khoảng 6 phút. Test chạy trên CPU với model tí hon, vài giây.
+Thời gian trên là thời gian làm bài. Env gốc (CPU): phần 2D khoảng 4–6 phút (đo được 221 tới 343 giây tuỳ tải máy), DCGAN 4 cấu hình × 3 epoch × 20 000
+ảnh khoảng 8 phút, cả notebook khoảng 14 phút; kernel `ai-gpu` (GPU 4GB) chạy DCGAN 15 epoch trên đủ 60 000 ảnh. Test chạy trên CPU với model tí hon, vài giây.
 
 Đọc mục 4 phần lý thuyết. Mở `starter/dcgan.ipynb`:
 
@@ -36,7 +36,7 @@ chứng khoảng 8 phút; kernel `ai-gpu` (GPU 4GB) chạy DCGAN 15 epoch trên 
 4. `class_histogram(pred, n_classes, min_frac)`: số lớp xuất hiện đủ nhiều và KL tới phân phối đều.
 
 Rồi chạy các cell `explore`: 4 cấu hình GAN 2D × 3 seed (saturating, non-saturating, G cập nhật 5 lần mỗi vòng, WGAN-GP), vẽ mẫu; train
-classifier giám khảo; train DCGAN và hai cấu hình đối chứng, log D(x), D(G(z)) và giám khảo mỗi epoch. Sau đó làm phần trắc nghiệm của bài
+classifier giám khảo; train DCGAN và ba cấu hình đối chứng (saturating ở lr chuẩn, D mạnh với từng loss), log D(x), D(G(z)) và giám khảo mỗi epoch. Sau đó làm phần trắc nghiệm của bài
 trong app.
 
 ## Tiêu chí đạt

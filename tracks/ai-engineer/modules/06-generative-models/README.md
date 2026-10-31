@@ -106,7 +106,7 @@ rạc 256 mức là hai con số khác nhau; so bits/dim giữa các paper phả
 flowchart TD
     G["Generative model<br/>học p(x)"] --> E["Likelihood tường minh<br/>(tính hoặc chặn dưới được log p(x))"]
     G --> I["Ngầm định<br/>(chỉ sinh mẫu)"]
-    E --> AR["Autoregressive<br/>p(x) = Π p(x_i | x_<i)<br/>PixelCNN, GPT"]
+    E --> AR["Autoregressive<br/>p(x) = Π p(x_i | các chiều trước)<br/>PixelCNN, GPT"]
     E --> FL["Normalizing flow<br/>đổi biến khả nghịch<br/>RealNVP, Glow"]
     E --> LV["Biến ẩn, cận dưới ELBO"]
     LV --> VAE["VAE<br/>một bước z → x"]
@@ -154,17 +154,11 @@ binary cross-entropy từng pixel. Điểm thắt (bottleneck) buộc model gi�
 ### Vì sao không lấy decoder đi sinh ảnh
 
 Ý tưởng tự nhiên: train xong, bỏ encoder, chọn một $$z$$ bất kỳ rồi decode. Thất bại vì không có gì ép các mã $$z$$ nằm ở một vùng
-biết trước. Bài Intermediate 01 đo trên MNIST (MLP 784-512-16, 20 epoch, CPU):
-
-| Model | BCE tái tạo trên test (nats/ảnh) | Std mã latent theo chiều | Mẫu từ $$z \sim \mathcal{N}(0, I)$$: tỉ lệ classifier tự tin > 0.9 |
-| --- | --- | --- | --- |
-| Autoencoder, latent 16 | **69.1** | 2.98 tới 4.30 | **0.000** |
-| VAE, latent 16 | 79.7 (+ KL 23.8) | khoảng 1 (bị KL kéo về) | 0.334 |
-| Ảnh thật (mốc) | | | 0.839 |
-
-Autoencoder tái tạo tốt hơn VAE 10.6 nats mỗi ảnh, nhưng mã của nó trải rộng gấp 3 tới 4 lần $$\mathcal{N}(0, I)$$ và có "lỗ" giữa
-các cụm: $$z$$ lấy ngẫu nhiên rơi vào vùng decoder chưa từng thấy, sinh ra nét nhoè không giống chữ số nào (không mẫu nào
-được classifier nhận ra với độ tin > 0.9). VAE trả giá ở tái tạo để đổi lấy một latent space **liền và đã biết phân phối**.
+biết trước. Autoencoder tái tạo tốt hơn VAE cùng kiến trúc (nó không phải trả "thuế" KL), nhưng mã của nó trải tuỳ ý, thường rộng hơn
+nhiều so với $$\mathcal{N}(0, I)$$, và có "lỗ" giữa các cụm: $$z$$ lấy ngẫu nhiên rơi vào vùng decoder chưa từng thấy, sinh ra nét nhoè không giống
+chữ số nào. VAE trả giá ở tái tạo để đổi lấy một latent space **liền và đã biết phân phối**. Bài Intermediate 01 cho bạn tự đo cả ba điều: hai
+con số tái tạo, độ trải của mã AE theo từng chiều, và tỉ lệ mẫu sinh từ $$z \sim \mathcal{N}(0, I)$$ mà một classifier MNIST nhận ra chắc chắn, so
+với cùng tỉ lệ trên ảnh thật.
 
 ### Quyết định thực tế
 
@@ -260,27 +254,20 @@ $$
 $$
 
 Tính tổng các tỉ số trong không gian log (log-sum-exp, như softmax ở module 01): mỗi số hạng cỡ $$e^{-100}$$, cộng trực tiếp là
-underflow về 0. VAE-16 ở bài Intermediate 01 trên 10 000 ảnh test MNIST: $$-\mathcal{L}_1 =$$ **103.5**, $$-\mathcal{L}_{100} =$$ **99.8** nats/ảnh
-(0.184 bits/dim). Khoảng hở 3.7 nats là cái giá của việc $$q$$ chỉ là Gauss đường chéo; khi báo cáo log-likelihood của VAE, luôn báo
-$$\mathcal{L}_K$$ với $$K$$ lớn, và ghi rõ $$K$$.
+underflow về 0. Khoảng hở giữa $$\mathcal{L}_1$$ và $$\mathcal{L}_K$$ là cái giá của việc $$q$$ chỉ là Gauss đường chéo; bài Intermediate 01 cho bạn đo nó trên
+MNIST. Khi báo cáo log-likelihood của VAE, luôn báo $$\mathcal{L}_K$$ với $$K$$ lớn, và ghi rõ $$K$$.
 
 ### β-VAE và posterior collapse
 
 Thay KL bằng $$\beta\,\mathrm{KL}$$: $$\beta > 1$$ ép latent gọn hơn (Higgins et al., 2017, dùng để học biểu diễn "tách bạch"), $$\beta < 1$$ ưu
 tiên tái tạo. Khi KL quá mạnh, decoder học cách **bỏ qua** một số chiều $$z$$: với những chiều đó, $$q(z_j \mid x) = p(z_j)$$ với mọi
 $$x$$, KL của chúng bằng 0 và chúng không mang thông tin gì. Đó là **posterior collapse**. Đo bằng **active units**: chiều $$j$$ là
-"sống" nếu $$\mathrm{Var}_x(\mathbb{E}_q[z_j]) > 0.01$$. Bài Intermediate 01 (VAE-16, 20 epoch, test MNIST, CPU):
+"sống" nếu $$\mathrm{Var}_x(\mathbb{E}_q[z_j]) > 0.01$$.
 
-| $$\beta$$ | Recon (nats) | KL (nats) | $$-$$ELBO ($$\beta = 1$$) | Active units | Mẫu sinh tự tin > 0.9 |
-| --- | --- | --- | --- | --- | --- |
-| 0.5 | 74.5 | 30.6 | 105.1 | 16/16 | 0.269 |
-| 1 | 79.7 | 23.8 | **103.5** | 16/16 | 0.334 |
-| 4 | 107.7 | 9.8 | 117.5 | 12/16 | 0.406 |
-| 10 | 144.1 | 3.8 | 147.9 | **6/16** | 0.409 |
-
-Đọc bảng: $$\beta = 1$$ cho ELBO tốt nhất (đúng thứ nó tối ưu); $$\beta = 10$$ giết 10 trên 16 chiều latent và tái tạo tệ gần gấp đôi,
-nhưng mẫu sinh lại "rõ" hơn theo classifier, vì latent gọn hơn nên ít vùng trống hơn. Không có một $$\beta$$ đúng cho mọi việc: chọn
-theo mục tiêu (likelihood, chất lượng mẫu, hay biểu diễn), và đo đúng mục tiêu đó.
+Tăng $$\beta$$ thì KL giảm, tái tạo tệ đi và số active units giảm; $$\beta = 1$$ cho ELBO tốt nhất vì đó đúng là thứ nó tối ưu. Điều ít hiển nhiên hơn:
+mẫu sinh từ prior chưa chắc tệ đi khi $$\beta$$ lớn, vì latent bị ép gọn hơn nên ít vùng trống hơn. Bài Intermediate 01 quét $$\beta \in \{0.5, 1, 4, 10\}$$
+để bạn tự thấy mỗi đại lượng đi theo hướng nào. Không có một $$\beta$$ đúng cho mọi việc: chọn theo mục tiêu (likelihood, chất lượng mẫu, hay biểu
+diễn), và đo đúng mục tiêu đó.
 
 Posterior collapse nặng nhất khi decoder **quá mạnh**, tự mô hình hoá được dữ liệu mà không cần $$z$$ (decoder autoregressive như
 PixelCNN hay LSTM cho text). Các cách chữa: KL annealing (tăng $$\beta$$ từ 0 lên 1 trong vài epoch đầu), free bits (không phạt KL dưới
@@ -329,10 +316,9 @@ $$
 $$
 
 Bản minimax gốc ("saturating") gần như không có gradient đúng lúc $$G$$ cần học nhất; bản "non-saturating" $$-\log D(G(z))$$ có cùng điểm
-cố định nhưng gradient lớn khi $$G$$ còn tệ. Goodfellow đã đề xuất bản thứ hai ngay trong bài báo gốc, và đó là mặc định. Thí nghiệm
-DCGAN trên MNIST ở bài Intermediate 02 (cùng mọi thứ, chỉ đổi loss của G) cho thấy khi nào điều đó quan trọng: với siêu tham số chuẩn hai bản
-cho kết quả gần như nhau, nhưng khi D mạnh hơn hẳn (lr của D gấp 10), bản saturating có $$D(G(z))$$ rơi về 0.000 và G kẹt ở 3 lớp chữ số, còn
-bản non-saturating vẫn học được 9 lớp (bảng cuối mục này).
+cố định nhưng gradient lớn khi $$G$$ còn tệ. Goodfellow đã đề xuất bản thứ hai ngay trong bài báo gốc, và đó là mặc định. Khác biệt lộ ra khi D
+phân biệt thật giả dễ dàng, điều với ảnh xảy ra rất sớm; trên dữ liệu 2D đơn giản thì hai loss có thể cho kết quả như nhau. Bài Intermediate 02
+cho bạn chạy cả hai loss trên vòng 8 Gauss và trên DCGAN (ở lr chuẩn và khi lr của D gấp 10 lần lr của G), rồi tự xem loss nào còn học được.
 
 ### DCGAN: các quy tắc làm GAN ảnh train được
 
@@ -367,39 +353,16 @@ về vùng đó. $$D$$ học ra và phạt vùng đó, $$G$$ nhảy sang vùng k
 $$z$$ cho cùng một ảnh. Lý thuyết minimax nói $$\min_G\max_D$$, nhưng gradient descent xen kẽ không phân biệt được nó với
 $$\max_D\min_G$$, mà nghiệm của bài toán sau chính là "đổ hết vào một điểm" (Goodfellow, NIPS 2016 tutorial).
 
-Đo mode collapse cần dữ liệu biết đáp án. Bộ đồ chơi chuẩn là **8 Gauss trên một vòng tròn** (bán kính 2, độ lệch 0.02): một mode
-được "phủ" khi có ít nhất 10 mẫu nằm trong 3 độ lệch chuẩn quanh tâm. Bài Intermediate 02 (MLP 2 tầng ẩn 128, 3 000 vòng, batch 256,
-3 seed, CPU):
-
-| Cấu hình | Mode phủ (3 seed) | Mẫu chất lượng cao | Độ trải std (dữ liệu: 1.41) |
-| --- | --- | --- | --- |
-| Minimax gốc (saturating) | 8 / 8 / 8 | 0.41 tới 0.68 | 1.40 tới 1.42 |
-| Non-saturating | 8 / 8 / 8 | 0.54 tới 0.65 | 1.39 tới 1.44 |
-| Non-saturating, G cập nhật 5 lần mỗi vòng | 1 / 0 / 0 | 0.00 tới 0.01 | **0.10, 0.14**, 1.03 |
-| WGAN-GP (critic 5 lần mỗi vòng) | 8 / 8 / 8 | 0.32 tới 0.37 | 1.36 tới 1.37 |
-
-Với cấu hình chuẩn, cả hai loss đều phủ đủ 8 mode, nhưng số mode phủ đếm mỗi 500 vòng **nhảy lên xuống** (`[1, 2, 8, 5, 8, 8]` với
-non-saturating seed 0) trước khi ổn định: đó là động lực đuổi bắt ở trên. Cho G cập nhật 5 lần mỗi bước D (G tối ưu theo một D gần như đứng
-yên) thì mẫu co về một vùng nhỏ cỡ 0.1, không nằm trên mode nào: mode collapse đúng nghĩa đen. WGAN-GP phủ đủ mode ở mọi seed, đổi lại mẫu
-chưa "sắc" bằng sau cùng số vòng.
+Đo mode collapse cần dữ liệu biết đáp án. Bộ đồ chơi chuẩn là **8 Gauss trên một vòng tròn** (bán kính 2, độ lệch 0.02; Metz et al. 2017):
+một mode được "phủ" khi có ít nhất 10 mẫu nằm trong 3 độ lệch chuẩn quanh tâm, và độ trải (std của mẫu) so với 1.41 của dữ liệu cho biết mẫu
+co lại hay dàn ra. Bài Intermediate 02 cho bạn chạy bốn cấu hình trên bộ này qua ba seed: hai loại loss, WGAN-GP, và một cấu hình cho G cập nhật
+nhiều lần mỗi bước D (G tối ưu theo một D gần như đứng yên, đúng kịch bản "đổ hết vào vùng D đang thích"). Theo dõi số mode phủ theo thời gian
+chứ không chỉ cuối cùng: động lực đuổi bắt ở trên hiện ra ở đó.
 
 Với ảnh thật không có tâm mode để đếm, dùng một **classifier** đã train làm giám khảo: histogram lớp dự đoán của 10 000 mẫu sinh
-(mất lớp nào, lệch về lớp nào, đo bằng KL tới phân phối đều) và tỉ lệ mẫu mà classifier tự tin. DCGAN trên MNIST ở bài
-Intermediate 02:
-
-| DCGAN, 3 epoch × 20 000 ảnh (CPU) | Tự tin > 0.9 | Số lớp ≥ 1% | KL tới đều | D(x) / D(G(z)) | Histogram 10 lớp |
-| --- | --- | --- | --- | --- | --- |
-| Ảnh test thật (mốc) | 0.951 | 10 | 0.002 | | |
-| Chuẩn (lr 2e-4 cả hai), non-saturating | 0.400 | 9 | 0.315 | 0.735 / 0.266 | `[706, 56, 1264, 3029, 517, 898, 219, 1276, 453, 1582]` |
-| D mạnh (lr D 2e-3), non-saturating | 0.363 | 9 | 0.357 | 0.816 / 0.180 | `[491, 78, 1344, 3324, 690, 633, 129, 1133, 622, 1556]` |
-| D mạnh, saturating | **0.093** | **3** | **1.208** | **1.000 / 0.000** | `[1, 16, 3949, 3829, 0, 2180, 0, 8, 17, 0]` |
-
-Cùng thí nghiệm trên GPU (PC, 15 epoch × 60 000 ảnh): bản chuẩn cân bằng hơn hẳn (tự tin 0.617, KL 0.042, đủ 10 lớp), còn D mạnh + saturating sụp hẳn:
-$$D(G(z)) = 0.000$$ từ epoch 2, và từ epoch 8 có **97%** mẫu bị chấm là chữ 1 (`[0, 9710, 0, 0, 0, 290, 0, 0, 0, 0]`).
-
-Hai điều đáng nhớ. Mode collapse trên ảnh thật không phải lúc nào cũng là "mọi ảnh giống hệt nhau"; dạng nhẹ là histogram lệch: với ngân sách
-CPU ngắn, DCGAN chuẩn sinh chữ 3 gấp 54 lần chữ 1, điều mà nhìn lưới 64 ảnh không thấy. Và ở dòng cuối, loss của G gần 0 đúng lúc G hỏng nặng nhất:
-loss GAN không phải thước đo chất lượng.
+(mất lớp nào, lệch về lớp nào, đo bằng KL tới phân phối đều) và tỉ lệ mẫu mà classifier tự tin. Hai điều đáng nhớ trước khi làm bài. Mode
+collapse trên ảnh thật không phải lúc nào cũng là "mọi ảnh giống hệt nhau"; dạng nhẹ là histogram lệch, thứ nhìn lưới 64 ảnh không thấy. Và loss
+của G có thể gần 0 đúng lúc G hỏng nặng nhất: loss GAN không phải thước đo chất lượng.
 
 ### Khi train GAN thì nhìn gì
 
@@ -555,19 +518,11 @@ x_{t_{prev}} = \sqrt{\bar\alpha_{t_{prev}}}\,\hat x_0 + \sqrt{1 - \bar\alpha_{t_
 $$
 
 "giữ nguyên nhiễu đã đoán, đổi mức nhiễu". Vì không cộng nhiễu mới, có thể **nhảy cóc** qua một dãy con 50, 20, 10 bước của $$T$$ mà
-vẫn dùng đúng model đã train với $$T = 1000$$, và cùng $$x_T$$ luôn cho cùng ảnh (nội suy trong không gian nhiễu được). Bài Intermediate 03
-đo trên FashionMNIST (U-Net 1.05 triệu tham số, 8 000 bước train, PC):
-
-| Sampler (model linear, EMA) | Lần forward | Tự tin > 0.9 | KL tới đều | Thời gian 1 000 ảnh |
-| --- | --- | --- | --- | --- |
-| DDPM | 1 000 | 0.499 | 0.064 | 108.5 s |
-| DDIM | 100 | 0.448 | 0.060 | 11.0 s |
-| DDIM | 50 | 0.445 | 0.059 | 5.5 s |
-| DDIM | 10 | 0.380 | 0.078 | 1.1 s |
-| DDPM, trọng số thô (không EMA) | 1 000 | 0.433 | 0.262 | 107.9 s |
-
-Giám khảo là một CNN FashionMNIST; trên ảnh **thật** nó chỉ tự tin > 0.9 ở 0.674 số ảnh (áo, áo khoác, sơ mi dễ lẫn), nên 0.5 là mức khá. DDIM 50 bước
-nhanh gấp 20 lần và mất khoảng 0.05 (với 1 000 mẫu, đổi seed nhiễu đã lệch khoảng 0.03); 10 bước thì sai số rời rạc hoá lộ rõ hơn.
+vẫn dùng đúng model đã train với $$T = 1000$$, và cùng $$x_T$$ luôn cho cùng ảnh (nội suy trong không gian nhiễu được). Thời gian sinh tỉ lệ
+thẳng với số lần forward, nên DDIM 50 bước rẻ hơn DDPM 1 000 bước 20 lần; cái giá là sai số rời rạc hoá, nhỏ ở vài chục bước và lộ rõ khi xuống
+khoảng 10 bước. Bài Intermediate 03 cho bạn đo đường đánh đổi này trên FashionMNIST bằng một classifier làm giám khảo. Khi đọc các con số đó, nhớ
+hai điều: một classifier FashionMNIST nhỏ không tự tin trên cả ảnh thật (áo, áo khoác, sơ mi dễ lẫn), nên so với mốc ảnh thật chứ không so với 1.0;
+và với khoảng 1 000 mẫu, chỉ đổi seed nhiễu ban đầu đã làm chỉ số lệch vài phần trăm, chênh lệch nhỏ hơn mức đó không có nghĩa.
 
 ### Đối chiếu với `diffusers`
 
@@ -605,13 +560,14 @@ này và cho thấy chúng đủ để đổi kết quả).
 - Mặc định hợp lý cho ảnh nhỏ: $$T = 1000$$, schedule cosine, dự đoán $$\varepsilon$$ (hoặc $$v$$), U-Net có GroupNorm và attention ở độ phân giải
   thấp, AdamW lr 1e-4 tới 2e-4, **EMA** trọng số (0.999 tới 0.9999), sinh bằng DDIM 50 bước hoặc một sampler ODE bậc cao (DPM-Solver).
 - EMA gần như bắt buộc với diffusion: trọng số dao động nhiều giữa các bước vì loss ở mỗi $$t$$ rất ồn; trung bình trượt cho model mượt
-  hơn hẳn: ở bảng trên, KL tới phân phối đều của mẫu sinh là 0.064 với EMA so với 0.262 với trọng số thô. Lưu cả
-  trọng số thô và EMA trong checkpoint.
-- Loss gần như đứng yên sau vài nghìn bước (FashionMNIST, schedule linear: quanh 0.040; cosine: 0.072, cao hơn mà mẫu không tệ hơn) trong khi mẫu vẫn đẹp lên rõ: loss là trung bình trên
-  mọi mức nhiễu, phần lớn là các mức không thể khử tốt hơn. Đánh giá bằng mẫu sinh và chỉ số (mục 7), không bằng loss.
-- Lỗi hay gặp: ảnh ở $$[0, 1]$$ thay vì $$[-1, 1]$$ (nhiễu chuẩn có thang lớn gấp đôi tín hiệu); lệch chỉ số $$t$$ một bước giữa lúc train
-  và lúc sinh; quên căn ($$\bar\alpha_t$$ thay vì $$\sqrt{\bar\alpha_t}$$); cộng nhiễu ở bước cuối; sinh bằng model ở `train()` khi có dropout. Bài
-  Advanced 02 gom các lỗi loại này.
+  hơn (bài Intermediate 03 cho bạn so mẫu sinh bằng EMA và bằng trọng số thô, xem chỉ số nào khác rõ nhất). EMA chỉ có ích khi số bước train lớn
+  hơn hẳn $$1/(1 - d)$$. Lưu cả trọng số thô và EMA trong checkpoint.
+- Loss gần như đứng yên sau vài nghìn bước trong khi mẫu vẫn đẹp lên rõ: loss là trung bình trên mọi mức nhiễu, phần lớn là các mức không thể
+  khử tốt hơn. Loss của hai schedule khác nhau cũng không so được với nhau, vì chúng dồn bước train vào các mức nhiễu khác nhau. Đánh giá bằng mẫu
+  sinh và chỉ số (mục 7), không bằng loss.
+- Lỗi hay gặp: lệch chỉ số $$t$$ một bước giữa lúc train và lúc sinh; dùng hai schedule khác nhau ở hai chỗ; cộng nhiễu ở bước cuối. Nguyên tắc
+  chung: mọi thứ train dùng và sampler dùng (thang dữ liệu, schedule, quy ước $$t$$) phải đến từ **một** chỗ định nghĩa, và kiểm sampler bằng một
+  model "oracle" trước khi tin mẫu sinh.
 
 ## 6. Sinh có điều kiện: classifier guidance và classifier-free guidance
 
@@ -633,8 +589,11 @@ $$
 \nabla\log p(x_t) + s\,\nabla\log p_\phi(y \mid x_t), \qquad s > 1
 $$
 
-tương đương lấy mẫu từ $$p(x)\,p(y \mid x)^s$$ (đã chuẩn hoá), phân phối "nhọn" hơn quanh những ảnh mà classifier tin chắc. Nhược điểm:
-phải train một classifier riêng chịu được mọi mức nhiễu, và gradient của classifier dễ bị "lừa" như adversarial example.
+Ở **mỗi mức nhiễu** riêng lẻ, đây đúng là score của phân phối nghiêng $$p_t(x_t)\,p_t(y \mid x_t)^s$$, "nhọn" hơn quanh những ảnh mà classifier tin
+chắc. Nhưng **không** có nghĩa là sampler sinh mẫu từ $$p(x)\,p(y \mid x)^s$$ ở $$t = 0$$: các phân phối nghiêng ở các mức nhiễu khác nhau không phải
+là các phiên bản làm nhiễu của cùng một phân phối, nên đi ngược theo chúng cho ra một phân phối khác (Chidambaram et al., 2024; Bradley và Nakkiran,
+2024, chỉ ra CFG thực chất là một bước dự đoán cộng một bước hiệu chỉnh kiểu Langevin). Bài đồ chơi bên dưới đo đúng chỗ khác nhau này. Nhược
+điểm thực tế: phải train một classifier riêng chịu được mọi mức nhiễu, và gradient của classifier dễ bị "lừa" như adversarial example.
 
 ### Classifier-free guidance (CFG)
 
@@ -680,28 +639,20 @@ học sai), sinh 20 000 mẫu lớp 1 bằng DDIM 100 bước:
 | 3 | 1.668 | 0.280 | 0.488 | 1.0000 |
 | 7 | 2.109 | 0.239 | 0.488 | 1.0000 |
 
-Ba điều đọc được, và chúng đúng cả với Stable Diffusion: (1) $$w = 0$$ tái tạo đúng phân phối (mean 1, std 0.5, và 2.2% mẫu nằm phía lớp
+Phân phối nghiêng $$p(x)\,p(y = 1 \mid x)^{1+w}$$ của bài này tính được bằng tích phân số trên trục x: với $$w = 1, 3, 7$$ mean của nó chỉ là 1.04,
+1.06, 1.09 và std 0.47, 0.45, 0.43, xa hẳn những gì sampler thật sự sinh ra.
+
+Bốn điều đọc được, và chúng đúng cả với Stable Diffusion: (1) $$w = 0$$ tái tạo đúng phân phối (mean 1, std 0.5, và 2.2% mẫu nằm phía lớp
 kia, đúng $$1 - \Phi(2)$$); guidance cho mẫu "đúng class" tuyệt đối nhưng **không còn là mẫu của** $$p(x \mid y)$$. (2) Guidance đẩy mẫu **ra xa**
-lớp kia (mean 2.1 khi $$w = 7$$, vượt hẳn tâm thật), tạo ảnh "quá đặc trưng", màu bão hoà khi $$w$$ lớn. (3) Đa dạng chỉ mất theo **hướng
-phân biệt các lớp** (std trục x giảm một nửa), hướng không liên quan tới class (trục y) giữ nguyên. Với ảnh, hướng phân biệt là các đặc
-trưng của class, nên ảnh rõ class hơn mà vẫn khác nhau ở bố cục, màu nền.
+lớp kia (mean 2.1 khi $$w = 7$$, vượt hẳn tâm thật), tạo ảnh "quá đặc trưng", màu bão hoà khi $$w$$ lớn. (3) Đẩy xa hơn và co hẹp hơn nhiều so với
+phân phối nghiêng (mean 2.11 so với 1.09, std 0.24 so với 0.43 ở $$w = 7$$): "CFG = lấy mẫu từ $$p(x)p(y \mid x)^{1+w}$$" là trực giác sai về lượng,
+dù đúng về hướng. (4) Đa dạng chỉ mất theo **hướng phân biệt các lớp** (std trục x giảm một nửa), hướng không liên quan tới class (trục y) giữ nguyên.
+Với ảnh, hướng phân biệt là các đặc trưng của class, nên ảnh rõ class hơn mà vẫn khác nhau ở bố cục, màu nền.
 
-Trên CIFAR-10 (bài Advanced 01, U-Net 8.95 triệu tham số, 35 000 bước, PC; 5 000 mẫu, 500 mỗi lớp, DDIM 50 bước; FID/KID với Inception-v3
-của torchvision so với 10 000 ảnh test; classifier ResNet-20 test accuracy 0.9047 làm giám khảo):
-
-| Cấu hình | FID | KID × 1000 | Class accuracy |
-| --- | --- | --- | --- |
-| Không điều kiện (nhãn rỗng) | 31.04 | 20.71 | 0.101 |
-| $$w = 0$$ | 26.17 | 16.34 | 0.699 |
-| $$w = 0.5$$ | 21.98 | 11.32 | 0.860 |
-| $$w = 1$$ | **20.52** | 8.45 | 0.927 |
-| $$w = 2$$ | 22.11 | **6.58** | 0.972 |
-| $$w = 4$$ | 30.41 | 8.27 | 0.990 |
-
-Kết quả có cùng hình dạng như bài đồ chơi: class accuracy tăng đều theo $$w$$, còn FID (đo cả chất lượng lẫn đa dạng) tốt nhất ở một
-$$w$$ vừa phải ($$w = 1$$) rồi tệ đi vì đa dạng mất dần: $$w = 4$$ cho 99% ảnh đúng class mà FID tệ ngang bản không điều kiện. Bài báo CFG báo đúng đường
-cong đánh đổi này trên ImageNet. Chú ý KID chọn $$w = 2$$ chứ không phải $$w = 1$$: hai thước đo cân chất lượng và đa dạng khác nhau, nên "guidance tốt
-nhất" phụ thuộc thước đo bạn chọn.
+Trên ảnh thật (bài Advanced 01: CIFAR-10, quét $$w$$ và đo FID, KID, độ chính xác class theo một classifier độc lập), hình dạng đánh đổi là như
+nhau: độ đúng class tăng theo $$w$$, còn các chỉ số phân phối (FID, KID) tốt nhất ở một $$w$$ vừa phải rồi tệ đi vì đa dạng mất dần. Bài báo CFG báo
+đúng đường cong này trên ImageNet. Hai chỉ số phân phối không nhất thiết chọn cùng một $$w$$: chúng cân chất lượng và đa dạng khác nhau, và với vài
+nghìn mẫu, chênh lệch nhỏ giữa hai cấu hình lân cận có thể nằm trong sai số đo (mục 7). Đừng coi "guidance tốt nhất" là một con số duy nhất.
 
 ### Từ đây tới Stable Diffusion
 
@@ -759,8 +710,13 @@ $$n$$ ảnh train đầu so với 10 000 ảnh test, PC):
 | FID so với 10 000 ảnh test | 30.52 | 15.44 | 7.42 | 4.95 |
 | KID × 1000 | -0.01 | -0.06 | 0.00 | 0.01 |
 
-Cùng một phân phối (ảnh CIFAR-10 thật), FID giảm 6 lần khi tăng số mẫu từ 1 000 lên 10 000, trong khi KID (không chệch) luôn quanh 0. Model ở bài
-Advanced 01 có FID 20.5 trên 5 000 mẫu: muốn biết nó cách ảnh thật bao xa, so với mốc 7.42 cùng số mẫu, không so với 0.
+Cùng một phân phối (ảnh CIFAR-10 thật), FID giảm 6 lần khi tăng số mẫu từ 1 000 lên 10 000, trong khi KID (không chệch) luôn quanh 0. Muốn biết
+một model cách ảnh thật bao xa, so FID của nó với mốc thật-với-thật **cùng số mẫu**, không so với 0.
+
+Hai chi tiết làm việc so hai model khó hơn tưởng. Độ chệch của FID ở số mẫu hữu hạn **phụ thuộc chính generator** (Chong và Forsyth, 2020), nên
+hai model có thể đổi thứ hạng khi tăng số mẫu; họ đề xuất ngoại suy $$\mathrm{FID}_\infty$$ từ vài cỡ mẫu. Và một con số FID từ một bộ mẫu không có
+error bar: chênh lệch 1 tới 2 điểm giữa hai cấu hình cần bootstrap (lấy lại mẫu nhiều lần) hoặc nhiều seed sinh mới kết luận được. "KID ± std"
+trong nhiều báo cáo là độ lệch chuẩn **giữa các tập con**, không phải sai số chuẩn của ước lượng KID.
 
 Hệ quả thực tế: chỉ so FID tính với **cùng số mẫu, cùng tập thật, cùng cài đặt** (cùng trọng số Inception, cùng cách resize). FID trong
 paper thường tính với 50 000 mẫu bằng Inception bản TensorFlow (`pytorch-fid`, `torch-fidelity`, `clean-fid` đều có bản đó); con số của
@@ -806,11 +762,14 @@ Paper:
   [DDIM](https://arxiv.org/abs/2010.02502) (2021); Nichol và Dhariwal. [Improved DDPM](https://arxiv.org/abs/2102.09672) (2021, schedule
   cosine); Song et al. [Score-Based Generative Modeling through SDEs](https://arxiv.org/abs/2011.13456) (2021).
 - Dhariwal và Nichol. [Diffusion Models Beat GANs on Image Synthesis](https://arxiv.org/abs/2105.05233) (2021, classifier guidance);
-  Ho và Salimans. [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598) (2022); Rombach et al.
+  Ho và Salimans. [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598) (2022); Chidambaram et al.
+  [What does guidance do? A fine-grained analysis in a simple setting](https://arxiv.org/abs/2409.13074) (2024); Bradley và Nakkiran.
+  [Classifier-Free Guidance is a Predictor-Corrector](https://arxiv.org/abs/2408.09000) (2024); Rombach et al.
   [Latent Diffusion Models](https://arxiv.org/abs/2112.10752) (2022, Stable Diffusion); Peebles và Xie.
   [DiT](https://arxiv.org/abs/2212.09748) (2023); Lipman et al. [Flow Matching](https://arxiv.org/abs/2210.02747) (2023); Lin et al.
   [Common Diffusion Noise Schedules and Sample Steps are Flawed](https://arxiv.org/abs/2305.08891) (2024).
-- Heusel et al. [GANs Trained by a Two Time-Scale Update Rule](https://arxiv.org/abs/1706.08500) (2017, FID); Bińkowski et al.
+- Heusel et al. [GANs Trained by a Two Time-Scale Update Rule](https://arxiv.org/abs/1706.08500) (2017, FID); Chong và Forsyth.
+  [Effectively Unbiased FID and Inception Score and where to find them](https://arxiv.org/abs/1911.07023) (2020); Bińkowski et al.
   [Demystifying MMD GANs](https://arxiv.org/abs/1801.01401) (2018, KID); Kynkäänniemi et al.
   [Improved Precision and Recall Metric](https://arxiv.org/abs/1904.06991) (2019); Parmar, Zhang, Zhu.
   [On Aliased Resizing and Surprising Subtleties in GAN Evaluation](https://arxiv.org/abs/2104.11222) (2022, clean-fid); Carlini et al.

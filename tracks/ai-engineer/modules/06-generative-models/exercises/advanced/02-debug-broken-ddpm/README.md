@@ -37,8 +37,7 @@ lặng**, mỗi bug một chỗ, đều là lỗi hay gặp khi tự viết ho�
 
 1. Tìm và sửa cả 5 bug ngay trong notebook. Không đổi chữ ký hàm, siêu tham số mặc định của `train`, kiến trúc `UNet`, schedule hay
    `DEVICE`: sửa ở gốc, không bù triệu chứng bằng cách train lâu hơn, đổi lr hay đổi sampler.
-2. Mỗi giả thuyết một phép thử; thêm cell `explore` tuỳ ý. Công cụ: các phép kiểm của bài Basic 03 và Intermediate 03, mục 5 lý thuyết, câu
-   "case" cuối của interview.
+2. Mỗi giả thuyết một phép thử; thêm cell `explore` tuỳ ý. Công cụ: các phép kiểm của bài Basic 03 và Intermediate 03, mục 5 lý thuyết.
 3. Ghi `starter/BUGS.md`: mỗi bug một mục `## Bug N: <tên ngắn>` với **triệu chứng** (con số), **cách phát hiện** (phép thử nào, kết quả gì)
    và **sửa** (dòng trước và sau). Cuối cùng ghi thứ tự gỡ, giám khảo sau mỗi lần sửa, bug nào che bug nào, và checklist bạn sẽ chạy trước
    khi train một diffusion model lâu.
@@ -47,12 +46,12 @@ lặng**, mỗi bug một chỗ, đều là lỗi hay gặp khi tự viết ho�
 ## Tiêu chí đạt
 
 - Siêu tham số mặc định của `train`, schedule và kiến trúc `UNet` (1 045 729 tham số) không đổi.
-- Mỗi hàm làm đúng việc mà tên và docstring của nó nói: test so `preprocess`, `postprocess`, `q_sample`, `ddpm_loss` với cài đặt tham chiếu;
-  `ddim_sample` trả đúng ảnh khi model là oracle của dữ liệu một điểm, và tất định với cùng generator kể cả khi model đưa vào đang ở chế độ
-  train; `EMA` là trung bình trượt riêng, không đụng tới trọng số của model; `train` cập nhật EMA thật.
+- Mỗi hàm làm đúng việc mà tên và docstring của nó nói. Test kiểm theo hành vi: dữ liệu vào model và ảnh ra khỏi đường đánh giá đúng thang
+  (đi vòng qua hai hàm phải ra lại ảnh gốc); forward process và loss khớp một cài đặt tham chiếu; sampler trả đúng ảnh với một model "oracle" và
+  cho cùng kết quả khi chạy lại với cùng seed, bất kể trạng thái của model đưa vào; trung bình trượt của trọng số là một trung bình thật, được
+  cập nhật trong lúc train và không làm đổi model.
 - `BUGS.md` không còn TODO, ít nhất 5 mục `## Bug N`, ít nhất 350 từ.
-- Nội dung chấm theo rubric trong `SOLUTION.md`; trên GPU, bản đã sửa cho tỉ lệ tự tin của giám khảo khoảng gấp đôi bản gốc (0.56 so với 0.28)
-  và độ sáng trung bình gần ảnh thật (khoảng 0.17 so với 0.12).
+- Nội dung chấm theo rubric trong `SOLUTION.md`; trên GPU, bản đã sửa cho giám khảo tốt hơn rõ rệt bản gốc và độ sáng trung bình gần ảnh thật.
 
 ## Gợi ý
 
@@ -66,5 +65,5 @@ có một ảnh: sampler đúng phải trả lại đúng ảnh đó; chạy hai
 ### Gợi ý 2
 
 Một số bug chỉ lộ ra khi các bug khác đã sửa, và một số bug làm giám khảo nói sai về những bug còn lại. Sửa xong mỗi bug, chạy lại mọi phép
-thử và ghi điểm giám khảo. Kiểm cả những thứ "sống" qua nhiều bước: trạng thái train/eval của model khi sinh, và EMA có thật sự là một bản
-sao riêng hay không (so `data_ptr()` hoặc sửa một bên rồi nhìn bên kia).
+thử và ghi điểm giám khảo. Đừng chỉ nhìn các hàm tính toán: nghĩ xem trạng thái nào sống qua nhiều bước hoặc nhiều lần gọi, và bạn kiểm nó bằng
+phép thử nào.

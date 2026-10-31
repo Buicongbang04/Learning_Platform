@@ -23,7 +23,7 @@ kiểu module rồi `nn.init.normal_`, dùng với `model.apply`.
 
 ## Kết quả thật
 
-Env gốc (CPU, 4 luồng), torch 2.14.1, seed 0; cả notebook 12 phút 15 giây.
+Env gốc (CPU, 4 luồng), torch 2.14.1, seed 0; cả notebook 13 phút 37 giây (phần 2D 333 giây, mỗi cấu hình DCGAN khoảng 2 phút).
 
 **Vòng 8 Gauss** (3 000 vòng, batch 256; một mode được phủ khi có ≥ 10 mẫu trong 3 độ lệch chuẩn; độ trải là std trung bình hai trục của 2 000
 mẫu, dữ liệu thật khoảng 1.41):
@@ -44,28 +44,38 @@ tin > 0.9 là 0.951; chấm 10 000 mẫu sinh):
 | Cấu hình | Tự tin > 0.9 | Số lớp ≥ 1% | KL tới đều | D(x) / D(G(z)) cuối | Histogram 10 lớp |
 | --- | --- | --- | --- | --- | --- |
 | Chuẩn (lr 2e-4 cả hai), NS | 0.400 | 9 | 0.315 | 0.735 / 0.266 | `[706, 56, 1264, 3029, 517, 898, 219, 1276, 453, 1582]` |
+| Chuẩn, saturating | **0.074** | **5** | **0.945** | 0.987 / 0.008 | `[15, 0, 3881, 2072, 61, 456, 0, 247, 3219, 49]` |
 | D mạnh (lr D 2e-3), NS | 0.363 | 9 | 0.357 | 0.816 / 0.180 | `[491, 78, 1344, 3324, 690, 633, 129, 1133, 622, 1556]` |
 | D mạnh, saturating | **0.093** | **3** | **1.208** | **1.000 / 0.000** | `[1, 16, 3949, 3829, 0, 2180, 0, 8, 17, 0]` |
 
-Kernel `ai-gpu` (PC, 15 epoch × 60 000 ảnh, cả notebook 12 phút 38 giây; giám khảo test accuracy 0.9832):
+Kernel `ai-gpu` (PC, 15 epoch × 60 000 ảnh, cả notebook 16 phút; giám khảo test accuracy 0.9838). Hai lần chạy cùng seed trên GPU **không** cho cùng
+số (conv transpose và BatchNorm trên CUDA không tất định), và với cấu hình D mạnh + saturating chúng khác nhau về chất:
 
-| Cấu hình | Tự tin > 0.9 | Số lớp ≥ 1% | KL tới đều | D(x) / D(G(z)) cuối | Histogram 10 lớp |
+| Cấu hình (GPU) | Tự tin > 0.9 | Số lớp ≥ 1% | KL tới đều | D(G(z)) epoch 1 / cuối | Histogram 10 lớp |
 | --- | --- | --- | --- | --- | --- |
-| Chuẩn, NS | 0.617 | 10 | 0.042 | 0.669 / 0.331 | `[1145, 718, 916, 1235, 1051, 851, 664, 1443, 578, 1399]` |
-| D mạnh, NS | 0.637 | 10 | 0.032 | 0.778 / 0.221 | `[1071, 798, 807, 1244, 1161, 785, 717, 1477, 714, 1226]` |
-| D mạnh, saturating | **0.000** | **2** | **2.171** | **1.000 / 0.000** | `[0, 9710, 0, 0, 0, 290, 0, 0, 0, 0]` |
+| Chuẩn, NS | 0.630 | 10 | 0.040 | 0.288 / 0.330 | `[1131, 742, 913, 1174, 1015, 702, 676, 1455, 718, 1474]` |
+| Chuẩn, saturating | 0.607 | 10 | 0.035 | 0.073 / 0.306 | `[1079, 724, 876, 1227, 1070, 867, 671, 1446, 690, 1350]` |
+| D mạnh, NS | 0.607 | 10 | 0.033 | 0.157 / 0.224 | `[956, 823, 912, 1265, 1085, 635, 687, 1410, 860, 1367]` |
+| D mạnh, saturating (lần 2) | 0.605 | 10 | 0.068 | **0.003** / 0.171 | `[1272, 654, 764, 1282, 778, 819, 618, 1634, 626, 1553]` |
+| D mạnh, saturating (lần 1, notebook trước khi thêm cấu hình chuẩn saturating) | **0.000** | **2** | **2.171** | 0.021 / **0.000** | `[0, 9710, 0, 0, 0, 290, 0, 0, 0, 0]` |
 
-Train đủ lâu, DCGAN chuẩn cân bằng lớp hơn nhiều (KL 0.307 ở epoch 1 xuống 0.042 ở epoch 15) và D mạnh với NS cũng ổn. Cấu hình D mạnh + saturating thì
-hỏng hẳn: từ epoch 2, $$D(x) = 1.000$$, $$D(G(z)) = 0.000$$, loss G bằng -0.000 (không còn gradient), và ở epoch 8 G sụp về gần như một lớp duy nhất (97% mẫu
-được chấm là chữ 1, không mẫu nào classifier tự tin). Đây là mode collapse "cổ điển" kèm saturation, đúng kịch bản mục 4 lý thuyết.
+Ở lần 1, từ epoch 2 $$D(x) = 1.000$$, $$D(G(z)) = 0.000$$, loss G bằng -0.000 và ở epoch 8 G sụp về gần như một lớp (97% mẫu được chấm là chữ 1). Ở lần 2,
+epoch đầu cũng gần như sụp ($$D(G(z)) = 0.003$$, giám khảo 0.000, 4 lớp) nhưng G thoát ra được và tới epoch 15 thì đuổi kịp NS. Với 15 epoch trên đủ dữ
+liệu, saturating ở lr chuẩn cũng ổn trên GPU, khác với cấu hình CPU ngắn. Thứ **tái lập được** qua cả ba lần chạy (CPU, hai lần GPU) là epoch đầu: với
+D mạnh, saturating có $$D(G(z))$$ chỉ 0.003 tới 0.021, còn NS là 0.09 tới 0.16.
 
 Đọc kết quả:
 
-- **Collapse do G "đuổi" một D đứng yên.** Cho G 5 bước mỗi bước D, mẫu co về gần một điểm (độ trải 0.10 và 0.14 so với 1.41 của dữ liệu) và không
-  nằm trên mode nào: G tìm điểm D đang chấm cao nhất rồi dồn mọi $$z$$ vào đó. Đó là định nghĩa mode collapse, và loss G lúc đó giảm rất đẹp.
-- **Saturating và NS như nhau khi D không quá mạnh** (cả trên vòng tròn lẫn cấu hình chuẩn của DCGAN). Khác biệt chỉ lộ ra khi D thắng sớm: với lr
-  của D gấp 10, bản saturating mất gradient ($$D(G(z))$$ về 0.000, loss G về -0.000), G kẹt ở 3 lớp (chủ yếu 2, 3, 5); bản NS vẫn học được 9 lớp. Đó là
-  lý do NS là mặc định: nó không giúp lúc mọi thứ ổn, nó cứu lúc mọi thứ lệch.
+- **Collapse do G "đuổi" một D đứng yên.** Cho G 5 bước mỗi bước D, cả ba seed gần như không phủ mode nào (1, 0, 0) và gần như không có mẫu chất lượng
+  cao, nhưng theo hai cách: seed 1 và 2 co về gần một điểm (độ trải 0.14 và 0.10 so với 1.41 của dữ liệu), đúng nghĩa đen của mode collapse; seed 0
+  vẫn dàn ra (độ trải 1.03) mà lệch khỏi mọi mode. G tối ưu theo một D gần như đứng yên thì dồn mẫu về vùng D đang chấm cao, vùng đó không nhất thiết
+  trùng dữ liệu. Loss G lúc đó vẫn giảm đẹp.
+- **Saturating và NS như nhau trên vòng 8 Gauss, nhưng không như nhau trên DCGAN.** Với MLP nhỏ trên dữ liệu 2D, hai loss phủ đủ 8 mode như nhau. Với
+  DCGAN trên MNIST, D phân biệt ảnh thật và giả dễ hơn hẳn ngay từ đầu, và với ngân sách CPU ngắn bản saturating hỏng **ngay ở lr chuẩn**: $$D(G(z))$$ chỉ còn 0.008, giám khảo
+  tự tin 0.074, 5 lớp, KL 0.945; bản NS cùng cấu hình học được 9 lớp. Khi D còn mạnh hơn (lr gấp 10), saturating hỏng nặng hơn (3 lớp, $$D(G(z))$$ về
+  0.000, loss G về -0.000) còn NS vẫn học được. Trên GPU với ngân sách dài hơn, saturating có lúc hồi phục, có lúc sụp hẳn (bảng GPU): hỏng của nó là
+  **ngẫu nhiên**, còn NS học được ở mọi lần chạy. Đó là lý do NS là mặc định: gradient của nó không biến mất khi D thắng. Kết luận về GAN cần nhiều
+  seed; một lần chạy may mắn không chứng minh cấu hình an toàn.
 - **WGAN-GP** phủ đủ 8 mode ở cả 3 seed, nhưng mẫu ít "sắc" hơn (35% chất lượng cao so với khoảng 58% của NS) với cùng số vòng: khoảng cách
   Wasserstein cho gradient ổn định, đổi lại hội tụ chậm hơn và tốn 5 lần bước critic.
 - Với ngân sách CPU, ngay cả DCGAN chuẩn cũng **lệch lớp**: chữ 3 chiếm 30% mẫu, chữ 1 chỉ 0.6% (9/10 lớp). KL 0.3 là một mức "collapse nhẹ" mà mắt
@@ -76,4 +86,5 @@ hỏng hẳn: từ epoch 2, $$D(x) = 1.000$$, $$D(G(z)) = 0.000$$, loss G bằng
 - Một batch chung `cat([real, fake])` qua D có BatchNorm: thống kê batch trộn thật và giả, D học khác hẳn (DCGAN gốc đưa riêng rẽ).
 - Đánh giá G ở chế độ train (BatchNorm dùng thống kê batch của chính mẫu sinh): kết quả phụ thuộc kích thước batch sinh.
 - Nhìn loss G giảm rồi kết luận "đang tốt": ở cấu hình D mạnh + saturating, loss G gần 0 đúng lúc G hỏng nặng nhất.
-- Số liệu thay đổi theo device và số luồng (chuỗi số ngẫu nhiên khác nhau trên CPU và GPU); thứ bậc giữa các cấu hình giữ nguyên.
+- Số liệu thay đổi theo device và số luồng (chuỗi số ngẫu nhiên khác nhau trên CPU và GPU), và trên GPU còn đổi giữa hai lần chạy cùng seed (các
+  kernel CUDA không tất định). Với một GAN gần ranh giới hỏng như D mạnh + saturating, điều đó đủ để đổi kết cục.

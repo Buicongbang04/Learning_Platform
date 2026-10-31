@@ -1,43 +1,43 @@
 questions:
-- id: ref-loss
-  kind: data
+- id: low-loss
+  kind: knowledge
   type: single
-  prompt: Trong bản tham chiếu, bug "dữ liệu ở [0, 1]" khi chỉ còn mình nó làm loss cuối thay đổi thế nào so với bản đã sửa?
+  prompt: Sửa một bug làm loss cuối TĂNG nhẹ (từ khoảng 0.018 lên 0.027) trong khi giám khảo tốt lên nhiều. Kết luận nào đúng?
   options:
   - id: a
-    text: Cao hơn hẳn, nên nhìn loss là thấy
+    text: Bản sửa sai, vì loss tăng nghĩa là model học kém đi; nên hoàn tác ngay
   - id: b
-    text: Thấp hơn, dù ảnh sinh tệ hơn nhiều
+    text: Loss đo bài toán model đang giải, không đo bài toán bạn cần; thấp hơn chưa chắc đúng hơn
   - id: c
-    text: Ra NaN sau vài trăm bước
+    text: Loss của diffusion luôn tăng khi model tốt lên, nên đây là dấu hiệu sửa đúng
   - id: d
-    text: Đúng bằng nhau tới 4 chữ số
-- id: ref-eval-bug
-  kind: data
+    text: Cần train lâu gấp đôi rồi so lại
+- id: negative-brightness
+  kind: knowledge
   type: single
-  prompt: Với bug ở postprocess (không đổi thang khi đánh giá) khi chỉ còn mình nó, giám khảo báo gì?
+  prompt: Giám khảo báo độ sáng trung bình của ảnh sinh là một số âm. Nghi điều gì trước tiên?
   options:
   - id: a
-    text: Tỉ lệ tự tin bằng 0, độ sáng bằng 0
+    text: Model đã collapse về một lớp nên mọi ảnh sinh ra đều đen hoặc gần đen
   - id: b
-    text: Đúng như bản đã sửa, vì ảnh sinh không đổi
+    text: Ảnh đưa vào giám khảo không ở thang [0, 1]; kiểm đường đánh giá bằng ảnh thật
   - id: c
-    text: Tỉ lệ tự tin cao hơn bản đúng, độ sáng âm
+    text: Classifier giám khảo bị overfit
   - id: d
-    text: Lỗi, vì classifier không nhận số âm
-- id: ref-ema
-  kind: data
+    text: Sampler cộng quá nhiều nhiễu ở bước cuối nên giá trị pixel bị kéo xuống dưới 0
+- id: same-numbers
+  kind: knowledge
   type: single
-  prompt: Khi EMA không clone (bug 4), giám khảo trên "EMA" và trên trọng số thô so với nhau thế nào?
+  prompt: Giám khảo trên trọng số EMA và trên trọng số thô cho đúng cùng một bộ số tới 3 chữ số. Nghi điều gì?
   options:
   - id: a
-    text: EMA tốt hơn hẳn như bình thường
+    text: EMA decay quá nhỏ nên hai bên trùng nhau là bình thường
   - id: b
-    text: Ra đúng cùng một bộ số
+    text: EMA không phải một bản sao riêng của trọng số
   - id: c
-    text: EMA tệ hơn hẳn, toàn nhiễu
+    text: Giám khảo không đủ nhạy để phân biệt hai model
   - id: d
-    text: Không so được vì EMA bị lỗi shape
+    text: Hai lần sinh dùng hai seed khác nhau
 - id: oracle
   kind: knowledge
   type: single
@@ -57,26 +57,26 @@ questions:
   prompt: Sinh hai lần bằng DDIM eta = 0 với cùng generator mà ra hai ảnh khác nhau. Nghi đầu tiên điều gì?
   options:
   - id: a
-    text: GPU có lỗi phần cứng khi tính toán song song
+    text: GPU có lỗi phần cứng khi tính toán song song nhiều luồng
   - id: b
     text: Ngẫu nhiên ngoài generator (dropout ở train())
   - id: c
     text: Schedule bị sai căn bậc hai
   - id: d
     text: DDIM vốn không tất định
-- id: state-dict
+- id: shared-memory
   kind: knowledge
   type: single
-  prompt: Vì sao dict(model.state_dict()) không phải là một bản sao trọng số?
+  prompt: Vì sao một bản "sao lưu" trọng số lấy trực tiếp từ các tensor của state_dict() mà không chép vẫn đổi theo model?
   options:
   - id: a
     text: state_dict chỉ chứa buffer, không chứa tham số
   - id: b
-    text: dict() làm tròn mọi tensor về float16 để tiết kiệm bộ nhớ
+    text: Các tensor đó dùng chung bộ nhớ với tham số
   - id: c
-    text: Tensor dùng chung bộ nhớ với tham số
+    text: state_dict tự làm tròn về float16
   - id: d
-    text: state_dict bị xoá sau mỗi optimizer.step()
+    text: optimizer.step() xoá state_dict mỗi bước
 - id: first-check
   kind: knowledge
   type: single

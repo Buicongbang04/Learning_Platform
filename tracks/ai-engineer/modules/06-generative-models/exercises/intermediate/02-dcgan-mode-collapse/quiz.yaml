@@ -2,29 +2,29 @@ questions:
 - id: ring-k5
   kind: data
   type: single
-  prompt: Trên vòng 8 Gauss, khi G được cập nhật 5 lần mỗi vòng (D 1 lần), mẫu sinh của các seed trông thế nào?
+  prompt: Trên vòng 8 Gauss, cấu hình G cập nhật 5 lần mỗi vòng phủ được bao nhiêu mode ở cuối, với ba seed?
   options:
   - id: a
-    text: Phủ đủ 8 mode như bản thường
+    text: 8, 8 và 8, như cấu hình thường không đổi gì
   - id: b
-    text: Co về một vùng nhỏ, gần như không phủ mode nào
+    text: Gần như không mode nào (0 hoặc 1 mỗi seed)
   - id: c
-    text: Trải đều thành một vòng tròn liền, không tách mode
+    text: Đúng 4 mode ở mọi seed
   - id: d
-    text: Phủ đúng 4 mode xen kẽ nhau
-- id: ring-hopping
+    text: 8 ở một seed, 4 ở hai seed còn lại
+- id: ring-sat-hq
   kind: data
   type: single
-  prompt: Theo dõi số mode được phủ mỗi 500 vòng với loss non-saturating, đường đó trông thế nào?
+  prompt: Với loss saturating trên vòng 8 Gauss, tỉ lệ mẫu chất lượng cao cuối cùng của ba seed nằm khoảng nào?
   options:
   - id: a
-    text: Tăng đơn điệu từ 1 lên 8
+    text: Từ 0.95 tới 1.0
   - id: b
-    text: Lên xuống trước khi ổn định ở 8
+    text: Từ khoảng 0.4 tới 0.7
   - id: c
-    text: Đứng yên ở 8 ngay từ 500 vòng đầu
+    text: Dưới 0.05 ở mọi seed
   - id: d
-    text: Giảm dần từ 8 về 1
+    text: Đúng bằng 0.5 ở cả ba seed
 - id: wgan-tradeoff
   kind: data
   type: single
@@ -33,7 +33,7 @@ questions:
   - id: a
     text: Phủ 8 mode, ít mẫu chất lượng cao hơn
   - id: b
-    text: Phủ ít mode hơn nhưng mẫu sắc hơn
+    text: Phủ ít mode hơn hẳn nhưng mẫu sắc nét hơn
   - id: c
     text: Kém hơn rõ rệt ở cả hai chỉ số
   - id: d
@@ -41,16 +41,16 @@ questions:
 - id: strong-d
   kind: data
   type: single
-  prompt: Khi lr của D gấp 10 lần lr của G, loss minimax gốc (saturating) cho mẫu DCGAN ra sao so với non-saturating?
+  prompt: 'Cấu hình D mạnh (lr D gấp 10) với loss saturating: D(G(z)) trung bình trong epoch đầu tiên là khoảng bao nhiêu?'
   options:
   - id: a
-    text: Tốt hơn, vì loss gốc đúng với lý thuyết
+    text: Khoảng 0.5
   - id: b
-    text: Như nhau, vì hai loss cùng điểm cân bằng
+    text: Khoảng 0.25
   - id: c
-    text: Tệ hẳn, còn vài lớp và D(G(z)) về 0
+    text: Dưới 0.03
   - id: d
-    text: Loss ra NaN ngay trong epoch đầu tiên
+    text: Gần 1.0
 - id: detach
   kind: knowledge
   type: single
@@ -76,7 +76,7 @@ questions:
   - id: c
     text: D đang thua, cần tăng lr của D lên
   - id: d
-    text: Mode collapse chắc chắn đã xảy ra rồi
+    text: Mode collapse chắc chắn đã xảy ra rồi, cần dừng ngay
 - id: bn-bias
   kind: knowledge
   type: single
@@ -90,16 +90,16 @@ questions:
     text: PyTorch không cho conv có bias trước BatchNorm
   - id: d
     text: Để khởi tạo N(0, 0.02²) không áp lên bias
-- id: hist-bias
-  kind: data
+- id: sat-variance
+  kind: knowledge
   type: single
-  prompt: Ở cấu hình D mạnh + loss saturating, histogram lớp của 10 000 mẫu sinh cuối cùng trông thế nào?
+  prompt: Cùng cấu hình D mạnh + saturating, một lần chạy sụp về vài lớp chữ số, một lần khác (khác seed hoặc khác máy) lại hồi phục đủ 10 lớp. Kết luận nào đúng?
   options:
   - id: a
-    text: Đều gần 1 000 mỗi lớp, KL gần bằng 0
+    text: Lần hồi phục chứng tỏ saturating an toàn, có thể dùng thay NS
   - id: b
-    text: Dồn vào 2–3 lớp, các lớp khác gần như vắng
+    text: Hỏng có yếu tố ngẫu nhiên; cần nhiều seed trước khi kết luận
   - id: c
-    text: Đủ 10 lớp nhưng lệch nhẹ, KL khoảng 0.1
+    text: Lần sụp là do lỗi cài đặt, vì GAN luôn tái lập được trên GPU
   - id: d
-    text: Không đo được, vì giám khảo chỉ chấm ảnh thật thôi
+    text: Classifier giám khảo hỏng ở một trong hai lần chạy đó

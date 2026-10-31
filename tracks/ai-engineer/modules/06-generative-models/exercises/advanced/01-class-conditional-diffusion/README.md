@@ -28,7 +28,7 @@ và các con số đó đáng tin tới đâu.
 **Phần cứng:** GPU 12GB (PC) · ~480 phút
 
 Thời gian trên là thời gian làm bài (thiết kế, code, thí nghiệm, báo cáo). Thời gian máy của bản tham chiếu trên RTX 3060 12GB đang chia GPU
-với một bài khác: train 35 000 bước khoảng 64 phút (bf16, `torch.compile`, VRAM đỉnh 1.4 GB), classifier ResNet-20 khoảng 5 phút, đánh giá
+với một bài khác: train 35 000 bước khoảng 62 phút (61.8 phút gồm cả biên dịch; bf16, `torch.compile`, VRAM đỉnh 1.4 GB), classifier ResNet-20 khoảng 3.5 phút, đánh giá
 đầy đủ (6 cấu hình × 5 000 ảnh + các thí nghiệm phụ) khoảng 25 phút: tổng dưới 2 giờ. **Laptop GPU 4GB**: cùng model, không compile (VRAM
 đỉnh 2.6 GB), 10 000 tới 15 000 bước; bảng checkpoint sớm trong `SOLUTION.md` cho biết bạn nên kỳ vọng FID cỡ nào ở ngân sách đó. Không có
 GPU: làm cùng bài trên FashionMNIST 28×28 một kênh (U-Net của bài Intermediate 03 thêm class embedding), báo FID trên feature của một
@@ -46,7 +46,7 @@ classifier FashionMNIST thay cho Inception và ghi rõ trong báo cáo.
    số bước DDIM; checkpoint sớm; FID giữa ảnh thật và ảnh thật cùng số mẫu (mốc).
 4. Lưu lưới ảnh 10 × 10 (mỗi hàng một class) ở $$w$$ bạn chọn, viết `starter/REPORT.md` theo khung, rồi làm phần trắc nghiệm của bài trong app.
 
-**Một `REPORT.md` portfolio tốt** mở bằng tóm tắt có số ("U-Net 9 triệu tham số, 35 000 bước trong 64 phút trên RTX 3060, FID 5k ... ở
+**Một `REPORT.md` portfolio tốt** mở bằng tóm tắt có số ("U-Net 9 triệu tham số, 35 000 bước trong 62 phút trên RTX 3060, FID 5k ... ở
 $$w = $$ ..., class accuracy ..."); có bảng quét $$w$$ và câu đọc đường cong đánh đổi; nói rõ FID ở đây tính bằng trọng số Inception nào, bao nhiêu
 mẫu, so với tập nào, và **vì sao không so được với số trong paper**; có lưới ảnh không chọn tay; có mục "lỗi đã gặp" với triệu chứng và cách
 phát hiện; có giới hạn (độ phân giải, thuộc lòng, ngân sách).

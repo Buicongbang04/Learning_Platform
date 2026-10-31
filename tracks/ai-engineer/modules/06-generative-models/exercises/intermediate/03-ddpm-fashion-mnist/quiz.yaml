@@ -1,30 +1,30 @@
 questions:
-- id: signal-mid
+- id: signal-t50
   kind: data
   type: single
-  prompt: Ở bước t = 500 (cell forward process), sqrt(alpha_bar) của schedule linear và cosine lần lượt khoảng bao nhiêu?
+  prompt: Ở bước t = 50 (cell forward process), sqrt(alpha_bar) của schedule linear và cosine lần lượt khoảng bao nhiêu?
   options:
   - id: a
-    text: 0.28 và 0.70
+    text: 0.985 và 0.996
   - id: b
-    text: 0.70 và 0.28
+    text: 0.996 và 0.985
   - id: c
+    text: 0.72 và 0.92
+  - id: d
     text: 0.50 và 0.50
-  - id: d
-    text: 0.95 và 0.99
-- id: ddim-speed
+- id: ddim-cost
   kind: data
   type: single
-  prompt: Với model đã train ở cấu hình GPU, DDIM 50 bước so với DDPM 1 000 bước thế nào?
+  prompt: Với model đã train ở cấu hình của bạn, DDIM 50 bước làm tỉ lệ "tự tin > 0.9" của giám khảo thay đổi bao nhiêu so với DDPM 1 000 bước (cấu hình GPU)?
   options:
   - id: a
-    text: Nhanh khoảng 20 lần nhưng mẫu thành nhiễu
+    text: Tăng khoảng 0.3
   - id: b
-    text: Chậm hơn, vì phải tính lại nhiễu sau khi kẹp
+    text: Giảm dưới 0.1 (khoảng 0.05)
   - id: c
-    text: Nhanh ~20 lần, giám khảo kém một chút
+    text: Giảm về gần 0
   - id: d
-    text: Nhanh gấp đôi, chất lượng tốt hơn hẳn
+    text: Giảm khoảng 0.3
 - id: ema-diversity
   kind: data
   type: single
@@ -38,19 +38,19 @@ questions:
     text: Số lớp xuất hiện tăng từ 5 lên 10
   - id: d
     text: Không khác gì, EMA chỉ để lưu checkpoint
-- id: cosine-loss
+- id: linear-loss
   kind: data
   type: single
-  prompt: Cùng 8 000 bước, loss cuối của model cosine so với model linear thế nào, và điều đó nói gì?
+  prompt: Loss trung bình 100 bước cuối của model linear trong lần chạy của bạn nằm khoảng nào?
   options:
   - id: a
-    text: Thấp hơn hẳn, nên cosine luôn sinh ảnh đẹp hơn
+    text: Dưới 0.005, gần như bằng 0
   - id: b
-    text: Bằng nhau, vì cùng kiến trúc và cùng dữ liệu
+    text: Từ khoảng 0.03 tới 0.07
   - id: c
-    text: Cao hơn, nên cosine học kém và mẫu thành nhiễu
+    text: Từ 0.2 tới 0.3
   - id: d
-    text: Cao hơn mà mẫu ngang nhau, không so được
+    text: Khoảng 1.0, bằng phương sai nhiễu
 - id: last-step
   kind: knowledge
   type: single
@@ -90,16 +90,16 @@ questions:
     text: Lỗi, vì EMA cần ít nhất 1 000 bước
   - id: d
     text: Tệ hơn, EMA còn nặng trọng số khởi tạo
-- id: timesteps
-  kind: knowledge
+- id: diffusers-gap
+  kind: data
   type: single
-  prompt: DDIMScheduler của diffusers với 50 bước bắt đầu từ t = 980 chứ không phải 999. Điều đó có nghĩa gì khi so số?
+  prompt: 'Cell đối chiếu: max |alpha_bar của bạn − alphas_cumprod của diffusers| (schedule linear) cỡ bao nhiêu?'
   options:
   - id: a
-    text: diffusers có lỗi, phải luôn bắt đầu từ 999
+    text: Đúng bằng 0
   - id: b
-    text: Phải so cùng dãy bước khi so số
+    text: Cỡ 1e-7, mức làm tròn float32
   - id: c
-    text: Không ảnh hưởng gì vì model giống nhau
+    text: Cỡ 1e-3
   - id: d
-    text: diffusers dùng T = 980 thay vì 1 000
+    text: Cỡ 0.1, vì hai bên khác schedule

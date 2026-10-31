@@ -53,7 +53,8 @@ Linear và cosine cùng ngân sách (seed nhiễu khác bảng trên): loss 500 
 Đọc kết quả:
 
 - **Loss không phải thước đo chất lượng**: loss giảm từ 0.182 xuống 0.040 (linear) rồi gần như đứng yên, còn mẫu vẫn khác nhau rõ giữa các
-  sampler. Loss của cosine cao gần gấp đôi linear mà mẫu ngang ngửa: cosine dành nhiều bước hơn ở mức nhiễu nhỏ, nơi đoán đúng nhiễu từ một ảnh gần
+  sampler. Loss của cosine cao gần gấp đôi linear mà mẫu không phân thắng thua rõ (cosine kém hơn ở DDIM 50 bước, 0.420 so với 0.471, nhưng hơn ở DDPM, 0.485 so với
+  0.466; cả hai chênh lệch chỉ cỡ nhiễu do seed với 1 000 mẫu): cosine dành nhiều bước hơn ở mức nhiễu nhỏ, nơi đoán đúng nhiễu từ một ảnh gần
   sạch là việc khó, nên loss trung bình cao hơn. So loss chỉ có nghĩa giữa hai model cùng schedule.
 - **DDIM 50 bước nhanh gấp 20 lần** DDPM 1 000 bước, mất khoảng 0.05 điểm "tự tin" theo giám khảo; xuống 10 bước thì mất thêm 0.065, sai số rời rạc
   hoá bắt đầu lộ (mẫu mịn và mờ hơn). Với 1 000 mẫu, đổi seed nhiễu đã làm lệch khoảng 0.03 (0.445 so với 0.471 cho cùng cấu hình), nên chênh lệch

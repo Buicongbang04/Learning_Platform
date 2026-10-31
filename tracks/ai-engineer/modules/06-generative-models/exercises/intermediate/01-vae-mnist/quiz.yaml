@@ -12,19 +12,19 @@ questions:
     text: VAE thấp hơn khoảng 10 nats mỗi ảnh
   - id: d
     text: AE thấp hơn khoảng 50 nats mỗi ảnh
-- id: ae-prior-samples
+- id: ae-code-std
   kind: data
   type: single
-  prompt: Sinh 1 000 ảnh bằng cách decode z ~ N(0, I) với autoencoder. Tỉ lệ ảnh mà classifier tự tin trên 0.9 là bao nhiêu?
+  prompt: Độ lệch chuẩn của mã autoencoder (latent 16) trên ảnh test, theo từng chiều, nằm trong khoảng nào?
   options:
   - id: a
-    text: Gần 0
+    text: Khoảng 0.1, gọn hơn N(0, I)
   - id: b
-    text: Khoảng một phần ba, ngang VAE
+    text: Khoảng 1, đúng như N(0, I)
   - id: c
-    text: Khoảng 0.8, ngang ảnh thật
+    text: Khoảng 3 tới 4
   - id: d
-    text: Cao hơn cả ảnh thật
+    text: Khoảng 30 tới 40
 - id: why-ae-fails
   kind: knowledge
   type: single
@@ -77,19 +77,19 @@ questions:
     text: Một nửa trở xuống (8 hoặc ít hơn)
   - id: d
     text: 0, mọi chiều đều chết
-- id: beta-samples
+- id: beta10-conf
   kind: data
   type: single
-  prompt: So với beta = 1, mẫu sinh từ prior của VAE beta = 10 được classifier đánh giá thế nào?
+  prompt: Tỉ lệ mẫu sinh từ prior của VAE beta = 10 được classifier tự tin trên 0.9 là khoảng bao nhiêu?
   options:
   - id: a
-    text: Tự tin hơn, dù tái tạo tệ đi nhiều
+    text: Gần 0
   - id: b
-    text: Kém tự tin hơn hẳn, gần mức của AE
+    text: Khoảng 0.1
   - id: c
-    text: Như nhau, vì cùng kiến trúc decoder
+    text: Khoảng 0.4
   - id: d
-    text: Không đo được vì KL bằng 0
+    text: Khoảng 0.8, ngang ảnh thật
 - id: mean-reduction
   kind: knowledge
   type: single

@@ -31,7 +31,7 @@ PC: RTX 3060 12GB (GPU đang chia với một bài train khác), torch 2.14.1+cu
 Giám khảo ResNet-20: test accuracy 0.9047 trên ảnh CIFAR-10 thật. Mốc: 5 000 ảnh **train thật** so với 10 000 ảnh test cho FID **7.42**, KID
 khoảng 0.
 
-| Cấu hình | FID | KID × 1000 (± std) | Class accuracy | Thời gian sinh 5 000 ảnh |
+| Cấu hình | FID | KID × 1000 (± std giữa 50 tập con) | Class accuracy | Thời gian sinh 5 000 ảnh |
 | --- | --- | --- | --- | --- |
 | Không điều kiện (nhãn rỗng) | 31.04 | 20.71 ± 1.31 | 0.101 | 100 s |
 | $$w = 0$$ (có điều kiện, không guidance) | 26.17 | 16.34 ± 1.24 | 0.699 | 99 s |
@@ -59,8 +59,11 @@ Mốc FID theo số mẫu (ảnh train thật so với 10 000 ảnh test): 1 000
 
 - **Guidance là núm đánh đổi.** Class accuracy tăng đơn điệu theo $$w$$ (0.70 → 0.99), còn FID có dạng chữ U, tốt nhất ở $$w = 1$$ rồi tệ đi khi đa dạng
   mất dần ($$w = 4$$ cho 30.41, tệ ngang bản không điều kiện dù 99% ảnh đúng class). Đúng hình dạng của bài đồ chơi ở mục 6 lý thuyết và của bài báo CFG.
-- **FID và KID không đồng ý về điểm tốt nhất** (FID chọn $$w = 1$$, KID chọn $$w = 2$$): hai thước đo cân chất lượng và đa dạng khác nhau. Báo cáo tốt nói ra
-  điều này thay vì chọn thước đo nào cho số đẹp hơn. Chênh lệch KID giữa $$w = 1$$ và $$w = 2$$ (8.45 và 6.58) lớn hơn vài lần độ lệch chuẩn giữa các tập con.
+- **FID và KID không đồng ý về điểm tốt nhất** (FID chọn $$w = 1$$, KID chọn $$w = 2$$): hai thước đo cân chất lượng và đa dạng khác nhau, và độ chệch của FID
+  ở số mẫu hữu hạn lại phụ thuộc chính generator (Chong và Forsyth, 2020), nên hai cấu hình có độ đa dạng khác nhau bị chệch khác nhau. Khoảng cách FID
+  1.6 điểm giữa $$w = 1$$ và $$w = 2$$ đến từ **một** bộ 5 000 mẫu, không có error bar; con số "± std" của KID là độ lệch chuẩn giữa 50 tập con, không phải
+  sai số chuẩn của ước lượng. Muốn khẳng định thứ hạng: bootstrap (lấy lại mẫu nhiều lần) hoặc vài seed sinh, và với FID thì ngoại suy $$\mathrm{FID}_\infty$$
+  từ vài cỡ mẫu. Báo cáo tốt nói ra điều này thay vì chọn thước đo nào cho số đẹp hơn.
 - **Con số tuyệt đối phải đọc cùng mốc.** FID 20.5 trên 5 000 mẫu không so được với "FID 3.17" của DDPM trong paper (50 000 mẫu, Inception TensorFlow,
   so với tập train): chính ảnh thật với ảnh thật đã cho 7.42 ở 5 000 mẫu và 30.52 ở 1 000 mẫu. Bảng số bước DDIM dùng 2 000 mẫu nên FID của nó cao hơn
   dòng chính một phần chỉ vì ít mẫu; so số bước bằng KID (không chệch): 10 bước 20.1, 25 bước 11.3, 50 bước 8.5, 100 bước 6.9.
