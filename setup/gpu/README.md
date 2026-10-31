@@ -25,6 +25,11 @@ uv sync --project setup/gpu                      # tải ~3GB+ lần đầu
 uv run --project setup/gpu python setup/gpu/check_gpu.py
 ```
 
+Env này dùng Python do uv quản lý (`python-preference = "only-managed"` trong `pyproject.toml`), vì
+Triton (`torch.compile`, một số kernel backward trên GPU) phải biên dịch module C và cần `Python.h`;
+Python hệ thống thường thiếu header này nếu chưa cài `python3.12-dev`. Lần sync đầu uv tự tải Python
+3.12. Env cũ tạo từ Python hệ thống: xoá `setup/gpu/.venv` rồi sync lại.
+
 `check_gpu.py` in tên GPU, VRAM, phiên bản CUDA/torch và chạy matmul fp16; thoát mã khác 0 nếu
 không thấy GPU.
 

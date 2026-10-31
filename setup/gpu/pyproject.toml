@@ -25,6 +25,7 @@ dependencies = [
 
 [tool.uv]
 package = false
+python-preference = "only-managed"
 # Phụ thuộc gián tiếp phát hành < 2 tuần trước 2026-10-30: chặn ở bản cũ hơn (bỏ dòng này khi đã đủ 2 tuần)
 constraint-dependencies = [
     "av<=19.0.1",
