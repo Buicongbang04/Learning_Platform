@@ -18,7 +18,7 @@ Trong test:
     ex.require_tool("shellcheck", "0.10")   # bài DevOps: skip nếu thiếu công cụ hoặc phiên bản cũ
     ex.require_cluster()                    # bài DevOps: skip nếu chưa có cluster kind devops-lab
     ex.require_image("nginx:1.30.6-alpine") # bài DevOps: skip nếu image Docker chưa pull
-    with DockerLab() as lab: lab.start("web", "nginx:1.30.6-alpine", ports=[80])  # container riêng, tự dọn
+    with DockerLab() as lab: lab.start("web", "nginx:1.30.6-alpine", ports=[80])  # dựng mọi thứ trong `with`
     run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})  # bài DevOps: chạy script trong bwrap
 """
 
@@ -164,6 +164,8 @@ def docker_cpu_args() -> list[str]:
 
 DOCKER_PREFIX = "devops-ex-"
 DOCKER_LABEL = "devops-ex=1"
+DOCKER_MEMORY = "256m"
+DOCKER_PIDS_LIMIT = 256
 _PORT_TAKEN = ("port is already allocated", "address already in use")
 
 
@@ -177,11 +179,22 @@ def _docker(*args: str, timeout: float = 60) -> subprocess.CompletedProcess:
     return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
 
 
-class DockerLab:
-    """Network và container riêng của một test, luôn được dọn trong `close()` (gọi ở `finally` hoặc `with`).
+def docker_leftovers(lab_id: str) -> list[str]:
+    """Container và network còn sót của một DockerLab (theo tiền tố `devops-ex-<id>`); rỗng nghĩa là đã dọn sạch."""
+    prefix = f"{DOCKER_PREFIX}{lab_id}"
+    containers = _docker("ps", "-a", "--filter", f"name={prefix}", "--format", "{{.Names}}").stdout.split()
+    networks = _docker("network", "ls", "--filter", f"name={prefix}", "--format", "{{.Name}}").stdout.split()
+    return containers + networks
 
-    Mọi container: tên `devops-ex-<uuid8>-<alias>`, nhãn `devops-ex=1`, `--rm`, ghim CPU theo `docker_cpu_args()`,
-    cổng chỉ mở trên 127.0.0.1 ở cổng trống do test chọn, mount chỉ đọc. Không đụng container hay network nào khác.
+
+class DockerLab:
+    """Network và container riêng của một test. Chỉ dùng bằng `with DockerLab() as lab:` và dựng mọi container BÊN TRONG
+    khối `with` (kể cả trong fixture: `with DockerLab() as lab: ...; yield lab`): lỗi hay Ctrl-C ở bất kỳ bước nào cũng
+    chạy `close()`. `start()` ngoài `with` bị từ chối.
+
+    Mọi container: tên `devops-ex-<uuid8>-<alias>`, nhãn `devops-ex=1`, `--rm`, ghim CPU theo `docker_cpu_args()`, giới hạn
+    RAM và số tiến trình, cổng chỉ mở trên 127.0.0.1 ở cổng trống do test chọn, mount chỉ đọc. Không đụng container hay
+    network nào khác.
     """
 
     def __init__(self) -> None:
@@ -190,28 +203,39 @@ class DockerLab:
         self.names: list[str] = []
         self.ports: dict[str, dict[int, int]] = {}
         self._network_created = False
+        self._entered = False
 
     def __enter__(self) -> "DockerLab":
-        self.open()
+        self._entered = True
+        try:
+            self._open()
+        except BaseException:
+            self.close()
+            raise
         return self
 
     def __exit__(self, *exc) -> None:
         self.close()
 
-    def open(self) -> None:
+    def _open(self) -> None:
         self._network_created = True
         result = _docker("network", "create", "--label", DOCKER_LABEL, self.network)
         if result.returncode != 0:
             pytest.fail(f"Không tạo được docker network {self.network}: {result.stderr.strip()}")
 
+    def _require_entered(self) -> None:
+        if not self._entered:
+            raise RuntimeError("Dùng DockerLab bằng `with DockerLab() as lab:` để container luôn được dọn")
+
     def name(self, alias: str) -> str:
         return f"{self.network}-{alias}"
 
     def run_args(self, alias: str, image: str, *command: str, detach: bool = True, mounts=(), publish=(),
-                 env: dict[str, str] | None = None, entrypoint: str | None = None) -> list[str]:
+                 env: dict[str, str] | None = None, entrypoint: str | None = None, memory: str = DOCKER_MEMORY,
+                 pids_limit: int = DOCKER_PIDS_LIMIT) -> list[str]:
         args = ["docker", "run", "--rm", *(["-d"] if detach else [])]
         args += ["--name", self.name(alias), "--label", DOCKER_LABEL, "--network", self.network, "--network-alias", alias]
-        args += docker_cpu_args()
+        args += ["--memory", memory, "--pids-limit", str(pids_limit), *docker_cpu_args()]
         for source, target in mounts:
             args += ["-v", f"{Path(source).resolve()}:{target}:ro"]
         for container_port, host_port in publish:
@@ -228,13 +252,16 @@ class DockerLab:
             self.names.append(name)
         return name
 
-    def start(self, alias: str, image: str, *command: str, ports=(), mounts=(), env=None, entrypoint=None) -> str:
+    def start(self, alias: str, image: str, *command: str, ports=(), mounts=(), env=None, entrypoint=None,
+              memory: str = DOCKER_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT) -> str:
         """Chạy container nền; `ports` là cổng trong container, cổng host lấy bằng `lab.port(alias, cổng)`."""
+        self._require_entered()
         name = self._track(alias)
         result = None
         for _ in range(3):
             publish = [(port, free_port()) for port in ports]
-            args = self.run_args(alias, image, *command, mounts=mounts, publish=publish, env=env, entrypoint=entrypoint)
+            args = self.run_args(alias, image, *command, mounts=mounts, publish=publish, env=env, entrypoint=entrypoint,
+                                 memory=memory, pids_limit=pids_limit)
             result = subprocess.run(args, capture_output=True, text=True, timeout=120)
             if result.returncode == 0:
                 self.ports[alias] = dict(publish)
@@ -247,6 +274,7 @@ class DockerLab:
     def run_once(self, alias: str, image: str, *command: str, mounts=(), entrypoint=None,
                  timeout: float = 60) -> subprocess.CompletedProcess:
         """Chạy container tới khi xong (vd. `nginx -t`) và trả kết quả; container vẫn được dọn nếu quá giờ."""
+        self._require_entered()
         self._track(alias)
         args = self.run_args(alias, image, *command, detach=False, mounts=mounts, entrypoint=entrypoint)
         try:

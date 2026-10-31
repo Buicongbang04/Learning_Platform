@@ -351,6 +351,10 @@ def test_docker_lab_run_args(monkeypatch, tmp_path):
     assert args[args.index("--label") + 1] == "devops-ex=1"
     assert args[args.index("--network") + 1] == lab.network and lab.network.startswith("devops-ex-")
     assert args[args.index("--cpuset-cpus") + 1] == "2-3"
+    assert args[args.index("--memory") + 1] == "256m"
+    assert args[args.index("--pids-limit") + 1] == "256"
+    custom = lab.run_args("big", "x:1", memory="1g", pids_limit=1024)
+    assert custom[custom.index("--memory") + 1] == "1g" and custom[custom.index("--pids-limit") + 1] == "1024"
     assert args[args.index("-v") + 1] == f"{(tmp_path / 'a.conf').resolve()}:/etc/nginx/nginx.conf:ro"
     assert args[args.index("-p") + 1] == "127.0.0.1:41234:80"
     assert args[args.index("--entrypoint") + 1] == "nginx"
@@ -392,3 +396,44 @@ def test_require_image_missing_skips(monkeypatch):
     with pytest.raises(pytest.skip.Exception) as info:
         testkit.Exercise.require_image("nginx:1.30.6-alpine")
     assert "docker pull nginx:1.30.6-alpine" in str(info.value)
+
+
+def test_docker_lab_refuses_start_outside_with(monkeypatch):
+    fake = FakeDocker()
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    lab = testkit.DockerLab()
+    with pytest.raises(RuntimeError):
+        lab.start("api", "python:3.12.16-alpine3.24")
+    with pytest.raises(RuntimeError):
+        lab.run_once("check", "nginx:1.30.6-alpine", "-t")
+    assert fake.calls == []
+
+
+def test_docker_lab_enter_cleans_up_when_network_fails(monkeypatch):
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 1 if cmd[1:3] == ["network", "create"] else 0, "", "boom")
+
+    monkeypatch.setattr(testkit.subprocess, "run", run)
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception):
+        with lab:
+            pass
+    assert calls[-1] == ["docker", "network", "rm", lab.network]
+
+
+def test_docker_lab_real_cleanup_after_error_inside_with():
+    if not shutil.which("docker") or not testkit.docker_ready():
+        pytest.skip("Cần Docker daemon")
+    image = "python:3.12.16-alpine3.24"
+    if testkit._docker("image", "inspect", image).returncode != 0:
+        pytest.skip(f"Chưa có image {image}")
+    lab = testkit.DockerLab()
+    with pytest.raises(RuntimeError):
+        with lab:
+            lab.start("sleeper", image, "sleep", "300")
+            assert testkit.docker_leftovers(lab.id)
+            raise RuntimeError("lỗi giữa chừng")
+    assert testkit.docker_leftovers(lab.id) == []

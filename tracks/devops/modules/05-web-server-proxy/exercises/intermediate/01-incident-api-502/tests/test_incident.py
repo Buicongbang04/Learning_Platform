@@ -38,14 +38,10 @@ def start_nginx(lab: DockerLab, alias: str, conf: Path, workdir: Path) -> str:
 def lab():
     ex.require_image(NGINX)
     ex.require_image(PYTHON)
-    lab = DockerLab()
-    try:
-        lab.open()
+    with DockerLab() as lab:
         for alias in BACKENDS:
             start_backend(lab, alias)
         yield lab
-    finally:
-        lab.close()
 
 
 @pytest.fixture(scope="module")

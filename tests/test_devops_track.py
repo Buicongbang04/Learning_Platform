@@ -206,6 +206,20 @@ def check_docker_test(path: Path) -> list[str]:
     return errors
 
 
+DIRECT_DOCKER = re.compile(
+    r"""\b_docker\s*\(|[\[(]\s*["']docker["']\s*,|\b(?:subprocess\.\w+|os\.system|os\.popen|Popen)\s*\(\s*f?["']docker\s"""
+)
+
+
+def check_docker_via_lab(path: Path) -> list[str]:
+    """Test bài tập chỉ được dùng Docker qua testkit.DockerLab (tên, nhãn, --rm, cpuset, giới hạn, dọn dẹp)."""
+    return [
+        f"{path}:{n}: gọi docker trực tiếp; dùng testkit.DockerLab"
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if DIRECT_DOCKER.search(line)
+    ]
+
+
 def check_no_curl_sudo(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8").replace("\\\n", " ")
     return [
@@ -315,6 +329,11 @@ def test_exercises():
 def test_docker_run_tests_use_rm_and_cpuset():
     files = [p for p in TRACK.rglob("*.py") if "tests" in p.relative_to(TRACK).parts]
     assert_clean([e for p in files for e in check_docker_test(p)])
+
+
+def test_docker_only_through_docker_lab():
+    files = [p for p in TRACK.rglob("*.py") if "tests" in p.relative_to(TRACK).parts]
+    assert_clean([e for p in files for e in check_docker_via_lab(p)])
 
 
 def test_no_curl_pipe_sudo_in_markdown():
@@ -526,6 +545,26 @@ def test_docker_test_detection(tmp_path):
     two = ok + 'cmd2 = ["docker", "container", "run", *docker_cpu_args(), "x"]\n'
     assert any("--rm" in e for e in check_docker_test(write(tmp_path / "e.py", two)))
     assert check_docker_test(write(tmp_path / "f.py", 'cmd = ["docker", "ps"]\n# dockerfile running\n')) == []
+
+
+def test_direct_docker_detection(tmp_path):
+    bad = [
+        'from testkit import _docker\nresult = _docker("run", "--rm", "nginx")\n',
+        'subprocess.run(["docker", "run", "--rm", "nginx"])\n',
+        "subprocess.run(('docker', 'ps', '-a'))\n",
+        'subprocess.check_output("docker run --rm nginx", shell=True)\n',
+        "os.system('docker rm -f x')\n",
+        'testkit._docker ("ps")\n',
+    ]
+    for i, text in enumerate(bad):
+        assert check_docker_via_lab(write(tmp_path / f"bad{i}.py", text)), text
+    good = (
+        'ex.require_tool("docker")\n'
+        'with DockerLab() as lab:\n    lab.start("web", "nginx:1.30.6-alpine", ports=[80])\n'
+        'shutil.which("docker")\n'
+        '# docker run trong chú thích\n'
+    )
+    assert check_docker_via_lab(write(tmp_path / "good.py", good)) == []
 
 
 def test_curl_pipe_sudo_detection(tmp_path):

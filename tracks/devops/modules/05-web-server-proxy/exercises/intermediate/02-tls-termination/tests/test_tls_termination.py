@@ -110,13 +110,9 @@ def start_edge(lab: DockerLab, alias: str, conf: Path, workdir: Path) -> Edge:
 def lab():
     ex.require_image(NGINX)
     ex.require_image(PYTHON)
-    lab = DockerLab()
-    try:
-        lab.open()
+    with DockerLab() as lab:
         start_backend(lab, "olist-api-1")
         yield lab
-    finally:
-        lab.close()
 
 
 @pytest.fixture(scope="module")

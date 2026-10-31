@@ -379,7 +379,8 @@ DB (`statement_timeout`) < app < Nginx < LB < client; tầng trong hết hạn t
 - `proxy_request_buffering on`: Nginx nhận hết body upload rồi mới gửi cho app; app không bị client upload chậm giữ chân.
 - **Keep-alive tới upstream** tiết kiệm bắt tay TCP (và TLS nếu có) cho mỗi request, tránh cạn cổng nguồn ở `TIME_WAIT` khi
   tải cao. Từ Nginx **1.29.7** (có trong nhánh stable 1.30), `keepalive` trong `upstream` bật mặc định,
-  `proxy_http_version` mặc định là 1.1 và header `Connection` không còn bị gửi. Trên các bản cũ (1.24 của Ubuntu 24.04,
+  `proxy_http_version` mặc định là 1.1 và header `Connection` không còn bị gửi (giới hạn mặc định 32 kết nối nhàn rỗi mỗi
+  worker; `keepalive 0;` tắt hẳn: mỗi request một kết nối mới, vẫn HTTP/1.1). Trên các bản cũ (1.24 của Ubuntu 24.04,
   1.26, 1.28) phải tự viết `keepalive 32;` trong `upstream` cùng `proxy_http_version 1.1;` và `proxy_set_header Connection
   "";`. Cấu hình chép từ blog thường nhắm bản cũ; kiểm bản bạn chạy bằng `nginx -v` trước.
 - WebSocket cần chuyển tiếp `Upgrade` và `Connection: upgrade` (một `map $http_upgrade $connection_upgrade`) và timeout

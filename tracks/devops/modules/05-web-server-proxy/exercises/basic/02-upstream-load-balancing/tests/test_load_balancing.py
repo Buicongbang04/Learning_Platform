@@ -1,12 +1,13 @@
 import re
 import shutil
 from collections import Counter
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
 import pytest
 
-from testkit import DockerLab, Exercise
+from testkit import DockerLab, Exercise, docker_leftovers
 
 ex = Exercise(__file__)
 NGINX = "nginx:1.30.6-alpine"
@@ -36,36 +37,26 @@ def start_nginx(lab: DockerLab, alias: str, conf: Path, workdir: Path) -> str:
     return url
 
 
-def new_lab() -> DockerLab:
+@contextmanager
+def backend_lab():
     ex.require_image(NGINX)
     ex.require_image(PYTHON)
-    lab = DockerLab()
-    lab.open()
-    for alias in BACKENDS:
-        start_backend(lab, alias)
-    return lab
+    with DockerLab() as lab:
+        for alias in BACKENDS:
+            start_backend(lab, alias)
+        yield lab
 
 
 @pytest.fixture(scope="module")
 def lab():
-    lab = None
-    try:
-        lab = new_lab()
+    with backend_lab() as lab:
         yield lab
-    finally:
-        if lab:
-            lab.close()
 
 
 @pytest.fixture
 def fresh_lab():
-    lab = None
-    try:
-        lab = new_lab()
+    with backend_lab() as lab:
         yield lab
-    finally:
-        if lab:
-            lab.close()
 
 
 @pytest.fixture(scope="module")
@@ -164,3 +155,20 @@ def test_checks_catch_starter_config(fresh_lab, tmp_path):
     dump = fresh_lab.exec("starter", "nginx", "-T")
     assert config_problems(dump.stdout)
     assert any("olist-api-2" in p for p in passive_health_problems(fresh_lab, "starter", url))
+
+
+def test_lab_cleaned_up_when_backend_fails_to_start(monkeypatch):
+    labs = []
+    real_wait = DockerLab.wait_log
+
+    def first_backend_then_fail(self, alias, text, timeout=60):
+        labs.append(self)
+        real_wait(self, alias, text, timeout)
+        raise RuntimeError("giả lập backend không lên được")
+
+    monkeypatch.setattr(DockerLab, "wait_log", first_backend_then_fail)
+    with pytest.raises(RuntimeError):
+        with backend_lab():
+            pass
+    assert len(labs) == 1, "Lab phải dừng ngay sau backend đầu tiên"
+    assert docker_leftovers(labs[0].id) == []

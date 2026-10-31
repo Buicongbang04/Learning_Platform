@@ -37,16 +37,12 @@ def start_nginx(lab: DockerLab, alias: str, conf: Path, workdir: Path) -> str:
 
 
 @pytest.fixture(scope="module")
-def lab(tmp_path_factory):
+def lab():
     ex.require_image(NGINX)
     ex.require_image(PYTHON)
-    lab = DockerLab()
-    try:
-        lab.open()
+    with DockerLab() as lab:
         start_backend(lab, "olist-api-1")
         yield lab
-    finally:
-        lab.close()
 
 
 @pytest.fixture(scope="module")
