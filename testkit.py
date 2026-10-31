@@ -25,6 +25,7 @@ from __future__ import annotations
 import importlib.util
 import linecache
 import os
+import pwd
 import re
 import shutil
 import signal
@@ -155,7 +156,7 @@ def docker_cpu_args() -> list[str]:
 
 
 _BWRAP_ISOLATION = ["--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--new-session"]
-_UNSAFE_ENV = re.compile(r"^(?:BASH_ENV|ENV|BASH_FUNC_.*)$")
+_UNSAFE_ENV = re.compile(r"^(?:BASH_ENV|ENV|BASH_FUNC_.*|LD_PRELOAD|LD_LIBRARY_PATH|SHELLOPTS|BASHOPTS|PROMPT_COMMAND|PS4)$")
 SANDBOX_SKIP = (
     "Bài này chạy script của bạn trong sandbox bubblewrap (bwrap) để một script viết sai không xoá hay sửa được tệp "
     "nào ngoài thư mục tạm của test; test từ chối chạy khi không có sandbox. {reason} Cài: sudo apt install bubblewrap "
@@ -163,12 +164,27 @@ SANDBOX_SKIP = (
 )
 
 
+def _real_homes() -> list[Path]:
+    homes = {Path(pwd.getpwuid(os.getuid()).pw_dir), Path(os.path.expanduser("~"))}
+    return sorted(h.resolve() for h in homes if h.is_dir())
+
+
+def _base_flags(bwrap: str) -> list[str]:
+    """Cờ chung cho lần thử và lần chạy thật: / chỉ đọc, /tmp và /run là tmpfs rỗng (che socket docker, D-Bus)."""
+    args = [bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run"]
+    for home in _real_homes():
+        docker_dir = home / ".docker"
+        if docker_dir.is_dir() and not docker_dir.is_relative_to("/tmp"):
+            args += ["--tmpfs", str(docker_dir)]
+    return args
+
+
 def sandbox_ready() -> str | None:
-    """Trả None khi bwrap tạo được sandbox, ngược lại trả lý do."""
+    """Trả None khi bwrap tạo được sandbox với đúng bộ cờ của lần chạy thật, ngược lại trả lý do."""
     bwrap = shutil.which("bwrap")
     if not bwrap:
         return "Chưa cài bwrap."
-    probe = _run_tool([bwrap, "--ro-bind", "/", "/", "--proc", "/proc", *_BWRAP_ISOLATION, "--clearenv", "true"])
+    probe = _run_tool([*_base_flags(bwrap), *_BWRAP_ISOLATION, "--clearenv", "--", "true"])
     if probe is None or probe.returncode != 0:
         detail = (probe.stderr.strip() if probe is not None else "") or "không rõ lỗi"
         return f"bwrap có nhưng không tạo được sandbox ({detail}); có thể kernel chặn user namespace không đặc quyền."
@@ -182,17 +198,22 @@ def _clean_env(env: dict[str, str], home: Path) -> dict[str, str]:
 
 
 def _hidden_by_tmpfs() -> list[Path]:
-    tmp = Path("/tmp")
+    hidden = (Path("/tmp"), Path("/run"))
     candidates = {ROOT, Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), Path(sys.executable).resolve().parent}
-    return sorted(p for p in candidates if p.is_relative_to(tmp) and p != tmp)
+    return sorted(p for p in candidates if any(p.is_relative_to(h) and p != h for h in hidden))
 
 
 def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str, str]) -> list[str]:
-    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp là tmpfs rỗng, chỉ `writable` ghi được, môi trường dựng lại từ đầu."""
+    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp và /run là tmpfs rỗng, ~/.docker bị che, chỉ `writable` ghi được,
+    môi trường dựng lại từ đầu.
+
+    Mạng KHÔNG bị tách (không --unshare-net): test healthcheck cần gọi server giả trên loopback của máy. Chấp nhận được vì
+    mô hình đe doạ là script viết sai vô tình phá dữ liệu, không phải mã độc; socket của docker và D-Bus vẫn bị che.
+    """
     reason = sandbox_ready()
     if reason:
         pytest.skip(SANDBOX_SKIP.format(reason=reason))
-    args = [shutil.which("bwrap"), "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"]
+    args = _base_flags(shutil.which("bwrap"))
     for path in _hidden_by_tmpfs():
         args += ["--ro-bind", str(path), str(path)]
     for path in writable:
@@ -214,7 +235,10 @@ def run_sandboxed(
     timeout: float = 30,
     input: str | None = None,
 ) -> subprocess.CompletedProcess:
-    """Chạy lệnh của người học trong sandbox bwrap; skip (không bao giờ chạy trần) khi không có sandbox."""
+    """Chạy lệnh của người học trong sandbox bwrap; skip (không bao giờ chạy trần) khi không có sandbox.
+
+    Không tách mạng (xem `sandbox_command`): đủ cho mục tiêu chặn script lỗi xoá hay sửa tệp thật.
+    """
     argv = sandbox_command(cmd, writable=writable, cwd=cwd, env=env)
     return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, input=input, env={})
 

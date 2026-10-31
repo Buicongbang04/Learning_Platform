@@ -64,7 +64,8 @@ Test chạy `release.py` bằng `subprocess` với chính Python của bạn và
 `--check "<python> <checker> <log> ; touch <tệp>"` và kiểm `<tệp>` **không** được tạo (chuỗi không đi qua shell). Test
 cũng tìm chuỗi `shell=True` và `os.system(` trong mã nguồn.
 
-Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt). Thiếu `bwrap` thì test skip.
+Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt); `/run` và `~/.docker` bị che nên không gọi được Docker; mạng không bị tách để test
+gọi được server giả trên `127.0.0.1`. Thiếu `bwrap` thì test skip.
 
 ## Tiêu chí đạt
 

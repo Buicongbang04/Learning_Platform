@@ -65,7 +65,8 @@ Test đặt một `pg_dump` giả lên đầu `PATH`. Nó ghi lại tham số v�
 dump giả, ghi dở rồi trả lỗi, tạo tệp rỗng, hoặc ghi dở rồi chờ (để thử khoá và tín hiệu). Bài cần Linux: `flock`
 (gói util-linux) và `sha256sum` (coreutils); thiếu thì test skip.
 
-Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt). Thiếu `bwrap` thì test skip. `PGHOST`... của bạn
+Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt); `/run` và `~/.docker` bị che nên không gọi được Docker; mạng không bị tách để test
+gọi được server giả trên `127.0.0.1`. Thiếu `bwrap` thì test skip. `PGHOST`... của bạn
 không lọt vào, nên test thấy đúng giá trị mặc định.
 
 ## Tiêu chí đạt

@@ -46,7 +46,8 @@ bạn ngoài sandbox của test.
 
 Test chạy script trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật
 bị che, chỉ thư mục tạm của test ghi được, môi trường biến dựng lại từ đầu; thiếu `bwrap` thì test skip. Sandbox là
-lớp bảo vệ máy bạn: dù script đổi `PATH` hay gọi `/bin/rm`, nó chỉ chạm được vào thư mục tạm đó. Bên trong sandbox,
+lớp bảo vệ máy bạn: dù script đổi `PATH` hay gọi `/bin/rm`, nó chỉ chạm được vào thư mục tạm đó (`/run` và `~/.docker` cũng bị che, nên
+không nhờ được Docker; mạng không bị tách). Bên trong sandbox,
 thư mục làm việc là thư mục tạm của test, chứa vài tệp mồi, và một `rm` giả đứng đầu `PATH` ghi lại mọi lần gọi, chỉ
 xoá thứ nằm trong thư mục tạm, từ chối mọi đường dẫn khác. Một script coi là hỏng nếu nó xoá tệp mồi trong thư mục làm
 việc, hay gọi `rm` với đường dẫn ngoài thư mục tạm. Mỗi kiểm tra được chứng minh bắt được một lỗi có thật bằng cách chạy

@@ -51,7 +51,8 @@ Test chạy một API giả trên `127.0.0.1` (cổng ngẫu nhiên) và gọi s
 và `OLIST_SHOP_*` của bạn không đi vào môi trường của script. Trường hợp quá giờ: `/healthz` treo 20 giây,
 script chạy với `-t 1` phải trả `CRITICAL - api unreachable (curl exit 28)` trong dưới 10 giây. Cổng đóng phải ra
 `curl exit 7`. Bài cần `curl` từ 7.68 và `jq` từ 1.6 (cài ở module 01); thiếu thì test skip.
-Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt). Thiếu `bwrap` thì test skip.
+Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt); `/run` và `~/.docker` bị che nên không gọi được Docker; mạng không bị tách để test
+gọi được server giả trên `127.0.0.1`. Thiếu `bwrap` thì test skip.
 
 ## Tiêu chí đạt
 

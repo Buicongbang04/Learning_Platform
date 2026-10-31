@@ -1,8 +1,10 @@
 """Test cho helper DevOps của testkit: phiên bản công cụ, docker, cpuset, cluster kind."""
 
 import os
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -132,21 +134,34 @@ SANDBOX_REQUIRED = pytest.mark.skipif(testkit.sandbox_ready() is not None, reaso
 
 @pytest.fixture
 def sentinel(tmp_path):
-    outside = tmp_path / "outside"
+    """Tệp canh nằm ngoài /tmp (dưới gốc repo) nên NHÌN THẤY được trong sandbox, chỉ là không ghi được."""
+    outside = testkit.ROOT / f".sandbox-sentinel-{os.getpid()}"
     outside.mkdir()
     target = outside / "sentinel.txt"
     target.write_text("giữ")
     inside = tmp_path / "inside"
     inside.mkdir()
-    return inside, target
+    try:
+        yield inside, target
+    finally:
+        shutil.rmtree(outside, ignore_errors=True)
+
+
+def assert_visible(inside, target):
+    seen = testkit.run_sandboxed(["cat", target], writable=[inside], cwd=inside, env={})
+    assert seen.stdout == "giữ", "Tệp canh phải nhìn thấy được trong sandbox để phép thử có nghĩa"
 
 
 @SANDBOX_REQUIRED
-def test_sandbox_path_reset_cannot_delete_outside(sentinel):
+def test_sandbox_path_reset_cannot_delete_visible_file(sentinel):
     inside, target = sentinel
-    script = f'PATH=/usr/bin:/bin; rm -rf "$HOME_OUTSIDE"; rm -f "{target}"; exit 0'
-    result = testkit.run_sandboxed(["bash", "-c", script], writable=[inside], cwd=inside, env={"HOME_OUTSIDE": str(target.parent)})
+    assert_visible(inside, target)
+    script = 'PATH=/usr/bin:/bin; rm -rf "$HOME_OUTSIDE"; rm -f "$TARGET"; exit 0'
+    result = testkit.run_sandboxed(
+        ["bash", "-c", script], writable=[inside], cwd=inside, env={"HOME_OUTSIDE": str(target.parent), "TARGET": str(target)}
+    )
     assert result.returncode == 0, result.stderr
+    assert "Read-only file system" in result.stderr
     assert target.read_text() == "giữ"
 
 
@@ -154,16 +169,36 @@ def test_sandbox_path_reset_cannot_delete_outside(sentinel):
 @pytest.mark.parametrize(
     "cmd",
     [
-        ["env", "-i", "/bin/rm", "-f", "{t}"],
+        ["env", "-i", "/bin/rm", "-rf", "{d}"],
         ["{py}", "-c", "import os, sys; os.remove(sys.argv[1])", "{t}"],
+        ["{py}", "-c", "import shutil, sys; shutil.rmtree(sys.argv[1])", "{d}"],
         ["bash", "-c", ': > "$1"', "_", "{t}"],
+        ["bash", "-c", 'mv "$1" "$1.bak"', "_", "{t}"],
     ],
 )
-def test_sandbox_blocks_other_deleters(sentinel, cmd):
+def test_sandbox_blocks_other_deleters_on_visible_file(sentinel, cmd):
     inside, target = sentinel
-    argv = [c.format(t=target, py=sys.executable) for c in cmd]
-    testkit.run_sandboxed(argv, writable=[inside], cwd=inside, env={})
+    assert_visible(inside, target)
+    argv = [c.format(t=target, d=target.parent, py=sys.executable) for c in cmd]
+    result = testkit.run_sandboxed(argv, writable=[inside], cwd=inside, env={})
+    assert result.returncode != 0
     assert target.read_text() == "giữ"
+
+
+@SANDBOX_REQUIRED
+def test_sandbox_hides_host_daemon_sockets(tmp_path):
+    uid = os.getuid()
+    script = (
+        f'for p in /run/docker.sock /var/run/docker.sock /run/user/{uid}/bus /run/user/{uid}/docker.sock /run/dbus/system_bus_socket; '
+        'do [ -e "$p" ] && echo "visible $p"; done; ls -A "$REAL_HOME/.docker" 2>/dev/null; exit 0'
+    )
+    result = testkit.run_sandboxed(["bash", "-c", script], writable=[tmp_path], cwd=tmp_path, env={"REAL_HOME": str(Path.home())})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+    if shutil.which("docker"):
+        docker = testkit.run_sandboxed(["docker", "version", "--format", "{{.Server.Version}}"], writable=[tmp_path], cwd=tmp_path, env={})
+        assert docker.returncode != 0, docker.stdout
+        assert docker.stdout.strip() == ""
 
 
 @SANDBOX_REQUIRED
@@ -199,25 +234,58 @@ def test_sandbox_hides_real_tmp(tmp_path):
     assert result.stdout.split() == ([first] if first else [])
 
 
+UNSAFE_VARS = {
+    "BASH_ENV": "{hook}",
+    "ENV": "{hook}",
+    "BASH_FUNC_x%%": "() { echo leaked; }",
+    "BASH_FUNC_rm%%": "() { echo leaked-rm; }",
+    "LD_PRELOAD": "/nonexistent/libleak.so",
+    "LD_LIBRARY_PATH": "/nonexistent",
+    "SHELLOPTS": "xtrace",
+    "BASHOPTS": "extglob",
+    "PROMPT_COMMAND": "echo leaked",
+    "PS4": "+leaked ",
+}
+
+
 @SANDBOX_REQUIRED
-def test_sandbox_drops_bash_env_and_exported_functions(tmp_path, monkeypatch):
+def test_sandbox_drops_dangerous_env(tmp_path):
     marker = tmp_path / "bash_env_ran"
     hook = tmp_path / "hook.sh"
     hook.write_text(f'touch "{marker}"\n')
-    monkeypatch.setenv("BASH_ENV", str(hook))
-    monkeypatch.setenv("ENV", str(hook))
-    monkeypatch.setenv("BASH_FUNC_x%%", "() { echo leaked; }")
-    monkeypatch.setenv("BASH_FUNC_rm%%", "() { echo leaked-rm; }")
+    parent = dict(os.environ)
+    parent.update({k: v.replace("{hook}", str(hook)) for k, v in UNSAFE_VARS.items()})
     result = testkit.run_sandboxed(
-        ["bash", "-c", 'type x >/dev/null 2>&1 && echo leaked; type -t rm; echo "env=${BASH_ENV:-}"'],
+        ["bash", "-c", 'type x >/dev/null 2>&1 && echo leaked; type -t rm; env | cut -d= -f1'],
         writable=[tmp_path],
         cwd=tmp_path,
-        env=dict(os.environ),
+        env=parent,
     )
     assert result.returncode == 0, result.stderr
-    assert "leaked" not in result.stdout
-    assert result.stdout.split() == ["file", "env="]
+    assert "leaked" not in result.stdout + result.stderr
+    lines = result.stdout.split()
+    assert lines[0] == "file"
+    assert not set(lines[1:]) & set(UNSAFE_VARS), lines
     assert not marker.exists()
+
+
+def test_unsafe_env_filter_unit():
+    cleaned = testkit._clean_env({**UNSAFE_VARS, "KEEP_ME": "1"}, Path("/x"))
+    assert not set(cleaned) & set(UNSAFE_VARS)
+    assert cleaned["KEEP_ME"] == "1"
+
+
+def test_probe_uses_same_flags_as_run(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(testkit.shutil, "which", lambda name: "/usr/bin/bwrap")
+    monkeypatch.setattr(testkit.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    argv = testkit.sandbox_command(["true"], writable=[tmp_path], cwd=tmp_path, env={})
+    probe = calls[0]
+    for flag in ("--dev", "--proc", "--clearenv", "--unshare-user", "--unshare-pid", "--new-session"):
+        assert flag in probe and flag in argv, flag
+    for mount in ("/tmp", "/run"):
+        assert ["--tmpfs", mount] in [probe[i : i + 2] for i in range(len(probe))]
+        assert ["--tmpfs", mount] in [argv[i : i + 2] for i in range(len(argv))]
 
 
 def test_sandbox_skips_without_bwrap(monkeypatch, tmp_path):

@@ -56,7 +56,8 @@ Test thử từ chối với `/`, `/tmp`, `/var`, một symlink trỏ tới `/`,
 lần hai ngay sau lần một phải in `total=0`. Test chạy từ thư mục tạm của nó, nên đường dẫn tương đối trong test bắt
 đầu từ đó.
 
-Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt). Thiếu `bwrap` thì test skip. Sandbox mới là lớp bảo vệ máy bạn; `find`/`rm` giả chỉ để chấm.
+Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt); `/run` và `~/.docker` bị che nên không gọi được Docker; mạng không bị tách để test
+gọi được server giả trên `127.0.0.1`. Thiếu `bwrap` thì test skip. Sandbox mới là lớp bảo vệ máy bạn; `find`/`rm` giả chỉ để chấm.
 
 ## Tiêu chí đạt
 
