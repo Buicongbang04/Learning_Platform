@@ -199,7 +199,13 @@ class WorkbookView:
         return raw if isinstance(raw, str) else getattr(raw, "text", None)  # ArrayFormula có .text
 
     def pivot_tables(self, sheet: str) -> list:
-        return list(getattr(self._sheet(self._formula_book(), sheet), "_pivots", []))
+        """Pivot table của sheet; openpyxl chỉ giữ chúng ở thuộc tính riêng `_pivots`."""
+        import openpyxl
+
+        ws = self._sheet(self._formula_book(), sheet)
+        if not hasattr(ws, "_pivots"):
+            raise RuntimeError(f"openpyxl {openpyxl.__version__} không còn thuộc tính _pivots: cập nhật testkit.pivot_tables")
+        return list(ws._pivots)
 
     def value(self, sheet: str, cell: str) -> Any:
         """Giá trị đã tính lại bằng LibreOffice (cache cấp module theo đường dẫn + mtime + size)."""

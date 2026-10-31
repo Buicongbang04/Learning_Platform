@@ -130,12 +130,11 @@ Nội dung mục này đã thống nhất với phiên AI Engineer; `handoff-ai-
 
 ## 7. Việc còn để ngỏ (không chặn việc học, làm nếu người học muốn)
 
-Còn mở:
+Quyết định sau khi khảo sát trên PC (2026-10-31):
 
-- Gom các bản sao code đọc Online Retail (module 03, 04, 06, 07, 09, 11, 12, 13, 14) vào một helper chung, ví dụ trong `testkit.py`. Cache key nên có thêm phiên bản loader.
-- Hàm `delete_all` / `list_for_teardown` bị chép ở 3 file test module 10; có thể gom vào `testkit.py` cùng đợt trên.
-- `pivot_tables()` của `Exercise.workbook` đọc thuộc tính riêng tư `_pivots` của openpyxl.
-- Bộ `grocery-sales-synthetic` tải từ Google Drive chưa có checksum. Đã có chặn trang HTML.
+- **Không gom loader Online Retail vào `testkit.py`.** Có 85 tệp ở 13 module tự đọc `online_retail_II.xlsx` (3 kiểu hàm, 5 kiểu tên cache parquet), không notebook nào import `testkit`. Gom lại sẽ làm notebook người học phụ thuộc bộ chấm (trái quyết định "notebook chạy độc lập" ở mục 6) và làm lộ lời giải ở các bài dạy làm sạch (module 06). Hậu quả của việc trùng lặp chỉ là vài bản cache parquet trong thư mục temp và lần đầu chạy chậm hơn. Vì vậy `delete_all` / `list_for_teardown` của module 10 cũng giữ nguyên ở 3 file test.
+- **Checksum `grocery-sales-synthetic`: làm sau khi gộp `ai-engineer` vào `main`.** Phải thêm trường vào dataclass `Dataset` trong `data/download_dataset.py`, tệp đang có conflict với nhánh AE (mục 4). Lợi ích nhỏ: dữ liệu sinh giả, chỉ dùng cục bộ, đã có chặn trang HTML.
+- **`pivot_tables()` đọc `_pivots` riêng tư của openpyxl: đã xử lý.** openpyxl ghim trong `uv.lock`; nếu bản mới bỏ thuộc tính này thì hàm báo `RuntimeError` rõ ràng thay vì âm thầm trả danh sách rỗng (có test trong `tests/test_testkit_workbook.py`).
 
 Đã xong trên PC (2026-10-31, nhánh `da-handoff-small-fixes`, có review độc lập):
 
