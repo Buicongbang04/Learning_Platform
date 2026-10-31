@@ -1,0 +1,105 @@
+questions:
+- id: test-majority
+  kind: data
+  type: single
+  prompt: Trong tập test UIT-VSFC (3 166 câu), chủ đề "giảng viên" chiếm khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 25%
+  - id: b
+    text: Khoảng 50%
+  - id: c
+    text: Khoảng 72%
+  - id: d
+    text: Khoảng 90%
+- id: rarest
+  kind: data
+  type: single
+  prompt: Chủ đề nào ít câu nhất trong tập test?
+  options:
+  - id: a
+    text: giảng viên
+  - id: b
+    text: chương trình đào tạo
+  - id: c
+    text: cơ sở vật chất
+  - id: d
+    text: khác
+- id: majority-baseline
+  kind: data
+  type: single
+  prompt: Một "model" luôn trả "giảng viên" cho mọi câu của tập test đầy đủ có macro-F1 (4 nhãn) khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.21
+  - id: b
+    text: Khoảng 0.42
+  - id: c
+    text: Khoảng 0.72
+  - id: d
+    text: Khoảng 0.84
+- id: why-balanced
+  kind: knowledge
+  type: single
+  prompt: Vì sao lấy 30 câu mỗi chủ đề thay vì 120 câu ngẫu nhiên từ tập test?
+  options:
+  - id: a
+    text: Để mỗi nhãn đủ câu cho macro-F1 có nghĩa
+  - id: b
+    text: Để accuracy trên mẫu bằng accuracy trên dữ liệu thật
+  - id: c
+    text: Vì Ollama giới hạn 30 lời gọi cho mỗi nhãn
+  - id: d
+    text: Vì lấy ngẫu nhiên thì không đặt được seed
+- id: hardware-noise
+  kind: knowledge
+  type: single
+  prompt: Cùng `qwen2.5:3b`, cùng prompt, temperature 0, chạy trên GPU rồi chỉ CPU thì vài câu đổi nhãn. Rút ra điều gì?
+  options:
+  - id: a
+    text: Bản CPU bị lỗi và phải loại khỏi benchmark
+  - id: b
+    text: Chênh lệch cỡ đó giữa hai model chỉ là nhiễu
+  - id: c
+    text: temperature 0 bị Ollama bỏ qua khi chạy CPU
+  - id: d
+    text: Nên luôn benchmark trên CPU vì tất định hơn
+- id: ci-zero
+  kind: knowledge
+  type: single
+  prompt: Hiệu macro-F1 giữa hai cấu hình là +0.06, khoảng tin cậy bootstrap 95% là [-0.01, 0.14]. Báo cáo nên viết gì?
+  options:
+  - id: a
+    text: Cấu hình thứ hai tốt hơn 0.06 macro-F1
+  - id: b
+    text: Chưa đủ bằng chứng, cần nhiều câu hơn
+  - id: c
+    text: Hai cấu hình chắc chắn ngang nhau
+  - id: d
+    text: Cấu hình thứ nhất tốt hơn vì cận dưới âm
+- id: none-is-wrong
+  kind: knowledge
+  type: single
+  prompt: Vì sao câu trả lời không đọc được nhãn tính là sai thay vì bỏ khỏi mẫu?
+  options:
+  - id: a
+    text: Bỏ đi thì thưởng cho model trả lời lan man
+  - id: b
+    text: Để macro-F1 luôn nằm trong khoảng 0 tới 1
+  - id: c
+    text: Vì sklearn không nhận giá trị None
+  - id: d
+    text: Vì mẫu phải giữ đúng 120 câu để chia hết
+- id: license-first
+  kind: knowledge
+  type: single
+  prompt: Sản phẩm thương mại, `qwen2.5:3b` và `qwen2.5:7b` cùng đạt ngưỡng chất lượng. Điều gì cần kiểm trước khi chọn 3B?
+  options:
+  - id: a
+    text: Số lượt tải của model trên Hugging Face
+  - id: b
+    text: Giấy phép của đúng biến thể 3B
+  - id: c
+    text: Model có gắn thẻ ngôn ngữ `vi` không
+  - id: d
+    text: Ngày phát hành của tag trên Ollama
