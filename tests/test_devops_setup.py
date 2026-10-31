@@ -1,7 +1,9 @@
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
+from urllib.parse import unquote
 
 import yaml
 
@@ -58,15 +60,92 @@ def test_existing_service_images_unchanged():
         assert services[name]["image"] == image
 
 
-def test_devops_tools_links_point_to_existing_files():
+DOC_LINK = re.compile(r"\]\((\.\./tracks/devops/[^)#\s]+)(?:#([^)\s]*))?\)")
+HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
+MODULES_DIR = ROOT / "tracks" / "devops" / "modules"
+
+
+def github_slug(heading: str) -> str:
+    """Slug của heading theo cách GitHub tạo anchor: chữ thường, giữ chữ (kể cả tiếng Việt), số, `-`, `_`; khoảng trắng thành `-`."""
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+    text = unicodedata.normalize("NFC", re.sub(r"[`*]", "", text)).lower()
+    kept = "".join(c for c in text if c in " -_" or unicodedata.category(c)[0] in "LNM")
+    return kept.replace(" ", "-")
+
+
+def heading_slugs(markdown: str) -> set[str]:
+    slugs: set[str] = set()
+    seen: dict[str, int] = {}
+    in_fence = False
+    for line in markdown.splitlines():
+        if line.strip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        match = None if in_fence else HEADING.match(line)
+        if match:
+            slug = github_slug(match.group(1))
+            count = seen.get(slug, 0)
+            seen[slug] = count + 1
+            slugs.add(slug if count == 0 else f"{slug}-{count}")
+    return slugs
+
+
+def devops_link_problems(text: str, base: Path, modules_dir: Path) -> list[str]:
+    """Link tới tracks/devops phải trỏ tới tệp có thật và anchor khớp một heading.
+
+    Chỉ bỏ qua link tới module chưa có thư mục (module của phase sau).
+    """
+    found = []
+    for link, anchor in DOC_LINK.findall(text):
+        target = (base / link).resolve()
+        if target.is_relative_to(modules_dir.resolve()):
+            module_id = target.relative_to(modules_dir.resolve()).parts[0]
+            if not (modules_dir / module_id).is_dir():
+                continue
+        if not target.is_file():
+            found.append(f"{link}: tệp không tồn tại")
+            continue
+        if anchor:
+            wanted = unicodedata.normalize("NFC", unquote(anchor)).lower()
+            if wanted not in heading_slugs(target.read_text(encoding="utf-8")):
+                found.append(f"{link}#{anchor}: không có heading nào tạo anchor này")
+    return found
+
+
+def test_devops_tools_links_point_to_existing_headings():
     text = TOOLS_DOC.read_text(encoding="utf-8")
-    links = re.findall(r"\]\((\.\./tracks/devops/[^)#]+)(?:#[^)]*)?\)", text)
-    assert links
-    for link in links:
-        target = (TOOLS_DOC.parent / link).resolve()
-        module_dir = target.parent
-        if module_dir.exists():
-            assert target.exists(), link
+    assert DOC_LINK.findall(text)
+    assert devops_link_problems(text, TOOLS_DOC.parent, MODULES_DIR) == []
+
+
+def test_github_slug_rules():
+    assert github_slug("0. Cài đặt") == "0-cài-đặt"
+    assert github_slug("2. Cấu hình Nginx: server, location, proxy_pass và header") == "2-cấu-hình-nginx-server-location-proxy_pass-và-header"
+    assert github_slug("Ghim CPU trên máy dùng chung") == "ghim-cpu-trên-máy-dùng-chung"
+    assert github_slug("`nginx -t` và [docs](https://x)") == "nginx--t-và-docs"
+    assert github_slug(unicodedata.normalize("NFD", "Cài đặt")) == "cài-đặt"
+
+
+def test_link_check_catches_bad_anchor_and_missing_file(tmp_path):
+    modules = tmp_path / "tracks" / "devops" / "modules"
+    readme = modules / "05-web-server-proxy" / "README.md"
+    readme.parent.mkdir(parents=True)
+    readme.write_text("# M\n\n## 0. Cài đặt\n\n```bash\n## 9. Không phải heading\n```\n\n## 1. Phần một\n\n## 1. Phần một\n", encoding="utf-8")
+    base = tmp_path / "setup"
+    base.mkdir()
+    good = (
+        "[a](../tracks/devops/modules/05-web-server-proxy/README.md#0-cài-đặt) "
+        "[b](../tracks/devops/modules/05-web-server-proxy/README.md#0-c%C3%A0i-%C4%91%E1%BA%B7t) "
+        "[c](../tracks/devops/modules/05-web-server-proxy/README.md#1-phần-một-1) "
+        "[d](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt)"
+    )
+    assert devops_link_problems(good, base, modules) == []
+    bad_anchor = "[x](../tracks/devops/modules/05-web-server-proxy/README.md#0-cai-dat)"
+    assert any("0-cai-dat" in p for p in devops_link_problems(bad_anchor, base, modules))
+    fenced = "[x](../tracks/devops/modules/05-web-server-proxy/README.md#9-không-phải-heading)"
+    assert devops_link_problems(fenced, base, modules)
+    missing = "[x](../tracks/devops/modules/05-web-server-proxy/INSTALL.md#0-cài-đặt)"
+    assert any("không tồn tại" in p for p in devops_link_problems(missing, base, modules))
 
 
 MODULE_LINK = re.compile(r"tracks/devops/modules/([^/)#\s]+)")
