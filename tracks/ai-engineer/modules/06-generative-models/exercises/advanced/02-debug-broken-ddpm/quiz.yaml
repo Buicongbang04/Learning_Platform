@@ -1,0 +1,92 @@
+questions:
+- id: ref-loss
+  kind: data
+  type: single
+  prompt: Trong bản tham chiếu, bug "dữ liệu ở [0, 1]" khi chỉ còn mình nó làm loss cuối thay đổi thế nào so với bản đã sửa?
+  options:
+  - id: a
+    text: Cao hơn hẳn, nên nhìn loss là thấy
+  - id: b
+    text: Thấp hơn, dù ảnh sinh tệ hơn nhiều
+  - id: c
+    text: Ra NaN sau vài trăm bước
+  - id: d
+    text: Đúng bằng nhau tới 4 chữ số
+- id: ref-eval-bug
+  kind: data
+  type: single
+  prompt: Với bug ở postprocess (không đổi thang khi đánh giá) khi chỉ còn mình nó, giám khảo báo gì?
+  options:
+  - id: a
+    text: Tỉ lệ tự tin bằng 0, độ sáng bằng 0
+  - id: b
+    text: Đúng như bản đã sửa, vì ảnh sinh không đổi
+  - id: c
+    text: Tỉ lệ tự tin cao hơn bản đúng, độ sáng âm
+  - id: d
+    text: Lỗi, vì classifier không nhận số âm
+- id: ref-ema
+  kind: data
+  type: single
+  prompt: Khi EMA không clone (bug 4), giám khảo trên "EMA" và trên trọng số thô so với nhau thế nào?
+  options:
+  - id: a
+    text: EMA tốt hơn hẳn như bình thường
+  - id: b
+    text: Ra đúng cùng một bộ số
+  - id: c
+    text: EMA tệ hơn hẳn, toàn nhiễu
+  - id: d
+    text: Không so được vì EMA bị lỗi shape
+- id: oracle
+  kind: knowledge
+  type: single
+  prompt: Phép thử "oracle một điểm" cho sampler là gì?
+  options:
+  - id: a
+    text: Train model trên một ảnh tới khi loss bằng 0 rồi sinh thử vài ảnh
+  - id: b
+    text: So ảnh sinh với ảnh train gần nhất theo pixel
+  - id: c
+    text: Chạy sampler với T = 1 bước cho nhanh rồi so với ảnh thật
+  - id: d
+    text: Nhiễu đúng cho dữ liệu một ảnh; sampler phải trả lại ảnh đó
+- id: determinism
+  kind: knowledge
+  type: single
+  prompt: Sinh hai lần bằng DDIM eta = 0 với cùng generator mà ra hai ảnh khác nhau. Nghi đầu tiên điều gì?
+  options:
+  - id: a
+    text: GPU có lỗi phần cứng khi tính toán song song
+  - id: b
+    text: Ngẫu nhiên ngoài generator (dropout ở train())
+  - id: c
+    text: Schedule bị sai căn bậc hai
+  - id: d
+    text: DDIM vốn không tất định
+- id: state-dict
+  kind: knowledge
+  type: single
+  prompt: Vì sao dict(model.state_dict()) không phải là một bản sao trọng số?
+  options:
+  - id: a
+    text: state_dict chỉ chứa buffer, không chứa tham số
+  - id: b
+    text: dict() làm tròn mọi tensor về float16 để tiết kiệm bộ nhớ
+  - id: c
+    text: Tensor dùng chung bộ nhớ với tham số
+  - id: d
+    text: state_dict bị xoá sau mỗi optimizer.step()
+- id: first-check
+  kind: knowledge
+  type: single
+  prompt: Vì sao nên kiểm đường đánh giá (đưa ảnh thật qua postprocess rồi giám khảo) trước mọi bug khác?
+  options:
+  - id: a
+    text: Thước đo sai thì mọi số đo khác sai theo
+  - id: b
+    text: Vì đó là bug duy nhất trong notebook làm loss tăng lên rõ rệt
+  - id: c
+    text: Vì giám khảo train lâu nhất
+  - id: d
+    text: Vì postprocess chạy trên GPU
