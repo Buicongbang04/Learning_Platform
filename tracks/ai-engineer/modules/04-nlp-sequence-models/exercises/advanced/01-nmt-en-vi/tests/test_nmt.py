@@ -119,7 +119,7 @@ def test_hypotheses_bleu():
     hyps = hyp_path.read_text(encoding="utf-8").splitlines()
     assert len(hyps) == len(refs) == 1268, "mỗi câu test đúng một dòng bản dịch"
     bleu = sacrebleu.corpus_bleu(hyps, [refs], tokenize="none").score
-    # Bản tham chiếu, beam 5: Bahdanau 19.97, Luong 12.21; không attention 5.72 (dưới ngưỡng)
+    # Bản tham chiếu, beam 5 với alpha = 1.4 (chọn trên dev): Bahdanau 20.89, Luong 13.85; không attention 5.72 (alpha = 0.6, dưới ngưỡng)
     assert bleu >= 8.0, f"BLEU tst2013 = {bleu:.2f}"
 
 
