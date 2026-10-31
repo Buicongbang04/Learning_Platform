@@ -1,0 +1,6 @@
+logged-max: [c]
+entropy-bug: [b]
+broadcast: [c]
+truncation-late: [a]
+first-check: [b]
+max-vs-min: [b]

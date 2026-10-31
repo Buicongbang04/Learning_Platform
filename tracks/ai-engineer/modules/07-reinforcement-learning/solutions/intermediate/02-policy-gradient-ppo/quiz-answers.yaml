@@ -1,4 +1,4 @@
-init-entropy: [c]
+final-entropy: [b]
 ppo-kl: [a]
 sampled-vs-greedy: [c]
 wallclock: [c]

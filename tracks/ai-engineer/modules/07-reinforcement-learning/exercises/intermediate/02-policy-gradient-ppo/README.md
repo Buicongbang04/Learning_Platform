@@ -4,7 +4,7 @@ level: intermediate
 services: []
 files:
   - path: starter/pg.ipynb
-    note: 9 hàm/lớp TODO
+    note: 8 hàm/lớp TODO
   - path: tests/test_pg.py
     note: Không sửa
 run:

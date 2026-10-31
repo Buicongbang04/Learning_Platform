@@ -1,17 +1,17 @@
 questions:
-- id: init-entropy
+- id: final-entropy
   kind: data
   type: single
-  prompt: Entropy trung bình của `ActorCritic(4, 2)` chưa train trên 256 observation đầu của CartPole gần giá trị nào?
+  prompt: Entropy của policy PPO (seed 0) ở lần cập nhật cuối cùng sau 150 000 bước nằm ở đâu?
   options:
   - id: a
-    text: '0.000'
+    text: Dưới 0.05, gần tất định
   - id: b
-    text: '0.347'
+    text: Khoảng 0.54
   - id: c
-    text: '0.693'
+    text: Đúng 0.693, không đổi
   - id: d
-    text: '1.386'
+    text: Trên 1.0, tăng dần
 - id: ppo-kl
   kind: data
   type: single
