@@ -33,10 +33,9 @@ laptop 4GB đủ bộ nhớ cho cùng cấu hình (tốc độ trên laptop chư
 token, embedding 128, hidden 256, 40-60 nghìn cặp; vẫn làm được mọi phần của bài nhưng BLEU sẽ thấp hơn nhiều (bản tham
 chiếu chưa đo cấu hình này; ghi rõ trong `REPORT.md` nếu không đạt ngưỡng test).
 
-**Lưu ý env GPU (torch 2.14):** backward của một số phép `bmm` (gặp ở attention Bahdanau) được chuyển sang kernel Triton,
-cần header Python để biên dịch. Nếu gặp lỗi `Python.h: No such file or directory`, cài gói header (`sudo apt install
-python3.12-dev` trên Ubuntu), hoặc tắt các kernel Triton đó ở đầu notebook bằng
-`torch._native.registry.deregister_op_overrides(disable_dsl_names="triton")` (API nội bộ, bản tham chiếu dùng cách này).
+**Lưu ý env GPU:** backward của attention Bahdanau trên torch 2.14 cần biên dịch kernel Triton (cần header Python). GPU env
+dùng Python do uv quản lý nên đã có sẵn (xem `setup/gpu/README.md`); nếu env cũ tạo từ Python hệ thống và gặp lỗi
+`Python.h: No such file or directory`, xoá `setup/gpu/.venv` rồi sync lại.
 
 1. Trong `starter/nmt.ipynb`, viết `beam_search` theo đặc tả trong notebook (hàm duy nhất được test chấm). Nó nhận một
    `step_fn` trả log-xác suất, nên test chạy trên model giả, không cần GPU.
