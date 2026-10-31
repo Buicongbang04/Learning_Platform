@@ -47,7 +47,7 @@ questions:
   - id: noise-floor
     kind: knowledge
     type: single
-    prompt: "Trên PC của track, chạy lại y hệt baseline trên cùng GPU cho 0 câu đổi nhãn. Muốn đo sàn nhiễu thật nên làm gì?"
+    prompt: "Trên PC của track, chạy lại y hệt baseline ngay sau đó trên cùng GPU cho 0 câu đổi nhãn. Muốn đo sàn nhiễu thật nên làm gì?"
     options:
       - { id: a, text: "Chạy lại thêm 10 lần trên cùng GPU" }
       - { id: b, text: "Kết luận sàn nhiễu bằng 0 và hạ ngưỡng" }

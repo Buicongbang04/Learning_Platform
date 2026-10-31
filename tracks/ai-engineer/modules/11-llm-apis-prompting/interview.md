@@ -51,7 +51,7 @@ prompt chỉ dài hơn một chút.
 ## Prompt caching hoạt động thế nào và khi nào nó không giúp gì?
 
 Server lưu trạng thái đã tính (KV cache) của một **prefix** prompt; request sau có cùng prefix byte-by-byte thì đọc
-lại thay vì tính lại, nên rẻ hơn (Anthropic: đọc cache 0.1 lần giá input, Opus 5.5 và Sonnet 5.5 là 0.05 lần) và
+lại thay vì tính lại, nên rẻ hơn (Anthropic: đọc cache 0.1 lần giá input, Opus 5.5 và Sonnet 5.5 là 0.05 lần, Fable 5.1 là 0.025 lần) và
 nhanh hơn ở time-to-first-token. Không giúp khi: prefix chung ngắn hơn ngưỡng tối thiểu (từ vài trăm tới vài nghìn
 token tuỳ model), có thứ thay đổi ở **đầu** prompt (ngày giờ, id người dùng, thứ tự tool không cố định), lưu lượng thưa
 hơn thời gian sống của cache (5 phút, 1 giờ), hoặc phần lớn token là output. Với Anthropic còn phải trả giá **ghi**
@@ -93,7 +93,8 @@ Có hại khi ràng buộc ép model vào một token đầu mà nó không đ�
 "nghĩ"), hoặc khi schema quá chặt buộc model chọn bừa một giá trị enum thay vì nói "không biết". Trên tập ghim của
 module, biến thể JSON schema có macro-F1 0.852 so với 0.804 của zero-shot một từ, khoảng tin cậy của hiệu chỉ vừa không
 chứa 0 (cận dưới cỡ +0.001); hai biến thể cũng khác một câu chỉ thị trong system prompt, nên không tách được phần đóng
-góp của ràng buộc. Câu trả lời đúng cho phỏng vấn: "đo trên tập của mình, cả hai chiều đều có thể".
+góp của ràng buộc; và khi chạy lại cả hai biến thể chỉ trên CPU, lợi thế còn +0.002 (mục 7 lý thuyết). Câu trả lời
+đúng cho phỏng vấn: "đo trên tập của mình, cả hai chiều đều có thể".
 
 ## Mô tả vòng function calling và các lỗi phải xử lý.
 
@@ -134,7 +135,7 @@ nhỏ hơn mức đó thì nói "chưa phân biệt được", đừng nói "t�
 - **Baseline**: TF-IDF + logistic regression cho chủ đề và cảm xúc (module 04: macro-F1 0.72 cho cảm xúc trên UIT-VSFC,
   train vài giây). LLM chỉ đáng khi hơn rõ, hoặc khi cần trường mà baseline không làm được (việc cần làm, khía cạnh).
 - **LLM**: structured output theo schema (bài Advanced 02), validate schema và quy tắc nghiệp vụ, gọi lại tối đa một
-  lần. Chạy theo lô: local `qwen2.5` trên một GPU (50 000 câu x khoảng 1 giây = vài giờ, chấp nhận được) hoặc Batch API
+  lần. Chạy theo lô: local `qwen2.5` trên một GPU (50 000 câu x khoảng 1 giây = khoảng 14 giờ trên một GPU, chấp nhận được với job chạy đêm) hoặc Batch API
   của nhà cung cấp (giảm 50%) nếu được phép gửi dữ liệu.
 - **Chi phí API** ước từ token đo được (mục 3 lý thuyết), so với chi phí GPU và công vận hành.
 - **Chất lượng trong vận hành**: lấy mẫu kiểm tay mỗi kỳ, theo dõi phân phối nhãn đầu ra (phân phối đổi đột ngột là
@@ -170,5 +171,5 @@ lần thử trên playground không phải bằng chứng: đưa prompt vào rep
 
 Streaming (người dùng thấy token đầu sau vài trăm mili giây thay vì đợi cả câu), prompt ngắn và prefix cố định để
 cache (giảm time-to-first-token), output ngắn (mỗi token ra là một lượt decode: CoT làm độ trễ tăng khoảng 15 lần ở mục
-4 lý thuyết), model nhỏ hơn hoặc router, chạy song song các lời gọi độc lập (nhiều tool, nhiều câu), và tránh vòng tool
+7 lý thuyết), model nhỏ hơn hoặc router, chạy song song các lời gọi độc lập (nhiều tool, nhiều câu), và tránh vòng tool
 thừa. Đo p50 và p95 riêng cho time-to-first-token và tổng thời gian, tách thời gian xếp hàng khỏi thời gian phục vụ.

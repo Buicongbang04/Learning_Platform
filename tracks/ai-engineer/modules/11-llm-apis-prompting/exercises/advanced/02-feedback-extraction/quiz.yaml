@@ -8,15 +8,15 @@ questions:
       - { id: b, text: "Từ 10 tới 25" }
       - { id: c, text: "Từ 26 tới 40" }
       - { id: d, text: "Trên 40" }
-  - id: actionable-rate
+  - id: lecturer-share
     kind: data
     type: single
-    prompt: "Với prompt và schema của bạn trên 150 câu ghim, qwen2.5:3b gắn actionable = true cho khoảng bao nhiêu phần trăm câu?"
+    prompt: "Trong 150 câu ghim, nhãn chủ đề lecturer (theo UIT-VSFC) chiếm khoảng bao nhiêu phần trăm?"
     options:
-      - { id: a, text: "Dưới 30%" }
-      - { id: b, text: "Từ 30% tới 50%" }
-      - { id: c, text: "Từ 50% tới 70%" }
-      - { id: d, text: "Trên 70%" }
+      - { id: a, text: "Dưới 40%" }
+      - { id: b, text: "Từ 40% tới 55%" }
+      - { id: c, text: "Từ 56% tới 75%" }
+      - { id: d, text: "Trên 75%" }
   - id: cross-field-rule
     kind: knowledge
     type: single

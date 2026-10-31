@@ -42,14 +42,22 @@ Chạy cell `explore` của lời giải ngày 2026-11-01 trên PC của track (
 đào tạo; 44 trung tính thuộc `others`; giảng viên 1 425 tích cực, 791 tiêu cực; phần trăm 95.2, 5.3, 72.7, 89.6.
 
 - Cả hai cách đúng mọi câu **một lần đếm** (trừ câu tổng), câu `list_examples` và câu ngoài phạm vi.
-- Cả hai sai **cả bốn** câu phần trăm: native gọi `percentage` với số bịa (`part` 10, `whole` 50; `part` 1234, `whole`
-  56789) mà không đếm trước; prompted đếm một lần rồi tự viết một con số (27.6%, 41.6%). Prompted còn sai câu hai số
-  đếm (chỉ đếm lớp tích cực).
+- Cả hai sai **cả bốn** câu phần trăm, mỗi câu một kiểu:
+
+  | Câu | Native | Prompted |
+  | --- | --- | --- |
+  | tiêu cực / cơ sở vật chất | đếm đúng 138, rồi `percentage(10, 50)` với số bịa, trả 20% | đếm 138, tự viết 27.6% |
+  | trung tính / toàn tập | không đếm, `percentage(1234, 56789)`, trả 2.2% | không đếm, `percentage(1234567890, 1500000000)`, trả 82.3% |
+  | tiêu cực / chương trình đào tạo | đếm 416, không gọi `percentage`, hỏi lại người dùng tổng số | đếm 416, tự viết 41.6% |
+  | giảng viên / tích cực | không đếm, `percentage(234, 1000)`, trả 23.4% | đếm 1 425, tự viết 53.8% |
+
+  Prompted còn sai câu hai số đếm (chỉ đếm lớp tích cực).
 - Câu "tổng bao nhiêu phản hồi": cả hai gửi `topic: null`, `sentiment: null`; schema chỉ cho chuỗi nên tool trả lỗi
   (lỗi tool duy nhất của mỗi cách). Native hỏi lại người dùng, prompted bịa "123456789".
 - Câu ngoài phạm vi: prompted trả `answer` rỗng (schema không bắt buộc `answer`), vẫn tính đúng theo tiêu chí "không
   gọi tool".
-- Thí nghiệm tự sửa (`topic: "phòng học"`): prompted gọi lại với `facility` và trả lời đúng 138; native không gọi lại.
+- Thí nghiệm tự sửa (`topic: "phòng học"`, một lần thử mỗi cách): prompted gọi lại với `facility` và trả lời đúng 138;
+  native không gọi lại.
 
 Đọc: chênh 7 và 6 trên 12 câu là nhiễu. Bài học nằm ở **thiết kế tool**: model 3B không tự lập kế hoạch "đếm, đếm,
 chia"; một tool trả thẳng phần trăm theo bộ lọc, và schema cho phép `null` ở tham số lọc, sẽ sửa phần lớn lỗi mà không

@@ -53,8 +53,7 @@ cần gọi lại khi có và không có `json_schema` (mục 5 lý thuyết có
 
 ### Gợi ý 1
 
-`json.JSONDecoder().raw_decode(text, i)` parse một giá trị JSON bắt đầu ở vị trí `i` và bỏ qua phần sau nó. Thử ở
-từng vị trí có `{` hoặc `[`.
+`json.JSONDecoder().raw_decode(text, i)` parse một giá trị JSON bắt đầu ở vị trí `i` và bỏ qua phần sau nó.
 
 ### Gợi ý 2
 

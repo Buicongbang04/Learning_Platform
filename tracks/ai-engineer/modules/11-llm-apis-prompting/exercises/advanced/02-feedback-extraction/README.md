@@ -33,7 +33,7 @@ lâu hơn vài lần. Làm bài Basic 03 và Intermediate 02 trước.
 
 1. Trong `starter/extract.ipynb`, cell chấm điểm (notebook mô tả đủ):
    - `check_record(record) -> list[str]`: lỗi schema theo `EXTRACTION_SCHEMA` (bằng `jsonschema`), rồi hai quy tắc
-     nghiệp vụ: `suggestion` phải có khi và chỉ khi `actionable` là `true`; `aspects` không trùng, không rỗng.
+     nghiệp vụ: `suggestion` phải có khi và chỉ khi `actionable` là `true`; `aspects` không có phần tử rỗng, không trùng.
    - `score_batch(records, golds) -> dict`: tỉ lệ hợp lệ, accuracy và macro-F1 cho cảm xúc (3 nhãn) và chủ đề (4 nhãn)
      theo nhãn thật UIT-VSFC (bản ghi không hợp lệ tính là sai), tỉ lệ `actionable`.
 2. Cell `explore`, thiết kế của bạn: prompt, gọi `qwen2.5:3b` với schema, gọi lại khi `check_record` báo lỗi, chạy trên

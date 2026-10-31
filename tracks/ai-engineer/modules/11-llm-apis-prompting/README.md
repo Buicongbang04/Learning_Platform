@@ -118,8 +118,9 @@ các gateway như OmniRoute hay LiteLLM đều nói được nó. Anthropic và 
 
 Bài Basic 01 viết bộ chuyển giữa ba cột đầu. Một vài chỗ hay vỡ khi đổi nhà cung cấp: Anthropic không nhận message
 `system` trong `messages`; Ollama báo `done_reason: "stop"` cả khi model gọi tool; OpenAI có thể trả `content: null`
-khi chỉ gọi tool; model Claude đời mới không cho "prefill" lượt assistant cuối, không nhận `temperature` (từ API
-version 2026-10-21) và không cho ép `tool_choice` vào một tool cụ thể (Opus 5.5, Sonnet 5.5, Fable 5.1). Chi tiết đổi
+khi chỉ gọi tool; model Claude đời mới không cho "prefill" lượt assistant cuối và không cho ép `tool_choice` vào một tool cụ thể
+(Opus 5.5, Sonnet 5.5, Fable 5.1). Tham số sampling (`temperature`, `top_p`, `top_k`) là hai chuyện riêng: Opus 5.5 và
+Fable 5.1 từ chối chúng ở mọi API version; từ API version 2026-10-21 thì mọi model Claude đều từ chối. Chi tiết đổi
 theo phiên bản: luôn đọc trang migration của nhà cung cấp khi đổi model.
 
 OpenAI có thêm **Responses API** (2025), thế hệ sau của Chat Completions: có trạng thái tuỳ chọn
@@ -258,7 +259,7 @@ diện (USD mỗi MTok, mức tiêu chuẩn, prompt ngắn). Trước khi dùng,
 | Claude Opus 5.5 | 4 | 20 | 0.20 | 5 / 8 | |
 | Claude Sonnet 5.5 | 2 | 10 | 0.10 | 2.50 / 4 | |
 | Claude Haiku 5.5 | 0.10 | 0.50 | 0.01 | 0.125 / 0.20 | prompt trên 100 000 token: 0.50 / 2.50 |
-| Gemini 3.8 Flash | 0.75 | 3.75 | 0.075 | | giá tới 31/12/2026; từ 1/1/2027 là 1.50 / 7.50 |
+| Gemini 3.8 Flash | 0.75 | 3.75 | 0.075 | | giá tới 31/12/2026; từ 1/1/2027 là 1.50 / 7.50, đọc cache 0.15 |
 | gpt-6.1-terra | 1.00 | 5.00 | 0.05 | | |
 | gpt-6.1-sol | 2.00 | 10.00 | 0.10 | | |
 
@@ -545,9 +546,11 @@ Vòng lặp này (bài Intermediate 01) có các quyết định thiết kế qu
 
 Chênh một câu trên 12 câu không nói được cách nào tốt hơn (bài Intermediate 02). Đọc từng câu thì rõ hơn:
 
-- **Cả bốn câu phần trăm đều sai ở cả hai cách.** Native gọi `percentage` với số **bịa** (`part` 10, `whole` 50) mà
-  không đếm trước; prompted đếm một lần rồi tự tính ra một con số không khớp gì. Model 3B không lập được kế hoạch hai
-  bước "đếm, đếm, chia". Cách sửa ở phía thiết kế tool: một tool `share(topic, sentiment)` trả thẳng phần trăm, để
+- **Cả bốn câu phần trăm đều sai ở cả hai cách**, theo những kiểu khác nhau. Native: câu cơ sở vật chất đếm đúng 138
+  rồi vẫn gọi `percentage(10, 50)` với số bịa; hai câu (trung tính toàn tập, tích cực về giảng viên) gọi `percentage`
+  với số bịa mà không đếm; câu chương trình đào tạo đếm 416 rồi hỏi lại người dùng tổng số thay vì gọi tool lần nữa.
+  Prompted: ba câu đếm một lần rồi tự viết ra phần trăm không khớp (27.6%, 41.6%, 53.8%); câu trung tính gọi
+  `percentage(1234567890, 1500000000)`. Model 3B không lập được kế hoạch hai bước "đếm, đếm, chia". Cách sửa ở phía thiết kế tool: một tool `share(topic, sentiment)` trả thẳng phần trăm, để
   việc nhiều bước nằm trong code.
 - **Câu "tổng bao nhiêu phản hồi"** sai ở cả hai: model gửi `topic: null`, schema chỉ cho chuỗi nên tool trả `ERROR`
   (lỗi tool duy nhất của mỗi cách). Native quay ra hỏi lại người dùng; prompted trả lời "123456789". Schema chặt bắt được
@@ -555,8 +558,9 @@ Chênh một câu trên 12 câu không nói được cách nào tốt hơn (bài
   kế tốt hơn.
 - **Câu ngoài phạm vi**: cả hai không gọi tool. Prompted trả `answer` rỗng vì schema không bắt buộc khoá `answer`: đúng
   theo tiêu chí chấm, nhưng là lỗi trải nghiệm.
-- **Tự sửa sau lỗi** (cell cuối notebook, tham số `topic: "phòng học"`): prompted đọc thông báo lỗi và gọi lại với
-  `facility`, ra đúng 138; native xin lỗi và không gọi lại.
+- **Tự sửa sau lỗi** (cell cuối notebook, tham số `topic: "phòng học"`, chỉ **một lần thử** cho mỗi cách): prompted đọc
+  thông báo lỗi và gọi lại với `facility`, ra đúng 138; native xin lỗi và không gọi lại. Một lần thử không đủ để nói
+  cách nào tự sửa tốt hơn.
 - Native tốn 517 token prompt cho câu hỏi đầu tiên so với 61 khi không có tool (mục 2): mô tả tool là chi phí thật ở
   mỗi lượt của vòng lặp.
 
@@ -636,7 +640,7 @@ ghim:
 ### Một mốc từ model API
 
 Cùng biến thể JSON schema (prompt 638 byte) gửi qua gateway OmniRoute dùng chung của track, id router
-`auto/gemini-3.8-flash`, gọi ngày 2026-11-01 khoảng 01:45 (lúc đó router đi tới Gemini 3.8 Flash; id `auto/...` là
+`auto/gemini-3.8-flash`, gọi ngày 2026-11-01 khoảng 01:45 (response không ghi model nào thực sự trả lời; id `auto/...` là
 router, model phía sau đổi được theo cấu hình, nên con số này chỉ đúng cho lần gọi đó), chỉ **10 câu đầu** của tập ghim
 (gateway dùng chung, không chạy cả tập): 9/10 đúng, 4.1 tới 7.3 giây mỗi lời gọi (gồm mạng và gateway), không lỗi.
 `qwen2.5:3b` zero-shot và JSON schema cũng 9/10 trên đúng 10 câu đó; cả ba cùng sai một câu nhãn neutral ("em nghĩ như

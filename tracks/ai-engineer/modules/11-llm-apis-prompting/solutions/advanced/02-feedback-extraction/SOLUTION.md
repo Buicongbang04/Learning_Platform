@@ -9,7 +9,7 @@ của một bản tham chiếu để bạn so, và rubric chấm `REPORT.md`.
 | --- | --- | --- |
 | Schema | 5 trường, `required` đủ cả 5, `suggestion` kiểu `["string", "null"]`, `additionalProperties: false` | trường luôn có mặt giúp code phía sau đơn giản; `null` tường minh tốt hơn thiếu khoá |
 | Nhãn | giá trị enum tiếng Anh, mô tả tiếng Việt trong prompt | enum ngắn, ổn định để đọc bằng code; mô tả mới là thứ dạy model ranh giới |
-| Quy tắc ngoài schema | `suggestion` có khi và chỉ khi `actionable`; `aspects` không trùng, không rỗng | JSON Schema khó diễn đạt ràng buộc giữa hai trường; lỗi loại này lọt qua constrained decoding |
+| Quy tắc ngoài schema | `suggestion` có khi và chỉ khi `actionable`; `aspects` không có phần tử rỗng, không trùng | JSON Schema khó diễn đạt ràng buộc giữa hai trường; lỗi loại này lọt qua constrained decoding |
 | Ép output | `format` = `EXTRACTION_SCHEMA` (Ollama) | bỏ hẳn lớp lỗi parse; chi phí là độ trễ (đo ở dưới) |
 | Gọi lại | bản ghi sai quy tắc gửi lại một lần kèm danh sách lỗi (bài Basic 03) | sửa được phần lớn lỗi quy tắc với một lượt gọi thêm cho số ít câu |
 | Thước đo | macro-F1 cảm xúc và chủ đề theo nhãn UIT-VSFC, tỉ lệ hợp lệ; trường tự do chấm tay 30 câu | có nhãn thì đo bằng nhãn; không có nhãn thì người chấm, không tin cảm giác |
@@ -43,8 +43,8 @@ facility 7.
 - So với prompt chỉ phân loại cảm xúc của Intermediate 02 (macro-F1 0.804), trích xuất 5 trường một lượt làm cảm xúc tụt
   hẳn, gần như toàn bộ ở lớp neutral. Khuyến nghị của bản tham chiếu: lấy cảm xúc từ một lời gọi riêng (hoặc một bộ phân
   loại đã train ở module 04), dùng lời gọi trích xuất cho chủ đề, khía cạnh và gợi ý.
-- **Tự chấm 30 câu đầu** (người viết bản tham chiếu chấm, một người, tiêu chí viết trước: `actionable` đúng khi phản hồi
-  nêu hoặc ngầm chỉ một việc cụ thể làm được, ví dụ "máy chiếu hơi mờ"; `aspects` đạt khi mọi cụm có trong câu và không
+- **Tự chấm 30 câu đầu** (implementer viết bản tham chiếu tự chấm, một người, bảng 30 dòng lưu ngoài repo cùng bản
+  tham chiếu; tiêu chí viết trước: `actionable` đúng khi phản hồi nêu hoặc ngầm chỉ một việc cụ thể làm được, ví dụ "máy chiếu hơi mờ"; `aspects` đạt khi mọi cụm có trong câu và không
   là chữ đệm): `actionable` đồng ý 27/30, cả 3 câu lệch đều là model bỏ sót việc ngầm định ("máy chiếu hơi mờ", "giờ lên
   lớp không chắc chắn", "chỉ cần cho bài tập qua web"), không có câu model gắn `true` sai; 4/4 `suggestion` có mặt đều
   dùng được; `aspects` đạt 23/30, lỗi chính là **đệm cho đủ 3 cụm** bằng chữ chép từ mô tả chủ đề trong prompt ("giảng
