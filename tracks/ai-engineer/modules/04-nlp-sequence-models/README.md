@@ -221,7 +221,7 @@ cùng thuật toán nhanh hơn hàng trăm lần; bài Advanced 01 dùng nó sau
 | --- | --- | --- | --- |
 | Học | gộp cặp **nhiều nhất** | gộp cặp làm **tăng likelihood** nhiều nhất | bắt đầu vocab lớn, **bỏ dần** token ít đóng góp nhất |
 | Encode | áp merge theo thứ hạng | khớp dài nhất từ trái (`##` cho phần sau) | Viterbi trên xác suất token, có thể sample nhiều cách cắt |
-| Dùng ở | GPT-2/3/4, Llama 3, Qwen | BERT, PhoBERT (BPE fastBPE) | T5, mT5, Gemma, Llama 2 |
+| Dùng ở | GPT-2/3/4, Llama 3, Qwen (byte-level); Llama 2, Gemma (SentencePiece BPE, byte fallback); PhoBERT (fastBPE) | BERT, DistilBERT | T5, mT5, ALBERT, XLNet |
 
 SentencePiece coi khoảng trắng là ký tự `▁` và không cần pretokenize theo ngôn ngữ, hợp với tiếng Nhật, Trung; nó có
 cả chế độ BPE lẫn Unigram. Lỗi hay gặp với tokenizer trong sản phẩm: tokenizer lúc serve khác lúc train (khác phiên
