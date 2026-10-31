@@ -62,6 +62,26 @@ def main() -> None:
         for t in ("online_retail_ii", "bike_hour"):
             n = conn.execute(text(f"SELECT count(*) FROM da.{t}")).scalar()
             print(f"da.{t}: {n} dòng")
+    sync_metabase()
+
+
+def sync_metabase() -> None:
+    """Metabase chỉ thấy schema đã sync; database `de` thêm trước khi có `da` thì phải sync lại."""
+    import requests
+
+    import clients
+
+    try:
+        s = clients.metabase_session()
+        dbs = s.get("/api/database").json()
+    except (requests.RequestException, RuntimeError, ValueError, KeyError):
+        print("Metabase chưa chạy hoặc chưa init: bỏ qua sync schema")
+        return
+    dbs = dbs["data"] if isinstance(dbs, dict) else dbs
+    for d in dbs:
+        if d["name"] == "de":
+            s.post(f"/api/database/{d['id']}/sync_schema").raise_for_status()
+            print("Metabase: đã yêu cầu sync schema database `de`")
 
 
 if __name__ == "__main__":

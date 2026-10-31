@@ -152,6 +152,8 @@ cd app && pnpm install --frozen-lockfile && cd ..
 sudo apt install libreoffice-calc     # bài Excel module 02 cần `soffice`
 ```
 
+- Nếu `LD_LIBRARY_PATH` có `/usr/lib/x86_64-linux-gnu` (thường do cấu hình CUDA trong `~/.bashrc`), `soffice` báo thiếu `libreglo.so` và mọi bài Excel module 02 bị ERROR. Bỏ thư mục đó khỏi `LD_LIBRARY_PATH`, giữ `$CUDA_HOME/lib64`. Kiểm: `soffice --headless --convert-to xlsx <tệp.csv>` phải tạo được tệp.
+
 - Docker: cần cho module 10 (BI) và một số bài của track DE.
 - Nếu PC không có dự án nào khác chiếm cổng 5432/6379/9000/9001, bỏ phần remap trong `setup/.env`. Xem `setup/.env.example`.
 
@@ -169,11 +171,15 @@ Chép từ laptop hoặc tạo mới với các biến sau:
 ```bash
 uv run python data/download_dataset.py --list
 for d in bike-sharing-uci online-retail-ii dunnhumby-complete-journey grocery-sales-synthetic \
-         marketing-ab ecommerce-events owid-co2 store-sales telco-churn open-meteo; do
+         marketing-ab ecommerce-events owid-co2 store-sales telco-churn; do
   uv run python data/download_dataset.py "$d"
 done
 uv run python data/download_olist.py      # module 08 Intermediate 03 dùng Olist
+wc -l data/raw/olist_orders_dataset.csv   # phải là 99442 (gồm header)
 ```
+
+- Open-Meteo không có trong registry: module 05 gọi API trực tiếp lúc chạy bài.
+- Nếu `data/raw` đã có sẵn tệp Olist từ nguồn khác, kiểm số dòng. Bản 50 000 dòng làm `test_real_order_funnel` (module 08 Intermediate 03) fail; chạy lại `download_olist.py` để lấy bản đầy đủ.
 
 - `grocery-sales-synthetic` tải từ thư mục Google Drive mà người học đưa, khoảng 517 MB. Giấy phép không rõ, nên chỉ dùng cục bộ.
 - Cách nhanh hơn là chép nguyên thư mục `data/raw` từ laptop sang.
@@ -184,7 +190,7 @@ uv run python data/download_olist.py      # module 08 Intermediate 03 dùng Olis
 ```bash
 docker compose -f setup/docker-compose.yml --profile bi up -d postgres metabase superset
 uv run python setup/bi/init_bi.py     # tạo admin Metabase, kết nối DB cho Metabase và Superset (chạy lại nhiều lần vẫn an toàn)
-uv run python setup/bi/load_da.py     # nạp schema `da`: online_retail_ii, bike_hour (đọc xlsx ~1 phút, RAM >1 GB)
+uv run python setup/bi/load_da.py     # nạp schema `da`: online_retail_ii, bike_hour (đọc xlsx ~1 phút, RAM >1 GB), rồi yêu cầu Metabase sync schema
 uv run pytest tests/test_bi_services.py -q
 ```
 
