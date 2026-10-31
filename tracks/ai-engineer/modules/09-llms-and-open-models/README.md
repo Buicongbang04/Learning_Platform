@@ -620,7 +620,7 @@ không", không đủ để xếp sát 100% VRAM.
   [Inference Providers](https://huggingface.co/docs/inference-providers/index),
   [Transformers.js](https://huggingface.co/docs/transformers.js/index).
 - Ollama: [API](https://github.com/ollama/ollama/blob/main/docs/api.md),
-  [Modelfile](https://github.com/ollama/ollama/blob/main/docs/modelfile.md), [thư viện model](https://ollama.com/library).
+  [Modelfile](https://docs.ollama.com/modelfile), [thư viện model](https://ollama.com/library).
 - Holtzman et al., [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751) (2019): nucleus sampling.
 - Keskar et al., [CTRL](https://arxiv.org/abs/1909.05858) (2019): repetition penalty.
 - Liu et al., [Lost in the Middle](https://arxiv.org/abs/2307.03172) (2023); Hsieh et al.,
