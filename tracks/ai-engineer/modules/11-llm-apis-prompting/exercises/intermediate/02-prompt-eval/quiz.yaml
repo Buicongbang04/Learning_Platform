@@ -1,0 +1,55 @@
+questions:
+  - id: fewshot-neutral-count
+    kind: data
+    type: single
+    prompt: "Trên 150 câu ghim (50 câu neutral thật), biến thể few-shot đoán bao nhiêu câu là neutral?"
+    options:
+      - { id: a, text: "Dưới 30 câu" }
+      - { id: b, text: "Từ 30 tới 40 câu" }
+      - { id: c, text: "Từ 41 tới 55 câu" }
+      - { id: d, text: "Trên 55 câu" }
+  - id: most-changed
+    kind: data
+    type: single
+    prompt: "So với zero-shot, biến thể nào làm nhiều câu đổi nhãn nhất?"
+    options:
+      - { id: a, text: "few-shot" }
+      - { id: b, text: "CoT-lite" }
+      - { id: c, text: "JSON schema" }
+      - { id: d, text: "Ba biến thể đổi số câu gần bằng nhau" }
+  - id: zero-shot-weakest-class
+    kind: data
+    type: single
+    prompt: "Với zero-shot, lớp nào có F1 thấp nhất?"
+    options:
+      - { id: a, text: "negative" }
+      - { id: b, text: "neutral" }
+      - { id: c, text: "positive" }
+      - { id: d, text: "Ba lớp có F1 bằng nhau" }
+  - id: paired-why
+    kind: knowledge
+    type: single
+    prompt: "Vì sao dùng bootstrap theo cặp (cùng chỉ số cho A và B) thay vì so hai khoảng tin cậy riêng?"
+    options:
+      - { id: a, text: "Câu khó thì khó với cả hai, theo cặp giữ tương quan đó" }
+      - { id: b, text: "Bootstrap riêng lẻ không chạy được khi có dự đoán None" }
+      - { id: c, text: "Theo cặp cho khoảng tin cậy rộng hơn nên an toàn hơn" }
+      - { id: d, text: "Theo cặp không cần chọn seed cho bộ sinh số ngẫu nhiên" }
+  - id: ci-contains-zero
+    kind: knowledge
+    type: single
+    prompt: "Hiệu macro-F1 của B so với A là +0.02 với CI 95% [-0.04, +0.08]. Kết luận nào đúng?"
+    options:
+      - { id: a, text: "B tốt hơn A khoảng 2 điểm, nên chọn B" }
+      - { id: b, text: "Chưa phân biệt được A và B trên tập này" }
+      - { id: c, text: "A tốt hơn B vì cận dưới của khoảng là số âm" }
+      - { id: d, text: "Bootstrap sai, khoảng tin cậy không được chứa 0" }
+  - id: english-labels
+    kind: knowledge
+    type: single
+    prompt: "Vì sao bài dùng nhãn tiếng Anh (negative, neutral, positive) dù dữ liệu tiếng Việt?"
+    options:
+      - { id: a, text: "qwen2.5:3b không hiểu được nhãn viết bằng tiếng Việt" }
+      - { id: b, text: "Nhãn tiếng Anh luôn cho macro-F1 cao hơn nhãn tiếng Việt" }
+      - { id: c, text: "Đọc bằng code chắc hơn: 'tích cực' nằm trong 'không tích cực'" }
+      - { id: d, text: "JSON schema của Ollama chỉ nhận enum là chữ ASCII" }
