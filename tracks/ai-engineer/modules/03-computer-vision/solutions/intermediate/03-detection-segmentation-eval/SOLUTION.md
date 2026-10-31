@@ -5,8 +5,8 @@
 **Mask → hộp.** `np.unique(mask)` bỏ 0 cho các id theo thứ tự tăng, `mask[None] == ids[:, None, None]` cho cả khối
 `(K, H, W)` trong một phép. Với mỗi mask, `np.nonzero` cho toạ độ pixel; hộp là `(x_min, y_min, x_max + 1, y_max + 1)`:
 cộng 1 ở góc dưới phải vì pixel `c` chiếm đoạn `[c, c+1)`. `torchvision.ops.masks_to_boxes` trả `x_max` không cộng 1,
-lệch 1 pixel so với hệ toạ độ liên tục mà YOLO trả ra; với người nhỏ nhất của bộ (hộp 7×20 pixel), thiếu 1 pixel ở cạnh
-phải và cạnh dưới đã làm IoU với hộp đúng chỉ còn 0.83, đủ để đổi kết quả ở các ngưỡng 0.9–0.95.
+lệch 1 pixel so với hệ toạ độ liên tục mà YOLO trả ra; với người nhỏ nhất của bộ (`FudanPed00063`, hộp 7×20 pixel), hộp
+theo quy ước đó chỉ còn 6×19 và IoU với hộp đúng là 0.814, đủ để đổi kết quả ở các ngưỡng 0.85–0.95.
 
 **Ghép.** Ma trận IoU `(P, G)` một lần, mảng `taken` cho ground truth đã bị chiếm. Duyệt prediction theo score giảm dần
 (`argsort` stable), che các cột đã chiếm bằng `np.where(taken, -1, iou[i])`, lấy `argmax`; IoU ≥ ngưỡng thì TP và đánh dấu

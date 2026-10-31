@@ -24,7 +24,7 @@ def output_size(n: int, k: int, stride: int, padding: int) -> int:
 
 def im2col(x: np.ndarray, kh: int, kw: int, stride: int = 1, padding: int = 0) -> np.ndarray:
     """x (N, C, H, W) → cols (N*OH*OW, C*kh*kw). Vùng padding là số 0."""
-    # TODO: pad x bằng 0, lấy từng lát cắt có bước nhảy stride cho mỗi (i, j) của kernel, rồi sắp lại trục
+    # TODO
     raise NotImplementedError
 
 
@@ -42,11 +42,11 @@ def col2im(cols: np.ndarray, x_shape: tuple[int, int, int, int], kh: int, kw: in
 def conv2d_forward(x: np.ndarray, W: np.ndarray, b: np.ndarray, stride: int = 1,
                    padding: int = 0) -> tuple[np.ndarray, tuple]:
     """Trả (out, cache). out shape (N, F, OH, OW); cache chứa những gì backward cần."""
-    # TODO: im2col rồi một phép nhân ma trận với W.reshape(F, -1), cộng b, sắp lại về NCHW
+    # TODO
     raise NotImplementedError
 
 
 def conv2d_backward(dout: np.ndarray, cache: tuple) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """dout = dL/dout shape (N, F, OH, OW). Trả (dx, dW, db) cùng shape với x, W, b."""
-    # TODO: dW và db từ cols; dx đi qua col2im
+    # TODO
     raise NotImplementedError

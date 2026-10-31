@@ -46,7 +46,8 @@ vài phút trên GPU 4GB rảnh (dưới 2 GB VRAM với batch 8); mỗi lần c
    thư mục đó sau khi train (đừng commit nó).
 3. **Đánh giá có đối chứng** trên đúng 34 ảnh val, cùng một bộ đánh giá: YOLO11n zero-shot (lớp `person` của COCO) so với
    bản fine-tune; AP50, AP50-95, precision/recall ở ngưỡng confidence bạn chọn cho app. 34 ảnh là ít: ước lượng độ bất
-   định (bootstrap theo ảnh, hoặc nhiều seed) trước khi nói "tốt hơn".
+   định của **hiệu** hai model bằng paired bootstrap theo ảnh (rút lại cùng tập ảnh cho cả hai, tính ΔAP mỗi lần), hoặc
+   nhiều seed, trước khi nói "tốt hơn".
 4. **App** (`starter/app.py`): `parse_source`, `iter_frames` (camera, tệp video hoặc thư mục ảnh), `draw_detections`,
    `FpsMeter`, `run` (vòng đọc → detect → vẽ → ghi/phát), `make_detector`. Phần phát MJPEG qua HTTP có sẵn. App phải
    chạy được với webcam **và** với một tệp video hoặc thư mục ảnh (người không có webcam vẫn kiểm được).

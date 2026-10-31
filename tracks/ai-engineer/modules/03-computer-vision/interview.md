@@ -76,7 +76,8 @@ Chi tiết hay hỏi tiếp:
 
 ViT cắt ảnh thành patch, chiếu tuyến tính (chính là một conv kernel $$P$$ stride $$P$$), thêm CLS token và position
 embedding, rồi dùng Transformer encoder. Khác biệt cốt lõi là **inductive bias**: CNN mang sẵn giả định cục bộ và dịch
-chuyển đồng biến; ViT gần như không có, mọi quan hệ không gian phải học từ dữ liệu. Vì vậy ViT train từ đầu trên dữ liệu
+chuyển đồng biến (conv: dịch input thì feature map dịch theo; pooling/GAP mới biến nó thành bất biến ở output); ViT gần
+như không có, mọi quan hệ không gian phải học từ dữ liệu. Vì vậy ViT train từ đầu trên dữ liệu
 nhỏ thua CNN cùng cỡ, nhưng với pretrain lớn (JFT, LAION, DINOv2) thì vượt và co giãn tốt hơn.
 
 Chọn trong thực tế:

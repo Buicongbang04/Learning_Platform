@@ -31,7 +31,7 @@ questions:
   prompt: Sau fine-tune, precision ở conf 0.25 (so với nhãn Penn-Fudan) của bản tham chiếu đổi thế nào so với zero-shot?
   options:
   - id: a
-    text: Tăng rõ, vì model học cách bỏ qua người không có nhãn
+    text: Tăng rõ, phù hợp với việc model bớt báo người không có nhãn
   - id: b
     text: Giảm mạnh, vì model báo nhiều hộp hơn
   - id: c

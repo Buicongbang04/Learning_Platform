@@ -12,7 +12,7 @@ kết quả của một bản tham chiếu (giữ ngoài repo) để bạn so, v
 | Ảnh trong dataset YOLO | symlink tới ảnh gốc | không nhân đôi 50 MB; ultralytics đọc qua symlink bình thường |
 | Model | `yolo11n.pt` pretrain COCO, giữ một lớp `person` | COCO đã có người; fine-tune chỉ cần chỉnh cho miền ảnh và quy ước hộp |
 | Train | 30 epoch, `imgsz=512`, batch 8, `seed=0`, `deterministic=True`, augmentation mặc định (mosaic, HSV, lật, scale) | ảnh Penn-Fudan cạnh dài 253–1 017 pixel, 512 giữ người nhỏ mà rẻ hơn 640 |
-| Đánh giá | bộ đánh giá của bài Intermediate 03 cho **cả hai** model, cùng 34 ảnh, `conf=0.001`, NMS iou 0.7; bootstrap 300 lần theo ảnh cho khoảng 95% | so công bằng; 34 ảnh có 90 người nên một hai hộp đã đổi AP vài điểm |
+| Đánh giá | bộ đánh giá của bài Intermediate 03 cho **cả hai** model, cùng 34 ảnh, `conf=0.001`, NMS iou 0.7; bootstrap 300 lần theo ảnh cho khoảng 95% của từng model, **paired bootstrap** 1 000 lần (cùng tập ảnh rút lại cho cả hai model) cho khoảng 95% của ΔAP | so công bằng; khoảng riêng của hai model chồng nhau chưa nói được gì, khoảng của hiệu thì có; 34 ảnh có 90 người nên một hai hộp đã đổi AP vài điểm |
 | Ngưỡng app | conf 0.25 | đủ cao để không nhấp nháy hộp, recall vẫn gần mức tối đa trên tập val |
 | Nguồn video | `cv2.VideoCapture` cho camera/tệp, đọc thư mục ảnh theo tên | người không có webcam kiểm bằng thư mục ảnh val hoặc một tệp video bất kỳ |
 | Phát hình | MJPEG qua `http.server` (có sẵn), không `imshow` | env dùng OpenCV headless, chạy được trên server không màn hình |
@@ -46,15 +46,24 @@ precision/recall ở IoU 0.5, conf 0.25:
 `yolo train` tự báo trên cùng 34 ảnh: mAP50 0.992 / mAP50-95 0.817 (512) và 0.981 / 0.825 (640): gần số của bộ đánh giá
 tự viết, nhưng chỉ có nghĩa khi đặt cạnh zero-shot đo cùng cách.
 
+Paired bootstrap 1 000 lần theo ảnh của hiệu (fine-tune trừ zero-shot @640):
+
+| Fine-tune | ΔAP50 (khoảng 95%) | ΔAP75 | ΔAP50-95 |
+| --- | --- | --- | --- |
+| train 512, đo 512 | −0.011 (−0.036 tới +0.004) | −0.029 (−0.077 tới +0.016) | **−0.084** (−0.117 tới −0.051) |
+| train 640, đo 640 | −0.010 (−0.024 tới −0.000) | −0.053 (−0.086 tới −0.019) | **−0.077** (−0.107 tới −0.043) |
+
 Đọc kết quả:
 
-- **Fine-tune không thắng zero-shot.** AP50-95 tụt khoảng 0.08 và khoảng bootstrap gần như tách rời. YOLO11n đã thấy hàng
-  trăm nghìn người trong COCO; 136 ảnh với 30 epoch (mosaic, lr mặc định) kéo nó lệch khỏi những gì đã biết nhiều hơn là
-  dạy thêm điều mới.
-- **Precision tăng, recall giảm**: zero-shot tìm thấy cả 90 người nhưng "precision" chỉ 0.78 vì nó cũng tìm thấy người
-  không được gán nhãn (bài Intermediate 03). Fine-tune trên nhãn thiếu dạy model **bỏ qua** đúng những người đó: con số
-  precision đẹp lên, chất lượng thật (một camera đường phố cần thấy mọi người) thì không. Một báo cáo tốt nói ra điều
-  này thay vì khoe precision.
+- **Fine-tune không thắng zero-shot, và hiệu có thật**: ΔAP50-95 âm trong cả 1 000 lần rút lại. Nhưng AP50 gần như bằng
+  nhau: model fine-tune vẫn tìm thấy người, chỉ có hộp **kém khít** hơn (AP75, AP50-95 giảm). Đó là quan sát, chưa phải
+  nguyên nhân: 30 epoch trên 136 ảnh với mosaic và lr mặc định là nghi phạm hàng đầu, cần ablation (freeze backbone, lr
+  nhỏ, tắt mosaic, ít epoch) mới tách được.
+- **Precision tăng, recall giảm, phù hợp với nhãn thiếu**: zero-shot tìm thấy cả 90 người có nhãn nhưng precision theo nhãn
+  chỉ 0.776 vì nó cũng báo người không được gán nhãn (bài Intermediate 03). Sau fine-tune precision lên 0.888/0.944, một
+  phần vì model bớt báo những người đó, và recall trên nhãn xuống 0.967/0.944, phù hợp với việc model học ức chế người bị che
+  hoặc ở mép ảnh. Vì AP đo trên chính bộ nhãn thiếu đó, hiệu ứng này không giải thích được AP giảm; nó là lý do không nên
+  khoe precision. Một camera đường phố cần thấy mọi người.
 - **Hướng làm đáng thử** nếu vẫn muốn fine-tune: gán nhãn bổ sung người bị thiếu (hoặc đánh dấu vùng bỏ qua), freeze
   backbone (`freeze=10`), lr nhỏ hơn, ít epoch hơn, hoặc lấy dữ liệu thật từ camera đích. Hoặc dùng zero-shot và đầu tư vào
   app, tracker, ngưỡng conf.

@@ -1,3 +1,4 @@
+import sys
 import time
 from typing import Callable
 
@@ -123,8 +124,8 @@ def test_backward_gradcheck(C):
 
 
 def test_vectorized_speed(C):
-    # Một tầng conv của ResNet CIFAR: 64 ảnh 16x32x32, 32 bộ lọc 3x3. Bản im2col dưới 1 s;
-    # vòng lặp Python qua từng (n, f, oh, ow) chậm hơn vài chục lần.
+    # Một tầng conv của ResNet CIFAR: 64 ảnh 16x32x32, 32 bộ lọc 3x3. Lời giải mẫu khoảng 0.1 s trên PC rảnh;
+    # vòng lặp Python qua từng (n, f, oh, ow) mất hơn 10 s chỉ riêng forward.
     rng = np.random.default_rng(8)
     x = rng.normal(size=(64, 16, 32, 32)).astype(np.float32)
     W = rng.normal(size=(32, 16, 3, 3)).astype(np.float32)
@@ -134,4 +135,41 @@ def test_vectorized_speed(C):
     C.conv2d_backward(np.ones_like(out), cache)
     elapsed = time.perf_counter() - start
     assert out.shape == (64, 32, 32, 32)
-    assert elapsed < 10.0, f"forward + backward mất {elapsed:.1f} s: còn vòng lặp Python qua N/OH/OW?"
+    assert elapsed < 2.0, f"forward + backward mất {elapsed:.1f} s: còn vòng lặp Python qua N/OH/OW?"
+
+
+def lines_executed(C, fn) -> int:
+    """Số dòng Python của conv.py được chạy trong fn()."""
+    target = C.__file__
+    count = 0
+
+    def tracer(frame, event, arg):
+        nonlocal count
+        if frame.f_code.co_filename != target:
+            return None
+        if event == "line":
+            count += 1
+        return tracer
+
+    sys.settrace(tracer)
+    try:
+        fn()
+    finally:
+        sys.settrace(None)
+    return count
+
+
+@pytest.mark.parametrize("dims", ["N", "HW"])
+def test_no_python_loop_over_batch_or_positions(C, dims):
+    # vòng lặp qua kh, kw được phép; số dòng Python chạy không được tăng theo N hay theo kích thước ảnh
+    rng = np.random.default_rng(9)
+    W, b = rng.normal(size=(3, 2, 3, 3)), np.zeros(3)
+
+    def run(n, hw):
+        x = rng.normal(size=(n, 2, hw, hw))
+        out, cache = C.conv2d_forward(x, W, b, 1, 1)
+        C.conv2d_backward(np.ones_like(out), cache)
+
+    small = lines_executed(C, lambda: run(2, 6))
+    big = lines_executed(C, lambda: run(16, 6) if dims == "N" else run(2, 18))
+    assert big <= small * 1.2 + 5, f"{small} dòng → {big} dòng: còn vòng lặp Python theo {dims}"

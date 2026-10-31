@@ -33,7 +33,7 @@ def box_iou(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
     Hợp bằng 0 (hai hộp suy biến) thì IoU là 0, không phải nan.
     """
-    # TODO: broadcast a[:, None, :] với b[None, :, :] để có giao của mọi cặp
+    # TODO
     raise NotImplementedError
 
 

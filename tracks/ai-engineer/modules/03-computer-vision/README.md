@@ -254,7 +254,8 @@ lật ngang), seed 0, đủ 50 000 ảnh train, 15 epoch, đo trên 10 000 ảnh
 0.685 (không phải overfit: model không học nổi cả tập train), còn cùng 36 tầng đó có residual thì cả train lẫn test đều
 tăng. Ở 20 tầng, BatchNorm còn đủ sức đỡ cho mạng plain nên khoảng cách nhỏ; sâu hơn thì không. LeNet-5 gần như không có
 khoảng cách train/test vì quá nhỏ để học thuộc: nó thiếu sức chứa, không thiếu dữ liệu. Cấu hình CPU mặc định (10 000
-ảnh, 4 epoch) cho cùng thứ bậc ở mức accuracy thấp hơn nhiều; bảng của cấu hình đó nằm trong lời giải của bài.
+ảnh, 4 epoch) cho accuracy thấp hơn nhiều và thứ bậc không giống hệt (mọi model còn underfit, Plain-20 thua cả LeNet-5),
+nhưng hai kết luận chính vẫn giữ: residual > plain và ResNet > ViT; bảng của cấu hình đó nằm trong lời giải của bài.
 
 ### Chọn backbone năm 2026
 
@@ -301,8 +302,10 @@ các tầng) hoặc FlashAttention (module 05).
 
 ### Inductive bias và cơn khát dữ liệu
 
-CNN mang sẵn hai giả định về ảnh: **cục bộ** (pixel gần nhau liên quan) và **dịch chuyển đồng biến** (con mèo ở
-góc nào cũng là mèo). ViT gần như không có: ngoài việc cắt patch, mọi quan hệ không gian phải học từ dữ liệu.
+CNN mang sẵn hai giả định về ảnh: **cục bộ** (pixel gần nhau liên quan) và **dịch chuyển đồng biến**
+(translation equivariance: dịch ảnh thì feature map của conv dịch theo, cùng một bộ lọc phát hiện tai mèo ở mọi chỗ).
+Pooling và global average pooling biến tính đồng biến đó thành **bất biến** (invariance) ở output: con mèo ở góc nào
+cũng ra cùng nhãn. ViT gần như không có: ngoài việc cắt patch, mọi quan hệ không gian phải học từ dữ liệu.
 Hệ quả, đo ở bài báo gốc: train trên ImageNet-1k (1.3 triệu ảnh), ViT-B **thua** ResNet cùng cỡ; pretrain trên
 JFT-300M (300 triệu ảnh) thì vượt. DeiT (Touvron et al. 2021) thu hẹp khoảng cách bằng augmentation mạnh,
 regularization và distillation từ một CNN thầy. Số đo ở mục 2 cho cùng xu hướng ở quy mô nhỏ: ViT d128 (811 146 tham số, gấp 3
@@ -443,7 +446,7 @@ flowchart TB
     end
     subgraph OS ["One-stage: YOLOv8/11, RetinaNet, FCOS"]
         direction LR
-        B1[backbone + neck FPN/PAN] --> B2["head dày đặc: mỗi ô 3 tỉ lệ<br/>dự đoán hộp + lớp"] --> B3[NMS]
+        B1[backbone + neck FPN/PAN] --> B2["head dày đặc: 3 tầng feature P3–P5<br/>mỗi ô một dự đoán hộp + lớp"] --> B3[NMS]
     end
     subgraph E2E ["End-to-end: DETR, YOLOv10, YOLO26"]
         direction LR
@@ -509,11 +512,16 @@ Bài Advanced 01 làm đúng việc này trên Penn-Fudan (136 ảnh train, 34 �
 | Fine-tune 30 epoch trên 136 ảnh train | 512 | 0.984 | 0.813 (0.777–0.855) |
 | Fine-tune 30 epoch trên 136 ảnh train | 640 | 0.985 | 0.821 (0.771–0.870) |
 
-(PC RTX 3060, seed 0, khoảng 4–6 phút train mỗi lần trên GPU dùng chung, khoảng 1 GB VRAM với batch 8.) Fine-tune **kém hơn** model có sẵn ở
-AP50-95, và khoảng bootstrap gần như không chồng nhau. 136 ảnh quá ít để cải thiện một detector đã thấy hàng trăm nghìn
-người trong COCO; tệ hơn, nhãn Penn-Fudan thiếu người bị che và ở mép ảnh, nên fine-tune dạy model **bỏ qua** đúng những
-người đó. Bài học của một kỹ sư lão luyện: luôn đo baseline
-zero-shot trên cùng tập val, cùng bộ đánh giá, trước khi tin rằng fine-tune có ích; và kiểm nhãn trước khi kết luận về model.
+(PC RTX 3060, seed 0, khoảng 4–6 phút train mỗi lần trên GPU dùng chung, khoảng 1 GB VRAM với batch 8.) Fine-tune
+**kém hơn** model có sẵn ở AP50-95, và chênh lệch có thật: paired bootstrap theo ảnh của ΔAP50-95 (fine-tune trừ
+zero-shot) là −0.084 (khoảng 95%: −0.117 tới −0.051) cho bản 512 và −0.077 (−0.107 tới −0.043) cho bản 640. Đọc kỹ con số
+thì AP50 gần như bằng nhau (0.995 so với 0.984/0.985), còn AP75 và AP50-95 giảm: model fine-tune vẫn **tìm thấy** người,
+nhưng hộp **kém khít** hơn. Đó là quan sát; 30 epoch trên 136 ảnh với mosaic và lr mặc định là nghi phạm, nhưng một lần
+chạy chưa tách được nguyên nhân. Hai chỉ số khác dịch theo hướng phù hợp với nhãn thiếu của Penn-Fudan: precision theo
+nhãn ở conf 0.25 tăng (0.776 lên 0.888/0.944) một phần vì model bớt báo những người không có nhãn, và recall trên nhãn giảm
+(1.000 xuống 0.967/0.944), phù hợp với việc model học ức chế người bị che hoặc ở mép ảnh. Bài học của một kỹ sư lão luyện:
+luôn đo baseline zero-shot trên cùng tập val, cùng bộ đánh giá, so bằng phép đo có cặp, trước khi tin rằng fine-tune có
+ích; và kiểm nhãn trước khi kết luận về model.
 
 ## 6. Segmentation: semantic, instance, U-Net, Mask R-CNN, mIoU
 

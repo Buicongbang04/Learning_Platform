@@ -47,10 +47,9 @@ Chỉ dùng numpy.
 
 ### Gợi ý 1
 
-Giao của hai hộp là hộp có góc trên trái `max` của hai góc trên trái và góc dưới phải `min` của hai góc dưới
-phải; chiều rộng/cao âm nghĩa là không giao, kẹp về 0. Với `a[:, None, :2]` shape `(N, 1, 2)` và `b[None, :, :2]`
-shape `(1, M, 2)`, `np.maximum` cho thẳng `(N, M, 2)`. Chia an toàn: `np.divide(inter, union, out=np.zeros(...),
-where=union > 0)`.
+Phần giao của hai hộp cũng là một hộp: nghĩ xem góc trên trái và góc dưới phải của nó lấy từ hai hộp ra sao, và chuyện gì
+xảy ra với chiều rộng khi hai hộp không chạm nhau. Để có mọi cặp `(i, j)` mà không vòng lặp, thêm một trục dài 1 vào mỗi
+mảng sao cho numpy broadcast thành `(N, M, ...)`. Hợp bằng 0 thì phép chia phải được chặn trước, không phải sửa `nan` sau.
 
 ### Gợi ý 2
 

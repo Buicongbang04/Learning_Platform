@@ -22,14 +22,14 @@ def receptive_field(layers: list[tuple[int, ...]]) -> tuple[int, int]:
     Trả (rf, jump): rf là số pixel input theo một chiều mà điểm output "nhìn thấy", jump là khoảng cách
     (tính bằng pixel input) giữa hai điểm output kề nhau.
     """
-    # TODO: đi từ tầng đầu, mỗi tầng nở rf thêm (k_eff - 1) * jump của tầng trước, rồi nhân jump với stride
+    # TODO
     raise NotImplementedError
 
 
 def maxpool2d_forward(x: np.ndarray, k: int, stride: int) -> tuple[np.ndarray, tuple]:
     """Trả (out, cache). Trong mỗi cửa sổ k x k lấy max; nhiều vị trí bằng nhau thì vị trí đầu tiên
     theo thứ tự hàng rồi cột thắng (như PyTorch)."""
-    # TODO: gom k*k lát cắt (mỗi lát một vị trí trong cửa sổ) thành một trục, lấy max và argmax trên trục đó
+    # TODO
     raise NotImplementedError
 
 
@@ -48,5 +48,5 @@ def avgpool2d_forward(x: np.ndarray, k: int, stride: int) -> tuple[np.ndarray, t
 
 def avgpool2d_backward(dout: np.ndarray, cache: tuple) -> np.ndarray:
     """dout shape (N, C, OH, OW) → dx shape (N, C, H, W)."""
-    # TODO: mỗi pixel trong cửa sổ nhận 1/(k*k) gradient của cửa sổ đó, cộng dồn khi chồng nhau
+    # TODO
     raise NotImplementedError
