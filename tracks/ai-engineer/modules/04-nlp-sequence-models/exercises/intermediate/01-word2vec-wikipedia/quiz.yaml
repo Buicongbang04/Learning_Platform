@@ -31,11 +31,11 @@ questions:
   prompt: 'Ở model ghép cụm, 5 kết quả đầu của `pháp : paris :: đức : ?` chủ yếu là gì?'
   options:
   - id: a
-    text: Tên các nước châu Âu như áo, bỉ, hà_lan
+    text: Tên các quốc gia châu Âu như áo, bỉ, hà_lan, séc
   - id: b
     text: Tên các thành phố châu Âu như lille, dresden
   - id: c
-    text: Từ chỉ người như vua, tướng, hoàng_đế
+    text: Từ chỉ người như vua, tướng, hoàng_đế, quan
   - id: d
     text: Các âm tiết rời như đức, pháp, quốc
 - id: loss-compare
