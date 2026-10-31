@@ -1,0 +1,8 @@
+blue-mean: [c]
+vit-underfit: [b]
+no-aug-gap: [d]
+speed: [c]
+sqrt-dk: [a]
+projection: [b]
+no-pos: [d]
+gap: [c]
