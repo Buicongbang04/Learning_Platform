@@ -56,4 +56,5 @@ Cell đầu notebook đọc xlsx một lần (20-90 giây) rồi lưu bản parq
 
 `Pool.map` gửi hàm và khối dữ liệu sang tiến trình con bằng `pickle`. Với start method `"fork"` (Linux) tiến trình con
 thừa hưởng mọi hàm đã định nghĩa trong notebook. Với `"spawn"` (mặc định trên Windows, macOS) hàm định nghĩa trong
-notebook không gửi được; khi đó chạy bài trên Linux/WSL, hoặc chuyển hàm map ra một tệp `.py` rồi import.
+notebook không gửi được; khi đó chạy bài trên Linux/WSL, hoặc chuyển hàm map ra một tệp `.py` rồi import. Trên hệ điều
+hành không có `"fork"` (Windows), các test chạy nhiều worker và hai test trên dữ liệu thật tự SKIP kèm lý do.

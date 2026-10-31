@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import tempfile
 from pathlib import Path
@@ -9,6 +10,11 @@ import pytest
 from testkit import Exercise
 
 ex = Exercise(__file__)
+NEEDS_FORK = pytest.mark.skipif(
+    "fork" not in multiprocessing.get_all_start_methods(),
+    reason="Hệ điều hành không có start method \"fork\": hàm định nghĩa trong notebook không gửi được sang tiến trình "
+    "con. Chạy bài trên Linux hoặc WSL.",
+)
 
 
 @pytest.fixture(scope="module")
@@ -64,7 +70,7 @@ def test_reduce_counts(nb):
     assert nb.reduce_counts([]) == {}
 
 
-@pytest.mark.parametrize("n_workers", [1, 3])
+@pytest.mark.parametrize("n_workers", [1, pytest.param(3, marks=NEEDS_FORK)])
 def test_run_mapreduce_matches_pandas(nb, n_workers):
     tx = tiny_tx()
     assert nb.run_mapreduce(tx, nb.map_revenue, n_workers) == pytest.approx(nb.pandas_revenue(tx))
@@ -93,6 +99,7 @@ def retail():
     return read_retail_1011()
 
 
+@NEEDS_FORK
 def test_real_revenue(nb, retail):
     by_pandas = nb.pandas_revenue(retail)
     by_mr = nb.run_mapreduce(retail, nb.map_revenue, 2)
@@ -104,6 +111,7 @@ def test_real_revenue(nb, retail):
     assert top3 == ["United Kingdom", "Netherlands", "EIRE"]
 
 
+@NEEDS_FORK
 def test_real_words(nb, retail):
     words = nb.run_mapreduce(retail, nb.map_words, 2)
     assert len(words) == 2062
