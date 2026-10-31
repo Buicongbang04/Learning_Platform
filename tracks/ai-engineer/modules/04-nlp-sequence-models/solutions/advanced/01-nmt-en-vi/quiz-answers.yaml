@@ -1,0 +1,7 @@
+dev-size: [b]
+html-entities: [c]
+length-ratio: [c]
+checkpoint: [b]
+length-penalty: [a]
+case-mismatch: [b]
+hallucination: [b]

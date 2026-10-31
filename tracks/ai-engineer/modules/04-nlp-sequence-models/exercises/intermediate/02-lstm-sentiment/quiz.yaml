@@ -1,0 +1,92 @@
+questions:
+- id: median-length
+  kind: data
+  type: single
+  prompt: Câu trong tập train UIT-VSFC có trung vị bao nhiêu âm tiết?
+  options:
+  - id: a
+    text: '6'
+  - id: b
+    text: '11'
+  - id: c
+    text: '24'
+  - id: d
+    text: '52'
+- id: best-epoch
+  kind: data
+  type: single
+  prompt: Val macro-F1 của BiLSTM qua 6 epoch diễn biến thế nào?
+  options:
+  - id: a
+    text: Đạt đỉnh ở epoch 1 rồi giảm đều tới cuối
+  - id: b
+    text: Đạt đỉnh quanh epoch 4-5 rồi tụt ở epoch 6
+  - id: c
+    text: Tăng đều tới epoch 6, chưa bão hoà
+  - id: d
+    text: Gần như không đổi, quanh 0.67 suốt
+- id: biggest-confusion
+  kind: data
+  type: single
+  prompt: Trong confusion matrix của BiLSTM trên test, ô ngoài đường chéo nào lớn nhất?
+  options:
+  - id: a
+    text: Negative thật bị đoán positive
+  - id: b
+    text: Positive thật bị đoán negative
+  - id: c
+    text: Neutral thật bị đoán positive
+  - id: d
+    text: Neutral thật bị đoán negative
+- id: unidirectional-curve
+  kind: data
+  type: single
+  prompt: Val macro-F1 của LSTM một chiều qua 6 epoch diễn biến thế nào?
+  options:
+  - id: a
+    text: Đạt đỉnh ở epoch 2 rồi giảm dần đều
+  - id: b
+    text: Còn tăng tới epoch 6, chưa bão hoà
+  - id: c
+    text: Gần như không đổi, quanh 0.60 suốt
+  - id: d
+    text: Dao động mạnh, lên xuống từng epoch
+- id: why-pack
+  kind: knowledge
+  type: single
+  prompt: Không dùng `pack_padded_sequence` mà lấy `output[:, -1]` của LSTM thì sao?
+  options:
+  - id: a
+    text: PyTorch báo lỗi shape vì các câu trong batch dài khác nhau
+  - id: b
+    text: Câu ngắn bị đọc thêm padding, kết quả phụ thuộc batch
+  - id: c
+    text: Chỉ chậm hơn vì phải tính trên cả phần padding
+  - id: d
+    text: Chiều ngược của BiLSTM bị bỏ qua hoàn toàn
+- id: deepcopy
+  kind: knowledge
+  type: single
+  prompt: Lưu `best = model.state_dict()` (không copy) để nạp lại cuối train thì chuyện gì xảy ra?
+  options:
+  - id: a
+    text: Nạp lại trọng số của epoch cuối, không phải epoch tốt nhất
+  - id: b
+    text: PyTorch báo lỗi vì state_dict đã bị giải phóng
+  - id: c
+    text: Đúng như mong đợi vì state_dict luôn là một bản sao
+  - id: d
+    text: Chỉ mất bias, còn trọng số vẫn của epoch tốt nhất
+- id: metric-choice
+  kind: knowledge
+  type: single
+  prompt: Vì sao chọn epoch và model theo macro-F1 thay vì accuracy trên UIT-VSFC?
+  options:
+  - id: a
+    text: Accuracy không tính được khi bài toán có từ ba lớp trở lên
+  - id: b
+    text: Macro-F1 luôn cao hơn accuracy nên đẹp hơn khi báo cáo
+  - id: c
+    text: Lớp hiếm bị accuracy bỏ qua, macro-F1 cân mỗi lớp như nhau
+  - id: d
+    text: sklearn chỉ hỗ trợ early stopping theo F1
