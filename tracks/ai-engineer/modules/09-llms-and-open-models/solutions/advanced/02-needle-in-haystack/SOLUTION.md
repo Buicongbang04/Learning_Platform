@@ -73,7 +73,10 @@ Các ô đúng ở `num_ctx` mặc định có needle ở khoảng 2 310 (6 000,
   đúng (`4`102 cho 4547, `1`23456 cho 1723: Qwen2.5 tách số thành từng chữ số, và chữ số đầu được sinh trước khi dời);
   gửi lại hai prompt đó với `num_predict` 1 thì nhận đúng `4` và `1`; gửi với `"shift": false` thì Ollama dừng sau
   **một** token với `done_reason` `"length"`, tức là cache đã đầy ngay sau prompt. Chưa xác nhận trực tiếp bằng log
-  debug (`OLLAMA_DEBUG=1` cần khởi động lại service dùng chung của máy). Hệ quả thực tế: prompt vừa khít `num_ctx` vẫn
+  debug (`OLLAMA_DEBUG=1` cần khởi động lại service dùng chung của máy). Ô đối chứng 6 000, depth 0.75 (needle ở khoảng
+  2 310 trong cửa sổ) chạy lại cùng hai cách cho kết quả cùng kiểu: `num_predict` 1 trả `5` (chữ số đầu của 5988),
+  `"shift": false` cũng dừng sau một token với `done_reason` `"length"`. Prompt của nó cũng lấp đầy cache, nhưng khúc
+  bị bỏ khi dời không chứa needle, nên ở lần chạy thường câu trả lời vẫn đúng. Hệ quả thực tế: prompt vừa khít `num_ctx` vẫn
   hỏng; quy tắc đúng là số token prompt cộng `num_predict` không vượt `num_ctx`.
 - **Model trả lời sai bằng giọng tự tin**: không ô nào trả "không tìm thấy". `456` có trong filler (số gần câu hỏi);
   `8884`, `72019`, `4102`, `409`, `643` không có trong prompt; `123456` là bịa hẳn. Không HTTP lỗi, `done_reason` bình

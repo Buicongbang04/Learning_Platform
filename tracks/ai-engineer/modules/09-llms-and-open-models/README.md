@@ -581,11 +581,12 @@ tokenizer thật.
 
 Prompt vừa khít `num_ctx` cũng chưa an toàn: cache đã đầy thì để sinh token tiếp theo, runner làm **context shift**,
 bỏ khoảng một nửa cache ngay sau các token giữ lại, và model mất luôn phần đó giữa chừng câu trả lời (bài Advanced 02
-gặp đúng hiện tượng này). Quy tắc: **số token prompt + `num_predict` ≤ `num_ctx`**. Đặt `options.num_ctx` (hoặc
+gặp đúng hiện tượng này, thí nghiệm ở Advanced 02). Quy tắc: **số token prompt + `num_predict` ≤ `num_ctx`**. Đặt `options.num_ctx` (hoặc
 `PARAMETER num_ctx` trong Modelfile, hoặc biến môi trường `OLLAMA_CONTEXT_LENGTH` của server) theo quy tắc đó, kiểm
 `prompt_eval_count` trong response, và đặt `"shift": false` khi muốn Ollama dừng (`done_reason` `"length"`) thay vì
-âm thầm bỏ context. Đổi `num_ctx` làm
-Ollama **nạp lại** model (vài giây) và tăng KV cache (mục 7).
+âm thầm bỏ context. `shift` là trường cấp ngoài của payload REST (`/api/chat`, `/api/generate`), không nằm trong
+`options`; SDK `ollama` 0.6.3 không có tham số này trong `chat()`, nên muốn dùng thì gọi REST. Đổi `num_ctx` làm Ollama
+**nạp lại** model (vài giây) và tăng KV cache (mục 7).
 
 ### Modelfile
 

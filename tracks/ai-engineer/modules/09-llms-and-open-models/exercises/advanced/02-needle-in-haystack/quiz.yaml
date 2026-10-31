@@ -15,7 +15,7 @@ questions:
 - id: truncated-cells
   kind: data
   type: single
-  prompt: Ở `num_ctx` mặc định, những ô nào có `prompt_eval_count` nhỏ hơn số token bạn đếm cho prompt?
+  prompt: Với filler và seed của notebook, ở `num_ctx` mặc định, những ô nào có `prompt_eval_count` nhỏ hơn số token bạn đếm cho prompt?
   options:
   - id: a
     text: Không ô nào
