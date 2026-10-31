@@ -15,6 +15,8 @@ Trong test:
     sql = ex.read("query.sql")              # đọc tệp văn bản
     ex.require_service("postgres")          # skip nếu dịch vụ Docker chưa chạy
     wb = ex.workbook("report.xlsx")         # bài Excel: wb.formula("Sheet", "B2"), wb.value("Sheet", "B2")
+    ex.require_tool("shellcheck", "0.10")   # bài DevOps: skip nếu thiếu công cụ hoặc phiên bản cũ
+    ex.require_cluster()                    # bài DevOps: skip nếu chưa có cluster kind devops-lab
 """
 
 from __future__ import annotations
@@ -96,6 +98,58 @@ def service_up(name: str, timeout: float = 0.5) -> bool:
             return True
     except OSError:
         return False
+
+
+TOOL_VERSION_ARGS = {
+    "docker": ["--version"],
+    "nginx": ["-v"],
+    "shellcheck": ["--version"],
+    "kubectl": ["version", "--client"],
+    "kind": ["version"],
+    "helm": ["version", "--short"],
+    "tofu": ["version"],
+}
+
+_VERSION = re.compile(r"\d+(?:\.\d+)+")
+
+
+def parse_version(text: str) -> tuple[int, ...] | None:
+    match = _VERSION.search(text)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group().split("."))
+
+
+def _run_tool(args: list[str]) -> subprocess.CompletedProcess | None:
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def tool_version(name: str) -> tuple[int, ...] | None:
+    if not shutil.which(name):
+        return None
+    result = _run_tool([name, *TOOL_VERSION_ARGS.get(name, ["--version"])])
+    if result is None:
+        return None
+    return parse_version(f"{result.stdout}\n{result.stderr}")
+
+
+def docker_ready() -> bool:
+    result = _run_tool(["docker", "info"])
+    return result is not None and result.returncode == 0
+
+
+def docker_cpu_args() -> list[str]:
+    cpuset = os.environ.get("DEVOPS_CPUSET", "")
+    if cpuset == "none":
+        return []
+    if cpuset:
+        return ["--cpuset-cpus", cpuset]
+    if (os.cpu_count() or 0) >= 36:
+        return ["--cpuset-cpus", "12-35"]
+    return []
 
 
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
@@ -295,3 +349,23 @@ class Exercise:
             pytest.skip(
                 f"Dịch vụ {name} chưa chạy. Bật bằng: docker compose -f setup/docker-compose.yml up -d {name}"
             )
+
+    @staticmethod
+    def require_tool(name: str, min_version: str | None = None) -> None:
+        if not shutil.which(name):
+            pytest.skip(f"Chưa cài {name}. Xem setup/DEVOPS-TOOLS.md")
+        if min_version:
+            have = tool_version(name)
+            need = parse_version(min_version)
+            if have is None or (need is not None and have < need):
+                shown = ".".join(map(str, have)) if have else "không rõ phiên bản"
+                pytest.skip(f"{name} {shown} cũ hơn {min_version} cần cho bài này. Xem setup/DEVOPS-TOOLS.md")
+        if name == "docker" and not docker_ready():
+            pytest.skip("Docker daemon chưa chạy hoặc user chưa có quyền dùng docker")
+
+    @staticmethod
+    def require_cluster(name: str = "devops-lab") -> None:
+        Exercise.require_tool("kind")
+        result = _run_tool(["kind", "get", "clusters"])
+        if result is None or name not in result.stdout.split():
+            pytest.skip(f"Chưa có cluster kind {name}. Xem setup/DEVOPS-TOOLS.md")
