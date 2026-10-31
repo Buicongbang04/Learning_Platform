@@ -150,16 +150,29 @@ def owner(path: Path) -> int | None:
         return None
 
 
+def signal_denied(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def test_not_permitted_process():
-    others = [
+    """Chỉ dùng PID mà chính test đã thử và bị kernel từ chối: script (dù viết sai) cũng không gửi được signal nào."""
+    if os.getuid() == 0:
+        pytest.skip("Chạy bằng root thì không có tiến trình nào từ chối signal")
+    candidates = (
         int(p.name)
         for p in Path("/proc").iterdir()
         if p.name.isdigit() and int(p.name) > 1 and owner(p) not in (None, os.getuid())
-    ]
-    if os.getuid() == 0 or not others:
-        pytest.skip("Không có tiến trình của user khác để thử")
-    pid = others[0]
+    )
+    pid = next((c for c in candidates if signal_denied(c)), None)
+    if pid is None:
+        pytest.skip("Không có tiến trình nào từ chối signal của user này để thử")
     result, _ = run(pid, 1)
     assert result.returncode == 4
     assert result.stderr.strip()
-    assert alive(pid) or not Path(f"/proc/{pid}").exists()
+    assert signal_denied(pid) or not Path(f"/proc/{pid}").exists()

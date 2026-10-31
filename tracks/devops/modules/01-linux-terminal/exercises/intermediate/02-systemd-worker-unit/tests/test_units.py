@@ -11,6 +11,7 @@ ex = Exercise(__file__)
 UNITS = ["olist-worker.service", "olist-backup.service", "olist-backup.timer"]
 MAX_EXPOSURE = 3.0
 SECRET = re.compile(r"(PASSWORD|SECRET|TOKEN|DSN|_KEY)\w*=", re.I)
+URL_CREDENTIALS = re.compile(r"://[^/\s:@]*:[^@\s]+@")
 PARSE_WARNING = re.compile(r"Unknown key|Unknown section|Failed to parse|Invalid|ignoring|Missing '='", re.I)
 HARDENING = {
     "NoNewPrivileges": {"yes", "true", "1", "on"},
@@ -73,11 +74,28 @@ def test_runs_as_unprivileged_user_with_hardening(units, name):
     assert exec_start.lstrip("-@:+!").startswith("/"), f"{name}: ExecStart phải dùng đường dẫn tuyệt đối"
 
 
+def inline_secrets(env: list[str]) -> list[str]:
+    return [e for e in env if SECRET.search(e) or URL_CREDENTIALS.search(e)]
+
+
+def test_inline_secret_detection():
+    leaked = parse_unit(
+        "[Service]\n"
+        "EnvironmentFile=/etc/olist-shop/worker.env\n"
+        "Environment=DATABASE_URL=postgresql://olist:olist-secret@db.internal:5432/olist\n"
+        "Environment=REDIS_URL=redis://:s3cr3t@cache.internal:6379/0\n"
+        "Environment=\"DB_PASSWORD=x\" LOG_LEVEL=info\n"
+    )["Service"]["Environment"]
+    assert inline_secrets(leaked) == leaked
+    clean = ["REDIS_URL=redis://cache.internal:6379/0", "LOG_LEVEL=info", "PYTHONUNBUFFERED=1"]
+    assert inline_secrets(clean) == []
+
+
 @pytest.mark.parametrize("name", ["olist-worker.service", "olist-backup.service"])
 def test_secrets_not_inline(units, name):
     unit = units[name]
     env = unit.get("Service", {}).get("Environment", [])
-    assert not [e for e in env if SECRET.search(e)], f"{name}: bí mật để trong EnvironmentFile=, không viết vào unit"
+    assert not inline_secrets(env), f"{name}: bí mật để trong EnvironmentFile=, không viết vào unit: {inline_secrets(env)}"
     assert last(unit, "Service", "EnvironmentFile"), f"{name}: đọc cấu hình từ EnvironmentFile="
 
 

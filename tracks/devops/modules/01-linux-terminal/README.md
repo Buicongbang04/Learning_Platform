@@ -75,12 +75,14 @@ sha256sum -c "${SC_FILE}.sha256"
 
 macOS không có `sha256sum`: dùng `shasum -a 256 -c "${SC_FILE}.sha256"`.
 
-Giải nén và cài vào `~/.local/bin` (không cần `sudo`):
+Giải nén và cài vào `~/.local/bin` (không cần `sudo`). Khối này kiểm lại checksum và nối mọi bước bằng `&&`, nên
+dán cả khối mà hash sai thì dừng ngay ở bước kiểm, không giải nén, không cài:
 
 ```bash
-tar -xJf "${SC_FILE}"
-mkdir -p ~/.local/bin
-install -m 0755 "shellcheck-v${SC_VERSION}/shellcheck" ~/.local/bin/shellcheck
+sha256sum -c "${SC_FILE}.sha256" \
+  && tar -xJf "${SC_FILE}" \
+  && mkdir -p ~/.local/bin \
+  && install -m 0755 "shellcheck-v${SC_VERSION}/shellcheck" ~/.local/bin/shellcheck
 ```
 
 Xác nhận. Kết quả kiểm trên máy xây khoá (Ubuntu 24.04, x86_64):
@@ -125,11 +127,15 @@ JQ_SHA256=b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f
 work="$(mktemp -d)" && cd "$work"
 curl -fLO --proto '=https' "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/${JQ_ASSET}"
 curl -fLO --proto '=https' "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/sha256sum.txt"
-sha256sum -c --ignore-missing sha256sum.txt
-echo "${JQ_SHA256}  ${JQ_ASSET}" | sha256sum -c
-install -m 0755 "${JQ_ASSET}" ~/.local/bin/jq
-jq --version
+sha256sum -c --ignore-missing sha256sum.txt \
+  && echo "${JQ_SHA256}  ${JQ_ASSET}" | sha256sum -c \
+  && mkdir -p ~/.local/bin \
+  && install -m 0755 "${JQ_ASSET}" ~/.local/bin/jq \
+  && jq --version
 ```
+
+Bốn bước cuối nối bằng `&&`: một trong hai lần kiểm in `FAILED` thì chuỗi dừng, binary không được cài. Khi đó xoá thư
+mục tạm và tải lại; sai lần nữa thì dừng hẳn và báo, đừng bỏ bước kiểm.
 
 Kết quả trên máy xây khoá: hai dòng `jq-linux-amd64: OK`, rồi `jq-1.8.2`. Lệnh `sha256sum -c` đầu so với tệp hash của
 chính release (chống tải hỏng); lệnh thứ hai so với hash đã ghim trong hướng dẫn (chống release bị tráo sau khi khoá
@@ -361,8 +367,12 @@ Ba cặp khái niệm hay nhầm:
 
 - **`Wants=`/`Requires=`** là phụ thuộc (kéo unit kia lên); **`After=`/`Before=`** là thứ tự. Chỉ `After=` mà không
   `Wants=` thì không kéo gì lên; chỉ `Wants=` mà không `After=` thì hai unit khởi động song song.
-- **`network.target`** chỉ nghĩa là tầng mạng đã được cấu hình xong; **`network-online.target`** mới là có IP và route.
-  Service kết nối ra ngoài khi khởi động cần `After=` và `Wants=network-online.target`.
+- **`network.target`** chỉ nghĩa là bộ quản lý mạng (systemd-networkd, NetworkManager...) đã được khởi động, không
+  bảo đảm interface nào đã có IP hay route (systemd.special(7)); thứ tự với nó chủ yếu có ý nghĩa lúc **tắt máy**:
+  service `After=network.target` được dừng trước khi mạng bị gỡ. **`network-online.target`** chờ tới khi mạng được
+  coi là đã cấu hình xong, nhưng làm chậm khởi động. Chỉ dùng `After=` và `Wants=network-online.target` khi service
+  thật sự cần mạng **ngay lúc khởi động**: mount NFS, hay worker Olist Shop nối Postgres và Redis ở máy khác ngay khi
+  chạy. Service chỉ lắng nghe cổng (Nginx, sshd) thì `After=network.target` là đủ.
 - **`Type=simple`** coi service "đã chạy" ngay khi fork; **`exec`** chờ `exec()` thành công (báo lỗi sớm khi sai
   đường dẫn); **`notify`** chờ ứng dụng gọi `sd_notify(READY=1)`; **`oneshot`** cho lệnh chạy xong rồi thoát.
 

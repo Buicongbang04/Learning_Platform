@@ -19,10 +19,10 @@ curl -fsSL "https://api.github.com/repos/koalaman/shellcheck/releases/tags/v${SC
   | jq -r --arg f "$SC_FILE" '.assets[] | select(.name == $f) | .digest'
 curl -fLO --proto '=https' "https://github.com/koalaman/shellcheck/releases/download/v${SC_VERSION}/${SC_FILE}"
 echo "${SC_SHA256}  ${SC_FILE}" > "${SC_FILE}.sha256"
-sha256sum -c "${SC_FILE}.sha256"
-tar -xJf "${SC_FILE}"
-mkdir -p ~/.local/bin
-install -m 0755 "shellcheck-v${SC_VERSION}/shellcheck" ~/.local/bin/shellcheck
+sha256sum -c "${SC_FILE}.sha256" \
+  && tar -xJf "${SC_FILE}" \
+  && mkdir -p ~/.local/bin \
+  && install -m 0755 "shellcheck-v${SC_VERSION}/shellcheck" ~/.local/bin/shellcheck
 which shellcheck
 shellcheck --version
 cp "${SC_FILE}.sha256" "$EX/starter/shellcheck.sha256"

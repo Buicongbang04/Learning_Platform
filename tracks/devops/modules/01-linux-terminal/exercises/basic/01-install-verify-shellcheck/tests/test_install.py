@@ -141,8 +141,9 @@ def test_binary_checksum_matches_installed(log):
 def test_checksum_was_verified_before_install(log):
     commands = section(log, "Lệnh đã chạy")
     tarball = logged_url(log).group("file")
+    commands = commands.replace("\\\n", " ")
     verify = re.search(r"sha256sum\s+(?:--\S+\s+)*-c|shasum\s+-a\s*256\s+(?:--\S+\s+)*-c", commands)
-    install = re.search(r"^\s*(?:install|cp|mv)\b.*shellcheck", commands, re.M)
+    install = re.search(r"(?:^|&&|;)\s*(?:install|cp|mv)\s.*shellcheck", commands, re.M)
     assert verify, "Phần 'Lệnh đã chạy' phải có bước kiểm `sha256sum -c` (hoặc `shasum -a 256 -c`)"
     assert install, "Phần 'Lệnh đã chạy' phải có bước chép binary vào ~/.local/bin"
     assert verify.start() < install.start(), "Kiểm checksum phải đứng trước bước cài"

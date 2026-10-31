@@ -35,7 +35,7 @@ backup.
 | --- | --- |
 | User | `User=olist` |
 | Bí mật | Không còn `Environment=` chứa `PASSWORD`, `SECRET`, `TOKEN`, `DSN` hay `..._KEY`; đọc từ `EnvironmentFile=` (ví dụ `/etc/olist-shop/worker.env`, quyền `0640 root:olist`) |
-| Khởi động | `After=` và `Wants=network-online.target` trong `[Unit]` |
+| Khởi động | `After=` và `Wants=network-online.target` trong `[Unit]` (worker nối Postgres và Redis ở máy khác ngay khi chạy; `network.target` chỉ bảo đảm bộ quản lý mạng đã khởi động) |
 | Restart | `Restart=on-failure`; `RestartSec=` ít nhất 1 giây; có `StartLimitIntervalSec=` và `StartLimitBurst=` trong `[Unit]` |
 | Dừng | `TimeoutStopSec=` trong khoảng (0, 60] giây (worker cần thời gian trả job đang dở, như bài Basic 03) |
 | Tài nguyên | Có `MemoryMax=`; có `StateDirectory=` hoặc `ReadWritePaths=` cho chỗ được ghi |
