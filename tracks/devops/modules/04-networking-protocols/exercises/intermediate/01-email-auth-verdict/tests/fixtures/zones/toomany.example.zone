@@ -1,0 +1,19 @@
+$ORIGIN toomany.example.
+$TTL 3600
+@ IN SOA ns1 admin 2026110101 3600 600 1209600 300
+@ IN NS ns1
+ns1 IN A 192.0.2.10
+@ IN TXT "v=spf1 include:s1.toomany.example include:s2.toomany.example include:s3.toomany.example include:s4.toomany.example include:s5.toomany.example include:s6.toomany.example ip4:192.0.2.12 -all"
+s1 IN TXT "v=spf1 a:h1.toomany.example ~all"
+h1 IN A 192.0.2.21
+s2 IN TXT "v=spf1 a:h2.toomany.example ~all"
+h2 IN A 192.0.2.22
+s3 IN TXT "v=spf1 a:h3.toomany.example ~all"
+h3 IN A 192.0.2.23
+s4 IN TXT "v=spf1 a:h4.toomany.example ~all"
+h4 IN A 192.0.2.24
+s5 IN TXT "v=spf1 a:h5.toomany.example ~all"
+h5 IN A 192.0.2.25
+s6 IN TXT "v=spf1 a:h6.toomany.example ~all"
+h6 IN A 192.0.2.26
+_dmarc IN TXT "v=DMARC1; p=reject"

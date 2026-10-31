@@ -1,0 +1,7 @@
+$ openssl s_client -connect api.olist-shop.com.br:443 -noservername </dev/null 2>&1 | sed -n '/Certificate chain/,/---/p'
+Certificate chain
+ 0 s:CN = shop.olist-shop.com.br
+   i:C = US, O = Let's Encrypt, CN = R11
+ 1 s:C = US, O = Let's Encrypt, CN = R11
+   i:C = US, O = Internet Security Research Group, CN = ISRG Root X1
+---

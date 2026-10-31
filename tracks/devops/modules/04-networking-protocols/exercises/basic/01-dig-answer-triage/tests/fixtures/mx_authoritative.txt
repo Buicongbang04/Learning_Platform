@@ -1,0 +1,23 @@
+
+; <<>> DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu <<>> @ns1.olist-shop.com.br olist-shop.com.br MX
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 9921
+;; flags: qr aa rd; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; QUESTION SECTION:
+;olist-shop.com.br.		IN	MX
+
+;; ANSWER SECTION:
+olist-shop.com.br.	3600	IN	MX	20 mx2.olist-shop.com.br.
+olist-shop.com.br.	3600	IN	MX	10   mx1.olist-shop.com.br.
+
+;; Query time: 4 msec
+;; SERVER: 203.0.113.53#53(ns1.olist-shop.com.br) (UDP)
+;; WHEN: Sun Nov 01 09:19:00 UTC 2026
+;; MSG SIZE  rcvd: 96
+

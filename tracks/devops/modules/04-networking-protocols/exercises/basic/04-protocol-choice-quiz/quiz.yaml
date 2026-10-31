@@ -1,0 +1,83 @@
+questions:
+  - id: partner-file-drop
+    kind: knowledge
+    type: single
+    prompt: "Đối tác logistics cần đẩy file CSV đơn hàng lên server Olist Shop mỗi giờ. Firewall của họ chỉ mở một cổng ra ngoài, họ dùng script cron. Giao thức nào hợp nhất?"
+    options:
+      - { id: a, text: "FTP thường trên cổng 21, giới hạn theo IP nguồn" }
+      - { id: b, text: "FTPS explicit, mở thêm dải cổng passive cho data" }
+      - { id: c, text: "SFTP qua SSH cổng 22, xác thực bằng khoá riêng" }
+      - { id: d, text: "HTTP upload qua cổng 80 với basic auth" }
+  - id: ftps-firewall
+    kind: knowledge
+    type: single
+    prompt: "Một đối tác bắt buộc FTPS. Kết nối điều khiển lên được nhưng lệnh LIST treo rồi timeout. Nguyên nhân hay gặp nhất?"
+    options:
+      - { id: a, text: "Chứng chỉ TLS của server đã hết hạn nên kênh dữ liệu bị chặn lại" }
+      - { id: b, text: "Kênh data passive dùng cổng động bị firewall hay NAT chặn" }
+      - { id: c, text: "FTPS chỉ chạy trên IPv6 nên kênh data không tới được" }
+      - { id: d, text: "Client phải chuyển sang chế độ ASCII trước khi LIST" }
+  - id: smtp-submission-port
+    kind: knowledge
+    type: single
+    prompt: "Worker của Olist Shop gửi email giao dịch qua ESP (SendGrid, SES...). Nên cấu hình cổng nào?"
+    options:
+      - { id: a, text: "25: cổng SMTP chuẩn, ESP nào cũng nhận và không cần xác thực" }
+      - { id: b, text: "587 với STARTTLS bắt buộc, hoặc 465 TLS ngay từ đầu, kèm xác thực" }
+      - { id: c, text: "143 vì IMAP cũng gửi được thư khi đã đăng nhập vào hộp thư" }
+      - { id: d, text: "2525 không mã hoá, vì cloud chặn cổng 25 và TLS làm chậm worker gửi thư" }
+  - id: imap-vs-pop3
+    kind: knowledge
+    type: single
+    prompt: "Team CSKH 6 người cùng đọc hộp thư support@ trên laptop và điện thoại, cần thấy thư nào người khác đã xử lý. Giao thức đọc thư nào?"
+    options:
+      - { id: a, text: "POP3S: tải thư về từng máy, xoá trên server cho nhẹ" }
+      - { id: b, text: "SMTP: cùng giao thức với lúc gửi nên đồng bộ tốt nhất" }
+      - { id: c, text: "IMAPS: thư và cờ đã đọc nằm trên server, mọi máy thấy như nhau" }
+      - { id: d, text: "POP3 không TLS trên cổng 110 để tương thích với điện thoại đời cũ" }
+  - id: greylisting-otp
+    kind: knowledge
+    type: single
+    prompt: "Khách của một công ty đối tác than mã OTP từ Olist Shop tới trễ 10-20 phút, nhưng chỉ lần đầu. Log MTA của bạn có '451 4.7.1 Greylisted, try again later'. Kết luận nào đúng?"
+    options:
+      - { id: a, text: "Server nhận đang greylist; MTA của bạn retry đúng, trễ là chi phí lần đầu" }
+      - { id: b, text: "Domain của bạn đã vào một blacklist công khai; thư sẽ không bao giờ tới nơi nhận" }
+      - { id: c, text: "SPF của bạn sai nên server nhận từ chối tạm thời mọi thư" }
+      - { id: d, text: "Lỗi 4xx nghĩa là hỏng vĩnh viễn; đổi sang gửi qua cổng 465" }
+  - id: dns-migration-ttl
+    kind: knowledge
+    type: single
+    prompt: "Thứ Bảy sẽ chuyển api.olist-shop.com.br sang load balancer mới. Bản ghi A hiện có TTL 86400. Làm gì với TTL?"
+    options:
+      - { id: a, text: "Đổi IP và hạ TTL xuống 60 cùng một lúc vào sáng thứ Bảy" }
+      - { id: b, text: "Hạ TTL xuống 60 trước ít nhất 24 giờ, đổi IP, theo dõi rồi tăng TTL lại" }
+      - { id: c, text: "Giữ 86400 cho ổn định; resolver sẽ tự thấy IP mới sau vài phút" }
+      - { id: d, text: "Đặt TTL 0 vĩnh viễn để mọi thay đổi sau này có hiệu lực ngay" }
+  - id: http3-blocked
+    kind: knowledge
+    type: single
+    prompt: "Bật HTTP/3 trên CDN. Một số người dùng công ty sau firewall chặn UDP 443. Điều gì xảy ra?"
+    options:
+      - { id: a, text: "Họ không vào được site cho tới khi firewall mở UDP 443" }
+      - { id: b, text: "Trình duyệt dùng HTTP/2 qua TCP, chỉ thấy HTTP/3 khi UDP thông" }
+      - { id: c, text: "CDN tự đổi sang HTTP/1.0 không mã hoá cho các IP đó" }
+      - { id: d, text: "HTTP/3 chạy trên TCP 443 nên firewall chặn UDP không liên quan" }
+  - id: ssh-hop
+    kind: knowledge
+    type: single
+    prompt: "Kỹ sư cần SSH tới db-primary (mạng riêng) qua bastion, dùng khoá trên laptop. Cách nào an toàn nhất nếu bastion có thể bị chiếm?"
+    options:
+      - { id: a, text: "ssh -A bastion rồi từ bastion ssh tiếp tới db-primary" }
+      - { id: b, text: "Copy khoá riêng lên ~/.ssh của bastion, chmod 600" }
+      - { id: c, text: "ssh -J bastion db-primary: phiên mã hoá đầu-cuối tới db" }
+      - { id: d, text: "Mở cổng 22 của db-primary ra Internet, chỉ cho IP văn phòng" }
+  - id: plain-protocols
+    kind: knowledge
+    type: multi
+    prompt: "Giao thức nào gửi mật khẩu dạng rõ trên mạng nếu dùng đúng cấu hình mặc định, không bọc TLS? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "FTP (cổng 21)" }
+      - { id: b, text: "Telnet (cổng 23)" }
+      - { id: c, text: "SFTP (cổng 22)" }
+      - { id: d, text: "POP3 (cổng 110)" }
+      - { id: e, text: "HTTP basic auth trên http://" }

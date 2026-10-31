@@ -1,0 +1,20 @@
+Return-Path: <pedidos@olist-shop.com.br>
+Authentication-Results: mx.cliente-mail.example;
+	spf=fail smtp.mailfrom=olist-shop.com.br;
+	dkim=pass header.d=olist-shop.com.br header.s=s2026
+Received: from relay.alumni-mail.example (relay.alumni-mail.example [192.0.2.77])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ3c1Pq8z1;
+	Sun, 01 Nov 2026 09:21:40 +0000
+Received: from mail.olist-shop.com.br (mail.olist-shop.com.br [203.0.113.5])
+	by mx.alumni-mail.example (Exim 4.97) with esmtps id 1t7Abc-000Kx2;
+	Sun, 01 Nov 2026 09:20:12 +0000
+DKIM-Signature: v=1; a=ed25519-sha256; c=relaxed/relaxed; d=olist-shop.com.br; s=s2026;
+	h=from:to:subject:date:message-id; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=;
+	b=Pp0q2vAa91Lm
+From: Olist Shop <pedidos@olist-shop.com.br>
+To: joao@alumni-mail.example
+Subject: Pedido 77ab confirmado
+Date: Sun, 01 Nov 2026 09:20:09 +0000
+Message-ID: <77ab.order@olist-shop.com.br>
+
+Seu pedido foi confirmado.

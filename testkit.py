@@ -111,6 +111,9 @@ TOOL_VERSION_ARGS = {
     "kind": ["version"],
     "helm": ["version", "--short"],
     "tofu": ["version"],
+    "openssl": ["version"],
+    "dig": ["-v"],
+    "ssh": ["-V"],
 }
 
 _VERSION = re.compile(r"\d+(?:\.\d+)+")

@@ -1,0 +1,14 @@
+*   Trying 198.51.100.20:443...
+* Connected to shop.olist-shop.com.br (198.51.100.20) port 443
+* ALPN: server accepted http/1.1
+> HEAD /api/banners/home HTTP/1.1
+> Host: shop.olist-shop.com.br
+> User-Agent: curl/8.5.0
+>
+< HTTP/1.1 200 OK
+< Date: Sun, 01 Nov 2026 09:04:00 GMT
+< Cache-Control: max-age=60
+< Age: 90
+< Connection: Keep-Alive
+<
+* Connection #0 to host shop.olist-shop.com.br left intact

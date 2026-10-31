@@ -1,0 +1,19 @@
+*   Trying 198.51.100.30:443...
+* Connected to api.olist-shop.com.br (198.51.100.30) port 443
+* ALPN: server accepted http/1.1
+> POST /v1/checkout HTTP/1.1
+> Host: api.olist-shop.com.br
+> User-Agent: curl/8.5.0
+> Content-Type: application/json
+> Content-Length: 182
+>
+< HTTP/1.1 503 Service Unavailable
+< Server: nginx
+< Date: Sun, 01 Nov 2026 09:02:00 GMT
+< Content-Type: application/json
+< Retry-After: 120
+< Cache-Control: no-store
+< Connection: close
+<
+{ [64 bytes data]
+* Closing connection

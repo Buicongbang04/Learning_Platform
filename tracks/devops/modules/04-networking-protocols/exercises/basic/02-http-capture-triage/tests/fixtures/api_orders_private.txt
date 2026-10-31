@@ -1,0 +1,19 @@
+*   Trying 198.51.100.30:443...
+* Connected to api.olist-shop.com.br (198.51.100.30) port 443
+* ALPN: server accepted http/1.1
+> GET /v1/orders?customer=7c1e HTTP/1.1
+> Host: api.olist-shop.com.br
+> User-Agent: curl/8.5.0
+> Accept: application/json
+> Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.redacted
+>
+< HTTP/1.1 200 OK
+< Server: nginx
+< Date: Sun, 01 Nov 2026 09:00:00 GMT
+< Content-Type: application/json
+< Content-Length: 2311
+< Cache-Control: private, max-age=60
+< Vary: Authorization
+<
+{ [2311 bytes data]
+* Connection #0 to host api.olist-shop.com.br left intact

@@ -1,0 +1,21 @@
+Return-Path: <bounce-9120@bounces.olist-shop.com.br>
+Authentication-Results: mx.cliente-mail.example;
+	spf=fail smtp.mailfrom=bounces.olist-shop.com.br;
+	dkim=fail (body hash did not verify) header.d=esp-mail.example header.s=esp1
+Received: from lists.alumni-mail.example (lists.alumni-mail.example [192.0.2.77])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ4d2Rs0z7;
+	Sun, 01 Nov 2026 10:05:13 +0000
+Received: from o44.esp-mail.example (o44.esp-mail.example [198.51.100.44])
+	by lists.alumni-mail.example (Mailman 3) with ESMTPS id 3QwE7;
+	Sun, 01 Nov 2026 10:00:03 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=esp-mail.example; s=esp1;
+	h=from:to:subject:date; bh=frcCV1k9oG9oKj3dpUqdJg1PxRT2RSN/XKdLCPjaYaY=; b=QmVsdA
+From: Olist Shop <ofertas@olist-shop.com.br>
+To: compras-ex-alunos@lists.alumni-mail.example
+Subject: [ex-alunos] Ofertas da semana
+Date: Sun, 01 Nov 2026 09:59:58 +0000
+Message-ID: <nl-2026-44.9120@esp-mail.example>
+
+Ofertas.
+--
+Lista ex-alunos: para sair, responda "sair".

@@ -1,0 +1,4 @@
+$ORIGIN olistmarket.com.br.
+$TTL 3600
+@ IN MX 10 aspmx.l.google.com.
+@ IN CNAME olistmarket.herokudns.example.

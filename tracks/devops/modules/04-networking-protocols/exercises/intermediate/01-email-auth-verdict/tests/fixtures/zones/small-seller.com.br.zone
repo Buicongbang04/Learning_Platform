@@ -1,0 +1,7 @@
+$ORIGIN small-seller.com.br.
+$TTL 3600
+@               IN SOA  ns1 admin 2026090101 3600 600 1209600 3600
+@               IN NS   ns1
+ns1             IN A    203.0.113.201
+@               IN A    203.0.113.200
+@               IN TXT  "v=spf1 a ?all"

@@ -1,0 +1,7 @@
+$ORIGIN cheap-deals.example.
+$TTL 300
+@               IN SOA  ns1 admin 2026103101 3600 600 1209600 60
+@               IN NS   ns1
+ns1             IN A    192.0.2.60
+@               IN TXT  "v=spf1 ip4:192.0.2.66 -all"
+mail            IN A    192.0.2.66

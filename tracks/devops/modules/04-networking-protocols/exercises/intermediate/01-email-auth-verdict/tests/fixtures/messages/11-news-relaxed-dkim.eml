@@ -1,0 +1,15 @@
+Return-Path: <bounce-4@esp-mail.example>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=esp-mail.example;
+	dkim=pass header.d=olist-shop.com.br header.s=s2026;
+	dkim=pass header.d=esp-mail.example header.s=esp1
+Received: from o50.esp-mail.example (o50.esp-mail.example [198.51.100.50])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ1m9Ef8z1;
+	Sun, 01 Nov 2026 16:00:00 +0000
+From: Olist Shop News <novidades@news.olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Novidades de novembro (parte 2)
+Date: Sun, 01 Nov 2026 15:59:58 +0000
+Message-ID: <news-12@esp-mail.example>
+
+Novidades.

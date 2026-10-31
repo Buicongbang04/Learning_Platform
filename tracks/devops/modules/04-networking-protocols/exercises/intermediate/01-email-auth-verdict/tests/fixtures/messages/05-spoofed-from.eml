@@ -1,0 +1,19 @@
+Return-Path: <x7@cheap-deals.example>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=cheap-deals.example;
+	dkim=fail (signature verification failed) header.d=olist-shop.com.br header.s=s2026
+Received: from mail.cheap-deals.example (mail.cheap-deals.example [192.0.2.66])
+	by mx.cliente-mail.example (Postfix) with ESMTP id 4XyZ5e3Tu2z4;
+	Sun, 01 Nov 2026 11:11:11 +0000
+Received: from mail.olist-shop.com.br (mail.olist-shop.com.br [203.0.113.5])
+	by mail.cheap-deals.example with ESMTPS;
+	Sun, 01 Nov 2026 11:11:10 +0000
+DKIM-Signature: v=1; a=ed25519-sha256; c=relaxed/relaxed; d=olist-shop.com.br; s=s2026;
+	h=from:to:subject:date; bh=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=; b=Zm9yZ2Vk
+From: Suporte Olist Shop <suporte@olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Seu pagamento falhou, atualize o cartao
+Date: Sun, 01 Nov 2026 11:11:09 +0000
+Message-ID: <a1@cheap-deals.example>
+
+Clique aqui.

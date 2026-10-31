@@ -1,0 +1,17 @@
+*   Trying 198.51.100.20:443...
+* Connected to shop.olist-shop.com.br (198.51.100.20) port 443
+* ALPN: server accepted h2
+> GET /api/products?category=bed_bath_table&page=1 HTTP/2
+> Host: shop.olist-shop.com.br
+> User-Agent: curl/8.5.0
+> Accept: application/json
+>
+< HTTP/2 200
+< date: Sun, 01 Nov 2026 09:01:40 GMT
+< content-type: application/json
+< cache-control: public, max-age=60, s-maxage=600
+< age: 100
+< vary: Accept-Encoding
+<
+{ [8820 bytes data]
+* Connection #0 to host shop.olist-shop.com.br left intact

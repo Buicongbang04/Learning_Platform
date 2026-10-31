@@ -1,0 +1,9 @@
+com
+net
+org
+br
+com.br
+net.br
+example
+co.uk
+uk

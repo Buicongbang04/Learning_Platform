@@ -1,0 +1,16 @@
+--- /etc/nginx/sites-enabled/api.conf (trước CHG-2291)
++++ /etc/nginx/sites-enabled/api.conf (sau CHG-2291)
+@@ -4,8 +4,8 @@ server {
+     listen 443 ssl;
+     http2 on;
+     server_name api.olist-shop.com.br;
+-    ssl_certificate     /etc/nginx/tls/api/fullchain.pem;
+-    ssl_certificate_key /etc/nginx/tls/api/privkey.pem;
++    ssl_certificate     /etc/nginx/tls/api/cert.pem;
++    ssl_certificate_key /etc/nginx/tls/api/privkey.pem;
+     ssl_protocols TLSv1.2 TLSv1.3;
+     ssl_stapling on;
+
+/etc/nginx/sites-enabled/shop.conf (không đổi):
+    listen 443 ssl default_server;
+    server_name shop.olist-shop.com.br;

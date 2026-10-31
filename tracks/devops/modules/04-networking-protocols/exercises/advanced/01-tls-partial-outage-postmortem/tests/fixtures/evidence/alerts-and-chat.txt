@@ -1,0 +1,16 @@
+Kênh #ops-olist-shop, thứ Sáu 2026-10-30, giờ UTC-3 (São Paulo). Đã bỏ tên người, giữ vai trò.
+
+18:32 [on-call] Bắt đầu change CHG-2291: thay cert api.olist-shop.com.br (cert cũ hết hạn 2026-11-02). Cert mới lấy từ portal ACME của nhà cung cấp DNS, tải bản "Certificate (PEM)".
+18:41 [on-call] Đã copy cert.pem + privkey.pem lên lb-1 và lb-2, nginx -t OK, reload xong. Mở https://api.olist-shop.com.br/healthz trên Chrome: ổ khoá xanh. Đóng CHG-2291.
+18:44 [monitor] Synthetic "api-cert-expiry": OK, cert còn 89 ngày.
+18:58 [worker] (log tự động) payment-sync: 312 lỗi trong 10 phút
+19:07 [CS] Một số khách nói app Android không tải được giỏ hàng, iPhone thì bình thường.
+19:15 [partner-logistics] Email: "integração de vocês fora do ar desde ~18:45, erro PKIX path building failed".
+19:22 [on-call] Từ laptop: curl https://api.olist-shop.com.br/healthz báo lỗi 60, Chrome vẫn vào được. Nghi DNS hoặc CDN cache, purge cache CDN.
+19:40 [on-call] Purge xong, vẫn lỗi. Mở incident SEV-2, gọi thêm người.
+19:52 [sre-2] Chạy openssl s_client, thấy server chỉ gửi 1 cert (xem s_client-*.txt).
+20:03 [sre-2] Sửa ssl_certificate trên lb-1 và lb-2, reload.
+20:06 [sre-2] curl OK, Java client test OK, payment-sync hết lỗi.
+20:15 [partner-logistics] Xác nhận tích hợp chạy lại, họ có 1.840 đơn cần đồng bộ lại.
+20:30 [sre-2] Ghi chú: kiểm thêm thì thấy POS cũ ở 14 cửa hàng đối tác (firmware 2019) vẫn báo "hostname mismatch" từ trước sự cố này, ticket POS-77 mở từ tháng 8 chưa ai xử lý.
+20:40 [IC] Đóng SEV-2. Postmortem hạn thứ Ba.

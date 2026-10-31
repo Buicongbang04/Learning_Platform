@@ -36,6 +36,10 @@ def patch_tool(monkeypatch, outputs, present=True):
         ("Docker version 27.3.1, build ce12230", (27, 3, 1)),
         ("v0.13.2", (0, 13, 2)),
         ("OpenTofu v1.13.2\non linux_amd64", (1, 13, 2)),
+        ("OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)", (3, 0, 13)),
+        ("OpenSSL 1.1.1w  11 Sep 2023", (1, 1, 1)),
+        ("DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu", (9, 18, 30)),
+        ("OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024", (9, 6)),
         ("no version here", None),
     ],
 )
@@ -46,6 +50,31 @@ def test_parse_version(text, expected):
 def test_tool_version_reads_nginx_stderr(monkeypatch):
     patch_tool(monkeypatch, {"-v": (0, "", "nginx version: nginx/1.27.3")})
     assert testkit.tool_version("nginx") == (1, 27, 3)
+
+
+@pytest.mark.parametrize(
+    "name,args,stdout,stderr,expected",
+    [
+        ("openssl", "version", "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)\n", "", (3, 0, 13)),
+        ("dig", "-v", "", "DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu\n", (9, 18, 30)),
+        ("ssh", "-V", "", "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024\n", (9, 6)),
+    ],
+)
+def test_tool_version_networking_tools(monkeypatch, name, args, stdout, stderr, expected):
+    patch_tool(monkeypatch, {args: (0, stdout, stderr)})
+    assert testkit.tool_version(name) == expected
+
+
+def test_require_openssl_1_1_1_accepts_3_0(monkeypatch):
+    patch_tool(monkeypatch, {"version": (0, "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)", "")})
+    testkit.Exercise.require_tool("openssl", "1.1.1")
+
+
+def test_require_openssl_too_old_skips(monkeypatch):
+    patch_tool(monkeypatch, {"version": (0, "OpenSSL 1.0.2k-fips  26 Jan 2017", "")})
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_tool("openssl", "1.1.1")
+    assert "1.0.2" in str(info.value)
 
 
 def test_tool_version_missing_binary(monkeypatch):

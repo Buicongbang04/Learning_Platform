@@ -1,0 +1,13 @@
+Lỗi theo loại client, 18:41-20:06 (UTC-3). Tổng request tới api.olist-shop.com.br trong khoảng đó: 412.300.
+
+| Client | Request | Lỗi TLS | Thông báo lỗi tiêu biểu |
+| --- | --- | --- | --- |
+| Chrome / Edge / Safari desktop | 188.400 | 0 | (không lỗi) |
+| iOS app 5.x (URLSession) | 97.100 | 0 | (không lỗi) |
+| Android app 5.x (OkHttp, Android 7-14) | 81.900 | 52.300 | javax.net.ssl.SSLHandshakeException: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found. |
+| Đối tác logistics (Java 17, Apache HttpClient) | 9.800 | 9.800 | PKIX path building failed: unable to find valid certification path to requested target |
+| payment-sync worker (Python requests) | 31.200 | 31.200 | SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate |
+| curl / script nội bộ | 1.900 | 1.900 | curl: (60) SSL certificate problem: unable to get local issuer certificate |
+| POS cửa hàng đối tác, firmware 2019 | 2.000 | 2.000 | hostname mismatch (đã lỗi từ trước 18:41, ticket POS-77) |
+
+Doanh thu ước tính bị ảnh hưởng: giỏ hàng Android không tải được trong 85 phút, khoảng 6% đơn của khung giờ đó.

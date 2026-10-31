@@ -1,0 +1,20 @@
+
+; <<>> DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu <<>> api.olist-shop.com.br AAAA
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 5502
+;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 65494
+;; QUESTION SECTION:
+;api.olist-shop.com.br.		IN	AAAA
+
+;; AUTHORITY SECTION:
+olist-shop.com.br.	60	IN	SOA	ns1.olist-shop.com.br. hostmaster.olist-shop.com.br. 2026110101 3600 600 1209600 3600
+
+;; Query time: 12 msec
+;; SERVER: 127.0.0.53#53(127.0.0.53) (UDP)
+;; WHEN: Sun Nov 01 09:13:40 UTC 2026
+;; MSG SIZE  rcvd: 118
+

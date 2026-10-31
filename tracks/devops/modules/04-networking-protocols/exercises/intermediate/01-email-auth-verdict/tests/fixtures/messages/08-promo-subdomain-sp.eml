@@ -1,0 +1,14 @@
+Return-Path: <promo@promo.olist-shop.com.br>
+Authentication-Results: mx.cliente-mail.example;
+	spf=none smtp.mailfrom=promo.olist-shop.com.br;
+	dkim=pass header.d=esp-mail.example header.s=esp1
+Received: from o200.esp-mail.example (o200.esp-mail.example [192.0.2.200])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ8h6Za5z7;
+	Sun, 01 Nov 2026 13:00:00 +0000
+From: Olist Shop Promo <promo@promo.olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Black Friday comeca agora
+Date: Sun, 01 Nov 2026 12:59:58 +0000
+Message-ID: <bf-1@esp-mail.example>
+
+Promo.

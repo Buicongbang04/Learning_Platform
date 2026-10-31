@@ -1,0 +1,16 @@
+*   Trying 198.51.100.30:443...
+* Connected to api.olist-shop.com.br (198.51.100.30) port 443
+* ALPN: server accepted http/1.1
+> GET /v1/orders/e481f51cbdc54678b7cc49136f2d6af7 HTTP/1.1
+> Host: api.olist-shop.com.br
+> User-Agent: curl/8.5.0
+>
+< HTTP/1.1 502 Bad Gateway
+< Server: nginx
+< Date: Sun, 01 Nov 2026 09:03:00 GMT
+< Content-Type: text/html
+< Content-Length: 150
+< Connection: keep-alive
+<
+{ [150 bytes data]
+* Connection #0 to host api.olist-shop.com.br left intact

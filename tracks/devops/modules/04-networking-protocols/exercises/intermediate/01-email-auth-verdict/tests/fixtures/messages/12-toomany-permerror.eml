@@ -1,0 +1,14 @@
+Return-Path: <alerts@toomany.example>
+Authentication-Results: mx.cliente-mail.example;
+	spf=permerror smtp.mailfrom=toomany.example;
+	dkim=pass header.d=toomany.example header.s=sel1
+Received: from smtp.toomany.example (smtp.toomany.example [192.0.2.12])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ2n0Gh9z2;
+	Sun, 01 Nov 2026 17:00:00 +0000
+From: Monitoring <alerts@toomany.example>
+To: maria@cliente-mail.example
+Subject: Disk usage 91%
+Date: Sun, 01 Nov 2026 16:59:58 +0000
+Message-ID: <alert-1@toomany.example>
+
+Disk.
