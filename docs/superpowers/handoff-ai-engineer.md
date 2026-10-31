@@ -140,3 +140,4 @@ Thứ tự đề xuất (2 module một lúc, ghép nặng GPU với nhẹ):
 - Kiểm tổng theo Task 22 của plan giai đoạn 3.
 - Review toàn nhánh (một reviewer mạnh nhất đọc diff `main..ai-engineer`).
 - Hỏi người học trước khi merge vào `main` hoặc push.
+- `main` đã có track Data Analyst (PR #5: `Exercise.workbook()` trong testkit, registry DA, dịch vụ BI Superset/Metabase). Thử merge `origin/main` ↔ `ai-engineer` (2026-10-31) cho conflict ở 4 tệp: `data/download_dataset.py` và `tests/test_download_dataset.py` (giữ cả hai bộ registry và test), `pyproject.toml` (hợp danh sách dependency của cả hai), `uv.lock` (không sửa tay, chạy `uv lock` lại). `testkit.py`, `data/README.md`, `setup/SETUP.md` tự merge được. Nên gộp `main` vào `ai-engineer` sớm (trước khi làm tiếp module) để các module mới dùng testkit/registry chung. Sau khi gộp: `uv run pytest tests -q`, torch vẫn `+cpu`, `SOLUTION=1 uv run pytest tracks -q`.
