@@ -9,16 +9,23 @@ from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
 NAIVE = Path(__file__).parent / "fixtures" / "naive-pre-commit"
+NAIVE_ALLOWLIST = Path(__file__).parent / "fixtures" / "naive-allowlist-pre-commit"
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("git") is None, reason="Cần bash và git")
 
 AWS_KEY = "AKIA2OLISTSHOP7Q3XYZ"
 STS_KEY = "ASIAQ4OLIST5SESSION1"
 FIXTURE_KEY = "AKIAQ7FAKEFIXTURE001"
+SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 
 
 def pem(kind: str) -> str:
     label = f"{kind} PRIVATE KEY" if kind else "PRIVATE KEY"
     return f"-----BEGIN {label}-----\nMIIEowIBAAKCAQEAolist0nly4test\n-----END {label}-----\n"
+
+
+@pytest.fixture(autouse=True)
+def git_version():
+    ex.require_tool("git", min_version="2.30")
 
 
 def git_env(home: Path) -> dict[str, str]:
@@ -47,6 +54,7 @@ class Repo:
         self.home.mkdir(parents=True)
         self.path = tmp_path / "olist-shop"
         self.path.mkdir()
+        self.tainted = False
         self.git("init", "-q")
         if initial:
             self.write("README.md", "# Olist Shop\n")
@@ -57,10 +65,13 @@ class Repo:
         target.chmod(0o755)
 
     def git(self, *args: str, check: bool = True) -> str:
-        result = subprocess.run(
-            ["git", "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args],
-            cwd=self.path, env=git_env(self.home), capture_output=True, text=True, check=check,
-        )
+        cmd = ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args]
+        if self.tainted:
+            result = run_sandboxed(cmd, writable=[self.tmp], cwd=self.path, env=git_env(self.home))
+        else:
+            result = subprocess.run(cmd, cwd=self.path, env=git_env(self.home), capture_output=True, text=True)
+        if check and result.returncode != 0:
+            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
         return result.stdout.strip()
 
     def write(self, name: str, content: str) -> None:
@@ -77,6 +88,7 @@ class Repo:
         return self.git("rev-parse", "--verify", "--quiet", "HEAD", check=False)
 
     def commit(self):
+        self.tainted = True
         return run_sandboxed(
             ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "feat: change"],
             writable=[self.tmp], cwd=self.path, env=git_env(self.home), timeout=30,
@@ -202,6 +214,37 @@ def test_blocks_on_initial_commit(tmp_path):
     result = repo.commit()
     assert_blocked(repo, result, ["secret: private-key: deploy/keys/id_rsa"])
     assert repo.head() == ""
+
+
+ALLOWLIST_ABUSE = {
+    "blank-allowlist-line": (
+        {".secrets-allowlist": f"# fixture\n\n   \n{FIXTURE_KEY}\n", "config/settings.py": f'KEY = "{AWS_KEY}"\n'},
+        "secret: aws-access-key-id: config/settings.py",
+    ),
+    "pragma-in-dotenv": ({".env": "DEBUG=1  # pragma: allowlist secret\n"}, "secret: dotenv-file: .env"),
+}
+
+
+@pytest.mark.parametrize("case", list(ALLOWLIST_ABUSE))
+def test_allowlist_cannot_be_abused(tmp_path, case):
+    files, finding = ALLOWLIST_ABUSE[case]
+    repo = Repo(tmp_path, ex.path("pre-commit"))
+    before = repo.head()
+    repo.stage(files)
+    assert_blocked(repo, repo.commit(), [finding])
+    assert repo.head() == before
+
+
+@pytest.mark.parametrize("case", list(ALLOWLIST_ABUSE))
+def test_naive_allowlist_is_caught(tmp_path, case):
+    """Hook coi dòng trống là một mục allowlist (chuỗi rỗng nằm trong mọi dòng) và cho pragma bỏ qua cả tệp: bài phải bắt được."""
+    files, _ = ALLOWLIST_ABUSE[case]
+    control = Repo(tmp_path / "control", NAIVE_ALLOWLIST)
+    control.stage({"config/settings.py": f'KEY = "{AWS_KEY}"\n', "services/.env": "X=1\n"})
+    assert control.commit().returncode != 0, "Hook ngây thơ phải chặn được ca thường, nếu không phép thử vô nghĩa"
+    repo = Repo(tmp_path / "abuse", NAIVE_ALLOWLIST)
+    repo.stage(files)
+    assert repo.commit().returncode == 0
 
 
 def test_naive_hook_is_caught(tmp_path):

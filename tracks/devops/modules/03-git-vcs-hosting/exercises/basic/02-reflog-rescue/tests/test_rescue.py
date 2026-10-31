@@ -12,7 +12,13 @@ ex = Exercise(__file__)
 NAIVE = Path(__file__).parent / "fixtures" / "naive_rescue.sh"
 BASH = shutil.which("bash")
 BRANCH = "feature/pix-payment"
+SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 pytestmark = pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="Cần bash và git")
+
+
+@pytest.fixture(autouse=True)
+def git_version():
+    ex.require_tool("git", min_version="2.30")
 
 
 def git_env(home: Path) -> dict[str, str]:
@@ -41,13 +47,17 @@ class Repo:
         self.home.mkdir()
         self.path = tmp_path / "olist-shop"
         self.path.mkdir()
+        self.tainted = False
         self.git("init", "-q")
 
     def git(self, *args: str, check: bool = True) -> str:
-        result = subprocess.run(
-            ["git", "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args],
-            cwd=self.path, env=git_env(self.home), capture_output=True, text=True, check=check,
-        )
+        cmd = ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args]
+        if self.tainted:
+            result = run_sandboxed(cmd, writable=[self.tmp], cwd=self.path, env=git_env(self.home))
+        else:
+            result = subprocess.run(cmd, cwd=self.path, env=git_env(self.home), capture_output=True, text=True)
+        if check and result.returncode != 0:
+            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
         return result.stdout.strip()
 
     def commit(self, name: str, message: str) -> str:
@@ -64,6 +74,7 @@ class Repo:
         return out or None
 
     def run(self, script: Path, *args: str):
+        self.tainted = True
         return run_sandboxed([BASH, script, *args], writable=[self.tmp], cwd=self.path, env=git_env(self.home), timeout=30)
 
     def state(self) -> tuple:
@@ -115,7 +126,8 @@ def test_rescues_lost_main_and_deleted_branch(tmp_path):
 def test_does_not_touch_main_head_or_worktree(tmp_path):
     repo, shas = incident(tmp_path)
     before = repo.state()
-    repo.run(ex.path("rescue.sh"), BRANCH)
+    result = repo.run(ex.path("rescue.sh"), BRANCH)
+    assert result.returncode == 0, result.stdout + result.stderr
     assert repo.state() == before, "Không được đổi main, HEAD, index hay working tree (không checkout, không reset)"
     assert repo.git("rev-parse", "main") == shas["after"]
 

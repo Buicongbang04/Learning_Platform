@@ -10,6 +10,12 @@ from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="Cần git")
+SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
+
+
+@pytest.fixture(autouse=True)
+def git_version():
+    ex.require_tool("git", min_version="2.30")
 
 
 def git_env(home: Path) -> dict[str, str]:
@@ -39,13 +45,17 @@ class Repo:
         self.path = tmp_path / "olist-shop"
         self.path.mkdir()
         self.counter = 0
+        self.tainted = False
         self.git("init", "-q")
 
-    def git(self, *args: str) -> str:
-        result = subprocess.run(
-            ["git", "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args],
-            cwd=self.path, env=git_env(self.home), capture_output=True, text=True, check=True,
-        )
+    def git(self, *args: str, check: bool = True) -> str:
+        cmd = ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args]
+        if self.tainted:
+            result = run_sandboxed(cmd, writable=[self.tmp], cwd=self.path, env=git_env(self.home))
+        else:
+            result = subprocess.run(cmd, cwd=self.path, env=git_env(self.home), capture_output=True, text=True)
+        if check and result.returncode != 0:
+            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
         return result.stdout.strip()
 
     def commit(self, message: str, name: str = "CHANGES.txt") -> str:
@@ -59,6 +69,7 @@ class Repo:
         self.git("tag", name, ref)
 
     def release(self, cwd: Path | None = None):
+        self.tainted = True
         return run_sandboxed(
             [sys.executable, ex.path("release.py")], writable=[self.tmp], cwd=cwd or self.path, env=git_env(self.home), timeout=30
         )

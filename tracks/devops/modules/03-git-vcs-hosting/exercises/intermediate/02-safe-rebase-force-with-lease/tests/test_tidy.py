@@ -11,6 +11,7 @@ ex = Exercise(__file__)
 NAIVE = Path(__file__).parent / "fixtures" / "naive_tidy.sh"
 BASH = shutil.which("bash")
 BRANCH = "feature/pix-payment"
+SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 pytestmark = pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="Cần bash và git")
 
 BASE_PIX = "def pay(order):\n    return 'todo'\n"
@@ -19,6 +20,11 @@ QR = "def pay(order):\n    return qr_code(order)\n"
 WEBHOOK = QR + "\n\ndef webhook(event):\n    return event['status']\n"
 WEBHOOK_FIXED = QR + "\n\ndef webhook(event):\n    if 'status' not in event:\n        raise ValueError('missing status')\n    return event['status']\n"
 SUBJECTS = ["feat(payments): pix qr code", "feat(payments): pix webhook"]
+
+
+@pytest.fixture(autouse=True)
+def git_version():
+    ex.require_tool("git", min_version="2.30")
 
 
 def git_env(home: Path) -> dict[str, str]:
@@ -42,15 +48,19 @@ def git_env(home: Path) -> dict[str, str]:
 
 
 class Clone:
-    def __init__(self, path: Path, home: Path):
+    def __init__(self, path: Path, world: "World"):
         self.path = path
-        self.home = home
+        self.home = world.home
+        self.world = world
 
     def git(self, *args: str, check: bool = True) -> str:
-        result = subprocess.run(
-            ["git", "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args],
-            cwd=self.path, env=git_env(self.home), capture_output=True, text=True, check=check,
-        )
+        cmd = ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args]
+        if self.world.tainted:
+            result = run_sandboxed(cmd, writable=[self.world.tmp], cwd=self.path, env=git_env(self.home))
+        else:
+            result = subprocess.run(cmd, cwd=self.path, env=git_env(self.home), capture_output=True, text=True)
+        if check and result.returncode != 0:
+            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
         return result.stdout.strip()
 
     def commit(self, name: str, content: str, message: str) -> str:
@@ -69,9 +79,10 @@ class World:
         self.tmp = tmp_path
         self.home = tmp_path / "home"
         self.home.mkdir()
+        self.tainted = False
         self.origin = tmp_path / "origin.git"
         subprocess.run(
-            ["git", "-c", "init.defaultBranch=main", "init", "-q", "--bare", str(self.origin)],
+            ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "init", "-q", "--bare", str(self.origin)],
             env=git_env(self.home), check=True, capture_output=True,
         )
         self.seed = self.clone("seed")
@@ -89,8 +100,8 @@ class World:
 
     def clone(self, name: str) -> Clone:
         path = self.tmp / name
-        subprocess.run(["git", "clone", "-q", str(self.origin), str(path)], env=git_env(self.home), check=True, capture_output=True)
-        return Clone(path, self.home)
+        subprocess.run(["git", *SAFE_CONFIG, "clone", "-q", str(self.origin), str(path)], env=git_env(self.home), check=True, capture_output=True)
+        return Clone(path, self)
 
     def advance_main(self, name: str = "api/orders.py", content: str = "def orders():\n    return []\n") -> str:
         self.seed.git("pull", "-q", "--ff-only", "origin", "main")
@@ -109,6 +120,7 @@ class World:
         return self.work.git("ls-remote", str(self.origin), f"refs/heads/{ref}").split("\t")[0]
 
     def run(self, script: Path, *args: str):
+        self.tainted = True
         return run_sandboxed([BASH, script, *args], writable=[self.tmp], cwd=self.work.path, env=git_env(self.home), timeout=60)
 
 

@@ -43,6 +43,7 @@ MESSAGES = [
 ]
 STATES = ["SP", "RJ", "MG", "RS", "PR", "BA", "SC", "PE", "CE", "GO"]
 BASE_DATE = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
+SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 
 SHIPPING = """import json
 from pathlib import Path
@@ -80,7 +81,7 @@ def git_env(home: Path, when: datetime | None = None) -> dict[str, str]:
 
 def git(repo: Path, home: Path, *args: str, when: datetime | None = None) -> str:
     result = subprocess.run(
-        ["git", "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args],
+        ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args],
         cwd=repo, env=git_env(home, when), capture_output=True, text=True, check=True,
     )
     return result.stdout.strip()

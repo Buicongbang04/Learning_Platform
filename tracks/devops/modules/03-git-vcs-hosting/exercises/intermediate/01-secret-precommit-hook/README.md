@@ -57,7 +57,9 @@ trong sandbox bubblewrap của [module 02](../../../../02-scripting/README.md#0-
 cả lệnh git nằm trong sandbox). Môi trường dựng lại từ đầu: `HOME` tạm, `GIT_CONFIG_GLOBAL=/dev/null`,
 `GIT_CONFIG_SYSTEM=/dev/null`, nên `core.hooksPath` hay signing trong `~/.gitconfig` của bạn không ảnh hưởng, và
 hook của bạn không chạy trên repo thật nào. Thiếu `bwrap` thì test skip. Có 11 ca phải chặn, 12 ca không được chặn
-(xem `BLOCK` và `ALLOW` trong test), cộng các ca staged/working tree, xoá `.env`, commit đầu tiên, nhiều phát hiện.
+(xem `BLOCK` và `ALLOW` trong test), cộng các ca staged/working tree, xoá `.env`, commit đầu tiên, nhiều phát hiện,
+và hai ca lạm dụng allowlist phải vẫn bị chặn: `.secrets-allowlist` có dòng trống hoặc chỉ có khoảng trắng cùng một
+AWS key thật ở tệp khác, và `.env` có dòng chứa `pragma: allowlist secret`. Git cũ hơn 2.30 thì test skip.
 
 ## Tiêu chí đạt
 

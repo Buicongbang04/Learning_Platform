@@ -42,12 +42,19 @@ def sandboxed(cmd, tmp_path, repo, home, timeout=60):
     return run_sandboxed([str(c) for c in cmd], writable=[tmp_path], cwd=repo, env=shop.git_env(home), timeout=timeout)
 
 
+def tgit(tmp_path, repo, home, *args):
+    """git sau khi script của người học đã chạy trong repo: cấu hình repo có thể đã bị sửa, nên cũng chạy trong sandbox."""
+    result = sandboxed(["git", *shop.SAFE_CONFIG, *args], tmp_path, repo, home)
+    assert result.returncode == 0, f"git {' '.join(args)}: {result.stderr}"
+    return result.stdout.strip()
+
+
 def check_at(tmp_path, repo, home, sha, script):
     shop.git(repo, home, "checkout", "-q", sha)
     try:
         return sandboxed([BASH, script], tmp_path, repo, home)
     finally:
-        shop.git(repo, home, "checkout", "-q", "main")
+        tgit(tmp_path, repo, home, "checkout", "-q", "main")
 
 
 @pytest.mark.parametrize(
@@ -73,7 +80,7 @@ def test_check_script_exit_codes(tmp_path, home, index, expected, why):
 def test_check_script_leaves_tree_clean(tmp_path, home):
     repo, info = build(tmp_path, home, "A")
     check_at(tmp_path, repo, home, info["shas"][31], ex.path("check_free_shipping.sh"))
-    status = shop.git(repo, home, "status", "--porcelain", "--ignored")
+    status = tgit(tmp_path, repo, home, "status", "--porcelain", "--ignored")
     assert status == "", f"Script kiểm không được để lại tệp trong repo (bisect checkout sẽ hỏng):\n{status}"
 
 
@@ -91,10 +98,10 @@ def test_find_first_bad(tmp_path, home, layout):
 def test_find_first_bad_cleans_up(tmp_path, home, layout):
     repo, _ = build(tmp_path, home, layout)
     sandboxed([BASH, ex.path("find_first_bad.sh"), "v1.0.0", "main"], tmp_path, repo, home, timeout=120)
-    assert shop.git(repo, home, "symbolic-ref", "--short", "HEAD") == "main"
+    assert tgit(tmp_path, repo, home, "symbolic-ref", "--short", "HEAD") == "main"
     assert not (repo / ".git" / "BISECT_LOG").exists(), "Chưa chạy git bisect reset"
     assert not (repo / ".git" / "BISECT_START").exists(), "Chưa chạy git bisect reset"
-    assert shop.git(repo, home, "status", "--porcelain") == ""
+    assert tgit(tmp_path, repo, home, "status", "--porcelain") == ""
 
 
 def test_find_first_bad_reports_failure(tmp_path, home):
@@ -102,8 +109,37 @@ def test_find_first_bad_reports_failure(tmp_path, home):
     result = sandboxed([BASH, ex.path("find_first_bad.sh"), "main", "v1.0.0"], tmp_path, repo, home, timeout=120)
     assert result.returncode == 1, f"good và bad đảo ngược thì bisect không kết luận được: cần exit 1\n{result.stdout}{result.stderr}"
     assert not re.search(r"^first-bad ", result.stdout, re.M)
-    assert shop.git(repo, home, "symbolic-ref", "--short", "HEAD") == "main"
+    assert tgit(tmp_path, repo, home, "symbolic-ref", "--short", "HEAD") == "main"
     assert not (repo / ".git" / "BISECT_START").exists(), "Lỗi cũng phải git bisect reset"
+
+
+@pytest.fixture(autouse=True)
+def git_version():
+    ex.require_tool("git", min_version="2.30")
+
+
+def test_learner_git_config_never_runs_outside_sandbox(tmp_path, tmp_path_factory, home):
+    """Script của người học có thể đặt core.hooksPath hay core.fsmonitor; lệnh git của test không được chạy chúng ngoài sandbox."""
+    repo, info = build(tmp_path, home, "A")
+    outside = tmp_path_factory.mktemp("outside-sandbox")
+    marker = outside / "pwned"
+    hooks = tmp_path / "evil-hooks"
+    hooks.mkdir()
+    for name in ("post-checkout", "fsmonitor"):
+        hook = hooks / name
+        hook.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 0\n")
+        hook.chmod(0o755)
+    setup = sandboxed(
+        ["sh", "-c", f"git config core.hooksPath '{hooks}' && git config core.fsmonitor '{hooks / 'fsmonitor'}'"], tmp_path, repo, home
+    )
+    assert setup.returncode == 0, setup.stderr
+    check_at(tmp_path, repo, home, info["shas"][3], NAIVE)
+    tgit(tmp_path, repo, home, "status", "--porcelain")
+    shop.git(repo, home, "checkout", "-q", info["shas"][5])
+    shop.git(repo, home, "status", "--porcelain")
+    assert not marker.exists(), "Hook do người học cấu hình đã chạy ngoài sandbox"
+    subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, env=shop.git_env(home), capture_output=True)
+    assert marker.exists(), "Kiểm tra vô nghĩa: hook giả không chạy cả khi gọi git không bảo vệ"
 
 
 def test_builder_is_deterministic(tmp_path):
@@ -118,7 +154,7 @@ def test_naive_check_is_caught(tmp_path, home):
     assert check_at(tmp_path, repo, home, info["shas"][24], NAIVE).returncode == 1
     sandboxed(["git", "bisect", "start", "main", "v1.0.0"], tmp_path, repo, home)
     sandboxed(["git", "bisect", "run", BASH, NAIVE], tmp_path, repo, home, timeout=120)
-    found = shop.git(repo, home, "rev-parse", "refs/bisect/bad")
+    found = tgit(tmp_path, repo, home, "rev-parse", "refs/bisect/bad")
     assert found != info["shas"][info["layout"].bad]
     assert found in {info["shas"][i] for i in [*info["layout"].syntax, *info["layout"].missing_rates]}
 
