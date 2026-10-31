@@ -36,7 +36,7 @@ GPU:** cấu hình của bài Intermediate 01 bản CPU trên 2 000 bài, kết 
 1. Trong `starter/gpt_vi.ipynb`, viết 3 hàm được chấm: `save_checkpoint`, `load_checkpoint` (định dạng `gpt-mini-v1`, đặc tả
    trong notebook) và `distinct_n`.
 2. Dữ liệu: validation là đúng 100 bài của module 04; train là mọi bài dài (≥ 2 000 ký tự) còn lại của hai shard
-   `train-00001` và `train-00002` (14 473 bài, 95.5 triệu ký tự). Tokenizer BPE byte-level 8 000 train trên 1 000 bài
+   `train-00001` và `train-00002` (khoảng 95.5 triệu ký tự). Tokenizer BPE byte-level 8 000 train trên 1 000 bài
    train của module 04 (để bpc so được với LSTM và với bài Intermediate 01), hoặc tokenizer của bạn nếu ghi rõ lý do.
 3. Train `GPT` của bài Basic 01 với cấu hình hợp phần cứng; đánh giá định kỳ bằng `evaluate_nll` (cửa sổ trượt stride bằng nửa
    context), lưu checkpoint tốt nhất bằng `save_checkpoint`.
