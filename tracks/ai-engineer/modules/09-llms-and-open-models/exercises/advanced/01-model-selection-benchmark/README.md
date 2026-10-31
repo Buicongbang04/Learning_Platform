@@ -30,7 +30,8 @@ vì nó nói rõ chênh lệch nào là thật, chênh lệch nào là nhiễu.
 Thời gian trên là thời gian làm bài (viết hàm, thiết kế prompt, chạy, đọc lỗi, viết báo cáo). Thời gian máy chạy cho
 120 câu mỗi cấu hình, đo trên PC của track: `qwen2.5:3b` hết trên GPU khoảng 1 phút; `qwen2.5:7b` với một nửa số tầng
 trên GPU (giống laptop 4 GB) khoảng 3 phút; `Qwen2.5-0.5B-Instruct` bằng `transformers` trên CPU 4 luồng khoảng 2 phút.
-Laptop chỉ có CPU vẫn làm được: `qwen2.5:3b` chạy CPU khoảng 1.2 giây một câu, `qwen2.5:7b` chậm hơn vài lần.
+Không có GPU vẫn làm được: trên PC, chỉ CPU 4 luồng, `qwen2.5:3b` mất khoảng 1.2 giây một câu (p50) và sinh khoảng 7
+token/s với `qwen2.5:7b` (chậm hơn 3B khoảng 2.6 lần).
 
 Bài toán: tính năng "tự gắn chủ đề cho phản hồi của sinh viên" trên UIT-VSFC (4 chủ đề: giảng viên, chương trình đào
 tạo, cơ sở vật chất, khác). Ứng viên bắt buộc: `Qwen/Qwen2.5-0.5B-Instruct` (Hugging Face), `qwen2.5:3b`,

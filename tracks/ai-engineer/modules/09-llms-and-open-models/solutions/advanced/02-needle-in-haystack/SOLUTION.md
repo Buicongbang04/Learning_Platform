@@ -41,32 +41,40 @@ PC của track, Ollama 0.13.5, `qwen2.5:3b` Q4_K_M hết trên RTX 3060, `temper
 | khoảng 6 100 tới 6 800 | **4 096** | đếm được + 29 |
 | khoảng 12 100 tới 12 900 | **4 096** | đếm được + 29 |
 
-29 token chênh là chat template (system mặc định của Qwen cùng các thẻ `<|im_start|>`, `<|im_end|>`). Lưới chạy hai lần
-cho đúng cùng bảng và cùng câu trả lời (filler, mã số và `seed` ghim).
+29 token chênh là chat template (system mặc định của Qwen cùng các thẻ `<|im_start|>`, `<|im_end|>`). Log server
+(`journalctl -u ollama`) ghi cho mỗi prompt bị cắt một dòng `msg="truncating input prompt" limit=4096 prompt=... keep=4
+new=4096`: giữ 4 token đầu và 4 092 token cuối. Con số `prompt=` trong log chỉ lớn hơn số token đếm được 8 thay vì 29,
+nên khi cắt, Ollama còn bỏ khối system mặc định trước đó. Lưới chạy hai lần cho đúng cùng bảng và cùng câu trả lời
+(filler, mã số và `seed` ghim).
 
-Bảy ô sai, tất cả ở `num_ctx` mặc định:
+Bảy ô sai, tất cả ở `num_ctx` mặc định. "Vị trí trong cửa sổ" là số token từ đầu phần được giữ tới needle (âm nghĩa là
+needle đã bị cắt):
 
-| Ô (độ dài, depth) | Vị trí needle / số token prompt | Needle trong 4 096 token cuối? | Trả lời | Mã đúng |
+| Ô (độ dài, depth) | Vị trí needle / token prompt | Vị trí trong cửa sổ 4 096 | Trả lời | Mã đúng |
 | --- | --- | --- | --- | --- |
-| 6 000, 0 | 0 / 6 422 | không | `8884` | 3496 |
-| 6 000, 0.25 | 1 406 / 6 148 | không | `72019` | 7037 |
-| 6 000, 0.5 | 3 001 / 6 149 | **có** (cách đầu cửa sổ khoảng 950 token) | `4102` | 4547 |
-| 12 000, 0 | 0 / 12 454 | không | `409` | 8619 |
-| 12 000, 0.25 | 2 761 / 12 273 | không | `456` | 1803 |
-| 12 000, 0.5 | 5 479 / 12 574 | không | `643` | 1198 |
-| 12 000, 0.75 | 9 147 / 12 154 | **có** (cách đầu cửa sổ khoảng 1 100 token) | `123456` | 1723 |
+| 6 000, 0 | 0 / 6 422 | âm | `8884` | 3496 |
+| 6 000, 0.25 | 1 406 / 6 148 | âm | `72019` | 7037 |
+| 6 000, 0.5 | 3 001 / 6 149 | khoảng 950 | `4102` | 4547 |
+| 12 000, 0 | 0 / 12 454 | âm | `409` | 8619 |
+| 12 000, 0.25 | 2 761 / 12 273 | âm | `456` | 1803 |
+| 12 000, 0.5 | 5 479 / 12 574 | âm | `643` | 1198 |
+| 12 000, 0.75 | 9 147 / 12 154 | khoảng 1 090 | `123456` | 1723 |
+
+Các ô đúng ở `num_ctx` mặc định có needle ở khoảng 2 310 (6 000, depth 0.75) và khoảng 4 055 (depth 1) trong cửa sổ.
 
 Đọc kết quả:
 
 - **Gốc của mọi ô sai là runtime cắt prompt.** Ở `num_ctx` 16 384 cùng các độ dài đó đúng 20/20, nên model đọc được cả
-  12 000 token khi được đọc hết. Ở `num_ctx` mặc định, prompt dài hơn 4 096 token bị cắt còn 4 096 (thấy ở
-  `prompt_eval_count`); câu hỏi ở cuối vẫn còn nên Ollama đã giữ phần cuối. Năm ô sai có needle nằm ngoài 4 096 token
-  cuối: dữ kiện đơn giản là không còn.
-- **Hai ô sai dù needle có vẻ còn trong phần được đọc** (bảng trên, cột "có"), trong khi ô 6 000 depth 0.75 (needle cách
-  đầu cửa sổ khoảng 2 300 token) và các ô depth 1 vẫn đúng. Hai giả thuyết, bài này không tách được: quy tắc cắt của
-  Ollama không đúng là "giữ 4 096 token cuối" (nó giữ vài token đầu, `num_keep`, rồi bỏ một khúc), hoặc prompt bị cắt
-  mất phần mở của chat template và câu đầu bị đứt nên model đọc kém phần đầu cửa sổ. Kết luận an toàn: **prompt đã bị cắt
-  thì không dự đoán được model còn dùng được phần nào**. Báo cáo tốt nói rõ chỗ này thay vì bịa một quy tắc gọn.
+  12 000 token khi được đọc hết. Năm ô sai có needle nằm ngoài phần được giữ: dữ kiện đơn giản là không còn.
+- **Hai ô còn lại rất có thể là context shift.** Prompt sau khi cắt lấp đầy đúng 4 096 vị trí của cache. Token đầu tiên
+  của câu trả lời được sinh khi cache vẫn nguyên; để sinh token thứ hai, runner phải dời context, bỏ khoảng
+  $$(4096 - 4) / 2 \approx 2\,046$$ token ngay sau 4 token giữ lại. Needle ở vị trí khoảng 950 và 1 090 rơi đúng vào
+  khúc bị bỏ, needle ở khoảng 2 310 thì không. Ba manh mối khớp với cơ chế này: chữ số đầu của cả hai câu trả lời đều
+  đúng (`4`102 cho 4547, `1`23456 cho 1723: Qwen2.5 tách số thành từng chữ số, và chữ số đầu được sinh trước khi dời);
+  gửi lại hai prompt đó với `num_predict` 1 thì nhận đúng `4` và `1`; gửi với `"shift": false` thì Ollama dừng sau
+  **một** token với `done_reason` `"length"`, tức là cache đã đầy ngay sau prompt. Chưa xác nhận trực tiếp bằng log
+  debug (`OLLAMA_DEBUG=1` cần khởi động lại service dùng chung của máy). Hệ quả thực tế: prompt vừa khít `num_ctx` vẫn
+  hỏng; quy tắc đúng là số token prompt cộng `num_predict` không vượt `num_ctx`.
 - **Model trả lời sai bằng giọng tự tin**: không ô nào trả "không tìm thấy". `456` có trong filler (số gần câu hỏi);
   `8884`, `72019`, `4102`, `409`, `643` không có trong prompt; `123456` là bịa hẳn. Không HTTP lỗi, `done_reason` bình
   thường. Đây là kiểu lỗi nguy hiểm nhất cho hỏi đáp tài liệu.
@@ -77,9 +85,9 @@ Bảy ô sai, tất cả ở `num_ctx` mặc định:
 - **Cái giá của `num_ctx` lớn**: prompt 12 000 token mất khoảng 4 giây thay vì 1.5 giây (đọc hết thay vì 4 096 token),
   KV cache khoảng 0.56 GiB ở 16 384 token, và đổi `num_ctx` làm nạp lại model.
 
-Khuyến nghị của bản tham chiếu: với `qwen2.5:3b` qua Ollama, đặt `num_ctx` theo độ dài prompt thật cộng phần trả lời,
-**luôn** kiểm `prompt_eval_count` so với số token đếm được và báo lỗi khi bằng đúng `num_ctx`; với tài liệu dài hơn vài
-nghìn token và câu hỏi cần nhiều đoạn, chunk và retrieve (module 13) thay vì tin vào context dài của một model 3B.
+Khuyến nghị của bản tham chiếu: với `qwen2.5:3b` qua Ollama, đặt `num_ctx` sao cho số token prompt cộng `num_predict`
+không vượt nó, **luôn** kiểm `prompt_eval_count` so với số token đếm được và báo lỗi khi bằng đúng `num_ctx` (hoặc gửi
+`"shift": false` để Ollama dừng thay vì âm thầm bỏ context); với tài liệu dài hơn vài nghìn token và câu hỏi cần nhiều đoạn, chunk và retrieve (module 13) thay vì tin vào context dài của một model 3B.
 
 ## Rubric
 
@@ -87,7 +95,7 @@ nghìn token và câu hỏi cần nhiều đoạn, chunk và retrieve (module 13
 | --- | --- | --- |
 | Test | 15 | Mọi test pass |
 | Thiết lập | 15 | Lưới đủ 40 ô, mã khác nhau mỗi ô, filler không lặp, đếm token bằng tokenizer thật, cache, giải phóng model khi xong |
-| Phát hiện cắt prompt | 25 | Có bảng `prompt_eval_count` so với số token đếm được; nhận ra mọi ô sai ở `num_ctx` mặc định là do cắt; tính vị trí needle so với cửa sổ được đọc cho từng ô sai, và nói thẳng ô nào không giải thích được bằng "giữ phần cuối" |
+| Phát hiện cắt prompt | 25 | Có bảng `prompt_eval_count` so với số token đếm được; nhận ra mọi ô sai ở `num_ctx` mặc định là do cắt; tính vị trí needle trong cửa sổ được giữ cho từng ô sai; giải thích (hoặc ít nhất nêu) các ô needle còn trong cửa sổ mà vẫn sai, dùng manh mối chữ số đầu đúng hoặc thí nghiệm `num_predict` 1 / `"shift": false` |
 | Diễn giải trung thực | 20 | Không kết luận "lost in the middle" từ ô bị cắt; nói rõ bài needle đơn là bài dễ, không chứng minh hiểu cả tài liệu |
 | Khuyến nghị | 15 | Cấu hình cụ thể (`num_ctx`, kiểm `prompt_eval_count`, khi nào chuyển sang RAG), có cái giá (thời gian, bộ nhớ) |
 | Báo cáo | 10 | Tóm tắt có số ở đầu, thiết lập tái lập được (phiên bản Ollama, phần cứng), giới hạn |

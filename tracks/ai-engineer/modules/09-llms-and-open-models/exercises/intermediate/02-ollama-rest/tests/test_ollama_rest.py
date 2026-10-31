@@ -36,16 +36,16 @@ def chunk(text, done=False, **extra):
                       ensure_ascii=False)
 
 
-FINAL = {"done_reason": "stop", "total_duration": 4_941_787_756, "load_duration": 297_602_624,
-         "prompt_eval_count": 38, "prompt_eval_duration": 529_157_015, "eval_count": 6,
-         "eval_duration": 4_036_382_601}
+FINAL = {"done_reason": "stop", "total_duration": 2_837_037_315, "load_duration": 2_540_741_849,
+         "prompt_eval_count": 38, "prompt_eval_duration": 29_690_759, "eval_count": 16,
+         "eval_duration": 219_906_745}
 
 
 def test_parse_stream_concatenates(nb):
     lines = [chunk("X"), chunk("in"), "", chunk(" chào"), chunk(" bạn!"), chunk("", done=True, **FINAL)]
     text, final = nb.parse_stream(lines)
     assert text == "Xin chào bạn!"
-    assert final["done"] is True and final["eval_count"] == 6
+    assert final["done"] is True and final["eval_count"] == 16
 
 
 def test_parse_stream_bytes_and_stops_at_done(nb):
@@ -64,11 +64,11 @@ def test_parse_stream_errors(nb):
 def test_speed_stats(nb):
     s = nb.speed_stats({"done": True, **FINAL})
     assert set(s) == {"load_s", "prompt_tokens", "prompt_tps", "gen_tokens", "gen_tps", "total_s"}
-    assert s["load_s"] == pytest.approx(0.297602624)
-    assert s["prompt_tokens"] == 38 and s["gen_tokens"] == 6
-    assert s["prompt_tps"] == pytest.approx(38 / 0.529157015)
-    assert s["gen_tps"] == pytest.approx(6 / 4.036382601)
-    assert s["total_s"] == pytest.approx(4.941787756)
+    assert s["load_s"] == pytest.approx(2.540741849)
+    assert s["prompt_tokens"] == 38 and s["gen_tokens"] == 16
+    assert s["prompt_tps"] == pytest.approx(38 / 0.029690759)
+    assert s["gen_tps"] == pytest.approx(16 / 0.219906745)
+    assert s["total_s"] == pytest.approx(2.837037315)
 
 
 def test_speed_stats_missing_fields(nb):

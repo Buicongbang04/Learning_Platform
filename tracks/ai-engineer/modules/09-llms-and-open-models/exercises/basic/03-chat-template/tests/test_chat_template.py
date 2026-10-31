@@ -135,6 +135,15 @@ def test_fit_history_contiguous_and_per_message(ct):
     assert ct.fit_history(h, 22, words, per_message=0) == [h[2], h[3], h[4]]
 
 
+def test_fit_history_drops_leading_tool_and_assistant(ct):
+    """Không system; đoạn giữ được là [tool, assistant, user]: bỏ tool và assistant đứng đầu cho tới message user."""
+    h = conv(("user", "q1 q1 q1 q1 q1 q1"), ("tool", "t"), ("assistant", "a"), ("user", "q2"))
+    assert ct.fit_history(h, 15, words) == [h[3]]
+    assert ct.fit_history(h, 25, words) == h
+    only_tool = conv(("system", "s"), ("tool", "t"))
+    assert ct.fit_history(only_tool, 20, words) == [only_tool[0]], "đoạn không có message user nào thì chỉ còn system"
+
+
 def test_fit_history_too_small_raises(ct):
     with pytest.raises(ValueError):
         ct.fit_history(HIST, 12, words)

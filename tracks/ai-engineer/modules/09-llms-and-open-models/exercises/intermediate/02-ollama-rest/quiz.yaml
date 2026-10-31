@@ -25,32 +25,32 @@ questions:
     text: Hai lời gọi bằng nhau, vì model đã nằm trong bộ nhớ
   - id: d
     text: Lời gọi mặc định, vì Ollama phải cắt bớt phần đầu prompt trước khi nạp
-- id: parameter-lines
-  kind: data
+- id: list-parameter
+  kind: knowledge
   type: single
-  prompt: Modelfile in ra ở cell cuối có bao nhiêu dòng `PARAMETER`?
+  prompt: Trong `render_modelfile`, tham số `stop` có giá trị là list hai chuỗi thì được viết thành gì?
   options:
   - id: a
-    text: '3'
+    text: Một dòng PARAMETER chứa cả list dạng JSON
   - id: b
-    text: '4'
+    text: Hai dòng PARAMETER stop, mỗi dòng một chuỗi
   - id: c
-    text: '5'
+    text: Một dòng PARAMETER stop nối hai chuỗi bằng dấu phẩy
   - id: d
-    text: '6'
-- id: license-key
-  kind: data
+    text: Không viết gì, vì stop chỉ đặt được qua options
+- id: license-name
+  kind: knowledge
   type: single
-  prompt: Trong `model_info` của `/api/show`, khoá `general.license` của `qwen2.5:3b` có giá trị gì?
+  prompt: Vì sao `model_facts` đọc `general.license.name` trước `general.license`?
   options:
   - id: a
-    text: "'apache-2.0'"
+    text: general.license.name luôn ngắn hơn nên dễ hiển thị
   - id: b
-    text: "'other'"
+    text: Giấy phép không chuẩn ghi "other", tên thật ở .name
   - id: c
-    text: "'qwen-research'"
+    text: general.license chỉ có ở model embedding
   - id: d
-    text: Không có khoá này
+    text: Ollama 0.13 đã bỏ hẳn khoá general.license
 - id: detect-truncation
   kind: knowledge
   type: single

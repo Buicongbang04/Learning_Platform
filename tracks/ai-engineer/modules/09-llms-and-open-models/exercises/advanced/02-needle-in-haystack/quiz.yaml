@@ -12,19 +12,19 @@ questions:
     text: '235'
   - id: d
     text: '380'
-- id: eval-count-default
+- id: truncated-cells
   kind: data
   type: single
-  prompt: Ở `num_ctx` mặc định, prompt khoảng 12 000 token có `prompt_eval_count` bằng bao nhiêu?
+  prompt: Ở `num_ctx` mặc định, những ô nào có `prompt_eval_count` nhỏ hơn số token bạn đếm cho prompt?
   options:
   - id: a
-    text: '2 048'
+    text: Không ô nào
   - id: b
-    text: '4 096'
+    text: Chỉ các ô 12 000 token
   - id: c
-    text: Khoảng 12 000
+    text: Các ô 6 000 và 12 000 token
   - id: d
-    text: '32 768'
+    text: Mọi ô từ 3 000 token trở lên
 - id: template-overhead
   kind: data
   type: single
@@ -80,7 +80,7 @@ questions:
 - id: wrong-answer-style
   kind: knowledge
   type: single
-  prompt: Khi needle đã bị cắt mất, `qwen2.5:3b` thường phản ứng thế nào?
+  prompt: Trong bản tham chiếu, khi needle đã bị cắt mất, `qwen2.5:3b` phản ứng thế nào?
   options:
   - id: a
     text: Trả lời "không tìm thấy mã số trong văn bản"

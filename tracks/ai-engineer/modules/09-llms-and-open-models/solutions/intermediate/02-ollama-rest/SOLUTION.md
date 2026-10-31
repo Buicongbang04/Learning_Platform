@@ -36,7 +36,10 @@ khoảng 20 giây khi model đã có trong page cache; lần đầu sau khi kh�
 | Đọc prompt dài | khoảng 3 700 tới 4 100 token/s |
 
 Bốn lần gọi lại `/api/chat` với `temperature` 0, `seed` 42 cho cùng một chuỗi với nhau nhưng **khác** lần stream đầu
-tiên; `llmkit.chat` khớp các lần gọi lại; `/v1/chat/completions` cho câu thứ ba. Model con `ae09-tro-ly` trả lời "Hugging
+tiên; `llmkit.chat` khớp các lần gọi lại; `/v1/chat/completions` cho câu thứ ba. Gọi cùng request qua Ollama SDK
+(`ollama.Client.chat`, cả không stream lẫn stream) cho đúng cùng `prompt_eval_count` 48, `eval_count` 41,
+`done_reason` `"stop"` và cùng câu trả lời với lần gọi REST ngay trước đó: SDK chỉ là lớp mỏng trên `/api/chat`, đổi
+dict sang object có thuộc tính và parse NDJSON giúp bạn. Model con `ae09-tro-ly` trả lời "Hugging
 Face là gì?" bằng tiếng Trung và "Ollama là gì?" bằng `'Ollama: Không rõ ý định cụ thể.'`.
 
 ## Đọc kết quả

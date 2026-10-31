@@ -25,7 +25,7 @@ phổ biến nhất khi chạy model local: prompt dài bị `num_ctx` cắt m�
 **Phần cứng:** CPU · ~60 phút
 
 Cần Ollama đang chạy với `qwen2.5:3b` (GPU 4 GB giúp nhanh hơn nhưng không bắt buộc). Ngoài thời gian làm bài, các
-cell `explore` gọi model khoảng 12 lần, trong đó 2 lần với prompt vài nghìn token: trên PC của track (model hết trên
+cell `explore` gọi model khoảng 16 lần, trong đó 2 lần với prompt vài nghìn token: trên PC của track (model hết trên
 GPU) cả notebook chạy khoảng 20 giây khi model đã ở page cache. Trên laptop GPU 4 GB hoặc chỉ CPU, prompt dài chậm hơn
 nhiều lần (chỉ CPU 4 luồng, `qwen2.5:3b` sinh khoảng 15 token/s): tính vài phút. Lần nạp model đầu tiên sau khi khởi
 động máy có thể mất cả phút.
@@ -41,7 +41,8 @@ Mở `starter/ollama_rest.ipynb`. Trong cell chấm điểm:
 5. `render_modelfile(base, system, parameters)`: Modelfile với `FROM`, `PARAMETER`, `SYSTEM`.
 
 Rồi chạy các cell `explore`: liệt kê model và đọc thông tin `qwen2.5:3b`, `qwen2.5:7b`; stream một câu trả lời, đo
-TTFT và token/s, xem `/api/ps`; gọi lại nhiều lần ở `temperature` 0 và so với `llmkit.chat`, `/v1/chat/completions`; thí nghiệm `num_ctx` với
+TTFT và token/s, xem `/api/ps`; gọi lại nhiều lần ở `temperature` 0 và so với `llmkit.chat`, `/v1/chat/completions`; gọi cùng request qua Ollama SDK
+(`ollama.Client`) và so số token với REST; thí nghiệm `num_ctx` với
 prompt dài có dữ kiện ở đầu; tạo model con từ Modelfile, gọi thử, xoá. Sau đó làm phần trắc nghiệm
 của bài trong app.
 

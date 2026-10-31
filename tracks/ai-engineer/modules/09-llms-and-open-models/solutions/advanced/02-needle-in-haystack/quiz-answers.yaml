@@ -1,5 +1,5 @@
 n-fillers: [c]
-eval-count-default: [b]
+truncated-cells: [c]
 template-overhead: [c]
 which-survives: [c]
 no-error: [b]

@@ -29,8 +29,9 @@ vào prompt.
 
 Thời gian trên là thời gian làm bài. Thời gian máy chạy, đo trên PC của track với `qwen2.5:3b` hết trên GPU: lưới 40 ô
 (4 độ dài × 5 vị trí × 2 `num_ctx`) khoảng 1.5 phút, prompt 12 000 token khoảng 4 giây. `qwen2.5:3b` ở `num_ctx` 16 384
-cần khoảng 0.6 GiB KV cache fp16 cộng trọng số, vẫn vừa GPU 4 GB. Laptop chỉ có CPU: đọc prompt khoảng 500 token/s,
-tính 25 giây cho mỗi prompt 12 000 token, cả lưới khoảng 15 phút.
+cần khoảng 0.6 GiB KV cache fp16 cộng trọng số, vẫn vừa GPU 4 GB. Chỉ có CPU: trên PC, Ollama giới hạn 4 luồng đọc
+prompt khoảng 500 token/s, nên **ước lượng** khoảng 25 giây cho mỗi prompt 12 000 token và khoảng 15 phút cho cả lưới
+(chưa chạy cả lưới ở chế độ CPU).
 
 1. Trong `starter/needle.ipynb`, cell chấm điểm: `build_haystack` và `needle_found` theo mô tả trong notebook.
 2. Cell `explore`: filler là các bài Wikipedia tiếng Việt (cell có sẵn), đếm token bằng tokenizer Qwen2.5 (cùng
@@ -62,7 +63,8 @@ thông tin dù đã đọc), nói rõ bài test này dễ hay khó so với vi�
 
 Trước khi nhìn tỉ lệ đúng, nhìn `prompt_eval_count`. Nếu nó dừng ở cùng một con số cho mọi prompt dài, mọi kết luận về
 "vị trí" ở các ô đó là kết luận về **phần nào của prompt còn lại**, không phải về khả năng của model. Thử đoán trước:
-runtime giữ phần đầu hay phần cuối của prompt, và vị trí needle nào sống sót.
+runtime giữ phần đầu hay phần cuối của prompt, và vị trí needle nào sống sót. Ô nào không khớp dự đoán thì xem log
+server (`journalctl -u ollama` trên Linux) và nghĩ xem cache còn chỗ cho câu trả lời không.
 
 ### Gợi ý 2
 

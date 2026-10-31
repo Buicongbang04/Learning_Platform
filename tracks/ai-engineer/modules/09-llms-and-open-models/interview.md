@@ -50,7 +50,7 @@ trí (RoPE, cửa sổ train) và bộ nhớ. Con số quảng cáo là **trần
 
 - **Cấu hình runtime**: Ollama nạp model với `num_ctx` mặc định nhỏ hơn nhiều (Ollama 0.13.5: `qwen2.5:3b` hỗ trợ
   32 768 nhưng nạp với 4 096) và **cắt prompt dài mà không báo lỗi**. Đo ở bài Intermediate 02: prompt vài nghìn
-  token bị cắt còn 4 096, dữ kiện ở đầu prompt mất, model trả lời sai với HTTP 200.
+  token bị cắt còn đúng `num_ctx`, dữ kiện ở đầu prompt mất, model trả lời sai với HTTP 200.
 - **Bộ nhớ**: KV cache tăng tuyến tính theo context; 32k token có thể tốn nhiều VRAM hơn chính trọng số Q4 (với model
   MHA như Phi-3 mini: 1.5 GiB cho mỗi 4 096 token).
 - **Chất lượng**: model dùng thông tin ở giữa context dài kém hơn ở đầu và cuối ("lost in the middle"); khả năng

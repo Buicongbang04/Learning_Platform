@@ -115,13 +115,14 @@ Cut-off là ngày dữ liệu pre-training dừng. Ba điều cần nhớ:
 
 Model đóng chỉ dùng được qua API của nhà cung cấp (hoặc các cloud bán lại); bạn không có trọng số. Bảng dưới mô tả
 **năng lực theo họ model**, không phải phiên bản cụ thể: tên model đổi vài tháng một lần, nên luôn xem trang "Models"
-trong docs chính thức (link ở mục 8) khi chọn. Module này không ghi giá: giá đổi thường xuyên, và module 11 dạy tính
+trong docs chính thức (link ở mục 8) khi chọn. Tên dòng model kiểm ngày 2026-10-30; ví dụ trang Anthropic khi đó liệt kê
+Claude Fable 5.1, Opus 5.5, Sonnet 5.5 và Haiku 5.5. Module này không ghi giá: giá đổi thường xuyên, và module 11 dạy tính
 chi phí theo token từ bảng giá hiện hành.
 
 | Nhà cung cấp | Họ model | Điểm mạnh nổi bật |
 | --- | --- | --- |
-| OpenAI | GPT (đa năng, đa phương thức), dòng reasoning "o", embedding, audio | Hệ sinh thái lớn nhất; API Chat Completions/Responses thành chuẩn de facto mà nhiều server khác bắt chước |
-| Anthropic | Claude (các bậc Opus, Sonnet, Haiku) | Lập luận, viết code, context dài, tool use, agent |
+| OpenAI | GPT (đa năng, đa phương thức, có chế độ reasoning), embedding, audio | Hệ sinh thái lớn nhất; API Chat Completions/Responses thành chuẩn de facto mà nhiều server khác bắt chước |
+| Anthropic | Claude (Fable, Opus, Sonnet, Haiku) | Lập luận, viết code, context dài, tool use, agent |
 | Google | Gemini (các bậc Pro, Flash) | Đa phương thức gốc (ảnh, âm thanh, video), context rất dài, gắn với Google Cloud (Vertex AI) |
 | Mistral AI | Model thương mại qua API (vd. Mistral Large) **và** nhiều model mở trọng số | Công ty châu Âu, có cả hai đường đóng và mở |
 | Cohere | Command (chat, RAG, tool use), Embed, Rerank | Hướng doanh nghiệp: RAG có trích dẫn, embedding và reranker đa ngôn ngữ |
@@ -264,10 +265,30 @@ vòng sinh. Ba cách chạy khác cùng hệ sinh thái:
 
 - **Inference Providers / `InferenceClient`** (`huggingface_hub`): gọi model trên hạ tầng của Hugging Face hoặc đối
   tác qua API, không cần GPU; cần token, có hạn mức miễn phí. Inference Endpoints: thuê endpoint riêng cho một model.
+  Dạng gọi (cần `HF_TOKEN`, track không chạy khối này):
+
+  ```text
+  from huggingface_hub import InferenceClient
+  client = InferenceClient(token=os.environ["HF_TOKEN"])
+  out = client.chat_completion(model="Qwen/Qwen2.5-7B-Instruct",
+                               messages=[{"role": "user", "content": "Xin chào"}], max_tokens=50)
+  print(out.choices[0].message.content)
+  ```
+
 - **Text Generation Inference, vLLM, SGLang**: server production đọc thẳng repo Hub (module 20).
 - **[Transformers.js](https://huggingface.co/docs/transformers.js)**: cùng API `pipeline` nhưng bằng JavaScript, chạy
   model ONNX ngay trong trình duyệt (WebGPU/WASM) hoặc Node: không server, dữ liệu không rời máy người dùng, hợp với
-  model nhỏ (embedding, phân loại, Whisper tiny, LLM vài trăm triệu tham số).
+  model nhỏ (embedding, phân loại, Whisper tiny, LLM vài trăm triệu tham số). Dạng gọi trong trình duyệt hoặc Node
+  (cần `npm install @huggingface/transformers`, track không chạy khối này; model phải có bản ONNX, như các repo của
+  `onnx-community` hay `Xenova`):
+
+  ```js
+  import { pipeline } from "@huggingface/transformers";
+  const classify = await pipeline("sentiment-analysis", "Xenova/distilbert-base-uncased-finetuned-sst-2-english");
+  console.log(await classify("I love this course!"));
+  const chat = await pipeline("text-generation", "onnx-community/Qwen2.5-0.5B-Instruct", { dtype: "q4" });
+  console.log(await chat([{ role: "user", content: "Xin chào" }], { max_new_tokens: 40 }));
+  ```
 
 `pipeline` giấu vòng sinh token và các tham số mặc định. Bài Intermediate 01 mở nó ra và tìm thấy một bất ngờ ở
 mục 5.
@@ -462,13 +483,16 @@ Ollama phục vụ ở cổng 11434: `/api/chat`, `/api/generate`, `/api/embed`,
 mang một mảnh `message.content`, dòng cuối có `"done": true` kèm thống kê tính bằng nano giây:
 
 ```text
-{"model":"qwen2.5:3b","message":{"role":"assistant","content":"X"},"done":false}
-{"model":"qwen2.5:3b","message":{"role":"assistant","content":"in"},"done":false}
+{"model":"qwen2.5:3b","created_at":"2026-10-31T17:57:30.197603032Z","message":{"role":"assistant","content":"Ch"},"done":false}
+{"model":"qwen2.5:3b","created_at":"2026-10-31T17:57:30.220247127Z","message":{"role":"assistant","content":"ào"},"done":false}
 ...
-{"model":"qwen2.5:3b","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop",
- "total_duration":4941787756,"load_duration":297602624,"prompt_eval_count":38,"prompt_eval_duration":529157015,
- "eval_count":6,"eval_duration":4036382601}
+{"model":"qwen2.5:3b","created_at":"2026-10-31T17:57:30.450827191Z","message":{"role":"assistant","content":""},
+ "done":true,"done_reason":"stop","total_duration":2837037315,"load_duration":2540741849,"prompt_eval_count":38,
+ "prompt_eval_duration":29690759,"eval_count":16,"eval_duration":219906745}
 ```
+
+(Bắt trên PC của track, "Xin chào, trả lời một câu.", lần gọi ngay sau khi model được nạp: 2.5 trong 2.8 giây là
+`load_duration`.)
 
 `llmkit.chat` (track) gói một lời gọi không stream; dưới đây là lời gọi thô tương đương bằng `httpx`:
 
@@ -507,19 +531,60 @@ cao là lần đầu tính cả prompt, các lần sau dùng lại KV cache củ
 cần một token đổi hạng là cả đuôi câu khác. `/v1/chat/completions` với cùng tham số cho câu thứ ba. Greedy là tất định
 về **toán học**, không phải về **số học dấu phẩy động**: test và eval phải chịu được điều đó.
 
+### Ollama SDK cho Python
+
+Gói `ollama` (có trong môi trường của track) là lớp mỏng trên đúng REST API ở trên: `client.chat(...)` gửi
+`POST /api/chat`, `options` là dict `options` của payload, `stream=True` trả về iterator các mảnh NDJSON đã parse,
+`client.show`, `client.ps`, `client.list`, `client.create`, `client.delete` ứng với `/api/show`, `/api/ps`, `/api/tags`,
+`/api/create`, `/api/delete`. Response là object có thuộc tính (`r.message.content`, `r.prompt_eval_count`,
+`r.done_reason`) thay vì dict, nhưng cùng trường. Khối dưới cần Ollama đang chạy với `qwen2.5:3b`:
+
+```python
+import httpx
+import ollama
+
+client = ollama.Client(host="http://localhost:11434")
+messages = [{"role": "user", "content": "Ollama là gì? Trả lời một câu."}]
+options = {"temperature": 0, "seed": 42, "num_predict": 60}
+
+raw = httpx.post("http://localhost:11434/api/chat", timeout=300,
+                 json={"model": "qwen2.5:3b", "messages": messages, "stream": False, "options": options}).json()
+r = client.chat(model="qwen2.5:3b", messages=messages, options=options)
+print("REST:", raw["prompt_eval_count"], raw["eval_count"], raw["done_reason"])
+print("SDK :", r.prompt_eval_count, r.eval_count, r.done_reason)
+
+for part in client.chat(model="qwen2.5:3b", messages=messages, options=options, stream=True):
+    print(part.message.content, end="", flush=True)
+print()
+info = client.show("qwen2.5:3b").modelinfo
+print(info["qwen2.context_length"], info.get("general.license.name"))
+print([(m.model, m.size_vram) for m in client.ps().models])
+```
+
+`prompt_eval_count` luôn bằng nhau (cùng prompt, cùng template); câu trả lời của lời gọi **đầu tiên** sau khi nạp model
+có thể khác các lần sau (đoạn trên). Chọn SDK hay REST là chuyện tiện: SDK có kiểu dữ liệu và async (`ollama.AsyncClient`),
+REST thô không thêm phụ thuộc và giống hệt mọi ngôn ngữ khác. Code cần đổi nhà cung cấp dễ dàng thì đi qua endpoint
+tương thích OpenAI hoặc một lớp như `llmkit`.
+
 ### Bẫy `num_ctx`
 
 Ollama nạp model với context `num_ctx` cấu hình được (mặc định của server này là 4 096, thấy ở `/api/ps`), **không
-phải** context tối đa của model. Prompt dài hơn bị cắt bớt phần đầu mà **không có lỗi nào**. Bài Intermediate 02 đặt
+phải** context tối đa của model. Prompt dài hơn bị cắt bớt phần đầu mà **không có lỗi nào** trong response; chỉ log
+của server có một dòng cảnh báo `msg="truncating input prompt" limit=4096 prompt=... keep=4 new=4096` (giữ 4 token
+đầu và phần cuối của prompt). Bài Intermediate 02 đặt
 một dữ kiện ("mã số của kho lưu trữ là 7429") ở đầu, theo sau khoảng 20 000 ký tự Wikipedia tiếng Việt, câu hỏi ở
 cuối. Với `num_ctx` mặc định, model trả lời sai mã số; với `num_ctx` 8 192, trả lời đúng. Response sai có HTTP 200,
-`done_reason` bình thường, không cảnh báo nào. Dấu hiệu duy nhất là `prompt_eval_count` dừng đúng ở 4 096 trong khi
-prompt thật dài hơn nhiều (bài tập cho bạn đo bao nhiêu). Văn bản Wikipedia dày số và tên riêng nên số ký tự mỗi token
+`done_reason` bình thường, không cảnh báo nào. Dấu hiệu duy nhất trong response là `prompt_eval_count` dừng đúng bằng
+`num_ctx` trong khi prompt thật dài hơn nhiều (bài tập cho bạn đo bao nhiêu). Văn bản Wikipedia dày số và tên riêng nên số ký tự mỗi token
 thấp hơn hẳn mức 3.5 của câu hội thoại ở mục 4: ước lượng token bằng số ký tự phải chừa biên rộng, hoặc đếm bằng
 tokenizer thật.
 
-Đặt `options.num_ctx` (hoặc `PARAMETER num_ctx` trong Modelfile, hoặc biến môi trường `OLLAMA_CONTEXT_LENGTH` của
-server) theo độ dài prompt thật cộng phần trả lời, và kiểm `prompt_eval_count` trong response. Đổi `num_ctx` làm
+Prompt vừa khít `num_ctx` cũng chưa an toàn: cache đã đầy thì để sinh token tiếp theo, runner làm **context shift**,
+bỏ khoảng một nửa cache ngay sau các token giữ lại, và model mất luôn phần đó giữa chừng câu trả lời (bài Advanced 02
+gặp đúng hiện tượng này). Quy tắc: **số token prompt + `num_predict` ≤ `num_ctx`**. Đặt `options.num_ctx` (hoặc
+`PARAMETER num_ctx` trong Modelfile, hoặc biến môi trường `OLLAMA_CONTEXT_LENGTH` của server) theo quy tắc đó, kiểm
+`prompt_eval_count` trong response, và đặt `"shift": false` khi muốn Ollama dừng (`done_reason` `"length"`) thay vì
+âm thầm bỏ context. Đổi `num_ctx` làm
 Ollama **nạp lại** model (vài giây) và tăng KV cache (mục 7).
 
 ### Modelfile
@@ -540,7 +605,8 @@ SYSTEM """Bạn là trợ lý tiếng Việt. Luôn trả lời đúng một câ
 template), `ADAPTER` (LoRA, module 14), `FROM ./model.gguf` (nhập GGUF của bạn, module 10). `ollama show --modelfile
 qwen2.5:3b` in Modelfile của model có sẵn: cách nhanh nhất để đọc template và giấy phép.
 
-Modelfile chỉ đổi **cấu hình**, không đổi năng lực. Model con trên, gọi trong bài Intermediate 02, trả lời "Hugging Face
+Modelfile chỉ đổi **cấu hình**, không đổi năng lực. Model con cùng system prompt này, tạo trong bài Intermediate 02,
+trả lời "Hugging Face
 là gì?" bằng `'Hugging Face是一家科技公司。'` (tiếng Trung, dù system prompt ghi "trợ lý tiếng Việt") và "Ollama là gì?"
 bằng `'Ollama: Không rõ ý định cụ thể.'`. Hỏi thêm vài seed, model đoán Ollama là "Người máy" hay "Đồ giả mạo". Ép một
 model 3B trả lời thật ngắn về thứ nó không chắc là công thức sinh ra hallucination; model đa ngôn ngữ nhỏ thỉnh thoảng
@@ -584,9 +650,10 @@ Ba bài học từ bảng:
 - **GQA quyết định KV cache**: Phi-3 mini (32 KV head) tốn KV cache gấp hơn 10 lần Qwen2.5-3B (2 KV head) ở cùng
   context, gần bằng chính trọng số Q4 của nó.
 - **Không vừa thì vẫn chạy, nhưng chậm**: Ollama đặt phần tầng không vừa lên CPU. Đo trên PC, Ollama giới hạn 4 luồng
-  CPU, cùng prompt, 128 token: `qwen2.5:3b` hết trên GPU sinh khoảng 130 token/s; chỉ CPU khoảng 15 token/s;
-  `qwen2.5:7b` với 14 tầng trên GPU (2.86 GB VRAM, giả lập GPU 4 GB của laptop, phần còn lại trên CPU) khoảng 11
-  token/s. Nửa model trên GPU vẫn chậm gần bằng chạy hết trên CPU, vì mỗi token phải đi qua phần chậm nhất.
+  CPU: `qwen2.5:7b` chỉ CPU sinh khoảng 7 token/s; với 14 tầng trên GPU (2.86 GB VRAM, giả lập GPU 4 GB của laptop,
+  phần còn lại trên CPU) khoảng 11 token/s. Thời gian mỗi token là tổng thời gian qua phần GPU và phần CPU, và phần CPU
+  chiếm gần hết, nên đưa nửa model lên GPU chỉ nhanh hơn chưa tới 2 lần. Để so: `qwen2.5:3b` vừa hết GPU sinh khoảng
+  130 token/s, chỉ CPU khoảng 15 token/s.
 
 ```mermaid
 flowchart TD
@@ -619,7 +686,7 @@ không", không đủ để xếp sát 100% VRAM.
   [Generation strategies](https://huggingface.co/docs/transformers/generation_strategies),
   [Inference Providers](https://huggingface.co/docs/inference-providers/index),
   [Transformers.js](https://huggingface.co/docs/transformers.js/index).
-- Ollama: [API](https://github.com/ollama/ollama/blob/main/docs/api.md),
+- Ollama: [API](https://github.com/ollama/ollama/blob/main/docs/api.md), [Python SDK](https://github.com/ollama/ollama-python),
   [Modelfile](https://docs.ollama.com/modelfile), [thư viện model](https://ollama.com/library).
 - Holtzman et al., [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751) (2019): nucleus sampling.
 - Keskar et al., [CTRL](https://arxiv.org/abs/1909.05858) (2019): repetition penalty.
