@@ -17,6 +17,7 @@ Trong test:
     wb = ex.workbook("report.xlsx")         # bài Excel: wb.formula("Sheet", "B2"), wb.value("Sheet", "B2")
     ex.require_tool("shellcheck", "0.10")   # bài DevOps: skip nếu thiếu công cụ hoặc phiên bản cũ
     ex.require_cluster()                    # bài DevOps: skip nếu chưa có cluster kind devops-lab
+    run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})  # bài DevOps: chạy script trong bwrap
 """
 
 from __future__ import annotations
@@ -151,6 +152,71 @@ def docker_cpu_args() -> list[str]:
     if (os.cpu_count() or 0) >= 36:
         return ["--cpuset-cpus", "12-35"]
     return []
+
+
+_BWRAP_ISOLATION = ["--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--new-session"]
+_UNSAFE_ENV = re.compile(r"^(?:BASH_ENV|ENV|BASH_FUNC_.*)$")
+SANDBOX_SKIP = (
+    "Bài này chạy script của bạn trong sandbox bubblewrap (bwrap) để một script viết sai không xoá hay sửa được tệp "
+    "nào ngoài thư mục tạm của test; test từ chối chạy khi không có sandbox. {reason} Cài: sudo apt install bubblewrap "
+    "(Fedora: sudo dnf install bubblewrap). Xem setup/DEVOPS-TOOLS.md"
+)
+
+
+def sandbox_ready() -> str | None:
+    """Trả None khi bwrap tạo được sandbox, ngược lại trả lý do."""
+    bwrap = shutil.which("bwrap")
+    if not bwrap:
+        return "Chưa cài bwrap."
+    probe = _run_tool([bwrap, "--ro-bind", "/", "/", "--proc", "/proc", *_BWRAP_ISOLATION, "--clearenv", "true"])
+    if probe is None or probe.returncode != 0:
+        detail = (probe.stderr.strip() if probe is not None else "") or "không rõ lỗi"
+        return f"bwrap có nhưng không tạo được sandbox ({detail}); có thể kernel chặn user namespace không đặc quyền."
+    return None
+
+
+def _clean_env(env: dict[str, str], home: Path) -> dict[str, str]:
+    base = {"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": str(home), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
+    base.update({k: v for k, v in env.items() if not _UNSAFE_ENV.match(k)})
+    return base
+
+
+def _hidden_by_tmpfs() -> list[Path]:
+    tmp = Path("/tmp")
+    candidates = {ROOT, Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), Path(sys.executable).resolve().parent}
+    return sorted(p for p in candidates if p.is_relative_to(tmp) and p != tmp)
+
+
+def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str, str]) -> list[str]:
+    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp là tmpfs rỗng, chỉ `writable` ghi được, môi trường dựng lại từ đầu."""
+    reason = sandbox_ready()
+    if reason:
+        pytest.skip(SANDBOX_SKIP.format(reason=reason))
+    args = [shutil.which("bwrap"), "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"]
+    for path in _hidden_by_tmpfs():
+        args += ["--ro-bind", str(path), str(path)]
+    for path in writable:
+        real = str(Path(path).resolve())
+        args += ["--bind", real, real]
+    home = Path(cwd).resolve()
+    args += ["--chdir", str(home), *_BWRAP_ISOLATION, "--clearenv"]
+    for key, value in _clean_env(env, home).items():
+        args += ["--setenv", key, value]
+    return [*args, "--", *map(str, cmd)]
+
+
+def run_sandboxed(
+    cmd: list,
+    *,
+    writable: list[Path],
+    cwd: Path,
+    env: dict[str, str],
+    timeout: float = 30,
+    input: str | None = None,
+) -> subprocess.CompletedProcess:
+    """Chạy lệnh của người học trong sandbox bwrap; skip (không bao giờ chạy trần) khi không có sandbox."""
+    argv = sandbox_command(cmd, writable=writable, cwd=cwd, env=env)
+    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, input=input, env={})
 
 
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.

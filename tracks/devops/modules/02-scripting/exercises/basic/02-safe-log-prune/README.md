@@ -41,9 +41,9 @@ Quy tắc:
    Thứ tự dòng không quan trọng.
 4. Dòng cuối của stderr là `total=<số tệp>` (đã xoá, hoặc sẽ xoá khi dry-run), kể cả khi `0`.
 5. Tên tệp có dấu cách, bắt đầu bằng `-` (như `-rf.log.4`) phải xử lý đúng.
-6. Xoá bằng `rm` và quét bằng `find` **gọi qua `PATH`**: không viết `/bin/rm`, `/usr/bin/find`, `command rm`, `\rm`.
-   Test thay hai lệnh này bằng bản giả khi thử thư mục nguy hiểm, để một script viết sai cũng không xoá được gì trên
-   máy bạn.
+6. Xoá bằng `rm` và quét bằng `find` **gọi qua `PATH`**: không viết `/bin/rm`, `/usr/bin/find`, `command rm`, `\rm`
+   (test tìm các chuỗi này). Khi thử thư mục nguy hiểm, test đặt `find` và `rm` giả lên đầu `PATH` để biết script có
+   gọi chúng không.
 
 | Tình huống | Exit | Output |
 | --- | --- | --- |
@@ -53,7 +53,10 @@ Quy tắc:
 | Bình thường (kể cả không có tệp nào) | `0` | Như quy tắc 3, 4 |
 
 Test thử từ chối với `/`, `/tmp`, `/var`, một symlink trỏ tới `/`, và đường dẫn `<symlink tới />/usr/../home`. Chạy
-lần hai ngay sau lần một phải in `total=0`.
+lần hai ngay sau lần một phải in `total=0`. Test chạy từ thư mục tạm của nó, nên đường dẫn tương đối trong test bắt
+đầu từ đó.
+
+Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt). Thiếu `bwrap` thì test skip. Sandbox mới là lớp bảo vệ máy bạn; `find`/`rm` giả chỉ để chấm.
 
 ## Tiêu chí đạt
 

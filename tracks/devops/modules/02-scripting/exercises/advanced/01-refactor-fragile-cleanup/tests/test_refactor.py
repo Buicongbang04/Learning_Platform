@@ -8,14 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from testkit import Exercise
+from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
 BASH = shutil.which("bash")
 pytestmark = pytest.mark.skipif(BASH is None, reason="Cần bash")
 ORIGINAL = Path(__file__).parent / "fixtures" / "cleanup_releases.original.sh"
 REVIEW_TEMPLATE = Path(__file__).parent / "fixtures" / "REVIEW.template.md"
-UNSAFE_DELETE = re.compile(r"(?<![\w-])(?:/usr)?/bin/rm\b|\bcommand\s+rm\b|\\rm\b|-delete\b|\bunlink\b|\brmdir\b")
+UNSAFE_DELETE = re.compile(
+    r"(?<![\w-])(?:/usr)?/bin/rm\b|\bcommand\s+rm\b|\\rm\b|-delete\b|\bunlink\b|\brmdir\b|\bPATH=|\benv\s+-i\b"
+    r"|\bsudo\b|\bmv\b|\b(?:python3?|perl)\b|\btruncate\b"
+)
+COMMENT = re.compile(r"(?:^|(?<=\s))#.*$")
 FAKE_RM = r'''#!{python}
 import os, shutil, sys
 sandbox = os.environ["SANDBOX"]
@@ -73,9 +77,8 @@ sys.exit(rc)
 class Sandbox:
     def __init__(self, tmp_path: Path, script: Path):
         self.script = script
-        self.root = tmp_path / "sandbox"
-        self.workdir = self.root / "workdir"
-        self.workdir.mkdir(parents=True)
+        self.root = tmp_path
+        self.workdir = tmp_path
         self.decoys = [self.workdir / n for n in ("r9", "keep-me.txt", "notes", "data.db")]
         for i, p in enumerate(self.decoys):
             p.write_text("decoy")
@@ -107,9 +110,8 @@ class Sandbox:
         return root
 
     def run(self, *args):
-        env = {**os.environ, "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}", "SANDBOX": str(self.root.resolve()), "RM_LOG": str(self.log)}
-        env.pop("CDPATH", None)
-        return subprocess.run([BASH, str(self.script), *map(str, args)], capture_output=True, text=True, timeout=60, env=env, cwd=self.workdir)
+        env = {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}", "SANDBOX": str(self.root.resolve()), "RM_LOG": str(self.log)}
+        return run_sandboxed([BASH, self.script, *map(str, args)], writable=[self.root], cwd=self.workdir, env=env, timeout=60)
 
     def refused(self) -> list[str]:
         return [line for line in self.log.read_text().splitlines() if line.startswith("REFUSED")] if self.log.exists() else []
@@ -125,9 +127,18 @@ def releases_left(root: Path) -> set[str]:
     return {p.name for p in (root / "releases").iterdir()}
 
 
+def code_only(text: str) -> str:
+    lines = text.splitlines()
+    if lines and lines[0].startswith("#!"):
+        lines = lines[1:]
+    return "\n".join(COMMENT.sub("", line) for line in lines)
+
+
 def static_guard(script: Path) -> list[str]:
-    if UNSAFE_DELETE.search(script.read_text(encoding="utf-8")):
-        return ["Xoá bằng `rm` gọi qua PATH (không /bin/rm, command rm, \\rm, find -delete, unlink, rmdir)"]
+    """Tín hiệu dạy học, không phải lớp an toàn (lớp an toàn là sandbox bwrap)."""
+    match = UNSAFE_DELETE.search(code_only(script.read_text(encoding="utf-8")))
+    if match:
+        return [f"Thấy '{match.group(0)}': chỉ xoá bằng `rm` gọi qua PATH; không đổi PATH, không env -i, sudo, mv, python/perl, truncate, find -delete, unlink, rmdir"]
     return []
 
 
@@ -219,13 +230,13 @@ def check_tmp_cleanup(script: Path, tmp_path: Path) -> list[str]:
 
 def check_bad_keep(script: Path, tmp_path: Path) -> list[str]:
     problems = []
+    sb = Sandbox(tmp_path, script)
     for i, keep in enumerate(("abc", "0", "-1", "2x")):
-        sb = Sandbox(tmp_path / str(i), script)
-        root = sb.deploy_root(["r3", "r2", "r1"], tmp=["a"])
+        root = sb.deploy_root(["r3", "r2", "r1"], tmp=["a"], name=f"olist-{i}")
         result = sb.run(root, keep)
         if result.returncode != 2 or not result.stderr.startswith("Usage:"):
             problems.append(f"KEEP={keep!r}: cần exit 2 và 'Usage:', được exit {result.returncode}")
-        if releases_left(root) != {"r3", "r2", "r1"} or not (root / "tmp" / "a").exists():
+        if releases_left(root) != {"r3", "r2", "r1"} or not (root / "tmp" / "a").exists() or not sb.decoys_intact():
             problems.append(f"KEEP={keep!r}: không được xoá gì")
     return problems
 
@@ -259,7 +270,7 @@ CHECKS = {
     "no_tmp_dir": check_no_tmp_dir,
     "shellcheck": check_shellcheck,
 }
-DEFECT_CHECKS = ["odd_names", "root_with_space", "current_is_protected", "missing_argument", "nonexistent_root", "tmp_cleanup", "bad_keep", "shellcheck"]
+DEFECT_CHECKS = ["odd_names", "root_with_space", "current_is_protected", "nonexistent_root", "tmp_cleanup", "bad_keep", "shellcheck"]
 
 
 @pytest.mark.parametrize("name", list(CHECKS))
@@ -274,12 +285,44 @@ def test_check_catches_original_defect(name, tmp_path):
     assert CHECKS[name](ORIGINAL, tmp_path), f"Kiểm tra {name} phải bắt được lỗi của bản gốc"
 
 
-def test_static_guard_catches_unsafe_delete(tmp_path):
-    for line in ("/bin/rm -rf \"$d\"", "command rm -rf \"$d\"", "find \"$d\" -mtime +1 -delete", "\\rm -f x"):
-        script = tmp_path / "s.sh"
-        script.write_text(f"#!/usr/bin/env bash\n{line}\n")
-        assert static_guard(script), line
-    script.write_text('#!/usr/bin/env bash\nrm -rf -- "$d"\n')
+def test_original_missing_argument_defect_is_visible_statically():
+    """Không chạy bản gốc khi thiếu tham số (nó sẽ mở rộng rm -rf /tmp/*); chứng minh lỗi bằng đọc mã."""
+    code = code_only(ORIGINAL.read_text(encoding="utf-8"))
+    assert "DEPLOY_ROOT=$1" in code
+    assert not re.search(r"\$#|\$\{1:\?|-z\s+\"?\$\{?1|usage", code), "Bản gốc không kiểm tham số"
+    assert re.search(r"^rm -rf \$DEPLOY_ROOT/tmp/\*$", code, re.M), "Bản gốc xoá $DEPLOY_ROOT/tmp/* không ngoặc kép"
+    assert re.search(r"^cd \$DEPLOY_ROOT/releases$", code, re.M), "Bản gốc cd không kiểm lỗi"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        '/bin/rm -rf "$d"',
+        'command rm -rf "$d"',
+        'find "$d" -mtime +1 -delete',
+        "\\rm -f x",
+        "PATH=/usr/bin:/bin",
+        "export PATH=/bin",
+        'env -i rm -rf "$d"',
+        'sudo rm -rf "$d"',
+        'mv "$d" /dev/null',
+        "python3 -c 'import shutil; shutil.rmtree(\"x\")'",
+        "perl -e 'unlink q(x)'",
+        "truncate -s 0 x",
+    ],
+)
+def test_static_guard_catches_unsafe_delete(tmp_path, line):
+    script = tmp_path / "s.sh"
+    script.write_text(f"#!/usr/bin/env bash\n{line}\n")
+    assert static_guard(script), line
+
+
+def test_static_guard_ignores_comments_and_safe_code(tmp_path):
+    script = tmp_path / "s.sh"
+    script.write_text(
+        "#!/usr/bin/env bash\n# không dùng /bin/rm, mv hay sudo ở đây\nn=${#arr[@]}\n"
+        'rm -rf -- "$d"  # không mv\necho "$#"\n'
+    )
     assert not static_guard(script)
 
 

@@ -87,11 +87,14 @@ echo "cleanup_releases: xong" >&2
 
 ## Cách kiểm chứng an toàn
 
-Không bao giờ thử một script xoá tệp mà bạn nghi là hỏng trên thư mục thật. Cách test của bài dùng được cho mọi script
-tương tự: thư mục tạm làm sandbox, `rm` giả đứng đầu `PATH` chỉ cho xoá trong sandbox, thư mục làm việc chứa tệp mồi.
-Ngoài ra: chạy trong container dùng một lần (`docker run --rm -v "$PWD":/w:ro ...`), hoặc thay `rm` bằng `echo rm` để
-xem lệnh sẽ chạy. Chạy test của bài lên bản gốc sẽ thấy `rm` giả từ chối từng mục trong `/tmp` thật của máy bạn: đó
-chính là sự cố trong đề.
+Không bao giờ thử một script xoá tệp mà bạn nghi là hỏng trên thư mục thật. Test của bài dùng hai lớp, và cả hai
+dùng được cho mọi script tương tự. Lớp an toàn là **sandbox**: bubblewrap mount `/` chỉ đọc, che `/tmp` thật bằng một
+tmpfs, chỉ cho ghi vào thư mục tạm của test, và dựng lại môi trường biến từ đầu; script có đổi `PATH`, gọi `/bin/rm`
+hay Python để xoá thì cũng chỉ chạm được vào thư mục tạm. Lớp quan sát là **`rm` giả** đứng đầu `PATH`, ghi lại mọi
+lần gọi để test biết script định xoá gì. Một `rm` giả một mình không phải lớp an toàn: chỉ cần script đặt lại `PATH`
+(chuyện bình thường khi làm cứng script cho cron) là nó bị bỏ qua. Cách khác: container dùng một lần với thư mục mount
+chỉ đọc (`docker run --rm -v "$PWD":/w:ro ...`), hay thay `rm` bằng `echo rm` để xem lệnh sẽ chạy. Chạy bản gốc không
+tham số trong sandbox, nó xoá sạch `/tmp` **của sandbox**: đó chính là sự cố trong đề.
 
 ## Rubric (100 điểm)
 

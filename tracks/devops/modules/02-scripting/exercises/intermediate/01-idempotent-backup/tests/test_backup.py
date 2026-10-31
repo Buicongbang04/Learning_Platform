@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from testkit import Exercise
+from testkit import Exercise, run_sandboxed, sandbox_command
 
 ex = Exercise(__file__)
 BASH = shutil.which("bash")
@@ -50,6 +50,11 @@ case "${FAKE_PG_MODE:-ok}" in
     : > "$FAKE_STARTED"
     for _ in $(seq 1 600); do sleep 0.1; done
     ;;
+  selfterm)
+    write "PGDMP partial"
+    kill -TERM 0
+    for _ in $(seq 1 100); do sleep 0.1; done
+    ;;
 esac
 """
 DUMP_NAME = "olist-{}.dump"
@@ -74,8 +79,7 @@ class Harness:
         self.dir = tmp_path / "my backups" / "olist"
 
     def env(self, mode="ok", date=DATE, extra=None):
-        env = {k: v for k, v in os.environ.items() if not k.startswith("PG") and k != "BACKUP_DATE"}
-        env.update(
+        env = dict(
             PATH=f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             FAKE_LOG=str(self.log),
             FAKE_PG_MODE=mode,
@@ -89,9 +93,13 @@ class Harness:
     def cmd(self, *args):
         return [BASH, str(ex.path("backup.sh")), *map(str, args)]
 
-    def run(self, *args, mode="ok", date=DATE, extra=None):
-        args = args or (self.dir,)
-        return subprocess.run(self.cmd(*args), capture_output=True, text=True, timeout=60, env=self.env(mode, date, extra))
+    def run(self, *args, mode="ok", date=DATE, extra=None, raw=False):
+        args = args if (args or raw) else (self.dir,)
+        return run_sandboxed(self.cmd(*args), writable=[self.tmp], cwd=self.tmp, env=self.env(mode, date, extra), timeout=60)
+
+    def popen(self, *args, mode="ok"):
+        argv = sandbox_command(self.cmd(*args), writable=[self.tmp], cwd=self.tmp, env=self.env(mode))
+        return subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={}, start_new_session=True)
 
     def calls(self) -> list[dict]:
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
@@ -221,7 +229,7 @@ def test_default_retention_is_seven(h):
 
 @pytest.mark.parametrize("args", [(), ("-k", 0, "{dir}"), ("-k", "x", "{dir}"), ("-z", "{dir}"), ("{dir}", "extra")])
 def test_usage_errors(h, args):
-    result = subprocess.run(h.cmd(*(str(a).format(dir=h.dir) for a in args)), capture_output=True, text=True, timeout=60, env=h.env())
+    result = h.run(*(str(a).format(dir=h.dir) for a in args), raw=True)
     assert result.returncode == 2
     assert result.stderr.startswith("Usage:")
     assert h.calls() == []
@@ -243,8 +251,8 @@ def wait_for(path: Path, proc: subprocess.Popen, seconds=20):
         time.sleep(0.05)
 
 
-def test_lock_and_signal_cleanup(h):
-    first = subprocess.Popen(h.cmd(h.dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=h.env("slow"), start_new_session=True)
+def test_lock_held_by_running_backup(h):
+    first = h.popen(h.dir, mode="slow")
     try:
         wait_for(h.started, first)
         start = time.monotonic()
@@ -252,17 +260,25 @@ def test_lock_and_signal_cleanup(h):
         assert second.returncode == 75, second.stdout + second.stderr
         assert second.stderr.strip()
         assert time.monotonic() - start < 10, "Đang có bản khác chạy thì thoát ngay, không chờ khoá"
-        os.killpg(first.pid, signal.SIGTERM)
-        first.communicate(timeout=20)
+        assert not (h.dir / DUMP_NAME.format(DATE)).exists()
     finally:
         if first.poll() is None:
             os.killpg(first.pid, signal.SIGKILL)
-            first.wait()
-    assert first.returncode != 0
+        first.communicate(timeout=20)
+    third = h.run()
+    assert third.returncode == 0, "Tiến trình giữ khoá đã chết thì khoá phải được nhả (flock trên fd)"
+
+
+def test_sigterm_cleans_up(h):
+    """pg_dump giả gửi SIGTERM cho cả process group của nó (như systemd hay Ctrl+C), bên trong sandbox."""
+    result = h.run(mode="selfterm")
+    assert result.returncode != 0
+    assert result.stdout == ""
     assert not (h.dir / DUMP_NAME.format(DATE)).exists()
     assert not [n for n in h.names() if n.startswith(".") and n != ".backup.lock"], f"Còn tệp tạm: {h.names()}"
-    third = h.run()
-    assert third.returncode == 0, "Khoá phải được nhả khi tiến trình trước đã dừng"
+    again = h.run()
+    assert again.returncode == 0, again.stderr
+    assert again.stdout == f"created {h.dir / DUMP_NAME.format(DATE)}\n"
 
 
 def test_shellcheck_clean():

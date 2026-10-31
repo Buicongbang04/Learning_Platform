@@ -41,13 +41,17 @@ bạn ngoài sandbox của test.
 | Output | stdout chỉ gồm các dòng `removed <tên release>`, mỗi release đã xoá một dòng, thứ tự tuỳ ý; thông điệp khác ra stderr |
 | `tmp/` | Có thì xoá **mọi** thứ bên trong, kể cả tệp ẩn và thư mục con, nhưng giữ thư mục `tmp`; không có thì bỏ qua |
 | Kết thúc | Exit `0` khi chạy bình thường, kể cả khi không có gì để xoá |
-| Cách xoá | Chỉ bằng `rm` gọi qua `PATH`. Không dùng `/bin/rm`, `/usr/bin/rm`, `command rm`, `\rm`, `find -delete`, `unlink`, `rmdir` (test tìm các chuỗi này trong tệp, kể cả trong comment) |
+| Cách xoá | Chỉ bằng `rm` gọi qua `PATH`. Phần code (không tính comment) không được chứa `/bin/rm`, `/usr/bin/rm`, `command rm`, `\rm`, `find -delete`, `unlink`, `rmdir`, `PATH=`, `env -i`, `sudo`, `mv`, `python`/`python3`/`perl`, `truncate`. Đây là tín hiệu dạy học (xoá dữ liệu đi qua đúng một đường, dễ review), không phải lớp an toàn |
 | Chất lượng | `shellcheck -S style` không có cảnh báo nào |
 
-Test chạy script với thư mục làm việc là một thư mục mồi chứa vài tệp, và đặt một `rm` giả lên đầu `PATH`: nó chỉ xoá
-thứ nằm trong sandbox của test, từ chối và ghi lại mọi đường dẫn khác. Nhờ vậy test chạy được cả bản gốc (để chứng
-minh mỗi kiểm tra bắt được một lỗi có thật trong `tests/fixtures/cleanup_releases.original.sh`) mà không chạm vào máy
-bạn. Một script coi là hỏng nếu nó xoá tệp mồi trong thư mục làm việc, hay gọi `rm` với đường dẫn ngoài sandbox.
+Test chạy script trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật
+bị che, chỉ thư mục tạm của test ghi được, môi trường biến dựng lại từ đầu; thiếu `bwrap` thì test skip. Sandbox là
+lớp bảo vệ máy bạn: dù script đổi `PATH` hay gọi `/bin/rm`, nó chỉ chạm được vào thư mục tạm đó. Bên trong sandbox,
+thư mục làm việc là thư mục tạm của test, chứa vài tệp mồi, và một `rm` giả đứng đầu `PATH` ghi lại mọi lần gọi, chỉ
+xoá thứ nằm trong thư mục tạm, từ chối mọi đường dẫn khác. Một script coi là hỏng nếu nó xoá tệp mồi trong thư mục làm
+việc, hay gọi `rm` với đường dẫn ngoài thư mục tạm. Mỗi kiểm tra được chứng minh bắt được một lỗi có thật bằng cách chạy
+nó (cũng trong sandbox) lên `tests/fixtures/cleanup_releases.original.sh`; riêng lỗi thiếu tham số được chứng minh bằng
+đọc mã, không chạy bản gốc.
 
 **Phần 2: điền `starter/REVIEW.md`**:
 

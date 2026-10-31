@@ -18,10 +18,54 @@ Sau module này bạn sẽ:
 - Viết công cụ vận hành bằng Python an toàn (`subprocess` không qua shell, `pathlib`, `argparse`, `logging`).
 - Chọn ngôn ngữ cho một công cụ vận hành (Bash, Python, Go, Node, Ruby, Rust, PowerShell) và bảo vệ được lựa chọn.
 
-Module không có `## 0. Cài đặt`: bài tập dùng `shellcheck` và `jq` đã cài ở
-[module 01](../01-linux-terminal/README.md#0-cài-đặt), cộng `curl`, `flock` (gói util-linux) và `sha256sum`
-(coreutils) có sẵn trên mọi distro Linux. Kiểm nhanh: `shellcheck --version && jq --version && flock --version`.
-Kiểm thử script Bash trong khoá này dùng pytest (đã có qua `uv`), nên bats chỉ được giới thiệu ở mục 5, không cần cài.
+## 0. Cài đặt
+
+Bài tập dùng `shellcheck` và `jq` đã cài ở [module 01](../01-linux-terminal/README.md#0-cài-đặt), cộng `curl`,
+`flock` (gói util-linux) và `sha256sum` (coreutils) có sẵn trên mọi distro Linux. Công cụ mới duy nhất là
+**bubblewrap** (`bwrap`): test chạy script của bạn trong một sandbox, vì script dọn dẹp hay backup viết dở có thể xoá
+nhầm tệp thật trên máy bạn. Kiểm thử script Bash trong khoá này dùng pytest (đã có qua `uv`), nên bats chỉ được giới
+thiệu ở mục 5, không cần cài.
+
+| Công cụ | Phiên bản đã kiểm | Tối thiểu cho bài tập | Bài dùng |
+| --- | --- | --- | --- |
+| bubblewrap (`bwrap`) | 0.11.0 (Pop!_OS 24.04), 0.9.0 là bản của Ubuntu 24.04 | 0.5.0 (cần `--clearenv`) | Mọi bài chạy script của bạn; thiếu thì test skip, không bao giờ chạy script ngoài sandbox |
+| flock, sha256sum | util-linux 2.39, coreutils 9.4 | Bản có sẵn | Intermediate 01 |
+
+### bubblewrap
+
+bubblewrap là công cụ tạo sandbox không cần root mà Flatpak dùng: nó đặt tiến trình vào user namespace và mount
+namespace riêng. Test của module dựng sandbox như sau: toàn bộ `/` chỉ đọc, `/tmp` là một tmpfs rỗng (`/tmp` thật
+của máy không nhìn thấy), chỉ thư mục tạm của chính test ghi được, môi trường biến dựng lại từ đầu (không mang theo
+`BASH_ENV` hay hàm Bash được export). Script của bạn có đổi `PATH`, gọi `/bin/rm`, `env -i rm` hay Python để xoá thì
+cũng chỉ chạm được vào thư mục tạm đó.
+
+Cài bằng package manager, không tải binary rời: gói của distro đã được ký và kiểm, và trên các distro hạn chế user
+namespace không đặc quyền (Ubuntu 24.04 có cơ chế AppArmor cho việc này), gói `bubblewrap` của distro là bản được cho
+phép, còn một binary tự build đặt trong `~/.local/bin` có thể bị chặn.
+
+```bash
+sudo apt install bubblewrap
+```
+
+Fedora, RHEL: `sudo dnf install bubblewrap`. Arch: `sudo pacman -S bubblewrap`. WSL2 với Ubuntu: như Ubuntu. macOS
+không có user namespace, nên các bài chạy script của module này cần Linux hoặc WSL2.
+
+Xác nhận, gồm một lần tạo sandbox thật. Kết quả trên máy xây khoá:
+
+```text
+$ bwrap --version
+bubblewrap 0.11.0
+$ bwrap --ro-bind / / --proc /proc --unshare-user --unshare-pid --clearenv -- /bin/sh -c 'touch /etc/x'
+touch: cannot touch '/etc/x': Read-only file system
+```
+
+Dòng thứ hai phải báo `Read-only file system`. Nếu nó báo `setting up uid map: Permission denied` hoặc
+`No permissions to creating new namespace`, kernel đang chặn user namespace không đặc quyền: kiểm
+`sysctl kernel.unprivileged_userns_clone` (Debian cũ) hoặc `sysctl kernel.apparmor_restrict_unprivileged_userns`
+(Ubuntu 24.04) và dùng gói `bubblewrap` của distro thay vì bản tự build. Test của module khi đó skip kèm lý do, không
+chạy script của bạn ngoài sandbox.
+
+Gỡ: `sudo apt remove bubblewrap` (giữ lại nếu máy có Flatpak, vì Flatpak phụ thuộc vào nó).
 
 ## 1. Script vận hành: nhắc lại và điều thay đổi
 
@@ -75,8 +119,8 @@ tạp, thì nên viết lại bằng ngôn ngữ khác **ngay bây giờ**, vì 
 | `-u` (`nounset`) | Dùng biến chưa đặt là lỗi | Biến gõ sai tên thành chuỗi rỗng: `rm -rf "$DEPLOY_ROTO/"` thành `rm -rf /` |
 | `-o pipefail` | Exit code của pipeline là của lệnh hỏng cuối cùng (khác `0`) | `pg_dump db \| gzip > x.gz` "thành công" dù `pg_dump` lỗi, vì `gzip` trả `0` |
 
-Thêm hai dòng nên có trong script Bash từ 4.4 trở lên: `shopt -s inherit_errexit` (command substitution `$(...)` thừa
-hưởng `-e`) và `set -E` nếu dùng `trap ... ERR` (trap đi vào cả hàm và subshell).
+Thêm hai dòng nên có trong script Bash từ 4.4 trở lên: `shopt -s inherit_errexit` (lệnh bên trong `$(...)` cũng dừng ở lỗi
+đầu tiên thay vì chạy tiếp) và `set -E` nếu dùng `trap ... ERR` (trap đi vào cả hàm và subshell).
 
 ### Những chỗ `set -e` **không** dừng script
 
@@ -90,7 +134,8 @@ hưởng `-e`) và `set -E` nếu dùng `trap ... ERR` (trap đi vào cả hàm 
 | Không phải lệnh cuối pipeline | `false \| true` | Chỉ lệnh cuối tính, trừ khi có `pipefail` |
 | Gán kèm khai báo | `local x=$(cmd)`, `export y=$(cmd)` | Exit code là của `local`/`export` (luôn `0`); shellcheck báo SC2155 |
 | Hàm gọi trong ngữ cảnh điều kiện | `if deploy; then`, `deploy \|\| rollback` | `-e` bị tắt **trong toàn bộ thân hàm**, lỗi giữa hàm bị bỏ qua |
-| Command substitution trong lệnh khác | `echo "$(false)"` | Không có `inherit_errexit` thì lỗi bên trong không lan ra |
+| Lỗi giữa command substitution | `x="$(false; echo tiếp)"` | Không có `inherit_errexit`, subshell bên trong bỏ `-e` nên chạy tiếp sau `false`, exit code là của `echo` (`0`). `inherit_errexit` chỉ bật `-e` **bên trong** subshell |
+| Command substitution làm tham số | `echo "$(false)"`, `log "$(cmd)"` | Exit code là của `echo`/`log`, không bao giờ của `cmd`, kể cả có `inherit_errexit`. Chỉ phép gán trơn `x="$(cmd)"` mang exit code của `cmd` ra ngoài |
 | Process substitution | `while read l; do ...; done < <(cmd)` | Exit code của `cmd` bị mất hẳn |
 | Số học trả 0 | `((count++))` khi `count=0` | `(( 0 ))` có exit `1`: script **chết** ở dòng tăng biến đếm. Viết `count=$((count + 1))` |
 
@@ -375,7 +420,9 @@ Script vận hành cần test như mọi code khác, và khó hơn vì nó đụ
 module:
 
 - **Sandbox**: mọi đường dẫn nằm trong thư mục tạm của test; script nhận thư mục qua tham số hoặc biến, không hardcode
-  `/var/backups`.
+  `/var/backups`. Script có thể xoá dữ liệu thì chạy nó trong sandbox của hệ điều hành (bubblewrap, container dùng một
+  lần), không chỉ dựa vào bản giả trên `PATH`: script chỉ cần đặt lại `PATH` hay gọi `/bin/rm` là vượt qua bản giả.
+  Test của module này chạy mọi script của bạn qua `testkit.run_sandboxed` (xem mục 0).
 - **Seam**: chỗ để thay phụ thuộc thật. Đặt bản giả của `pg_dump`, `curl`, `rm` lên đầu `PATH`; nhận thời gian qua
   biến (`BACKUP_DATE`), lệnh ngủ qua biến (`RETRY_SLEEP_CMD`); chạy một HTTP server giả trên `127.0.0.1`.
 - **Chứng minh test bắt được lỗi**: chạy test lên bản lỗi (bản gốc trước khi sửa) và thấy nó đỏ. Bài Advanced 01 làm

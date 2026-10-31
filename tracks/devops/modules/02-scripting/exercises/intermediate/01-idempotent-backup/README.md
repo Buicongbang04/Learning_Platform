@@ -40,9 +40,11 @@ Viết `starter/backup.sh [-k số_bản_giữ] <thư_mục_backup>` sao lưu da
    lỗi (exit khác `0`) hoặc tệp rỗng: báo lỗi ra stderr, exit `1`, stdout rỗng. Thành công: ghi checksum dạng của
    `sha256sum` (`<hash>  olist-<ngày>.dump`, hai dấu cách, tên tệp không kèm thư mục, để `sha256sum -c` chạy được trong
    thư mục backup), đổi tên tệp tạm thành tên thật bằng `mv`, in `created <thư_mục>/olist-<ngày>.dump`.
-7. **Dọn dẹp.** Mọi đường thoát (lỗi, `SIGINT`, `SIGTERM`) không để lại tệp tạm nào. Test gửi `SIGTERM` tới cả
-   process group đang chạy (giống systemd hay Ctrl+C dừng một service) khi `pg_dump` đang chạy; script phải thoát với
-   mã khác `0`, không còn tệp tạm, không có tệp `olist-<ngày>.dump`, và khoá được nhả.
+7. **Dọn dẹp.** Mọi đường thoát (lỗi, `SIGINT`, `SIGTERM`) không để lại tệp tạm nào. Trong một test, `pg_dump`
+   giả ghi dở rồi gửi `SIGTERM` cho cả process group của nó (`kill -TERM 0`, giống systemd hay Ctrl+C dừng một
+   service): script phải thoát với mã khác `0`, stdout rỗng, không còn tệp tạm, không có tệp `olist-<ngày>.dump`, và
+   lần chạy ngay sau đó tạo được bản backup. Trong test khác, bản đang giữ khoá bị `SIGKILL` (không trap được); lần
+   chạy sau đó phải lấy được khoá.
 8. **Retention.** Chỉ sau khi tạo bản mới thành công: giữ `-k` tệp tên đúng mẫu `olist-YYYY-MM-DD.dump` mới nhất
    (so theo ngày trong tên), xoá các bản cũ hơn cùng tệp `.sha256` của chúng. Không đụng tệp nào khác trong thư mục
    (`notes.txt`, `olist-manual.dump`...). Khi dump lỗi hoặc khi `skip`, không xoá gì.
@@ -62,6 +64,9 @@ Test truyền một đường dẫn có dấu cách (`.../my backups/olist`). Th
 Test đặt một `pg_dump` giả lên đầu `PATH`. Nó ghi lại tham số và các biến `PG*` nó nhận được, và tuỳ chế độ sẽ ghi một
 dump giả, ghi dở rồi trả lỗi, tạo tệp rỗng, hoặc ghi dở rồi chờ (để thử khoá và tín hiệu). Bài cần Linux: `flock`
 (gói util-linux) và `sha256sum` (coreutils); thiếu thì test skip.
+
+Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt). Thiếu `bwrap` thì test skip. `PGHOST`... của bạn
+không lọt vào, nên test thấy đúng giá trị mặc định.
 
 ## Tiêu chí đạt
 

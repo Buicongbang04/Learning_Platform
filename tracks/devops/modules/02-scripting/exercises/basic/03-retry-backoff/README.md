@@ -59,6 +59,8 @@ Ví dụ, lệnh trả `7`, `7`, rồi `0` với mặc định: chạy 3 lần, 
 Test kiểm jitter bằng cách chạy ba lần với `-j -n 6`: mọi lần chờ nằm trong `[0, 1]`, `[0, 2]`, `[0, 4]`, `[0, 8]`,
 `[0, 16]`, và ít nhất một lần trong ba lần chạy có dãy khác hẳn `1 2 4 8 16`.
 
+Mọi test chạy script của bạn trong sandbox bubblewrap (xem [Cài đặt](../../../README.md#0-cài-đặt)): `/` chỉ đọc, `/tmp` thật bị che, thư mục làm việc và thư mục duy nhất ghi được là thư mục tạm của test, môi trường biến dựng lại từ đầu (chỉ có `PATH`, `HOME` trỏ vào thư mục tạm, `LANG`/`LC_ALL`, cộng các biến test đặt). Thiếu `bwrap` thì test skip.
+
 ## Tiêu chí đạt
 
 - `uv run pytest tracks/devops/modules/02-scripting/exercises/basic/03-retry-backoff -q` pass toàn bộ, gồm

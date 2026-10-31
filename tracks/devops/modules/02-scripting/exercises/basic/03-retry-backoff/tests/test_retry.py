@@ -1,11 +1,10 @@
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from testkit import Exercise
+from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
 BASH = shutil.which("bash")
@@ -37,7 +36,6 @@ class Harness:
 
     def run(self, *args, codes="0"):
         env = {
-            **os.environ,
             "RETRY_SLEEP_CMD": str(self.sleep),
             "SLEEP_LOG": str(self.sleep_log),
             "COUNTER": str(self.counter),
@@ -45,8 +43,8 @@ class Harness:
         }
         for path in (self.sleep_log, self.counter):
             path.unlink(missing_ok=True)
-        return subprocess.run(
-            [BASH, str(ex.path("retry.sh")), *map(str, args)], capture_output=True, text=True, timeout=60, env=env
+        return run_sandboxed(
+            [BASH, ex.path("retry.sh"), *map(str, args)], writable=[self.tmp], cwd=self.tmp, env=env, timeout=60
         )
 
     def sleeps(self) -> list[str]:

@@ -1,14 +1,13 @@
 import os
 import re
 import shlex
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 import pytest
 
-from testkit import Exercise
+from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
 CHECKER = """
@@ -39,12 +38,12 @@ class Harness:
         return shlex.join([sys.executable, str(self.checker), str(self.check_log), *extra])
 
     def run(self, *args, timeout=60):
-        return subprocess.run(
-            [sys.executable, str(ex.path("release.py")), "--root", str(self.root), *map(str, args)],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+        return run_sandboxed(
+            [sys.executable, ex.path("release.py"), "--root", self.root, *map(str, args)],
+            writable=[self.tmp],
             cwd=self.tmp,
+            env={},
+            timeout=timeout,
         )
 
     def deploy(self, version: str, *extra, health="ok"):
