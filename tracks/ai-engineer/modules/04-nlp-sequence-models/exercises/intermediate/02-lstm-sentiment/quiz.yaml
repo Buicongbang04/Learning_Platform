@@ -1,56 +1,56 @@
 questions:
-- id: neutral-share
+- id: median-length
   kind: data
   type: single
-  prompt: Lớp neutral chiếm khoảng bao nhiêu phần trăm tập train UIT-VSFC?
+  prompt: Câu trong tập train UIT-VSFC có trung vị bao nhiêu âm tiết?
   options:
   - id: a
-    text: Khoảng 4%
+    text: '6'
   - id: b
-    text: Khoảng 15%
+    text: '11'
   - id: c
-    text: Khoảng 33%
+    text: '24'
   - id: d
-    text: Khoảng 47%
-- id: majority-f1
+    text: '52'
+- id: best-epoch
   kind: data
   type: single
-  prompt: Đoán toàn bộ test là positive cho accuracy 0.502. Macro-F1 của cách đoán này là bao nhiêu?
+  prompt: Train BiLSTM 6 epoch, epoch nào được chọn theo val macro-F1?
   options:
   - id: a
-    text: '0.502'
+    text: Epoch 2
   - id: b
-    text: '0.669'
+    text: Epoch 4
   - id: c
-    text: '0.223'
+    text: Epoch 5
   - id: d
-    text: '0.000'
-- id: best-model
+    text: Epoch 6
+- id: biggest-confusion
   kind: data
   type: single
-  prompt: Trên test, khác biệt rõ nhất giữa BiLSTM và TF-IDF + logistic regression nằm ở đâu?
+  prompt: Trong confusion matrix của BiLSTM trên test, ô ngoài đường chéo nào lớn nhất?
   options:
   - id: a
-    text: Accuracy, BiLSTM hơn khoảng 5 điểm
+    text: Negative thật bị đoán positive
   - id: b
-    text: F1 lớp neutral, khoảng 0.42 so với 0.31
+    text: Positive thật bị đoán negative
   - id: c
-    text: F1 lớp positive, khoảng 0.93 so với 0.80
+    text: Neutral thật bị đoán positive
   - id: d
-    text: Không có khác biệt nào lớn hơn 0.01
-- id: neutral-errors
+    text: Neutral thật bị đoán negative
+- id: unidirectional-curve
   kind: data
   type: single
-  prompt: BiLSTM đoán sai bao nhiêu trong 167 câu neutral của tập test?
+  prompt: Val macro-F1 của LSTM một chiều qua 6 epoch diễn biến thế nào?
   options:
   - id: a
-    text: '12'
+    text: Đạt đỉnh ở epoch 2 rồi giảm dần đều
   - id: b
-    text: '55'
+    text: Còn tăng tới epoch 6, chưa bão hoà
   - id: c
-    text: '112'
+    text: Gần như không đổi, quanh 0.60 suốt
   - id: d
-    text: '167'
+    text: Dao động mạnh, lên xuống từng epoch
 - id: why-pack
   kind: knowledge
   type: single

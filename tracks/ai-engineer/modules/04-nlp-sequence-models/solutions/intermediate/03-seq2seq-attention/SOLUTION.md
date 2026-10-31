@@ -32,30 +32,32 @@ bỏ qua hoặc truyền `force=True`).
 
 ## Kết quả thật
 
-CPU 4 luồng, seed 0. Lần chạy notebook lời giải mất 90 phút vì CPU bị chia sẻ rất nặng (load trung bình trên 40); máy rảnh
-nhanh hơn nhiều lần.
+CPU 4 luồng, seed 0, chạy lại ngày 2026-10-31 trên PC (CPU dùng chung, load trung bình 20-30): cả notebook mất 44 phút, trong
+đó hai epoch cuối của model Luong mỗi epoch gần 20 phút vì máy bận; khi máy rảnh mỗi epoch dịch khoảng 1 phút, bài đảo chuỗi
+40-90 giây mỗi model.
 
 | Bài đảo chuỗi (dài 5-20, hidden 32, 1 500 bước) | Đúng nguyên chuỗi |
 | --- | --- |
 | Không attention | 0.108 |
-| Luong general | 0.980 |
+| Luong general | 0.992 |
 | Bahdanau | 1.000 |
 
 | Dịch Anh-Việt (46 311 cặp ≤ 15 từ, vocab 4 000, emb 64, hidden 128, 3 epoch) | Train PPL epoch 1 / 2 / 3 | BLEU 378 câu tst2013 |
 | --- | --- | --- |
 | Không attention | 167.0 / 75.0 / 55.9 | 3.25 |
-| Luong general | 189.5 / 79.2 / 55.6 | 4.15 |
+| Luong general | 190.3 / 79.8 / 55.8 | 4.63 |
 
 Tỉ lệ `<unk>` phía tiếng Việt: 1.2% token. Đọc kết quả:
 
 - Bài đảo chuỗi cho thấy nút thắt rõ nhất có thể: thông tin cần (vị trí đối xứng) nằm ở một chỗ cụ thể của nguồn, attention
   học được đường chéo ngược gần hoàn hảo, còn một vector 32 chiều không chứa nổi 20 ký hiệu.
-- Trên dịch thật ở quy mô này, attention chỉ hơn 0.9 BLEU, và heatmap của "i was very proud of my country ." cho thấy mọi
-  bước sinh dồn trọng số vào dấu chấm cuối câu: model chưa học căn chỉnh, dùng attention như một vector tóm tắt. Bản dịch
+- Trên dịch thật ở quy mô này, attention chỉ hơn 1.4 BLEU (lần chạy trên laptop cùng seed: Luong 4.15, tức hơn 0.9; model
+  không attention ra đúng 3.25 trên cả hai máy). Chênh lệch giữa hai máy cỡ nửa BLEU là nhiễu số học, không phải kết quả.
+  Heatmap của "i was very proud of my country ." cho thấy mọi bước sinh dồn trọng số vào dấu chấm cuối câu: model chưa học căn chỉnh, dùng attention như một vector tóm tắt. Bản dịch
   "và tôi rất rất nhiều ." vừa sai nghĩa vừa lặp từ (exposure bias). Muốn attention có ích cần nhiều dữ liệu, model lớn hơn,
-  nhiều epoch: bài Advanced 01 trên GPU đạt BLEU 11.6 trên toàn bộ `tst2013`.
+  nhiều epoch: bản tham chiếu của bài Advanced 01 (GPU, BPE, toàn bộ dữ liệu) có heatmap căn chỉnh gần như từng từ.
 - Luong song song hoá được khi teacher forcing nên mỗi epoch nhanh như model không attention; Bahdanau lặp từng bước, chậm
-  hơn khoảng 3 lần trên CPU nhưng ở thử nghiệm riêng có loss epoch 1 thấp hơn (4.51 so với 5.24).
+  hơn vài lần mỗi epoch, nhưng đưa context vào chính RNN nên học nhanh hơn theo epoch (số đo ở bài Advanced 01).
 
 ## Bẫy thường gặp
 

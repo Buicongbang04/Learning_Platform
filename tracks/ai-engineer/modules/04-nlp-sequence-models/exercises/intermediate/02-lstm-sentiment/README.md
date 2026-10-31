@@ -23,8 +23,8 @@ batch có padding, và đọc được vì sao accuracy 90% chưa nói lên gì 
 
 **Phần cứng:** CPU · ~120 phút
 
-Thời gian trên là thời gian làm bài. Chạy cả notebook lời giải: vài phút trên CPU 4 luồng khi máy rảnh; lần đo của lời
-giải mất 12 phút (mỗi LSTM 5-6 phút) vì CPU đang bị việc khác chiếm.
+Thời gian trên là thời gian làm bài. Thời gian máy của notebook lời giải trên CPU 4 luồng: khoảng 2 phút (LSTM một chiều
+44 giây, BiLSTM 74 giây, đo trên PC ngày 2026-10-31); trên laptop đang bị việc khác chiếm, một lần đo mất 12 phút.
 
 Mở `starter/sentiment.ipynb` và làm theo đặc tả trên từng cell:
 
@@ -49,19 +49,19 @@ neutral bị đoán sai. Sau đó làm phần trắc nghiệm của bài trong a
   seed cho cùng history, khác seed thì khác.
 - UIT-VSFC thật: đúng số câu và phân bố nhãn, vocab 1 535; BiLSTM 64 chiều train 2 epoch trên 4 000 câu đạt val
   accuracy ≥ 0.8 trong dưới 30 giây.
-- Cell `explore` in ra bảng giống mục 5 lý thuyết (BiLSTM test macro-F1 0.7549; máy khác có thể lệch ở chữ số thứ hai).
+- Cell `explore` in ra bảng giống mục 5 lý thuyết (máy khác có thể lệch ở chữ số thứ ba).
 
 ## Gợi ý
 
 ### Gợi ý 1
 
-`pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)` rồi đưa thẳng vào `nn.LSTM`; với
-`(_, (h, _)) = self.lstm(packed)`, `h` có shape `(num_directions, N, hidden)` và đã là state ở **độ dài thật** của từng câu
-(chiều ngược: state sau khi đọc về token đầu). `torch.cat(list(h), dim=-1)` nối hai chiều. Lấy `output[:, -1]` của chuỗi
-không pack là lỗi kinh điển: với câu ngắn, đó là state sau khi đọc một đống `<pad>`.
+Đọc docs của `pack_padded_sequence`: tham số nào cho phép batch **không** xếp theo độ dài, và `lengths` phải ở thiết bị nào?
+Với input đã pack, `h_n` mà `nn.LSTM` trả về là state ở vị trí nào của từng câu (chiều xuôi và chiều ngược), shape của nó
+với LSTM hai chiều là gì? Lấy `output[:, -1]` của chuỗi không pack là lỗi kinh điển: với câu ngắn, đó là state sau khi đọc
+một đống `<pad>`.
 
 ### Gợi ý 2
 
-`model.state_dict()` trả **tham chiếu** tới tensor đang train: lưu nó làm "bản tốt nhất" thì nó vẫn đổi theo các epoch
-sau. Dùng `copy.deepcopy(model.state_dict())`. Cộng `loss.item() * len(batch)` rồi chia cho số mẫu. Xáo bằng
-`torch.randperm(N, generator=g)` với `g` seed riêng, và gọi `torch.manual_seed(seed)` đầu hàm để dropout tái lập được.
+`model.state_dict()` trả về bản sao hay tham chiếu tới tensor đang train? Thử in một phần tử trước và sau một bước
+optimizer rồi quyết định cách lưu "bản tốt nhất". Train loss trung bình **theo mẫu**: batch cuối nhỏ hơn các batch khác.
+Để tái lập: xáo bằng `torch.randperm` với một `Generator` seed riêng, và đặt seed toàn cục đầu hàm để dropout cũng cố định.

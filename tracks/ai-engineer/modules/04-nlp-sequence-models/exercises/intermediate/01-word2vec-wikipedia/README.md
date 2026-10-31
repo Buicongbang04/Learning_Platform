@@ -58,15 +58,14 @@ nước–thủ đô và 12 cặp giới tính, vẽ PCA. Sau đó làm phần t
 
 ### Gợi ý 1
 
-Với `make_pairs`, sau subsample còn mảng `a` (id) và `s` (câu). Cặp ở khoảng cách `d` là `a[:-d]` với `a[d:]`, hợp lệ khi
-`s[:-d] == s[d:]`. Cửa sổ động thuộc về **center**: cặp (center ở `i`, context ở `i + d`) cần `b[i] >= d`, cặp (center ở
-`i + d`, context ở `i`) cần `b[i + d] >= d`. Một vòng `for d in range(1, window + 1)` với các mask boolean là đủ nhanh cho
-6 triệu token.
+Với `make_pairs`, nghĩ theo **khoảng cách** chứ không theo vị trí: với mỗi `d` từ 1 tới `window`, mọi cặp cách nhau `d`
+lấy được bằng hai lát cắt lệch nhau `d` phần tử của mảng id sau subsample. Điều kiện "cùng câu" và điều kiện cửa sổ động
+đều là mask boolean trên đúng hai lát cắt đó. Cửa sổ động thuộc về **center**: với mỗi hướng (context ở bên phải hay bên
+trái), bán kính `b` của phần tử nào quyết định cặp được giữ? Một vòng lặp theo `d` là đủ nhanh cho 6 triệu token.
 
 ### Gợi ý 2
 
-`SGNS.forward`: `v = in_emb(centers)` shape `(B, d)`, điểm âm bằng `torch.bmm(out_emb(negatives), v.unsqueeze(-1))`.
-Optimizer: `torch.optim.SGD(model.parameters(), lr=lr * batch_size)` chạy được với gradient sparse; đổi lr mỗi bước bằng
-cách gán `group["lr"]` trong `opt.param_groups`. Tổng số bước để tính lr giảm dần: `epochs * ceil(số cặp epoch đầu /
-batch_size)`. Muốn khớp số của lời giải: tạo `SGNS` ngay sau `torch.manual_seed(seed)`, lấy cặp và hoán vị từ cùng một
-`rng`, mẫu âm bằng `torch.multinomial` trên tensor `float64`.
+Điểm âm của cả batch là một phép nhân ma trận theo batch giữa `(B, K, d)` và `(B, d, 1)`. `torch.optim.SGD` nhận được
+gradient sparse; loss là **trung bình** theo batch, nên nghĩ xem lr của optimizer phải bằng bao nhiêu để mỗi cặp nhận bước
+như word2vec gốc. lr đổi mỗi bước bằng cách sửa `param_groups`. Muốn khớp số của lời giải: tạo `SGNS` ngay sau
+`torch.manual_seed(seed)`, lấy cặp và hoán vị từ cùng một `rng`, mẫu âm bằng `torch.multinomial` trên tensor `float64`.

@@ -57,6 +57,7 @@ $$v$$ và $$u$$ (mục 3 lý thuyết). Nhớ chia cho B vì loss là trung bìn
 
 ### Gợi ý 2
 
-`W_in[centers] -= lr * dv` với `centers = [0, 0, 3]` chỉ áp **một** trong hai cập nhật của dòng 0 (fancy indexing gán,
-không cộng). Dùng `np.add.at(W_in, centers, -lr * dv)`. Với negative shape `(B, K)`, làm phẳng chỉ số thành `(B*K,)` và
-gradient thành `(B*K, d)`. Tính mọi gradient từ giá trị **trước** cập nhật rồi mới sửa ma trận.
+Gán qua fancy indexing (`W[idx] -= ...`) với chỉ số lặp lại chỉ giữ **một** lần ghi. numpy có một hàm "unbuffered" cộng tại
+chỗ theo chỉ số (mục 3 lý thuyết có nhắc tên); test so với autograd sẽ cho bạn biết đã dùng đúng chưa. Negative có shape
+`(B, K)`: chỉ số và gradient phải được làm phẳng theo cùng một cách. Tính mọi gradient từ giá trị **trước** cập nhật rồi mới
+sửa ma trận.

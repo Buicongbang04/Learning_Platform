@@ -19,18 +19,18 @@ tới câu dài nhất **trong batch** (trung vị 11 âm tiết, p99 là 52, d�
 
 ## Kết quả thật
 
-Embedding 128, hidden 128, dropout 0.3, Adam 2e-3, batch 64, 6 epoch, seed 0, CPU 4 luồng:
+Embedding 128, hidden 128, dropout 0.3, Adam 2e-3, batch 64, 6 epoch, seed 0, CPU 4 luồng (PC, 2026-10-31):
 
 | Model | Val macro-F1 theo epoch | Epoch chọn |
 | --- | --- | --- |
-| LSTM một chiều | 0.615, 0.658, 0.701, 0.741, 0.760, 0.771 | 6 |
+| LSTM một chiều | 0.615, 0.659, 0.680, 0.746, 0.772, 0.788 | 6 |
 | BiLSTM | 0.666, 0.721, 0.740, 0.800, 0.810, 0.787 | 5 |
 
 | Model (test, 3 166 câu) | Accuracy | Macro-F1 | F1 negative | F1 neutral | F1 positive |
 | --- | --- | --- | --- | --- | --- |
 | Đoán toàn positive | 0.5022 | 0.2229 | 0 | 0 | 0.669 |
 | TF-IDF 1-2 gram + LR (C = 10) | 0.8977 | 0.7159 | 0.915 | 0.311 | 0.922 |
-| LSTM một chiều | 0.9021 | 0.7246 | 0.920 | 0.327 | 0.927 |
+| LSTM một chiều | 0.9002 | 0.7256 | 0.918 | 0.333 | 0.925 |
 | BiLSTM | 0.9037 | 0.7549 | 0.922 | 0.415 | 0.928 |
 
 Confusion matrix của BiLSTM (dòng là nhãn thật negative, neutral, positive):
@@ -43,14 +43,16 @@ Confusion matrix của BiLSTM (dòng là nhãn thật negative, neutral, positiv
 
 Đọc kết quả:
 
-- Ba model thật có accuracy trong khoảng 0.6 điểm; macro-F1 tách chúng ra (0.716, 0.725, 0.755), và gần như toàn bộ
+- Ba model thật có accuracy trong khoảng 0.6 điểm; macro-F1 tách chúng ra (0.716, 0.726, 0.755), và gần như toàn bộ
   khác biệt đến từ lớp neutral (0.31 → 0.42).
 - BiLSTM vẫn đoán sai 112 / 167 câu neutral. Đọc các câu sai: "thời gian học .", "tâm lý .", "bài thuyết trình của các
   sinh viên ." là mảnh câu không có cảm xúc rõ, còn "môn học này giúp chúng em hiểu ra những vấn đề cơ bản ." thì nhãn
   neutral cũng gây tranh cãi. Giới hạn nằm ở nhãn và dữ liệu nhiều hơn ở model.
 - LSTM một chiều chưa bão hoà ở epoch 6 (val F1 còn tăng); BiLSTM đạt đỉnh ở epoch 5 rồi tụt: chọn epoch theo
   validation có ý nghĩa: trên val, epoch 5 hơn epoch 6 tới 0.023 macro-F1.
-- Thời gian lần đo này 5-6 phút mỗi LSTM vì CPU bị chia sẻ; trên laptop rảnh nhanh hơn vài lần. TF-IDF + LR train trong
+- LSTM một chiều lệch nhẹ giữa hai máy dù cùng seed (laptop: macro-F1 0.7246, F1 neutral 0.327; BiLSTM ra đúng cùng số):
+  thứ tự cộng số thực trong BLAS khác nhau. Chênh lệch ở chữ số thứ ba không phải kết quả.
+- Thời gian trên PC: 44 giây cho LSTM một chiều, 74 giây cho BiLSTM. TF-IDF + LR train trong
   vài giây và chỉ kém 0.04 macro-F1: trong sản phẩm thật, baseline này thường là điểm khởi đầu hợp lý.
 
 ## Bẫy thường gặp

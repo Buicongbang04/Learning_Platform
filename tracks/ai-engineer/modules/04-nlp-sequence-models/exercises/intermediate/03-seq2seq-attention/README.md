@@ -23,8 +23,9 @@ vì sao thứ tự "attention trước hay sau bước RNN" quyết định có 
 
 **Phần cứng:** CPU · ~150 phút
 
-Thời gian trên là thời gian làm bài. Chạy cả notebook lời giải trên CPU 4 luồng: lần đo của lời giải mất 90 phút vì CPU đang bị chia sẻ rất nặng (mỗi model đảo chuỗi 3.5-6 phút, mỗi epoch
-dịch 3-35 phút); ở một lần thử khi máy nhẹ hơn, mỗi epoch dịch chỉ mất 1-1.5 phút. Kernel `ai-gpu` (GPU) nhanh
+Thời gian trên là thời gian làm bài. Thời gian máy của notebook lời giải trên CPU 4 luồng: khi máy rảnh mỗi model đảo chuỗi
+40-90 giây và mỗi epoch dịch khoảng 1 phút (tổng chừng 10 phút); lần đo trên PC đang bị chiếm (load 20-30) mất 44 phút vì
+có epoch kéo dài tới 20 phút. Kernel `ai-gpu` (GPU) nhanh
 hơn nhiều nhưng không bắt buộc.
 
 Mở `starter/seq2seq.ipynb`, làm theo đặc tả trên từng cell (quy ước shape: batch trước, `mask` là `True` ở token thật):
@@ -56,14 +57,14 @@ Rồi chạy các cell `explore`: bài đảo chuỗi dài tới 20 với ba ch�
 
 ### Gợi ý 1
 
-Attention theo batch: Bahdanau `self.W_q(query).unsqueeze(1) + self.W_k(keys)` broadcast thành `(N, S, attn_dim)`, qua
-`tanh` rồi `self.v` và `squeeze(-1)`. Luong: `torch.bmm(k, query.unsqueeze(-1))`. Context: `torch.bmm(weights.unsqueeze(1),
-keys).squeeze(1)`. Mask: `scores.masked_fill(~mask, float("-inf"))` rồi mới softmax. `h_n` của GRU hai chiều có shape
-`(2, N, hidden)`: `h[0]` là chiều xuôi, `h[1]` chiều ngược.
+Viết attention cho cả batch bằng broadcasting và `bmm`, không lặp theo câu: với Bahdanau, query `(N, ·)` cần thêm một trục
+để cộng được với keys `(N, S, ·)`; với Luong, score là một tích theo batch. Context cũng là một `bmm` của trọng số với
+keys. Mask áp **trước** softmax (mục 6 lý thuyết). Kiểm shape của `h_n` của GRU hai chiều: chiều xuôi và chiều ngược nằm ở
+chỉ số nào?
 
 ### Gợi ý 2
 
-`forward` song song cho Luong: `S, _ = self.decoder(emb(tgt_in), s0.unsqueeze(0))` ra `(N, T, H)`; score mọi bước một lần
-`torch.bmm(S, self.attn.W(keys).transpose(1, 2))` shape `(N, T, S_src)`, mask `~mask.unsqueeze(1)`, softmax, `bmm` với
-`keys`. Muốn chắc đúng, chạy test `forward` bằng `step`: hai đường phải ra cùng logits. Trong `step` của Bahdanau,
-`nn.GRU` nhận input `(N, 1, emb + 2H)` và state `(1, N, H)`.
+Với Luong, decoder GRU không cần context nên chạy được cả `tgt_in` một lần; score cho mọi cặp (bước đích, vị trí nguồn) khi
+đó là một `bmm` ra shape `(N, T, S_src)`, và mask phải thêm một trục để broadcast. Dùng test "forward bằng step" làm thước
+đo: hai đường phải cho cùng logits, lệch là có chỗ nối sai thứ tự hoặc quên mask. Với Bahdanau, kiểm kích thước input của
+GRU decoder (embedding nối với context) và state ban đầu có shape `(1, N, H)`.

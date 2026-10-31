@@ -55,8 +55,8 @@ Từ đó suy gradient của 4 khối $$z$$ (nhân đạo hàm sigmoid $$\sigma(
 
 ### Gợi ý 2
 
-Thứ tự cụ thể ở mỗi bước $$t$$ (đi ngược):
-$$dh = \text{dout}_t + dh_{next}$$, $$dc = dc_{next} + dh \odot o \odot (1 - \tanh^2 c_t)$$,
-$$dz = [dc \odot g \odot i(1-i);\ dc \odot c_{t-1} \odot f(1-f);\ dc \odot i \odot (1-g^2);\ dh \odot \tanh c_t \odot o(1-o)]$$,
-rồi $$dW_{ih} \mathrel{+}= dz^\top x_t$$, $$dW_{hh} \mathrel{+}= dz^\top h_{t-1}$$, $$dx_t = dz\,W_{ih}$$,
-$$dh_{next} = dz\,W_{hh}$$, $$dc_{next} = dc \odot f$$. `db_ih` và `db_hh` bằng nhau (hai bias cộng vào cùng một chỗ).
+Viết đạo hàm cho **một bước** trước, giả sử đã biết gradient vào $$h_t$$ và vào $$c_t$$. Mỗi khối trong bốn khối của $$dz$$ là
+tích của ba thứ: gradient đi vào ($$dc$$ hoặc $$dh$$), "đối tác" của cổng đó trong phương trình $$c_t$$ hoặc $$h_t$$, và đạo hàm
+của hàm kích hoạt viết qua chính giá trị đã lưu. Rồi tự hỏi: gradient về $$h_{t-1}$$ đi qua ma trận nào, còn gradient về
+$$c_{t-1}$$ đi qua phép nhân nào (không qua ma trận nào cả). Test báo `dc0` sai mà `dh0` đúng thường là thiếu một đường vào
+$$c_t$$. Hai bias cộng vào cùng một chỗ trong $$z_t$$, nên gradient của chúng có quan hệ gì?

@@ -1,56 +1,56 @@
 questions:
-- id: n-phrases
+- id: vocab-phrased
   kind: data
   type: single
-  prompt: Với `min_count=5`, `delta=5`, `threshold=100` trên 5 000 bài (seed 0), `find_phrases` tìm được bao nhiêu cụm?
+  prompt: Sau khi ghép cụm, vocab (từ xuất hiện ít nhất 5 lần) của model thứ hai có bao nhiêu mục?
   options:
   - id: a
-    text: '2 931'
-  - id: b
     text: '13 077'
+  - id: b
+    text: '24 305'
   - id: c
-    text: '21 834'
+    text: '33 760'
   - id: d
-    text: '48 520'
-- id: hanoi-neighbors
+    text: '54 912'
+- id: song-neighbors
   kind: data
   type: single
-  prompt: Ở model train sau khi ghép cụm, các láng giềng gần nhất của `hà_nội` chủ yếu là gì?
+  prompt: Ở model train trên âm tiết (không ghép cụm), các láng giềng gần nhất của `sông` chủ yếu là gì?
   options:
   - id: a
-    text: Các thành phố, địa danh khác của Việt Nam
+    text: Tên các con sông nước ngoài như vistula, dniepr
   - id: b
-    text: Tên các quốc gia châu Á như nhật_bản, lào
+    text: Các con sông lớn của Việt Nam như hồng, cửu_long
   - id: c
-    text: Từ chỉ thời gian như tháng, năm, ngày
+    text: Các từ chỉ vùng nước như hồ, biển, suối, đầm lầy
   - id: d
-    text: Các âm tiết rời như hà, nội, giang
-- id: syllable-neighbors
+    text: Các âm tiết chức năng như của, là, và
+- id: berlin
   kind: data
   type: single
-  prompt: Ở model train trên âm tiết (không ghép cụm), láng giềng của `mèo` có `thằn` và `lằn`. Điều đó cho thấy gì?
+  prompt: 'Ở model ghép cụm, `pháp : paris :: đức : ?` cho từ nào ở vị trí 1?'
   options:
   - id: a
-    text: Model đã học đúng nghĩa của cả từ thằn lằn ghép
+    text: dresden
   - id: b
-    text: Vector học được là của âm tiết trong từ ghép
+    text: berlin
   - id: c
-    text: Subsampling đã bỏ quá nhiều từ phổ biến
+    text: munich
   - id: d
-    text: Phân phối nhiễu mũ 0.75 làm lệch từ hiếm
-- id: analogy-acc
+    text: đức
+- id: loss-compare
   kind: data
   type: single
-  prompt: Analogy nước–thủ đô (top 1, chỉ cặp có trong vocab) của model ghép cụm đúng khoảng bao nhiêu?
+  prompt: Loss epoch 3 của model âm tiết và model ghép cụm so với nhau thế nào, và kết luận được gì?
   options:
   - id: a
-    text: Khoảng 1%
+    text: Ghép cụm thấp hơn hẳn (dưới một nửa), embedding tốt hơn hẳn
   - id: b
-    text: Khoảng 11%
+    text: Chênh dưới 0.05, nhưng hai vocab khác nhau nên không so được
   - id: c
-    text: Khoảng 45%
+    text: Âm tiết thấp hơn hẳn, ghép cụm làm model học kém đi rất rõ
   - id: d
-    text: Khoảng 80%
+    text: Bằng nhau tới 4 chữ số, ghép cụm không có tác dụng gì
 - id: trung-quoc
   kind: knowledge
   type: single

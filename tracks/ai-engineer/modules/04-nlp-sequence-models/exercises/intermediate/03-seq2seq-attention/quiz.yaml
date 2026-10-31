@@ -1,56 +1,56 @@
 questions:
-- id: reverse-none
+- id: unk-rate
   kind: data
   type: single
-  prompt: Trên bài đảo chuỗi dài tới 20 (hidden 32), model không attention đúng nguyên chuỗi khoảng bao nhiêu?
+  prompt: Với vocab 4 000 từ, khoảng bao nhiêu phần trăm token phía tiếng Việt (46 311 cặp câu ngắn) thành `<unk>`?
   options:
   - id: a
-    text: Khoảng 0.11
+    text: Khoảng 0.1%
   - id: b
-    text: Khoảng 0.50
+    text: Khoảng 1.2%
   - id: c
-    text: Khoảng 0.85
+    text: Khoảng 8%
   - id: d
-    text: Khoảng 0.98
-- id: reverse-attn
+    text: Khoảng 25%
+- id: ppl-trajectory
   kind: data
   type: single
-  prompt: Cùng bài đó, hai model có attention (Luong, Bahdanau) đạt khoảng bao nhiêu?
+  prompt: Train perplexity của model Luong so với model không attention qua 3 epoch dịch Anh-Việt diễn biến thế nào?
   options:
   - id: a
-    text: Khoảng 0.3 đến 0.4
+    text: Thấp hơn hẳn ngay từ epoch 1 và cách xa dần
   - id: b
-    text: Khoảng 0.6 đến 0.7
+    text: Cao hơn ở epoch 1, gần bằng nhau ở epoch 3
   - id: c
-    text: Từ 0.98 trở lên
+    text: Bằng nhau ở cả ba epoch, chênh dưới 1%
   - id: d
-    text: Ngang model không attention
-- id: short-bleu
+    text: Thấp hơn ở epoch 1, cao hơn hẳn ở epoch 3
+- id: slowest-reverse
   kind: data
   type: single
-  prompt: Dịch câu ≤ 15 từ sau 3 epoch trên CPU, BLEU tst2013 của hai model nằm trong khoảng nào?
+  prompt: Trên bài đảo chuỗi (cùng 1 500 bước), model nào train mất nhiều thời gian nhất?
   options:
   - id: a
-    text: Dưới 5, attention hơn khoảng 1 điểm
+    text: Không attention
   - id: b
-    text: Khoảng 15, attention hơn khoảng 5 điểm
+    text: Luong general
   - id: c
-    text: Khoảng 30, hai model bằng nhau
+    text: Bahdanau
   - id: d
-    text: Trên 40, không attention tốt hơn
-- id: heatmap
-  kind: data
+    text: Ba model gần bằng nhau
+- id: attention-on-period
+  kind: knowledge
   type: single
-  prompt: Ma trận attention của model Luong trên bài đảo chuỗi có hình dạng gì?
+  prompt: Heatmap attention của một model dịch cho thấy mọi bước sinh đều dồn trọng số vào dấu chấm cuối câu nguồn. Điều đó nói gì?
   options:
   - id: a
-    text: Một đường chéo ngược
+    text: Model đã học căn chỉnh từ với từ rất tốt
   - id: b
-    text: Một đường chéo xuôi
+    text: Model dùng attention như một vector tóm tắt cố định
   - id: c
-    text: Đều nhau ở mọi ô vuông
+    text: Mask padding bị sai nên trọng số dồn về cuối câu
   - id: d
-    text: Dồn hết vào cột đầu tiên
+    text: Dấu chấm là token quan trọng nhất khi dịch câu
 - id: why-parallel
   kind: knowledge
   type: single
@@ -90,16 +90,3 @@ questions:
     text: Overfitting do vocab quá nhỏ hẹp
   - id: d
     text: Nút thắt của attention kiểu Bahdanau
-- id: mt-heatmap
-  kind: data
-  type: single
-  prompt: Heatmap attention Luong của câu "i was very proud of my country ." sau 3 epoch trông thế nào?
-  options:
-  - id: a
-    text: Đường chéo, mỗi từ Việt nhìn đúng từ Anh tương ứng
-  - id: b
-    text: Mọi bước đều dồn trọng số vào dấu chấm cuối câu
-  - id: c
-    text: Trọng số chia đều cho mọi từ tiếng Anh ở mọi bước
-  - id: d
-    text: Mọi bước đều dồn trọng số vào từ đầu tiên là i

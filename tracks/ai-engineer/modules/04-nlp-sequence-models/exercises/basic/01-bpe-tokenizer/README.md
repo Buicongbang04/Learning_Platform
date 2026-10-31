@@ -60,7 +60,7 @@ thay mọi lần xuất hiện của `pair` trong `ids` (đi từ trái, không 
 
 ### Gợi ý 2
 
-Chọn cặp tốt nhất với luật hoà: `max(counts, key=lambda p: (counts[p], -p[0], -p[1]))`. Trong `encode`, dựng
-`ranks = {pair: 256 + i}` rồi mỗi vòng lấy `min(các cặp liền nhau, key=lambda p: ranks.get(p, inf))`; nếu cặp đó không
-có trong `ranks` thì dừng. Cache kết quả theo pretoken (văn bản thật lặp lại rất nhiều từ). Trong `decode`, bảng
-`vocab[256 + i] = vocab[a] + vocab[b]` dựng theo đúng thứ tự merge vì merge sau có thể dùng token của merge trước.
+Luật hoà viết gọn nhất bằng một **khoá so sánh dạng tuple** cho `max`: tần suất trước, rồi tới hai id, đặt dấu sao cho id
+nhỏ thắng. Trong `encode`, đổi danh sách merge thành một bảng tra thứ hạng; mỗi vòng chọn cặp liền nhau có thứ hạng nhỏ
+nhất, cặp không có trong bảng coi như thứ hạng vô cùng (và là điều kiện dừng). Văn bản thật lặp lại rất nhiều từ: cache
+kết quả theo pretoken. Trong `decode`, nghĩ xem vì sao bảng id → bytes phải dựng theo **đúng thứ tự** merge.

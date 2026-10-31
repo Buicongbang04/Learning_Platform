@@ -13,11 +13,11 @@ framework khác thì model hỏng âm thầm.
 | --- | --- | --- |
 | vào $$h_t$$ | $$dh = \text{dout}_t + dh_{next}$$ | $$h_t$$ vừa là output vừa là input của bước sau |
 | vào $$c_t$$ | $$dc = dc_{next} + dh \odot o \odot (1 - \tanh^2 c_t)$$ | hai đường: băng chuyền và qua $$h_t$$ |
-| 4 khối $$z$$ | xem Gợi ý 2 của đề | đạo hàm sigmoid, tanh |
+| 4 khối $$z$$ | $$dz = [dc \odot g \odot i(1-i);\ dc \odot c_{t-1} \odot f(1-f);\ dc \odot i \odot (1-g^2);\ dh \odot \tanh c_t \odot o(1-o)]$$ | đạo hàm sigmoid, tanh viết qua giá trị đã lưu |
 | tham số | $$dW_{ih} \mathrel{+}= dz^\top x_t$$, $$dW_{hh} \mathrel{+}= dz^\top h_{t-1}$$ | cộng dồn qua mọi bước |
-| về bước trước | $$dh_{next} = dz\,W_{hh}$$, $$dc_{next} = dc \odot f$$ | dòng cuối là "con đường cộng" của mục 5 |
+| về bước trước | $$dx_t = dz\,W_{ih}$$, $$dh_{next} = dz\,W_{hh}$$, $$dc_{next} = dc \odot f$$ | dòng cuối là "con đường cộng" của mục 5 |
 
-`dh0`, `dc0` là `dh_next`, `dc_next` sau bước $$t = 0$$. Khởi tạo các tích luỹ `dW` bằng 0 **trong** `backward` rồi gán
+`db_ih` và `db_hh` cùng bằng tổng $$dz$$ theo batch và thời gian (hai bias cộng vào cùng một chỗ). `dh0`, `dc0` là `dh_next`, `dc_next` sau bước $$t = 0$$. Khởi tạo các tích luỹ `dW` bằng 0 **trong** `backward` rồi gán
 vào `self` ở cuối, nên gọi hai lần cho cùng kết quả.
 
 **Sigmoid ổn định.** Tách theo dấu: $$1/(1+e^{-x})$$ cho $$x \ge 0$$ và $$e^x/(1+e^x)$$ cho $$x < 0$$, không bao giờ tính
