@@ -1,0 +1,9 @@
+/services/api/app/payments/ @olist-shop/payments @olist-shop/security
+/services/api/migrations/ @olist-shop/backend @olist-shop/data
+/analytics/ @olist-shop/data
+/infra/ @olist-shop/platform
+*.tf @olist-shop/platform
+/deploy/ @olist-shop/platform
+Dockerfile @olist-shop/backend @olist-shop/platform
+/.github/ @olist-shop/platform @olist-shop/security
+* @olist-shop/backend

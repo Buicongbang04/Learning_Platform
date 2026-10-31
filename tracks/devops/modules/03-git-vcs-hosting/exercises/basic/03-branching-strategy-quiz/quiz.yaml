@@ -1,0 +1,92 @@
+questions:
+  - id: saas-daily-deploy
+    kind: knowledge
+    type: single
+    prompt: "API Olist Shop: 12 dev, một bản production duy nhất, CI 8 phút, đã có feature flag, muốn deploy nhiều lần mỗi ngày. Chiến lược nhánh nào hợp nhất?"
+    options:
+      - { id: a, text: "GitFlow: develop, release/* mỗi sprint, hotfix/* từ master" }
+      - { id: b, text: "Trunk-based: nhánh sống dưới một ngày, merge vào main sau CI" }
+      - { id: c, text: "Release branch mỗi tuần, QA trên nhánh rồi merge ngược về main" }
+      - { id: d, text: "Mỗi feature một nhánh dài, gom merge vào main cuối sprint" }
+  - id: mobile-store-release
+    kind: knowledge
+    type: single
+    prompt: "Team đang trunk-based. App mobile của Olist Shop phải gửi App Store duyệt 1-3 ngày; trong lúc chờ, main vẫn nhận code mới, và bản đang duyệt có thể cần sửa gấp. Làm gì?"
+    options:
+      - { id: a, text: "Code freeze main tới khi store duyệt xong, rồi mở lại" }
+      - { id: b, text: "Chuyển hẳn sang GitFlow, thêm nhánh develop cho mọi thay đổi" }
+      - { id: c, text: "Cắt release/x.y từ main lúc gửi duyệt, sửa trên main rồi cherry-pick" }
+      - { id: d, text: "Tag main lúc gửi duyệt; cần sửa thì commit thẳng lên tag đó rồi tag lại" }
+  - id: on-prem-versions
+    kind: knowledge
+    type: single
+    prompt: "Bản cài on-prem cho đối tác: khách đang chạy cả 3.x và 4.x, bản vá bảo mật phải ra cho cả hai trong 48 giờ. Tổ chức nhánh thế nào?"
+    options:
+      - { id: a, text: "Nhánh bảo trì release/3.x và release/4.x, sửa trên main rồi backport" }
+      - { id: b, text: "Fork thành hai repo riêng cho 3.x và 4.x, sửa từng repo độc lập" }
+      - { id: c, text: "Chỉ giữ main, yêu cầu mọi khách nâng lên 4.x trước khi nhận bản vá" }
+      - { id: d, text: "GitFlow chuẩn: một master duy nhất, hotfix/* merge vào master và develop" }
+  - id: dora-lead-time
+    kind: knowledge
+    type: single
+    prompt: "Team dùng GitFlow, lead time for changes khoảng 3 tuần, phần lớn thời gian code nằm chờ trên develop và release/*. Thay đổi nào cải thiện chỉ số này nhiều nhất?"
+    options:
+      - { id: a, text: "Thêm một vòng QA thủ công trên release/* để giảm change failure rate" }
+      - { id: b, text: "Bắt buộc 3 người review mỗi PR để lỗi không lọt vào develop" }
+      - { id: c, text: "Bật squash merge cho mọi PR để lịch sử develop gọn hơn" }
+      - { id: d, text: "PR nhỏ merge thẳng vào main hằng ngày sau flag, deploy từ main" }
+  - id: hotfix-continuous-deploy
+    kind: knowledge
+    type: single
+    prompt: "Trunk-based, mỗi lần merge vào main là pipeline 15 phút deploy production. Bản vừa deploy làm checkout lỗi 30% request. Bước đầu tiên hợp lý nhất?"
+    options:
+      - { id: a, text: "Mở hotfix/* từ tag cũ, sửa và deploy nhánh đó, merge lại sau" }
+      - { id: b, text: "Rollback về artifact trước, rồi sửa qua PR bình thường trên main" }
+      - { id: c, text: "Push thẳng bản sửa lên main, tạm tắt required checks cho nhanh hơn" }
+      - { id: d, text: "Giữ nguyên, viết bản sửa đầy đủ kèm test rồi mới deploy lại" }
+  - id: merge-method
+    kind: knowledge
+    type: single
+    prompt: "PR trong repo thường có nhiều commit 'wip', 'fix typo'. Team sinh changelog từ tiêu đề PR và hay dùng git bisect trên main. Chọn cách merge nào?"
+    options:
+      - { id: a, text: "Merge commit, giữ đủ mọi commit của nhánh để truy vết" }
+      - { id: b, text: "Rebase and merge, đưa từng commit của nhánh lên main" }
+      - { id: c, text: "Squash merge, mỗi PR một commit mang tiêu đề PR" }
+      - { id: d, text: "Fast-forward tay trên máy dev, rồi push thẳng main" }
+  - id: long-migration
+    kind: knowledge
+    type: single
+    prompt: "Team trunk-based phải chuyển cổng thanh toán sang nhà cung cấp mới, ước tính 6 tuần. Cách tổ chức code nào ít rủi ro nhất?"
+    options:
+      - { id: a, text: "Một nhánh feature riêng trong 6 tuần, rebase lên main mỗi tuần một lần" }
+      - { id: b, text: "Tạm dựng nhánh develop cho riêng việc chuyển cổng này" }
+      - { id: c, text: "Branch by abstraction sau feature flag, merge từng phần vào main" }
+      - { id: d, text: "Fork repo, làm xong 6 tuần rồi mở một PR lớn về repo gốc" }
+  - id: env-branches
+    kind: knowledge
+    type: single
+    prompt: "Team đề xuất ba nhánh dev, staging, prod; promote bằng cách merge dev vào staging rồi staging vào prod, mỗi nhánh tự build image. Vấn đề lớn nhất là gì?"
+    options:
+      - { id: a, text: "Git không cho merge qua lại giữa ba nhánh sống lâu như vậy" }
+      - { id: b, text: "Image chạy ở prod không phải image đã test ở staging, nhánh dần lệch nhau" }
+      - { id: c, text: "Phải trả thêm phí cho GitHub khi repo có hơn hai nhánh được bảo vệ dài hạn" }
+      - { id: d, text: "Merge commit làm git log khó đọc hơn khi xem lịch sử deploy" }
+  - id: gitflow-fit
+    kind: knowledge
+    type: single
+    prompt: "Trường hợp nào GitFlow (develop, release/*, hotfix/*) vẫn là lựa chọn có lý?"
+    options:
+      - { id: a, text: "Firmware phát hành theo quý, có giai đoạn QA dài trên bản ổn định" }
+      - { id: b, text: "Web SaaS deploy nhiều lần mỗi ngày, có feature flag đầy đủ" }
+      - { id: c, text: "Startup 3 người đang làm prototype, chưa có khách trả tiền" }
+      - { id: d, text: "Repo pipeline dữ liệu của team data, chạy CD mỗi khi merge vào main" }
+  - id: trunk-prerequisites
+    kind: knowledge
+    type: multi
+    prompt: "Điều nào là điều kiện cần để trunk-based development an toàn? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "CI nhanh và đáng tin chạy cho mọi PR trước khi merge" }
+      - { id: b, text: "Feature flag hoặc branch by abstraction cho việc dở dang" }
+      - { id: c, text: "Code freeze một tuần trước mỗi lần phát hành" }
+      - { id: d, text: "PR nhỏ, được review trong vòng một ngày" }
+      - { id: e, text: "Nhánh develop để gom thay đổi trước khi vào main" }
