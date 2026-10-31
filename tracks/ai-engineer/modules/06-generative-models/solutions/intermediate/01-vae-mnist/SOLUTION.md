@@ -51,6 +51,9 @@ Mẫu sinh từ $$z \sim \mathcal{N}(0, I)$$, 1 000 mẫu, chấm bằng một M
 | AE-16 | **0.000** | 9 |
 | VAE-16, $$\beta$$ 1 / 0.5 / 4 / 10 | 0.334 / 0.269 / 0.406 / 0.409 | 10 |
 
+Kernel `ai-gpu` (PC) cho cùng bức tranh với số lệch nhẹ (chuỗi số ngẫu nhiên khác): AE 69.0; VAE recon 80.0, KL 23.6, $$-\mathcal{L}_1$$ 103.6, $$-\mathcal{L}_{100}$$ 99.7;
+$$\beta$$ 4 và 10 còn 12 và 6 active units; mẫu VAE tự tin 0.308 ($$\beta = 1$$) và 0.410 ($$\beta = 10$$); AE vẫn 0.000. Cả notebook khoảng 7 phút.
+
 Đọc kết quả:
 
 - **Tái tạo và sinh là hai mục tiêu khác nhau.** AE tái tạo tốt hơn VAE 10.6 nats/ảnh nhưng không sinh được: std mã AE theo từng chiều từ 2.98
