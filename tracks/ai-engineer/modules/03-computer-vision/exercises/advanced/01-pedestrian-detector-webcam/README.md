@@ -41,7 +41,9 @@ vài phút trên GPU 4GB rảnh (dưới 2 GB VRAM với batch 8); mỗi lần c
    `write_yolo_dataset` (ảnh là symlink tới ảnh gốc, nhãn `.txt`, `data.yaml`). Chạy với mặc định: 136 ảnh train,
    34 ảnh val. Bài Advanced 02 dùng đúng cách chia này.
 2. **Fine-tune**: YOLO11n pretrain COCO trên tập train (lệnh ở phần `run`, hoặc API `YOLO(...).train(...)`), thêm ít
-   nhất một biến thể có lý do (`imgsz`, số epoch, augmentation, freeze backbone, YOLO11s...). Ghi seed.
+   nhất một biến thể có lý do (`imgsz`, số epoch, augmentation, freeze backbone, YOLO11s...). Ghi seed. Lần train đầu,
+   ultralytics tải `yolo26n.pt` vào thư mục `weights/` **của thư mục đang đứng** để kiểm AMP: chạy từ gốc repo thì xoá
+   thư mục đó sau khi train (đừng commit nó).
 3. **Đánh giá có đối chứng** trên đúng 34 ảnh val, cùng một bộ đánh giá: YOLO11n zero-shot (lớp `person` của COCO) so với
    bản fine-tune; AP50, AP50-95, precision/recall ở ngưỡng confidence bạn chọn cho app. 34 ảnh là ít: ước lượng độ bất
    định (bootstrap theo ảnh, hoặc nhiều seed) trước khi nói "tốt hơn".

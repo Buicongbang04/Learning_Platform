@@ -12,7 +12,7 @@ kết quả của một bản tham chiếu (giữ ngoài repo) để bạn so, v
 | Ảnh trong dataset YOLO | symlink tới ảnh gốc | không nhân đôi 50 MB; ultralytics đọc qua symlink bình thường |
 | Model | `yolo11n.pt` pretrain COCO, giữ một lớp `person` | COCO đã có người; fine-tune chỉ cần chỉnh cho miền ảnh và quy ước hộp |
 | Train | 30 epoch, `imgsz=512`, batch 8, `seed=0`, `deterministic=True`, augmentation mặc định (mosaic, HSV, lật, scale) | ảnh Penn-Fudan cạnh dài 253–1 017 pixel, 512 giữ người nhỏ mà rẻ hơn 640 |
-| Đánh giá | bộ đánh giá của bài Intermediate 03 cho **cả hai** model, cùng 34 ảnh, `conf=0.001`, NMS iou 0.7; bootstrap 300 lần theo ảnh cho khoảng 95% | so công bằng; 34 ảnh có khoảng 80 người nên một hai hộp đã đổi AP vài điểm |
+| Đánh giá | bộ đánh giá của bài Intermediate 03 cho **cả hai** model, cùng 34 ảnh, `conf=0.001`, NMS iou 0.7; bootstrap 300 lần theo ảnh cho khoảng 95% | so công bằng; 34 ảnh có 90 người nên một hai hộp đã đổi AP vài điểm |
 | Ngưỡng app | conf 0.25 | đủ cao để không nhấp nháy hộp, recall vẫn gần mức tối đa trên tập val |
 | Nguồn video | `cv2.VideoCapture` cho camera/tệp, đọc thư mục ảnh theo tên | người không có webcam kiểm bằng thư mục ảnh val hoặc một tệp video bất kỳ |
 | Phát hình | MJPEG qua `http.server` (có sẵn), không `imshow` | env dùng OpenCV headless, chạy được trên server không màn hình |
@@ -31,7 +31,38 @@ Những lỗi hay gặp:
 
 ## Kết quả tham chiếu
 
-«KẾT_QUẢ_ADV01»
+Bản tham chiếu theo đúng bảng trên: ultralytics 8.4.178, torch 2.14.1+cu126, PC RTX 3060 (GPU dùng chung với một bài
+train khác), seed 0. Train 30 epoch mất 239 s ở `imgsz=512` và 378 s ở `imgsz=640`, khoảng 1 GB VRAM. Đánh giá trên 34 ảnh
+val (90 người) bằng bộ đánh giá của bài Intermediate 03, `conf=0.001`, khoảng 95% bootstrap 300 lần theo ảnh;
+precision/recall ở IoU 0.5, conf 0.25:
+
+| Model | `imgsz` đo | AP50 | AP75 | AP50-95 (khoảng 95%) | Precision / recall @0.25 |
+| --- | --- | --- | --- | --- | --- |
+| YOLO11n zero-shot | 640 | 0.995 | 0.967 | **0.897** (0.863–0.926) | 0.776 / 1.000 |
+| YOLO11n zero-shot | 512 | 0.996 | 0.935 | 0.877 (0.843–0.916) | 0.783 / 1.000 |
+| Fine-tune, train `imgsz=512` | 512 | 0.984 | 0.938 | 0.813 (0.777–0.855) | 0.888 / 0.967 |
+| Fine-tune, train `imgsz=640` | 640 | 0.985 | 0.914 | 0.821 (0.771–0.870) | 0.944 / 0.944 |
+
+`yolo train` tự báo trên cùng 34 ảnh: mAP50 0.992 / mAP50-95 0.817 (512) và 0.981 / 0.825 (640): gần số của bộ đánh giá
+tự viết, nhưng chỉ có nghĩa khi đặt cạnh zero-shot đo cùng cách.
+
+Đọc kết quả:
+
+- **Fine-tune không thắng zero-shot.** AP50-95 tụt khoảng 0.08 và khoảng bootstrap gần như tách rời. YOLO11n đã thấy hàng
+  trăm nghìn người trong COCO; 136 ảnh với 30 epoch (mosaic, lr mặc định) kéo nó lệch khỏi những gì đã biết nhiều hơn là
+  dạy thêm điều mới.
+- **Precision tăng, recall giảm**: zero-shot tìm thấy cả 90 người nhưng "precision" chỉ 0.78 vì nó cũng tìm thấy người
+  không được gán nhãn (bài Intermediate 03). Fine-tune trên nhãn thiếu dạy model **bỏ qua** đúng những người đó: con số
+  precision đẹp lên, chất lượng thật (một camera đường phố cần thấy mọi người) thì không. Một báo cáo tốt nói ra điều
+  này thay vì khoe precision.
+- **Hướng làm đáng thử** nếu vẫn muốn fine-tune: gán nhãn bổ sung người bị thiếu (hoặc đánh dấu vùng bỏ qua), freeze
+  backbone (`freeze=10`), lr nhỏ hơn, ít epoch hơn, hoặc lấy dữ liệu thật từ camera đích. Hoặc dùng zero-shot và đầu tư vào
+  app, tracker, ngưỡng conf.
+
+Độ trễ YOLO11n (trung vị 50 khung sau 10 khung warmup, ảnh val): CPU Xeon 4 luồng 17.7 ms (`imgsz` 320) và 32.3 ms (640) cho
+riêng model, GPU 11.9 và 12.1 ms (model nano trên GPU bị chi phối bởi khởi chạy kernel, không đổi theo `imgsz`). Cả vòng app
+trên video 640×480 dựng từ 34 ảnh val (102 khung, đọc, detect, vẽ, ghi mp4): **54 FPS** GPU ở `imgsz` 640, **40 FPS** CPU ở
+`imgsz` 320. Bản tham chiếu của `app.py` và `prepare_data.py` qua toàn bộ test của bài.
 
 ## Rubric
 

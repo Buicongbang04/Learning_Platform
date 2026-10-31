@@ -497,12 +497,23 @@ thật mà bộ dữ liệu không gán nhãn, nên AP đo trên nhãn thiếu t
 Dữ liệu theo định dạng YOLO (mỗi ảnh một tệp `.txt`, mỗi dòng `lớp cx cy w h` chuẩn hoá) cộng một `data.yaml`, rồi:
 
 ```bash
-uv run yolo detect train data=data.yaml model=yolo11n.pt epochs=30 imgsz=512 batch=8 project=~/.cache/ai-engineer/runs
+uv run --project setup/gpu yolo detect train data=data.yaml model=yolo11n.pt epochs=30 imgsz=512 batch=8 seed=0 \
+    project=$HOME/.cache/ai-engineer/runs
 ```
 
 Bài Advanced 01 làm đúng việc này trên Penn-Fudan (136 ảnh train, 34 ảnh val):
 
-«BẢNG_YOLO_FT»
+| YOLO11n trên 34 ảnh val (90 người), bộ đánh giá của bài Intermediate 03 | `imgsz` | AP50 | AP50-95 (khoảng 95% bootstrap theo ảnh) |
+| --- | --- | --- | --- |
+| Zero-shot (pretrain COCO, lớp `person`) | 640 | 0.995 | **0.897** (0.863–0.926) |
+| Fine-tune 30 epoch trên 136 ảnh train | 512 | 0.984 | 0.813 (0.777–0.855) |
+| Fine-tune 30 epoch trên 136 ảnh train | 640 | 0.985 | 0.821 (0.771–0.870) |
+
+(PC RTX 3060, seed 0, khoảng 4–6 phút train mỗi lần trên GPU dùng chung, khoảng 1 GB VRAM với batch 8.) Fine-tune **kém hơn** model có sẵn ở
+AP50-95, và khoảng bootstrap gần như không chồng nhau. 136 ảnh quá ít để cải thiện một detector đã thấy hàng trăm nghìn
+người trong COCO; tệ hơn, nhãn Penn-Fudan thiếu người bị che và ở mép ảnh, nên fine-tune dạy model **bỏ qua** đúng những
+người đó (precision theo nhãn tăng, chất lượng thật thì không). Bài học của một kỹ sư lão luyện: luôn đo baseline
+zero-shot trên cùng tập val, cùng bộ đánh giá, trước khi tin rằng fine-tune có ích; và kiểm nhãn trước khi kết luận về model.
 
 ## 6. Segmentation: semantic, instance, U-Net, Mask R-CNN, mIoU
 
@@ -591,9 +602,18 @@ flowchart LR
     DRAW --> OUT["MJPEG trình duyệt<br/>/ VideoWriter"]
 ```
 
-Ngân sách thời gian: 30 FPS là 33 ms cho **cả** vòng. Đo trên laptop này với YOLO11n:
+Ngân sách thời gian: 30 FPS là 33 ms cho **cả** vòng. Đo trên PC này (bài Advanced 01):
 
-«BẢNG_LATENCY»
+| YOLO11n, ảnh val Penn-Fudan, `conf=0.25`, trung vị 50 khung sau 10 khung warmup | `imgsz` 320 | `imgsz` 640 |
+| --- | --- | --- |
+| CPU Xeon, 4 luồng (model / cả `predict`) | 17.7 / 19.4 ms | 32.3 / 35.3 ms |
+| GPU RTX 3060 (model / cả `predict`) | 11.9 / 14.2 ms | 12.1 / 15.4 ms |
+
+Cả vòng app (đọc video 640×480, detect, vẽ, mã hoá và ghi tệp) đạt **54 FPS** trên GPU ở `imgsz` 640 và **40 FPS** trên CPU
+ở `imgsz` 320. Hai điều đáng để ý: trên CPU gấp đôi cạnh ảnh thì thời gian model gần gấp đôi (FLOPs gấp bốn nhưng phần cố
+định không nhỏ); trên GPU thời gian gần như không đổi theo `imgsz` vì model nano quá nhỏ, thời gian bị chi phối bởi việc
+khởi chạy kernel và chép dữ liệu chứ không phải phép tính. Số đo lúc GPU có tiến trình khác dùng chung; đo lại trên phần
+cứng đích trước khi hứa FPS.
 
 Khi không đủ nhanh, theo thứ tự rẻ nhất: giảm `imgsz` (FLOPs tỉ lệ bình phương), chạy GPU, export **ONNX** hoặc
 **OpenVINO**/TensorRT (`model.export(format="onnx")`), lượng tử hoá INT8 (module 10), đọc camera ở một luồng riêng để
