@@ -202,14 +202,39 @@ def superset():
         pytest.skip(f"Superset chưa đăng nhập được ({type(e).__name__}). Bật BI bằng: {BI_START}")
 
 
-def _all(session, kind):
+def _all(session, kind, prefix):
     out, page = [], 0
     while True:
-        res = session.get(f"/api/v1/{kind}/", params={"q": f"(page:{page},page_size:100)"}).json()
+        res = list_for_teardown(session, f"/api/v1/{kind}/", prefix, params={"q": f"(page:{page},page_size:100)"})
         out += res["result"]
         if len(out) >= res["count"] or not res["result"]:
             return out
         page += 1
+
+
+def list_for_teardown(session, url, prefix, **kwargs):
+    """GET danh sách cho teardown; lỗi (vd. session hết hạn) thì báo rõ cần dọn tay object của lần chạy."""
+    try:
+        res = session.get(url, **kwargs)
+        res.raise_for_status()
+        return res.json()
+    except requests.RequestException as e:
+        pytest.fail(f"Teardown không đọc được GET {url} ({e}); hãy xoá tay object có tên bắt đầu bằng {prefix!r}")
+
+
+def delete_all(session, urls):
+    """Xoá từng url, không dừng giữa chừng; cuối cùng báo mọi lần xoá lỗi (url + status) để dọn tay."""
+    failed = []
+    for url in urls:
+        try:
+            res = session.delete(url)
+        except requests.RequestException as e:
+            failed.append(f"DELETE {url}: {type(e).__name__}")
+            continue
+        if not res.ok:
+            failed.append(f"DELETE {url}: HTTP {res.status_code} {res.text[:200]}")
+    if failed:
+        pytest.fail("Teardown không dọn hết object test, hãy xoá tay:\n" + "\n".join(failed))
 
 
 @pytest.fixture(scope="module")
@@ -218,15 +243,16 @@ def run(superset):
     tag = uuid.uuid4().hex[:8]
     state = {"prefix": f"test-{tag} · ", "table": f"test_{tag}_bike_hour_demand"}
     yield state
-    for d in _all(superset, "dashboard"):
-        if d["dashboard_title"].startswith(state["prefix"]):
-            superset.delete(f"/api/v1/dashboard/{d['id']}")
-    for c in _all(superset, "chart"):
-        if c["slice_name"].startswith(state["prefix"]):
-            superset.delete(f"/api/v1/chart/{c['id']}")
-    for t in _all(superset, "dataset"):
-        if t["table_name"] == state["table"]:
-            superset.delete(f"/api/v1/dataset/{t['id']}")
+    prefix = state["prefix"]
+    dashboards = _all(superset, "dashboard", prefix)
+    charts = _all(superset, "chart", prefix)
+    datasets = _all(superset, "dataset", prefix)
+    delete_all(
+        superset,
+        [f"/api/v1/dashboard/{d['id']}" for d in dashboards if d["dashboard_title"].startswith(prefix)]
+        + [f"/api/v1/chart/{c['id']}" for c in charts if c["slice_name"].startswith(prefix)]
+        + [f"/api/v1/dataset/{t['id']}" for t in datasets if t["table_name"] == state["table"]],
+    )
 
 
 def published(superset, run):

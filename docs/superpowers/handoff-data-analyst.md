@@ -130,15 +130,21 @@ Nội dung mục này đã thống nhất với phiên AI Engineer; `handoff-ai-
 
 ## 7. Việc còn để ngỏ (không chặn việc học, làm nếu người học muốn)
 
+Còn mở:
+
 - Gom các bản sao code đọc Online Retail (module 03, 04, 06, 07, 09, 11, 12, 13, 14) vào một helper chung, ví dụ trong `testkit.py`. Cache key nên có thêm phiên bản loader.
-- Module 14 Basic 03 dùng multiprocessing với context "fork", nên chỉ chạy trên Linux. Có thể thêm SKIP khi nền tảng không hỗ trợ fork.
-- Module 14 Intermediate 02: test k-means ghim đúng thứ tự tên segment. Có thể so sánh tên sau khi sắp xếp.
-- Module 09: tắt telemetry của dbt (`DBT_SEND_ANONYMOUS_USAGE_STATS=False`). Đoạn dbt trong README nên dọn thư mục trong `finally`.
-- Module 10: teardown chưa kiểm status của lệnh DELETE.
+- Hàm `delete_all` / `list_for_teardown` bị chép ở 3 file test module 10; có thể gom vào `testkit.py` cùng đợt trên.
 - `pivot_tables()` của `Exercise.workbook` đọc thuộc tính riêng tư `_pivots` của openpyxl.
 - Bộ `grocery-sales-synthetic` tải từ Google Drive chưa có checksum. Đã có chặn trang HTML.
-- Module 05: `pipeline.py --last 0` chưa bị từ chối.
-- Câu chữ nhỏ ở SOLUTION module 01, Basic 03 ("vài ngày bão sai 200–300%") và Intermediate 02 ("30/10, 1 096 lượt" thực ra chỉ có 11 giờ dữ liệu).
+
+Đã xong trên PC (2026-10-31, nhánh `da-handoff-small-fixes`, có review độc lập):
+
+- Module 14 Basic 03: test cần fork tự SKIP khi nền tảng không hỗ trợ; lời giải vẫn dùng fork (đổi sang spawn phải tách mapper ra tệp `.py`).
+- Module 14 Intermediate 02: giữ ghim thứ tự tên segment (quy ước sắp theo `monetary_median`, seed 0–7 cho cùng thứ tự), kiểm tập tên trước để báo lỗi rõ hơn.
+- Module 09: tắt telemetry dbt bằng `flags: send_anonymous_usage_stats: false` trong `dbt_project.yml`; demo README dọn thư mục trong `finally`.
+- Module 10: teardown kiểm status của GET danh sách và DELETE, xoá hết rồi mới báo lỗi.
+- Module 05: `pipeline.py --last N` từ chối N < 1.
+- Module 01: SOLUTION Basic 03 và Intermediate 02 dùng số đo thật. Hai ngày xấu trời của 10/2012 là 02/10 và 29/10; 30/10 xếp loại mây và chỉ có giờ 13–23, nên kéo nhóm mây từ +1.4% xuống −4.2%.
 
 ## 8. Runbook trên PC
 

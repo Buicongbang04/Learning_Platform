@@ -4,6 +4,7 @@ import uuid
 
 import duckdb
 import pytest
+import requests
 
 import testkit
 from testkit import Exercise
@@ -171,14 +172,38 @@ def metabase():
         pytest.skip(str(e))
 
 
+def list_for_teardown(session, url, prefix, **kwargs):
+    """GET danh sách cho teardown; lỗi (vd. session hết hạn) thì báo rõ cần dọn tay object của lần chạy."""
+    try:
+        res = session.get(url, **kwargs)
+        res.raise_for_status()
+        return res.json()
+    except requests.RequestException as e:
+        pytest.fail(f"Teardown không đọc được GET {url} ({e}); hãy xoá tay object có tên bắt đầu bằng {prefix!r}")
+
+
+def delete_all(session, urls):
+    """Xoá từng url, không dừng giữa chừng; cuối cùng báo mọi lần xoá lỗi (url + status) để dọn tay."""
+    failed = []
+    for url in urls:
+        try:
+            res = session.delete(url)
+        except requests.RequestException as e:
+            failed.append(f"DELETE {url}: {type(e).__name__}")
+            continue
+        if not res.ok:
+            failed.append(f"DELETE {url}: HTTP {res.status_code} {res.text[:200]}")
+    if failed:
+        pytest.fail("Teardown không dọn hết object test, hãy xoá tay:\n" + "\n".join(failed))
+
+
 @pytest.fixture(scope="module")
 def run(metabase):
     """Tên riêng cho lần chạy test (không đụng question của bạn); dọn mọi card mang tên đó khi xong."""
     state = {"prefix": f"test-{uuid.uuid4().hex[:8]} · "}
     yield state
-    for card in metabase.get("/api/card").json():
-        if card["name"].startswith(state["prefix"]):
-            metabase.delete(f"/api/card/{card['id']}")
+    cards = list_for_teardown(metabase, "/api/card", state["prefix"])
+    delete_all(metabase, [f"/api/card/{c['id']}" for c in cards if c["name"].startswith(state["prefix"])])
 
 
 def published(metabase, run):

@@ -135,6 +135,14 @@ def test_missing_days(pl, tmp_path):
     assert pl.missing_days(db, "2026-10-19", "2026-10-21") == ["2026-10-19"]
 
 
+@pytest.mark.parametrize("n", ["0", "-3"])
+def test_last_must_be_positive(pl, n, capsys):
+    with pytest.raises(SystemExit) as e:
+        pl.main(["--last", n])
+    assert e.value.code == 2
+    assert "--last" in capsys.readouterr().err
+
+
 def test_runbook_filled():
     text = ex.read("RUNBOOK.md")
     assert "TODO" not in text, "RUNBOOK.md còn TODO"

@@ -114,6 +114,10 @@ def test_real_segments(nb, retail):
     rfm = nb.rfm_table(retail, SNAPSHOT)
     profile = nb.segment_profile(rfm, nb.fit_kmeans(nb.prepare_features(rfm), 4))
     names = nb.name_segments(profile, rfm)
-    assert names.tolist() == ["Champions", "At risk", "New / promising", "Hibernating"]
+    expected = ["Champions", "At risk", "New / promising", "Hibernating"]
+    assert sorted(names) == sorted(expected), f"Cần đúng bốn tên, mỗi cụm một tên; nhận {names.tolist()}"
+    assert names.tolist() == expected, (
+        f"Đủ bốn tên nhưng sai thứ tự {names.tolist()}: segment_profile phải sắp monetary_median giảm dần"
+    )
     assert profile["n"].tolist() == pytest.approx([713, 1187, 812, 1626], abs=20)
     assert profile["revenue_share"].iloc[0] == pytest.approx(0.647, abs=0.01)
