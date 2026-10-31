@@ -43,7 +43,7 @@ def sgns_step(W_in: np.ndarray, W_out: np.ndarray, centers: np.ndarray, contexts
     loss_b = -log σ(u_o · v_c) - Σ_k log σ(-u_k · v_c), v = W_in[center], u = W_out[context/negative].
     Gradient lấy theo loss trung bình; chỉ số lặp lại trong batch phải được cộng dồn.
     """
-    # TODO: forward (điểm dương, điểm âm, loss ổn định số), gradient theo v, u_o, u_k, cập nhật bằng np.add.at
+    # TODO: forward (điểm dương, điểm âm, loss ổn định số), gradient theo v, u_o, u_k, cập nhật cộng dồn theo chỉ số
     raise NotImplementedError
 
 
