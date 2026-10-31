@@ -93,13 +93,13 @@ questions:
 - id: hist-bias
   kind: data
   type: single
-  prompt: Với cấu hình DCGAN chuẩn, histogram lớp của 10 000 mẫu sinh cho thấy gì?
+  prompt: Ở cấu hình D mạnh + loss saturating, histogram lớp của 10 000 mẫu sinh cuối cùng trông thế nào?
   options:
   - id: a
     text: Đều gần 1 000 mỗi lớp, KL gần bằng 0
   - id: b
-    text: Lệch rõ, có lớp gần 1/3 số mẫu, có lớp gần vắng
+    text: Dồn vào 2–3 lớp, các lớp khác gần như vắng
   - id: c
-    text: Chỉ có đúng một lớp chữ số duy nhất
+    text: Đủ 10 lớp nhưng lệch nhẹ, KL khoảng 0.1
   - id: d
     text: Không đo được, vì giám khảo chỉ chấm ảnh thật thôi

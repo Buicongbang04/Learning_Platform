@@ -47,7 +47,17 @@ tin > 0.9 là 0.951; chấm 10 000 mẫu sinh):
 | D mạnh (lr D 2e-3), NS | 0.363 | 9 | 0.357 | 0.816 / 0.180 | `[491, 78, 1344, 3324, 690, 633, 129, 1133, 622, 1556]` |
 | D mạnh, saturating | **0.093** | **3** | **1.208** | **1.000 / 0.000** | `[1, 16, 3949, 3829, 0, 2180, 0, 8, 17, 0]` |
 
-⟪INT02_GPU⟫
+Kernel `ai-gpu` (PC, 15 epoch × 60 000 ảnh, cả notebook 12 phút 38 giây; giám khảo test accuracy 0.9832):
+
+| Cấu hình | Tự tin > 0.9 | Số lớp ≥ 1% | KL tới đều | D(x) / D(G(z)) cuối | Histogram 10 lớp |
+| --- | --- | --- | --- | --- | --- |
+| Chuẩn, NS | 0.617 | 10 | 0.042 | 0.669 / 0.331 | `[1145, 718, 916, 1235, 1051, 851, 664, 1443, 578, 1399]` |
+| D mạnh, NS | 0.637 | 10 | 0.032 | 0.778 / 0.221 | `[1071, 798, 807, 1244, 1161, 785, 717, 1477, 714, 1226]` |
+| D mạnh, saturating | **0.000** | **2** | **2.171** | **1.000 / 0.000** | `[0, 9710, 0, 0, 0, 290, 0, 0, 0, 0]` |
+
+Train đủ lâu, DCGAN chuẩn cân bằng lớp hơn nhiều (KL 0.307 ở epoch 1 xuống 0.042 ở epoch 15) và D mạnh với NS cũng ổn. Cấu hình D mạnh + saturating thì
+hỏng hẳn: từ epoch 2, $$D(x) = 1.000$$, $$D(G(z)) = 0.000$$, loss G bằng -0.000 (không còn gradient), và ở epoch 8 G sụp về gần như một lớp duy nhất (97% mẫu
+được chấm là chữ 1, không mẫu nào classifier tự tin). Đây là mode collapse "cổ điển" kèm saturation, đúng kịch bản mục 4 lý thuyết.
 
 Đọc kết quả:
 
@@ -58,8 +68,8 @@ tin > 0.9 là 0.951; chấm 10 000 mẫu sinh):
   lý do NS là mặc định: nó không giúp lúc mọi thứ ổn, nó cứu lúc mọi thứ lệch.
 - **WGAN-GP** phủ đủ 8 mode ở cả 3 seed, nhưng mẫu ít "sắc" hơn (35% chất lượng cao so với khoảng 58% của NS) với cùng số vòng: khoảng cách
   Wasserstein cho gradient ổn định, đổi lại hội tụ chậm hơn và tốn 5 lần bước critic.
-- Ngay cả DCGAN chuẩn cũng **lệch lớp**: chữ 3 chiếm 30% mẫu, chữ 1 chỉ 0.6% (giám khảo nhận ra 9/10 lớp). KL 0.3 là một mức "collapse nhẹ" mà mắt
-  nhìn lưới 64 ảnh không thấy; chỉ histogram mới thấy.
+- Với ngân sách CPU, ngay cả DCGAN chuẩn cũng **lệch lớp**: chữ 3 chiếm 30% mẫu, chữ 1 chỉ 0.6% (9/10 lớp). KL 0.3 là một mức "collapse nhẹ" mà mắt
+  nhìn lưới 64 ảnh không thấy; chỉ histogram mới thấy, và nó giảm dần khi train lâu hơn (bảng GPU).
 
 ## Bẫy thường gặp
 
