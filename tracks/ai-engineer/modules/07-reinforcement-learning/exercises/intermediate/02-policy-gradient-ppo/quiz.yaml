@@ -1,0 +1,105 @@
+questions:
+- id: init-entropy
+  kind: data
+  type: single
+  prompt: Entropy trung bình của `ActorCritic(4, 2)` chưa train trên 256 observation đầu của CartPole gần giá trị nào?
+  options:
+  - id: a
+    text: '0.000'
+  - id: b
+    text: '0.347'
+  - id: c
+    text: '0.693'
+  - id: d
+    text: '1.386'
+- id: ppo-kl
+  kind: data
+  type: single
+  prompt: Trong 150 000 bước PPO seed 0, approx KL lớn nhất giữa các lần cập nhật nằm ở khoảng nào?
+  options:
+  - id: a
+    text: Dưới 0.01
+  - id: b
+    text: Từ 0.02 tới 0.05
+  - id: c
+    text: Từ 0.1 tới 0.3
+  - id: d
+    text: Trên 1
+- id: sampled-vs-greedy
+  kind: data
+  type: single
+  prompt: Với REINFORCE không baseline sau 150 000 bước, return của policy lấy mẫu so với policy greedy thế nào?
+  options:
+  - id: a
+    text: Lấy mẫu cao hơn greedy ở cả ba seed
+  - id: b
+    text: Hai cách cho return bằng nhau ở cả ba seed
+  - id: c
+    text: Lấy mẫu thấp hơn greedy ở cả 3 seed
+  - id: d
+    text: Greedy sập về dưới 100 ở một seed
+- id: wallclock
+  kind: data
+  type: single
+  prompt: Cùng 150 000 bước env trên CPU, thời gian train một seed của PPO so với REINFORCE ra sao?
+  options:
+  - id: a
+    text: PPO chậm hơn REINFORCE khoảng 3 lần
+  - id: b
+    text: Hai thuật toán tốn gần như bằng nhau
+  - id: c
+    text: PPO nhanh hơn khoảng 2.5 lần
+  - id: d
+    text: PPO nhanh hơn khoảng 20 lần
+- id: baseline-bias
+  kind: knowledge
+  type: single
+  prompt: Vì sao trừ baseline V(s) khỏi return không làm lệch kỳ vọng của policy gradient?
+  options:
+  - id: a
+    text: Vì kỳ vọng của ∇log π(a|s) theo a bằng 0
+  - id: b
+    text: Vì V(s) được detach nên gradient của nó bằng 0
+  - id: c
+    text: Vì advantage luôn được chuẩn hoá về mean 0
+  - id: d
+    text: Vì critic học bằng một optimizer khác với actor
+- id: min-clip
+  kind: knowledge
+  type: single
+  prompt: Với A > 0 và ratio ρ = 1.5 (ε = 0.2), clipped objective của PPO cho gradient theo ρ bằng bao nhiêu?
+  options:
+  - id: a
+    text: Bằng A, giống hệt policy gradient thường
+  - id: b
+    text: Bằng 0, vì nhánh bị cắt 1.2·A được chọn
+  - id: c
+    text: Bằng −A, kéo ρ về lại 1
+  - id: d
+    text: Bằng 1.2·A, tức gradient đã nhân hệ số cắt
+- id: final-obs
+  kind: knowledge
+  type: single
+  prompt: Ở bước một env CartPole bị cắt vì đủ 500 bước (SAME_STEP autoreset), next_values phải lấy V của observation nào?
+  options:
+  - id: a
+    text: Observation sau reset mà envs.step vừa trả về
+  - id: b
+    text: Không cần V, vì truncated thì không bootstrap
+  - id: c
+    text: Observation trước khi làm action ở bước đó
+  - id: d
+    text: Observation cuối thật, nằm trong final_obs
+- id: sample-not-argmax
+  kind: knowledge
+  type: single
+  prompt: Vì sao khi thu dữ liệu cho REINFORCE/PPO phải lấy mẫu action từ π thay vì argmax?
+  options:
+  - id: a
+    text: Argmax không khả vi nên autograd sẽ báo lỗi
+  - id: b
+    text: Gradient cần action sinh ra từ đúng phân phối π
+  - id: c
+    text: Lấy mẫu chạy nhanh hơn argmax trên vector env
+  - id: d
+    text: Argmax làm entropy tăng và policy không hội tụ
