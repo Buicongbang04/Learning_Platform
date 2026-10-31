@@ -1,0 +1,8 @@
+# TODO 7: chạy olist-backup.service lúc 02:30 mỗi ngày, chạy bù khi máy tắt, rải giờ chạy
+
+[Unit]
+Description=Olist Shop: lịch backup Postgres
+
+[Timer]
+
+[Install]

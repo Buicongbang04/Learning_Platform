@@ -1,0 +1,7 @@
+# TODO 6: oneshot, user olist, ưu tiên CPU và I/O thấp, hardening, chỉ ghi được vào /var/backups/olist-shop
+
+[Unit]
+Description=Olist Shop: backup Postgres
+
+[Service]
+ExecStart=/opt/olist-shop/bin/backup.sh

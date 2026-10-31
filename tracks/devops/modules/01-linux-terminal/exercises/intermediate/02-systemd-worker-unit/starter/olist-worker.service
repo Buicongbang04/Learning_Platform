@@ -1,0 +1,21 @@
+# Unit cũ do team dev viết khi chạy thử trên VM. Sửa lại cho production.
+# TODO 1: chạy bằng user olist, không phải root
+# TODO 2: đọc cấu hình và bí mật từ /etc/olist-shop/worker.env
+# TODO 3: restart khi lỗi, có giới hạn số lần, có thời gian chờ dừng
+# TODO 4: hardening tới exposure <= 3.0 (systemd-analyze security --offline=yes)
+# TODO 5: giới hạn bộ nhớ, khai báo thư mục được ghi
+
+[Unit]
+Description=Olist Shop worker
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/olist-shop
+Environment=DATABASE_URL=postgresql://olist:olist-secret@db.internal:5432/olist
+Environment=REDIS_URL=redis://cache.internal:6379/0
+ExecStart=/opt/olist-shop/.venv/bin/python -m olist_shop.worker
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
