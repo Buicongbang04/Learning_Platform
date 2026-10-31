@@ -46,7 +46,7 @@ Chỉ dùng numpy, không `sliding_window_view` hay `as_strided` (bạn tự c�
 - `conv2d_forward` khớp `F.conv2d` tới `1e-10` trên cả 6 cấu hình.
 - `dx, dW, db` khớp autograd của PyTorch tới `1e-10`, và gradient check (sai phân trung tâm) đạt `rel < 1e-7`.
 - Forward + backward một tầng conv 3×3 của ResNet CIFAR (64 ảnh 16×32×32, 32 bộ lọc) dưới 10 giây (lời giải
-  mẫu khoảng 0.3 giây; vòng lặp qua từng vị trí output mất cỡ 30 giây chỉ riêng forward).
+  mẫu khoảng 0.1 giây trên CPU 4 luồng của PC rảnh; vòng lặp qua từng vị trí output mất cỡ 11 giây chỉ riêng forward).
 
 ## Gợi ý
 

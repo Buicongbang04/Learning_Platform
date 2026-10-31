@@ -34,12 +34,16 @@ của phép tuyến tính im2col), đúng thứ backward cần.
 
 ## Kết quả thật
 
-numpy 2.5.4, float32, `OMP_NUM_THREADS=4`, máy đang chạy nhiều việc khác (số thời gian chỉ để so thứ bậc):
+numpy 2.5.4, float32, `OMP_NUM_THREADS=4`, PC Xeon E5-2696 v3 lúc rảnh (trung vị 5 lần):
 
-| Cách tính forward, 64 ảnh 16×32×32, 32 bộ lọc 3×3 | Thời gian |
+| Cách tính, 64 ảnh 16×32×32, 32 bộ lọc 3×3 | Thời gian |
 | --- | --- |
-| 4 vòng lặp Python lồng nhau qua `(n, f, oh, ow)` | khoảng 31 s (đo 2 ảnh rồi nhân 32) |
-| im2col + một phép nhân ma trận | 45 ms |
+| 4 vòng lặp Python lồng nhau qua `(n, f, oh, ow)`, chỉ forward | khoảng 11 s (đo 2 ảnh rồi nhân 32) |
+| im2col + một phép nhân ma trận, forward | 46 ms |
+| backward (hai phép nhân ma trận + col2im) | 59 ms |
+
+Lúc máy bận (nhiều tiến trình tranh cùng nhân CPU), cùng phép đo forward lên tới 0.4–1.8 s: thời gian CPU chỉ so được
+trong cùng điều kiện.
 
 `cols` của tầng này nặng 37.7 MB, gấp đúng 9 lần input 4.2 MB (mỗi pixel được chép vào 9 cửa sổ): đó là cái giá
 bộ nhớ của im2col, và là lý do cuDNN có thuật toán "implicit GEMM" không dựng `cols` thật.

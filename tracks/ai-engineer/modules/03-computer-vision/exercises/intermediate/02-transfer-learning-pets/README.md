@@ -25,7 +25,7 @@ backbone) và chọn được chiến lược theo số đo chứ không theo c�
 **Phần cứng:** GPU 4GB · ~120 phút
 
 Thời gian trên là thời gian làm bài. Notebook chạy được trên CPU (env gốc) nhưng hai lần fine-tune 3 epoch chiếm phần
-lớn thời gian: khoảng 25–40 phút trên CPU 4 luồng tuỳ tải máy; với kernel `ai-gpu` trên GPU 4GB còn vài phút (batch 64
+lớn thời gian: khoảng 13 phút trên CPU 4 luồng của PC rảnh, 25–40 phút trên laptop tuỳ tải máy; với kernel `ai-gpu` trên GPU 4GB còn vài phút (batch 64
 ảnh 160 px dưới 1.5 GB VRAM). Lần đầu tải bộ dữ liệu (754 MB) và weights ImageNet của ResNet-18 (45 MB, vào
 `~/.cache/torch`). Test không tải gì: chúng dùng ResNet-18 khởi tạo ngẫu nhiên.
 

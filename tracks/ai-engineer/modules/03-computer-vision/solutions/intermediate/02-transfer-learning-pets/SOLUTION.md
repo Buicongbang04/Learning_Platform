@@ -52,8 +52,8 @@ ResNet-18 ảnh 160 px, batch 64, seed 0, PC RTX 3060 (kernel `ai-gpu`; GPU đan
 - **Từ đầu: 20% sau 3 epoch**, loss 2.94 vẫn chưa xa mức đoán mò $$\ln 37 \approx 3.61$$. Khoảng 100 ảnh mỗi lớp là quá ít để
   học feature thị giác từ số 0 trong ngân sách này.
 
-Env gốc (CPU 4 luồng) chạy đúng cấu hình này, accuracy chỉ lệch ở chữ số thứ ba do thứ tự cộng khác, nhưng mất khoảng
-25–40 phút tuỳ tải máy: hai lần train 3 epoch chiếm phần lớn.
+Env gốc (CPU 4 luồng, nbconvert cả notebook 751 s trên PC Xeon rảnh) chạy đúng cấu hình này: probe 0.8626, quên Normalize
+0.7653, fine-tune 0.8694, từ đầu 0.2020, chỉ lệch GPU ở chữ số thứ ba (thứ tự cộng khác). Laptop CPU chậm hơn nhiều lần.
 
 ## Bẫy thường gặp
 

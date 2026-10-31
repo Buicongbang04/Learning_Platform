@@ -62,7 +62,7 @@ def test_iou_degenerate_is_zero_not_nan(B):
 
 
 def test_iou_vectorized(B):
-    # 2.25 triệu cặp: bản broadcast khoảng 0.2 s, vòng lặp Python qua từng cặp vài giây trở lên
+    # 2.25 triệu cặp: bản broadcast khoảng 0.1 s, vòng lặp Python qua từng cặp vài giây trở lên
     a, b = random_boxes(1500, 3), random_boxes(1500, 4)
     start = time.perf_counter()
     B.box_iou(a, b)

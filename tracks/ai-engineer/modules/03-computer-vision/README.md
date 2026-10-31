@@ -107,8 +107,8 @@ input chỉ **4.2 MB**: mỗi pixel bị chép vào 9 cửa sổ. Đó là cái 
 "implicit GEMM" (không dựng `cols` thật), Winograd (giảm phép nhân cho kernel 3×3) và FFT (kernel lớn), rồi
 `torch.backends.cudnn.benchmark = True` thử từng thuật toán để chọn cái nhanh nhất cho shape của bạn. Đổi lại,
 im2col biến conv thành GEMM, phép toán được tối ưu kỹ nhất trên mọi phần cứng: trên cùng tầng conv đó (64
-ảnh), bốn vòng lặp Python qua từng `(n, f, oh, ow)` mất khoảng **31 giây**, bản numpy im2col **45 ms**, nhanh
-hơn khoảng 700 lần.
+ảnh, CPU 4 luồng của PC), bốn vòng lặp Python qua từng `(n, f, oh, ow)` mất khoảng **11 giây**, bản numpy im2col **46 ms**, nhanh
+hơn khoảng 230 lần.
 
 ### Backward
 
@@ -512,7 +512,7 @@ Bài Advanced 01 làm đúng việc này trên Penn-Fudan (136 ảnh train, 34 �
 (PC RTX 3060, seed 0, khoảng 4–6 phút train mỗi lần trên GPU dùng chung, khoảng 1 GB VRAM với batch 8.) Fine-tune **kém hơn** model có sẵn ở
 AP50-95, và khoảng bootstrap gần như không chồng nhau. 136 ảnh quá ít để cải thiện một detector đã thấy hàng trăm nghìn
 người trong COCO; tệ hơn, nhãn Penn-Fudan thiếu người bị che và ở mép ảnh, nên fine-tune dạy model **bỏ qua** đúng những
-người đó (precision theo nhãn tăng, chất lượng thật thì không). Bài học của một kỹ sư lão luyện: luôn đo baseline
+người đó. Bài học của một kỹ sư lão luyện: luôn đo baseline
 zero-shot trên cùng tập val, cùng bộ đánh giá, trước khi tin rằng fine-tune có ích; và kiểm nhãn trước khi kết luận về model.
 
 ## 6. Segmentation: semantic, instance, U-Net, Mask R-CNN, mIoU
