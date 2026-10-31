@@ -112,3 +112,24 @@ def test_hardcoded_cpuset_detection():
     assert hardcoded_cpuset_lines('act --container-options "--cpuset-cpus=12-35"')
     assert hardcoded_cpuset_lines('nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster') == []
     assert hardcoded_cpuset_lines('docker update --cpuset-cpus "$DEVOPS_CPUSET" x') == []
+
+
+CPUSET_NONE = re.compile(r"DEVOPS_CPUSET\s*=\s*[\"']?none\b|`none`")
+
+
+def cpuset_none_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if "DEVOPS_CPUSET" in line and CPUSET_NONE.search(line)]
+
+
+def test_docs_do_not_recommend_cpuset_none():
+    docs = [TOOLS_DOC, *sorted((ROOT / "tracks" / "devops").rglob("*.md"))]
+    found = [f"{p.relative_to(ROOT)}: {line}" for p in docs for line in cpuset_none_lines(p.read_text(encoding="utf-8"))]
+    assert found == []
+
+
+def test_cpuset_none_detection():
+    assert cpuset_none_lines("- Đặt `DEVOPS_CPUSET=none` để không ghim")
+    assert cpuset_none_lines('export DEVOPS_CPUSET="none"')
+    assert cpuset_none_lines("ghim (`DEVOPS_CPUSET` rỗng hoặc `none`)")
+    assert cpuset_none_lines("unset DEVOPS_CPUSET") == []
+    assert cpuset_none_lines("export DEVOPS_CPUSET=2-7") == []

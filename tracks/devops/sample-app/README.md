@@ -74,7 +74,7 @@ Nginx, API và log. Ở worker, `request_id` là `job_id`.
 
 ## Chạy bằng Docker Compose
 
-Các lệnh dưới chạy trong `tracks/devops/sample-app`. Compose đọc `DEVOPS_CPUSET` bạn đã `export` (xem [Ghim CPU](../README.md#ghim-cpu-trên-máy-dùng-chung)) để ghim core; để trống thì không ghim. Lệnh build hạ ưu tiên bằng `nice`:
+Các lệnh dưới chạy trong `tracks/devops/sample-app`. Compose đọc `DEVOPS_CPUSET` bạn đã `export` (xem [Ghim CPU](../README.md#ghim-cpu-trên-máy-dùng-chung)) để ghim core; để trống hoặc `unset DEVOPS_CPUSET` thì không ghim. Lệnh build hạ ưu tiên bằng `nice`:
 
 ```bash
 cd tracks/devops/sample-app

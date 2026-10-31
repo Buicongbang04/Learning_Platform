@@ -482,7 +482,9 @@ Ngay ở module 00, hãy nhìn Olist Shop bằng câu hỏi của module này:
 - **Ownership**: trong capstone, bạn đóng cả ba vai: stream-aligned (sở hữu Olist Shop), platform (pipeline và cluster
   dùng chung), SRE (SLO và game day). Ghi lại lúc nào mình đang ở vai nào giúp trả lời câu phỏng vấn về tổ chức.
 
-Chạy thử ngay (cần Docker, các lệnh ở README của sample-app):
+Chạy thử ngay (cần Docker, các lệnh ở README của sample-app). Compose ghim container theo `DEVOPS_CPUSET` nếu bạn đã
+`export` một dải core; máy ít core thì `unset DEVOPS_CPUSET` để không ghim (xem
+[Ghim CPU](../../README.md#ghim-cpu-trên-máy-dùng-chung)):
 
 ```bash
 cd tracks/devops/sample-app
