@@ -450,9 +450,11 @@ $$
 $$
 
 (đúng ra còn các nhánh đi qua $$h$$ và các cổng, nhưng đây là nhánh chính). Gradient sống được khi $$f_t \approx 1$$.
-Khởi tạo mặc định cho bias cỡ 0 nên $$f_t \approx \sigma(0) = 0.5$$: sau 50 bước còn $$0.5^{50} \approx 10^{-15}$$, đúng
-như bảng mục 4. Đặt bias cổng quên bằng 1 (Jozefowicz và cộng sự, 2015 khuyên vậy) cho $$f \approx 0.73$$, bằng 3 cho
-$$f \approx 0.95$$: LSTM bắt đầu ở chế độ "nhớ mặc định" và tự học khi nào quên.
+Khởi tạo mặc định cho bias cỡ 0 nên $$f_t \approx \sigma(0) = 0.5$$: riêng nhánh này sau 50 bước còn
+$$0.5^{50} \approx 10^{-15}$$. Bảng mục 4 đo 2.5e-10 vì còn các nhánh khác và $$f_t$$ không đúng bằng 0.5, nhưng cùng bản chất:
+co theo cấp số nhân. Đặt bias cổng quên bằng 1 (Jozefowicz và cộng sự, 2015 khuyên vậy) cho $$f \approx 0.73$$, nhánh này
+còn $$0.73^{50} \approx 10^{-7}$$ (bảng đo 7.7e-4 ở $$t = 50$$, cùng xu hướng co chậm hơn hẳn), bằng 3 cho $$f \approx 0.95$$
+($$0.95^{50} \approx 0.08$$): LSTM bắt đầu ở chế độ "nhớ mặc định" và tự học khi nào quên.
 
 Thí nghiệm: chuỗi $$T$$ ký hiệu ngẫu nhiên (one-hot, 8 ký hiệu), model phải trả lời ký hiệu **đầu tiên** sau khi đọc hết
 chuỗi (phụ thuộc xa đúng $$T$$ bước). Một tầng hidden 64 rồi `Linear` trên state cuối, Adam lr 3e-3, batch 64, 1 500 bước,
@@ -609,9 +611,12 @@ dài, 8 epoch, chọn epoch theo BLEU greedy trên `tst2012`, beam 5 với $$\al
 | Bahdanau, beam (24.9 triệu) | 20.9 | 21.9 | 20.8 | 18.3 |
 
 Ở quy mô này nút thắt hiện rõ: model không attention mất gần 2/3 BLEU khi câu dài ra, Bahdanau chỉ mất khoảng 1/6, và
-heatmap của nó căn gần như từng từ. Bahdanau đưa context vào chính RNN nên học nhanh hơn hẳn theo epoch (dev BLEU sau epoch 1
-đã bằng Luong sau 8 epoch), đổi lại mỗi epoch chậm hơn 2-4 lần vì phải lặp từng bước, và lớp output của bản này to gần gấp
-đôi: so hai model khác kiến trúc phải nói rõ những khác biệt đó. Beam search chỉ có ích khi chuẩn hoá độ dài đủ mạnh: với
+heatmap của model Luong (bản tham chiếu) đã căn gần như từng từ. Bahdanau tốt hơn Luong rất xa, nhưng phép so này **không cân
+tham số** và bản Luong **thiếu input feeding**: Bahdanau có 24.9 triệu tham số so với 13.6 triệu, phần lớn chênh lệch nằm ở
+lớp output (khoảng 14.3 triệu, nhận $$[s_t; c_t; e_t]$$, so với khoảng 4.9 triệu của Luong kể cả lớp $$W_c$$, tức gấp khoảng
+3 lần). Việc đưa context vào chính RNN có thể là một lý do Bahdanau đạt dev BLEU cao sớm (sau epoch 1 đã ngang Luong sau 8
+epoch), nhưng một lần chạy với hai kiến trúc khác cỡ không tách được nguyên nhân. Đổi lại, mỗi epoch Bahdanau chậm hơn 2-4
+lần vì phải lặp từng bước. Beam search chỉ có ích khi chuẩn hoá độ dài đủ mạnh: với
 $$\alpha = 0.6$$, beam của Luong cho đúng bằng greedy vì bản dịch ngắn hơn reference 20%.
 
 Đặt con số vào bối cảnh: hệ thống attention LSTM nhiều tầng của Stanford (Luong và Manning, 2015) đạt khoảng 23 BLEU trên

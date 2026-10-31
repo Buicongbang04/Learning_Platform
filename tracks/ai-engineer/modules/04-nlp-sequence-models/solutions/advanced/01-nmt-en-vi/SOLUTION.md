@@ -72,7 +72,8 @@ BLEU theo độ dài câu nguồn (số từ tiếng Anh):
   chỉ mất khoảng 1/6. Khác với bài Intermediate 03 (câu ≤ 15 từ, attention chỉ hơn 1.4 BLEU).
 - **Bahdanau hơn Luong rất xa** (20.9 so với 13.9), và đã hơn Luong tốt nhất ngay sau epoch 1. Nhưng đây không phải phép so
   "additive tốt hơn multiplicative": bản Luong không có input feeding nên decoder không biết đã nhìn đâu, và lớp output của
-  Bahdanau nhận cả $$[s_t; c_t; e_t]$$ nên có gần gấp đôi tham số. Báo cáo tốt nêu rõ khác biệt kiến trúc, số tham số, thời
+  Bahdanau nhận cả $$[s_t; c_t; e_t]$$ (khoảng 14.3 triệu tham số so với khoảng 4.9 triệu của Luong kể cả $$W_c$$, gấp khoảng 3
+  lần; cả model 24.9 so với 13.6 triệu). Báo cáo tốt nêu rõ khác biệt kiến trúc, số tham số, thời
   gian mỗi epoch (Bahdanau chậm hơn 2-4 lần) và chỉ kết luận điều số đo cho phép; thử Luong có input feeding là biến thể hợp lý.
 - **Chuẩn hoá độ dài quyết định beam có ích hay không**: với $$\alpha$$ = 0.6, beam của Luong không hơn greedy (12.21 cả hai)
   vì bản dịch ngắn hơn reference 20% (BP 0.796); $$\alpha$$ = 1.4 đưa BP lên 0.97 và thêm 1.6 BLEU. Precision n-gram của beam
