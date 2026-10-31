@@ -1,0 +1,8 @@
+signal-mid: [a]
+ddim-speed: [c]
+ema-diversity: [b]
+cosine-loss: [d]
+last-step: [b]
+clip-recompute: [c]
+ema-short: [d]
+timesteps: [b]

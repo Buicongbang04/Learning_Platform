@@ -1,0 +1,105 @@
+questions:
+- id: signal-mid
+  kind: data
+  type: single
+  prompt: Ở bước t = 500 (cell forward process), sqrt(alpha_bar) của schedule linear và cosine lần lượt khoảng bao nhiêu?
+  options:
+  - id: a
+    text: 0.28 và 0.70
+  - id: b
+    text: 0.70 và 0.28
+  - id: c
+    text: 0.50 và 0.50
+  - id: d
+    text: 0.95 và 0.99
+- id: ddim-speed
+  kind: data
+  type: single
+  prompt: Với model đã train ở cấu hình GPU, DDIM 50 bước so với DDPM 1 000 bước thế nào?
+  options:
+  - id: a
+    text: Nhanh khoảng 20 lần nhưng mẫu thành nhiễu
+  - id: b
+    text: Chậm hơn, vì phải tính lại nhiễu sau khi kẹp
+  - id: c
+    text: Nhanh ~20 lần, giám khảo kém một chút
+  - id: d
+    text: Nhanh gấp đôi, chất lượng tốt hơn hẳn
+- id: ema-diversity
+  kind: data
+  type: single
+  prompt: Cấu hình GPU, DDPM 1 000 bước. So với trọng số thô, mẫu sinh bằng EMA khác rõ nhất ở chỉ số nào?
+  options:
+  - id: a
+    text: Thời gian sinh nhanh gấp đôi
+  - id: b
+    text: KL tới đều thấp hơn hẳn
+  - id: c
+    text: Số lớp xuất hiện tăng từ 5 lên 10
+  - id: d
+    text: Không khác gì, EMA chỉ để lưu checkpoint
+- id: cosine-loss
+  kind: data
+  type: single
+  prompt: Cùng 8 000 bước, loss cuối của model cosine so với model linear thế nào, và điều đó nói gì?
+  options:
+  - id: a
+    text: Thấp hơn hẳn, nên cosine luôn sinh ảnh đẹp hơn
+  - id: b
+    text: Bằng nhau, vì cùng kiến trúc và cùng dữ liệu
+  - id: c
+    text: Cao hơn, nên cosine học kém và mẫu thành nhiễu
+  - id: d
+    text: Cao hơn mà mẫu ngang nhau, không so được
+- id: last-step
+  kind: knowledge
+  type: single
+  prompt: Ở bước cuối (t = 0) của sampler DDPM, vì sao không cộng nhiễu?
+  options:
+  - id: a
+    text: Vì cộng nhiễu ở bước cuối làm sampler chậm gấp đôi
+  - id: b
+    text: Variance posterior tại t = 0 bằng 0
+  - id: c
+    text: Vì generator đã hết số ngẫu nhiên sau T − 1 bước
+  - id: d
+    text: Vì model không được train ở t = 0
+- id: clip-recompute
+  kind: knowledge
+  type: single
+  prompt: Trong DDIM, sau khi kẹp x0 dự đoán vào [-1, 1], vì sao phải tính lại nhiễu dự đoán?
+  options:
+  - id: a
+    text: Vì model phải chạy forward lần thứ hai cho chắc
+  - id: b
+    text: Để giảm phương sai của nhiễu ban đầu x_T
+  - id: c
+    text: Để x0 và nhiễu nhất quán với x_t
+  - id: d
+    text: Không cần, đó chỉ là tối ưu tốc độ
+- id: ema-short
+  kind: knowledge
+  type: single
+  prompt: Train chỉ 600 bước với EMA decay 0.999 thì mẫu sinh bằng EMA thường ra sao?
+  options:
+  - id: a
+    text: Tốt hơn trọng số thô, vì EMA luôn tốt hơn
+  - id: b
+    text: Giống hệt trọng số thô vì decay quá nhỏ
+  - id: c
+    text: Lỗi, vì EMA cần ít nhất 1 000 bước
+  - id: d
+    text: Tệ hơn, EMA còn nặng trọng số khởi tạo
+- id: timesteps
+  kind: knowledge
+  type: single
+  prompt: DDIMScheduler của diffusers với 50 bước bắt đầu từ t = 980 chứ không phải 999. Điều đó có nghĩa gì khi so số?
+  options:
+  - id: a
+    text: diffusers có lỗi, phải luôn bắt đầu từ 999
+  - id: b
+    text: Phải so cùng dãy bước khi so số
+  - id: c
+    text: Không ảnh hưởng gì vì model giống nhau
+  - id: d
+    text: diffusers dùng T = 980 thay vì 1 000
