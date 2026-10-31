@@ -291,7 +291,9 @@ Quy ước ba tầng mà dbt Labs khuyên dùng:
 Đoạn dưới dựng một project dbt hai model trong thư mục tạm, nạp bảng thô thật vào DuckDB, chạy `dbt build`
 (model + test) rồi in kết quả. Đó chính là cách test của bài Intermediate 01 chấm project của bạn.
 `profiles.yml` đặt trong project và đường dẫn `--target-path`/`--log-path` trỏ ra thư mục tạm, nên không
-đụng `~/.dbt/` hay làm bẩn repo.
+đụng `~/.dbt/` hay làm bẩn repo. Khoá `flags: send_anonymous_usage_stats: false` trong `dbt_project.yml` tắt
+telemetry (mặc định dbt gửi thống kê sử dụng ẩn danh về dbt Labs); khối `finally` dọn thư mục tạm kể cả khi
+build lỗi giữa chừng.
 
 ```python
 import shutil
@@ -300,69 +302,73 @@ import textwrap
 from dbt.cli.main import dbtRunner
 
 work = Path(tempfile.mkdtemp(prefix="m09_dbt_"))
-proj = work / "project"
-(proj / "models").mkdir(parents=True)
-db = work / "retail.duckdb"
-files = {
-    "dbt_project.yml": """
-        name: m09_demo
-        version: "1.0.0"
-        config-version: 2
-        profile: m09_demo
-        models:
-          m09_demo:
-            +materialized: table
-    """,
-    "profiles.yml": f"""
-        m09_demo:
-          target: dev
-          outputs:
-            dev: {{type: duckdb, path: "{db.as_posix()}", threads: 1}}
-    """,
-    "models/sources.yml": """
-        version: 2
-        sources:
-          - name: raw
-            schema: raw
-            tables: [{name: sales_lines}]
-    """,
-    "models/stg_sales_lines.sql": """
-        select source_row as line_id, cast("Invoice" as varchar) as invoice_no, "Country" as country,
-               "Quantity" * "Price" as amount,
-               not starts_with(cast("Invoice" as varchar), 'C') and "Quantity" > 0 and "Price" > 0 as is_valid_sale
-        from {{ source('raw', 'sales_lines') }}
-    """,
-    "models/mart_country_revenue.sql": """
-        select country, sum(amount) as revenue, count(distinct invoice_no) as orders
-        from {{ ref('stg_sales_lines') }}
-        where is_valid_sale
-        group by country
-    """,
-    "models/schema.yml": """
-        version: 2
-        models:
-          - name: stg_sales_lines
-            columns:
-              - {name: line_id, data_tests: [unique, not_null]}
-          - name: mart_country_revenue
-            columns:
-              - {name: country, data_tests: [unique, not_null]}
-    """,
-}
-for name, body in files.items():
-    (proj / name).write_text(textwrap.dedent(body).strip() + "\n", encoding="utf-8")
+try:
+    proj = work / "project"
+    (proj / "models").mkdir(parents=True)
+    db = work / "retail.duckdb"
+    files = {
+        "dbt_project.yml": """
+            name: m09_demo
+            version: "1.0.0"
+            config-version: 2
+            profile: m09_demo
+            flags:
+              send_anonymous_usage_stats: false
+            models:
+              m09_demo:
+                +materialized: table
+        """,
+        "profiles.yml": f"""
+            m09_demo:
+              target: dev
+              outputs:
+                dev: {{type: duckdb, path: "{db.as_posix()}", threads: 1}}
+        """,
+        "models/sources.yml": """
+            version: 2
+            sources:
+              - name: raw
+                schema: raw
+                tables: [{name: sales_lines}]
+        """,
+        "models/stg_sales_lines.sql": """
+            select source_row as line_id, cast("Invoice" as varchar) as invoice_no, "Country" as country,
+                   "Quantity" * "Price" as amount,
+                   not starts_with(cast("Invoice" as varchar), 'C') and "Quantity" > 0 and "Price" > 0 as is_valid_sale
+            from {{ source('raw', 'sales_lines') }}
+        """,
+        "models/mart_country_revenue.sql": """
+            select country, sum(amount) as revenue, count(distinct invoice_no) as orders
+            from {{ ref('stg_sales_lines') }}
+            where is_valid_sale
+            group by country
+        """,
+        "models/schema.yml": """
+            version: 2
+            models:
+              - name: stg_sales_lines
+                columns:
+                  - {name: line_id, data_tests: [unique, not_null]}
+              - name: mart_country_revenue
+                columns:
+                  - {name: country, data_tests: [unique, not_null]}
+        """,
+    }
+    for name, body in files.items():
+        (proj / name).write_text(textwrap.dedent(body).strip() + "\n", encoding="utf-8")
 
-with duckdb.connect(str(db)) as c:
-    c.execute("CREATE SCHEMA raw")
-    c.register("src", raw)
-    c.execute("CREATE TABLE raw.sales_lines AS SELECT * FROM src")
+    with duckdb.connect(str(db)) as c:
+        c.execute("CREATE SCHEMA raw")
+        c.register("src", raw)
+        c.execute("CREATE TABLE raw.sales_lines AS SELECT * FROM src")
 
-res = dbtRunner().invoke(["build", "--project-dir", str(proj), "--profiles-dir", str(proj), "--quiet",
-                          "--target-path", str(work / "target"), "--log-path", str(work / "logs")])
-print("dbt build:", "OK" if res.success else "LỖI", "|", [(r.node.name, str(r.status)) for r in res.result])
-with duckdb.connect(str(db)) as c:  # dbt-duckdb còn giữ kết nối trong cùng tiến trình: mở cùng cấu hình
-    print(c.sql("SELECT * FROM mart_country_revenue ORDER BY revenue DESC LIMIT 3"))
-shutil.rmtree(work, ignore_errors=True)  # dọn thư mục tạm
+    res = dbtRunner().invoke(["build", "--project-dir", str(proj), "--profiles-dir", str(proj), "--quiet",
+                              "--target-path", str(work / "target"), "--log-path", str(work / "logs")])
+    print("dbt build:", "OK" if res.success else "LỖI", "|", [(r.node.name, str(r.status)) for r in res.result])
+    with duckdb.connect(str(db)) as c:  # dbt-duckdb còn giữ kết nối trong cùng tiến trình: mở cùng cấu hình
+        print(c.sql("SELECT * FROM mart_country_revenue ORDER BY revenue DESC LIMIT 3"))
+finally:
+    shutil.rmtree(work, ignore_errors=True)
 ```
 
 Hai việc dbt làm hộ DA ở đây: thứ tự build suy ra từ `ref()` (mart chạy sau staging), và test chạy ngay sau
