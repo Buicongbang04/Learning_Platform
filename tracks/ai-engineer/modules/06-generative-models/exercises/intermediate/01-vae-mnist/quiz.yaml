@@ -1,0 +1,105 @@
+questions:
+- id: ae-vs-vae-recon
+  kind: data
+  type: single
+  prompt: Cùng latent 16 và 20 epoch, lỗi tái tạo trên test của autoencoder so với phần tái tạo của VAE thế nào?
+  options:
+  - id: a
+    text: AE thấp hơn khoảng 10 nats mỗi ảnh
+  - id: b
+    text: Hai model gần như bằng nhau, lệch dưới 1 nat
+  - id: c
+    text: VAE thấp hơn khoảng 10 nats mỗi ảnh
+  - id: d
+    text: AE thấp hơn khoảng 50 nats mỗi ảnh
+- id: ae-prior-samples
+  kind: data
+  type: single
+  prompt: Sinh 1 000 ảnh bằng cách decode z ~ N(0, I) với autoencoder. Tỉ lệ ảnh mà classifier tự tin trên 0.9 là bao nhiêu?
+  options:
+  - id: a
+    text: Gần 0
+  - id: b
+    text: Khoảng một phần ba, ngang VAE
+  - id: c
+    text: Khoảng 0.8, ngang ảnh thật
+  - id: d
+    text: Cao hơn cả ảnh thật
+- id: why-ae-fails
+  kind: knowledge
+  type: single
+  prompt: Vì sao decode z ~ N(0, I) với một autoencoder thường cho ảnh rác?
+  options:
+  - id: a
+    text: Không có gì ép mã của ảnh thật nằm theo N(0, I), z ngẫu nhiên rơi vào vùng decoder chưa thấy
+  - id: b
+    text: Decoder của autoencoder không có hàm sigmoid ở output
+  - id: c
+    text: Autoencoder chỉ học được biến đổi tuyến tính giống PCA
+  - id: d
+    text: Latent của autoencoder luôn có ít chiều hơn VAE
+- id: iwae-gap
+  kind: data
+  type: single
+  prompt: Với VAE-16 (beta 1), -L_1 (một mẫu, tức -ELBO) trừ -L_100 trên tập test là khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Đúng 0, hai cận trùng nhau
+  - id: b
+    text: Vài nats, khoảng 2 tới 6
+  - id: c
+    text: Khoảng 30 nats
+  - id: d
+    text: Âm, vì L_100 là cận lỏng hơn
+- id: k1-meaning
+  kind: knowledge
+  type: single
+  prompt: Cận importance-weighted L_K với K = 1 chính là gì?
+  options:
+  - id: a
+    text: log p(x) chính xác
+  - id: b
+    text: Ước lượng một mẫu của ELBO
+  - id: c
+    text: KL giữa q(z|x) và prior
+  - id: d
+    text: Lỗi tái tạo, không có số hạng KL
+- id: beta10-units
+  kind: data
+  type: single
+  prompt: VAE-16 với beta = 10 còn bao nhiêu active units trên 16?
+  options:
+  - id: a
+    text: 16, beta không ảnh hưởng số chiều sống
+  - id: b
+    text: Khoảng 12 tới 14
+  - id: c
+    text: Một nửa trở xuống (8 hoặc ít hơn)
+  - id: d
+    text: 0, mọi chiều đều chết
+- id: beta-samples
+  kind: data
+  type: single
+  prompt: So với beta = 1, mẫu sinh từ prior của VAE beta = 10 được classifier đánh giá thế nào?
+  options:
+  - id: a
+    text: Tự tin hơn, dù tái tạo tệ đi nhiều
+  - id: b
+    text: Kém tự tin hơn hẳn, gần mức của AE
+  - id: c
+    text: Như nhau, vì cùng kiến trúc decoder
+  - id: d
+    text: Không đo được vì KL bằng 0
+- id: mean-reduction
+  kind: knowledge
+  type: single
+  prompt: Viết recon bằng F.binary_cross_entropy_with_logits(logits, x) với reduction mặc định, KL vẫn cộng trên chiều latent. Chuyện gì xảy ra?
+  options:
+  - id: a
+    text: Không gì, vì mean và sum chỉ khác một hằng số
+  - id: b
+    text: KL bị chia 784 lần nên model gần như autoencoder
+  - id: c
+    text: Như beta = 784, posterior collapse và mẫu mờ đều nhau
+  - id: d
+    text: Loss ra NaN vì BCE trung bình không ổn định số

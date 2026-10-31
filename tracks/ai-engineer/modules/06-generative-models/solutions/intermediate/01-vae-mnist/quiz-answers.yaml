@@ -1,0 +1,8 @@
+ae-vs-vae-recon: [a]
+ae-prior-samples: [a]
+why-ae-fails: [a]
+iwae-gap: [b]
+k1-meaning: [b]
+beta10-units: [c]
+beta-samples: [a]
+mean-reduction: [c]
