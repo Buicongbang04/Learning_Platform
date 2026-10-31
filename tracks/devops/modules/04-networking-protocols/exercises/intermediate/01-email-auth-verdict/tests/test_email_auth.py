@@ -22,6 +22,7 @@ EXPECTED = {
     "11-news-relaxed-dkim.eml": ("news.olist-shop.com.br", "esp-mail.example", "pass", False, True, "pass", "quarantine", "deliver", "deliver"),
     "12-toomany-permerror.eml": ("toomany.example", "toomany.example", "permerror", False, True, "pass", "reject", "deliver", "deliver"),
     "13-no-dmarc-seller.eml": ("small-seller.com.br", "small-seller.com.br", "pass", True, False, "none", None, "deliver", "deliver"),
+    "14-duplicate-dmarc.eml": ("mkt.olist-shop.com.br", "cheap-deals.example", "pass", False, False, "none", None, "deliver", "deliver"),
 }
 
 
@@ -181,3 +182,12 @@ def test_cases_catch_naive_shortcuts(records, suffixes):
     raw = (FIXTURES / "messages" / "06-forged-auth-results.eml").read_text(encoding="utf-8")
     assert naive.evaluate(raw, records, suffixes)["dmarc"] == "pass"
     assert EXPECTED["06-forged-auth-results.eml"][KEYS.index("dmarc")] == "fail"
+
+
+def test_duplicate_dmarc_stops_discovery(records, suffixes):
+    """Hai bản ghi v=DMARC1 ở tên miền From: dừng, không áp DMARC (RFC 7489 6.6.3). Bản tìm tiếp ở org domain sẽ quarantine."""
+    naive = load_naive()
+    raw = (FIXTURES / "messages" / "14-duplicate-dmarc.eml").read_text(encoding="utf-8")
+    assert len(records[("_dmarc.mkt.olist-shop.com.br", "TXT")]) == 2
+    assert naive.policy_with_fallthrough("mkt.olist-shop.com.br", records, suffixes) == "quarantine"
+    assert EXPECTED["14-duplicate-dmarc.eml"][KEYS.index("policy")] is None

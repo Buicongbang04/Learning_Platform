@@ -18,3 +18,12 @@ def evaluate(raw: str, records: dict, suffixes: set[str]) -> dict:
         for h in msg.get_all("Authentication-Results", [])
     )
     return {"from_domain": from_domain, "dmarc": "pass" if passed else "fail"}
+
+
+def policy_with_fallthrough(domain: str, records: dict, suffixes: set[str]) -> str | None:
+    found = [t for t in records.get((f"_dmarc.{domain}", "TXT"), []) if t.lower().startswith("v=dmarc1")]
+    if len(found) == 1:
+        return found[0].split("p=", 1)[1].split(";")[0].strip()
+    org = last_two(domain) if not domain.endswith(".com.br") else ".".join(domain.split(".")[-3:])
+    tags = dict(p.strip().split("=", 1) for p in records[(f"_dmarc.{org}", "TXT")][0].split(";"))
+    return tags.get("sp", tags["p"])

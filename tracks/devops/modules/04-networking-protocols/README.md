@@ -369,8 +369,10 @@ flowchart LR
 - Client chỉ có **root**. Server phải gửi leaf **và** intermediate. Thiếu intermediate: trình duyệt desktop và iOS thường
   tự bù (tải theo URL AIA trong cert, cache intermediate đã gặp), còn OpenSSL (curl, Python), Java, Android thì báo
   `unable to get local issuer certificate`. Kiểm sau mỗi lần đổi cert bằng client nghiêm ngặt, không bằng trình duyệt.
-- **SAN** (subjectAltName) là nơi duy nhất client hiện đại đọc tên host; CN bị bỏ qua. Wildcard `*.olist-shop.com.br` khớp
-  đúng một nhãn: không khớp `olist-shop.com.br` cũng không khớp `a.b.olist-shop.com.br`.
+- **SAN** (subjectAltName) là nơi phải đặt mọi tên host. Đối chiếu tên qua CN (Common Name) đã lỗi thời: trình duyệt bỏ
+  hẳn CN, còn OpenSSL (`X509_check_host`, nên cả curl), Python (`hostname_checks_common_name`) chỉ dùng CN khi cert
+  **không có** SAN DNS nào, và bỏ qua CN ngay khi có SAN. Vì vậy luôn đặt tên vào SAN, kể cả tên đã nằm trong CN.
+  Wildcard `*.olist-shop.com.br` khớp đúng một nhãn: không khớp `olist-shop.com.br` cũng không khớp `a.b.olist-shop.com.br`.
 - **Thu hồi**: CRL (danh sách tải về) và OCSP (hỏi CA từng cert) đều chậm và hay bị bỏ qua khi lỗi mạng (soft-fail).
   **OCSP stapling** để server tự gắn phản hồi OCSP vào bắt tay. Xu hướng hiện tại đi theo hướng ngược: cert sống ngắn để
   thu hồi bớt quan trọng; Let's Encrypt đã dừng OCSP năm 2025 và chỉ còn CRL, CA/Browser Forum đã thông qua lộ trình rút

@@ -153,9 +153,8 @@ def dmarc_tags(text: str) -> dict[str, str]:
     return tags
 
 
-def dmarc_record(domain: str, records: dict) -> dict[str, str] | None:
-    found = [dmarc_tags(t) for t in records.get((f"_dmarc.{domain}", "TXT"), []) if t.strip().lower().startswith("v=dmarc1")]
-    return found[0] if len(found) == 1 else None
+def dmarc_records(domain: str, records: dict) -> list[dict[str, str]]:
+    return [dmarc_tags(t) for t in records.get((f"_dmarc.{domain}", "TXT"), []) if t.strip().lower().startswith("v=dmarc1")]
 
 
 def first_received(msg) -> tuple[str, str]:
@@ -188,15 +187,17 @@ def evaluate(raw: str, records: dict, suffixes: set[str]) -> dict:
     spf_domain = norm(return_path.rsplit("@", 1)[1]) if "@" in return_path else helo
     spf = spf_check(ip, spf_domain, records)
 
-    record = dmarc_record(from_domain, records)
-    policy = None
-    if record is not None:
+    record, policy = None, None
+    found = dmarc_records(from_domain, records)
+    if len(found) == 1:
+        record = found[0]
         policy = record.get("p", "none").lower()
-    else:
+    elif not found:
         org = org_domain(from_domain, suffixes)
         if org != from_domain:
-            record = dmarc_record(org, records)
-            if record is not None:
+            found = dmarc_records(org, records)
+            if len(found) == 1:
+                record = found[0]
                 policy = record.get("sp", record.get("p", "none")).lower()
     tags = record or {}
     spf_ok = spf == "pass" and aligned(spf_domain, from_domain, tags.get("aspf", "r").lower(), suffixes)

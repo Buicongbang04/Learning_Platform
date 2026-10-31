@@ -23,7 +23,7 @@ Script đầy đủ ở `make_chain.sh` cạnh tệp này.
 | `basicConstraints` | `critical, CA:TRUE` (+ `pathlen:0` ở intermediate) | `CA:FALSE` | Cert server có `CA:TRUE` ký được cert cho bất kỳ tên nào; `pathlen:0` cấm intermediate tạo thêm CA con |
 | `keyUsage` | `keyCertSign, cRLSign` | `digitalSignature` | Client nghiêm ngặt từ chối cert server có `keyCertSign` hoặc thiếu `digitalSignature` |
 | `extendedKeyUsage` | Thường không đặt | `serverAuth` | Thiếu thì một số client (Windows, Chrome trên nhiều nền tảng) từ chối dùng cho TLS server |
-| `subjectAltName` | Không | Mọi tên và IP client dùng để gọi | Từ 2017 Chrome bỏ hẳn việc đọc CN; thiếu SAN là `hostname mismatch` |
+| `subjectAltName` | Không | Mọi tên và IP client dùng để gọi | Có SAN thì CN bị bỏ qua: tên chỉ nằm trong CN là `hostname mismatch`. Không có SAN: Chrome (từ 2017) và trình duyệt khác từ chối, OpenSSL/curl/Python còn rơi về CN, nên lỗi chỉ hiện ở một phần client. Luôn đặt mọi tên vào SAN |
 | SKI / AKI | Có | Có | Client dựng chuỗi khó hơn khi CA có nhiều cert cùng tên (ví dụ sau khi xoay khoá CA) |
 
 ## Vì sao server phải gửi intermediate

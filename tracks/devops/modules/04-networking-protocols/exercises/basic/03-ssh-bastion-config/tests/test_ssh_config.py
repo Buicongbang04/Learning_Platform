@@ -62,7 +62,7 @@ def common_problems(host: str, o: dict[str, list[str]]) -> list[str]:
         found.append(f"{host}: serveralivecountmax phải trong 2..5, đang là {count}")
     if one(o, "controlmaster") != "auto":
         found.append(f"{host}: controlmaster phải là auto")
-    if not re.search(r"/\.ssh/[^/]*[0-9a-f]{40}$", one(o, "controlpath") or ""):
+    if not re.search(r"/\.ssh/[^/]*(?:%C|[0-9a-f]{40})$", one(o, "controlpath") or ""):
         found.append(f"{host}: controlpath phải nằm trong ~/.ssh và dùng %C")
     persist = one(o, "controlpersist") or ""
     if not (persist.isdigit() and 60 <= int(persist) <= 1800):

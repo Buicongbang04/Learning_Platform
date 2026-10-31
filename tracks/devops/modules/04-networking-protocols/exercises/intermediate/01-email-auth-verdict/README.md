@@ -29,7 +29,7 @@ Bạn là người vận hành hộp thư của `cliente-mail.example`. MX của
   dnspython, trả `{(tên, loại): [rdata, ...]}`; tên chữ thường không dấu chấm cuối, TXT đã ghép các chuỗi con. Đây là
   "DNS" duy nhất của bài: không tra DNS thật.
 - `public_suffixes.txt`: danh sách hậu tố công khai thu gọn (bản thật là Public Suffix List). `load_suffixes` đọc nó.
-- `messages/*.eml`: 13 thư thật-dạng. Phần header là thứ cần đọc.
+- `messages/*.eml`: 14 thư thật-dạng. Phần header là thứ cần đọc.
 
 Viết bốn hàm trong `starter/email_auth.py`.
 
@@ -79,14 +79,15 @@ Trả một trong `pass`, `fail`, `softfail`, `neutral`, `none`, `permerror` (t�
 | `disposition` | `dmarc` là `pass` hoặc `none` → `deliver`. `fail` → theo `policy`: `none` → `deliver`, `quarantine` → `quarantine`, `reject` → `reject` |
 | `fallback` | Cách xử lý thư **không** rơi vào mẫu `pct`. `dmarc == "fail"` và `pct < 100` → hạ một bậc: `reject` → `quarantine`, `quarantine` → `deliver`, `none` → `deliver`. Mọi trường hợp khác bằng `disposition` |
 
-Tìm bản ghi DMARC: TXT tại `_dmarc.<from_domain>` bắt đầu bằng `v=DMARC1` (không phân biệt hoa thường). Không có thì,
-nếu `org_domain(from_domain)` khác `from_domain`, tìm tại `_dmarc.<organizational domain>`. Ở một tên mà có hơn một bản
-ghi `v=DMARC1` thì coi như không có. Tag tách bằng `;`, mỗi tag `tên=giá trị`, bỏ khoảng trắng hai bên. Mặc định: `adkim`
+Tìm bản ghi DMARC (RFC 7489 mục 6.6.3): lấy các TXT tại `_dmarc.<from_domain>` bắt đầu bằng `v=DMARC1` (không phân
+biệt hoa thường). Đúng một bản ghi: dùng nó. **Hơn một** bản ghi: dừng tìm, DMARC không được áp dụng (coi như không có
+bản ghi), **không** tìm tiếp ở organizational domain. Không có bản ghi nào: nếu `org_domain(from_domain)` khác
+`from_domain`, làm lại đúng quy tắc trên tại `_dmarc.<organizational domain>`. Tag tách bằng `;`, mỗi tag `tên=giá trị`, bỏ khoảng trắng hai bên. Mặc định: `adkim`
 và `aspf` là `r`, `pct` là `100`. Khi không có bản ghi, alignment vẫn tính với `r`.
 
 Test gọi bốn hàm trực tiếp (trong tiến trình pytest, không chạy tiến trình con, không ghi tệp): 8 ca `org_domain`, 5 ca
-`aligned`, 26 ca `spf_check` dựng sẵn trong test, 2 ca giới hạn tra DNS, và 13 thư với đủ 9 khoá. Một test nữa chứng minh
-bộ thư bắt được hai lối tắt hay gặp (lấy hai nhãn cuối làm organizational domain, tin mọi `Authentication-Results`).
+`aligned`, 26 ca `spf_check` dựng sẵn trong test, 2 ca giới hạn tra DNS, và 14 thư với đủ 9 khoá. Một test nữa chứng minh
+bộ thư bắt được ba lối tắt hay gặp (lấy hai nhãn cuối làm organizational domain, tin mọi `Authentication-Results`, gặp nhiều bản ghi DMARC thì tìm tiếp ở organizational domain).
 
 ## Tiêu chí đạt
 

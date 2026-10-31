@@ -224,7 +224,7 @@ def test_openssl_verify(built):
     no_intermediate = openssl_verify(chain / "root-ca.crt", None, chain / "server.crt")
     assert no_intermediate.returncode != 0, "Thiếu intermediate thì phải không xác minh được"
     wrong_name = openssl_verify(chain / "root-ca.crt", chain / "intermediate-ca.crt", chain / "server.crt", "-verify_hostname", "admin.olist.test")
-    assert wrong_name.returncode != 0 and "hostname mismatch" in wrong_name.stdout + wrong_name.stderr
+    assert wrong_name.returncode != 0 and "hostname mismatch" in (wrong_name.stdout + wrong_name.stderr).lower()
 
 
 def test_tls_handshake_with_sni(built, served):
@@ -328,7 +328,7 @@ def test_expired_and_wrong_san_fail_in_openssl_and_tls(tmp_path, served):
     result = openssl_verify(expired / "root-ca.crt", expired / "intermediate-ca.crt", expired / "server.crt")
     assert result.returncode != 0 and "expired" in (result.stdout + result.stderr).lower()
     server = served(expired / "fullchain.pem", expired / "server.key")
-    assert "expired" in handshake(server, expired / "root-ca.crt", "shop.olist.test")
+    assert "expired" in handshake(server, expired / "root-ca.crt", "shop.olist.test").lower()
     wrong = defective_pki(tmp_path, "wrong-san")
     server = served(wrong / "fullchain.pem", wrong / "server.key")
     assert "mismatch" in handshake(server, wrong / "root-ca.crt", "shop.olist.test").lower()

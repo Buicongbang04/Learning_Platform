@@ -46,7 +46,7 @@ Với **mọi** host (kể cả host lạ), output của `ssh -G` phải có:
 | `serveraliveinterval` | Số nguyên 15..60 |
 | `serveralivecountmax` | Số nguyên 2..5 |
 | `controlmaster` | `auto` |
-| `controlpath` | Nằm trong `~/.ssh/` và kết thúc bằng hash `%C` (40 ký tự hex sau khi `ssh -G` mở rộng) |
+| `controlpath` | Nằm trong `~/.ssh/` và kết thúc bằng `%C` (tuỳ phiên bản OpenSSH, `ssh -G` in nguyên `%C` hoặc đã mở rộng thành 40 ký tự hex; cả hai đều được chấp nhận) |
 | `controlpersist` | 60..1800 giây (viết `10m` thì `ssh -G` in `600`) |
 | `proxycommand` | Không có, hoặc `none`: dùng `ProxyJump`, không dùng `ProxyCommand` |
 | `proxyjump` | `bastion` cho `app-*` và `db-*`; không có (hoặc `none`) cho mọi host khác, **kể cả chính `bastion`** |

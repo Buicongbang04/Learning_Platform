@@ -35,6 +35,7 @@ Code đầy đủ ở `email_auth.py` cạnh tệp này.
 | 11 | pass | Hai chữ ký: chữ ký `d=olist-shop.com.br` aligned relaxed với `news.olist-shop.com.br`. Một chữ ký aligned là đủ |
 | 12 | pass dù SPF permerror | SPF quá 10 lượt, nhưng DKIM aligned cứu. Đừng để permerror kéo dài: thư của nguồn chỉ có SPF sẽ fail |
 | 13 | none | Không có DMARC: người nhận tự quyết theo heuristic. Từ 2024, Gmail và Yahoo đòi bulk sender (trên 5.000 thư/ngày) có DMARC |
+| 14 | none, deliver | `_dmarc.mkt` có **hai** bản ghi `v=DMARC1` (agency marketing thêm một bản mà không gỡ bản cũ). RFC 7489 mục 6.6.3: dừng tìm, DMARC không được áp dụng; không tìm tiếp ở `_dmarc.olist-shop.com.br`. Kết quả: thư giả mạo `mkt.` lọt qua dù tên miền tổ chức có `sp=quarantine`. Một bản ghi thừa vô hiệu hoá cả chính sách: kiểm số bản ghi `_dmarc` trong CI của DNS |
 
 ## Hai thay đổi cho Olist Shop
 
