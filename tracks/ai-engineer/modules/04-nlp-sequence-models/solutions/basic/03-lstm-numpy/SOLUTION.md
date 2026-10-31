@@ -3,8 +3,8 @@
 ## Cách làm
 
 **Forward.** Mỗi bước một phép nhân ma trận cho cả 4 cổng (`x_t @ W_ih.T + h @ W_hh.T + b_ih + b_hh`, shape `(N, 4H)`),
-rồi cắt 4 khối theo thứ tự `i, f, g, o`. Thứ tự này là quy ước của PyTorch (Keras dùng `i, f, c, o`, cuDNN có bố cục
-riêng): sai thứ tự thì forward vẫn chạy, ra số hợp lý, chỉ không khớp `nn.LSTM`, và khi nạp trọng số từ checkpoint của
+rồi cắt 4 khối theo thứ tự `i, f, g, o`. PyTorch, Keras và cuDNN cùng thứ tự này (Keras gọi khối thứ ba là
+`c`); framework khác thật sự là TF `LSTMBlockCell` (`i, c, f, o`) và ONNX (`i, o, f, c`): sai thứ tự thì forward vẫn chạy, ra số hợp lý, chỉ không khớp `nn.LSTM`, và khi nạp trọng số từ checkpoint của
 framework khác thì model hỏng âm thầm.
 
 **Backward.** Đi ngược thời gian, mang theo hai gradient `dh_next`, `dc_next`:
