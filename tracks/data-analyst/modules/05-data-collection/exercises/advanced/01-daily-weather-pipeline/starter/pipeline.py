@@ -123,10 +123,12 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--last", type=int, metavar="N", help="backfill N ngày gần nhất, tới hôm qua")
     parser.add_argument("--root", default=".", help="gốc repo (mặc định thư mục hiện tại)")
     args = parser.parse_args(argv)
+    if args.last is not None and args.last < 1:
+        parser.error(f"--last phải là số nguyên ≥ 1 (số ngày gần nhất cần chạy), nhận {args.last}")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     root = Path(args.root)
     raw_dir, db_path = root / "data/raw_api/weather-daily", root / "data/clean/weather.sqlite"
-    if args.last:
+    if args.last is not None:
         today = date.today()
         args.backfill = [(today - timedelta(days=args.last)).isoformat(), (today - timedelta(days=1)).isoformat()]
     days = [args.day] if args.day else missing_days(db_path, *args.backfill)
