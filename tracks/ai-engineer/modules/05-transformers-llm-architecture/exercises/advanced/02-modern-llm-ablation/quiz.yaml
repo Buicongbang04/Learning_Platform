@@ -1,26 +1,26 @@
 questions:
 - id: biggest-gain
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Trong ablation ở quy mô GPT mini, thay đổi nào làm bpc kém đi nhiều nhất so với bản đầy đủ?
+  prompt: Theo bảng ablation ở mục 4 phần lý thuyết, thay đổi nào làm bpc kém đi nhiều nhất so với bản đầy đủ?
   options:
   - id: a
-    text: Bỏ RoPE, dùng position embedding học được
-  - id: b
     text: Thay RMSNorm bằng LayerNorm thông thường
-  - id: c
+  - id: b
     text: Chuyển từ GQA 2 kv head sang MQA 1 kv head
+  - id: c
+    text: Bỏ RoPE, dùng position embedding học được
   - id: d
     text: Thay SwiGLU bằng MLP GELU cùng cỡ tham số
 - id: seed-noise
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Hai seed của cùng một cấu hình lệch nhau cỡ bao nhiêu bpc ở ngân sách 3 000 bước?
+  prompt: Theo bảng ablation ở mục 4 phần lý thuyết, hai seed của cùng một cấu hình lệch nhau cỡ bao nhiêu bpc ở ngân sách 3 000 bước?
   options:
   - id: a
-    text: Dưới 0.01
-  - id: b
     text: Khoảng 0.05
+  - id: b
+    text: Dưới 0.01
   - id: c
     text: Khoảng 0.2
   - id: d
@@ -31,24 +31,24 @@ questions:
   prompt: Llama 3 8B có 32 head query và 8 kv head. KV cache của nó so với bản MHA cùng cỡ thế nào?
   options:
   - id: a
-    text: Nhỏ hơn 4 lần
-  - id: b
     text: Nhỏ hơn 8 lần
-  - id: c
+  - id: b
     text: Bằng nhau, chỉ khác số tham số
-  - id: d
+  - id: c
     text: Lớn hơn vì phải repeat K, V
+  - id: d
+    text: Nhỏ hơn 4 lần
 - id: decode-bound
   kind: knowledge
   type: single
   prompt: Vì sao decode từng token của LLM lớn thường bị giới hạn bởi băng thông bộ nhớ chứ không bởi compute?
   options:
   - id: a
-    text: Mỗi token phải đọc toàn bộ trọng số và KV cache cho rất ít phép tính
-  - id: b
     text: Softmax trên vocab lớn tốn nhiều phép tính nhất
-  - id: c
+  - id: b
     text: GPU không chạy được phép nhân ma trận với batch 1
+  - id: c
+    text: Mỗi token phải đọc toàn bộ trọng số và KV cache cho rất ít phép tính
   - id: d
     text: Tokenizer chạy trên CPU nên chặn GPU
 - id: rope-relative
@@ -57,9 +57,9 @@ questions:
   prompt: Tính chất nào làm RoPE mã hoá được vị trí tương đối?
   options:
   - id: a
-    text: Tích vô hướng của q, k đã quay chỉ phụ thuộc hiệu vị trí
-  - id: b
     text: RoPE cộng một vector vị trí học được vào q và k
+  - id: b
+    text: Tích vô hướng của q, k đã quay chỉ phụ thuộc hiệu vị trí
   - id: c
     text: RoPE quay cả v nên output phụ thuộc vị trí
   - id: d
@@ -70,9 +70,9 @@ questions:
   prompt: LayerNorm cho bpc kém hơn RMSNorm 0.004, hai seed lệch nhau 0.006. Kết luận nào đúng?
   options:
   - id: a
-    text: RMSNorm tốt hơn rõ rệt, nên luôn dùng
-  - id: b
     text: Chưa phân biệt được ở ngân sách này
+  - id: b
+    text: RMSNorm tốt hơn rõ rệt, nên luôn dùng
   - id: c
     text: LayerNorm hỏng khi dùng với RoPE
   - id: d

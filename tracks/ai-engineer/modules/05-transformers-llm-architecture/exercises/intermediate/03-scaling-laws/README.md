@@ -25,7 +25,7 @@ Chinchilla khuyên.
 **Phần cứng:** CPU · ~120 phút
 
 Thời gian trên là thời gian làm bài. Notebook lời giải trên CPU 4 luồng: 5 model, 600 bước mỗi model, cả notebook 8 phút (PC, máy rảnh);
-kernel `ai-gpu` dùng 5 model rộng hơn và 2 000 bước. Đọc mục 7 phần lý thuyết. Mở `starter/scaling.ipynb`:
+kernel `ai-gpu` dùng 5 model rộng hơn và 2 000 bước (PC RTX 3060: cả notebook 10 phút). Đọc mục 7 phần lý thuyết. Mở `starter/scaling.ipynb`:
 
 1. `gpt_params(n_layer, n_embd, vocab_size, block_size)`: tổng tham số và tham số non-embedding của `GPT` bài Basic 01, bằng
    công thức (không khởi tạo model). `train_flops(n_params, n_tokens)`.

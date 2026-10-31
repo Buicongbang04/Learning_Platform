@@ -19,7 +19,27 @@
 
 ## Kết quả của notebook lời giải
 
-«I03_SOL»
+Cùng 1 000 bài train và BPE 8 000 của bài Intermediate 01, 4 tầng, 4 head, chỉ đổi `n_embd`, seed 0.
+
+| Bản | `n_embd` | $$N$$ non-embedding | Val loss | Khớp $$L(N)$$ |
+| --- | --- | --- | --- | --- |
+| CPU 4 luồng, 600 bước, batch 32 × 64 (1.23 triệu token mỗi model), cả notebook 8 phút | 32 / 64 / 96 / 128 / 192 | 50 880 / 200 064 / 447 552 / 793 344 / 1 779 840 | 6.460 / 6.116 / 6.041 / 5.795 / 5.679 | $$0.00 + 9.6\,N^{-0.036}$$ |
+| kernel `ai-gpu`, PC RTX 3060, 2 000 bước, batch 32 × 128 (8.19 triệu token mỗi model), cả notebook 10 phút | 64 / 128 / 192 / 256 / 384 | 200 064 / 793 344 / 1 779 840 / 3 159 552 / 7 098 624 | 5.143 / 4.842 / 4.799 / 4.666 / 4.518 | $$0.34 + 7.6\,N^{-0.038}$$ |
+
+Token mỗi tham số của model lớn nhất: 0.69 (CPU) và 1.15 (GPU), thấp xa mức 20 của Chinchilla; model nhỏ nhất thấy 24 (CPU) và
+41 (GPU) token mỗi tham số.
+
+Đọc kết quả:
+
+- Loss giảm gần như thẳng theo $$\log N$$, có nhiễu (bản GPU: 128 và 192 gần bằng nhau; bản CPU: 64 và 96 gần bằng nhau). Không
+  thấy đi ngang, nên $$c$$ không xác định được: bản CPU cho $$c = 0$$ (biên dưới của lưới), bản GPU cho 0.34. Hai số mũ
+  0.036 và 0.038 gần nhau nhưng đều nhỏ hơn 0.076 của Kaplan, vì mọi model bị giới hạn bởi số token cố định.
+- Biểu đồ loss theo compute: ở cùng mức compute, model nhỏ có loss train thấp hơn; các đường không cắt nhau trong ngân sách này.
+  Model lớn chỉ thắng vì tiêu nhiều compute hơn. Đây là phía compute nhỏ của đường bao Chinchilla.
+- Chinchilla: compute của Gopher $$6 \cdot 280 \cdot 10^9 \cdot 300 \cdot 10^9 = 5.04 \times 10^{23}$$ FLOP; quy tắc 20 token mỗi
+  tham số khuyên 65 tỉ tham số và 1.30 nghìn tỉ token. Công thức loss cho Gopher 1.993, Chinchilla 1.937.
+- Mutant đổi tiêu chí chọn $$c$$ sang sai số trong không gian $$\log(y - c)$$ vẫn qua test (trên dữ liệu test hai tiêu chí chọn
+  gần cùng $$c$$); đây là lỗi về phương pháp, giải thích ở mục `fit_power_law` phía trên.
 
 ## Bẫy thường gặp
 

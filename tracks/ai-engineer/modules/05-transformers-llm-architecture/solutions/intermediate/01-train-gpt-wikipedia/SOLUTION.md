@@ -26,7 +26,7 @@ token), đúng như module 04.
 | Model | Tham số | Ngân sách | Thời gian train | Perplexity theo token | bpc |
 | --- | --- | --- | --- | --- | --- |
 | GPT mini CPU (`n_embd` 128, 4 tầng) | 1.83 triệu | 1 500 bước × 32 × 128 = 6.1 triệu token | 8.3 phút, CPU 4 luồng | 164.5 | 2.115 |
-| GPT mini GPU (`n_embd` 256, 4 tầng) | 5.24 triệu | 3 000 bước × 32 × 128 = 12.3 triệu token | GPU_I01_TIME | GPU_I01_PPL | GPU_I01_BPC |
+| GPT mini GPU (`n_embd` 256, 4 tầng) | 5.24 triệu | 3 000 bước × 32 × 128 = 12.3 triệu token | RTX 3060, 3.2 phút | 98.2 | 1.901 |
 | LSTM 2 tầng 512 (module 04, Advanced 02) | 9.83 triệu | 3 000 bước × 32 × 128 | 1.9 phút, RTX 3060 | 117.0 | 1.975 |
 
 Ở cùng ngân sách (dòng GPU), Transformer một nửa số tham số đã vượt LSTM. Bản CPU nhỏ hơn và chỉ train một nửa số bước nên còn

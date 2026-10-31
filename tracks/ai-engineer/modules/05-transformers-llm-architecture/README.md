@@ -106,13 +106,17 @@ key giống hệt nhau cho cùng output ở mọi vị trí; thứ tự do posit
 
 Một Block gồm attention (trộn thông tin **giữa** các token) và MLP $$d \to 4d \to d$$ (biến đổi **từng** token), mỗi phần bọc
 trong residual và LayerNorm. Chi phí attention là $$O(T^2 d)$$ phép tính và một ma trận score $$T \times T$$ cho mỗi head. Đo một
-lớp attention ($$d = 256$$, 4 head, batch 1, forward, bf16 không dùng):
+lớp attention ($$d = 256$$, 4 head, batch 1, forward float32, PC RTX 3060, PyTorch 2.14, trung bình 5 lần chạy):
 
 | T | Tự viết (ms) | SDPA (ms) | Bộ nhớ đỉnh tự viết (MB) | Bộ nhớ đỉnh SDPA (MB) |
 | --- | --- | --- | --- | --- |
-«BENCH_ATT_ROWS»
+| 512 | 0.69 | 0.60 | 10.5 | 2.5 |
+| 1 024 | 1.93 | 0.80 | 37 | 5 |
+| 2 048 | 5.32 | 2.14 | 138 | 10 |
+| 4 096 | 22.51 | 6.85 | 540 | 20 |
+| 8 192 | 93.51 | 24.27 | 2 136 | 40 |
 
-(«BENCH_ATT_NOTE») Bản tự viết vật chất hoá ma trận score $$4 \times T \times T$$ float32: gấp đôi $$T$$ là gấp bốn bộ nhớ.
+(Bộ nhớ đỉnh là phần tăng thêm so với trước khi gọi. Trên CPU 4 luồng, ở $$T$$ = 8 192 bản tự viết mất 1 236 ms, SDPA 156 ms.) Bản tự viết vật chất hoá ma trận score $$4 \times T \times T$$ float32: gấp đôi $$T$$ là gấp bốn bộ nhớ.
 `F.scaled_dot_product_attention` gọi kernel kiểu **FlashAttention** (Dao và cộng sự, 2022): tính softmax theo từng khối
 trong SRAM của GPU với một mẹo cộng dồn ổn định số, không bao giờ ghi ma trận $$T \times T$$ ra bộ nhớ. Số phép tính vẫn bậc
 hai, nhưng bộ nhớ tuyến tính và nhanh hơn nhiều lần vì bớt đọc ghi bộ nhớ. Bài tập tự viết attention để hiểu; code thật dùng SDPA.
@@ -172,19 +176,20 @@ Cùng 1 000 bài train và 100 bài validation của module 04 (validation 664 5
 | Model | Tham số | Phần cứng, thời gian | Perplexity theo token | bpc |
 | --- | --- | --- | --- | --- |
 | LSTM 2 tầng 512 (module 04) | 9.83 triệu | RTX 3060, 1.9 phút | 117.0 | 1.975 |
-| GPT mini 4 tầng, $$d$$ 256 (GPT-2) | 5.24 triệu | RTX 3060, «I01_GPU_TIME» | «I01_GPU_PPL» | «I01_GPU_BPC» |
+| GPT mini 4 tầng, $$d$$ 256 (GPT-2) | 5.24 triệu | RTX 3060, 3.2 phút | 98.2 | 1.901 |
 | GPT mini bản Llama (mục 4) | 5.00 triệu | RTX 3060, 2.6 phút | 93.0 | 1.879 |
-| GPT mini $$d$$ 128, 1 500 bước (bản CPU của bài Intermediate 01) | 1.83 triệu | CPU 4 luồng, 8.3 phút | 164.5 | 2.115 |
 
-Transformer một nửa số tham số vượt LSTM ở cùng ngân sách; bản CPU nhỏ hơn và train một nửa số bước thì chưa. Đọc bảng như kỹ
-sư: mỗi dòng phải kèm số tham số và ngân sách. Trên **toàn bộ** bài dài của hai shard (95.5 triệu ký tự, bài Advanced 01), GPT
-mini 5.3 triệu tham số context 256 đạt bpc 1.540 sau 5.3 phút, bản 13.8 triệu tham số đạt «ADV_PC_BPC» (mục 7): với Transformer,
-dữ liệu và compute là giới hạn chính, không phải kiến trúc.
+Transformer một nửa số tham số vượt LSTM ở cùng ngân sách. Đừng đọc thành "Transformer luôn thắng": bản CPU của bài
+Intermediate 01 nhỏ hơn và train một nửa số bước, bạn sẽ tự đo xem nó đứng ở đâu. Đọc bảng như kỹ sư: mỗi dòng phải kèm số tham
+số và ngân sách. Bài Advanced 01 dùng cùng lớp GPT nhưng train trên **toàn bộ** bài dài của hai shard (95.5 triệu
+ký tự) thay vì 1 000 bài, context 256 và lâu hơn (mục 7 tính compute của bản PC). Với Transformer, dữ liệu và compute thường là giới hạn
+chính, không phải kiến trúc.
 
 Văn bản sinh từ "Hà Nội là" (model 5.24 triệu tham số trên 1 000 bài, temperature 0.8, top-k 40): "Hà Nội là một trong những người
-vô thần. Vì thế, ông làm đồng thời cũng không thành công với công đồng hóa, nên rất ít và có sức khỏe. ..." Đúng chính tả, ngữ
-pháp cục bộ hợp lý, nội dung vô nghĩa; greedy rơi vào vòng lặp. Sampling (temperature, top-k, top-p) và vì sao greedy lặp được
-nói kỹ ở module 09.
+Hà Nội. / Gia tộc Việt Nam / Sau khi tốt nghiệp nước ngoài ở Việt Nam, nước ngoài có những người con trai đi sống theo. ..."
+(notebook lời giải Intermediate 01, bản GPU) Đúng chính tả, ngữ
+pháp cục bộ hợp lý, nội dung vô nghĩa. Sampling (temperature, top-k, top-p) và hành vi của greedy decoding được nói kỹ ở
+module 09.
 
 ## 3. BERT, GPT, T5: cùng khối, khác mask và mục tiêu
 
@@ -213,9 +218,19 @@ Quy tắc 80/10/10 của BERT tồn tại vì `[MASK]` không bao giờ xuất h
 `[MASK]`, model không học biểu diễn tốt cho token thật. Bài Intermediate 02 train cùng một `TinyTransformer` hai lần, chỉ đổi cờ
 `causal` và loss, cùng 1 000 bài Wikipedia, cùng số bước:
 
-«I02_TABLE»
+| Model (`n_embd` 256, 3 000 bước, 5.24 triệu tham số) | Accuracy khi che một chỗ trống mỗi lần (11 928 lần) |
+| --- | --- |
+| GPT (chỉ nhìn bên trái) | 0.238 |
+| BERT (nhìn hai phía) | 0.245 |
 
-«I02_TEXT»
+(PC RTX 3060, notebook lời giải cả bài 6 phút. Bài còn đo cách thứ hai, che 15% token cùng lúc, và cho cả hai model sinh văn
+bản; kết quả đó để bạn tự đo.)
+
+Giả thuyết "BERT điền chỗ trống giỏi hơn hẳn vì nhìn hai phía" chỉ đúng một phần ở ngân sách này: hơn 0.007, cỡ nhiễu. Lý do là
+**hiệu quả dữ liệu**: cùng 3 000 bước, BERT chỉ nhận loss trên khoảng 15% token, khoảng 1.8 triệu dự đoán so với 12.3 triệu của
+GPT. BERT gốc train 1 triệu bước batch 256 để bù; ELECTRA (2020) sinh ra để sửa sự lãng phí này (học trên **mọi** token bằng nhiệm
+vụ "token này có bị thay không"). Bài học kỹ sư: giả thuyết hợp lý vẫn phải đo, và so hai mục tiêu train phải nói rõ ngân sách
+(bước, token, số vị trí có tín hiệu).
 
 ## 4. Từ GPT-2 tới Llama: RMSNorm, RoPE, SwiGLU, GQA
 
@@ -263,9 +278,26 @@ Bài Advanced 02 đi từ bản đầy đủ (RMSNorm, RoPE, SwiGLU, GQA 4 head 
 đổi **một** thứ mỗi lần; cùng dữ liệu, tokenizer, 3 000 bước batch 32 × 128, learning rate, đánh giá như mục 2. Hai seed (seed
 đổi cả khởi tạo lẫn thứ tự batch):
 
-«ABL_TABLE»
+| Cấu hình | Tham số | bpc seed 0 / seed 1 | So với bản đầy đủ (trung bình) |
+| --- | --- | --- | --- |
+| GPT-2 (lớp `GPT` bài Basic 01) | 5 240 320 | 1.907 / 1.902 | +0.029 |
+| **Đầy đủ** (RMSNorm, RoPE, SwiGLU, GQA 4/2) | 4 999 424 | 1.879 / 1.873 | 0 |
+| position embedding học được thay RoPE | 5 032 192 | 1.918 / 1.914 | +0.040 |
+| LayerNorm thay RMSNorm | 5 001 728 | 1.883 / 1.877 | +0.004 |
+| GELU $$4d$$ thay SwiGLU | 4 933 888 | 1.872 / 1.866 | −0.007 |
+| MHA (4 kv head) | 5 261 568 | 1.869 / 1.869 | −0.007 |
+| MQA (1 kv head) | 4 868 352 | 1.878 / 1.876 | +0.001 |
 
-«ABL_TEXT»
+(PC RTX 3060, bf16 autocast, mỗi lần chạy 2.4-2.9 phút. Hai seed của cùng cấu hình lệch nhau tới 0.006 bpc.)
+
+- **Thật**: bản Llama tốt hơn GPT-2 khoảng 0.03 bpc ở cả hai seed, và gần như toàn bộ đến từ **RoPE**: bỏ RoPE thì kém hơn cả
+  GPT-2. Ở context 128, mã hoá vị trí tương đối giúp nhiều hơn mọi thứ khác.
+- **Trong nhiễu**: RMSNorm so với LayerNorm, MQA so với GQA. Ở quy mô này chúng không đổi chất lượng; lợi ích của chúng là tốc
+  độ và bộ nhớ (RMSNorm rẻ hơn, MQA có cache nhỏ hơn GQA 2 kv head 2 lần).
+- **Ngược kỳ vọng**: GELU nhỉnh hơn SwiGLU 0.007 ở cả hai seed, vừa vượt nhiễu. Lợi ích của SwiGLU được báo cáo ở quy mô lớn hơn
+  nhiều (Shazeer 2020, model T5 base sau 65 000 bước); 3 000 bước trên model 5 triệu tham số không bác bỏ được nó, chỉ cho thấy
+  nó không phải nguồn lợi ở đây. MHA tốt hơn GQA 0.007 nhưng thêm 262 144 tham số: GQA đổi một chút chất lượng lấy cache nhỏ hơn.
+- Kết luận từ một seed với chênh lệch dưới mức nhiễu (ví dụ "LayerNorm tệ hơn RMSNorm") là lỗi phổ biến nhất khi đọc ablation.
 
 ## 5. Inference: prefill, decode và KV cache
 
@@ -294,9 +326,20 @@ Không có cache, bước thứ $$t$$ phải forward lại cả $$t$$ token: sin
 chiếu token mới và attend vào K, V đã lưu. Đo trên GPT mini bản Llama (4 tầng, $$d$$ 256, 2 kv head), prompt 32 token, greedy (cả
 hai cách sinh ra **đúng cùng** token):
 
-«KV_TABLE»
+| Token sinh ra | CPU 4 luồng, có cache (s) | CPU, không cache (s) | RTX 3060, có cache (s) | RTX 3060, không cache (s) |
+| --- | --- | --- | --- | --- |
+| 64 | 0.21 | 0.41 | 0.43 | 0.47 |
+| 256 | 0.76 | 2.71 | 1.66 | 1.73 |
+| 768 | 2.41 | 18.84 | 5.07 | 5.32 |
 
-«KV_TEXT»
+(PC, PyTorch 2.14, float32, một lần đo mỗi ô sau một lần chạy làm nóng; GPU lúc đo có job khác dùng chung.)
+
+Trên CPU, cache cho đúng dáng thuật toán: không cache thì thời gian tăng gần bậc hai (768 token chậm hơn 7.8 lần), có cache thì
+tuyến tính, khoảng 3 ms mỗi token. Trên GPU, cache gần như không nhanh hơn, và cả hai đều **chậm hơn CPU có cache**: model 5 triệu
+tham số quá nhỏ, mỗi bước decode là vài chục kernel tí hon, thời gian bị chi phối bởi chi phí khởi chạy kernel và đồng bộ chứ không
+phải phép tính. Phải tới context dài hoặc model lớn, khi forward lại cả chuỗi thật sự tốn compute và băng thông, lợi ích của cache
+trên GPU mới hiện ra; với LLM thật, không có KV cache thì decode không dùng được. Đo trên phần cứng thật trước khi kết luận
+"tối ưu này nhanh hơn".
 
 Bộ nhớ cache:
 
@@ -393,14 +436,32 @@ C \approx 6ND
 $$
 
 (forward khoảng $$2N$$ FLOP mỗi token: mỗi tham số một phép nhân và một phép cộng; backward gấp đôi forward). Ví dụ: GPT mini cấu hình
-PC của bài Advanced 01 (10.6 triệu tham số non-embedding, 131 triệu token) cần khoảng $$8 \times 10^{15}$$ FLOP; RTX 3060 đạt cỡ
-«ADV_PC_TFLOPS» TFLOP/s thực tế ở bf16 trên model này (theo thời gian đo được), nên mất «ADV_PC_TIME».
+PC của bài Advanced 01 (6 tầng, $$d$$ 384, 10.6 triệu tham số non-embedding, 13.8 triệu tham số tính cả embedding dùng chung với
+lm_head; 8 000 bước × 64 × 256 = 131 triệu token). Với $$N$$ non-embedding như Kaplan, $$C \approx 8.4 \times 10^{15}$$ FLOP; nhưng
+với model tí hon vocab 8 000, phép nhân lm_head ($$d \times V$$ mỗi token, 3.1 triệu tham số) không nhỏ, tính cả nó thì
+$$C \approx 1.1 \times 10^{16}$$ FLOP. Lần chạy thật trên PC RTX 3060 (bf16 autocast, `torch.compile`) mất 17.6 phút, tức khoảng
+124 000 token/s, cỡ 10 TFLOP/s thực tế theo $$6ND$$ với $$N$$ 13.8 triệu (thời gian đo gồm cả compile và eval định kỳ, $$6ND$$ bỏ qua phép
+nhân của attention, nên đây là ước lượng thô). Làm ngược lại là cách kỹ sư ước lượng trước một lần train: $$6ND$$ chia cho
+FLOP/s thực đạt được.
 
 Bài Intermediate 03 train 5 GPT mini chỉ khác $$d$$ (4 tầng, cùng số token) và khớp $$L(N) = c + aN^{-\alpha}$$:
 
-«I03_TABLE»
+| `n_embd` | $$N$$ non-embedding | Val loss (nat/token) |
+| --- | --- | --- |
+| 64 | 200 064 | 5.143 |
+| 128 | 793 344 | 4.842 |
+| 192 | 1 779 840 | 4.799 |
+| 256 | 3 159 552 | 4.666 |
+| 384 | 7 098 624 | 4.518 |
 
-«I03_TEXT»
+(Kernel `ai-gpu`, PC RTX 3060, 2 000 bước batch 32 × 128 mỗi model, seed 0, cả notebook 10 phút.)
+
+Hàm khớp ra $$L \approx 0.34 + 7.6\,N^{-0.038}$$. Bản CPU của bài (5 model nhỏ hơn, 600 bước, context 64) ra $$c = 0$$ và số mũ
+0.036. Cả hai cho thấy cùng một điều: trong khoảng đo, loss gần như thẳng theo $$\log N$$ (mỗi lần nhân đôi $$N$$ bớt khoảng
+0.12-0.15 nat), chưa có dấu hiệu đi ngang, nên 5 điểm ngân sách nhỏ **không tách được** $$c$$ khỏi $$a$$ và $$\alpha$$; $$c$$ trôi về biên.
+Số mũ nhỏ hơn nhiều con số 0.076 của Kaplan vì mọi model ở đây cùng thấy một lượng token cố định và quá ít so với kích thước:
+loss bị giới hạn bởi dữ liệu và số bước chứ không chỉ bởi $$N$$. Bài học: muốn ước lượng một luật scaling, cần nhiều bậc độ lớn,
+mỗi điểm train đủ lâu, và nói rõ khoảng tin cậy; một đường khớp đẹp trên log-log không chứng minh gì về chỗ ngoài khoảng đo.
 
 ### Chinchilla: chia ngân sách thế nào
 
