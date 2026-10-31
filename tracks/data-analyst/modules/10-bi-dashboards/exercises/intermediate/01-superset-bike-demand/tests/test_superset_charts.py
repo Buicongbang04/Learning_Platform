@@ -212,21 +212,34 @@ def _all(session, kind):
         page += 1
 
 
+def delete_all(session, urls):
+    """Xoá từng url, không dừng giữa chừng; cuối cùng báo mọi lần xoá lỗi (url + status) để dọn tay."""
+    failed = []
+    for url in urls:
+        try:
+            res = session.delete(url)
+        except requests.RequestException as e:
+            failed.append(f"DELETE {url}: {type(e).__name__}")
+            continue
+        if not res.ok:
+            failed.append(f"DELETE {url}: HTTP {res.status_code} {res.text[:200]}")
+    if failed:
+        pytest.fail("Teardown không dọn hết object test, hãy xoá tay:\n" + "\n".join(failed))
+
+
 @pytest.fixture(scope="module")
 def run(superset):
     """Tên riêng cho lần chạy test; khi xong xoá dashboard, chart, dataset mang tên đó (không đụng của bạn)."""
     tag = uuid.uuid4().hex[:8]
     state = {"prefix": f"test-{tag} · ", "table": f"test_{tag}_bike_hour_demand"}
     yield state
-    for d in _all(superset, "dashboard"):
-        if d["dashboard_title"].startswith(state["prefix"]):
-            superset.delete(f"/api/v1/dashboard/{d['id']}")
-    for c in _all(superset, "chart"):
-        if c["slice_name"].startswith(state["prefix"]):
-            superset.delete(f"/api/v1/chart/{c['id']}")
-    for t in _all(superset, "dataset"):
-        if t["table_name"] == state["table"]:
-            superset.delete(f"/api/v1/dataset/{t['id']}")
+    delete_all(
+        superset,
+        [f"/api/v1/dashboard/{d['id']}" for d in _all(superset, "dashboard")
+         if d["dashboard_title"].startswith(state["prefix"])]
+        + [f"/api/v1/chart/{c['id']}" for c in _all(superset, "chart") if c["slice_name"].startswith(state["prefix"])]
+        + [f"/api/v1/dataset/{t['id']}" for t in _all(superset, "dataset") if t["table_name"] == state["table"]],
+    )
 
 
 def published(superset, run):
