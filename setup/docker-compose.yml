@@ -5,7 +5,7 @@
 # Bật theo nhóm:
 #   docker compose -f setup/docker-compose.yml --profile nosql up -d
 # Nhóm: sql (postgres), nosql (mongo, redis, cassandra, neo4j), lake (minio),
-#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), all (tất cả)
+#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), devops (mailpit), all (các nhóm trên, không gồm devops)
 # Tắt (giữ dữ liệu):     docker compose -f setup/docker-compose.yml --profile all down
 # Tắt và xoá dữ liệu:    docker compose -f setup/docker-compose.yml --profile all down -v
 #
@@ -224,6 +224,21 @@ services:
       timeout: 5s
       retries: 20
       start_period: 20s
+
+  mailpit:
+    # SMTP giả để module 04 kiểm thư gửi ra: SMTP cổng 11025, giao diện và API HTTP cổng 18025.
+    # DEVOPS_CPUSET để trống thì không ghim CPU; xem setup/DEVOPS-TOOLS.md mục "Ghim CPU".
+    image: axllent/mailpit:v1.21.8
+    profiles: [devops]
+    cpuset: "${DEVOPS_CPUSET:-}"
+    ports:
+      - "${MAILPIT_SMTP_PORT:-11025}:1025"
+      - "${MAILPIT_HTTP_PORT:-18025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 # Mọi service chung network `de-net`: từ Metabase kết nối Postgres bằng host `postgres`,
 # từ container khác kết nối Kafka bằng `kafka:9092`.

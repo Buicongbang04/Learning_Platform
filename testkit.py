@@ -68,6 +68,7 @@ SERVICES = {
     "superset": ("SUPERSET_HOST", "localhost", "SUPERSET_PORT", 8088),
     "airflow": ("AIRFLOW_HOST", "localhost", "AIRFLOW_PORT", 8080),
     "localstack": ("LOCALSTACK_HOST", "localhost", "LOCALSTACK_PORT", 4566),
+    "mailpit": ("MAILPIT_HOST", "localhost", "MAILPIT_SMTP_PORT", 11025),
 }
 
 def _port(name: str) -> int:
