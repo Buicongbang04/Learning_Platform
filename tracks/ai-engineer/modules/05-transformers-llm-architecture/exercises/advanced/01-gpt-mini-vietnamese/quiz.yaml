@@ -1,0 +1,79 @@
+questions:
+- id: train-articles
+  kind: data
+  type: single
+  prompt: Gộp hai shard, bỏ 100 bài validation, còn bao nhiêu bài dài ít nhất 2 000 ký tự làm tập train?
+  options:
+  - id: a
+    text: '5 313'
+  - id: b
+    text: '9 160'
+  - id: c
+    text: '14 473'
+  - id: d
+    text: '23 389'
+- id: bpc-vs-lstm
+  kind: data
+  type: single
+  prompt: Sau khi train trên toàn bộ tập train lớn, bpc của GPT mini trên validation so với LSTM của module 04 (1.975) thế nào?
+  options:
+  - id: a
+    text: Thấp hơn rõ rệt, dưới 1.7
+  - id: b
+    text: Gần như bằng, trong khoảng 1.9-2.0
+  - id: c
+    text: Cao hơn, trên 2.0
+  - id: d
+    text: Không so được vì khác dữ liệu train
+- id: greedy-repeat
+  kind: data
+  type: single
+  prompt: Với greedy decoding, distinct-2 của 100 token sinh ra thường thế nào so với temperature 1.0?
+  options:
+  - id: a
+    text: Thấp hơn nhiều, vì greedy dễ rơi vào vòng lặp
+  - id: b
+    text: Gần bằng nhau, vì cả hai dùng cùng một model đã train
+  - id: c
+    text: Cao hơn, vì greedy luôn chọn token chắc chắn nhất
+  - id: d
+    text: Luôn đúng bằng 1 với mọi model
+- id: weights-only
+  kind: knowledge
+  type: single
+  prompt: Vì sao nên nạp checkpoint bằng `torch.load(..., weights_only=True)`?
+  options:
+  - id: a
+    text: Nạp nhanh hơn vì bỏ qua tensor của optimizer
+  - id: b
+    text: Không chạy code pickle tuỳ ý trong tệp
+  - id: c
+    text: Tự chuyển trọng số sang GPU đang có sẵn
+  - id: d
+    text: Bắt buộc khi model dùng weight tying
+- id: tokenizer-in-ckpt
+  kind: knowledge
+  type: single
+  prompt: Vì sao checkpoint nên chứa cả tokenizer?
+  options:
+  - id: a
+    text: Tokenizer khác làm id token lệch, model vô dụng
+  - id: b
+    text: PyTorch không nạp được trọng số nếu thiếu tokenizer
+  - id: c
+    text: Để giảm đáng kể kích thước tệp checkpoint
+  - id: d
+    text: Tokenizer chứa learning rate để train tiếp
+- id: train-val-gap
+  kind: knowledge
+  type: single
+  prompt: Loss train 2.9 nat, loss validation 3.25 nat sau 4.6 epoch. Bước tiếp theo hợp lý nhất?
+  options:
+  - id: a
+    text: Train thêm nhiều epoch trên cùng dữ liệu
+  - id: b
+    text: Thêm dữ liệu mới thay vì lặp lại dữ liệu cũ
+  - id: c
+    text: Bỏ weight decay để model học được nhanh hơn
+  - id: d
+    text: Chuyển sang đánh giá trên tập train cho số đẹp
