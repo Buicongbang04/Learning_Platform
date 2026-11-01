@@ -1,0 +1,2 @@
+olist_role: worker
+olist_worker_concurrency: 2

@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-10-30T02:00:00Z",
+  "hosts": [
+    {"name": "web-1", "ip": "10.20.1.11", "role": "web", "env": "prod", "az": "hcm-1a", "status": "active", "cpu": 4, "canary": false},
+    {"name": "web-2", "ip": "10.20.1.12", "role": "web", "env": "prod", "az": "hcm-1b", "status": "active", "cpu": 4, "canary": false},
+    {"name": "worker-1", "ip": "10.20.2.21", "role": "worker", "env": "prod", "az": "hcm-1a", "status": "active", "cpu": 8, "canary": true},
+    {"name": "worker-2", "ip": "10.20.2.22", "role": "worker", "env": "prod", "az": "hcm-1b", "status": "active", "cpu": 8, "canary": false},
+    {"name": "worker-3", "ip": "10.20.2.23", "role": "worker", "env": "prod", "az": "hcm-1a", "status": "active", "cpu": 4, "canary": false},
+    {"name": "worker-4", "ip": "10.20.2.24", "role": "worker", "env": "prod", "az": "hcm-1b", "status": "decommissioned", "cpu": 8, "canary": false},
+    {"name": "worker-stg-1", "ip": "10.30.2.21", "role": "worker", "env": "staging", "az": "hcm-1a", "status": "active", "cpu": 2, "canary": false},
+    {"name": "db-1", "ip": "10.20.3.31", "role": "postgres", "env": "prod", "az": "hcm-1a", "status": "active", "cpu": 16, "canary": false}
+  ]
+}

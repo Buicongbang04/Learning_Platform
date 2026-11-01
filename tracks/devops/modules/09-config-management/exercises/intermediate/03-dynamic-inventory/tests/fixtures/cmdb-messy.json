@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-10-31T02:00:00Z",
+  "hosts": [
+    {"name": "pay-1", "ip": "10.20.4.41", "role": "Payment-API", "env": "PROD", "az": "HCM-1A", "status": "active", "cpu": 4},
+    {"name": "pay-2", "ip": "10.20.4.42", "role": "Payment-API", "env": "PROD", "status": "Active", "cpu": 8, "canary": true},
+    {"name": "old-1", "ip": "10.20.4.40", "role": "Payment-API", "env": "PROD", "az": "hcm-1a", "status": "DECOMMISSIONED", "cpu": 4}
+  ]
+}

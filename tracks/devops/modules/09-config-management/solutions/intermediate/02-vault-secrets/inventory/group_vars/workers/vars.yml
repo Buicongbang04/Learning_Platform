@@ -1,0 +1,2 @@
+olist_db_password: "{{ vault_olist_db_password }}"
+olist_redis_password: "{{ vault_olist_redis_password }}"

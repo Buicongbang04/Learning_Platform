@@ -1,0 +1,7 @@
+plugin: ansible.builtin.constructed
+strict: true
+groups:
+  canary: olist_canary
+  big: olist_cpu >= 8
+compose:
+  olist_worker_concurrency: olist_cpu * 2

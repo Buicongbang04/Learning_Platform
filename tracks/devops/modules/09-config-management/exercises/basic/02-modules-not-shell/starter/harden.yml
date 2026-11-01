@@ -1,0 +1,23 @@
+- name: Cấu hình worker kiểu cũ
+  hosts: workers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Tạo thư mục release
+      ansible.builtin.shell: mkdir -p /opt/olist-shop/releases/1.4.2 && chmod 750 /opt/olist-shop/releases
+
+    - name: Ghi LOG_LEVEL
+      ansible.builtin.shell: echo "LOG_LEVEL=INFO" >> /etc/olist-shop/worker.env
+
+    - name: Đổi timezone
+      ansible.builtin.shell: sed -i 's|^TZ=.*|TZ=Asia/Ho_Chi_Minh|' /etc/olist-shop/worker.env
+
+    - name: Trỏ current vào bản đang chạy
+      ansible.builtin.shell: ln -sfn /opt/olist-shop/releases/1.4.2 /opt/olist-shop/current
+
+    - name: Kiểm phiên bản Python
+      ansible.builtin.command: /usr/local/bin/python3 --version
+
+    - name: Đếm job lỗi trong log
+      ansible.builtin.shell: grep -c ERROR /var/log/olist-shop/worker.log
+      register: errors

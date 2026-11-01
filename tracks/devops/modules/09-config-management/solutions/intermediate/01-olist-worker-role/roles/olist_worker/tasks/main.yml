@@ -1,0 +1,77 @@
+- name: Tạo group olist
+  ansible.builtin.group:
+    name: "{{ olist_worker_user }}"
+    system: true
+
+- name: Tạo user olist
+  ansible.builtin.user:
+    name: "{{ olist_worker_user }}"
+    group: "{{ olist_worker_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/olist-shop
+    create_home: false
+
+- name: Tạo thư mục cài đặt
+  ansible.builtin.file:
+    path: "{{ olist_worker_home }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Tạo thư mục cấu hình
+  ansible.builtin.file:
+    path: "{{ olist_worker_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ olist_worker_user }}"
+    mode: "0750"
+
+- name: Chép code worker
+  ansible.builtin.copy:
+    src: "{{ olist_worker_src }}"
+    dest: "{{ olist_worker_home }}/app/olist_shop/"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+  notify: Restart olist-worker
+
+- name: Cài dependency vào virtualenv từ wheel nội bộ
+  ansible.builtin.pip:
+    name: "{{ olist_worker_packages }}"
+    virtualenv: "{{ olist_worker_home }}/.venv"
+    virtualenv_command: "{{ olist_worker_python }} -m venv"
+  environment:
+    PIP_NO_INDEX: "1"
+    PIP_FIND_LINKS: "{{ olist_worker_wheels_dir }}"
+  notify: Restart olist-worker
+
+- name: Ghi env file của worker
+  ansible.builtin.template:
+    src: worker.env.j2
+    dest: "{{ olist_worker_config_dir }}/worker.env"
+    owner: root
+    group: "{{ olist_worker_user }}"
+    mode: "0640"
+  notify: Restart olist-worker
+  tags: [config]
+
+- name: Ghi systemd unit
+  ansible.builtin.template:
+    src: olist-worker.service.j2
+    dest: /etc/systemd/system/olist-worker.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart olist-worker
+  tags: [config]
+
+- name: Bật olist-worker
+  ansible.builtin.systemd_service:
+    name: olist-worker
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: ansible_facts.service_mgr == "systemd"

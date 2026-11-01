@@ -1,0 +1,7 @@
+[host]
+name = {{ inventory_hostname }}
+env = {{ olist_env }}
+role = {{ olist_role }}
+{% if olist_role == "worker" %}
+concurrency = {{ olist_worker_concurrency }}
+{% endif %}

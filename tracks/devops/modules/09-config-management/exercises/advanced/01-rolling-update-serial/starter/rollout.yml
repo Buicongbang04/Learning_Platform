@@ -1,0 +1,22 @@
+- name: Rollout worker Olist Shop
+  hosts: workers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Tạo thư mục bản mới
+      ansible.builtin.file:
+        path: "/opt/olist-shop/releases/{{ olist_release }}"
+        state: directory
+        mode: "0755"
+
+    - name: Ghi VERSION
+      ansible.builtin.copy:
+        content: "{{ olist_release }}\n"
+        dest: "/opt/olist-shop/releases/{{ olist_release }}/VERSION"
+        mode: "0644"
+
+    - name: Chuyển current sang bản mới
+      ansible.builtin.file:
+        src: "/opt/olist-shop/releases/{{ olist_release }}"
+        dest: /opt/olist-shop/current
+        state: link

@@ -1,0 +1,127 @@
+questions:
+  - id: precedence-role-vars
+    kind: knowledge
+    type: single
+    prompt: "Role `olist_worker` khai báo `olist_worker_log_level: INFO` trong `roles/olist_worker/vars/main.yml`. Ops đặt `olist_worker_log_level: DEBUG` trong `inventory/group_vars/workers.yml` rồi chạy playbook. Env file trên máy ghi gì, và vì sao?"
+    options:
+      - { id: a, text: "DEBUG, vì giá trị đặt ở inventory là nguồn sự thật của môi trường và luôn thắng mọi biến khai báo bên trong role, kể cả vars" }
+      - { id: b, text: "INFO, vì role vars đứng trên inventory group_vars; giá trị người dùng được ghi đè phải nằm ở defaults" }
+      - { id: c, text: "Lỗi do một biến khai báo hai nơi" }
+      - { id: d, text: "Ngẫu nhiên theo thứ tự đọc tệp" }
+  - id: precedence-extra-vars
+    kind: knowledge
+    type: single
+    prompt: "Một task `ansible.builtin.set_fact: olist_release=1.4.2` chạy giữa play, còn lệnh chạy có `-e olist_release=1.5.0`. Sau task đó, `olist_release` bằng bao nhiêu?"
+    options:
+      - { id: a, text: "1.4.2, vì set_fact chạy sau lúc parse dòng lệnh và biến gán gần nhất trong thời gian chạy luôn được dùng cho các task tiếp theo" }
+      - { id: b, text: "Lỗi xung đột biến" }
+      - { id: c, text: "1.5.0: extra vars có ưu tiên cao nhất, set_fact không ghi đè được" }
+      - { id: d, text: "Tuỳ theo set_fact có `cacheable: true` hay không" }
+  - id: shell-idempotency
+    kind: knowledge
+    type: single
+    prompt: "Task `ansible.builtin.shell: echo LOG_LEVEL=INFO >> /etc/olist-shop/worker.env` chạy hằng ngày. Sau một tuần, điều gì đúng?"
+    options:
+      - { id: a, text: "Tệp có 7 dòng LOG_LEVEL và recap báo changed mỗi lần; dùng `lineinfile` với `regexp` để có trạng thái mong muốn" }
+      - { id: b, text: "Tệp chỉ có một dòng vì module shell của Ansible so sánh nội dung tệp trước và sau rồi bỏ qua lần ghi trùng, recap báo ok" }
+      - { id: c, text: "Chỉ lần đầu báo changed vì shell nhớ trạng thái" }
+      - { id: d, text: "Task fail từ lần thứ hai vì tệp đã tồn tại" }
+  - id: grep-failed-when
+    kind: knowledge
+    type: single
+    prompt: "Task `ansible.builtin.command: grep -c ERROR /var/log/olist-shop/worker.log` fail trên máy có log sạch. Cách sửa đúng là gì?"
+    options:
+      - { id: a, text: "Thêm `ignore_errors: true` để play chạy tiếp trên mọi máy, rồi đọc `result.stdout` ở task sau như bình thường để quyết định dừng hay không" }
+      - { id: b, text: "Đổi sang `ansible.builtin.shell` vì command không hiểu mã thoát" }
+      - { id: c, text: "Bỏ task vì không đo được" }
+      - { id: d, text: "`failed_when: result.rc > 1` (grep trả 1 khi không khớp, 2 khi lỗi) cùng `changed_when: false`" }
+  - id: handler-timing
+    kind: knowledge
+    type: single
+    prompt: "Task ghi env file notify handler `Restart olist-worker`. Một task phía sau trong cùng play gọi health check của worker và cần worker đã chạy với cấu hình mới. Bạn làm gì?"
+    options:
+      - { id: a, text: "Không cần làm gì thêm: handler chạy ngay sau task đã notify nó, trước khi task kế tiếp trong play bắt đầu, nên health check thấy cấu hình mới" }
+      - { id: b, text: "Thêm `ansible.builtin.meta: flush_handlers` trước task health check" }
+      - { id: c, text: "Đổi handler thành task thường có `when: true`" }
+      - { id: d, text: "Đặt `force_handlers: true`" }
+  - id: handler-failure
+    kind: knowledge
+    type: single
+    prompt: "Task cập nhật unit đã đổi và notify handler, rồi một task sau đó fail trên cùng máy. Mặc định chuyện gì xảy ra với handler, và cờ nào đổi hành vi đó?"
+    options:
+      - { id: a, text: "Handler vẫn chạy ở cuối play trên máy đó vì đã được notify trước khi lỗi xảy ra, Ansible ghi nhớ mọi notify cho tới hết play" }
+      - { id: b, text: "Handler chạy ngay lúc task fail" }
+      - { id: c, text: "Handler không chạy trên máy lỗi; `force_handlers: true` (hay `--force-handlers`) buộc nó chạy" }
+      - { id: d, text: "Handler chạy trên mọi máy trừ máy lỗi, kể cả máy không notify" }
+  - id: check-diff
+    kind: knowledge
+    type: single
+    prompt: "Bạn chạy `ansible-playbook site.yml --check --diff` trên production. Phát biểu nào đúng?"
+    options:
+      - { id: a, text: "Không đổi gì trên máy; module hỗ trợ check mode báo sẽ đổi gì, `command`/`shell` bị bỏ qua nên kết quả có thể thiếu" }
+      - { id: b, text: "An toàn tuyệt đối và chính xác với mọi task, kể cả `command` và `shell`, vì Ansible mô phỏng lệnh trên một bản sao hệ thống tệp" }
+      - { id: c, text: "Áp thay đổi nhưng tự rollback cuối play" }
+      - { id: d, text: "Chỉ kiểm cú pháp, giống `--syntax-check`" }
+  - id: vault-practice
+    kind: knowledge
+    type: single
+    prompt: "Cách tổ chức bí mật nào là thực hành tốt với Ansible Vault?"
+    options:
+      - { id: a, text: "Mã hoá cả `site.yml` và mọi role bằng `ansible-vault encrypt` để không ai đọc được logic triển khai lẫn bí mật nằm lẫn trong task" }
+      - { id: b, text: "`group_vars/prod/vars.yml` trỏ `db_password: \"{{ vault_db_password }}\"`, `vault.yml` cạnh nó mã hoá bằng vault id prod, task dùng `no_log`" }
+      - { id: c, text: "Để mật khẩu trong biến môi trường của CI và in ra log để debug" }
+      - { id: d, text: "Commit mật khẩu vault vào `ansible.cfg` để CI đọc được" }
+  - id: serial-rollout
+    kind: knowledge
+    type: single
+    prompt: "Rollout worker tới 20 máy. Bạn muốn từng đợt 25%, dừng ngay khi có một máy lỗi. Cấu hình nào?"
+    options:
+      - { id: a, text: "`strategy: free` cùng `forks: 5`, để mỗi lúc chỉ năm máy chạy và máy lỗi tự bị loại khỏi phần còn lại của play" }
+      - { id: b, text: "`run_once: true`" }
+      - { id: c, text: "`async: 300` cho mọi task" }
+      - { id: d, text: "`serial: \"25%\"` và `max_fail_percentage: 0`" }
+  - id: push-pull
+    kind: knowledge
+    type: single
+    prompt: "Máy mới do autoscaling tạo phải tự cấu hình khi boot, không có ai chạy playbook từ ngoài vào. Mô hình nào phù hợp?"
+    options:
+      - { id: a, text: "Pull: cloud-init chạy `ansible-pull` (hay agent như Puppet, Chef) trên chính máy, hoặc tốt hơn là boot từ image đã cấu hình sẵn" }
+      - { id: b, text: "Push từ laptop của người trực: alert báo có máy mới, người trực chạy playbook với `--limit` tên máy đó trong vòng vài phút" }
+      - { id: c, text: "Không thể, Ansible chỉ có mô hình push" }
+      - { id: d, text: "Mở SSH từ Internet để CI tìm máy mới" }
+  - id: mutable-immutable
+    kind: knowledge
+    type: single
+    prompt: "Fleet worker stateless scale 12 tới 60 máy trong đợt sale, máy mới cần nhận việc trong vòng 1 phút. Chọn gì?"
+    options:
+      - { id: a, text: "Chạy Ansible lúc boot bằng cloud-init và `ansible-pull`, vì máy luôn nhận cấu hình mới nhất mà không cần build gì trước" }
+      - { id: b, text: "Sửa tay máy đầu tiên rồi chụp snapshot mỗi khi đổi" }
+      - { id: c, text: "Image bất biến build bằng Packer với role Ansible làm provisioner; đổi bản là thay máy" }
+      - { id: d, text: "Chạy Puppet agent mỗi 30 phút" }
+  - id: tool-choice
+    kind: knowledge
+    type: single
+    prompt: "Công ty cần agent trên 5000 máy liên tục tự sửa drift theo mô hình khai báo, có báo cáo tập trung, team chấp nhận học DSL riêng. Công cụ nào hợp nhất?"
+    options:
+      - { id: a, text: "Shell script chạy bằng cron" }
+      - { id: b, text: "Puppet (hay Chef/Salt với agent): pull theo chu kỳ, catalog khai báo, báo cáo trên server" }
+      - { id: c, text: "Ansible ad-hoc chạy tay mỗi tuần từ máy quản trị, vì không cần agent nên 5000 máy không tốn tài nguyên chạy nền liên tục" }
+      - { id: d, text: "cloud-init, vì nó chạy ở mọi lần boot" }
+  - id: roles-defaults
+    kind: knowledge
+    type: single
+    prompt: "Trong một role, `defaults/main.yml` và `vars/main.yml` khác nhau ở điểm nào?"
+    options:
+      - { id: a, text: "Không khác, Ansible gộp hai tệp" }
+      - { id: b, text: "`vars/main.yml` chỉ được đọc khi chạy với `--tags vars`, còn `defaults/main.yml` luôn được nạp nên dùng cho mọi biến của role" }
+      - { id: c, text: "`defaults` có ưu tiên thấp nhất (người dùng role ghi đè dễ), `vars` cao hơn inventory và play vars, dành cho hằng số nội bộ" }
+      - { id: d, text: "`defaults` chỉ dùng cho handler" }
+  - id: idempotence-tests
+    kind: knowledge
+    type: multi
+    prompt: "Bạn muốn CI bắt được role không idempotent trước khi merge. Những cách nào đúng? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Converge hai lần trên máy mới, lần hai phải `changed=0` (kịch bản idempotence của molecule)" }
+      - { id: b, text: "Chạy `ansible-lint` để bắt `command`/`shell` thiếu `changed_when`, `creates`" }
+      - { id: c, text: "Chỉ chạy `--syntax-check`" }
+      - { id: d, text: "Sau converge, chạy `--check --diff` và đòi không có thay đổi" }
