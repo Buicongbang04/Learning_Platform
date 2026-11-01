@@ -1066,9 +1066,10 @@ def _hidden_by_tmpfs() -> list[Path]:
     return sorted(p for p in candidates if any(p.is_relative_to(h) and p != h for h in hidden))
 
 
-def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str, str]) -> list[str]:
+def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str, str], readonly=()) -> list[str]:
     """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp và /run là tmpfs rỗng, `CREDENTIAL_PATHS` của home thật bị che, chỉ
-    `writable` ghi được, môi trường dựng lại từ đầu.
+    `writable` ghi được, môi trường dựng lại từ đầu. `readonly` là thư mục cần nhìn thấy nhưng không được ghi (cần khi nó
+    nằm dưới /tmp hay /run, bị tmpfs che); mount sau tmpfs, trước `writable`.
 
     Mạng KHÔNG bị tách (không --unshare-net): test healthcheck cần gọi server giả trên loopback của máy. Chấp nhận được vì
     mô hình đe doạ là script viết sai vô tình phá dữ liệu, không phải mã độc; socket của docker và D-Bus vẫn bị che.
@@ -1079,6 +1080,9 @@ def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str
     args = _base_flags(shutil.which("bwrap"))
     for path in _hidden_by_tmpfs():
         args += ["--ro-bind", str(path), str(path)]
+    for path in readonly:
+        real = str(Path(path).resolve())
+        args += ["--ro-bind", real, real]
     for path in writable:
         real = str(Path(path).resolve())
         args += ["--bind", real, real]
@@ -1097,12 +1101,13 @@ def run_sandboxed(
     env: dict[str, str],
     timeout: float = 30,
     input: str | None = None,
+    readonly=(),
 ) -> subprocess.CompletedProcess:
     """Chạy lệnh của người học trong sandbox bwrap; skip (không bao giờ chạy trần) khi không có sandbox.
 
     Không tách mạng (xem `sandbox_command`): đủ cho mục tiêu chặn script lỗi xoá hay sửa tệp thật.
     """
-    argv = sandbox_command(cmd, writable=writable, cwd=cwd, env=env)
+    argv = sandbox_command(cmd, writable=writable, cwd=cwd, env=env, readonly=readonly)
     return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, input=input, env={})
 
 
@@ -1620,7 +1625,9 @@ _TOFU_PREFIX = re.compile(rf"{DOCKER_PREFIX}[0-9a-f]{{8}}")
 TOFU_PROVIDERS = {"hashicorp/aws": TOFU_AWS_PROVIDER}
 TOFU_REGISTRY = "registry.opentofu.org"
 _TOFU_FORBIDDEN_ARGS = ("no_proxy", "http_proxy", "https_proxy", "custom_ca_bundle")
-_TOFU_FORBIDDEN_HCL = re.compile(rf"^\s*({'|'.join(_TOFU_FORBIDDEN_ARGS)})\s*=", re.M)
+_TOFU_FORBIDDEN_HCL = re.compile(rf"\b({'|'.join(_TOFU_FORBIDDEN_ARGS)})\s*=(?!=)")
+_HCL_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_HCL_LINE_COMMENT = re.compile(r"(?<!:)//.*|#.*")
 _TOFU_FORBIDDEN_JSON = re.compile(rf'"({'|'.join(_TOFU_FORBIDDEN_ARGS)})"\s*:')
 _TOFU_LOCK_ENTRY = re.compile(r'provider\s+"([^"]+)"\s*\{[^}]*?\bversion\s*=\s*"([^"]+)"', re.S)
 _TOFU_VERSION_MISMATCH = re.compile(r"no available releases match|does not match|locked provider|doesn't match", re.I)
@@ -1753,6 +1760,9 @@ def tofu_config_problems(root: Path) -> list[str]:
         else:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        if pattern is _TOFU_FORBIDDEN_HCL:
+            text = _HCL_BLOCK_COMMENT.sub(lambda m: "\n" * m.group().count("\n"), text)
+            text = _HCL_LINE_COMMENT.sub("", text)
         for match in pattern.finditer(text):
             line = text.count("\n", 0, match.start()) + 1
             found.append(
@@ -1846,13 +1856,14 @@ def localstack_sweep(prefix: str) -> list[str]:
             return []
         return [item for item in items if _owned_by(item[field] if field else item, prefix)]
 
-    def attempt(label: str, *actions) -> None:
+    def attempt(label: str, *actions) -> bool:
         try:
             for action in actions:
                 action()
-            removed.append(label)
         except errors:
-            pass
+            return False
+        removed.append(label)
+        return True
 
     s3 = boto3.client("s3", **options)
     try:
@@ -1915,7 +1926,8 @@ def localstack_sweep(prefix: str) -> list[str]:
         name, key = alias["AliasName"], alias.get("TargetKeyId")
         if not name.startswith("alias/") or not _owned_by(name, prefix):
             continue
-        attempt(f"kms-alias:{name}", lambda name=name: kms.delete_alias(AliasName=name))
+        if not attempt(f"kms-alias:{name}", lambda name=name: kms.delete_alias(AliasName=name)):
+            continue
         shared = any(other.get("TargetKeyId") == key and not _owned_by(other["AliasName"], prefix) for other in aliases)
         if key and not shared:
             try:
@@ -1991,10 +2003,13 @@ class TofuLab:
         self.env = tofu_env(self.home, prefix=self.prefix, endpoint=self.endpoint)
 
     def _writable(self) -> list[Path]:
-        """Mirror chỉ đọc nhờ `/` ro-bind; riêng mirror dưới /tmp (bị tmpfs che) phải bind vào mới nhìn thấy."""
-        plugins = tofu_plugin_dir().resolve()
-        hidden = plugins.is_relative_to("/tmp") or plugins.is_relative_to("/run")
-        return [self.workdir, self.home, *([plugins] if hidden and plugins.is_dir() else [])]
+        return [self.workdir, self.home]
+
+    @staticmethod
+    def _readonly() -> list[Path]:
+        """Mirror luôn chỉ đọc với lệnh do người học điều khiển; bind lại để nhìn thấy cả khi nó nằm dưới /tmp hay /run."""
+        plugins = tofu_plugin_dir()
+        return [plugins] if plugins.is_dir() else []
 
     def _require_entered(self) -> None:
         if not self._entered or self.workdir is None:
@@ -2003,7 +2018,8 @@ class TofuLab:
     def _execute(self, args: list[str], env: dict[str, str], writable: list[Path], timeout: float | None) -> subprocess.CompletedProcess:
         limit = timeout or self.timeout
         try:
-            return run_sandboxed(["tofu", *args], writable=writable, cwd=self.workdir, env=env, timeout=limit)
+            return run_sandboxed(["tofu", *args], writable=writable, readonly=self._readonly(), cwd=self.workdir, env=env,
+                                 timeout=limit)
         except subprocess.TimeoutExpired:
             pytest.fail(f"tofu {' '.join(args)} chạy quá {limit:.0f}s")
 

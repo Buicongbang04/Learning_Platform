@@ -2613,6 +2613,12 @@ def test_tofu_lock_version_check(tmp_path):
     'provider "aws" {\n  no_proxy = "*"\n}\n',
     'terraform {\n  backend "s3" {\n    custom_ca_bundle = "/x.pem"\n  }\n}\n',
     '{"provider": {"aws": {"no_proxy": "*"}}}',
+    'provider "aws" { no_proxy = "*" }\n',
+    'terraform { backend "s3" { custom_ca_bundle = "/x.pem" } }\n',
+    'provider "aws" { region = "us-east-1"; https_proxy = "http://corp:3128" }\n',
+    'locals { a = { b = 1, http_proxy = "x" } }\n',
+    'provider "aws" {\n  no_proxy\t   =   "*"\n}\n',
+    'provider "aws" { endpoints { s3 = "http://x" } } /* c */ provider "aws" { alias = "b"; no_proxy = "*" }\n',
 ])
 def test_tofu_refuses_proxy_overrides(tmp_path, snippet):
     name = "main.tf.json" if snippet.startswith("{") else "main.tf"
@@ -2620,6 +2626,67 @@ def test_tofu_refuses_proxy_overrides(tmp_path, snippet):
     (tmp_path / "modules" / "x" / name).write_text(snippet, encoding="utf-8")
     problems = testkit.tofu_config_problems(tmp_path)
     assert problems and "modules/x/" in problems[0] and "proxy" in problems[0].lower() + "proxy"
+
+
+@pytest.mark.parametrize("text", [
+    '# no_proxy = "*"\nprovider "aws" {}\n',
+    'provider "aws" {} // https_proxy = "x"\n',
+    '/* custom_ca_bundle = "x"\n   http_proxy = "y" */\nprovider "aws" {}\n',
+    'provider "aws" {\n  endpoints {\n    s3 = "http://127.0.0.1:14566" # no_proxy = 1\n  }\n}\n',
+    'variable "no_proxy_note" {}\noutput "x" { value = var.no_proxy_note == "" }\n',
+])
+def test_tofu_allows_forbidden_words_in_comments(tmp_path, text):
+    (tmp_path / "main.tf").write_text(text, encoding="utf-8")
+    assert testkit.tofu_config_problems(tmp_path) == []
+
+
+def test_tofu_forbidden_line_number_survives_block_comment(tmp_path):
+    (tmp_path / "main.tf").write_text('/* a\nb\n*/\nprovider "aws" { no_proxy = "*" }\n', encoding="utf-8")
+    assert testkit.tofu_config_problems(tmp_path)[0].startswith("main.tf:4:")
+
+
+@SANDBOX_REQUIRED
+def test_sandbox_readonly_paths_visible_not_writable(tmp_path):
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "data.txt").write_text("giữ", encoding="utf-8")
+    work = tmp_path / "work"
+    work.mkdir()
+    result = testkit.run_sandboxed(["sh", "-c", f"cat {shared}/data.txt; touch {shared}/new && echo WROTE"],
+                                   writable=[work], readonly=[shared], cwd=work, env={})
+    assert result.stdout.startswith("giữ") and "WROTE" not in result.stdout
+    assert "Read-only file system" in result.stderr
+    assert not (shared / "new").exists()
+    argv = testkit.sandbox_command(["true"], writable=[work], readonly=[shared], cwd=work, env={})
+    assert argv.index(str(shared.resolve())) > argv.index("/run")
+
+
+@TOFU_REQUIRED
+def test_tofu_learner_run_cannot_write_mirror_under_tmp(monkeypatch, tmp_path, recorder):
+    endpoint, _ = recorder
+    real = testkit.tofu_plugin_dir()
+    if not testkit.tofu_providers_present():
+        pytest.skip("Cần provider đã có trong mirror chung")
+    mirror = tmp_path / "mirror"
+    for source, version in testkit.TOFU_PROVIDERS.items():
+        target = mirror / testkit.TOFU_REGISTRY / source / version
+        target.mkdir(parents=True)
+        platform = testkit._tofu_platform()
+        (target / platform).symlink_to(real / testkit.TOFU_REGISTRY / source / version / platform)
+    monkeypatch.setattr(testkit, "tofu_plugin_dir", lambda: mirror)
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", f"""
+resource "terraform_data" "probe" {{
+  provisioner "local-exec" {{
+    command = "ls {mirror}/{testkit.TOFU_REGISTRY} && touch {mirror}/pwned"
+  }}
+}}
+""")
+        lab.init()
+        result = lab.apply(check=False)
+        assert result.returncode != 0
+        assert "Read-only file system" in result.stdout + result.stderr
+    assert not (mirror / "pwned").exists()
 
 
 def test_tofu_allows_normal_config(tmp_path):
@@ -2837,3 +2904,42 @@ def test_tofu_lab_sweep_removes_orphans_with_its_prefix_only():
     finally:
         s3.delete_bucket(Bucket=keep)
         ssm.delete_parameter(Name=f"/{keep}/p")
+
+
+@pytest.mark.parametrize("alias_fails", [False, True])
+def test_localstack_sweep_schedules_key_only_after_alias_removed(monkeypatch, alias_fails):
+    import boto3
+    from botocore.exceptions import ClientError
+
+    calls = []
+
+    class Fake:
+        def __init__(self, service):
+            self.service = service
+
+        def get_paginator(self, name):
+            return self
+
+        def paginate(self, **kwargs):
+            if self.service == "kms":
+                return [{"Aliases": [{"AliasName": "alias/devops-ex-abc12345-state", "TargetKeyId": "k1"}]}]
+            return []
+
+        def list_buckets(self, **kwargs):
+            return {"Buckets": []}
+
+        def delete_alias(self, AliasName):
+            calls.append(("delete_alias", AliasName))
+            if alias_fails:
+                raise ClientError({"Error": {"Code": "X", "Message": "x"}}, "DeleteAlias")
+
+        def schedule_key_deletion(self, KeyId, PendingWindowInDays):
+            calls.append(("schedule", KeyId))
+
+    monkeypatch.setattr(boto3, "client", lambda service, **kwargs: Fake(service))
+    removed = testkit.localstack_sweep("devops-ex-abc12345")
+    if alias_fails:
+        assert removed == [] and calls == [("delete_alias", "alias/devops-ex-abc12345-state")]
+    else:
+        assert removed == ["kms-alias:alias/devops-ex-abc12345-state"]
+        assert calls == [("delete_alias", "alias/devops-ex-abc12345-state"), ("schedule", "k1")]
