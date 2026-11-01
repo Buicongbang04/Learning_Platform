@@ -25,7 +25,6 @@ Trong test:
 
 from __future__ import annotations
 
-import functools
 import importlib.util
 import linecache
 import os
@@ -174,6 +173,7 @@ DOCKER_LABEL = "devops-ex=1"
 DOCKER_MEMORY = "256m"
 DOCKER_PIDS_LIMIT = 256
 DOCKER_LOG_LINES = 40
+DOCKER_LOG_CHARS = 4000
 _PORT_TAKEN = ("port is already allocated", "address already in use")
 
 
@@ -300,8 +300,11 @@ class DockerLab:
         return result.stdout + result.stderr
 
     def _log_tail(self, alias: str) -> str:
-        result = _docker("logs", "--tail", str(DOCKER_LOG_LINES), self.name(alias))
-        text = (result.stdout + result.stderr).rstrip() or "(không có log)"
+        try:
+            result = _docker("logs", "--tail", str(DOCKER_LOG_LINES), self.name(alias))
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return f"(Không lấy được docker logs của {alias}: {error})"
+        text = (result.stdout + result.stderr).rstrip()[-DOCKER_LOG_CHARS:] or "(không có log)"
         return f"{DOCKER_LOG_LINES} dòng log cuối của {alias}:\n{text}"
 
     def exec(self, alias: str, *command: str, timeout: float = 30) -> subprocess.CompletedProcess:
@@ -363,7 +366,9 @@ SANDBOX_SKIP = (
 )
 
 
-CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure")
+CREDENTIAL_PATHS = (
+    ".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".git-credentials", ".netrc", ".terraform.d",
+)
 
 
 def _real_homes() -> list[Path]:
@@ -377,38 +382,48 @@ def _real_homes() -> list[Path]:
     return sorted(h.resolve() for h in homes if h.is_dir())
 
 
-def _base_flags(bwrap: str) -> list[str]:
-    """Cờ chung cho lần thử và lần chạy thật: / chỉ đọc, /tmp và /run là tmpfs rỗng (che socket docker, D-Bus), và
-    `CREDENTIAL_DIRS` của mọi home thật bị che bằng tmpfs khi tồn tại (thư mục dưới /tmp đã bị che sẵn)."""
-    args = [bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run"]
+def _credential_targets() -> list[Path]:
+    """Đích thật (đã resolve symlink, tuyệt đối hay tương đối) của `CREDENTIAL_PATHS` trong mọi home thật; bỏ đích không
+    tồn tại và đích dưới /tmp (đã bị che sẵn). bwrap không mount được lên chính symlink, nên phải mount lên đích."""
+    targets: list[Path] = []
     for home in _real_homes():
-        for rel in CREDENTIAL_DIRS:
-            secret = home / rel
-            if secret.is_relative_to("/tmp"):
-                continue
-            if secret.is_dir():
-                args += ["--tmpfs", str(secret)]
-            elif secret.exists():
-                args += ["--ro-bind", "/dev/null", str(secret)]
+        for rel in CREDENTIAL_PATHS:
+            target = (home / rel).resolve()
+            if target.exists() and not target.is_relative_to("/tmp") and target not in targets:
+                targets.append(target)
+    return targets
+
+
+def _base_flags(bwrap: str) -> list[str]:
+    """Cờ chung cho lần thử và lần chạy thật: / chỉ đọc, /tmp và /run là tmpfs rỗng (che socket docker, D-Bus), thư mục
+    thông tin đăng nhập bị phủ tmpfs, tệp thông tin đăng nhập bị thay bằng /dev/null."""
+    args = [bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run"]
+    for target in _credential_targets():
+        if target.is_dir():
+            args += ["--tmpfs", str(target)]
+        else:
+            args += ["--ro-bind", "/dev/null", str(target)]
     return args
 
 
-@functools.cache
-def _probe(argv: tuple[str, ...]) -> subprocess.CompletedProcess | None:
-    return _run_tool(list(argv))
+_SANDBOX_OK: set[tuple[str, ...]] = set()
 
 
 def sandbox_ready() -> str | None:
-    """Trả None khi bwrap tạo được sandbox với đúng bộ cờ của lần chạy thật, ngược lại trả lý do. Kết quả cache theo
-    bộ cờ (`_probe.cache_clear()` để thử lại)."""
+    """Trả None khi bwrap tạo được sandbox với đúng bộ cờ của lần chạy thật, ngược lại trả lý do. Chỉ cache lần thử thành
+    công (theo bộ cờ), nên lỗi tạm thời không làm skip cả phiên."""
     bwrap = shutil.which("bwrap")
     if not bwrap:
         return "Chưa cài bwrap."
-    probe = _probe((*_base_flags(bwrap), *_BWRAP_ISOLATION, "--clearenv", "--", "true"))
-    if probe is None or probe.returncode != 0:
-        detail = (probe.stderr.strip() if probe is not None else "") or "không rõ lỗi"
-        return f"bwrap có nhưng không tạo được sandbox ({detail}); có thể kernel chặn user namespace không đặc quyền."
-    return None
+    argv = (*_base_flags(bwrap), *_BWRAP_ISOLATION, "--clearenv", "--", "true")
+    if argv in _SANDBOX_OK:
+        return None
+    probe = _run_tool(list(argv))
+    if probe is not None and probe.returncode == 0:
+        _SANDBOX_OK.add(argv)
+        return None
+    detail = (probe.stderr.strip() if probe is not None else "") or "không rõ lỗi"
+    return f"bwrap có nhưng không tạo được sandbox ({detail}); có thể kernel chặn user namespace không đặc quyền."
 
 
 def _clean_env(env: dict[str, str], home: Path) -> dict[str, str]:
@@ -424,8 +439,8 @@ def _hidden_by_tmpfs() -> list[Path]:
 
 
 def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str, str]) -> list[str]:
-    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp và /run là tmpfs rỗng, ~/.docker, ~/.kube, ~/.aws, ~/.ssh,
-    ~/.config/gcloud, ~/.azure bị che, chỉ `writable` ghi được, môi trường dựng lại từ đầu.
+    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp và /run là tmpfs rỗng, `CREDENTIAL_PATHS` của home thật bị che, chỉ
+    `writable` ghi được, môi trường dựng lại từ đầu.
 
     Mạng KHÔNG bị tách (không --unshare-net): test healthcheck cần gọi server giả trên loopback của máy. Chấp nhận được vì
     mô hình đe doạ là script viết sai vô tình phá dữ liệu, không phải mã độc; socket của docker và D-Bus vẫn bị che.

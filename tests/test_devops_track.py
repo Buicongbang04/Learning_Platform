@@ -196,8 +196,20 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
 
 TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
-SHELLS = {"sh", "bash", "/bin/sh", "/bin/bash", "/usr/bin/bash"}
-SHELL_TOOL = re.compile(rf"(?:^|[;&|(])\s*({'|'.join(TOOLS)})(?:\s|$)")
+SHELLS = {"sh", "bash", "dash", "zsh"}
+WRAPPERS = {
+    "nice": {"-n", "--adjustment"},
+    "taskset": set(),
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
+    "env": {"-u", "-C", "--unset", "--chdir"},
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-D"},
+    "stdbuf": {"-i", "-o", "-e"},
+    "ionice": {"-c", "-n", "-p", "-P", "-u"},
+    "chrt": {"-T", "-P", "-D"},
+}
+SHELL_SEPARATORS = re.compile(r"[;&|()`\n]")
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+NUMERIC = re.compile(r"^[\d.,:\-]+[smhd]?$")
 
 
 def call_name(node: ast.AST) -> str:
@@ -208,9 +220,16 @@ def call_name(node: ast.AST) -> str:
     return func.id if isinstance(func, ast.Name) else ""
 
 
-def is_subprocess_call(node: ast.Call) -> bool:
+def is_command_sink(node: ast.Call) -> bool:
     name = call_name(node)
-    return name.startswith("subprocess.") or name in {"os.system", "os.popen", "Popen"}
+    if name.split(".")[-1] in SANDBOX_HELPERS:
+        return False
+    if name.startswith(("subprocess.", "os.exec", "os.spawn", "asyncio.create_subprocess_")) or name in {"os.system", "os.popen"}:
+        return True
+    if isinstance(node.func, ast.Name):
+        lowered = node.func.id.lower()
+        return node.func.id == "Popen" or "run" in lowered or "exec" in lowered
+    return False
 
 
 def string_value(node: ast.AST) -> str | None:
@@ -221,80 +240,142 @@ def string_value(node: ast.AST) -> str | None:
     return None
 
 
-def shell_tool(node: ast.AST) -> str | None:
-    match = SHELL_TOOL.search(string_value(node) or "")
-    return match.group(1) if match else None
+def command_tool(words: list[str | None]) -> str | None:
+    """Công cụ bị cấm mà argv `words` thực sự chạy, sau khi bỏ `VAR=x`, wrapper (nice, taskset, timeout, env, sudo,
+    stdbuf, ionice, chrt) cùng tuỳ chọn của nó, và đi vào `sh/bash -<cờ>c "<script>"`. `None` trong `words` là giá trị
+    không biết lúc tĩnh."""
+    i = 0
+    while i < len(words) and words[i] is not None and ASSIGNMENT.match(words[i]):
+        i += 1
+    while i < len(words) and words[i] is not None:
+        name = Path(words[i]).name
+        if name in TOOLS:
+            return name
+        if name in SHELLS:
+            for j in range(i + 1, len(words)):
+                flag = words[j]
+                if flag is None or not flag.startswith("-"):
+                    return None
+                if not flag.startswith("--") and "c" in flag[1:]:
+                    script = words[j + 1] if j + 1 < len(words) else None
+                    return shell_tool(script) if script is not None else None
+            return None
+        if name not in WRAPPERS:
+            return None
+        options = WRAPPERS[name]
+        i += 1
+        while i < len(words) and words[i] is not None:
+            word = words[i]
+            if word.startswith("-"):
+                i += 2 if word in options else 1
+            elif ASSIGNMENT.match(word) or NUMERIC.match(word):
+                i += 1
+            else:
+                break
+    return None
 
 
-def sandboxed_argv(tree: ast.AST) -> set[int]:
-    ids = set()
+def shell_tool(script: str) -> str | None:
+    for segment in SHELL_SEPARATORS.split(script):
+        tool = command_tool([word.strip("'\"") for word in segment.split()])
+        if tool:
+            return tool
+    return None
+
+
+def which_aliases(tree: ast.AST) -> dict[str, str]:
+    names = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and call_name(node).split(".")[-1] in SANDBOX_HELPERS:
-            ids.update(id(arg) for arg in node.args[:1])
-            ids.update(id(kw.value) for kw in node.keywords if kw.arg == "cmd")
-    return ids
-
-
-def which_aliases(tree: ast.AST) -> set[str]:
-    names = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and call_name(node.value) == "shutil.which":
-            if node.value.args and string_value(node.value.args[0]) in TOOLS:
-                names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        if isinstance(node, ast.Assign):
+            tool = which_tool(node.value)
+            if tool:
+                names.update({t.id: tool for t in node.targets if isinstance(t, ast.Name)})
     return names
 
 
-def argv_tool(node: ast.List | ast.Tuple, aliases: set[str]) -> str | None:
-    if not node.elts:
-        return None
-    first = node.elts[0]
-    if string_value(first) in TOOLS:
-        return string_value(first)
-    if isinstance(first, ast.Name) and first.id in aliases:
-        return first.id
-    if string_value(first) in SHELLS and len(node.elts) > 2 and string_value(node.elts[1]) == "-c":
-        return shell_tool(node.elts[2])
+def which_tool(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Call) and call_name(node) == "shutil.which" and node.args:
+        return string_value(node.args[0])
     return None
+
+
+def assigned_values(tree: ast.AST) -> dict[str, list[ast.AST]]:
+    values: dict[str, list[ast.AST]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    values.setdefault(target.id, []).append(node.value)
+    return values
+
+
+def command_candidates(node: ast.AST, values: dict[str, list[ast.AST]], depth: int = 0) -> list[ast.AST]:
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return command_candidates(node.left, values, depth)
+    if isinstance(node, ast.Name) and depth < 3:
+        return [c for value in values.get(node.id, []) for c in command_candidates(value, values, depth + 1)]
+    return [node]
+
+
+def element_word(node: ast.AST, aliases: dict[str, str]) -> str | None:
+    if isinstance(node, ast.Name):
+        return aliases.get(node.id)
+    return which_tool(node) or string_value(node)
+
+
+def candidate_tool(node: ast.AST, aliases: dict[str, str]) -> str | None:
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return command_tool([element_word(e, aliases) for e in node.elts])
+    if isinstance(node, ast.Name) and node.id in aliases:
+        return aliases[node.id]
+    text = which_tool(node) or string_value(node)
+    return shell_tool(text) if text is not None else None
+
+
+def sink_argument(node: ast.Call) -> ast.AST | None:
+    if node.args:
+        return node.args[0]
+    return next((kw.value for kw in node.keywords if kw.arg in {"args", "cmd"}), None)
 
 
 def check_tool_calls(path: Path) -> list[str]:
     """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu trực tiếp; đi qua helper của testkit
     (DockerLab, run_sandboxed, sandbox_command, và sau này act_run, TofuLab, KubeLab, kind_node_exec).
 
-    Luật (AST, nên chuỗi, chú thích, dict `{"docker": FAKE}`, `result["kind"]`, `require_tool("docker", "24")`,
-    `require_image(...)`, `shutil.which("kubectl")` không bị bắt):
-    - list/tuple literal có phần tử đầu là tên công cụ, hoặc là biến gán từ `shutil.which("<công cụ>")`, hoặc là
-      `["bash", "-c", "<lệnh có công cụ>"]`;
-    - chuỗi (kể cả f-string) truyền cho `subprocess.*`, `os.system`, `os.popen`, `Popen` mà có lệnh bắt đầu bằng tên
-      công cụ (đầu chuỗi hoặc sau `;`, `&&`, `|`, `(`);
-    - mọi chỗ nhắc tới `_docker` của testkit.
-    Ngoại lệ duy nhất: list là tham số đầu (hay `cmd=`) của `run_sandboxed(` / `sandbox_command(` ngay trong cùng lời gọi,
-    vd. `run_sandboxed(["tofu", "plan"], ...)`: lệnh chạy trong bwrap, socket Docker và thông tin đăng nhập bị che.
-    Gán list vào biến rồi mới truyền vẫn bị bắt.
+    Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
+    `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
+    có tên chứa `run`/`exec`. Tham số đó là list/tuple, chuỗi (kể cả f-string), `shutil.which(...)`, hoặc biến gán từ
+    các thứ đó (`["docker"] + extra` lấy vế trái). Lệnh bị bắt khi, sau khi bỏ `VAR=x` và wrapper (nice, taskset,
+    timeout, env, sudo, stdbuf, ionice, chrt) cùng tuỳ chọn, phần tử đầu có `Path(x).name` là công cụ bị cấm, hoặc là
+    `sh/bash -<cờ>c "<script>"` mà script có lệnh như vậy ở đầu một đoạn (tách theo `;`, `&`, `|`, `(`, `)`, backtick,
+    xuống dòng). Ngoài ra mọi chỗ nhắc tới `_docker` của testkit đều bị bắt.
+
+    Vì vậy tuple/list dữ liệu (`for t in ("docker", "kind")`, `parametrize("tool", ["kind"])`, `("kubectl", "1.34")`),
+    dict binary giả, chuỗi, chú thích, `require_tool`, `require_image`, `shutil.which` đứng riêng không bị bắt.
+    `run_sandboxed(`/`sandbox_command(` không phải điểm chạy lệnh: lệnh trong đó chạy trong bwrap, socket Docker và
+    thông tin đăng nhập bị che, nên `run_sandboxed(["tofu", "plan"], ...)` hợp lệ.
     """
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except SyntaxError as error:
         return [f"{path}:{error.lineno}: không parse được: {error.msg}"]
-    allowed = sandboxed_argv(tree)
     aliases = which_aliases(tree)
-    found: list[tuple[int, str]] = []
+    values = assigned_values(tree)
+    found: set[tuple[int, str]] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.List, ast.Tuple)) and id(node) not in allowed:
-            tool = argv_tool(node, aliases)
-            if tool:
-                found.append((node.lineno, tool))
-        elif isinstance(node, ast.Call) and is_subprocess_call(node) and node.args:
-            tool = shell_tool(node.args[0])
-            if tool:
-                found.append((node.lineno, tool))
+        if isinstance(node, ast.Call) and is_command_sink(node):
+            argument = sink_argument(node)
+            for candidate in command_candidates(argument, values) if argument is not None else []:
+                tool = candidate_tool(candidate, aliases)
+                if tool:
+                    found.add((node.lineno, tool))
         if isinstance(node, ast.Name) and node.id == "_docker" or isinstance(node, ast.Attribute) and node.attr == "_docker":
-            found.append((node.lineno, "_docker"))
+            found.add((node.lineno, "_docker"))
         elif isinstance(node, ast.alias) and node.name == "_docker":
-            found.append((node.lineno, "_docker"))
+            found.add((node.lineno, "_docker"))
     return [
         f"{path}:{line}: gọi {tool} trực tiếp; dùng helper của testkit (DockerLab, run_sandboxed, ...)"
-        for line, tool in sorted(set(found))
+        for line, tool in sorted(found)
     ]
 
 
@@ -615,39 +696,73 @@ TOOL_DENYLIST_BAD = {
     "list-docker": 'subprocess.run(["docker", "run", "--rm", "nginx"])\n',
     "tuple-docker": "subprocess.run(('docker', 'ps', '-a'))\n",
     "list-kind": 'subprocess.run(["kind", "get", "clusters"], check=True)\n',
-    "list-act": 'cmd = ["act", "-j", "test"]\n',
+    "list-act-via-variable": 'cmd = ["act", "-j", "test"]\nsubprocess.run(cmd)\n',
     "list-kubectl": 'subprocess.check_output(["kubectl", "get", "pods"])\n',
-    "list-helm": 'subprocess.run(["helm", "install", "x", "chart"])\n',
-    "list-tofu": 'subprocess.run(["tofu", "apply", "-auto-approve"])\n',
-    "list-tofu-assigned-then-sandboxed": 'cmd = ["tofu", "plan"]\nrun_sandboxed(cmd, writable=[t], cwd=t, env={})\n',
+    "list-helm": 'subprocess.call(["helm", "install", "x", "chart"])\n',
+    "list-tofu": 'subprocess.check_call(["tofu", "apply", "-auto-approve"])\n',
     "list-docker-starred": 'subprocess.run(["docker", *args])\n',
+    "list-concat": 'subprocess.run(["docker"] + extra)\n',
+    "args-keyword": 'subprocess.run(args=["helm", "list"])\n',
+    "popen-list": 'Popen(["kubectl", "logs", "-f", "x"])\n',
+    "os-execvp": 'os.execvp("docker", ["docker", "ps"])\n',
+    "asyncio-exec": 'await asyncio.create_subprocess_exec("kubectl", "get", "pods")\n',
+    "local-run-wrapper": 'def run_cmd(c):\n    return subprocess.run(c)\nrun_cmd(["kind", "get", "clusters"])\n',
+    "local-exec-wrapper": 'exec_tool(("tofu", "plan"))\n',
     "string-subprocess": 'subprocess.check_output("docker run --rm nginx", shell=True)\n',
     "string-os-system": "os.system('docker rm -f x')\n",
     "string-os-popen": "os.popen('kubectl get ns').read()\n",
     "string-popen": 'Popen("helm list", shell=True)\n',
     "fstring-subprocess": 'subprocess.run(f"kind delete cluster --name {name}", shell=True)\n',
     "string-after-and": 'subprocess.run("cd x && docker compose up -d", shell=True)\n',
+    "string-newline": 'subprocess.run("echo hi\\ndocker ps", shell=True)\n',
+    "string-backtick": 'subprocess.run("echo `kubectl get ns`", shell=True)\n',
+    "string-variable": 'script = "set -e; helm upgrade x chart"\nsubprocess.run(script, shell=True)\n',
     "shell-c-list": 'subprocess.run(["bash", "-c", "kubectl apply -f x.yaml"])\n',
+    "shell-lc-list": 'subprocess.run(["bash", "-lc", "helm list"])\n',
+    "shell-ec-list": 'subprocess.run(["/bin/sh", "-ec", "tofu init"])\n',
+    "shell-separate-flags": 'subprocess.run(["bash", "-e", "-c", "act -j build"])\n',
+    "wrapper-nice": 'subprocess.run(["nice", "-n", "15", "docker", "build", "."])\n',
+    "wrapper-taskset": 'subprocess.run(["taskset", "-c", "12-35", "kind", "create", "cluster"])\n',
+    "wrapper-chain": 'subprocess.run(["nice", "-n", "15", "taskset", "-c", "12-35", "docker", "run", "x"])\n',
+    "wrapper-timeout": 'subprocess.run(["timeout", "-s", "KILL", "30", "kubectl", "get", "pods"])\n',
+    "wrapper-env": 'subprocess.run(["env", "-i", "KUBECONFIG=/x", "kubectl", "get", "ns"])\n',
+    "wrapper-sudo": 'subprocess.run(["sudo", "-u", "root", "docker", "ps"])\n',
+    "wrapper-stdbuf": 'subprocess.run(["stdbuf", "-oL", "act", "-l"])\n',
+    "wrapper-ionice": 'subprocess.run(["ionice", "-c", "3", "tofu", "apply"])\n',
+    "wrapper-chrt": 'subprocess.run(["chrt", "-i", "0", "helm", "list"])\n',
+    "wrapper-in-shell-string": 'subprocess.run("nice -n 15 docker build .", shell=True)\n',
+    "assignment-in-shell-string": 'subprocess.run("KUBECONFIG=/x kubectl apply -f y", shell=True)\n',
+    "absolute-path-list": 'subprocess.run(["/usr/bin/docker", "ps"])\n',
+    "absolute-path-string": 'subprocess.run("/usr/local/bin/kubectl get pods", shell=True)\n',
     "which-alias": 'KUBECTL = shutil.which("kubectl")\nsubprocess.run([KUBECTL, "get", "pods"])\n',
+    "which-inline": 'subprocess.run([shutil.which("docker"), "ps"])\n',
     "private-docker-call": 'from testkit import _docker\nresult = _docker("run", "--rm", "nginx")\n',
     "private-docker-attr": 'testkit._docker ("ps")\n',
     "private-docker-alias": 'from testkit import _docker as d\n',
 }
 
 TOOL_DENYLIST_GOOD = {
-    "docker-lab": 'with DockerLab() as lab:\n    lab.start("web", "nginx:1.30.6-alpine", ports=[80])\n',
+    "docker-lab": 'with DockerLab() as lab:\n    lab.start("web", "nginx:1.30.6-alpine", ports=[80])\n    lab.exec("web", "nginx", "-t")\n',
     "require-tool": 'ex.require_tool("docker")\nex.require_tool("kind")\n',
     "require-image": 'ex.require_image("nginx:1.30.6-alpine")\n',
     "shutil-which": 'if shutil.which("kubectl") is None:\n    pytest.skip("x")\n',
     "comment-and-string": '# docker run trong chú thích\nmessage = "chạy docker run --rm hoặc kubectl apply"\n',
     "fake-binaries-dict": 'FAKES = {"docker": FAKE, "kubectl": FAKE}\n',
     "subscript-key": 'assert result["kind"] == "nxdomain"\n',
+    "data-tuple-loop": 'for t in ("docker", "kind"):\n    ex.require_tool(t)\n',
+    "data-parametrize": '@pytest.mark.parametrize("tool", ["kind", "helm"])\ndef test_x(tool):\n    pass\n',
+    "data-version-pairs": 'PINS = (("kubectl", "1.34"), ("helm", "3.19"))\n',
+    "data-list-unused": 'TOOLS = ["docker", "kind"]\nexpected = ["kubectl", "apply", "-f", "x"]\nassert parse(line) == expected\n',
     "run-sandboxed-tofu": 'run_sandboxed(["tofu", "plan"], writable=[t], cwd=t, env={})\n',
     "run-sandboxed-keyword": 'testkit.run_sandboxed(cmd=["kubectl", "version"], writable=[t], cwd=t, env={})\n',
+    "run-sandboxed-variable": 'cmd = ["tofu", "plan"]\nrun_sandboxed(cmd, writable=[t], cwd=t, env={})\n',
     "sandbox-command-docker": 'argv = sandbox_command(["docker", "version"], writable=[t], cwd=t, env={})\n',
     "run-sandboxed-shell-c": 'run_sandboxed(["bash", "-c", "tofu init && tofu plan"], writable=[t], cwd=t, env={})\n',
     "other-argv": 'subprocess.run(["git", "status"])\nsubprocess.run(["bash", "-c", "echo docker"])\n',
+    "nice-python": 'subprocess.run(["nice", "-n", "15", "python3", "x.py"])\n',
+    "wrapper-learner-script": 'subprocess.run(["timeout", "30", "bash", "deploy.sh", "docker"])\n',
     "learner-script-string": 'subprocess.run("./deploy.sh docker", shell=True)\n',
+    "echo-mentions-tool": 'subprocess.run("echo use kubectl here", shell=True)\n',
 }
 
 

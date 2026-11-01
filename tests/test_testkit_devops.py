@@ -443,9 +443,9 @@ def test_docker_lab_real_cleanup_after_error_inside_with():
 
 @pytest.fixture(autouse=True)
 def fresh_sandbox_probe():
-    testkit._probe.cache_clear()
+    testkit._SANDBOX_OK.clear()
     yield
-    testkit._probe.cache_clear()
+    testkit._SANDBOX_OK.clear()
 
 
 @pytest.mark.parametrize(
@@ -501,16 +501,39 @@ def test_sandbox_ready_is_cached(monkeypatch):
     assert len(calls) == 1
 
 
-CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure")
+def test_sandbox_ready_retries_after_transient_failure(monkeypatch):
+    outcomes = [subprocess.TimeoutExpired("bwrap", 10), subprocess.CompletedProcess("bwrap", 1, "", "lỗi tạm"), None]
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        outcome = outcomes[len(calls) - 1]
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome or subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(testkit.shutil, "which", lambda name: "/usr/bin/bwrap")
+    monkeypatch.setattr(testkit.subprocess, "run", run)
+    assert testkit.sandbox_ready() is not None
+    assert "lỗi tạm" in testkit.sandbox_ready()
+    assert testkit.sandbox_ready() is None
+    assert testkit.sandbox_ready() is None
+    assert len(calls) == 3, "Chỉ cache lần thử thành công"
+
+
+CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".terraform.d")
+CREDENTIAL_FILES = (".git-credentials", ".netrc")
 
 
 @pytest.fixture
 def fake_home():
-    """Home giả ngoài /tmp (dưới gốc repo) có đủ thư mục thông tin đăng nhập, mỗi thư mục một tệp bí mật."""
+    """Home giả ngoài /tmp (dưới gốc repo) có đủ thư mục và tệp thông tin đăng nhập."""
     home = testkit.ROOT / f".sandbox-home-{os.getpid()}"
     for rel in CREDENTIAL_DIRS:
         (home / rel).mkdir(parents=True)
         (home / rel / "secret").write_text(f"bí mật {rel}")
+    for rel in CREDENTIAL_FILES:
+        (home / rel).write_text(f"bí mật {rel}")
     (home / "visible.txt").write_text("thấy")
     try:
         yield home
@@ -518,8 +541,21 @@ def fake_home():
         shutil.rmtree(home, ignore_errors=True)
 
 
-def tmpfs_targets(argv):
-    return {argv[i + 1] for i, flag in enumerate(argv) if flag == "--tmpfs"}
+@pytest.fixture
+def outside_tmp():
+    """Thư mục ngoài /tmp (dưới ~/.cache) làm đích cho symlink tuyệt đối, như ~/.kube -> /mnt/c/... trên WSL."""
+    base = Path.home() / ".cache" / f"devops-sandbox-test-{os.getpid()}"
+    base.mkdir(parents=True)
+    try:
+        yield base.resolve()
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def flag_targets(argv, flag):
+    if flag == "--tmpfs":
+        return {argv[i + 1] for i, a in enumerate(argv) if a == flag}
+    return {argv[i + 2] for i, a in enumerate(argv) if a == "--ro-bind" and argv[i + 1] == "/dev/null"}
 
 
 def test_sandbox_hides_cloud_credentials_flags(monkeypatch, fake_home, tmp_path):
@@ -529,23 +565,61 @@ def test_sandbox_hides_cloud_credentials_flags(monkeypatch, fake_home, tmp_path)
     (partial / ".aws").mkdir(parents=True)
     try:
         monkeypatch.setattr(testkit, "_real_homes", lambda: [fake_home, under_tmp, partial])
-        targets = tmpfs_targets(testkit._base_flags("/usr/bin/bwrap"))
-        assert {str(fake_home / rel) for rel in CREDENTIAL_DIRS} <= targets
-        assert str(partial / ".aws") in targets
-        assert not any(t.startswith(str(partial / ".kube")) or t.startswith(str(under_tmp)) for t in targets), targets
+        argv = testkit._base_flags("/usr/bin/bwrap")
+        tmpfs = flag_targets(argv, "--tmpfs")
+        assert {str(fake_home / rel) for rel in CREDENTIAL_DIRS} <= tmpfs
+        assert {str(fake_home / rel) for rel in CREDENTIAL_FILES} <= flag_targets(argv, "--ro-bind")
+        assert str(partial / ".aws") in tmpfs
+        assert not any(t.startswith(str(partial / ".kube")) or t.startswith(str(under_tmp)) for t in tmpfs), tmpfs
     finally:
         shutil.rmtree(partial, ignore_errors=True)
 
 
-@SANDBOX_REQUIRED
-def test_sandbox_hides_cloud_credentials(monkeypatch, fake_home, tmp_path):
+def test_sandbox_credential_symlinks_mount_resolved_target(monkeypatch, fake_home, outside_tmp, tmp_path):
+    (outside_tmp / "kube").mkdir()
+    (outside_tmp / "netrc").write_text("x")
+    shutil.rmtree(fake_home / ".kube")
+    (fake_home / ".kube").symlink_to(outside_tmp / "kube")
+    shutil.rmtree(fake_home / ".aws")
+    (fake_home / "stash" / "aws").mkdir(parents=True)
+    (fake_home / ".aws").symlink_to(Path("stash") / "aws")
+    (fake_home / ".netrc").unlink()
+    (fake_home / ".netrc").symlink_to(outside_tmp / "netrc")
+    shutil.rmtree(fake_home / ".ssh")
+    (tmp_path / "ssh").mkdir()
+    (fake_home / ".ssh").symlink_to(tmp_path / "ssh")
+    shutil.rmtree(fake_home / ".azure")
+    (fake_home / ".azure").symlink_to(outside_tmp / "khong-ton-tai")
     monkeypatch.setattr(testkit, "_real_homes", lambda: [fake_home])
-    script = 'cat "$H/visible.txt"; for d in ' + " ".join(CREDENTIAL_DIRS) + '; do cat "$H/$d/secret" 2>/dev/null && echo " lộ $d"; done; exit 0'
+    argv = testkit._base_flags("/usr/bin/bwrap")
+    tmpfs = flag_targets(argv, "--tmpfs")
+    assert str(outside_tmp / "kube") in tmpfs and str(fake_home / ".kube") not in tmpfs
+    assert str(fake_home / "stash" / "aws") in tmpfs and str(fake_home / ".aws") not in tmpfs
+    assert str(outside_tmp / "netrc") in flag_targets(argv, "--ro-bind")
+    assert not any("ssh" in t for t in tmpfs), "Đích dưới /tmp đã bị che sẵn"
+    assert not any("azure" in t or "khong-ton-tai" in t for t in tmpfs), "Symlink hỏng thì bỏ qua"
+
+
+@SANDBOX_REQUIRED
+def test_sandbox_hides_cloud_credentials(monkeypatch, fake_home, outside_tmp, tmp_path):
+    (outside_tmp / "kube").mkdir()
+    (outside_tmp / "kube" / "secret").write_text("bí mật .kube")
+    shutil.rmtree(fake_home / ".kube")
+    (fake_home / ".kube").symlink_to(outside_tmp / "kube")
+    shutil.rmtree(fake_home / ".aws")
+    (fake_home / "stash" / "aws").mkdir(parents=True)
+    (fake_home / "stash" / "aws" / "secret").write_text("bí mật .aws")
+    (fake_home / ".aws").symlink_to(Path("stash") / "aws")
+    monkeypatch.setattr(testkit, "_real_homes", lambda: [fake_home])
+    assert testkit.sandbox_ready() is None, "Symlink tuyệt đối không được làm hỏng sandbox"
+    paths = [f"{rel}/secret" for rel in CREDENTIAL_DIRS] + list(CREDENTIAL_FILES)
+    script = 'cat "$H/visible.txt"; for f in ' + " ".join(paths) + '; do cat "$H/$f" 2>/dev/null | grep -q . && echo " lộ $f"; done; exit 0'
     result = testkit.run_sandboxed(["bash", "-c", script], writable=[tmp_path], cwd=tmp_path, env={"H": str(fake_home)})
     assert result.returncode == 0, result.stderr
     assert result.stdout == "thấy", result.stdout
-    for rel in CREDENTIAL_DIRS:
-        assert (fake_home / rel / "secret").read_text() == f"bí mật {rel}"
+    assert (outside_tmp / "kube" / "secret").read_text() == "bí mật .kube"
+    for rel in CREDENTIAL_FILES:
+        assert (fake_home / rel).read_text() == f"bí mật {rel}"
 
 
 def test_docker_lab_no_new_privileges(monkeypatch):
@@ -689,3 +763,23 @@ def test_git_repo_taint_switches_to_sandbox(monkeypatch, tmp_path, tmp_path_fact
     assert not marker.exists(), "Sau taint(), lệnh git của test phải chạy trong sandbox"
     subprocess.run(["git", *testkit.SAFE_GIT_CONFIG, "checkout", "-q", "main"], cwd=path, env=testkit.git_env(home), capture_output=True)
     assert marker.exists(), "Kiểm tra vô nghĩa: filter giả không chạy cả khi gọi git trực tiếp"
+
+
+def test_docker_lab_log_tail_survives_docker_errors(monkeypatch):
+    lab = testkit.DockerLab()
+
+    def boom(*args, **kwargs):
+        raise subprocess.TimeoutExpired(["docker", "logs"], 60)
+
+    monkeypatch.setattr(testkit, "_docker", boom)
+    assert "Không lấy được docker logs" in lab._log_tail("api")
+    monkeypatch.setattr(testkit, "_docker", lambda *a, **kw: (_ for _ in ()).throw(OSError("không có docker")))
+    assert "Không lấy được docker logs" in lab._log_tail("api")
+
+
+def test_docker_lab_log_tail_is_capped(monkeypatch):
+    lab = testkit.DockerLab()
+    huge = "x" * 10000 + "CUOI"
+    monkeypatch.setattr(testkit, "_docker", lambda *a, **kw: subprocess.CompletedProcess(a, 0, huge, ""))
+    tail = lab._log_tail("api")
+    assert tail.endswith("CUOI") and len(tail) < 4200
