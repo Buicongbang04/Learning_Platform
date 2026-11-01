@@ -59,9 +59,9 @@ Khoảng 2,5 phút, phần lớn là chờ bản 1.2 vượt `progressDeadlineSe
 
 ### Gợi ý 1
 
-`kubectl set env deployment/api A=1 B=2` đổi hai biến trong một lần sửa template, tức một revision. Annotation change-cause gắn
-vào ReplicaSet mới nên phải có trước khi controller tạo ReplicaSet đó: `kubectl rollout pause` rồi sửa, ghi annotation, rồi
-`kubectl rollout resume` là một cách gọn.
+`kubectl set env deployment/api A=1 B=2` đổi hai biến trong một lần sửa template, tức một revision. `rollout history` đọc
+change-cause từ annotation của ReplicaSet; controller chép annotation của Deployment sang ReplicaSet mới, nên ghi annotation cùng lúc
+với thay đổi template là chắc nhất: `kubectl rollout pause`, sửa, ghi annotation, `kubectl rollout resume` là một cách gọn.
 
 ### Gợi ý 2
 

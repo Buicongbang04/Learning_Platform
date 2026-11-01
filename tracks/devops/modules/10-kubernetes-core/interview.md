@@ -121,4 +121,4 @@ Ingress là một object L7 đơn giản (host, path, TLS), mọi thứ khác n�
 việc của đội hạ tầng với đội app. Gateway API tách vai trò: GatewayClass (implementation), Gateway (listener, TLS, ai được gắn route,
 của đội platform), HTTPRoute, GRPCRoute, TCPRoute (của đội app), với trọng số, match header, rewrite, mirror là trường chuẩn, mang
 được giữa các implementation, và `ReferenceGrant` cho tham chiếu chéo namespace tường minh. Cluster mới chọn Gateway API; dự án
-ingress-nginx của cộng đồng đã ngừng bảo trì từ tháng 3/2026, cluster cũ lên kế hoạch chuyển bằng `ingress2gateway`.
+ingress-nginx của cộng đồng đã ngừng bảo trì ngày 24/3/2026, cluster cũ lên kế hoạch chuyển bằng `ingress2gateway`.

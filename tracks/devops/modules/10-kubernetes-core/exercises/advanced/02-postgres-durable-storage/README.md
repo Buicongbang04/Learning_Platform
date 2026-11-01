@@ -31,7 +31,7 @@ StorageClass (quyền của bạn không có, giống ở công ty).
 1. `starter/k8s/postgres.yaml`: StatefulSet `postgres` dùng volume đó cho `/var/lib/postgresql/data` (`PGDATA` là thư mục con
    `pgdata`). Service `postgres` headless có sẵn. Biến `POSTGRES_*` lấy từ Secret `olist-db` (test tạo).
 2. `starter/k8s/backup.yaml`: PVC `pg-backups` (StorageClass `standard`, 1Gi, ReadWriteOnce) và CronJob `pg-backup` chạy `pg_dump
-   -Fc` (image `postgres:16.15-alpine`) mỗi đêm vào PVC đó, giữ 7 bản mới nhất. `concurrencyPolicy: Forbid`, có
+   -Fc` (image `postgres:16.15-alpine`) mỗi đêm vào PVC đó (giữ bao nhiêu bản là quyết định của bạn, test không chấm). `concurrencyPolicy: Forbid`, có
    `startingDeadlineSeconds`; Job có `activeDeadlineSeconds` và `backoffLimit` từ 1 tới 3; mật khẩu từ Secret.
 3. `starter/restore/pg-restore.yaml`: Job `pg-restore` khôi phục bản dump mới nhất trong `pg-backups` vào Postgres (xoá object
    hiện có trước khi tạo lại). Tệp này không apply cùng `k8s/`; người trực apply khi cần.

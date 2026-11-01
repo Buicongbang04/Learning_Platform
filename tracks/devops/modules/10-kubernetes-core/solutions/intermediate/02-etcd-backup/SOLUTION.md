@@ -27,14 +27,20 @@ xoá.
 
 ## Rubric lab restore (10 điểm)
 
+Theo đúng lab ở mục 6 của module: restore ra thư mục mới trên máy, dừng static pod, đổi data dir **tại chỗ**, bật lại, kiểm.
+
 | Tiêu chí | Điểm |
 | --- | --- |
-| Tạo snapshot đúng cờ, chép ra máy, kiểm bằng `etcdutl snapshot status` (có số revision, số key) | 2 |
-| Chứng minh được snapshot chứa Secret ở dạng đọc được và nêu hai biện pháp bảo vệ | 1 |
-| Restore bằng `etcdutl snapshot restore` ra **thư mục mới**, không ghi đè `/var/lib/etcd` đang chạy | 2 |
-| Trỏ static pod etcd vào thư mục mới (sửa `hostPath` trong manifest), giải thích vì sao kubelet tự tạo lại pod | 2 |
-| ConfigMap đã xoá trở lại; nêu được thay đổi nào sau snapshot đã mất | 1 |
-| Viết được các bước khác trên kubeadm thật: dừng kube-apiserver (chuyển manifest ra khỏi `/etc/kubernetes/manifests`), restore trên **mọi** member với `--name`, `--initial-cluster`, `--initial-advertise-peer-urls` khớp nhau, rồi bật lại | 2 |
+| Tạo snapshot đúng cờ, chép ra máy, quyền `0600`, kiểm bằng `etcdutl snapshot status` (có revision, số key) | 2 |
+| Chứng minh snapshot chứa Secret ở dạng đọc được và nêu hai biện pháp bảo vệ | 1 |
+| `etcdutl snapshot restore` ra **thư mục mới** với `--name`, `--initial-cluster`, `--initial-advertise-peer-urls` đọc từ `etcd.yaml`; giải thích vì sao cluster nhiều member bắt buộc ba cờ đó | 2 |
+| Dừng etcd và kube-apiserver bằng cách chuyển manifest ra khỏi `/etc/kubernetes/manifests`, **chờ** container dừng hẳn, giữ data dir cũ ở `/var/lib/etcd-truoc-restore`, đặt bản restore vào `/var/lib/etcd`, trả manifest về, chờ `/readyz` | 2 |
+| ConfigMap đã xoá trở lại; nêu được thứ gì tạo sau snapshot đã mất trên cả cluster dùng chung, và vì sao không được chạy test song song | 1 |
+| Nói được đường lui khi chuỗi lệnh dừng giữa chừng (khối quay về `/var/lib/etcd-truoc-restore`, phương án cuối là tạo lại cluster) và các bước khác trên kubeadm nhiều member: restore **cùng** snapshot trên mọi member, mỗi member `--name` của nó | 2 |
+
+Tài liệu kubeadm còn mô tả cách restore ra thư mục mới rồi sửa `hostPath` của volume `etcd-data` trong manifest. Cách đó đúng trên
+kubeadm thật nhưng không dùng trên `devops-lab`: test thật của bài này kiểm data dir là `/var/lib/etcd` (snapshot của test ghi vào đó)
+và fail kèm lời nhắc nếu manifest trỏ chỗ khác. Không cộng điểm cho cách đó trong rubric này.
 
 ## Câu hỏi ở Tiêu chí đạt
 

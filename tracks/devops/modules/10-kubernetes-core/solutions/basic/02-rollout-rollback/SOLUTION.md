@@ -15,8 +15,8 @@ Lời giải: `api.yaml`, `release.sh`, `rollback.sh`.
 
 ## release.sh
 
-Pause, đổi env, ghi change-cause, resume: controller chỉ tạo **một** ReplicaSet mới và annotation có trên Deployment trước khi
-ReplicaSet đó được tạo, nên `rollout history` ghi đúng `release 1.2` cho đúng revision. `kubectl set env` với nhiều cặp trong một
+Pause, đổi env, ghi change-cause, resume: controller chỉ tạo **một** ReplicaSet mới, và annotation đã có trên Deployment khi
+ReplicaSet đó được tạo, nên `rollout history` ghi đúng `release 1.2` cho đúng revision mà không phụ thuộc thời điểm. `kubectl set env` với nhiều cặp trong một
 lệnh cũng chỉ là một revision. `--record` đã bị bỏ, đừng dùng.
 
 Script không tự rollback: rollout kẹt với `maxUnavailable: 0` không gây mất capacity, người trực có thời gian xem log của pod mới

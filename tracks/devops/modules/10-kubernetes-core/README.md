@@ -31,6 +31,7 @@ Sau module này bạn sẽ:
 | Docker | 29.x, như module 06 | 24.0 | Node của kind là container |
 | Image bài tập | `devops-track/olist-shop:1.0` (build từ `setup/kind/olist-shop.Dockerfile`), `postgres:16.15-alpine`, `redis:7.4.12-alpine`, `nginx:1.30.6-alpine` | Đúng tag này | Nạp sẵn vào hai worker |
 | bwrap, uv | Như module 02 | Như module 02 | Sandbox của test, chạy pytest |
+| Gateway dùng chung | CRD Gateway API standard v1.6.3, Traefik v3.7.17 (`setup/kind/gateway/`) | Đúng bản này | Intermediate 04 |
 | `etcdutl` (tuỳ chọn) | 3.6.4 | 3.6 | Lab restore etcd ở mục 6 |
 
 Helm cũng đã có trong `setup/DEVOPS-TOOLS.md`, nhưng module 11 mới dùng.
@@ -142,6 +143,26 @@ docker.io/library/redis                         7.4.12-alpine        98c6ca8f397
 Manifest trong bài dùng đúng các tag này và không có `imagePullPolicy: Always`, nên kubelet dùng bản trong node. Xoá cluster là
 xoá luôn image đã nạp.
 
+### Gateway dùng chung (Ingress và Gateway API)
+
+Intermediate 04 cần một controller Ingress và Gateway API chạy sẵn trong cluster. Admin (bạn, bằng kubeconfig admin) cài **một lần**
+sau khi tạo cluster: CRD Gateway API kênh standard v1.6.3 và Traefik v3.7.17 cùng IngressClass, GatewayClass `devops-traefik` và Gateway
+dùng chung `devops-gateway/public`, từ các tệp ghim checksum trong `setup/kind/gateway/`. Lệnh đầy đủ (kéo image theo digest, kiểm
+`SHA256SUMS`, nạp image, `kubectl apply --server-side` cho CRD, chờ rollout) nằm ở mục "Gateway dùng chung" của
+`setup/DEVOPS-TOOLS.md`. Kết thúc đúng khi:
+
+```bash
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n devops-gateway get gateway public
+```
+
+```text
+NAME     CLASS            ADDRESS   PROGRAMMED   AGE
+public   devops-traefik             True         6s
+```
+
+Test không bao giờ cài nó; thiếu thì `ex.require_gateway()` skip kèm lệnh cài. Traefik chỉ có Service ClusterIP, không mở cổng nào trên
+máy bạn; test gọi nó từ một pod trong cluster.
+
 ### Test chạy trên cluster thế nào
 
 Helper `KubeLab` của testkit, mỗi test một lab:
@@ -248,6 +269,7 @@ sequenceDiagram
     participant S as kube-scheduler
     participant K as kubelet (worker)
     participant C as containerd (CRI)
+    participant P as EndpointSlice controller
     U->>A: PATCH Deployment api (server-side apply)
     A->>A: authn, RBAC, admission, validate
     A->>E: ghi /registry/deployments/ns/api
@@ -260,7 +282,8 @@ sequenceDiagram
     A-->>K: sự kiện watch: Pod của node này
     K->>C: RunPodSandbox (CNI cấp IP), PullImage, CreateContainer
     K->>A: cập nhật status: Running, Ready
-    A-->>D: EndpointSlice controller thêm IP pod vào Service
+    A-->>P: sự kiện watch: Pod Ready
+    P->>A: ghi IP pod vào EndpointSlice của Service
 ```
 
 Ba điều rút ra:
@@ -340,8 +363,8 @@ spec:
 
 Gỡ lỗi container không có shell: `kubectl debug -it <pod> --image=nginx:1.30.6-alpine --target=api -- sh` thêm một ephemeral
 container chung PID namespace với `api`. `kubectl debug <pod> --copy-to=<pod>-debug --container=api -- sh` thì tạo bản sao của pod
-với lệnh khác, không đụng pod gốc. Gỡ lỗi node bằng `kubectl debug node/<tên>` cần pod privileged nên bị Pod Security chặn trong
-namespace của bài; trên kind thì `docker exec` vào node thay thế.
+với lệnh khác, không đụng pod gốc. Gỡ lỗi node bằng `kubectl debug node/<tên>` tạo pod dùng hostPID, hostNetwork và mount `/` của node qua
+hostPath, nên Pod Security `baseline` chặn trong namespace của bài; trên kind thì `docker exec` vào node thay thế.
 
 ### ReplicaSet và Deployment
 
@@ -400,7 +423,8 @@ Job chạy pod tới khi đủ `completions` lần thành công. Các trường 
 
 - `backoffLimit` (retry, mặc định 6), `activeDeadlineSeconds` (trần thời gian cả Job), `ttlSecondsAfterFinished` (dọn Job xong).
 - `parallelism` và `completions`; `completionMode: Indexed` cho mỗi pod một `JOB_COMPLETION_INDEX` (chia lô dữ liệu không cần hàng
-  đợi); `backoffLimitPerIndex` để một phần lỗi không làm hỏng cả lô; `podFailurePolicy` để không retry lỗi chắc chắn không qua được
+  đợi); `backoffLimitPerIndex` để một phần lỗi không làm hỏng cả lô; `successPolicy` (GA 1.33) để Job Indexed coi là xong khi đủ một
+tập index chỉ định thành công (ví dụ chỉ cần pod leader index 0), không chờ mọi pod; `podFailurePolicy` để không retry lỗi chắc chắn không qua được
   (mã thoát 42 là "dữ liệu hỏng") và không tính lần bị evict là lỗi.
 - `restartPolicy` của pod: `Never` (mỗi lần thử là pod mới, giữ log) hay `OnFailure` (restart container trong cùng pod).
 
@@ -502,7 +526,8 @@ IP của một pod ready.
 | ExternalName | Trong cluster | Bản ghi DNS CNAME, không proxy | Đặt tên nội bộ cho dịch vụ ngoài cluster |
 
 Các trường hay dùng: `targetPort` theo **tên** cổng của container; `externalTrafficPolicy: Local` (giữ IP client, chỉ gửi tới node có
-pod, đổi lại cân bằng tải kém hơn); `internalTrafficPolicy: Local`; `sessionAffinity: ClientIP`; `trafficDistribution: PreferClose`
+pod, đổi lại cân bằng tải kém hơn); `internalTrafficPolicy: Local` (traffic từ trong cluster chỉ tới endpoint trên **cùng node** với
+pod gọi, không có thì gói tin bị bỏ chứ không chuyển node khác: hợp với agent DaemonSet như log collector, nguy hiểm với service thường); `sessionAffinity: ClientIP`; `trafficDistribution: PreferClose`
 (ưu tiên endpoint cùng zone, đỡ phí truyền giữa zone). Service không selector cộng EndpointSlice tay trỏ được tới IP ngoài cluster.
 
 Gỡ lỗi Service theo thứ tự:
@@ -540,7 +565,7 @@ Ingress là object HTTP(S) L7: rule theo host và path, TLS từ Secret `kuberne
 không có **Ingress controller** (ingress-nginx, Traefik, HAProxy, AWS Load Balancer Controller...) đọc nó; `ingressClassName` chọn
 controller. Điểm yếu đã lộ: mọi thứ ngoài host, path, TLS (rewrite, timeout, rate limit, canary) nằm trong annotation riêng của từng
 controller, không mang sang controller khác được; một object vừa chứa việc của đội hạ tầng (TLS, cổng) vừa của đội app (route). Dự án
-ingress-nginx của cộng đồng Kubernetes đã ngừng bảo trì từ tháng 3/2026 (SIG Network thông báo tháng 11/2025); cluster mới nên đi
+ingress-nginx của cộng đồng Kubernetes ngừng bảo trì ngày 24/3/2026 (SIG Network thông báo ngày 11/11/2025); cluster mới nên đi
 thẳng Gateway API.
 
 ```yaml
@@ -565,7 +590,7 @@ spec:
 
 ### Gateway API
 
-Gateway API (`gateway.networking.k8s.io/v1`, GA từ 2023, cài bằng CRD) tách vai trò thành ba lớp object:
+Gateway API (`gateway.networking.k8s.io/v1`, GA từ 2023, cài bằng CRD; `devops-lab` dùng bản v1.6.3) tách vai trò thành ba lớp object:
 
 ```mermaid
 flowchart LR
@@ -602,11 +627,15 @@ Những gì Ingress phải dùng annotation thì Gateway API có trường chu�
 mirror; route TCP, UDP, TLS, gRPC (`GRPCRoute`). `ReferenceGrant` cho phép route tham chiếu Service ở namespace khác một cách tường
 minh. `ingress2gateway` chuyển Ingress cũ sang.
 
-Cluster `devops-lab` không cài sẵn Ingress controller hay implementation của Gateway API (cài chúng cần quyền admin cả cluster và
-image tải từ Internet), nên không bài nào chấm phần này. Muốn thử tay: cài CRD chuẩn của Gateway API và một implementation theo hướng
-dẫn chính thức của nó (Envoy Gateway và NGINX Gateway Fabric đều có hướng dẫn cho kind), dùng cổng `18080`/`18443` mà
-`devops-lab.yaml` đã map ra `127.0.0.1` trên node control plane có nhãn `ingress-ready=true`. Phần thử tay này chưa kiểm chứng trên
-máy viết bài; xoá cluster rồi tạo lại để quay về trạng thái sạch.
+Trên `devops-lab`, Traefik dùng chung (mục 0) phục vụ cả hai API: IngressClass `devops-traefik` cho Ingress và GatewayClass
+`devops-traefik` với Gateway `devops-gateway/public` cho HTTPRoute. Đây đúng là cách chia vai ở công ty: Gateway do platform giữ (bạn
+không tạo được Gateway, GatewayClass hay ReferenceGrant bằng quyền của lab), team app chỉ gắn route vào. Policy của lab buộc mọi host là
+`<namespace của lab>.olist.test` hay tên con, để route của lab này không chiếm host của lab khác. Intermediate 04 cho bạn viết một
+Ingress cho host cũ và một HTTPRoute chia 90/10 cộng match header, rồi gọi qua Service của Traefik từ trong cluster với header `Host`:
+
+```bash
+kubectl exec deploy/api-stable -- python -c "import urllib.request as u; r = u.Request('http://traefik.devops-gateway.svc.cluster.local/healthz', headers={'Host': 'lab10.olist.test'}); print(u.urlopen(r).read())"
+```
 
 ## 5. Storage: volume, PV, PVC, StorageClass và CSI
 
@@ -684,9 +713,14 @@ snapshot restore`; dùng `etcdutl`. Production chạy định kỳ (systemd time
 ### Lab: backup rồi restore etcd của devops-lab
 
 Lab tay, chấm bằng rubric trong lời giải của Intermediate 02. Đã kiểm trên máy viết bài (etcd 3.6.4, kind 0.30.0): ConfigMap bị xoá
-trở lại sau khi etcd và API server khởi động lại. Lab đưa **cả cluster** về thời điểm snapshot; chạy khi không có test nào đang chạy. Node
+trở lại sau khi etcd và API server khởi động lại. Node
 kind chỉ có `etcdctl` bên trong container etcd (image không có `etcdutl` hay shell), nên snapshot ghi vào `/var/lib/etcd` (mount chung
 giữa container etcd và node) rồi chép ra máy; restore dùng `etcdutl` trên máy bạn.
+
+**Cảnh báo.** Restore đưa **cả cluster dùng chung** về thời điểm snapshot, không chỉ namespace `etcd-lab`: mọi namespace, RBAC,
+policy, object của lab test, HTTPRoute... tạo sau snapshot biến mất, và thứ đã xoá sau snapshot hiện lại; pod đang chạy mà etcd không còn
+biết thành mồ côi cho tới khi controller dọn. **Không chạy pytest nào trong lúc làm lab**, kể cả ở terminal khác. Làm xong mà còn thấy lạ
+(namespace `devops-ex-*` sót, Gateway không Programmed) thì dùng phương án cuối ở cuối mục.
 
 Bước 1: cài `etcdutl` 3.6.4 vào thư mục lab (kiểm SHA-256 trước khi giải nén):
 
@@ -735,14 +769,21 @@ grep -a -c khong-nen-lo-ra "$LAB/lab-snapshot.db"
 
 Dòng `1` cuối: giá trị của Secret nằm nguyên văn trong snapshot. Ai có tệp backup là có mọi Secret của cluster.
 
-Bước 3: "sự cố", rồi restore ra thư mục mới trên máy, dừng etcd và API server, thay data dir, bật lại. kubelet dừng một static pod
-khi manifest của nó rời `/etc/kubernetes/manifests` và tạo lại khi manifest quay về; data dir cũ được giữ ở
-`/var/lib/etcd-truoc-restore` để quay lui:
+Bước 3: "sự cố", rồi restore. `etcdutl snapshot restore` dựng một data dir **mới** với tên member và cấu hình cluster lấy đúng từ cờ
+của etcd trong manifest (`--name`, `--initial-cluster`, `--initial-advertise-peer-urls`; với một member thì etcd vẫn chạy được nếu bỏ
+qua, nhưng cluster nhiều member bắt buộc, nên tập làm đúng). Rồi dừng etcd và API server bằng cách chuyển manifest của chúng ra khỏi
+`/etc/kubernetes/manifests` (kubelet dừng static pod khi manifest biến mất), giữ data dir cũ ở `/var/lib/etcd-truoc-restore`, đặt data dir
+mới vào đúng `/var/lib/etcd`, trả manifest về:
 
 ```bash
 export KUBECONFIG=~/.kube/devops-lab.yaml LAB=~/.cache/devops-track/etcd-lab N=devops-lab-control-plane &&
 kubectl -n etcd-lab delete configmap quan-trong &&
-"$LAB/etcd-v3.6.4-linux-amd64/etcdutl" snapshot restore "$LAB/lab-snapshot.db" --data-dir "$LAB/restored" &&
+ETCD_NAME="$(docker exec $N sed -n 's/^ *- --name=//p' /etc/kubernetes/manifests/etcd.yaml)" &&
+ETCD_PEER="$(docker exec $N sed -n 's/^ *- --initial-advertise-peer-urls=//p' /etc/kubernetes/manifests/etcd.yaml)" &&
+ETCD_CLUSTER="$(docker exec $N sed -n 's/^ *- --initial-cluster=//p' /etc/kubernetes/manifests/etcd.yaml)" &&
+echo "$ETCD_NAME | $ETCD_PEER | $ETCD_CLUSTER" &&
+"$LAB/etcd-v3.6.4-linux-amd64/etcdutl" snapshot restore "$LAB/lab-snapshot.db" --name "$ETCD_NAME" \
+  --initial-cluster "$ETCD_CLUSTER" --initial-advertise-peer-urls "$ETCD_PEER" --data-dir "$LAB/restored" &&
 docker exec $N mkdir -p /etc/kubernetes/manifests-stopped &&
 docker exec $N mv /etc/kubernetes/manifests/kube-apiserver.yaml /etc/kubernetes/manifests/etcd.yaml /etc/kubernetes/manifests-stopped/ &&
 timeout 120 sh -c "until [ -z \"\$(docker exec $N crictl ps -q --name '^(etcd|kube-apiserver)\$')\" ]; do sleep 2; done" &&
@@ -756,14 +797,45 @@ kubectl -n etcd-lab get configmap quan-trong -o jsonpath='{.data.gia-tri}{"\n"}'
 ```
 
 ```text
+devops-lab-control-plane | https://172.21.0.3:2380 | devops-lab-control-plane=https://172.21.0.3:2380
 truoc-su-co
 ```
 
-Lệnh `timeout ... until` đầu chờ kubelet dừng hẳn hai container (không chờ là `mv` thư mục khi etcd còn ghi); lệnh sau chờ API server
-trả `ok`. Dọn: `KUBECONFIG=~/.kube/devops-lab.yaml kubectl delete namespace etcd-lab`, `docker exec devops-lab-control-plane rm -rf
-/var/lib/etcd-truoc-restore` và `rm -rf ~/.cache/devops-track/etcd-lab`. Data dir vẫn ở `/var/lib/etcd` như kubeadm đặt, nên
-Intermediate 02 vẫn chạy được sau lab. Đừng trỏ manifest sang thư mục khác rồi bỏ đó: test snapshot của bài đọc tệp ở
-`/var/lib/etcd` của node.
+Lệnh `timeout ... until` đầu chờ kubelet dừng hẳn hai container (không chờ là đổi thư mục khi etcd còn ghi); lệnh sau chờ API server trả
+`ok`. Cả khối mất khoảng 40 giây trên máy viết bài.
+
+**Nếu chuỗi lệnh dừng giữa chừng** sau khi manifest đã bị chuyển đi, etcd và API server vẫn tắt: `kubectl` báo `connection refused`. Quay
+về data dir trước restore (khối này đã kiểm: chạy ngay sau một lần restore thành công, cluster về đúng trạng thái trước restore):
+
+```bash
+export KUBECONFIG=~/.kube/devops-lab.yaml N=devops-lab-control-plane &&
+docker exec $N mkdir -p /etc/kubernetes/manifests-stopped &&
+docker exec $N sh -c 'for f in etcd kube-apiserver; do if [ -f /etc/kubernetes/manifests/$f.yaml ]; then mv /etc/kubernetes/manifests/$f.yaml /etc/kubernetes/manifests-stopped/; fi; done' &&
+timeout 120 sh -c "until [ -z \"\$(docker exec $N crictl ps -q --name '^(etcd|kube-apiserver)\$')\" ]; do sleep 2; done" &&
+docker exec $N test -d /var/lib/etcd-truoc-restore &&
+docker exec $N sh -c 'if [ -d /var/lib/etcd ]; then mv /var/lib/etcd "/var/lib/etcd-restore-loi-$(date +%s)"; fi' &&
+docker exec $N mv /var/lib/etcd-truoc-restore /var/lib/etcd &&
+docker exec $N sh -c 'mv /etc/kubernetes/manifests-stopped/*.yaml /etc/kubernetes/manifests/' &&
+timeout 180 sh -c "until kubectl get --raw /readyz >/dev/null 2>&1; do sleep 3; done" &&
+kubectl get nodes
+```
+
+Khối này chuyển data dir hỏng sang `/var/lib/etcd-restore-loi-<thời điểm>` thay vì xoá, để còn xem lại. `test -d` dừng chuỗi nếu chưa có
+bản trước restore (lỗi xảy ra trước bước đổi thư mục): khi đó chỉ cần trả manifest về
+(`docker exec $N sh -c 'mv /etc/kubernetes/manifests-stopped/*.yaml /etc/kubernetes/manifests/'`).
+
+**Phương án cuối**, khi cả hai cách trên không đưa API server về: xoá cluster rồi làm lại mục 0 từ đầu (tạo cluster, ghim CPU, nạp image,
+cài Gateway dùng chung theo `setup/DEVOPS-TOOLS.md`):
+
+```bash
+kind delete cluster --name devops-lab --kubeconfig ~/.kube/devops-lab.yaml
+```
+
+Dọn sau lab: `KUBECONFIG=~/.kube/devops-lab.yaml kubectl delete namespace etcd-lab`, `docker exec devops-lab-control-plane rm -rf
+/var/lib/etcd-truoc-restore /var/lib/etcd/lab-snapshot.db` (cùng các thư mục `/var/lib/etcd-restore-loi-*` nếu có) và `rm -rf
+~/.cache/devops-track/etcd-lab`. Data dir vẫn ở `/var/lib/etcd` như kubeadm đặt, nên Intermediate 02 vẫn chạy được sau lab. Tài liệu
+kubeadm còn cách khác là restore ra thư mục mới rồi sửa `hostPath` của volume `etcd-data` trong manifest; đừng dùng cách đó trên
+`devops-lab`: test snapshot của Intermediate 02 đọc tệp ở `/var/lib/etcd` của node và sẽ fail kèm lời nhắc làm lại bước này.
 
 Trên kubeadm thật có thêm: dừng kube-apiserver trước (chuyển `kube-apiserver.yaml` ra khỏi `/etc/kubernetes/manifests`) để không ai
 ghi vào etcd cũ trong lúc restore; cluster nhiều member thì restore **cùng một** snapshot trên mọi member với `--name`,
@@ -833,7 +905,8 @@ doanh nghiệp tuỳ năng lực đội; kind và minikube chỉ cho dev và CI.
 - Kubernetes Documentation, *Pod Quality of Service Classes*: https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/
 - Kubernetes Documentation, *Service*, *EndpointSlices*, *DNS for Services and Pods*: https://kubernetes.io/docs/concepts/services-networking/
 - Kubernetes Gateway API: https://gateway-api.sigs.k8s.io/
-- Kubernetes Blog, thông báo ngừng bảo trì ingress-nginx của SIG Network (11/2025): https://kubernetes.io/blog/
+- Kubernetes Blog, *Ingress NGINX Retirement: What You Need to Know* (11/11/2025): https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/
+- Traefik Documentation v3.7, *Kubernetes Gateway API provider* (hỗ trợ Gateway API standard v1.6.3): https://doc.traefik.io/traefik/v3.7/reference/install-configuration/providers/kubernetes/kubernetes-gateway/
 - Kubernetes Documentation, *Persistent Volumes*, *Storage Classes*, *Dynamic Volume Provisioning*: https://kubernetes.io/docs/concepts/storage/
 - Kubernetes Documentation, *Operating etcd clusters for Kubernetes* (backup, restore): https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
 - etcd Documentation v3.6, *Disaster recovery* và `etcdutl`: https://etcd.io/docs/v3.6/op-guide/recovery/

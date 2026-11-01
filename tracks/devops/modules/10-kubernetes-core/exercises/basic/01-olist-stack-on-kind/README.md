@@ -52,6 +52,7 @@ workload (tối đa 3 phút mỗi cái), rồi kiểm:
 | Từ ngoài vào | Script của test chạy `kubectl port-forward svc/api <cổng trống>:8000` trong sandbox rồi `curl /readyz`: `200 {"db":"ok","redis":"ok"}` |
 | Endpoint | EndpointSlice của Service `api` có ít nhất 2 endpoint ready |
 | Worker chạy | `POST /jobs/recompute` qua port-forward trả `202`, log của worker có `"job done"` trong 60 giây |
+| DNS | Từ pod worker, `redis.<namespace>.svc.cluster.local` phân giải ra ClusterIP của Service `redis`, `postgres-0.postgres.<namespace>.svc.cluster.local` ra IP của pod `postgres-0` |
 
 Image phải có sẵn trong hai worker của `devops-lab` (mục 0 của module); thiếu thì test skip kèm lệnh `kind load`. Khoảng 1 phút.
 

@@ -54,7 +54,7 @@ workload (tối đa 2 phút mỗi cái), đợi thêm 30 giây rồi kiểm:
 | Thiết kế giữ nguyên | Pod api mang nhãn `app.kubernetes.io/name: api` |
 
 Lab thứ hai apply `tests/fixtures/incident/` (bản lúc sự cố, giống starter) và đòi nó tái hiện đúng các triệu chứng: PVC có event
-lỗi provisioning và vẫn `Pending`, worker bị restart trong 2 phút, Service `api` không chọn được pod nào dù có pod api. Khoảng 3
+lỗi provisioning và vẫn `Pending`, worker bị restart trong 2 phút, EndpointSlice của Service `api` rỗng. Khoảng 3
 phút khi đã sửa, 7 phút trên starter (chờ rollout hết giờ).
 
 ## Tiêu chí đạt

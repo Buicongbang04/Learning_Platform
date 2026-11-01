@@ -144,3 +144,19 @@ def test_worker_processes_job(stack):
             return
         time.sleep(2)
     pytest.fail(f"Worker chưa xử lý job sau 60 giây. Log cuối:\n{logs[-800:]}")
+
+
+RESOLVE = ("import json, socket, sys; "
+           "print(json.dumps({n: sorted({a[4][0] for a in socket.getaddrinfo(n, None, socket.AF_INET)}) for n in sys.argv[1:]}))")
+
+
+def test_cluster_dns_names(stack):
+    lab, _, _ = stack
+    names = [f"redis.{lab.namespace}.svc.cluster.local", f"postgres-0.postgres.{lab.namespace}.svc.cluster.local"]
+    result = lab.kubectl("exec", "deployment/worker", "--", "python", "-c", RESOLVE, *names, check=False)
+    assert result.returncode == 0, f"Pod worker không phân giải được {names}: {result.stderr[-400:]}"
+    resolved = json.loads(result.stdout)
+    redis = get_json(lab, "service", "redis")
+    assert resolved[names[0]] == [redis["spec"]["clusterIP"]], "Tên Service redis phải trỏ ClusterIP của nó"
+    pod = get_json(lab, "pod", "postgres-0")
+    assert resolved[names[1]] == [pod["status"]["podIP"]], "postgres-0.postgres phải trỏ IP của pod postgres-0 (Service headless)"

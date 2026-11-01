@@ -100,4 +100,4 @@ def test_incident_reproduces_symptoms(incident):
     assert get_json(lab, "pvc", "data-postgres-0")["status"].get("phase") == "Pending"
     assert wait_for(lambda: worker_restarts(lab) > 0, 120), "Bản lúc sự cố: worker phải bị restart"
     pods = (get_json(lab, "pods", "-l", "app.kubernetes.io/name=api") or {"items": []})["items"]
-    assert pods and endpoints(lab, ready_only=False) == [], "Bản lúc sự cố: Service api không chọn được pod nào"
+    assert pods and endpoints(lab, ready_only=False) == [], "Bản lúc sự cố: EndpointSlice của api phải rỗng"
