@@ -1636,6 +1636,8 @@ _TOFU_NETWORK_ERRORS = re.compile(
     r"|context deadline exceeded|proxyconnect",
     re.I,
 )
+_TOFU_CONFIG_SUFFIXES = (".tf", ".tofu", ".tf.json", ".tofu.json", ".tftest.hcl", ".tofutest.hcl", ".tftest.json",
+                         ".tofutest.json")
 _TOFU_COPY_IGNORE = (*_COPY_IGNORE, ".terraform", "terraform.tfstate", "terraform.tfstate.backup", ".terraform.tfstate.lock.info")
 _BLACKHOLE: socket.socket | None = None
 
@@ -1765,6 +1767,9 @@ def _tofu_json_problems(rel: Path, text: str) -> list[str]:
             "thẳng ký tự đó (tệp là UTF-8)")
     try:
         keys = _tofu_json_keys(text)
+    except RecursionError:
+        return [*found, f"{rel}: JSON lồng quá sâu: phép kiểm cấu hình không đọc hết được tệp này nên từ chối nó. Giảm độ "
+                        "lồng của mảng/đối tượng rồi chạy lại"]
     except ValueError as error:
         return [*found, f"{rel}: JSON không hợp lệ ({error}): sửa cú pháp JSON rồi chạy lại; phép kiểm cấu hình không đọc "
                         "được tệp này nên từ chối nó"]
@@ -1779,15 +1784,16 @@ def _tofu_json_problems(rel: Path, text: str) -> list[str]:
 
 def tofu_config_problems(root: Path) -> list[str]:
     """Đối số provider hay backend vô hiệu lớp chặn mạng của `tofu_env` (`no_proxy`, `http_proxy`, `https_proxy`,
-    `custom_ca_bundle`) trong `*.tf`, `*.tofu` và bản `.json` của chúng dưới `root` (bỏ `.terraform`). Quét văn bản thô,
-    không bỏ chú thích: tên cấm theo sau bởi `=` hay `:` ở bất kỳ đâu đều bị từ chối. Tệp JSON còn bị cấm mọi escape
-    `\\uXXXX`, phải parse được, và mọi khoá đã giải mã ở mọi độ sâu được so (không phân biệt hoa thường) với tên cấm."""
+    `custom_ca_bundle`) trong `*.tf`, `*.tofu`, tệp test `*.tftest.hcl`, `*.tofutest.hcl` và bản `.json` của chúng dưới
+    `root` (bỏ `.terraform`). Quét văn bản thô, không bỏ chú thích: tên cấm theo sau bởi `=` hay `:` ở bất kỳ đâu đều bị
+    từ chối. Tệp JSON còn bị cấm mọi escape `\\uXXXX`, phải parse được (lồng quá sâu cũng bị từ chối), và mọi khoá đã
+    giải mã ở mọi độ sâu được so (không phân biệt hoa thường) với tên cấm."""
     root = Path(root)
     found = []
     for path in sorted(root.rglob("*")):
         if ".terraform" in path.relative_to(root).parts or not path.is_file():
             continue
-        if not path.name.endswith((".tf", ".tofu", ".tf.json", ".tofu.json")):
+        if not path.name.endswith(_TOFU_CONFIG_SUFFIXES):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         if path.name.endswith(".json"):

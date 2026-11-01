@@ -2699,6 +2699,28 @@ def test_tofu_allows_clean_json_config(tmp_path):
     assert testkit.tofu_config_problems(tmp_path) == []
 
 
+def test_tofu_refuses_deeply_nested_json_cleanly(tmp_path):
+    (tmp_path / "main.tf.json").write_text("[" * 100_000 + "]" * 100_000, encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert len(problems) == 1 and problems[0].startswith("main.tf.json:") and "JSON lồng quá sâu" in problems[0]
+
+
+@pytest.mark.parametrize("name", ["x.tftest.hcl", "x.tofutest.hcl"])
+def test_tofu_refuses_proxy_override_in_test_file(tmp_path, name):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / name).write_text('provider "aws" { no_proxy = "*" }\n', encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert len(problems) == 1 and problems[0].startswith(f"tests/{name}:1:")
+
+
+@pytest.mark.parametrize("name", ["x.tftest.json", "x.tofutest.json"])
+def test_tofu_applies_json_rules_to_json_test_file(tmp_path, name):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / name).write_text('{"provider": {"aws": {"no\\u005fproxy": "*"}}}', encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert any("escape" in p for p in problems) and any("khoá JSON" in p and "no_proxy" in p for p in problems)
+
+
 def test_tofu_forbidden_line_number_survives_block_comment(tmp_path):
     (tmp_path / "main.tf").write_text('/* a\nb\n*/\nprovider "aws" { no_proxy = "*" }\n', encoding="utf-8")
     assert testkit.tofu_config_problems(tmp_path)[0].startswith("main.tf:4:")
