@@ -23,7 +23,8 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | ansible-core (`ansible`, `ansible-playbook`, `ansible-inventory`, `ansible-vault`...) | 09 Configuration management (bản đã kiểm 2.21.5, cài vào venv riêng `~/.cache/devops-track/ansible` bằng `uv pip install --require-hashes -r setup/ansible/requirements.txt`, symlink vào `~/.local/bin`; không thêm vào `pyproject.toml` gốc; test chạy Ansible trong sandbox tới target là container SSH build từ `setup/ansible-target/` trên `python:3.12.16-slim-trixie`) | 2.21 | [Cài đặt](../tracks/devops/modules/09-config-management/README.md#0-cài-đặt) |
 | kind | 10 Kubernetes core (cluster dùng chung `devops-lab`, xem [Cluster kind devops-lab](#cluster-kind-devops-lab)) | 0.30.0 (node image ghim `kindest/node:v1.34.0` theo digest) | [Cài đặt](../tracks/devops/modules/10-kubernetes-core/README.md#0-cài-đặt) |
 | kubectl | 10 Kubernetes core (bản đã kiểm 1.34.13, khớp minor của node image) | 1.33 (lệch tối đa một minor với API server 1.34) | [Cài đặt](../tracks/devops/modules/10-kubernetes-core/README.md#0-cài-đặt) |
-| helm | 11 Kubernetes production (chưa viết; bản đã kiểm 3.22.1) | 3.18 | [Cluster kind devops-lab](#cluster-kind-devops-lab) |
+| helm | 11 Kubernetes production (bản đã kiểm 3.22.1; Kustomize có sẵn trong kubectl) | 3.18 | [Cluster kind devops-lab](#cluster-kind-devops-lab) |
+| metrics-server (trong cluster, không cài lên máy) | 11 Kubernetes production (HPA, `kubectl top`; bản 0.9.1 ghim trong `setup/kind/metrics-server/`, xem [metrics-server dùng chung](#metrics-server-dùng-chung)) | Đúng bản đã ghim | [metrics-server dùng chung](#metrics-server-dùng-chung) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
@@ -199,7 +200,48 @@ KUBECONFIG=~/.kube/devops-lab.yaml kubectl delete namespaces,clusterroles,cluste
 
 Lệnh xoá trên chỉ chọn object có nhãn `devops-ex`, không đụng gì khác; chỉ chạy khi không có test nào đang chạy. Node kind là container Docker chạy privileged, nên pod privileged, hostPath, hostNetwork trên cluster này chạm được tới máy của bạn: namespace của test chặn chúng bằng Pod Security, và bài thực hành tay cũng nên làm trong namespace có nhãn `pod-security.kubernetes.io/enforce=baseline`.
 
-HPA ở module 11 cần metrics-server, chưa cài sẵn. Kế hoạch: cài từ manifest ghim phiên bản (`components.yaml` của một release metrics-server cố định, lưu trong repo để cài offline) thêm cờ `--kubelet-insecure-tls` vì kubelet của kind dùng chứng chỉ tự ký; module 11 sẽ ghi lệnh cụ thể.
+### metrics-server dùng chung
+
+HPA và `kubectl top` (module 11, capstone m06) đọc CPU, bộ nhớ của pod qua API `metrics.k8s.io` do metrics-server phục vụ. **Admin cài
+một lần** sau khi tạo cluster; test không bao giờ cài, thiếu thì `ex.require_metrics()` skip kèm lệnh dưới. Tệp ghim trong
+`setup/kind/metrics-server/`:
+
+| Thành phần | Bản | Ghim |
+| --- | --- | --- |
+| `00-metrics-server-v0.9.1-components.yaml` | `components.yaml` của release v0.9.1 (hỗ trợ Kubernetes 1.34 trở lên), chép nguyên | `SHA256SUMS` (`3c7f57cd...`) |
+| `kustomization.yaml` (track viết) | Patch Deployment: thêm `--kubelet-insecure-tls`, `imagePullPolicy: Never` | `SHA256SUMS` |
+| Image `registry.k8s.io/metrics-server/metrics-server:v0.9.1` | Kéo theo digest `sha256:9b0ba1926e1d3089673f45461c3c1416109dea33b3ba3434048defd380df329b` rồi gắn tag | Nạp vào hai worker bằng `kind load image-archive` |
+
+Vì sao `--kubelet-insecure-tls`: metrics-server lấy số liệu từ endpoint `/metrics/resource` của kubelet trên từng node qua HTTPS. Kubelet
+của kind dùng chứng chỉ serving tự ký, không có IP của node trong SAN và không do CA của cluster ký, nên metrics-server từ chối với
+`x509: cannot validate certificate for 172.21.0.3 because it doesn't contain any IP SANs` và không bao giờ Ready (đã thử trên máy viết
+bài). Cờ này bỏ kiểm chứng chỉ của kubelet, chỉ chấp nhận được trên cluster lab; cluster thật bật `serverTLSBootstrap` cho kubelet và
+duyệt CSR để kubelet có chứng chỉ do CA ký. `imagePullPolicy: Never` giữ kiểu fail closed như Traefik: chưa nạp image thì pod báo
+`ErrImageNeverPull` thay vì tự kéo tag không ghim. Chạy từ thư mục gốc của repo:
+
+```bash
+docker pull registry.k8s.io/metrics-server/metrics-server@sha256:9b0ba1926e1d3089673f45461c3c1416109dea33b3ba3434048defd380df329b &&
+docker tag registry.k8s.io/metrics-server/metrics-server@sha256:9b0ba1926e1d3089673f45461c3c1416109dea33b3ba3434048defd380df329b registry.k8s.io/metrics-server/metrics-server:v0.9.1 &&
+(cd setup/kind/metrics-server && sha256sum --check SHA256SUMS) &&
+mkdir -p ~/.cache/devops-track/kind-images &&
+docker save --platform linux/amd64 -o ~/.cache/devops-track/kind-images/metrics-server.tar registry.k8s.io/metrics-server/metrics-server:v0.9.1 &&
+nice -n 15 kind load image-archive ~/.cache/devops-track/kind-images/metrics-server.tar --name devops-lab --nodes devops-lab-worker,devops-lab-worker2 &&
+rm -f ~/.cache/devops-track/kind-images/metrics-server.tar &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml apply -k setup/kind/metrics-server &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n kube-system rollout status deployment/metrics-server --timeout=120s &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=120s
+```
+
+Lần lấy số liệu đầu tiên mất khoảng 30 giây sau khi rollout xong (`--metric-resolution=15s`); `kubectl --kubeconfig
+~/.kube/devops-lab.yaml top nodes` có số là xong. Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/metrics-server`.
+
+### Bài thao tác node (cordon, drain, taint)
+
+Bài cần cordon, drain hay taint worker (module 11) làm qua `KubeLab.node_action` của testkit, chỉ trên worker, `close()` hoàn tác.
+Trạng thái node là của cả cluster, nên testkit giữ khoá `~/.cache/devops-track/kube-nodes.lock` suốt từ lần thao tác node đầu tiên
+tới khi hoàn tác xong: hai bài như vậy không bao giờ chạy chồng nhau, kể cả ở hai terminal. Tệp test của các bài này mang marker
+`kube_nodes`; muốn chạy song song phần còn lại thì loại chúng ra (`-m "not kube_nodes"`). Trong lúc bài drain một worker, pod của bài
+khác, Traefik và metrics-server đang nằm trên worker đó cũng bị dời; sau khi hoàn tác, testkit chờ chúng available lại rồi mới trả.
 
 ## Ghim CPU
 

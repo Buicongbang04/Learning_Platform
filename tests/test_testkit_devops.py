@@ -5189,3 +5189,288 @@ def test_kube_lab_routes_policy_real():
         result = lab.kubectl("apply", "-f", "-", input=json.dumps(gateway), check=False)
         assert result.returncode != 0 and "forbidden" in result.stderr
         assert lab.kubectl("auth", "can-i", "create", "referencegrants.gateway.networking.k8s.io", check=False).stdout.strip() == "no"
+
+
+@pytest.mark.parametrize("args", [
+    ("create", "rolebinding", "jane", "--role=reader", "--user=jane"),
+    ("create", "rolebinding", "jane", "--role=reader", "--user", "jane@olist.example"),
+    ("create", "clusterrolebinding", "oncall", "--clusterrole=view", "--group=olist-oncall"),
+    ("create", "rolebinding", "ci", "--role=reader", "--serviceaccount=devops-ex-x:ci"),
+    ("create", "rolebinding", "many", "--role=reader", "--user=a", "--group=b", "--serviceaccount=ns:c", "--dry-run=client"),
+])
+def test_kube_lab_kubectl_allows_subject_flags_of_create_binding(monkeypatch, args):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.kubectl(*args)
+        assert fake.calls_with(*args)
+
+
+@pytest.mark.parametrize("args", [
+    ("--user=x", "create", "rolebinding", "jane", "--role=reader"),
+    ("--user", "x", "create", "rolebinding", "jane", "--role=reader", "--user=jane"),
+    ("-n", "default", "create", "rolebinding", "jane", "--role=reader", "--user=jane"),
+    ("create", "role", "reader", "--verb=get", "--resource=pods", "--user=admin"),
+    ("get", "pods", "--user=admin"),
+    ("get", "pods", "--group=system:masters"),
+    ("set", "serviceaccount", "deployment/api", "ci", "--serviceaccount=x"),
+    ("create", "rolebinding", "jane", "--role=reader", "--as=system:admin"),
+    ("create", "rolebinding", "jane", "--role=reader", "--as-group=system:masters"),
+    ("create", "rolebinding", "jane", "--role=reader", "--kubeconfig=/x"),
+    ("auth", "can-i", "get", "pods", "--user=x"),
+])
+def test_kube_lab_kubectl_refuses_identity_flags_outside_create_binding(monkeypatch, args):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        before = len(fake.sandbox_calls)
+        with pytest.raises(ValueError, match="kubeconfig của lab"):
+            lab.kubectl(*args)
+        assert len(fake.sandbox_calls) == before
+
+
+def test_kube_lab_can_i_runs_read_only_with_admin(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        assert lab.can_i("patch", "deployments", serviceaccount="ci-deployer") is True
+        assert lab.can_i("get", "pods", subresource="log", user="jane@olist.example", groups=("olist-oncall",)) is True
+        assert lab.can_i("list", "deployments.apps", serviceaccount="ci", all_namespaces=True) is True
+    calls = [c for c in fake.sandbox_calls if c["cmd"][1:3] == ["auth", "can-i"] and any(a.startswith("--as=") for a in c["cmd"])]
+    assert [c["cmd"][1:] for c in calls] == [
+        ["auth", "can-i", "patch", "deployments", "-n", lab.namespace, f"--as=system:serviceaccount:{lab.namespace}:ci-deployer"],
+        ["auth", "can-i", "get", "pods", "-n", lab.namespace, "--subresource=log", "--as=jane@olist.example",
+         "--as-group=olist-oncall"],
+        ["auth", "can-i", "list", "deployments.apps", "--all-namespaces", f"--as=system:serviceaccount:{lab.namespace}:ci"],
+    ]
+    assert all(c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig) for c in calls)
+
+
+def test_kube_lab_can_i_answer_no(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    original = fake.run_sandboxed
+
+    def run(cmd, **kwargs):
+        if any(str(a).startswith("--as=") for a in cmd):
+            return subprocess.CompletedProcess(cmd, 1, "no\n", "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    with testkit.KubeLab() as lab:
+        assert lab.can_i("get", "secrets", serviceaccount="ci-deployer") is False
+
+
+@pytest.mark.parametrize("kwargs,needle", [
+    ({"verb": "get", "resource": "pods"}, "serviceaccount hoặc user"),
+    ({"verb": "get", "resource": "pods", "serviceaccount": "a", "user": "b"}, "serviceaccount hoặc user"),
+    ({"verb": "get pods", "resource": "pods", "serviceaccount": "a"}, "verb"),
+    ({"verb": "get", "resource": "--as=x", "serviceaccount": "a"}, "resource"),
+    ({"verb": "get", "resource": "pods", "serviceaccount": "Bad Name"}, "serviceaccount"),
+    ({"verb": "get", "resource": "pods", "serviceaccount": "kube-system:default"}, "serviceaccount"),
+    ({"verb": "get", "resource": "pods", "user": "-x"}, "user"),
+    ({"verb": "get", "resource": "pods", "user": "jane", "groups": ("a b",)}, "group"),
+    ({"verb": "get", "resource": "pods", "user": "jane", "subresource": "--x"}, "subresource"),
+])
+def test_kube_lab_can_i_validates_arguments(monkeypatch, kwargs, needle):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        before = len(fake.sandbox_calls)
+        args = (kwargs.pop("verb"), kwargs.pop("resource"))
+        with pytest.raises(ValueError, match=needle):
+            lab.can_i(*args, **kwargs)
+        assert len(fake.sandbox_calls) == before
+
+
+def test_kube_lab_learner_role_writes_quota_and_limitrange(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        items = json.loads(fake.calls_with("apply", "-f", "-")[0]["input"])["items"]
+    role = next(i for i in items if i["kind"] == "Role")
+    rw = {r for rule in role["rules"] if rule["verbs"] == testkit._KUBE_RW and rule["apiGroups"] == [""] for r in rule["resources"]}
+    assert {"resourcequotas", "limitranges"} <= rw
+
+
+def test_kube_lab_crd_allow_grants_lab_api_group_only(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab(allow=("CustomResourceDefinition",)) as lab:
+        assert lab.api_group == f"{lab.namespace}.olist.test"
+        items = json.loads(fake.calls_with("apply", "-f", "-")[0]["input"])["items"]
+    role = next(i for i in items if i["kind"] == "Role")
+    assert {"apiGroups": [lab.api_group], "resources": ["*"], "verbs": testkit._KUBE_RW} in role["rules"]
+    policy = next(i for i in items if i["kind"] == "ValidatingAdmissionPolicy" and i["metadata"]["name"] == lab.namespace)
+    assert any("customresourcedefinitions" in v["expression"] and f"'{lab.api_group}'" in v["expression"]
+               for v in policy["spec"]["validations"])
+    with testkit.KubeLab() as plain:
+        items = json.loads(fake.calls_with("apply", "-f", "-")[-1]["input"])["items"]
+    role = next(i for i in items if i["kind"] == "Role" and i["metadata"]["namespace"] == plain.namespace)
+    assert not any(plain.api_group in rule["apiGroups"] for rule in role["rules"])
+
+
+def crd(group: str, labels=None) -> dict:
+    return {"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
+            "metadata": {"name": f"widgets.{group}", "labels": labels if labels is not None else {"devops-ex": "abc12345"}},
+            "spec": {"group": group, "scope": "Namespaced",
+                     "names": {"plural": "widgets", "singular": "widget", "kind": "Widget"},
+                     "versions": [{"name": "v1", "served": True, "storage": True,
+                                   "schema": {"openAPIV3Schema": {"type": "object", "x-kubernetes-preserve-unknown-fields": True}}}]}}
+
+
+def test_crd_group_must_be_lab_group():
+    group = "devops-ex-abc12345.olist.test"
+    ok = testkit.kube_manifest_problems([crd(group)], lab_id="abc12345", namespace="devops-ex-abc12345",
+                                        allow=("CustomResourceDefinition",), api_group=group)
+    assert ok == []
+    bad = testkit.kube_manifest_problems([crd("traefik.io")], lab_id="abc12345", namespace="devops-ex-abc12345",
+                                         allow=("CustomResourceDefinition",), api_group=group)
+    assert any("nhóm API" in p and group in p for p in bad), bad
+
+
+def test_rbac_policy_accepts_rolebinding_service_account_without_namespace(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        items = json.loads(fake.calls_with("apply", "-f", "-")[0]["input"])["items"]
+    policy = next(i for i in items if i["kind"] == "ValidatingAdmissionPolicy" and i["metadata"]["name"] == f"{lab.namespace}-rbac")
+    binding = next(v["expression"] for v in policy["spec"]["validations"] if "subjects" in v["expression"])
+    assert "request.resource.resource == 'rolebindings'" in binding and "!has(s.namespace)" in binding
+
+
+def metrics_fake(monkeypatch, **answers):
+    return gateway_fake(monkeypatch, **answers)
+
+
+METRICS_OK = {"deployment metrics-server": (0, "1"), "apiservice": (0, "True"),
+              "/apis/metrics.k8s.io/v1beta1/nodes": (0, json.dumps({"items": [{"metadata": {"name": "devops-lab-worker"}}]}))}
+
+
+def test_require_metrics_ok(monkeypatch):
+    metrics_fake(monkeypatch, **METRICS_OK)
+    testkit.Exercise.require_metrics()
+
+
+@pytest.mark.parametrize("broken,answer,needle", [
+    ("deployment metrics-server", (1, ""), "metrics-server"),
+    ("deployment metrics-server", (0, "0"), "metrics-server"),
+    ("apiservice", (0, "False"), "APIService"),
+    ("/apis/metrics.k8s.io/v1beta1/nodes", (0, json.dumps({"items": []})), "chưa có số liệu"),
+    ("/apis/metrics.k8s.io/v1beta1/nodes", (1, ""), "chưa có số liệu"),
+])
+def test_require_metrics_skips_with_setup(monkeypatch, broken, answer, needle):
+    answers = dict(METRICS_OK)
+    answers[broken] = answer
+    metrics_fake(monkeypatch, **answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_metrics()
+    assert_skip(info, needle, "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply -k setup/kind/metrics-server", "image-archive")
+
+
+def test_metrics_server_setup_pinned_and_documented():
+    import hashlib
+
+    folder = testkit.KUBE_METRICS_DIR
+    sums = dict(reversed(line.split()) for line in (folder / "SHA256SUMS").read_text(encoding="utf-8").splitlines())
+    assert set(sums) == {"00-metrics-server-v0.9.1-components.yaml", "kustomization.yaml"}
+    for name, digest in sums.items():
+        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest, name
+    assert sums["00-metrics-server-v0.9.1-components.yaml"] == "3c7f57cdbee0f57fb0259a150e8f6d6cb4f29d72d1aa5dce8803151dd6d4c2a1"
+    components = (folder / "00-metrics-server-v0.9.1-components.yaml").read_text(encoding="utf-8")
+    assert f"image: {testkit.KUBE_METRICS_IMAGE}" in components
+    kustomization = (folder / "kustomization.yaml").read_text(encoding="utf-8")
+    assert "--kubelet-insecure-tls" in kustomization and "value: Never" in kustomization
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    assert testkit.KUBE_METRICS_IMAGE_DIGEST in doc and "setup/kind/metrics-server" in doc and "--kubelet-insecure-tls" in doc
+
+
+def test_kube_lab_node_action_holds_node_lock(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setattr(testkit, "KUBE_NODE_LOCK_TIMEOUT", 0.5)
+    KubeFake(monkeypatch)
+    with testkit.KubeLab() as first:
+        first.node_action({"action": "cordon", "node": "devops-lab-worker"})
+        assert (tmp_path / "devops-track" / "kube-nodes.lock").exists()
+        with testkit.KubeLab() as second:
+            with pytest.raises(pytest.fail.Exception, match="node_action"):
+                second.node_action({"action": "cordon", "node": "devops-lab-worker2"})
+    with testkit.KubeLab() as third:
+        third.node_action({"action": "cordon", "node": "devops-lab-worker2"})
+
+
+def test_kube_lab_without_node_action_takes_no_lock(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setattr(testkit, "KUBE_NODE_LOCK_TIMEOUT", 0.5)
+    KubeFake(monkeypatch)
+    with testkit.KubeLab() as first:
+        first.node_action({"action": "cordon", "node": "devops-lab-worker"})
+        with testkit.KubeLab() as second:
+            second.kubectl("get", "pods")
+
+
+def test_kube_lab_close_waits_for_shared_components_after_node_action(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    fake = KubeFake(monkeypatch)
+    original = fake.run_sandboxed
+    answers = iter([0, 1, 1])
+
+    def run(cmd, **kwargs):
+        if "deployments" in cmd and "json" in cmd:
+            ready = next(answers, 1)
+            item = {"metadata": {"name": "traefik"}, "spec": {"replicas": 1}, "status": {"availableReplicas": ready}}
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"items": [item]}), "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    with testkit.KubeLab() as lab:
+        lab.node_action({"action": "drain", "node": "devops-lab-worker"})
+    assert lab.cleanup_error is None
+    assert next(answers, "done") == "done"
+
+
+@KUBE_REQUIRED
+def test_kube_lab_can_i_and_create_binding_real():
+    with testkit.KubeLab() as lab:
+        lab.kubectl("create", "serviceaccount", "ci")
+        lab.kubectl("create", "role", "deployer", "--verb=get,list,patch", "--resource=deployments.apps")
+        lab.kubectl("create", "rolebinding", "ci", "--role=deployer", f"--serviceaccount={lab.namespace}:ci")
+        lab.kubectl("create", "rolebinding", "jane", "--role=deployer", "--user=jane@olist.example", "--group=olist-oncall")
+        bare = {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding", "metadata": {"name": "bare"},
+                "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "deployer"},
+                "subjects": [{"kind": "ServiceAccount", "name": "bare"}]}
+        lab.kubectl("apply", "-f", "-", input=json.dumps(bare))
+        deadline = time.monotonic() + 30
+        while not lab.can_i("patch", "deployments.apps", serviceaccount="ci") and time.monotonic() < deadline:
+            time.sleep(1)
+        assert lab.can_i("patch", "deployments.apps", serviceaccount="ci")
+        assert lab.can_i("patch", "deployments.apps", serviceaccount="bare")
+        assert not lab.can_i("delete", "deployments.apps", serviceaccount="ci")
+        assert not lab.can_i("get", "secrets", serviceaccount="ci")
+        assert not lab.can_i("list", "deployments.apps", serviceaccount="ci", all_namespaces=True)
+        assert lab.can_i("list", "deployments.apps", user="someone", groups=("olist-oncall",))
+        assert not lab.can_i("list", "deployments.apps", user="someone", groups=("other",))
+        lab.kubectl("create", "resourcequota", "q", "--hard=pods=5")
+        lab.kubectl("create", "-f", "-", input=json.dumps({"apiVersion": "v1", "kind": "LimitRange", "metadata": {"name": "l"},
+                                                          "spec": {"limits": [{"type": "Container", "max": {"memory": "1Gi"}}]}}))
+
+
+@KUBE_REQUIRED
+def test_kube_lab_custom_resources_of_lab_group_real(tmp_path):
+    with testkit.KubeLab(allow=("CustomResourceDefinition",)) as lab:
+        (tmp_path / "crd.json").write_text(json.dumps(crd(lab.api_group, {"devops-ex": lab.id})), encoding="utf-8")
+        lab.apply_learner(tmp_path / "crd.json")
+        lab.kubectl("wait", "--for=condition=Established", f"crd/widgets.{lab.api_group}", "--timeout=60s")
+        widget = {"apiVersion": f"{lab.api_group}/v1", "kind": "Widget", "metadata": {"name": "w"}, "spec": {"size": 1}}
+        deadline = time.monotonic() + 30
+        while lab.kubectl("apply", "-f", "-", input=json.dumps(widget), check=False).returncode != 0:
+            assert time.monotonic() < deadline, "Không tạo được custom resource của nhóm API của lab"
+            time.sleep(1)
+        assert lab.kubectl("get", "widgets", "w", "-o", "jsonpath={.spec.size}").stdout == "1"
+        foreign = crd("example.org", {"devops-ex": lab.id})
+        foreign["metadata"]["name"] = f"widgets{lab.id}.example.org"
+        foreign["spec"]["names"] = {"plural": f"widgets{lab.id}", "singular": f"widget{lab.id}", "kind": "Widget"}
+        result = lab.kubectl("apply", "-f", "-", input=json.dumps(foreign), check=False)
+        assert result.returncode != 0 and "denied" in result.stderr, result.stderr
+    assert testkit.kube_leftovers(lab.id) == []
+
+
+@KUBE_REQUIRED
+def test_require_metrics_real():
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_metrics()
+    with testkit.KubeLab() as lab:
+        assert "devops-lab-worker" in lab.kubectl("top", "nodes").stdout

@@ -3019,6 +3019,19 @@ KUBE_SKIP_GATEWAY = (
     "Cluster kind {name} chưa có Gateway dùng chung ({detail}). Cài một lần (nạp image traefik:v3.7.17 trước, xem module 10 mục 0 "
     "và setup/DEVOPS-TOOLS.md): {setup}"
 )
+KUBE_METRICS_DIR = ROOT / "setup" / "kind" / "metrics-server"
+KUBE_METRICS_VERSION = "0.9.1"
+KUBE_METRICS_IMAGE = "registry.k8s.io/metrics-server/metrics-server:v0.9.1"
+KUBE_METRICS_IMAGE_DIGEST = "sha256:9b0ba1926e1d3089673f45461c3c1416109dea33b3ba3434048defd380df329b"
+KUBE_METRICS_SETUP = "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply -k setup/kind/metrics-server"
+KUBE_SKIP_METRICS = (
+    "Cluster kind {name} chưa có metrics-server chạy được ({detail}). Cài một lần (kéo image theo digest rồi nạp bằng docker save và "
+    "kind load image-archive, kiểm SHA256SUMS, xem module 11 mục 0 và setup/DEVOPS-TOOLS.md): {setup}; vừa cài thì chờ khoảng "
+    "30 giây cho lần lấy số liệu đầu tiên"
+)
+KUBE_NODE_LOCK_TIMEOUT = 900
+KUBE_SHARED_NAMESPACES = ("kube-system", "local-path-storage", "devops-gateway")
+KUBE_SHARED_READY_TIMEOUT = 180
 KUBE_LOAD = "kind load docker-image {images} --name {name} --nodes " + KUBE_WORKERS
 KUBE_SKIP_IMAGES = (
     "Image chưa nạp vào worker của cluster kind {name} ({detail}); test không bao giờ kéo image từ Internet. Nạp bằng: {load}{build}. "
@@ -3032,8 +3045,11 @@ _KUBE_SA = "devops-ex-learner"
 _KUBE_LABEL_KEY = "devops-ex"
 _KUBECTL_FORBIDDEN = {
     "kubeconfig", "context", "cluster", "user", "server", "token", "as", "as-group", "as-uid", "username", "password",
-    "client-certificate", "client-key", "certificate-authority", "insecure-skip-tls-verify", "tls-server-name",
+    "client-certificate", "client-key", "certificate-authority", "insecure-skip-tls-verify", "tls-server-name", "group",
+    "serviceaccount",
 }
+_KUBECTL_SUBJECT_FLAGS = {"user", "group", "serviceaccount"}
+_KUBECTL_BINDING_COMMANDS = (("create", "rolebinding"), ("create", "clusterrolebinding"))
 _KUBECTL_BOOL_SHORT = set("AwRith")
 _HELM_INSTALL_FORBIDDEN = {"post-renderer", "post-renderer-args", "namespace", "create-namespace"}
 _KUBE_ENV_OWNED = ("KUBE", "HELM_")
@@ -3079,11 +3095,12 @@ _KUBE_RW = ["get", "list", "watch", "create", "update", "patch", "delete", "dele
 _KUBE_READ = ["get", "list", "watch"]
 _KUBE_LEARNER_RULES = [
     {"apiGroups": [""], "resources": ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims", "serviceaccounts",
-                                      "replicationcontrollers", "replicationcontrollers/scale"], "verbs": _KUBE_RW},
+                                      "replicationcontrollers", "replicationcontrollers/scale", "resourcequotas", "limitranges"],
+     "verbs": _KUBE_RW},
     {"apiGroups": [""], "resources": ["pods/exec", "pods/attach", "pods/portforward", "pods/ephemeralcontainers", "pods/eviction",
                                       "services/proxy"], "verbs": ["get", "create", "update", "patch"]},
-    {"apiGroups": [""], "resources": ["pods/log", "pods/status", "endpoints", "events", "resourcequotas", "limitranges",
-                                      "persistentvolumeclaims/status", "services/status"], "verbs": _KUBE_READ},
+    {"apiGroups": [""], "resources": ["pods/log", "pods/status", "endpoints", "events", "persistentvolumeclaims/status",
+                                      "services/status", "resourcequotas/status"], "verbs": _KUBE_READ},
     {"apiGroups": ["apps"], "resources": ["deployments", "statefulsets", "daemonsets", "replicasets", "deployments/scale",
                                           "statefulsets/scale", "replicasets/scale", "deployments/rollback", "controllerrevisions"],
      "verbs": _KUBE_RW},
@@ -3419,7 +3436,7 @@ def _kube_route_problems(where: str, kind: str, doc: dict, namespace: str) -> li
     return found
 
 
-def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), cluster_kinds=()) -> list[str]:
+def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), cluster_kinds=(), api_group: str | None = None) -> list[str]:
     """Kiểm tĩnh object Kubernetes của bài trước khi apply (tín hiệu sớm, ranh giới thật là quyền RBAC, policy và Pod Security
     trong cluster, xem `KubeLab`). Object namespaced chỉ ở namespace của lab (không ghi namespace thì lab đặt). Object
     cluster-scoped (danh sách dựng sẵn cộng `cluster_kinds` đọc từ cluster) phải có kind trong `allow` và nhãn
@@ -3427,7 +3444,8 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
     binding vào cluster-admin hay `system:*`, subject là nhóm hệ thống hay ServiceAccount ở namespace khác; role có
     escalate/bind/impersonate, `*` trên `*` hay aggregationRule; pod (ở bất kỳ độ sâu nào: Deployment, CronJob...) privileged,
     hostPath, hostNetwork/hostPID/hostIPC, hostPort, capability ngoài baseline, procMount, seccomp/AppArmor Unconfined;
-    PersistentVolume hostPath hay local; StorageClass; PriorityClass globalDefault; Service có externalIPs."""
+    PersistentVolume hostPath hay local; StorageClass; PriorityClass globalDefault; Service có externalIPs; CustomResourceDefinition
+    ngoài nhóm API `api_group` của lab."""
     found = []
     cluster = _KUBE_CLUSTER_KINDS | set(cluster_kinds)
     for index, doc in enumerate(_kube_flatten(documents), 1):
@@ -3456,6 +3474,9 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
             found += _kube_pod_problems(where, spec)
         if kind == "PriorityClass" and doc.get("globalDefault") is True:
             found.append(f"{where}: globalDefault đổi độ ưu tiên mặc định của mọi pod trong cluster")
+        if kind == "CustomResourceDefinition" and api_group and (doc.get("spec") or {}).get("group") != api_group:
+            found.append(f"{where}: CRD phải thuộc nhóm API riêng của lab ({api_group}), không phải "
+                         f"{(doc.get('spec') or {}).get('group')}")
         if kind == "Service" and isinstance(doc.get("spec"), dict) and doc["spec"].get("externalIPs"):
             found.append(f"{where}: externalIPs chặn được traffic tới địa chỉ đó của mọi pod trong cluster")
         if kind == "PersistentVolume" and isinstance(doc.get("spec"), dict):
@@ -3466,13 +3487,20 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
 
 
 def _kube_refuse_flags(tool: str, args) -> None:
-    for arg in map(str, args):
+    """Từ chối cờ đổi cluster, context, user hay danh tính. Riêng `--user`, `--group`, `--serviceaccount` của `kubectl create
+    rolebinding|clusterrolebinding` là subject của binding, chỉ nhận khi lệnh con đứng đầu argv (cờ đặt trước lệnh con là cờ
+    toàn cục `--user` của kubeconfig)."""
+    args = [str(arg) for arg in args]
+    binding = tool == "kubectl" and tuple(args[:2]) in _KUBECTL_BINDING_COMMANDS
+    for arg in args:
         if arg == "--":
             return
         bad = False
         if arg.startswith("--"):
             name = arg[2:].split("=", 1)[0]
             bad = name in _KUBECTL_FORBIDDEN if tool == "kubectl" else name.startswith("kube")
+            if bad and binding and name in _KUBECTL_SUBJECT_FLAGS:
+                bad = False
         elif tool == "kubectl" and arg.startswith("-") and len(arg) > 1:
             for letter in arg[1:]:
                 if letter == "s":
@@ -3511,15 +3539,18 @@ class KubeLab:
     định của testkit, không bao giờ đọc `KUBECONFIG` hay `~/.kube` của người học), rồi bằng quyền admin tạo namespace
     `devops-ex-<id>` có nhãn `devops-ex=<id>` và Pod Security `enforce=<pod_security>` (baseline, hoặc restricted), ServiceAccount
     `devops-ex-learner` với Role riêng `_KUBE_LEARNER_RULES` trong namespace đó (không `impersonate`, không
-    `serviceaccounts/token`, không escalate/bind), ClusterRoleBinding vào `view` (đọc mọi namespace, không có Secret) và quyền đọc
-    object cluster-scoped, quyền ghi đúng các kind trong `allow` (`KUBE_ALLOWABLE`, không có StorageClass), và bốn
+    `serviceaccounts/token`, không escalate/bind; ghi được ResourceQuota, LimitRange của chính namespace đó), ClusterRoleBinding
+    vào `view` (đọc mọi namespace, không có Secret) và quyền đọc object cluster-scoped, quyền ghi đúng các kind trong `allow`
+    (`KUBE_ALLOWABLE`, không có StorageClass; có CustomResourceDefinition thì Role thêm quyền ghi mọi resource của nhóm API riêng
+    `api_group` trong namespace của lab, và CRD phải thuộc nhóm đó), và bốn
     ValidatingAdmissionPolicy: policy `devops-ex-<id>` áp cho mọi ServiceAccount của namespace (nhóm
     `system:serviceaccounts:<ns>`, kể cả ServiceAccount bài tự tạo rồi lấy token trong pod): object cluster-scoped tạo, sửa,
-    xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, ClusterRoleBinding không
-    cấp cho `system:*`; policy `devops-ex-<id>-pv` từ chối PV hostPath của mọi user không phải thành phần hệ thống và PV local
+    xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, CRD chỉ thuộc `api_group`,
+    ClusterRoleBinding không cấp cho `system:*`; policy `devops-ex-<id>-pv` từ chối PV hostPath của mọi user không phải thành phần hệ thống và PV local
     ngoài `KUBE_LOCAL_PV_ROOT` hay không do admin tạo; policy `devops-ex-<id>-rbac` (cũng cho mọi ServiceAccount của namespace,
     cả Role/RoleBinding trong namespace): không nhãn `rbac.authorization.k8s.io/aggregate-to-*`, không aggregationRule, binding
-    không cấp cho `system:*` hay ServiceAccount của namespace khác; policy `devops-ex-<id>-routes` (cũng cho mọi ServiceAccount
+    không cấp cho `system:*` hay ServiceAccount của namespace khác (RoleBinding bỏ trống namespace của subject ServiceAccount là
+    namespace của chính nó); policy `devops-ex-<id>-routes` (cũng cho mọi ServiceAccount
     của namespace): Ingress phải `ingressClassName: devops-traefik`, không `defaultBackend`, HTTPRoute chỉ gắn Gateway
     `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con. Lab chỉ trao kubeconfig khi cả
     bốn policy đã chặn được lần tạo thử.
@@ -3530,7 +3561,9 @@ class KubeLab:
     khác, không bao giờ mount vào sandbox của người học. `kubectl`/`helm` từ chối cờ đổi cluster, context, user hay danh tính
     (`--kubeconfig`, `--context`, `--server`/`-s`, `--token`, `--as`..., với helm mọi `--kube*`); script tự gọi kubectl không bị
     kiểm cờ nhưng chỉ có token của lab, `~/.kube` thật bị sandbox che. Việc cần quyền admin chỉ qua `admin_local_pv` và
-    `node_action`, từ spec đã kiểm từng trường.
+    `node_action`, từ spec đã kiểm từng trường; `can_i` hỏi `kubectl auth can-i --as=...` hộ người học bằng quyền admin, chỉ đọc.
+    `kubectl` nhận `--user`, `--group`, `--serviceaccount` duy nhất khi argv bắt đầu bằng `create rolebinding` hay `create
+    clusterrolebinding` (subject của binding); đặt trước lệnh con hay ở lệnh khác là cờ danh tính, bị từ chối.
 
     Ranh giới: quyền RBAC của token, bốn policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
     hostNetwork, hostPID, hostIPC, hostPort, capability lạ). Node kind là container privileged: pod privileged thấy ổ đĩa của máy
@@ -3566,6 +3599,7 @@ class KubeLab:
         self._cordoned: set[str] = set()
         self._taints: set[tuple[str, str, str]] = set()
         self._local_nodes: set[str] = set()
+        self._node_lock = None
 
     @property
     def control(self) -> Path:
@@ -3681,6 +3715,9 @@ class KubeLab:
             {"expression": "request.operation == 'DELETE' || request.resource.resource != 'priorityclasses' || "
                            "!has(object.globalDefault) || object.globalDefault == false",
              "message": "PriorityClass của bài không được globalDefault"},
+            {"expression": "request.operation == 'DELETE' || request.resource.resource != 'customresourcedefinitions' || "
+                           f"object.spec.group == '{self.api_group}'",
+             "message": f"CustomResourceDefinition của bài phải thuộc nhóm API riêng của lab: {self.api_group}"},
             {"expression": "request.operation == 'DELETE' || request.resource.resource != 'clusterrolebindings' || "
                            "!has(object.subjects) || !object.subjects.exists(s, s.kind != 'ServiceAccount' && "
                            "s.name.startsWith('system:'))",
@@ -3698,6 +3735,7 @@ class KubeLab:
              "message": "ClusterRole của bài không được có aggregationRule"},
             {"expression": "!(request.resource.resource in ['rolebindings', 'clusterrolebindings']) || !has(object.subjects) || "
                            "object.subjects.all(s, !s.name.startsWith('system:') && (s.kind != 'ServiceAccount' || "
+                           "(request.resource.resource == 'rolebindings' && (!has(s.namespace) || s.namespace == '')) || "
                            f"(has(s.namespace) && s.namespace == '{self.namespace}')))",
              "message": f"Binding của bài chỉ cấp quyền cho user, nhóm không phải system:* hay ServiceAccount của {self.namespace}"},
         ]
@@ -3744,6 +3782,9 @@ class KubeLab:
             cluster_binding(f"{self.namespace}-read", f"{self.namespace}-read"),
             cluster_binding(f"{self.namespace}-view", "view"),
         ]
+        if "CustomResourceDefinition" in self.allow:
+            items[items.index(next(i for i in items if i["kind"] == "Role"))]["rules"] = [
+                *_KUBE_LEARNER_RULES, {"apiGroups": [self.api_group], "resources": ["*"], "verbs": _KUBE_RW}]
         if self.allow:
             rules = [{"apiGroups": [KUBE_ALLOWABLE[kind][0]], "resources": [KUBE_ALLOWABLE[kind][1]],
                       "verbs": ["get", "list", "watch", "create", "update", "patch", "delete"]} for kind in self.allow]
@@ -3755,6 +3796,13 @@ class KubeLab:
     @property
     def hostname(self) -> str:
         """Tên miền riêng của lab cho Ingress và HTTPRoute: `<namespace>.olist.test` (cộng tên con)."""
+        return f"{self.namespace}.{KUBE_LAB_DOMAIN}"
+
+    @property
+    def api_group(self) -> str:
+        """Nhóm API riêng của lab cho CustomResourceDefinition (`allow` có CustomResourceDefinition): `<namespace>.olist.test`.
+        CRD của bài phải thuộc nhóm này (kiểm tĩnh và policy của lab); Role của lab ghi được mọi resource của nhóm này trong
+        namespace của lab, không nhóm nào khác. Tên CRD là cluster-wide, nhóm riêng giúp hai lab chạy song song không giẫm nhau."""
         return f"{self.namespace}.{KUBE_LAB_DOMAIN}"
 
     @property
@@ -3864,7 +3912,7 @@ class KubeLab:
         try:
             documents = _kube_flatten(documents)
             problems = kube_manifest_problems(documents, lab_id=self.id, namespace=self.namespace, allow=self.allow,
-                                              cluster_kinds=self._cluster_kinds)
+                                              cluster_kinds=self._cluster_kinds, api_group=self.api_group)
             payload = json.dumps({"apiVersion": "v1", "kind": "List", "items": documents}, default=str)
         except RecursionError:
             pytest.fail("Manifest bị từ chối trước khi apply: lồng quá sâu")
@@ -3914,7 +3962,7 @@ class KubeLab:
         rendered = self.helm("template", release, str(chart), "--namespace", self.namespace, *args, readonly=[chart])
         documents = _kube_flatten(self._parse(rendered.stdout, f"helm template {release}"))
         problems = kube_manifest_problems(documents, lab_id=self.id, namespace=self.namespace, allow=self.allow,
-                                          cluster_kinds=self._cluster_kinds)
+                                          cluster_kinds=self._cluster_kinds, api_group=self.api_group)
         if problems:
             pytest.fail(f"Chart {chart.name} bị từ chối trước khi cài:\n- " + "\n- ".join(problems))
         return self.helm("upgrade", "--install", release, str(chart), "--namespace", self.namespace, *args, readonly=[chart],
@@ -3978,13 +4026,92 @@ class KubeLab:
             pytest.fail(f"Không tạo được PV {volume['metadata']['name']}: {_output_tail(result)}")
         return volume["metadata"]["name"]
 
+    def can_i(self, verb: str, resource: str, *, serviceaccount: str | None = None, user: str | None = None, groups=(),
+              subresource: str | None = None, all_namespaces: bool = False) -> bool:
+        """`kubectl auth can-i` bằng quyền admin, chỉ đọc (hỏi SubjectAccessReview, không đổi gì), cho một ServiceAccount của lab
+        (`serviceaccount`, thành `system:serviceaccount:<namespace của lab>:<tên>`) hoặc một user (`user`, cộng `groups`). Token của
+        lab không có `impersonate` nên `--as` bị từ chối với người học; testkit hỏi hộ. Mặc định trong namespace của lab;
+        `all_namespaces` hỏi quyền trên mọi namespace (`--all-namespaces`)."""
+        self._require_entered()
+        if (serviceaccount is None) == (user is None):
+            raise ValueError("can_i cần đúng một trong serviceaccount hoặc user")
+        if not isinstance(verb, str) or not re.fullmatch(r"[a-z*]{1,30}", verb):
+            raise ValueError(f"verb {verb!r} không hợp lệ")
+        if not isinstance(resource, str) or not re.fullmatch(r"[a-z0-9*][-a-z0-9.*/]{0,100}", resource):
+            raise ValueError(f"resource {resource!r} không hợp lệ")
+        if subresource is not None and (not isinstance(subresource, str) or not re.fullmatch(r"[a-z][a-z0-9]{0,40}", subresource)):
+            raise ValueError(f"subresource {subresource!r} không hợp lệ")
+        identity = re.compile(r"[A-Za-z0-9][-A-Za-z0-9@._:]{0,100}")
+        if serviceaccount is not None and (not isinstance(serviceaccount, str) or not _KUBE_NAME.fullmatch(serviceaccount)):
+            raise ValueError(f"serviceaccount {serviceaccount!r} phải là tên ServiceAccount trong namespace của lab")
+        if user is not None and (not isinstance(user, str) or not identity.fullmatch(user)):
+            raise ValueError(f"user {user!r} không hợp lệ")
+        for group in groups:
+            if not isinstance(group, str) or not identity.fullmatch(group):
+                raise ValueError(f"group {group!r} không hợp lệ")
+        argv = ["auth", "can-i", verb, resource, "--all-namespaces" if all_namespaces else "-n", *([] if all_namespaces else
+                                                                                                    [self.namespace])]
+        if subresource:
+            argv.append(f"--subresource={subresource}")
+        who = f"system:serviceaccount:{self.namespace}:{serviceaccount}" if serviceaccount else user
+        argv += [f"--as={who}", *(f"--as-group={group}" for group in groups)]
+        result = self._admin.run(*argv)
+        answer = result.stdout.strip().splitlines()[-1:] if result.stdout.strip() else []
+        if answer not in (["yes"], ["no"]):
+            pytest.fail(f"kubectl {' '.join(argv)} không trả yes/no: {_output_tail(result)}")
+        return answer == ["yes"]
+
+    def _lock_nodes(self) -> None:
+        if self._node_lock is not None:
+            return
+        import fcntl
+
+        path = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "devops-track" / "kube-nodes.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(path, "a+")
+        deadline = time.monotonic() + KUBE_NODE_LOCK_TIMEOUT
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() > deadline:
+                    handle.close()
+                    pytest.fail(f"node_action chờ quá {KUBE_NODE_LOCK_TIMEOUT}s: một lab khác đang cordon, drain hay taint worker "
+                                f"({path}); bài dùng node_action không chạy song song")
+                time.sleep(min(2, KUBE_NODE_LOCK_TIMEOUT / 4))
+        self._node_lock = handle
+
+    def _wait_shared_ready(self, errors: list[str]) -> None:
+        deadline = time.monotonic() + KUBE_SHARED_READY_TIMEOUT
+        waiting: list[str] = []
+        while True:
+            waiting = []
+            for namespace in KUBE_SHARED_NAMESPACES:
+                result = self._admin.run("-n", namespace, "get", "deployments", "-o", "json")
+                try:
+                    items = json.loads(result.stdout).get("items", []) if result.returncode == 0 and result.stdout.strip() else []
+                except ValueError:
+                    items = []
+                waiting += [f"{namespace}/{item['metadata']['name']}" for item in items
+                            if ((item.get("status") or {}).get("availableReplicas") or 0) < ((item.get("spec") or {}).get("replicas", 1) or 0)]
+            if not waiting or time.monotonic() > deadline:
+                break
+            time.sleep(2)
+        if waiting:
+            errors.append(f"sau khi hoàn tác node, thành phần dùng chung chưa available lại sau {KUBE_SHARED_READY_TIMEOUT}s: "
+                          f"{', '.join(waiting)}")
+
     def node_action(self, spec: dict, *, check: bool = True) -> subprocess.CompletedProcess:
         """Thao tác node bằng quyền admin từ spec đã kiểm, chỉ trên worker, không bao giờ control plane: `{"action": "cordon" |
         "uncordon" | "drain", "node": ...}` (drain luôn `--ignore-daemonsets --delete-emptydir-data`, có eviction, không bao giờ
         `--disable-eviction`), `{"action": "taint" | "untaint", "node": ..., "taint": {"key", "value", "effect"}}` (key không
         thuộc `kubernetes.io`, `k8s.io`). `close()` uncordon mọi node lab đã cordon hay drain và gỡ mọi taint lab đã thêm.
-        Giới hạn: trạng thái cordon và taint là của node, không đếm theo lab; hai lab chạy song song cùng cordon một worker thì
-        lab đóng trước uncordon luôn cho lab kia. Bài dùng `node_action` không chạy song song với nhau (pytest-xdist)."""
+        Trạng thái cordon và taint là của node, không đếm theo lab, nên lần `node_action` đầu tiên giữ khoá
+        `~/.cache/devops-track/kube-nodes.lock` (flock, chờ tối đa `KUBE_NODE_LOCK_TIMEOUT`) tới khi `close()` hoàn tác xong: hai
+        lab dùng `node_action` không bao giờ chạy chồng nhau, kể cả ở hai tiến trình pytest. Test dùng `node_action` mang marker
+        `kube_nodes`. Sau khi hoàn tác, `close()` chờ Deployment trong `KUBE_SHARED_NAMESPACES` (CoreDNS, local-path, Gateway,
+        metrics-server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node."""
         self._require_entered()
         spec = self._spec(spec, {"action", "node"}, {"taint"}, "node_action")
         action = spec["action"]
@@ -3993,12 +4120,16 @@ class KubeLab:
         node = self._worker(spec["node"])
         if (action in ("taint", "untaint")) != ("taint" in spec):
             raise ValueError("taint chỉ đi kèm action taint hay untaint, và hai action đó cần taint")
+        taint_spec = None
         if action in ("taint", "untaint"):
             taint = self._spec(spec["taint"], {"key", "effect"}, {"value"}, "taint")
             key, value, effect = taint["key"], taint.get("value", ""), taint["effect"]
             if (not isinstance(key, str) or not _KUBE_TAINT_KEY.fullmatch(key) or "kubernetes.io" in key or "k8s.io" in key
                     or not isinstance(value, str) or not _KUBE_TAINT_VALUE.fullmatch(value) or effect not in _KUBE_TAINT_EFFECTS):
                 raise ValueError(f"taint {taint!r} không hợp lệ (key riêng của bài, effect {', '.join(_KUBE_TAINT_EFFECTS)})")
+            taint_spec = (key, effect)
+        self._lock_nodes()
+        if taint_spec:
             argv = ["taint", "nodes", node, f"{key}={value}:{effect}" if value else f"{key}:{effect}"]
             if action == "untaint":
                 argv[-1] = f"{key}:{effect}-"
@@ -4035,6 +4166,8 @@ class KubeLab:
             result = self._admin.run("uncordon", node)
             if result.returncode != 0:
                 errors.append(f"uncordon {node}: {_output_tail(result)}")
+        if self._node_lock is not None:
+            self._wait_shared_ready(errors)
 
     def close(self) -> None:
         """Gỡ thao tác node của lab, xoá namespace, chờ rồi xoá PV có `claimRef` trỏ namespace của lab (PV do local-path tạo
@@ -4071,6 +4204,9 @@ class KubeLab:
             errors.append(str(error))
         finally:
             self._kubeconfig_text = ""
+            if self._node_lock is not None:
+                self._node_lock.close()
+                self._node_lock = None
             if self.root is not None:
                 shutil.rmtree(self.root, ignore_errors=True)
         if errors:
@@ -4365,6 +4501,36 @@ class Exercise:
                 result = admin.run(*args)
                 if result.returncode != 0 or not ok(result.stdout):
                     pytest.skip(KUBE_SKIP_GATEWAY.format(name=name, detail=f"thiếu {what}", setup=KUBE_GATEWAY_SETUP))
+
+    @staticmethod
+    def require_metrics(name: str = KIND_CLUSTER) -> None:
+        """Skip kèm lệnh cài khi cluster chưa có metrics-server dùng được: Deployment `kube-system/metrics-server` có pod
+        available, APIService `v1beta1.metrics.k8s.io` Available, và `/apis/metrics.k8s.io/v1beta1/nodes` đã có số liệu. Admin cài
+        một lần từ `setup/kind/metrics-server/` (manifest ghim của release, cờ `--kubelet-insecure-tls`, image nạp sẵn); test không
+        bao giờ cài."""
+        _require_cluster_up(name)
+        with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}metrics-") as tmp:
+            admin = _KubeAdmin(Path(tmp), name)
+
+            def has_nodes(out: str) -> bool:
+                try:
+                    return bool(json.loads(out).get("items"))
+                except ValueError:
+                    return False
+
+            checks = (
+                ("Deployment metrics-server chưa có pod available", ("-n", "kube-system", "get", "deployment", "metrics-server", "-o",
+                                                                     "jsonpath={.status.availableReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+                ("APIService v1beta1.metrics.k8s.io chưa Available", ("get", "apiservice", "v1beta1.metrics.k8s.io", "-o",
+                                                                      "jsonpath={.status.conditions[?(@.type=='Available')].status}"),
+                 lambda out: out.strip() == "True"),
+                ("metrics.k8s.io chưa có số liệu của node", ("get", "--raw", "/apis/metrics.k8s.io/v1beta1/nodes"), has_nodes),
+            )
+            for what, args, ok in checks:
+                result = admin.run(*args)
+                if result.returncode != 0 or not ok(result.stdout):
+                    pytest.skip(KUBE_SKIP_METRICS.format(name=name, detail=what, setup=KUBE_METRICS_SETUP))
 
     @staticmethod
     def require_kind_images(*images: str, name: str = KIND_CLUSTER) -> None:

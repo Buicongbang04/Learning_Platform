@@ -435,6 +435,24 @@ def check_tool_calls(path: Path) -> list[str]:
     ]
 
 
+def check_node_action_marker(path: Path) -> list[str]:
+    """Test gọi `.node_action(` (cordon, drain, taint worker dùng chung) phải đặt `pytestmark` cấp module có
+    `pytest.mark.kube_nodes`, để chọn hay loại cả tệp (`-m "not kube_nodes"`) khi chạy song song; testkit còn giữ khoá node."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError:
+        return []
+    calls = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "node_action"]
+    if not calls:
+        return []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets):
+            if "pytest.mark.kube_nodes" in ast.unparse(node.value):
+                return []
+    return [f"{path}:{calls[0]}: test dùng node_action phải có pytestmark = pytest.mark.kube_nodes ở cấp module"]
+
+
 def track_test_files() -> list[Path]:
     roots = [MODULES_DIR, TRACK / "capstone"]
     return sorted(p for root in roots if root.is_dir() for p in root.rglob("*.py") if "tests" in p.relative_to(root).parts)
@@ -951,3 +969,20 @@ def test_track_json_check_catches_defects():
     data = valid_track()
     del data["modules"][0]["topics"]
     assert any("00-introduction" in e for e in check_track_json(data))
+
+
+def test_node_action_tests_carry_marker():
+    assert_clean([e for p in track_test_files() for e in check_node_action_marker(p)])
+
+
+@pytest.mark.parametrize("source,ok", [
+    ("import pytest\n\npytestmark = pytest.mark.kube_nodes\n\ndef test_x(lab):\n    lab.node_action({})\n", True),
+    ("import pytest\n\npytestmark = [pytest.mark.kube_nodes, pytest.mark.slow]\n\ndef test_x(lab):\n    lab.node_action({})\n", True),
+    ("import pytest\n\n@pytest.mark.kube_nodes\ndef test_x(lab):\n    lab.node_action({})\n", False),
+    ("def test_x(lab):\n    lab.node_action({})\n", False),
+    ("import pytest\n\npytestmark = pytest.mark.slow\n\ndef test_x(lab):\n    lab.node_action({})\n", False),
+    ("def test_x(lab):\n    lab.kubectl('get', 'pods')\n", True),
+])
+def test_node_action_marker_detection(tmp_path, source, ok):
+    path = write(tmp_path / "test_x.py", source)
+    assert (check_node_action_marker(path) == []) is ok
