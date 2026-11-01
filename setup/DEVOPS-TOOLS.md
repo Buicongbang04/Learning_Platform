@@ -158,7 +158,9 @@ tạo cluster; test không bao giờ cài, thiếu thì `ex.require_gateway()` s
 | Object dùng chung (`10-traefik.yaml`) | Namespace `devops-gateway` (Pod Security `restricted`), Deployment, Service `traefik` (ClusterIP cổng 80), IngressClass `devops-traefik`, GatewayClass `devops-traefik`, Gateway `devops-gateway/public` (listener HTTP 8000, chỉ nhận HTTPRoute từ namespace có nhãn `devops-ex`) | `SHA256SUMS` |
 
 Manifest dùng tag vì `kind load` không giữ repo digest trong containerd của node (pod ghi digest sẽ khiến kubelet kéo lại từ Docker
-Hub); digest được ghim ở bước `docker pull`. Chạy từ thư mục gốc của repo, sau khi đã tạo cluster:
+Hub); digest được ghim ở bước `docker pull`, và Deployment đặt `imagePullPolicy: Never`: chưa nạp image thì pod báo
+`ErrImageNeverPull` thay vì tự kéo một tag không ghim. `00-gateway-api-v1.6.3-standard-install.yaml` là bản chép nguyên của release;
+`10-traefik.yaml` do track viết. Chạy từ thư mục gốc của repo, sau khi đã tạo cluster:
 
 ```bash
 docker pull traefik@sha256:30ff62491aacdb862ceb8c9edcf2627da638d7deafdd4b6dab32fe34f8aa3e90 &&

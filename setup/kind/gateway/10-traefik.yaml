@@ -80,7 +80,7 @@ spec:
       containers:
         - name: traefik
           image: traefik:v3.7.17
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           args:
             - --global.checkNewVersion=false
             - --global.sendAnonymousUsage=false

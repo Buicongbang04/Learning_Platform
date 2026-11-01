@@ -3512,15 +3512,17 @@ class KubeLab:
     `devops-ex-<id>` có nhãn `devops-ex=<id>` và Pod Security `enforce=<pod_security>` (baseline, hoặc restricted), ServiceAccount
     `devops-ex-learner` với Role riêng `_KUBE_LEARNER_RULES` trong namespace đó (không `impersonate`, không
     `serviceaccounts/token`, không escalate/bind), ClusterRoleBinding vào `view` (đọc mọi namespace, không có Secret) và quyền đọc
-    object cluster-scoped, quyền ghi đúng các kind trong `allow` (`KUBE_ALLOWABLE`, không có StorageClass), và hai
+    object cluster-scoped, quyền ghi đúng các kind trong `allow` (`KUBE_ALLOWABLE`, không có StorageClass), và bốn
     ValidatingAdmissionPolicy: policy `devops-ex-<id>` áp cho mọi ServiceAccount của namespace (nhóm
     `system:serviceaccounts:<ns>`, kể cả ServiceAccount bài tự tạo rồi lấy token trong pod): object cluster-scoped tạo, sửa,
     xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, ClusterRoleBinding không
     cấp cho `system:*`; policy `devops-ex-<id>-pv` từ chối PV hostPath của mọi user không phải thành phần hệ thống và PV local
     ngoài `KUBE_LOCAL_PV_ROOT` hay không do admin tạo; policy `devops-ex-<id>-rbac` (cũng cho mọi ServiceAccount của namespace,
     cả Role/RoleBinding trong namespace): không nhãn `rbac.authorization.k8s.io/aggregate-to-*`, không aggregationRule, binding
-    không cấp cho `system:*` hay ServiceAccount của namespace khác. Lab chỉ trao kubeconfig khi cả ba policy đã chặn được lần tạo
-    thử.
+    không cấp cho `system:*` hay ServiceAccount của namespace khác; policy `devops-ex-<id>-routes` (cũng cho mọi ServiceAccount
+    của namespace): Ingress phải `ingressClassName: devops-traefik`, không `defaultBackend`, HTTPRoute chỉ gắn Gateway
+    `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con. Lab chỉ trao kubeconfig khi cả
+    bốn policy đã chặn được lần tạo thử.
 
     `kubectl`, `helm`, `run` (script của bài), `apply_learner`, `helm_install` chạy qua `run_sandboxed` với `KUBECONFIG` là
     kubeconfig của lab (một cluster, một context có namespace của lab, token của `devops-ex-learner`) trong thư mục `control`
@@ -3530,7 +3532,7 @@ class KubeLab:
     kiểm cờ nhưng chỉ có token của lab, `~/.kube` thật bị sandbox che. Việc cần quyền admin chỉ qua `admin_local_pv` và
     `node_action`, từ spec đã kiểm từng trường.
 
-    Ranh giới: quyền RBAC của token, hai policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
+    Ranh giới: quyền RBAC của token, bốn policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
     hostNetwork, hostPID, hostIPC, hostPort, capability lạ). Node kind là container privileged: pod privileged thấy ổ đĩa của máy
     host, hostPath vào node chạm `/var` và `/run/containerd` của node. Vì thế chặn các trường đó là yêu cầu an toàn cho máy host
     chứ không chỉ cho cluster. `kube_manifest_problems` trong `apply_learner` và `helm_install` (sau `helm template`) là tín hiệu
@@ -3760,8 +3762,9 @@ class KubeLab:
         return f"{self.namespace}-probe"
 
     def _wait_ready(self) -> None:
-        """Policy và RBAC mới tạo chỉ có hiệu lực sau khi API server đồng bộ (vài giây). Chờ tới khi hai lần tạo thử bằng admin
-        (dry-run, tên probe riêng của lab) bị đúng hai policy của lab chặn: ClusterRole không nhãn, PV hostPath. Rồi chờ token
+        """Policy và RBAC mới tạo chỉ có hiệu lực sau khi API server đồng bộ (vài giây). Chờ tới khi mỗi lần tạo thử bằng admin
+        (dry-run, tên probe riêng của lab) bị đúng policy tương ứng của lab chặn: ClusterRole không nhãn, ClusterRole nhãn
+        aggregate-to, PV hostPath, Ingress không class. Rồi chờ token
         của lab được tạo pod, mới trao kubeconfig."""
         probes = {
             self.namespace: {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
