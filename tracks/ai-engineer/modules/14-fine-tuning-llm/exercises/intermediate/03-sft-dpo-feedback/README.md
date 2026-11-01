@@ -26,7 +26,7 @@ của chính model, chạy DPO, và so DPO với một đối chứng công bằ
 Chạy notebook bằng kernel `ai-gpu`. Thời gian trên là thời gian làm bài; notebook lời giải chạy khoảng 16 phút trên PC của
 track (RTX 3060 12GB, GPU có lúc dùng chung với tiến trình khác), VRAM đỉnh khi train dưới 3 GiB (cấp phát bởi PyTorch), vừa GPU 4GB của
 laptop. Lần đầu tải Qwen2.5-0.5B-Instruct khoảng 1 GB. Kernel CPU (môi trường gốc) chỉ chạy bản thu nhỏ để kiểm code chạy
-hết. Đọc mục 2, 5, 6 lý thuyết và mục 5, 7 module 11 (structured output, tập ghim 150 câu).
+hết (khoảng 10 phút trên CPU 4 luồng), con số của bản đó không có ý nghĩa. Đọc mục 2, 5, 6 lý thuyết và mục 5, 7 module 11 (structured output, tập ghim 150 câu).
 
 Mở `starter/sft_dpo.ipynb`. Trong các cell chấm điểm:
 

@@ -23,10 +23,10 @@ không fine-tune để trả lời câu hỏi: thứ model thiếu là hành vi 
 
 **Phần cứng:** GPU 4GB · ~120 phút
 
-Chạy notebook bằng kernel `ai-gpu`. Thời gian trên là thời gian làm bài; notebook lời giải chạy <<I02_TIME>> trên PC của
-track (RTX 3060 12GB), VRAM đỉnh khi train <<I02_VRAM>>. Cell so với Qwen2.5-3B-Instruct (bf16, khoảng 6 GB trọng số) chỉ
-chạy khi GPU trống trên 8 GiB, tức trên PC; laptop 4GB tự bỏ qua cell đó và dùng số trong lời giải. Cần hai tệp do bài 01
-ghi ra: làm bài 01 trước. Đọc mục 2, 3, 7 lý thuyết.
+Chạy notebook bằng kernel `ai-gpu`. Thời gian trên là thời gian làm bài; notebook lời giải chạy khoảng 12 phút trên PC của
+track (RTX 3060 12GB), VRAM đỉnh khi train dưới 3 GiB (cấp phát bởi PyTorch, ngân sách 1 024 token mỗi batch). Cell so với Qwen2.5-3B-Instruct (bf16, khoảng 6 GB trọng số) chỉ
+chạy khi GPU trống trên 8 GiB, tức trên PC; laptop 4GB tự bỏ qua cell đó và dùng số trong lời giải. Kernel CPU (môi trường gốc) chỉ chạy bản thu nhỏ khoảng 5 phút
+để kiểm code. Cần hai tệp do bài 01 ghi ra: làm bài 01 trước. Đọc mục 2, 3, 7 lý thuyết.
 
 Mở `starter/sft_instruction.ipynb`:
 
@@ -36,7 +36,7 @@ Mở `starter/sft_instruction.ipynb`:
 4. `normalize_answer`, `is_short_answer`, `exact_match`: chọn câu trắc nghiệm có đáp án ngắn nằm trong câu hỏi, so đáp án
    sau chuẩn hoá.
 
-Rồi chạy các cell `explore`: chọn 4 000 câu train, 300 câu validation cho loss, 300 câu trắc nghiệm (cả hai lấy từ phần
+Rồi chạy các cell `explore`: chọn 4 000 câu train, 300 câu validation cho loss, 200 câu trắc nghiệm (cả hai lấy từ phần
 validation chia theo nhóm của bài 01, không trùng nhau); đo model gốc; train 1 epoch LoRA r = 16 trên mọi lớp tuyến tính;
 đo lại; so với 3B. Sau đó làm phần trắc nghiệm của bài trong app.
 

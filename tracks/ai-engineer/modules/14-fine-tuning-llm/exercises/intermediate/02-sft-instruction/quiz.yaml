@@ -1,0 +1,92 @@
+questions:
+- id: labeled-share
+  kind: data
+  type: single
+  prompt: "Trong 4 000 mẫu train (tối đa 512 token), khoảng bao nhiêu phần trăm token có label (thuộc phần trả lời)?"
+  options:
+  - id: a
+    text: Khoảng 5%
+  - id: b
+    text: Khoảng 40%
+  - id: c
+    text: Khoảng 80%
+  - id: d
+    text: Đúng 100%
+- id: padding-waste
+  kind: data
+  type: single
+  prompt: "Tỉ lệ token thật khi batch cố định 8 mẫu theo thứ tự gốc, so với batch theo ngân sách token?"
+  options:
+  - id: a
+    text: Khoảng 0.64, so với gần 1.0
+  - id: b
+    text: Khoảng 0.95, so với khoảng 0.97
+  - id: c
+    text: Khoảng 0.30, so với khoảng 0.35
+  - id: d
+    text: Gần 1.0, so với khoảng 0.64
+- id: ppl-change
+  kind: data
+  type: single
+  prompt: "Perplexity trên 300 mẫu validation (chia theo nhóm) thay đổi thế nào sau 1 epoch SFT?"
+  options:
+  - id: a
+    text: Tăng, vì model quên kiến thức cũ
+  - id: b
+    text: Giảm từ khoảng 6 xuống khoảng 4.4
+  - id: c
+    text: Giảm từ khoảng 6 xuống khoảng 1.1
+  - id: d
+    text: Không đổi trong sai số
+- id: em-change
+  kind: data
+  type: single
+  prompt: "Exact-match trên 200 câu trắc nghiệm đáp án ngắn trước và sau SFT?"
+  options:
+  - id: a
+    text: Từ khoảng 0.18 lên khoảng 0.26
+  - id: b
+    text: Từ khoảng 0.60 lên khoảng 0.95
+  - id: c
+    text: Từ khoảng 0.26 xuống khoảng 0.18
+  - id: d
+    text: Cả hai lần đều đúng 0
+- id: token-weighted
+  kind: knowledge
+  type: single
+  prompt: "Vì sao `heldout_nll` cộng tổng NLL rồi chia tổng số token, thay vì lấy trung bình `loss` của từng batch?"
+  options:
+  - id: a
+    text: Vì `loss` của Hugging Face không tính được ở chế độ eval
+  - id: b
+    text: Vì batch có số token khác nhau, trung bình batch lệch trọng số
+  - id: c
+    text: Vì cộng tổng chạy nhanh hơn hẳn trên GPU so với việc lấy trung bình
+  - id: d
+    text: Vì perplexity chỉ định nghĩa cho batch có một mẫu duy nhất
+- id: shuffle-batches
+  kind: knowledge
+  type: single
+  prompt: "Batch được xếp theo độ dài. Vì sao vẫn phải trộn thứ tự các batch trước khi train?"
+  options:
+  - id: a
+    text: Để model không thấy mọi mẫu ngắn trước rồi mọi mẫu dài sau
+  - id: b
+    text: Để mỗi batch có đúng một mẫu của mỗi system prompt
+  - id: c
+    text: Vì PEFT báo lỗi khi gặp các batch có độ dài tăng dần đều nhau
+  - id: d
+    text: Để tỉ lệ token thật tăng lên gần 1.0 hơn nữa
+- id: ppl-meaning
+  kind: knowledge
+  type: single
+  prompt: "Perplexity validation giảm sau SFT. Kết luận nào chắc chắn nhất?"
+  options:
+  - id: a
+    text: Model trả lời đúng hơn ở mọi tác vụ, kể cả tác vụ chưa từng gặp
+  - id: b
+    text: Model khớp phân phối của dữ liệu SFT hơn, chưa chắc đúng hơn
+  - id: c
+    text: Model đã học thuộc toàn bộ tập validation
+  - id: d
+    text: Model chắc chắn tốt hơn mọi model lớn hơn
