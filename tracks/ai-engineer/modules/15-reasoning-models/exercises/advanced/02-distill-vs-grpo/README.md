@@ -47,8 +47,8 @@ của Intermediate 03 và Advanced 01 (làm trước); thiếu Advanced 01 thì 
   khoảng tin cậy của một hiệu cỡ ±3 tới 4 điểm).
 - Phân tích dữ liệu tổng hợp: thầy đúng bao nhiêu, bao nhiêu câu có lời giải, độ dài và văn phong so với trò; kiểm
   nhiễm bẩn.
-- Giới hạn và điều kiện: thầy 3B chỉ hơn trò vừa phải; giấy phép dùng output của model thầy (Qwen2.5 3B có giấy phép riêng,
-  đọc model card); API đóng thường cấm dùng output để train model cạnh tranh.
+- Giới hạn và điều kiện: lượng dữ liệu (800 câu) so với các công thức distill thật; giấy phép dùng output của model thầy
+  (Qwen2.5 3B có giấy phép riêng, đọc model card); API đóng thường cấm dùng output để train model cạnh tranh.
 
 ## Tiêu chí đạt
 
