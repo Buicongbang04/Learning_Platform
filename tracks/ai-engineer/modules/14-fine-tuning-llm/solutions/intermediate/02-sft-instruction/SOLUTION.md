@@ -21,27 +21,32 @@
 
 Dữ liệu: 4 000 mẫu train (1 139 057 token, trong đó 483 297 token có label, 42%), 300 mẫu validation cho loss (36 568 token
 có label), 200 câu trắc nghiệm đáp án ngắn (trong 287 câu như vậy của 3 689 câu validation). Ngân sách 1 024 token mỗi batch:
-1 297 bước, 613 giây, VRAM đỉnh 2.83 GiB. Tỉ lệ token thật: **0.999** với batch theo ngân sách token, **0.635** với batch
+1 297 bước, 600 giây, VRAM đỉnh 2.83 GiB. Tỉ lệ token thật: **0.999** với batch theo ngân sách token, **0.635** với batch
 cố định 8 mẫu theo thứ tự gốc.
 
-| Model | Val loss | Val perplexity | Trắc nghiệm EM | Độ dài trả lời TB (ký tự) |
-| --- | --- | --- | --- | --- |
-| 0.5B gốc | 1.796 | 6.02 | 0.175 | 54.4 |
-| 0.5B + SFT LoRA (4 000 mẫu, 1 epoch) | 1.478 | 4.39 | 0.260 | 38.7 |
-| 3B gốc, không fine-tune | <<I02_3B_LOSS>> | <<I02_3B_PPL>> | <<I02_3B_EM>> | <<I02_3B_LEN>> |
+| Model | Val loss | Val perplexity | Trắc nghiệm EM | Có chứa đáp án | Độ dài trả lời TB (ký tự) |
+| --- | --- | --- | --- | --- | --- |
+| 0.5B gốc | 1.796 | 6.02 | 0.175 | 0.300 | 54.4 |
+| 0.5B + SFT LoRA (4 000 mẫu, 1 epoch) | 1.478 | 4.38 | 0.255 | 0.450 | 38.5 |
+| 3B gốc, không fine-tune | 1.578 | 4.85 | 0.025 | 0.480 | 104.7 |
 
-Dòng 3B đo bằng một script riêng với đúng cùng 300 + 200 câu (cell trong notebook tự bỏ qua vì lúc chạy notebook GPU đang có
-tiến trình khác giữ khoảng 7 GB); <<I02_3B_NOTE>>.
+"Có chứa đáp án": đáp án đúng (đã chuẩn hoá) nằm đâu đó trong câu trả lời; thước đo lỏng, ưu ái câu trả lời dài (một câu dài
+có thể nhắc nhiều lựa chọn). Dòng 3B đo bằng một script riêng với đúng cùng 300 + 200 câu và cùng hàm của notebook (cell
+trong notebook tự bỏ qua vì lúc chạy GPU đang có tiến trình khác giữ khoảng 3.4 GB; 3B bf16 cần 6.56 GiB, 123 giây). Chạy
+lại cả notebook hai lần: loss và perplexity của SFT trùng tới chữ số thứ 3, EM 0.260 và 0.255.
 
 Đọc bảng:
 
-- **Loss và perplexity giảm rõ** (6.02 xuống 4.39): model khớp phân phối của OpenOrca-Viet hơn, tức viết giống kiểu câu trả
-  lời của GPT-4 dịch sang tiếng Việt hơn. Đó là thay đổi **văn phong** là chủ yếu: câu trả lời trắc nghiệm ngắn đi (54 xuống
-  39 ký tự) và hay viết đúng lựa chọn hơn.
-- **Exact-match tăng** từ 0.175 lên 0.260; 200 câu cho khoảng tin cậy cỡ ±0.06 nên mức tăng có thật nhưng không lớn. Đọc
-  câu trả lời mẫu: model gốc hay viết dài hoặc thêm lời dẫn ("Dựa trên câu hỏi của bạn..."), exact-match tính là sai dù
-  ý có thể đúng; một phần mức tăng là do câu trả lời gọn đúng khuôn của dữ liệu.
-- <<I02_3B_READ>>
+- **Loss và perplexity giảm rõ** (6.02 xuống 4.38) và còn thấp hơn cả model 3B (4.85): model 0.5B sau SFT khớp phân phối của
+  OpenOrca-Viet hơn, tức viết giống kiểu câu trả lời trong dữ liệu hơn. Perplexity thấp hơn model lớn hơn không có nghĩa là
+  "giỏi hơn": nó đo mức giống văn phong dữ liệu.
+- **Exact-match kể một câu chuyện, "có chứa đáp án" kể câu chuyện khác.** Theo EM, 0.5B sau SFT (0.255) hơn hẳn 3B (0.025),
+  vì 3B luôn giải thích dài dòng (105 ký tự trung bình) theo system prompt của OpenOrca. Theo "có chứa đáp án", 3B không
+  fine-tune (0.48) ngang 0.5B sau SFT (0.45); 200 câu cho khoảng tin cậy cỡ ±0.07 nên không phân biệt được hai con số này.
+- Vậy SFT ở đây chủ yếu dạy **hành vi** (trả lời gọn, đúng khuôn: EM tăng từ 0.175 lên 0.255, độ dài giảm), và đưa model
+  0.5B lên **ngang** mức "biết đáp án" của model 3B chưa fine-tune, không vượt. Muốn model biết nhiều hơn thì chọn model nền
+  lớn hơn; muốn đúng khuôn thì prompt (few-shot, dặn "chỉ trả lời lựa chọn") hoặc SFT đều làm được, và SFT có lợi khi
+  phải dùng model nhỏ.
 
 ## Bẫy thường gặp
 

@@ -301,7 +301,8 @@ Qwen2.5-7B bằng QLoRA trên bài thật của Advanced 01 (chuỗi ngắn, bat
   khoảng 0.7 GiB ở bf16, và embedding 136 triệu tham số không bị lượng tử hoá. QLoRA đáng giá khi **trọng số** là khoản lớn
   nhất, tức với model 7B trở lên.
 - Full fine-tune 0.5B vẫn vừa GPU 12GB nhờ checkpointing; trên GPU 4GB của laptop chỉ LoRA (hoặc QLoRA) với chuỗi ngắn hơn,
-  batch nhỏ hơn mới vừa: các bài Intermediate giới hạn số token mỗi batch để đỉnh nằm dưới 4 GiB.
+  batch nhỏ hơn mới vừa: các bài Intermediate giới hạn số token mỗi batch để đỉnh nằm dưới 4 GiB. Lưu ý `SFTConfig` và
+  `DPOConfig` của TRL 1.17 bật gradient checkpointing **mặc định**; vòng train tự viết thì phải tự bật.
 
 Ước lượng cho máy của bạn: dùng công thức của module 09 mục 7 cho trọng số, cộng tham số LoRA × (4 + 4 + 8) byte (PEFT giữ adapter ở fp32), cộng
 activation (đo một bước như trên là cách nhanh nhất). Bài Advanced 01 cho bạn viết bộ ước lượng và so với số đo.

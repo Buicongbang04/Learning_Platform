@@ -51,6 +51,19 @@ questions:
     text: Từ khoảng 0.26 xuống khoảng 0.18
   - id: d
     text: Cả hai lần đều đúng 0
+- id: big-model-em
+  kind: data
+  type: single
+  prompt: "Qwen2.5-3B-Instruct không fine-tune đạt exact-match bao nhiêu trên cùng 200 câu trắc nghiệm, và vì sao?"
+  options:
+  - id: a
+    text: Khoảng 0.9, vì model lớn biết nhiều hơn
+  - id: b
+    text: Khoảng 0.5, ngang mức có chứa đáp án
+  - id: c
+    text: Dưới 0.05, vì trả lời dài dòng giải thích
+  - id: d
+    text: Đúng 0, vì 3B không đọc được tiếng Việt
 - id: token-weighted
   kind: knowledge
   type: single

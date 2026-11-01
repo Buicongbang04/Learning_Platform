@@ -25,10 +25,14 @@ chỉ dùng prompt? Bài toán là bài trích xuất phản hồi UIT-VSFC ra J
 
 **Phần cứng:** GPU 12GB (PC) · ~180 phút
 
-Chạy notebook bằng kernel `ai-gpu` (xem `setup/gpu/README.md`). Thời gian trên là thời gian làm bài. Thời gian máy của bản tham chiếu trên PC của track (RTX 3060 12GB): <<A01_TIMES>>.
-Lần đầu tải Qwen2.5-7B-Instruct khoảng 15 GB. **Laptop 4GB**: chạy cùng notebook với `MODEL = "Qwen/Qwen2.5-3B-Instruct"`,
-`BATCH = 2`, `GRAD_ACCUM = 8` (<<A01_3B>>), hoặc 0.5B; báo cáo ghi rõ model đã dùng. Đọc mục 3, 4 lý thuyết và mục 3, 7
-module 10. Làm bài Intermediate 03 trước.
+Chạy notebook bằng kernel `ai-gpu` (xem `setup/gpu/README.md`). Thời gian trên là thời gian làm bài. Thời gian máy của
+bản tham chiếu trên PC của track (RTX 3060 12GB, GPU dùng chung với tiến trình khác lúc đo): nạp 7B ở 4 bit vài giây khi đã
+có trong cache, đánh giá trước fine-tune khoảng 8 phút, QLoRA 1 epoch trên 2 000 câu khoảng 15 phút, đánh giá sau khoảng
+10 phút, VRAM đỉnh dưới 7 GiB. Lần đầu tải Qwen2.5-7B-Instruct khoảng 15 GB.
+
+**Laptop 4GB**: chạy cùng notebook với `MODEL = "Qwen/Qwen2.5-3B-Instruct"`, `BATCH = 2`, `GRAD_ACCUM = 8` (trọng số NF4
+ước lượng dưới 2 GiB; cấu hình này chưa được đo trên laptop), hoặc với 0.5B; báo cáo ghi rõ model đã dùng. Đọc mục 3, 4 lý
+thuyết và mục 3, 7 module 10. Làm bài Intermediate 03 trước.
 
 1. Trong `starter/qlora.ipynb`, viết `lora_param_count`, `weight_memory_gib`, `bnb_4bit_config`, `qlora_sft_kwargs`,
    `load_4bit` theo đặc tả trong notebook, và **dán** bốn hàm của bài Intermediate 03.
