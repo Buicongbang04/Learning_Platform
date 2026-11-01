@@ -28,16 +28,16 @@ questions:
 - id: zero-vs-mean
   kind: data
   type: single
-  prompt: Tắt 4 head induction mạnh nhất. Loss trên bản thứ nhất (phần không cần induction) đổi thế nào?
+  prompt: Zero ablation 4 head induction mạnh nhất làm loss bản thứ nhất (phần không cần induction) tăng khoảng bao nhiêu?
   options:
   - id: a
-    text: Zero và mean ablation đều gần như không đổi
+    text: Dưới 0.1 nat
   - id: b
-    text: Zero tăng hơn 2 nat, mean gần như không đổi
+    text: Khoảng 0.5 nat
   - id: c
-    text: Mean tăng hơn 2 nat, zero gần như không đổi
+    text: Khoảng 2.4 nat
   - id: d
-    text: Zero và mean ablation đều tăng hơn 2 nat
+    text: Khoảng 10 nat
 - id: vs-random
   kind: data
   type: single

@@ -1,6 +1,6 @@
 prev-head: [b]
 induction-layers: [b]
-zero-vs-mean: [b]
+zero-vs-mean: [c]
 vs-random: [c]
 lens-half: [c]
 probe-peak: [b]
