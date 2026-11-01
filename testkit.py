@@ -1154,9 +1154,35 @@ class GitRepo:
         return result.stdout.strip()
 
 
-ACT_IMAGE = "devops-track/act-runner:1.0"
+ACT_RUNNER_DIR = ROOT / "setup" / "act-runner"
+ACT_RUNNER_FILES = ("Dockerfile", "requirements-ci.txt")
+ACT_RUNNER_VERSION = "1.0"
 ACT_BASE_IMAGE = "node:24.22.2-trixie-slim"
-ACT_IMAGE_BUILD = f"docker pull {ACT_BASE_IMAGE} && docker build --pull=false -t {ACT_IMAGE} setup/act-runner"
+
+
+def act_runner_tag() -> str:
+    """Tag của image runner: `<ACT_RUNNER_VERSION>-<8 ký tự đầu SHA-256 của Dockerfile nối requirements-ci.txt>`, bằng đúng
+    `cat Dockerfile requirements-ci.txt | sha256sum | cut -c1-8` trong README. Đổi phiên bản, ARG hay wheel trong hai tệp đó
+    là đổi tag, nên image cũ không bao giờ được dùng nhầm."""
+    import hashlib
+
+    digest = hashlib.sha256(b"".join((ACT_RUNNER_DIR / name).read_bytes() for name in ACT_RUNNER_FILES)).hexdigest()
+    return f"{ACT_RUNNER_VERSION}-{digest[:8]}"
+
+
+def _act_base_digest() -> str:
+    match = re.search(rf"^FROM\s+{re.escape(ACT_BASE_IMAGE)}@(sha256:[0-9a-f]{{64}})\s*$",
+                      (ACT_RUNNER_DIR / "Dockerfile").read_text(encoding="utf-8"), re.M)
+    return match.group(1) if match else ""
+
+
+ACT_IMAGE = f"devops-track/act-runner:{act_runner_tag()}"
+ACT_IMAGE_BUILD = (
+    f"docker pull {ACT_BASE_IMAGE} && docker image inspect --format '{{{{index .RepoDigests 0}}}}' {ACT_BASE_IMAGE} | "
+    f"grep -qx 'node@{_act_base_digest()}' && nice -n 15 docker build --pull=false "
+    '${DEVOPS_CPUSET:+--cpuset-cpus "$DEVOPS_CPUSET"} '
+    f"-t {ACT_IMAGE} setup/act-runner"
+)
 ACT_CHECKOUT_INPUTS = frozenset({
     "persist-credentials", "fetch-depth", "fetch-tags", "clean", "lfs", "submodules", "show-progress", "filter",
     "sparse-checkout", "sparse-checkout-cone-mode", "set-safe-directory", "path",
@@ -1211,13 +1237,13 @@ def _act_skipped_locally(condition) -> bool:
     """True khi `if:` chắc chắn sai dưới act: biểu thức (bỏ `${{ }}` và khoảng trắng) đúng bằng `!env.ACT`, hoặc là chuỗi
     `&&` ở cấp trên cùng có một vế đúng bằng `!env.ACT` và mọi vế có ngoặc khác đúng bằng một hàm trạng thái
     (`always()`, `success()`, `failure()`, `cancelled()`, `!cancelled()`). Chuỗi trong nháy đơn được thay bằng chỗ giữ trước
-    khi xét; có `||`, nháy kép, `!=`, `$`, `{`, `}` hay ngoặc ở chỗ khác thì không công nhận."""
+    khi xét; có `||`, nháy kép, `!=`, `$`, `{`, `}`, `[`, `]` hay ngoặc ở chỗ khác thì không công nhận."""
     text = str(condition or "").strip()
     if text.startswith("${{") and text.endswith("}}"):
         text = text[3:-2]
     text = re.sub(r"'(?:[^']|'')*'", "'S'", text)
     text = re.sub(r"\s+", "", text)
-    if any(token in text for token in ("||", '"', "!=", "$", "{", "}")):
+    if any(token in text for token in ("||", '"', "!=", "$", "{", "}", "[", "]")):
         return False
     terms = text.split("&&")
     if "!env.ACT" not in terms:

@@ -2050,6 +2050,8 @@ def test_act_guard_accepts(condition):
     "always() && (!env.ACT)",
     "!always() && !env.ACT && x()",
     "!env.ACT && hashFiles('a')",
+    "env[1&&!env.ACT&&2]",
+    "${{ env['ACT'] && !env.ACT }}",
 ])
 def test_act_guard_refuses_bypasses(condition):
     assert not testkit._act_skipped_locally(condition)
@@ -2254,3 +2256,40 @@ def test_act_failed_on_network_uv_dns_error():
 ])
 def test_act_failed_on_network_only_for_setup_step_network_errors(text):
     assert testkit.act_failed_on_network(act_result(text), SETUP_STEPS) is False
+
+
+OFFLINE_WORKFLOW = """
+name: offline
+on: push
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Không có Internet
+        run: |
+          node -e 'fetch("https://pypi.org/simple/").then(() => process.exit(1), () => console.log("devops-ex-output internet=none"))'
+      - name: Python và wheel từ image
+        run: |
+          uv venv --python 3.12.13 "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" -r requirements.txt
+          "$RUNNER_TEMP/venv/bin/python" -c 'import fastapi, yaml; print("devops-ex-output imported=" + fastapi.__version__)'
+"""
+
+
+@pytest.mark.skipif(os.environ.get("DEVOPS_ACT_OFFLINE_PROOF") != "1", reason="Chỉ chạy khi DEVOPS_ACT_OFFLINE_PROOF=1")
+def test_act_runner_works_without_internet(monkeypatch, tmp_path):
+    real = testkit._docker
+
+    def internal(*args, timeout=60):
+        if args[:2] == ("network", "create") and any(str(a).startswith(f"{testkit.ACT_RUN_LABEL}=") for a in args):
+            args = ("network", "create", "--internal", *args[2:])
+        return real(*args, timeout=timeout)
+
+    monkeypatch.setattr(testkit, "_docker", internal)
+    project = write_project(tmp_path, OFFLINE_WORKFLOW,
+                            {"requirements.txt": (testkit.ROOT / "setup" / "act-runner" / "requirements-ci.txt").read_text(encoding="utf-8")})
+    result = testkit.act_run(project, timeout=300)
+    assert testkit.act_job_results(result) == {"offline": True}, result.stdout[-3000:]
+    assert testkit.act_outputs(result)["offline"] == {"internet": "none", "imported": "0.143.1"}
+    assert "Downloading" not in result.stdout

@@ -253,12 +253,30 @@ def test_act_runner_base_is_pinned_by_digest():
     assert re.fullmatch(rf"{re.escape(testkit.ACT_BASE_IMAGE)}@sha256:[0-9a-f]{{64}}", bases[0])
 
 
-def test_act_runner_tag_matches_label_and_build_command():
+def test_act_runner_tag_follows_inputs():
+    import hashlib
+
     text = (ACT_RUNNER / "Dockerfile").read_text(encoding="utf-8")
     version = re.search(r'devops-track\.act-runner="([^"]+)"', text).group(1)
-    assert testkit.ACT_IMAGE == f"devops-track/act-runner:{version}"
-    assert f"-t {testkit.ACT_IMAGE} setup/act-runner" in testkit.ACT_IMAGE_BUILD
+    content = (ACT_RUNNER / "Dockerfile").read_bytes() + (ACT_RUNNER / "requirements-ci.txt").read_bytes()
+    expected = f"devops-track/act-runner:{version}-{hashlib.sha256(content).hexdigest()[:8]}"
+    assert testkit.ACT_IMAGE == expected, (
+        f"Tag image runner phải theo nội dung setup/act-runner: {expected}. Build lại bằng: {testkit.ACT_IMAGE_BUILD}")
     assert "UV_OFFLINE=1" in text and "UV_PYTHON_DOWNLOADS=never" in text
+
+
+def test_act_runner_build_command_matches_readme():
+    build = testkit.ACT_IMAGE_BUILD
+    digest = re.search(r"^FROM\s+\S+@(sha256:[0-9a-f]{64})", (ACT_RUNNER / "Dockerfile").read_text(encoding="utf-8"), re.M).group(1)
+    for piece in (f"grep -qx 'node@{digest}'", "nice -n 15 docker build --pull=false", '${DEVOPS_CPUSET:+--cpuset-cpus "$DEVOPS_CPUSET"}',
+                  f"-t {testkit.ACT_IMAGE} setup/act-runner"):
+        assert piece in build, piece
+    readme = (ROOT / "tracks" / "devops" / "modules" / "07-cicd-artifacts" / "README.md").read_text(encoding="utf-8")
+    assert ('ACT_RUNNER="devops-track/act-runner:1.0-$(cat setup/act-runner/Dockerfile setup/act-runner/requirements-ci.txt '
+            '| sha256sum | cut -c1-8)"') in readme
+    assert f"'node@{digest}'" in readme and '-t "$ACT_RUNNER" setup/act-runner' in readme
+    assert testkit.ACT_IMAGE in readme, (
+        f"README module 07 phải in tag hiện tại {testkit.ACT_IMAGE} trong output mẫu và ~/.actrc; cập nhật sau khi build lại")
 
 
 def test_act_runner_caches_every_sample_app_requirement():
