@@ -23,12 +23,13 @@ Sau module này bạn sẽ:
 | Công cụ / image | Phiên bản đã kiểm | Tối thiểu cho bài tập | Dùng ở |
 | --- | --- | --- | --- |
 | act | 0.2.94 | 0.2.94 | Basic 01, 02; Intermediate 01 |
-| Image runner `node` | `node:24.22.2-trixie-slim` (digest bên dưới) | Đúng tag này | Mọi bài chạy act |
+| Image runner | `devops-track/act-runner:1.0`, build một lần từ `setup/act-runner/` trên `node:24.22.2-trixie-slim` (ghim digest) | Đúng tag này | Mọi bài chạy act |
 | actionlint | 1.7.12 | 1.7 (thiếu thì riêng test actionlint skip) | Basic 01, 02; Intermediate 01 |
 | Registry local | `registry:2.8.3` (service `registry`, profile `devops`) | Đúng tag này | Basic 01, Intermediate 02 |
 | Image `python` | `python:3.12.16-slim-trixie`, `python:3.12.16-alpine3.24` (từ module 06) | Đúng tag này | Basic 01, Intermediate 02 |
 | Docker, buildx, git, bwrap, shellcheck | Như module 06 và 02 | Như module 06 và 02 | Build image, repo git tạm, sandbox |
-| uv, Python trong job | uv 0.10.8, CPython 3.12.13, tải **trong** job | Đúng phiên bản này | Basic 01, 02; Intermediate 01 |
+| uv, Python, wheel trong job | uv 0.10.8, CPython 3.12.13, wheel của Olist Shop, có sẵn trong image runner | Đúng phiên bản này | Basic 01, 02; Intermediate 01 |
+| curl | Có sẵn trên hầu hết distro | 7.68 | Intermediate 02 (`promote.sh` gọi API registry) |
 
 ### act
 
@@ -70,34 +71,57 @@ act version 0.2.94
 Đừng dùng script `install.sh` của repo act kiểu `curl ... | bash`: nó tải bản mới nhất, không ghim phiên bản.
 
 **Image runner.** Lần đầu chạy, act hỏi chọn image cho nhãn `ubuntu-latest` (Large khoảng 18 GB, Medium `catthehacker/ubuntu:act-*`
-khoảng 1,5 GB, Micro `node:*-slim`). Track dùng một image Micro ghim tag và kiểm digest:
+khoảng 1,5 GB, Micro `node:*-slim`). Image Micro nhỏ nhưng thiếu gần hết công cụ, nên mỗi lần chạy job phải tải uv, Python và
+wheel từ Internet: chậm, và mất mạng là không chấm được. Track build **một lần** một image runner riêng từ
+`setup/act-runner/Dockerfile`, rồi mọi lần chạy sau dùng nó offline:
+
+| Lớp | Nội dung | Vì sao |
+| --- | --- | --- |
+| Nền | `node:24.22.2-trixie-slim@sha256:54f84b4c...` (ghim digest) | Node cho action JavaScript, bash cho bước `run:` |
+| apt (suite trixie) | `ca-certificates` (20250419+deb13u1 lúc viết), `git` (2.47.3) | Kho chứng chỉ CA hệ thống, git cho bước cần lịch sử |
+| uv 0.10.8 | Tải bằng `fetch` của Node, kiểm SHA-256 trước khi giải nén vào `/usr/local/bin` | Cài Python và dependency |
+| CPython 3.12.13 | `uv python install` vào `UV_PYTHON_INSTALL_DIR=/opt/uv/python` | Workflow gọi `uv venv --python 3.12.13` tìm thấy ngay |
+| Cache wheel | `uv pip install -r requirements-ci.txt` (dependency của Olist Shop cộng pytest, fakeredis, httpx, pyyaml đã ghim) vào `UV_CACHE_DIR=/opt/uv/cache` | `uv pip install` trong job lấy từ cache, không tải |
+| Env | `UV_OFFLINE=1`, `UV_PYTHON_DOWNLOADS=never` | Thiếu gì trong cache thì job **lỗi rõ ràng** thay vì lặng lẽ tải |
+
+Build từ gốc repo (cần mạng một lần, khoảng 1 phút, image khoảng 810 MB):
 
 ```bash
 docker pull node:24.22.2-trixie-slim &&
-docker image inspect --format '{{index .RepoDigests 0}}' node:24.22.2-trixie-slim
+docker image inspect --format '{{index .RepoDigests 0}}' node:24.22.2-trixie-slim | grep -qx \
+  'node@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446' &&
+nice -n 15 docker build --pull=false ${DEVOPS_CPUSET:+--cpuset-cpus "$DEVOPS_CPUSET"} \
+  -t devops-track/act-runner:1.0 setup/act-runner &&
+docker run --rm --network none devops-track/act-runner:1.0 sh -c 'uv --version && uv python find 3.12.13'
 ```
 
 ```text
-node@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446
+uv 0.10.8
+/opt/uv/python/cpython-3.12.13-linux-x86_64-gnu/bin/python3.12
 ```
 
-| | Runner `ubuntu-latest` của GitHub | `node:24.22.2-trixie-slim` dưới act |
+Image này **không** mang nhãn `devops-ex=1` và không thuộc lab nào, nên không lệnh dọn nào của test xoá nó; nó ở lại cho các lần
+chạy sau như một image nền. Thiếu image thì test skip kèm đúng lệnh build trên. Khi `requirements-ci.txt` hay phiên bản trong
+Dockerfile đổi, track nâng tag (`1.1`...) và test báo thiếu image mới. Gỡ: `docker image rm devops-track/act-runner:1.0`.
+
+| | Runner `ubuntu-latest` của GitHub | `devops-track/act-runner:1.0` dưới act |
 | --- | --- | --- |
-| Kích thước | Máy ảo đầy đủ | 337 MB |
-| Có sẵn | Python, Docker, git, curl, jq, hàng trăm công cụ | Node.js 24, bash, tar, gzip, `sha256sum`, apt; **không** Python, git, curl, chứng chỉ CA hệ thống |
+| Kích thước | Máy ảo đầy đủ | Khoảng 810 MB |
+| Có sẵn | Python, Docker, git, curl, jq, hàng trăm công cụ | Node.js 24, bash, git, chứng chỉ CA, uv, CPython 3.12.13, wheel của Olist Shop; **không** curl, Docker |
 | Docker | Có daemon riêng của máy ảo | Không có socket (testkit tắt), không Docker-in-Docker |
 | User | `runner` có sudo | `root` trong container, bị giới hạn bởi cgroup và `no-new-privileges` |
 
-Image nhỏ, ghim được, đủ chạy action JavaScript (cần Node) và bước `run:` bằng bash. Thứ gì job cần mà image không có thì job phải
-tự cài, y như trên một runner trống: các bài tập tải uv bằng `fetch` của Node (Node mang sẵn kho chứng chỉ CA của nó), kiểm SHA-256,
-rồi dùng uv cài Python và dependency. Cách cài này chạy y hệt trên runner của GitHub, nên workflow không cần nhánh riêng cho act.
+Workflow của bài tập vì vậy viết theo kiểu "cài nếu thiếu": bước **Cài uv** thoát ngay khi `uv --version` đúng bằng phiên bản
+ghim, ngược lại mới tải (kiểm SHA-256); bước **Cài Python và dependency** chạy `uv venv --python 3.12.13` và `uv pip install`, dưới
+act lấy từ image, trên GitHub tải từ Internet. Cùng một YAML chạy ở cả hai nơi. Test không dùng volume `act-toolcache` dùng chung
+của act để cache gì cả: thứ dùng chung giữa các lần chạy nằm trong image, chỉ đọc với mọi lần chạy khác.
 
 Test của module không gọi `act` trực tiếp mà qua `testkit.act_run`: env dựng từ đầu (không đọc `~/.actrc`, `GITHUB_TOKEN` của
 bạn), `--pull=false`, job bị ghim CPU theo `DEVOPS_CPUSET`, RAM 1 GB, 512 tiến trình, không socket Docker, network riêng, dọn mọi
 container, volume, network của lần chạy khi xong. Muốn tự chạy act bằng tay với cùng mặc định, tạo `~/.actrc`:
 
 ```text
--P ubuntu-latest=node:24.22.2-trixie-slim
+-P ubuntu-latest=devops-track/act-runner:1.0
 --pull=false
 --container-daemon-socket -
 ```
@@ -106,8 +130,8 @@ container, volume, network của lần chạy khi xong. Muốn tự chạy act b
 bạn cho mọi bước của workflow (module 06, mục 3).
 
 Gỡ: `rm -f ~/.local/bin/act && rm -rf ~/.cache/act ~/.cache/devops-track/act`, cộng `~/.actrc` nếu bạn đã tạo theo hướng dẫn
-trên. Volume `act-toolcache` do act tạo dùng
-chung giữa mọi lần chạy; xoá bằng `docker volume rm act-toolcache` khi không còn dùng act.
+trên. Volume `act-toolcache` do act tạo dùng chung giữa mọi lần chạy; xoá bằng `docker volume rm act-toolcache` khi không
+còn dùng act.
 
 ### actionlint
 
@@ -294,7 +318,7 @@ Basic 02 sửa một workflow mắc gần như mọi lỗi trên.
 | --- | --- | --- |
 | Bước `run:`, `needs:`, `outputs`, `if:`, `env`, `strategy.matrix` | Chạy thật | Đúng thứ cần thử nhất: logic của pipeline |
 | Action JavaScript, composite | Chạy, sau khi clone repo action (cần mạng lần đầu) | Testkit chỉ cho `actions/checkout` (act chép thẳng repo vào job, không tải) |
-| `actions/checkout` | Chép thư mục hiện tại vào job | Không clone từ remote |
+| `actions/checkout` | Chép thư mục hiện tại vào job, không clone từ remote **khi không đặt `ref`/`repository`** | Có `ref`, `repository` (hay input lạ khác) thì act tải và chạy action thật; testkit từ chối, chỉ nhận `persist-credentials`, `fetch-depth`, `path`... |
 | `GITHUB_TOKEN`, secret | Chỉ khi bạn truyền vào (`-s`) | Testkit không truyền token của bạn |
 | `services:`, `container:` | act hỗ trợ | Testkit từ chối: container phụ không bị giới hạn CPU, RAM như job |
 | Docker trong job (build, push) | Chỉ khi mount socket Docker | Testkit tắt socket: socket là root trên máy bạn |
@@ -305,13 +329,20 @@ Basic 02 sửa một workflow mắc gần như mọi lỗi trên.
 act đặt biến môi trường `ACT=true` trong mọi job. Bước gắn `if: ${{ !env.ACT }}` vì vậy bị bỏ qua dưới act và chạy bình thường
 trên GitHub; đó là cách viết **một** workflow cho cả hai nơi.
 
+Mặc định một bước chỉ chạy khi mọi bước trước đã thành công (`success()` ngầm). Báo cáo test, log, ảnh chụp màn hình cần nhất đúng
+lúc test **fail**, nên bước lưu chúng cần hàm trạng thái: `if: ${{ !cancelled() && !env.ACT }}` (chạy cả khi bước trước lỗi, trừ khi
+run bị huỷ; bỏ qua dưới act). Testkit chỉ công nhận guard là chuỗi `&&` ở cấp trên cùng có đúng một vế `!env.ACT`, các vế có
+ngoặc khác phải đúng bằng `always()`, `success()`, `failure()`, `cancelled()` hay `!cancelled()`; có `||`, nháy kép, `!=` hay ngoặc
+khác (`!(... && !env.ACT ...)`) thì không, vì khi đó không chắc biểu thức sai dưới act. `!cancelled()` tốt hơn `always()`: huỷ run
+(ví dụ do `concurrency` có commit mới) thì không cần tải báo cáo của lần chạy đã bỏ.
+
 ### Mẫu chấm của module
 
 ```mermaid
 sequenceDiagram
   participant T as Test (pytest)
   participant A as testkit.act_run
-  participant J as Job trong node:24.22.2-trixie-slim
+  participant J as Job trong devops-track/act-runner:1.0
   participant L as DockerLab
   participant R as Registry local
   T->>A: Bản chép repo, sự kiện push
@@ -364,7 +395,8 @@ Manifest deploy tham chiếu `olist-api:sha-3f9c2a1b7d10@sha256:...` (module 06,
 **Promotion** là gắn thêm tag (hay ghi digest vào cấu hình của môi trường tiếp theo) cho cùng một manifest, không build lại:
 `docker buildx imagetools create --tag reg/olist-api:1.4.2 reg/olist-api@sha256:...`, `crane tag`, `skopeo copy`. Một số tổ chức
 tách registry theo mức tin cậy (`dev`, `prod`) và promote bằng cách chép manifest sang registry production, nơi chỉ pipeline
-promote có quyền ghi. Intermediate 02 mã hoá một chính sách tag thành script và chứng minh promotion giữ nguyên digest.
+promote có quyền ghi. Intermediate 02 mã hoá một chính sách tag thành script và viết promotion bằng retag ngay trên registry (GET
+manifest, PUT dưới tag mới), không bao giờ dời tag phát hành.
 
 ### SBOM, provenance, chữ ký
 

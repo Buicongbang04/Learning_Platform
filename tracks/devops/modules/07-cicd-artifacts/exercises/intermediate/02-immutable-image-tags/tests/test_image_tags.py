@@ -10,6 +10,7 @@ from testkit import REGISTRY_MANIFEST_TYPES, SAFE_GIT_CONFIG, DockerLab, Exercis
 ex = Exercise(__file__)
 FIXTURES = Path(__file__).parent / "fixtures"
 SCRIPT = "ci/image-tags.sh"
+PROMOTE = "ci/promote.sh"
 DOCKER_TAG = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
 
 
@@ -139,24 +140,69 @@ def test_unknown_ref_is_refused(repo, ref):
     refused(repo.tags(ref), 2)
 
 
-def registry_digest(client: httpx.Client, ref: str) -> str:
-    address, rest = ref.split("/", 1)
-    repo, tag = rest.rsplit(":", 1)
+def registry_digest(client: httpx.Client, address: str, repo: str, tag: str) -> str | None:
     response = client.head(f"http://{address}/v2/{repo}/manifests/{tag}", headers={"Accept": ", ".join(REGISTRY_MANIFEST_TYPES)})
-    assert response.status_code == 200, f"Registry không có {ref} (HTTP {response.status_code})"
-    return response.headers.get("docker-content-digest", "")
+    return response.headers.get("docker-content-digest") if response.status_code == 200 else None
 
 
-def test_promotion_is_a_retag_with_same_digest(repo):
+def promote(tmp_path: Path, address: str, repo: str, source: str, target: str):
+    ex.require_tool("curl")
+    return run_sandboxed(["bash", str(ex.path(PROMOTE)), address, repo, source, target], writable=[tmp_path], cwd=tmp_path,
+                         env={}, timeout=60)
+
+
+@pytest.fixture
+def registry(tmp_path):
+    ex.require_registry()
+    ex.require_image("python:3.12.16-alpine3.24")
+    with DockerLab() as lab, httpx.Client(trust_env=False, timeout=10) as client:
+        yield lab, client
+
+
+def push_tiny(lab: DockerLab, tag: str, variant: str = "a") -> tuple[str, str]:
+    image = lab.build(FIXTURES / "tiny", f"tiny-{variant}", build_args={"VARIANT": variant})
+    ref = lab.push(image, "olist-api", tag=tag)
+    address, rest = ref.split("/", 1)
+    return address, rest.rsplit(":", 1)[0]
+
+
+def test_promotion_is_a_registry_side_retag(repo, registry, tmp_path):
+    lab, client = registry
     repo.commit()
     main_tags = lines(repo.tags("refs/heads/main"))
     repo.git("tag", "v1.5.0")
-    release_tags = lines(repo.tags("refs/tags/v1.5.0"))
-    assert main_tags[0] == release_tags[0], "Cùng một commit phải có cùng tag sha-..."
-    ex.require_registry()
-    ex.require_image("python:3.12.16-alpine3.24")
-    with DockerLab() as lab:
-        image = lab.build(FIXTURES / "tiny", "olist-api")
-        with httpx.Client(trust_env=False, timeout=10) as client:
-            digests = {tag: registry_digest(client, lab.push(image, "olist-api", tag=tag)) for tag in [*main_tags, *release_tags]}
-    assert len(set(digests.values())) == 1 and re.fullmatch(r"sha256:[0-9a-f]{64}", next(iter(digests.values()))), digests
+    release = lines(repo.tags("refs/tags/v1.5.0"))
+    assert main_tags[0] == release[0], "Cùng một commit phải có cùng tag sha-..."
+    address, name = push_tiny(lab, release[0])
+    built = registry_digest(client, address, name, release[0])
+    assert registry_digest(client, address, name, release[1]) is None
+    result = promote(tmp_path, address, name, release[0], release[1])
+    assert result.returncode == 0, f"promote.sh thoát mã {result.returncode}: {result.stderr.strip()}"
+    assert registry_digest(client, address, name, release[1]) == built, "Tag phát hành phải trỏ đúng digest đã build"
+    assert result.stdout.split()[-1:] == [built], f"promote.sh phải in digest ở dòng cuối, nhận {result.stdout!r}"
+    again = promote(tmp_path, address, name, release[0], release[1])
+    assert again.returncode == 0 and again.stdout.split()[-1:] == [built], "Gắn lại cùng digest phải thành công (idempotent)"
+
+
+def test_promotion_refuses_to_move_a_release_tag(registry, tmp_path):
+    lab, client = registry
+    address, name = push_tiny(lab, "sha-0123456789ab", "a")
+    push_tiny(lab, "1.5.0", "b")
+    before = registry_digest(client, address, name, "1.5.0")
+    assert before and before != registry_digest(client, address, name, "sha-0123456789ab")
+    result = promote(tmp_path, address, name, "sha-0123456789ab", "1.5.0")
+    refused(result, 5)
+    assert registry_digest(client, address, name, "1.5.0") == before, "Tag phát hành đã bị dời"
+
+
+def test_promotion_of_missing_source_is_refused(registry, tmp_path):
+    lab, _ = registry
+    address, name = push_tiny(lab, "sha-0123456789ab")
+    refused(promote(tmp_path, address, name, "sha-ffffffffffff", "1.5.0"), 4)
+
+
+def test_scripts_pass_shellcheck(tmp_path):
+    ex.require_tool("shellcheck")
+    scripts = [str(ex.path(SCRIPT)), str(ex.path(PROMOTE))]
+    result = run_sandboxed(["shellcheck", *scripts], writable=[tmp_path], cwd=tmp_path, env={}, timeout=60)
+    assert result.returncode == 0, f"shellcheck báo lỗi:\n{result.stdout}{result.stderr}"

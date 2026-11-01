@@ -16,11 +16,6 @@ WORKFLOW = ".github/workflows/ci.yml"
 SETUP_STEPS = ("Cài uv", "Cài Python và dependency")
 SHA_TAG = re.compile(r"^sha-[0-9a-f]{12}$")
 STEP_OUTPUT = re.compile(r"steps\.([A-Za-z0-9_-]+)\.outputs\.tag")
-NETWORK = re.compile(
-    r"ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|UND_ERR_CONNECT|dns error|error sending request|"
-    r"Failed to fetch|Could not connect|Network is unreachable|Temporary failure in name resolution"
-)
-FAILED_STEP = re.compile(r"❌\s+Failure - Main (.+?) \[[0-9.]+\D*\]")
 CANARY = "def test_devops_ex_canary_red():\n    assert 1 + 1 == 3, 'test đỏ do harness cài vào'\n"
 ACT_TIMEOUT = 600
 
@@ -42,9 +37,7 @@ def assemble(dest: Path, workflow: Path, *, canary: bool = False) -> Path:
 
 def run_workflow(dest: Path) -> object:
     result = testkit.act_run(dest, event="push", timeout=ACT_TIMEOUT)
-    text = f"{result.stdout}\n{result.stderr}"
-    failed = [step.strip() for step in FAILED_STEP.findall(text)]
-    if any(step in SETUP_STEPS for step in failed) and NETWORK.search(text):
+    if testkit.act_failed_on_network(result, SETUP_STEPS):
         pytest.skip("Bước cài uv/Python trong job cần mạng (github.com, pypi.org) và đang lỗi mạng. Kiểm kết nối rồi chạy lại.")
     return result
 
@@ -77,7 +70,12 @@ def uses_step(job: dict, action: str) -> dict | None:
 
 
 def guarded(step: dict) -> bool:
-    return "!env.ACT" in re.sub(r"\s+", "", str(step.get("if", "")))
+    return testkit._act_skipped_locally(step.get("if"))
+
+
+def push_only_on_push(value) -> bool:
+    text = re.sub(r"\s+", "", str(value))
+    return text in ("${{github.event_name=='push'}}", "${{github.event_name!='pull_request'}}")
 
 
 def has_write(permissions) -> bool:
@@ -162,8 +160,9 @@ def image_problems(image: dict) -> list[str]:
         found.append(f"tags của docker/build-push-action phải dùng {ref} và không có latest")
     if not re.search(rf"APP_VERSION=\$\{{\{{\s*{re.escape(ref)}\s*\}}\}}", str(options.get("build-args", ""))):
         found.append(f"build-args phải có APP_VERSION=${{{{ {ref} }}}}")
-    if "github.event_name" not in str(options.get("push", "")):
-        found.append("push của docker/build-push-action phải là biểu thức theo github.event_name (không push từ pull_request)")
+    if not push_only_on_push(options.get("push", "")):
+        found.append("push của docker/build-push-action phải đúng bằng ${{ github.event_name == 'push' }} hoặc "
+                     "${{ github.event_name != 'pull_request' }} (không push từ pull_request)")
     return found
 
 
@@ -209,6 +208,23 @@ def test_checks_catch_unsafe_image_job():
     for needle in ("needs: test", "packages: write", "GITHUB_SHA", "date", "ghcr.io", "GITHUB_TOKEN", "không có latest",
                    "APP_VERSION", "github.event_name"):
         assert needle in found, found
+
+
+@pytest.mark.parametrize("push,ok", [
+    ("${{ github.event_name == 'push' }}", True),
+    ("${{github.event_name != 'pull_request'}}", True),
+    ("${{ github.event_name != 'push' }}", False),
+    ("${{ github.event_name == 'pull_request' }}", False),
+    ("${{ github.event_name == 'push' || true }}", False),
+    ("true", False),
+])
+def test_push_condition_must_exclude_pull_requests(push, ok):
+    assert push_only_on_push(push) is ok
+
+
+@pytest.mark.parametrize("condition", ["${{ env.ACT != 'true' }}", "${{ !env.ACTION }}", "${{ true || !env.ACT }}"])
+def test_guard_must_be_one_act_skips(condition):
+    assert not guarded({"if": condition})
 
 
 def test_actionlint(tmp_path):

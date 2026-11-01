@@ -16,11 +16,6 @@ JOB = "worker-tests"
 SETUP_STEPS = ("Cài uv", "Cài Python và dependency")
 PINNED = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
 UNTRUSTED = re.compile(r"\$\{\{[^}]*\bgithub\.(?:event\.|head_ref\b)")
-NETWORK = re.compile(
-    r"ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|UND_ERR_CONNECT|dns error|error sending request|"
-    r"Failed to fetch|Could not connect|Network is unreachable|Temporary failure in name resolution"
-)
-FAILED_STEP = re.compile(r"❌\s+Failure - Main (.+?) \[[0-9.]+\D*\]")
 
 
 def load(path: Path) -> dict:
@@ -80,10 +75,15 @@ def hardening_problems(doc: dict) -> list[str]:
                 found.append(f"{where}: {uses} phải ghim theo commit SHA đủ 40 ký tự")
             if uses.split("@")[0] == "actions/checkout":
                 options = step.get("with") or {}
-                if options.get("persist-credentials") is not False:
+                if not isinstance(options, dict) or options.get("persist-credentials") is not False:
                     found.append(f"{where}: checkout cần persist-credentials: false")
-                if "github.event" in str(options.get("ref", "")):
-                    found.append(f"{where}: checkout không được lấy ref từ dữ liệu của sự kiện")
+                extra = sorted(k for k in options if k not in testkit.ACT_CHECKOUT_INPUTS) if isinstance(options, dict) else []
+                if extra:
+                    found.append(f"{where}: checkout không đặt {', '.join(extra)}; checkout mặc định đã lấy đúng commit của sự kiện")
+            if uses.split("@")[0] == "actions/upload-artifact" and not re.fullmatch(
+                    r"(?:!cancelled\(\)|always\(\))&&!env\.ACT|!env\.ACT&&(?:!cancelled\(\)|always\(\))",
+                    re.sub(r"\s+|^\$\{\{|\}\}$", "", str(step.get("if", "")))):
+                found.append(f"{where}: báo cáo test phải được lưu cả khi test fail: if: ${{{{ !cancelled() && !env.ACT }}}}")
             if UNTRUSTED.search(str(step.get("run", ""))):
                 found.append(f"{where}: run: chèn thẳng github.event.* hoặc github.head_ref, phải đưa qua env:")
     return found
@@ -115,7 +115,8 @@ def test_checks_catch_starter():
     found = "\n".join(hardening_problems(load(FIXTURES / "worker-ci.starter.yml")))
     for needle in ("pull_request_target", "branches: [main]", "Cần trigger pull_request", "permissions cấp workflow",
                    "timeout-minutes", "concurrency", "actions/checkout@v7 phải ghim", "actions/upload-artifact@v7 phải ghim",
-                   "persist-credentials", "Lấy code của PR): run: chèn thẳng"):
+                   "persist-credentials", "Lấy code của PR): run: chèn thẳng",
+                   "báo cáo test phải được lưu cả khi test fail"):
         assert needle in found, found
 
 
@@ -131,8 +132,16 @@ def test_actionlint(tmp_path):
 
 def test_hardened_workflow_still_runs_worker_tests(tmp_path):
     result = testkit.act_run(assemble(tmp_path / "repo", ex.path(WORKFLOW)), event="push", timeout=600)
-    text = f"{result.stdout}\n{result.stderr}"
-    if any(s.strip() in SETUP_STEPS for s in FAILED_STEP.findall(text)) and NETWORK.search(text):
+    if testkit.act_failed_on_network(result, SETUP_STEPS):
         pytest.skip("Bước cài uv/Python trong job cần mạng (github.com, pypi.org) và đang lỗi mạng. Kiểm kết nối rồi chạy lại.")
     assert testkit.act_job_results(result).get(JOB) is True, f"Job {JOB} không xanh khi push lên main. {tail(result)}"
-    assert re.search(r"\|\s+\d+ passed", text), f"Không thấy pytest chạy test của worker. {tail(result)}"
+    assert re.search(r"\|\s+\d+ passed", f"{result.stdout}\n{result.stderr}"), f"Không thấy pytest chạy test của worker. {tail(result)}"
+
+
+def test_checks_catch_checkout_ref_and_report_guard():
+    doc = load(FIXTURES / "worker-ci.starter.yml")
+    steps(doc["jobs"][JOB])[0]["with"] = {"persist-credentials": False, "ref": "${{ github.sha }}"}
+    report = next(s for s in steps(doc["jobs"][JOB]) if str(s.get("uses", "")).startswith("actions/upload-artifact"))
+    report["if"] = "${{ always() || !env.ACT }}"
+    found = "\n".join(hardening_problems(doc))
+    assert "checkout không đặt ref" in found and "báo cáo test phải được lưu" in found, found

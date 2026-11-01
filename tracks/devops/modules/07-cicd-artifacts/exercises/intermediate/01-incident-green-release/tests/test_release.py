@@ -14,11 +14,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 WORKFLOW = ".github/workflows/release.yml"
 SETUP_STEPS = ("Cài uv", "Cài Python và dependency")
 SHA_TAG = re.compile(r"^sha-[0-9a-f]{12}$")
-NETWORK = re.compile(
-    r"ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|UND_ERR_CONNECT|dns error|error sending request|"
-    r"Failed to fetch|Could not connect|Network is unreachable|Temporary failure in name resolution"
-)
-FAILED_STEP = re.compile(r"❌\s+Failure - Main (.+?) \[[0-9.]+\D*\]")
 CANARY = "def test_devops_ex_canary_red():\n    assert 1 + 1 == 3, 'test đỏ do harness cài vào'\n"
 
 
@@ -38,8 +33,7 @@ def assemble(dest: Path, workflow: Path, *, canary: bool) -> Path:
 
 def run_release(dest: Path):
     result = testkit.act_run(dest, event="push", timeout=600)
-    text = f"{result.stdout}\n{result.stderr}"
-    if any(s.strip() in SETUP_STEPS for s in FAILED_STEP.findall(text)) and NETWORK.search(text):
+    if testkit.act_failed_on_network(result, SETUP_STEPS):
         pytest.skip("Bước cài uv/Python trong job cần mạng (github.com, pypi.org) và đang lỗi mạng. Kiểm kết nối rồi chạy lại.")
     return result
 

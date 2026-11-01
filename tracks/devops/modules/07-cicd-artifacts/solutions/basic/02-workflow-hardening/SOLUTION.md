@@ -11,6 +11,7 @@ Bản đã sửa nằm ở `.github/workflows/worker-ci.yml` cạnh tệp này. 
 | `actions/checkout` mặc định `persist-credentials: true` | Token được ghi vào `.git/config` của workspace; bước sau (hay artifact upload cả thư mục) đọc được | `persist-credentials: false`; job không cần push gì |
 | Không `timeout-minutes` | Test treo (deadlock, chờ mạng) chiếm runner 6 giờ, chặn hàng đợi | `timeout-minutes: 15` |
 | Không `concurrency` | 5 push liên tiếp lên một PR là 5 lần chạy song song | `group: worker-ci-${{ github.ref }}`, `cancel-in-progress: true` |
+| Bước lưu báo cáo chỉ có `if: ${{ !env.ACT }}` | Bước sau một bước lỗi mặc định không chạy (`success()` ngầm): đúng lần test fail, lần cần báo cáo nhất, không có báo cáo nào được lưu | `if: ${{ !cancelled() && !env.ACT }}`: chạy cả khi test fail, bỏ qua khi run bị huỷ (commit mới đẩy lên, `concurrency` huỷ lần cũ) và dưới act |
 | `push:` không giới hạn nhánh | Mỗi push lên nhánh tính năng chạy CI một lần, mở PR từ nhánh đó chạy thêm lần nữa | `push: branches: [main]`; nhánh tính năng được kiểm qua `pull_request` |
 
 ## Những gì không có trong bài nhưng nên làm ở repo thật
@@ -29,4 +30,4 @@ actionlint "$EX/starter/.github/workflows/worker-ci.yml" &&
 nice -n 15 uv run pytest "$EX" -q
 ```
 
-Trên máy viết bài: `4 passed` trong khoảng 20 giây.
+Trên máy viết bài: `5 passed` trong khoảng 15 giây (image runner đã build, không cần mạng).

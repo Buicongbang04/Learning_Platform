@@ -17,14 +17,23 @@ Script đầy đủ ở `ci/image-tags.sh` cạnh tệp này. Phần dưới gi�
 
 ## Promotion là retag, không build lại
 
-Test cuối cho thấy: cùng một commit, chạy trên `main` rồi trên tag `v1.5.0`, cho bốn tag (`sha-...`, `main-...`, `sha-...`,
-`1.5.0`) và cả bốn trỏ **một digest** trên registry. Phát hành bản `1.5.0` vì vậy không cần build lại: chỉ gắn thêm tag cho
-manifest đã có (`docker buildx imagetools create --tag ...:1.5.0 ...@sha256:<digest>`, `crane tag`, `skopeo copy`). Image đã qua
-test, quét và ký ở staging chính là image lên production, từng byte. Build lại "cùng commit" ở bước phát hành tạo ra một image
-khác (image nền vừa được build lại, gói mới trên PyPI, timestamp trong layer) chưa ai kiểm.
+`ci/promote.sh` cạnh tệp này làm promotion ngay trên registry: `GET` manifest của tag `sha-...` (kèm header `Accept` cho cả OCI
+index lẫn Docker manifest, vì `docker push` từ image store containerd đẩy OCI index), rồi `PUT` **đúng những byte đó** với đúng
+`Content-Type` dưới tag mới. Digest là SHA-256 của chính những byte này, nên tag mới trỏ đúng digest cũ: image đã qua test, quét và
+ký ở staging chính là image lên production, từng byte. Build lại "cùng commit" ở bước phát hành tạo ra một image khác (image nền
+vừa được build lại, gói mới trên PyPI, timestamp trong layer) chưa ai kiểm. Không cần pull về máy, nên promote vài chục image
+mất vài giây.
 
-Registry nên bật **tag immutability** cho tag phát hành (ECR, Harbor, Google Artifact Registry, JFrog có tuỳ chọn này) để chính
-sách không chỉ dựa vào script: đẩy đè `1.5.0` bị từ chối ở phía server.
+Hai quy tắc làm script an toàn để chạy lại:
+
+- Tag đích đã trỏ cùng digest: thành công mà không làm gì (pipeline chạy lại sau lỗi mạng không đỏ oan).
+- Tag đích đã trỏ digest khác: thoát 5. Tag phát hành không bao giờ bị dời; muốn sửa thì phát hành `1.5.1`.
+
+Công cụ làm sẵn việc này: `docker buildx imagetools create --tag reg/olist-api:1.5.0 reg/olist-api@sha256:...`, `crane tag`,
+`skopeo copy`, `oras tag`. Registry nên bật **tag immutability** cho tag phát hành (ECR, Harbor, Google Artifact Registry, JFrog có
+tuỳ chọn này) để quy tắc thứ hai được thực thi ở phía server, không chỉ dựa vào script. Registry `registry:2` không có tuỳ chọn đó,
+nên kiểm "đã trỏ digest khác" phải nằm trong script; giữa lúc kiểm và lúc PUT vẫn có cửa sổ tranh chấp nhỏ mà chỉ server mới đóng
+được.
 
 ## Dùng trong workflow
 
@@ -47,8 +56,8 @@ YAML; script riêng có lợi là chạy được trong mọi CI (GitLab, Jenkin
 
 ```bash
 EX=tracks/devops/modules/07-cicd-artifacts/exercises/intermediate/02-immutable-image-tags &&
-shellcheck "$EX/starter/ci/image-tags.sh" &&
+shellcheck "$EX/starter/ci/image-tags.sh" "$EX/starter/ci/promote.sh" &&
 nice -n 15 uv run pytest "$EX" -q
 ```
 
-Trên máy viết bài: `18 passed` trong khoảng 4 giây.
+Trên máy viết bài: `21 passed` trong khoảng 8 giây (registry local đã bật).

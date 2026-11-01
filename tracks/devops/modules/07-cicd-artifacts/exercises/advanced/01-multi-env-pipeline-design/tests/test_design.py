@@ -99,6 +99,8 @@ def problems(doc: str) -> list[str]:
     if len(prose(section(doc, 1))) < 300:
         found.append("Phần 1: bối cảnh và mục tiêu cần ít nhất 300 ký tự")
     found += environment_problems(doc) + diagram_problems(doc) + strategy_problems(doc) + gate_problems(doc)
+    if re.search(r"write-all|permissions:\s*write", section(doc, 6), re.I):
+        found.append("Phần 6: không cấp permissions write-all; mỗi job chỉ nhận quyền nó cần")
     if not re.search(r"\d+\s*phút", section(doc, 5)):
         found.append("Phần 5: cần mục tiêu thời gian rollback tính bằng phút")
     for number, minimum in MIN_BULLETS.items():
@@ -130,5 +132,5 @@ def test_checks_catch_weak_design():
     for needle in ("production phải deploy artifact theo digest", "production không được dùng latest",
                    "production cần phê duyệt", "sơ đồ chưa có rollback", "ít nhất 2 chiến lược khác nhau",
                    "ít nhất 3 gate có ngưỡng bằng số", "theo độ trễ", "mục tiêu thời gian rollback",
-                   "chưa nói tới expand", "chưa nói tới OIDC"):
+                   "chưa nói tới expand", "chưa nói tới OIDC", "không cấp permissions write-all"):
         assert needle in found, f"Không bắt được: {needle}\n{found}"

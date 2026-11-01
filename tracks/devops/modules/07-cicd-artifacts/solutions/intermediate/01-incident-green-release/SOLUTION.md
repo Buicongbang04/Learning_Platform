@@ -52,7 +52,7 @@ trả mã). `continue-on-error: false` được bỏ vì đó là mặc định 
 | `defaults: run: shell: bash` cấp workflow (lời giải) | Mặc định cho mọi workflow mới | Bảo vệ cả bước viết sau này; đưa vào template workflow của tổ chức |
 | `shell: bash` trên riêng bước đó | Chỉ muốn đổi một bước | Bước khác viết sau vẫn có thể dính |
 | `set -o pipefail` đầu script | Script cũng chạy ngoài GitHub (Makefile, script local) | Dễ quên ở bước mới |
-| `pytest --junitxml=report.xml` hoặc `pytest ... > pytest-report.txt; status=$?` rồi `exit $status` | Cần báo cáo có cấu trúc | Bỏ hẳn pipe; JUnit XML đọc được bởi action hiển thị test |
+| `pytest --junitxml=report.xml`, hoặc `status=0; pytest ... > pytest-report.txt 2>&1 \|\| status=$?; cat pytest-report.txt; exit "$status"` | Cần báo cáo có cấu trúc, hay cần làm gì đó trước khi bước fail | Bỏ hẳn pipe. Dưới `bash -e`, `pytest ...; status=$?` không bao giờ tới `status=$?` vì shell đã thoát ở lệnh lỗi; `\|\| status=$?` giữ mã mà không kích hoạt `-e` |
 | `PIPESTATUS[0]` | Cần mã thoát của từng lệnh trong pipe | Chỉ có trong bash; khó đọc |
 
 Không sửa bằng cách bỏ `tee` và bước tóm tắt: báo cáo test là thứ team cần, và lần sau ai đó sẽ thêm lại đúng dòng đó.
@@ -65,7 +65,7 @@ actionlint "$EX/starter/.github/workflows/release.yml" &&
 nice -n 15 uv run pytest "$EX" -q
 ```
 
-Trên máy viết bài: `6 passed` trong khoảng 60 giây. Lưu ý `actionlint` kèm shellcheck **không** bắt lỗi này ở bản lúc sự cố:
+Trên máy viết bài: `6 passed` trong khoảng 50 giây. Lưu ý `actionlint` kèm shellcheck **không** bắt lỗi này ở bản lúc sự cố:
 thiếu `pipefail` không phải lỗi cú pháp, nên chỉ test hành vi (cài một test đỏ rồi đòi pipeline đỏ) mới bắt được.
 
 ## Bài học cho postmortem

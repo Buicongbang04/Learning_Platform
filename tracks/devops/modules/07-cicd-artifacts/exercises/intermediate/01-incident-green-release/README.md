@@ -12,7 +12,7 @@ files:
   - path: tests/fixtures/repo/requirements-dev.txt
     note: Dependency cho test, ghim phiên bản
 run:
-  - docker pull node:24.22.2-trixie-slim
+  - docker pull node:24.22.2-trixie-slim && docker build --pull=false -t devops-track/act-runner:1.0 setup/act-runner
   - uv run pytest tracks/devops/modules/07-cicd-artifacts/exercises/intermediate/01-incident-green-release -q
 ---
 
@@ -39,10 +39,10 @@ Tìm nguyên nhân và sửa `starter/.github/workflows/release.yml`. Giữ nguy
 của pytest>`.
 
 **Cách test chấm.** Repo là Olist Shop (`tracks/devops/sample-app`) cộng `requirements-dev.txt` và workflow của bạn. Test chạy
-workflow bằng `testkit.act_run` (sự kiện `push` trên `main`, image `node:24.22.2-trixie-slim`, không socket Docker; hai bước
+workflow bằng `testkit.act_run` (sự kiện `push` trên `main`, image runner `devops-track/act-runner:1.0`, không socket Docker; hai bước
 `docker/*` có `if: ${{ !env.ACT }}` bị bỏ qua và chỉ được kiểm tĩnh). Kết quả từng job đọc bằng `act_job_results`, các dòng
-`devops-ex-output` đọc bằng `act_outputs`. Có ba lần chạy act, mỗi lần khoảng 20 giây, cần mạng tới `github.com` và `pypi.org` cho
-hai bước cài đặt (lỗi mạng ở đó thì test skip).
+`devops-ex-output` đọc bằng `act_outputs`. Có ba lần chạy act, mỗi lần khoảng 15 giây, không cần mạng: uv, Python và wheel
+có sẵn trong image runner.
 
 ## Tiêu chí đạt
 
@@ -61,11 +61,12 @@ hai bước cài đặt (lỗi mạng ở đó thì test skip).
 
 ### Gợi ý 1
 
-Runner quyết định một bước `run:` xanh hay đỏ chỉ bằng **một con số**: mã thoát của tiến trình shell chạy script của bước. So
-script của bước **Test** trước và sau lần chỉnh sửa tuần trước. Với dòng lệnh đó, mã thoát của cả dòng đến từ lệnh nào?
+Runner quyết định một bước `run:` xanh hay đỏ chỉ bằng **một con số**: mã thoát của tiến trình shell chạy script của bước.
+Đọc script của bước **Test** trong `starter/`: với dòng lệnh đó, mã thoát của cả dòng đến từ lệnh nào? Chạy đúng dòng đó trên máy
+với một test đỏ rồi `echo $?` để kiểm.
 
 ### Gợi ý 2
 
 Log của act in đúng lệnh mà runner dùng để chạy mỗi bước (`docker exec cmd=[...]`). Chạy thử workflow lúc sự cố bằng
-`act push -j test -P ubuntu-latest=node:24.22.2-trixie-slim --pull=false --container-daemon-socket -` trong một bản sao repo,
+`act push -j test -P ubuntu-latest=devops-track/act-runner:1.0 --pull=false --container-daemon-socket -` trong một bản sao repo,
 xem dòng đó, rồi tra tài liệu GitHub về `jobs.<job_id>.steps[*].shell` để biết runner gọi shell với cờ gì khi bạn không khai báo.

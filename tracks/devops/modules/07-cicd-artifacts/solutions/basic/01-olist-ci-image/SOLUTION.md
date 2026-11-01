@@ -16,7 +16,7 @@ build, push thay cho workflow khi chấm.
 | `outputs.tag` | Từ `steps.meta.outputs.tag` | Job deploy sau này (capstone) đọc `needs.image.outputs.tag` thay vì tự tính lại |
 | Login | `docker/login-action`, `ghcr.io`, `secrets.GITHUB_TOKEN` | Token ngắn hạn, tự hết hạn khi job xong, phạm vi theo `permissions`; không cần PAT sống lâu |
 | Build | `docker/build-push-action`, `build-args: APP_VERSION=<tag>`, nhãn `org.opencontainers.image.revision` | `/healthz` trả đúng tag, nhãn OCI trỏ về commit: nhìn container đang chạy là biết từ commit nào |
-| `push` | `${{ github.event_name == 'push' }}` | PR vẫn build (bắt Dockerfile hỏng sớm) nhưng không đẩy image của code chưa review |
+| `push` | `${{ github.event_name == 'push' }}` | PR vẫn build (bắt Dockerfile hỏng sớm) nhưng không đẩy image của code chưa review. Test chỉ nhận đúng dạng này hoặc `!= 'pull_request'`: một biểu thức "có nhắc tới event_name" như `!= 'push'` làm ngược lại |
 | Guard | `if: ${{ !env.ACT }}` | act đặt biến `ACT`, nên hai bước Docker chỉ chạy trên GitHub |
 
 Các action được ghim theo commit SHA (`actions/checkout@3d3c42e...` là v7.0.1). Basic 02 giải thích vì sao; bài này không chấm
@@ -44,7 +44,7 @@ nice -n 15 uv run pytest "$EX" -q
 ```
 
 `actionlint` không kèm cờ thì chạy cả shellcheck trên từng bước `run:` (nếu đã cài từ module 01): lời giải sạch cả hai. Kết quả
-trên máy viết bài: `7 passed` trong khoảng 70 giây (hai lần act khoảng 20 giây mỗi lần, build image có cache).
+trên máy viết bài: `16 passed` trong khoảng 60 giây (hai lần act khoảng 15 giây mỗi lần, build image có cache).
 
 ## Lỗi hay gặp
 

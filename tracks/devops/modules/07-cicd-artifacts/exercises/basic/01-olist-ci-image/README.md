@@ -14,7 +14,7 @@ files:
   - path: tests/fixtures/ci.starter.yml
     note: Bản gốc của starter, test chứng minh phép kiểm bắt được lỗi của nó
 run:
-  - docker pull node:24.22.2-trixie-slim
+  - docker pull node:24.22.2-trixie-slim && docker build --pull=false -t devops-track/act-runner:1.0 setup/act-runner
   - docker pull python:3.12.16-slim-trixie
   - docker compose -f setup/docker-compose.yml --profile devops up -d registry
   - uv run pytest tracks/devops/modules/07-cicd-artifacts/exercises/basic/01-olist-ci-image -q
@@ -47,13 +47,15 @@ Workflow cần có:
    chứa `date`, `run_number`, `run_id`, `run_attempt` hay `latest`.
 7. Bước `docker/login-action` vào `registry: ghcr.io` bằng `password: ${{ secrets.GITHUB_TOKEN }}`, và bước
    `docker/build-push-action` với `context: .`, `tags` dùng `steps.<id>.outputs.tag` (không có `latest`),
-   `build-args: APP_VERSION=${{ steps.<id>.outputs.tag }}`, `push` là biểu thức theo `github.event_name` để pull request chỉ build
-   mà không push. Cả hai bước có `if: ${{ !env.ACT }}` (được nối thêm điều kiện bằng `&&`).
+   `build-args: APP_VERSION=${{ steps.<id>.outputs.tag }}`, `push` đúng bằng `${{ github.event_name == 'push' }}` hoặc
+   `${{ github.event_name != 'pull_request' }}` để pull request chỉ build mà không push. Cả hai bước có `if:` mà testkit công nhận
+   là chắc chắn sai dưới act: `${{ !env.ACT }}`, có thể nối thêm điều kiện bằng `&&` (mục 3 của lý thuyết).
 
 **Vì sao chạy được trên máy, và phần nào không chạy.** Test chạy workflow bằng `act` (mục 3 của lý thuyết) qua
-`testkit.act_run`: mỗi job là một container `node:24.22.2-trixie-slim`, ghim CPU, RAM 1 GB, **không có socket Docker**. Image
-runner này không có Python, nên hai bước có sẵn tải `uv` 0.10.8 (kiểm SHA-256 trước khi giải nén), dùng uv cài Python 3.12.13 và
-dependency từ PyPI: job cần mạng tới `github.com` và `pypi.org`. Hai bước này chạy y hệt trên runner `ubuntu-latest` của GitHub.
+`testkit.act_run`: mỗi job là một container `devops-track/act-runner:1.0` (image runner của track, build một lần theo mục 0 của
+module), ghim CPU, RAM 1 GB, **không có socket Docker**. Image đã có uv 0.10.8, CPython 3.12.13 và cache wheel của Olist Shop, nên
+hai bước có sẵn không tải gì: **Cài uv** thấy đúng phiên bản thì thoát, **Cài Python và dependency** lấy Python và wheel từ image
+(`UV_OFFLINE=1`). Trên runner `ubuntu-latest` của GitHub, cùng hai bước đó tải uv (kiểm SHA-256), Python và wheel từ Internet.
 Bước `docker/login-action` và `docker/build-push-action` cần socket Docker và registry thật nên gắn `if: ${{ !env.ACT }}`: dưới
 act chúng bị bỏ qua (testkit thay action bằng action rỗng, không tải gì), test chỉ **kiểm tĩnh** chúng: cấu trúc YAML theo 7 điểm
 trên, cộng `actionlint` nếu bạn đã cài. Phần build và push thật do **harness** làm thay workflow, dùng đúng output của workflow:
@@ -68,7 +70,8 @@ trên, cộng `actionlint` nếu bạn đã cài. Phần build và push thật d
    test xong.
 
 Registry local là service `registry` (profile `devops`) trong `setup/docker-compose.yml`; chưa bật thì test đó skip kèm lệnh bật.
-Thiếu image runner hay image Python thì test skip kèm lệnh `docker pull`. Lỗi mạng ở hai bước cài đặt thì test skip. `actionlint`
+Thiếu image runner thì test skip kèm lệnh build; thiếu image Python thì skip kèm lệnh `docker pull`. Lần build image đầu tiên
+của harness cần mạng để tải gói pip (lỗi mạng thì skip); các lần sau dùng cache của BuildKit. `actionlint`
 chưa cài thì riêng test actionlint skip (xem `## 0. Cài đặt` của module); test cấu trúc không phụ thuộc actionlint.
 
 **Chạy pipeline thật trên GitHub (tuỳ chọn, không chấm).** Tạo repo riêng (private cũng được) rồi chép đúng bộ tệp mà harness
@@ -109,5 +112,5 @@ Bash có cắt chuỗi: `${GITHUB_SHA::12}`. Ghi output của bước bằng `ec
 
 `push: ${{ github.event_name == 'push' }}` cho pull request build để bắt lỗi Dockerfile mà không đẩy image của code chưa review.
 Điều kiện của bước login có thể là `${{ !env.ACT && github.event_name == 'push' }}`. Muốn thử nhanh từng job:
-`act push -j test -P ubuntu-latest=node:24.22.2-trixie-slim --pull=false --container-daemon-socket -` trong thư mục repo
+`act push -j test -P ubuntu-latest=devops-track/act-runner:1.0 --pull=false --container-daemon-socket -` trong thư mục repo
 đã dựng ở trên (`--container-daemon-socket -` để job không nhận socket Docker của máy bạn).

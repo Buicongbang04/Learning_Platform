@@ -12,7 +12,7 @@ files:
   - path: tests/fixtures/repo/requirements-dev.txt
     note: Dependency cho test, ghim phiên bản
 run:
-  - docker pull node:24.22.2-trixie-slim
+  - docker pull node:24.22.2-trixie-slim && docker build --pull=false -t devops-track/act-runner:1.0 setup/act-runner
   - uv run pytest tracks/devops/modules/07-cicd-artifacts/exercises/basic/02-workflow-hardening -q
 ---
 
@@ -39,14 +39,22 @@ Phép kiểm tĩnh (đọc YAML, không cần actionlint):
 3. Mỗi job có `timeout-minutes` từ 1 tới 30.
 4. Mỗi job có `concurrency` (cấp workflow hoặc cấp job) với `group` và `cancel-in-progress` bật.
 5. Mọi `uses:` ghim theo commit SHA đủ 40 ký tự hex (`owner/repo@<sha>`), kể cả `actions/checkout`.
-6. Mọi bước `actions/checkout` có `with: persist-credentials: false` và không lấy `ref` từ `github.event...`.
+6. Mọi bước `actions/checkout` có `with: persist-credentials: false` và không đặt `ref`, `repository` hay input nào ngoài
+   danh sách an toàn (`persist-credentials`, `fetch-depth`, `fetch-tags`, `clean`, `lfs`, `submodules`, `show-progress`,
+   `filter`, `sparse-checkout`, `sparse-checkout-cone-mode`, `set-safe-directory`, `path`). Checkout mặc định đã lấy đúng commit
+   của sự kiện; dưới act, checkout không clone từ remote khi không đặt `ref`/`repository` (đặt thì act tải và chạy action thật,
+   `act_run` từ chối).
 7. Không bước `run:` nào chứa biểu thức `${{ ... }}` đọc `github.event.*` hay `github.head_ref`; giá trị đó phải đi qua `env:`.
+8. Bước `actions/upload-artifact` lưu báo cáo test có `if: ${{ !cancelled() && !env.ACT }}` (hoặc `always()` thay cho
+   `!cancelled()`): báo cáo cần nhất đúng lúc test fail, mà mặc định bước sau một bước lỗi không chạy. `!env.ACT` vẫn giữ để act
+   bỏ qua bước này; testkit công nhận hàm trạng thái nối bằng `&&` với `!env.ACT` (mục 3 của lý thuyết).
 
-Phép kiểm hành vi: `testkit.act_run` chạy workflow với sự kiện `push` trên `main` trong image `node:24.22.2-trixie-slim` (không
+Phép kiểm hành vi: `testkit.act_run` chạy workflow với sự kiện `push` trên `main` trong image runner `devops-track/act-runner:1.0` (không
 socket Docker, bước có guard bị bỏ qua); job `worker-tests` phải xanh và pytest phải in dòng `N passed`. Thêm `actionlint` (nếu đã
 cài, chạy với `-shellcheck= -pyflakes=`): không lỗi. actionlint tự bắt điểm 7 với `github.event.pull_request.title`, nên đây là
 lưới thứ hai, không phải lưới duy nhất. Một test đưa `tests/fixtures/worker-ci.starter.yml` vào phép kiểm tĩnh và đòi bắt đủ các
-lỗi của nó.
+lỗi của nó; một test khác thêm `ref: ${{ github.sha }}` cho checkout và guard `always() || !env.ACT` cho bước lưu báo
+cáo rồi đòi bị bắt.
 
 Lấy SHA của một tag action (cần mạng):
 
@@ -58,7 +66,7 @@ Tag nhẹ in một dòng là commit; tag có chú thích in thêm dòng `^{}`, v
 
 ## Tiêu chí đạt
 
-- Test tĩnh pass với đủ 7 điểm; test hành vi xanh; actionlint sạch.
+- Test tĩnh pass với đủ 8 điểm; test hành vi xanh; actionlint sạch.
 - Giải thích được bằng một câu cho từng thay đổi: nó chặn kịch bản tấn công hay sự cố nào.
 - Biết `pull_request` từ fork chạy với token chỉ đọc và không có secret, và vì sao đó là điều bạn muốn ở đây.
 
