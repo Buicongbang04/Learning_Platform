@@ -52,7 +52,7 @@ Worker phơi metrics `jobs_processed_total`, `jobs_failed_total` ở cổng `WOR
 | `LOG_LEVEL` | `INFO` | |
 | `APP_VERSION` | `dev` | Trả trong `/healthz`, dùng để kiểm bản đang chạy sau deploy |
 | `WORKER_METRICS_PORT` | `9101` | Chỉ worker dùng |
-| `OLIST_SHOP_PG_PORT` / `OLIST_SHOP_REDIS_PORT` / `OLIST_SHOP_API_PORT` | `25432` / `26379` / `28000` | Cổng trên máy host |
+| `OLIST_SHOP_PG_PORT` / `OLIST_SHOP_REDIS_PORT` / `OLIST_SHOP_API_PORT` | `25432` / `26379` / `28000` | Cổng trên máy host, chỉ mở trên `127.0.0.1` (Postgres mật khẩu `olist`, Redis không mật khẩu) |
 | `DEVOPS_CPUSET` | rỗng | Ghim core cho mọi container, ví dụ `12-35` trên máy dùng chung |
 
 Cổng host cố ý tránh `5432`, `6379`, `8000`, `8080`, `9000`, `9001` và cả `15432`, `16379` (cổng mà

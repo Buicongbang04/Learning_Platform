@@ -82,7 +82,7 @@ docker compose -f setup/docker-compose.yml --profile devops up -d mailpit &&
 curl -fsS --retry 10 --retry-connrefused --retry-delay 1 http://localhost:18025/api/v1/info
 ```
 
-SMTP ở `localhost:11025`, giao diện web và API ở `http://localhost:18025`; đổi cổng bằng `MAILPIT_SMTP_PORT`,
+SMTP ở `localhost:11025`, giao diện web và API ở `http://localhost:18025` (chỉ mở trên `127.0.0.1`); đổi cổng bằng `MAILPIT_SMTP_PORT`,
 `MAILPIT_HTTP_PORT` trong `setup/.env`. Tắt khi xong:
 `docker compose -f setup/docker-compose.yml --profile devops stop mailpit`. Gỡ hẳn container:
 `docker compose -f setup/docker-compose.yml --profile devops rm -f mailpit`.

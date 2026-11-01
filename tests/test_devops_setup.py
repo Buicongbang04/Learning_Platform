@@ -50,6 +50,11 @@ def test_mailpit_host_ports_avoid_reserved():
         assert host_port not in RESERVED_PORTS
 
 
+def test_mailpit_ports_bind_loopback_only():
+    mappings = [str(m) for m in _services()["mailpit"]["ports"]]
+    assert mappings == ["127.0.0.1:${MAILPIT_SMTP_PORT:-11025}:1025", "127.0.0.1:${MAILPIT_HTTP_PORT:-18025}:8025"]
+
+
 def test_mailpit_registered_in_testkit():
     assert testkit.SERVICES["mailpit"] == ("MAILPIT_HOST", "localhost", "MAILPIT_SMTP_PORT", 11025)
 

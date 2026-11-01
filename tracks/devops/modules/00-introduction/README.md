@@ -466,7 +466,7 @@ flowchart LR
 | API | `/metrics` (`http_requests_total`, `http_request_duration_seconds`) | Nguồn cho SLI theo request; nhãn `path` là route template để tránh nổ cardinality |
 | Worker | Lấy job từ list Redis `olist:jobs`, thoát sạch khi nhận `SIGTERM` | Deploy và scale không làm mất job đang chạy |
 | Log | JSON một dòng, có `request_id` lấy từ header `X-Request-ID` | Lần được một request qua Nginx, API và log |
-| Cổng host | Postgres `25432`, Redis `26379`, API `28000` (đổi bằng biến môi trường) | Không đụng project khác đang chạy trên máy |
+| Cổng host | Postgres `25432`, Redis `26379`, API `28000` (đổi bằng biến môi trường), chỉ mở trên `127.0.0.1` | Không đụng project khác đang chạy trên máy, không lộ database ra mạng LAN |
 
 Olist Shop lớn dần qua các module như một hệ thống thật: script vận hành (02), Nginx có TLS phía trước (05), image tối ưu
 đã quét lỗ hổng (06), pipeline CI/CD (07), hạ tầng bằng OpenTofu và Ansible (08, 09), Helm chart trên kind (11), GitOps

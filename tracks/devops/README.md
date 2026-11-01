@@ -124,7 +124,7 @@ Không bao giờ chạy script tải từ mạng thẳng vào shell với quyề
 
 Dịch vụ phụ trợ của track nằm dưới profile `devops` của `setup/docker-compose.yml` (ví dụ Mailpit cho module
 04), không đụng các service của track Data Engineer. Ứng dụng mẫu có compose riêng trong
-[`sample-app/`](sample-app/README.md), cổng host mặc định `25432`, `26379`, `28000` để không trùng project khác.
+[`sample-app/`](sample-app/README.md), cổng host mặc định `25432`, `26379`, `28000` để không trùng project khác, chỉ mở trên `127.0.0.1`.
 
 Từ module 10, bài cần Kubernetes dùng chung một cluster kind tên `devops-lab`. Module 10 hướng dẫn tạo đầy đủ;
 khung lệnh như sau:

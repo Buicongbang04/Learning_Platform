@@ -146,7 +146,9 @@ def test_ports_avoid_common_defaults():
     for name, service in spec["services"].items():
         assert service.get("cpuset") == "${DEVOPS_CPUSET:-}", name
         for port in service.get("ports", []):
-            host = str(port).rsplit(":", 1)[0]
+            bind, _, rest = str(port).partition(":")
+            assert bind == "127.0.0.1", f"{name}: chỉ publish trên 127.0.0.1, không mở ra mạng ngoài: {port}"
+            host = rest.rsplit(":", 1)[0]
             m = re.fullmatch(r"\$\{OLIST_SHOP_\w+_PORT:-(\d+)\}", host)
             assert m, f"{name}: cổng host phải lấy từ biến OLIST_SHOP_*_PORT: {port}"
             defaults.append(int(m.group(1)))
