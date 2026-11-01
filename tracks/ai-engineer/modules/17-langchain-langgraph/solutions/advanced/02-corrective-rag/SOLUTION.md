@@ -50,8 +50,9 @@ câu chỉ RAG trích đúng, 10 câu chỉ CRAG trích đúng.
 ## Đọc kết quả
 
 - **CRAG làm tệ hơn ở đây, và lý do đo được.** "Trích đúng" không thể vượt "điều đúng có trong nguồn trả lời", và con số
-  đó tụt từ 82 xuống 53 vì bộ chấm 3B bỏ điều đúng ở 35% số câu nó có mặt. Bộ chấm chỉ đọc 700 ký tự đầu của mỗi điều; với
-  điều dài, phần liên quan nằm sau.
+  đó tụt từ 82 xuống 53 vì bộ chấm 3B bỏ điều đúng ở 35% số câu nó có mặt. Bộ chấm chỉ đọc 700 ký tự đầu của mỗi điều, và
+  độ dài khớp với chỗ nó hỏng: nó giữ điều đúng ở 54% (32/59) khi điều dài hơn 700 ký tự, 91% (21/23) khi ngắn hơn (lượt
+  chấm đầu, log `a02_summary.log`).
 - **Viết lại gần như không chạy.** Bộ chấm hiếm khi bỏ **hết** 5 nguồn (chỉ 5/100 câu), nên vòng sửa sai hầu như không
   kích hoạt, và cả 5 lần viết lại không đưa điều đúng vào nguồn. Lợi ích chính của CRAG trong paper (tìm lại khi
   retrieval hỏng) cần một bộ chấm biết nói "không có gì liên quan"; với bộ chấm này, hơn một nửa số nguồn nó giữ là

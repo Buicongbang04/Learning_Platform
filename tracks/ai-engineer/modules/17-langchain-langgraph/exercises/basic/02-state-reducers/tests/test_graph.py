@@ -55,7 +55,7 @@ def test_merge_is_order_independent(g):
         for b in batches:
             acc = g.merge_evidence(acc, b)
         results.add(tuple((x["uid"], x["score"], x["part"]) for x in acc))
-    assert len(results) == 1, "kết quả gộp phụ thuộc thứ tự các nhánh song song xong việc"
+    assert len(results) == 1, "kết quả gộp phụ thuộc thứ tự các cập nhật được áp"
     uids = [u for u, _, _ in next(iter(results))]
     assert len(uids) == len(set(uids))
 
@@ -179,9 +179,15 @@ def test_empty_split_uses_question(g):
     assert out["parts"] == ["Thủ tục ly hôn"] and env.searches == ["Thủ tục ly hôn"]
 
 
-def test_same_result_whatever_finishing_order(g):
-    answers = set()
-    for seed in range(6):
-        env = Env({"p1": [("A", 0.6), ("B", 0.6)], "p2": [("B", 0.6), ("C", 0.9)], "p3": [("A", 0.7)]}, seed=seed)
-        answers.add(build(g, env).invoke({"question": "p1 | p2 | p3"})["answer"])
-    assert answers == {"C,A,B"}
+def test_same_result_whatever_part_order(g):
+    """Đổi thứ tự các vế (tức thứ tự Send) không được đổi state cuối, kể cả vế mà evidence bằng điểm được gắn vào."""
+    import itertools
+
+    table = {"p1": [("A", 0.6), ("B", 0.6)], "p2": [("B", 0.6), ("C", 0.9)], "p3": [("A", 0.7)]}
+    results = set()
+    for order in itertools.permutations(["p1", "p2", "p3"]):
+        out = build(g, Env(table)).invoke({"question": " | ".join(order)})
+        results.add(tuple((e["uid"], e["score"], e["part"]) for e in out["evidence"]))
+        assert out["answer"] == "C,A,B"
+    assert results == {(("C", 0.9, "p2"), ("A", 0.7, "p3"), ("B", 0.6, "p1"))}, \
+        "state cuối phụ thuộc thứ tự các vế trong câu hỏi"

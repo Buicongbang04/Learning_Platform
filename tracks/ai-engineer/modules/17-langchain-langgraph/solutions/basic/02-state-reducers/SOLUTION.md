@@ -6,9 +6,12 @@
 `(score, -part)`: điểm cao hơn thắng, bằng điểm thì `part` nhỏ hơn thắng. Rồi `sorted(..., key=(-score, uid))`. Hai
 điểm dễ sai:
 
-- **Quy tắc bằng điểm phải đầy đủ.** "Bằng điểm thì giữ bản cũ" nghe tự nhiên nhưng "cũ" phụ thuộc nhánh `retrieve`
-  nào xong trước, tức phụ thuộc lịch chạy thread. Đồ thị khi đó vẫn chạy, chỉ thỉnh thoảng gắn evidence với vế khác,
-  và test chạy 20 thứ tự gộp mới thấy. Reducer của khoá được ghi song song phải **giao hoán và kết hợp**.
+- **Quy tắc bằng điểm phải đầy đủ.** "Bằng điểm thì giữ bản cũ" nghe tự nhiên nhưng "cũ" là bản được áp trước. Ở
+  LangGraph 1.2.16, `apply_writes` sắp các task theo đường dẫn (tên node, chỉ số `Send`) trước khi áp, nên thứ tự là
+  tất định chứ không phụ thuộc thread nào xong trước; nhưng nó gắn với thứ tự các vế trong câu hỏi, và là chi tiết cài
+  đặt có thể đổi giữa các phiên bản. Với quy tắc "giữ bản cũ", chỉ cần người dùng viết hai vế theo thứ tự ngược lại là
+  evidence gắn với vế khác. Test gộp 20 thứ tự và chạy đồ thị với các vế đảo thứ tự bắt được điều này. Reducer của khoá
+  được ghi song song phải **giao hoán và kết hợp**.
 - **Không sửa list đầu vào.** LangGraph giữ giá trị cũ trong checkpoint; sửa tại chỗ là sửa luôn lịch sử.
 
 **`ResearchState`.** `evidence: Annotated[list[Evidence], merge_evidence]`, `attempts: Annotated[int, operator.add]`.

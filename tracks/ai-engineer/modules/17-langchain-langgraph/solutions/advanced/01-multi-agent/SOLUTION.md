@@ -61,17 +61,20 @@ So theo cặp: một agent và supervisor lệch nhau 7 task (4 chỉ một agen
   tách bạch, một agent đã chọn đúng tool; tầng điều phối chỉ thêm một chỗ hỏng: ở các task nhà sách sai, agent con trả lời
   "không tìm thấy" hoặc điều phối viên tóm câu trả lời của agent con sai đi (một câu trả lời bắt đầu "Ccâu hỏi của bạn vượt
   quá khả năng..."). Ở phần pháp luật hai cách bằng nhau (15/20).
-- **Swarm sập ở mọi câu có phần pháp luật** vì handoff không xảy ra: trong 28 task có phần pháp luật, agent nhà sách (nơi
-  mọi lượt bắt đầu) chỉ gọi handoff thật 2 lần. 11 lần nó **viết** lời gọi ra thành chữ (`" transfer_to_legal()"`,
-  `".transfer_to_legal{}"`) thay vì phát một tool call, 5 lần trả về chuỗi rỗng, 2 lần nói "tôi sẽ chuyển" rồi dừng. Tool
-  không tham số là trường hợp model 3B này phát tool call kém nhất. Cơ chế handoff đúng (test của `make_handoff_tool` xanh,
-  và 2 lần chuyển thật chạy đúng); thứ hỏng là model không dùng được nó.
+- **Swarm sập ở mọi câu có phần pháp luật** vì handoff gần như không xảy ra. Phân loại cả 28 task có phần pháp luật
+  (agent nhà sách là nơi mọi lượt bắt đầu; log `a01_summary.log`): 2 lần gọi handoff thật (L15, M1; quyền chuyển sang
+  agent pháp luật nhưng cả hai task vẫn sai); 11 lần **viết** lời gọi ra thành chữ (`" transfer_to_legal()"`,
+  `".transfer_to_legal{}"`) thay vì phát một tool call; 5 lần trả về chuỗi rỗng; 2 lần nói "tôi sẽ chuyển" rồi dừng; 8 lần
+  tự trả lời mà không chuyển (2 câu luật trả lời "không tìm thấy trong dữ liệu", 6 câu ghép trả lời phần sách rồi bỏ qua
+  hoặc tự nói qua phần luật mà không tra cứu). Giả thuyết, **chưa đo**: tool không tham số là trường hợp model 3B này phát tool call kém nhất; muốn
+  kiểm thì thêm một tham số bắt buộc cho tool handoff và chạy lại cùng bảng. Cơ chế handoff tự nó đúng (test của
+  `make_handoff_tool` xanh, 2 lần chuyển thật đến đúng agent); thứ hỏng là model không dùng được nó.
 - **Câu ghép là chỗ khó nhất cho cả ba**: 3/8 là tốt nhất; một agent làm đúng phần sách ở 6 câu nhưng chỉ tra trúng phần
   luật ở 4.
 - **Kết luận cho capstone với model nhỏ**: một agent có ít tool, mô tả tool rõ, là lựa chọn mặc định. Nếu cần tách
   (nhiều miền, nhiều tool), dùng router bằng structured output hẹp hoặc code (như bước `plan` của bài Intermediate 03) thay
-  cho handoff do model tự quyết; nếu dùng handoff, cho tool handoff một tham số bắt buộc (ví dụ `reason: str`) và đo lại,
-  vì model nhỏ phát tool call có tham số tốt hơn. Chạy lại cùng bảng với `qwen2.5:7b` trên PC để biết phần nào là do
+  cho handoff do model tự quyết; nếu dùng handoff, thử cho tool handoff một tham số bắt buộc (ví dụ `reason: str`) và đo
+  lại xem giả thuyết ở trên có đúng không. Chạy lại cùng bảng với `qwen2.5:7b` trên PC để biết phần nào là do
   model.
 
 ## Rubric (100 điểm)

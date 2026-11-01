@@ -47,8 +47,8 @@ flowchart LR
 
 Trong `starter/graph.py`:
 
-1. `merge_evidence(left, right)`: reducer, quy tắc trong docstring. Các nhánh `retrieve` xong theo thứ tự bất kỳ; kết
-   quả gộp **không được** phụ thuộc thứ tự đó.
+1. `merge_evidence(left, right)`: reducer, quy tắc trong docstring. Kết quả gộp **không được** phụ thuộc thứ tự các cập
+   nhật được áp (thứ tự đó gắn với thứ tự các vế và là chi tiết cài đặt của LangGraph, có thể đổi giữa các phiên bản).
 2. `ResearchState`: thêm reducer cho các khoá cần cộng dồn (`evidence` dùng `merge_evidence`, `attempts` cộng số).
    Khoá nào **ghi đè** mỗi lần thì giữ không reducer.
 3. `route_parts`, `weak_parts`, `should_continue` theo docstring.
@@ -61,8 +61,8 @@ Trong `starter/graph.py`:
   nhau cho cùng một kết quả.
 - `ResearchState` khai báo đúng reducer cho `evidence` và `attempts`, không cho `parts`.
 - Đồ thị: hai vế tra song song không lỗi cập nhật, mỗi vế tra đúng một lần; vòng `rewrite` chỉ tra lại vế còn yếu;
-  dừng đúng ở `max_attempts`; viết lại mà không đổi gì thì đi thẳng tới `answer`; 6 thứ tự hoàn thành ngẫu nhiên cho
-  cùng một câu trả lời.
+  dừng đúng ở `max_attempts`; viết lại mà không đổi gì thì đi thẳng tới `answer`; mọi hoán vị thứ tự các vế cho
+  cùng một state cuối (cả vế mà evidence bằng điểm được gắn vào).
 
 ## Gợi ý
 

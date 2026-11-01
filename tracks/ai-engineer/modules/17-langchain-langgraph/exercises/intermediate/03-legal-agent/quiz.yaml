@@ -5,9 +5,8 @@ questions:
     prompt: "S3: agent hỏi lại bao nhiêu trong 10 câu mức phạt giao thông không nói loại xe?"
     options:
       - { id: a, text: "0 đến 2 câu" }
-      - { id: b, text: "3 đến 5 câu" }
-      - { id: c, text: "6 đến 8 câu" }
-      - { id: d, text: "9 hoặc 10 câu" }
+      - { id: b, text: "3 đến 8 câu" }
+      - { id: c, text: "9 hoặc 10 câu" }
   - id: s2-both
     kind: data
     type: single

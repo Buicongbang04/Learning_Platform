@@ -105,9 +105,12 @@ là câu phạt giao thông không nói loại xe, như câu gốc của tập g
   nguồn thay vì 5. Bản production nên **định tuyến**: câu một ý đi RAG một lượt (hoặc agent giữ 5 nguồn khi chỉ có một vế),
   chỉ câu nhiều vế hay thiếu dữ kiện mới đi đường agent.
 - **Nguồn đúng chưa phải câu trả lời đúng.** Trích đúng thấp ở mọi cột (27 và 32/100 ở S1, 2/50 cả hai vế ở S2) và gần
-  một nửa câu bị từ chối: ở S1 RAG từ chối 31 câu, agent 29 câu **dù điều đúng có trong nguồn**. Đây chính là lỗi đơn vị
-  nguồn của mục 5 module 13: cả điều cắt ở 1 500 ký tự, phần trả lời nằm sau chỗ cắt (Điều 5, Điều 6 Nghị định 100/2019 dài
-  hơn 12 000 ký tự), model **đúng** khi từ chối. Sửa ở retrieval (chọn khoản, như bài Intermediate 02 module 13), không ở
+  một nửa câu bị từ chối: ở S1 RAG từ chối 31 câu, agent 29 câu **dù điều đúng có trong nguồn**. Phần lớn trường hợp khớp
+  với lỗi đơn vị nguồn của mục 5 module 13: trong 31 câu RAG từ chối dù có điều đúng, 22 câu có điều đúng dài hơn 1 500
+  ký tự (agent: 23/29); tỉ lệ từ chối là 22/44 khi điều đúng dài và 9/38 khi ngắn (log `refusal_length_split.log`). Với
+  điều dài (Điều 5, Điều 6 Nghị định 100/2019 dài hơn 12 000 ký tự), phần trả lời rất có thể nằm sau chỗ cắt và model khi
+  đó **đúng** khi từ chối; chúng tôi không kiểm từng câu xem phần trả lời có thật sự nằm sau chỗ cắt không, và 9 câu điều
+  ngắn bị từ chối là lỗi của bước trả lời. Sửa trước hết ở retrieval (chọn khoản, như bài Intermediate 02 module 13), không ở
   đồ thị. Đó là việc của capstone milestone 3 và 6.
 - **Hỏi lại có giá của nó.** 3/100 câu thường bị hỏi thừa; model bịa loại xe ở một số câu thiếu nên không hỏi. Một bộ đo
   riêng cho hỏi lại (câu thiếu và bản đủ của chúng) là bắt buộc, vì tỉ lệ đúng tổng không cho thấy hai lỗi này.

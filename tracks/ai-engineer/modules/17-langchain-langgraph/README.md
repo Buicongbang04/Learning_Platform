@@ -199,8 +199,11 @@ $$
 s_{k+1}[\text{khoá}] = s_k[\text{khoá}] \oplus u_1 \oplus u_2 \oplus \dots \oplus u_m
 $$
 
-với $$u_i$$ là cập nhật của các node chạy trong bước $$k$$, theo một thứ tự **không cố định**. Muốn kết quả xác định,
-$$\oplus$$ phải kết hợp và giao hoán trên các cập nhật đó. Khoá **không** có reducer thì là ghi đè, và hai node cùng ghi
+với $$u_i$$ là cập nhật của các node chạy trong bước $$k$$. Ở LangGraph 1.2.16 thứ tự áp các $$u_i$$ là **tất định**:
+`apply_writes` sắp các task theo đường dẫn (tên node, chỉ số của `Send`) trước khi áp, nên thread nào xong trước không
+quan trọng. Nhưng đó là chi tiết cài đặt không có trong tài liệu và có thể đổi giữa các phiên bản; và với một
+$$\oplus$$ không giao hoán, kết quả vẫn phụ thuộc những thứ không mang nghĩa như tên node hay thứ tự các vế trong câu
+hỏi. Vì vậy $$\oplus$$ vẫn phải kết hợp và giao hoán trên các cập nhật đó. Khoá **không** có reducer thì là ghi đè, và hai node cùng ghi
 nó trong một bước làm LangGraph ném `InvalidUpdateError: At key 'x': Can receive only one value per step`.
 
 | Reducer | Dùng cho |
@@ -236,7 +239,8 @@ for step in app.stream({"seen": []}, stream_mode="values"):
     print(step)
 ```
 
-Bước đầu `a`, `b` chạy song song và `operator.add` nối cả hai (thứ tự giữa chúng không được bảo đảm); `reset` chạy khi
+Bước đầu `a`, `b` chạy song song và `operator.add` nối cả hai (ra `['a', 'b']` theo thứ tự tên node ở bản này, không phải
+một cam kết của API); `reset` chạy khi
 **cả hai** xong (`add_edge([...], "reset")` là cạnh chờ nhiều nguồn) và ghi đè.
 
 ### Cạnh có điều kiện, `Send`, `Command`, vòng lặp
@@ -440,10 +444,10 @@ flowchart LR
 
 ### Cái framework không đổi được
 
-Module 16 đo trên bộ task này: ReAct văn bản 17/24, native 10/24 (mục 2 module 16). Ba agent native của bài Intermediate
-01 (dựng tay, prebuilt, vòng tự viết chạy lại) cho kết quả cùng khoảng với nhau và khoảng tin cậy chồng nhau gần hết; vòng
-ReAct văn bản chạy lại vẫn cao hơn hẳn. Kiểu hỏng cũng giống module 16: dừng sau nhiều nhất một tool, hỏi lại người dùng
-thay vì gọi tool tiếp. **Giao thức** gọi tool trên model này quyết định tỉ lệ đúng; đổi framework không đổi điều đó. Muốn
+Module 16 đo trên bộ task này: ReAct văn bản 17/24, native 10/24 (mục 2 module 16). Bài Intermediate 01 cho bạn đo ba
+agent native (dựng tay, prebuilt, vòng tự viết chạy lại) và vòng ReAct văn bản trên cùng điều kiện, với khoảng tin cậy và
+so theo cặp. Câu hỏi cần trả lời bằng số của bạn: khác biệt lớn nằm giữa các **framework** hay giữa các **giao thức** gọi
+tool? Framework chỉ là cách viết vòng lặp; model và giao thức thì nó không đổi. Muốn
 ReAct văn bản trong LangGraph thì đặt parser của module 16 vào node `agent`: đồ thị không quan tâm model nói chuyện thế
 nào.
 
@@ -505,12 +509,11 @@ flowchart TB
 | Hỏng kiểu gì | chọn nhầm tool khi có nhiều tool | tự trả lời thay vì giao; mất chi tiết khi tóm yêu cầu | không chuyển khi cần; chuyển qua lại |
 | Thư viện | `create_react_agent`, tự dựng | `langgraph-supervisor`, agent làm tool | `langgraph-swarm`, tool handoff tự viết |
 
-Handoff là một tool trả `Command`: model gọi `transfer_to_legal`, tool trả
-`Command(goto="legal", graph=Command.PARENT, update={"messages": [...], "active_agent": "legal"})`. Hai chi tiết quyết
-định nó chạy đúng: `update` phải mang theo **toàn bộ** message của agent hiện tại cộng một `ToolMessage` trả lời đúng lời
-gọi handoff (không thì lịch sử ở đồ thị cha thiếu `AIMessage` có lời gọi đó, hoặc có tool call bỏ lửng), và tham số
-`state`, `tool_call_id` được **tiêm** vào tool (`InjectedState`, `InjectedToolCallId`), không phải để model điền. Bài
-Advanced 01 viết tool này có test.
+Handoff là một tool mà kết quả không phải chữ mà là một lệnh điều khiển: khi model gọi `transfer_to_legal`, tool yêu
+cầu đồ thị **cha** chuyển sang node của agent pháp luật và ghi lại agent nào đang giữ quyền. Hai chi tiết quyết định nó
+chạy đúng: lịch sử gửi lên đồ thị cha phải đủ, gồm cả lời gọi handoff và một câu trả lời cho đúng lời gọi đó (không thì có
+tool call bỏ lửng hoặc câu trả lời mồ côi); và những gì tool cần biết về state hay về lời gọi hiện tại phải do framework
+cung cấp lúc chạy, không phải để model điền. Bài Advanced 01 viết tool này có test.
 
 ### Khi nào đáng
 

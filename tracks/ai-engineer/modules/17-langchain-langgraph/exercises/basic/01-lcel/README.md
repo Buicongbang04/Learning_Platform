@@ -61,7 +61,6 @@ lỗi qua tên `llm`).
 
 ### Gợi ý 2
 
-Song song trong LCEL là `batch` (thread pool) hoặc `RunnableParallel`. Với `analyze_many`, đọc kỹ test có
-`attempts=2`: `batch(..., return_exceptions=True)` của một chain bọc `with_retry` trong `langchain-core` 1.6.12 có lỗi
-xếp nhầm kết quả khi lượt thử cuối có cả câu thành công lẫn câu lỗi (mục 1 lý thuyết). Cách an toàn là để mỗi phần tử
-tự bắt lỗi của chính nó rồi mới `batch`.
+Song song trong LCEL là `batch` (thread pool) hoặc `RunnableParallel`. Với `analyze_many`, đọc kỹ
+`test_analyze_many_with_retry_keeps_results_aligned` và mục "Một lỗi thật của framework" ở mục 1 lý thuyết trước khi
+chọn cách gọi `batch`: kiểm bằng test xem mỗi kết quả có đúng vị trí của câu hỏi sinh ra nó không.

@@ -46,8 +46,10 @@ theo **superstep** (kiểu Pregel / BSP): mọi node được kích hoạt trong
 cập nhật được áp vào state qua reducer ở cuối bước. Hai node cùng ghi một khoá **không có reducer** trong cùng bước thì
 LangGraph ném `InvalidUpdateError` ("Can receive only one value per step") vì không biết giữ cái nào.
 
-Reducer cho khoá được ghi song song phải **giao hoán và kết hợp**, vì thứ tự các nhánh xong việc không cố định. Ví dụ hỏng
-tinh vi: gộp evidence theo uid, "bằng điểm thì giữ bản cũ": đồ thị chạy được nhưng kết quả phụ thuộc lịch chạy thread.
+Reducer cho khoá được ghi song song phải **giao hoán và kết hợp**. LangGraph 1.2.16 áp các cập nhật theo thứ tự tất
+định (sắp theo tên node và chỉ số `Send`), nhưng đó là chi tiết cài đặt, không phải cam kết của API. Ví dụ hỏng tinh vi:
+gộp evidence theo uid, "bằng điểm thì giữ bản cũ": đồ thị chạy được nhưng kết quả phụ thuộc thứ tự các vế trong câu hỏi
+hay tên node, tức những thứ không mang nghĩa, và có thể đổi khi nâng phiên bản.
 Reducer cũng không được sửa đầu vào tại chỗ, vì giá trị cũ nằm trong checkpoint. `add_messages` là reducer có sẵn cho
 message: nối thêm, **thay** message cùng `id`, xoá bằng `RemoveMessage`; `Overwrite(value)` bỏ qua reducer khi cần ghi đè.
 

@@ -4,9 +4,9 @@ questions:
     type: single
     prompt: "Agent dựng tay đúng bao nhiêu trong 6 task nhóm `tra-1` (chỉ cần tra một lần)?"
     options:
-      - { id: a, text: "0 hoặc 1 task" }
-      - { id: b, text: "2 đến 4 task" }
-      - { id: c, text: "5 hoặc 6 task" }
+      - { id: a, text: "0 task" }
+      - { id: b, text: "1 đến 5 task" }
+      - { id: c, text: "Cả 6 task" }
   - id: pair-diff
     kind: data
     type: single
