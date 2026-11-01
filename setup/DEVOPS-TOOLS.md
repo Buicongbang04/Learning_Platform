@@ -23,8 +23,8 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | ansible-core (`ansible`, `ansible-playbook`, `ansible-inventory`, `ansible-vault`...) | 09 Configuration management (bản đã kiểm 2.21.5, cài vào venv riêng `~/.cache/devops-track/ansible` bằng `uv pip install --require-hashes -r setup/ansible/requirements.txt`, symlink vào `~/.local/bin`; không thêm vào `pyproject.toml` gốc; test chạy Ansible trong sandbox tới target là container SSH build từ `setup/ansible-target/` trên `python:3.12.16-slim-trixie`) | 2.21 | [Cài đặt](../tracks/devops/modules/09-config-management/README.md#0-cài-đặt) |
 | kind | 10 Kubernetes core (cluster dùng chung `devops-lab`, xem [Cluster kind devops-lab](#cluster-kind-devops-lab)) | 0.30.0 (node image ghim `kindest/node:v1.34.0` theo digest) | [Cài đặt](../tracks/devops/modules/10-kubernetes-core/README.md#0-cài-đặt) |
 | kubectl | 10 Kubernetes core (bản đã kiểm 1.34.13, khớp minor của node image) | 1.33 (lệch tối đa một minor với API server 1.34) | [Cài đặt](../tracks/devops/modules/10-kubernetes-core/README.md#0-cài-đặt) |
-| helm | 11 Kubernetes production (bản đã kiểm 3.22.1; Kustomize có sẵn trong kubectl) | 3.18 | [Cluster kind devops-lab](#cluster-kind-devops-lab) |
-| metrics-server (trong cluster, không cài lên máy) | 11 Kubernetes production (HPA, `kubectl top`; bản 0.9.1 ghim trong `setup/kind/metrics-server/`, xem [metrics-server dùng chung](#metrics-server-dùng-chung)) | Đúng bản đã ghim | [metrics-server dùng chung](#metrics-server-dùng-chung) |
+| helm | 11 Kubernetes production (bản đã kiểm 3.22.1; Kustomize có sẵn trong kubectl) | 3.18 | [Cài đặt](../tracks/devops/modules/11-kubernetes-production/README.md#0-cài-đặt) |
+| metrics-server (trong cluster, không cài lên máy) | 11 Kubernetes production (HPA, `kubectl top`; bản 0.9.1 ghim trong `setup/kind/metrics-server/`, xem [metrics-server dùng chung](#metrics-server-dùng-chung)) | Đúng bản đã ghim | [Cài đặt](../tracks/devops/modules/11-kubernetes-production/README.md#0-cài-đặt) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
