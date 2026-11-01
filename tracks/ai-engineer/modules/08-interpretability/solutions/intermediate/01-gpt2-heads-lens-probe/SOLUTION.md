@@ -7,7 +7,7 @@
 giống hệt), `attn.c_proj → attn.proj`, `mlp.c_fc → mlp.fc`, `mlp.c_proj → mlp.proj`, `ln_f → ln_f`. `Conv1D` tính
 $$xW + b$$ với $$W$$ shape `(in, out)` nên phải chuyển vị sang `nn.Linear`. `lm_head.weight` trong state dict của ta là cùng tensor với
 `tok_emb.weight`; nạp `wte` vào cả hai khoá giữ nguyên tying (load_state_dict chỉ chép giá trị). Hai bẫy im lặng: ma trận vuông
-`attn.c_proj` không báo lỗi shape khi quên chuyển vị, và GELU chính xác thay cho bản tanh làm logits lệch cỡ $$10^{-3}$$, đủ để
+`attn.c_proj` không báo lỗi shape khi quên chuyển vị, và GELU chính xác thay cho bản tanh làm logits lệch cỡ $$0.1$$ (đo 0.11 trên GPT-2 small), đủ để
 đổi top-1 ở vài vị trí. Bản đúng lệch Hugging Face $$8.4 \times 10^{-5}$$ (float32, khác thứ tự phép cộng).
 
 **`ablate_heads`.** Pre-hook trên `attn.proj` nhận `z` shape `(B, T, C)`, `view` thành `(B, T, n_head, head_dim)`, gán head được
