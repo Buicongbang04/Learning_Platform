@@ -1,0 +1,92 @@
+questions:
+- id: gptq-int3
+  kind: data
+  type: single
+  prompt: Trên GPT mini, int3 nhóm 128 đối xứng, GPTQ lấy lại khoảng bao nhiêu phần Δbpc mà RTN gây ra?
+  options:
+  - id: a
+    text: Dưới 10%
+  - id: b
+    text: Khoảng 25% tới 75%
+  - id: c
+    text: Khoảng 80% tới 95%
+  - id: d
+    text: Không lấy lại được, GPTQ tệ hơn RTN
+- id: awq-gain
+  kind: data
+  type: single
+  prompt: Cũng trên GPT mini, AWQ int4 nhóm 128 so với RTN cùng cấu hình thế nào?
+  options:
+  - id: a
+    text: Gần bằng RTN, chênh dưới 0.005 bpc
+  - id: b
+    text: Tốt hơn RTN khoảng 0.05 bpc ở mọi lớp
+  - id: c
+    text: Tốt hơn cả GPTQ cùng cấu hình
+  - id: d
+    text: Tệ hơn RTN hơn 0.05 bpc
+- id: weight-vs-output
+  kind: data
+  type: single
+  prompt: Ở cell so sai số từng lớp (int3 nhóm 128), GPTQ so với RTN thế nào?
+  options:
+  - id: a
+    text: Sai số trọng số và đầu ra đều nhỏ hơn
+  - id: b
+    text: Sai số trọng số lớn hơn, sai số đầu ra nhỏ hơn
+  - id: c
+    text: Sai số trọng số nhỏ hơn, sai số đầu ra lớn hơn
+  - id: d
+    text: Cả hai đều lớn hơn RTN
+- id: act-outliers
+  kind: data
+  type: single
+  prompt: Trên mọi lớp của GPT mini, tỉ lệ max/median của trung bình |x| theo kênh input lớn nhất là bao nhiêu?
+  options:
+  - id: a
+    text: Dưới 30
+  - id: b
+    text: Khoảng 100 tới 200
+  - id: c
+    text: Khoảng 500 tới 1 000
+  - id: d
+    text: Hơn 5 000
+- id: damp
+  kind: knowledge
+  type: single
+  prompt: Dampening λI trong Hessian của GPTQ dùng để làm gì?
+  options:
+  - id: a
+    text: Giữ H khả nghịch, ổn định số khi có kênh gần như luôn bằng 0
+  - id: b
+    text: Làm GPTQ chạy nhanh hơn nhờ ma trận thưa hơn
+  - id: c
+    text: Thay cho dữ liệu hiệu chỉnh khi không có sẵn dữ liệu nào để chạy
+  - id: d
+    text: Phạt trọng số lớn giống weight decay khi train
+- id: awq-fold
+  kind: knowledge
+  type: single
+  prompt: AWQ nhân cột k của W với s_k. Phép chia tương ứng của activation được xử lý thế nào khi chạy?
+  options:
+  - id: a
+    text: Gộp vào lớp phía trước (norm hoặc linear), không tốn thêm
+  - id: b
+    text: Bỏ qua vì sai số nhỏ không đáng kể
+  - id: c
+    text: Lượng tử hoá luôn activation bằng chính s_k ở mỗi kênh tương ứng
+  - id: d
+    text: Nhân thêm s_k vào bias của chính lớp đó
+- id: calib-split
+  kind: knowledge
+  type: single
+  prompt: Vì sao dữ liệu hiệu chỉnh phải lấy từ tập train chứ không lấy từ validation?
+  options:
+  - id: a
+    text: Validation quá ngắn để tính Hessian
+  - id: b
+    text: GPTQ khớp sai số trên chính dữ liệu đó, bpc validation sẽ bị lạc quan
+  - id: c
+    text: Tokenizer xử lý validation khác tập train
+  - id: d
+    text: Validation không có đủ kênh input để đo ngoại lai activation của từng lớp
