@@ -1868,6 +1868,27 @@ def tofu_env(home: Path, *, prefix: str, endpoint: str | None = None, fetch: boo
     return env
 
 
+def localstack_client(service: str):
+    """Client boto3 cho `localstack-devops` (không bao giờ LocalStack của DE: cổng trùng thì RuntimeError trước khi tạo
+    client), thông tin đăng nhập giả, không proxy, không đọc `~/.aws` hay biến `AWS_*` của người học. Test dùng nó để tạo
+    trước tài nguyên (bucket backend, tài nguyên "tạo tay" để import, drift) và kiểm kết quả; đặt tên theo `lab.prefix` để
+    `TofuLab.close()` sweep được."""
+    endpoint = _localstack_devops_checked()
+    import boto3
+    from botocore.config import Config
+
+    saved = {key: os.environ.pop(key) for key in list(os.environ) if key.startswith("AWS_")}
+    os.environ.update({"AWS_CONFIG_FILE": "/dev/null", "AWS_SHARED_CREDENTIALS_FILE": "/dev/null"})
+    try:
+        session = boto3.session.Session(aws_access_key_id="test", aws_secret_access_key="test", region_name=TOFU_REGION)
+        return session.client(service, endpoint_url=endpoint,
+                              config=Config(connect_timeout=3, read_timeout=30, retries={"max_attempts": 2}, proxies={}))
+    finally:
+        for key in ("AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE"):
+            os.environ.pop(key, None)
+        os.environ.update(saved)
+
+
 def localstack_sweep(prefix: str) -> list[str]:
     """Xoá trên `localstack-devops` (không bao giờ trên `localstack` của DE) mọi tài nguyên mang đúng tiền tố của một lab
     (`devops-ex-<8 hex>`): tên bằng tiền tố hoặc bắt đầu bằng `<tiền tố>-`/`<tiền tố>/` (bỏ `/` đầu và `alias/`). Gồm bucket
@@ -2113,6 +2134,21 @@ class TofuLab:
         if check and result.returncode not in ok:
             pytest.fail(self._failure(["plan", *args], result))
         return result
+
+    def plan_json(self, *args: str) -> dict:
+        """`plan -out` vào tệp tạm trong thư mục làm việc rồi `show -json` tệp đó; trả dict (`resource_changes`, mỗi mục có
+        `change.actions`, `previous_address`, `change.importing`). Plan lỗi thì fail kèm output."""
+        import json
+
+        self._require_entered()
+        name = f".devops-ex-{uuid.uuid4().hex[:8]}.tfplan"
+        try:
+            result = self.run("plan", "-input=false", f"-out={name}", *args, check=False)
+            if result.returncode != 0:
+                pytest.fail(self._failure(["plan", *args], result))
+            return json.loads(self.run("show", "-json", name).stdout)
+        finally:
+            (self.workdir / name).unlink(missing_ok=True)
 
     def apply(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
         return self.run("apply", "-auto-approve", "-input=false", *args, check=check)

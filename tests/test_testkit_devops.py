@@ -3024,3 +3024,42 @@ def test_localstack_sweep_schedules_key_only_after_alias_removed(monkeypatch, al
     else:
         assert removed == ["kms-alias:alias/devops-ex-abc12345-state"]
         assert calls == [("delete_alias", "alias/devops-ex-abc12345-state"), ("schedule", "k1")]
+
+
+def test_localstack_client_refuses_de_port(monkeypatch):
+    monkeypatch.setenv("LOCALSTACK_DEVOPS_PORT", "4566")
+    monkeypatch.setenv("LOCALSTACK_PORT", "4566")
+    with pytest.raises(RuntimeError, match="trùng cổng localstack"):
+        testkit.localstack_client("s3")
+
+
+def test_localstack_client_ignores_learner_aws_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALSTACK_DEVOPS_PORT", "24566")
+    monkeypatch.setenv("LOCALSTACK_PORT", "4566")
+    broken = tmp_path / "config"
+    broken.write_text("[profile x\nendpoint_url = http://203.0.113.9:1\n", encoding="utf-8")
+    monkeypatch.setenv("AWS_PROFILE", "khong-ton-tai")
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(broken))
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://203.0.113.9:1")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAREALKEY")
+    client = testkit.localstack_client("s3")
+    assert client.meta.endpoint_url == "http://127.0.0.1:24566"
+    assert client._request_signer._credentials.access_key == "test"
+    assert os.environ["AWS_PROFILE"] == "khong-ton-tai" and os.environ["AWS_CONFIG_FILE"] == str(broken)
+    assert os.environ["AWS_ACCESS_KEY_ID"] == "AKIAREALKEY"
+
+
+@TOFU_REQUIRED
+def test_tofu_lab_plan_json(recorder):
+    endpoint, _ = recorder
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", 'variable "prefix" {\n  type = string\n}\nresource "terraform_data" "marker" {\n  input = var.prefix\n}\n')
+        lab.init()
+        plan = lab.plan_json()
+        changes = {r["address"]: r["change"]["actions"] for r in plan["resource_changes"]}
+        assert changes == {"terraform_data.marker": ["create"]}
+        assert not list(lab.workdir.glob("*.tfplan"))
+        lab.write("broken.tf", 'resource "terraform_data" "x" {\n  input = var.khong_co\n}\n')
+        with pytest.raises(pytest.fail.Exception, match="tofu plan"):
+            lab.plan_json()
+        assert not list(lab.workdir.glob("*.tfplan"))
