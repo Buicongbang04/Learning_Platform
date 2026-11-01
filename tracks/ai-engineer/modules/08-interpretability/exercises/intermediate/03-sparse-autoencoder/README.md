@@ -25,7 +25,7 @@ của người khác và biết hỏi lại câu nào.
 **Phần cứng:** GPU 4GB · ~150 phút
 
 Thời gian trên là thời gian làm bài. Thời gian máy của notebook lời giải: với kernel `ai-gpu` (1 triệu token, 6 144 latent, 3 SAE)
-chạy 4 tới 7 phút (247 và 395 giây ở hai lần chạy, GPU dùng chung với tiến trình khác); không có GPU notebook tự giảm còn 200 nghìn token và 3 072 latent, chạy 15 tới 19 phút (887 và 1 121 giây ở hai lần chạy) trên CPU 4 luồng (cả hai đo trên PC dùng
+chạy khoảng 4 phút (249 giây, RTX 3060 có tiến trình khác chiếm khoảng 3.8 GB); không có GPU notebook tự giảm còn 200 nghìn token và 3 072 latent, chạy 15 tới 19 phút (887 và 1 121 giây ở hai lần chạy) trên CPU 4 luồng (cả hai đo trên PC dùng
 chung). VRAM dưới 2 GB. Cần bài Intermediate 01 (`gpt2_into_gpt_mini`, chưa xong thì tự dùng lời giải). Đọc mục 6 phần lý thuyết.
 Mở `starter/sae.ipynb`:
 

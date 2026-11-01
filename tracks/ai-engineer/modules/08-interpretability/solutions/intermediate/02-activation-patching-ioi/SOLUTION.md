@@ -20,7 +20,7 @@ Block (chỉ đổi thứ attention đọc, đường residual vẫn mang giá t
 ## Kết quả thật
 
 GPT-2 small trong lớp `GPT` module 05, 32 cặp prompt `ioi_prompts(32, seed=0)`, token đầu `<|endoftext|>`, CPU 4 luồng, ngày
-2026-11-01; notebook chạy 176 giây (PC dùng chung). Kiểm độ bền bằng một bộ 64 prompt khác (seed 0 của script tham chiếu, cùng
+2026-11-01; notebook chạy 176 tới 206 giây ở ba lần chạy (PC dùng chung). Kiểm độ bền bằng một bộ 64 prompt khác (seed 0 của script tham chiếu, cùng
 template): mọi kết luận dưới đây giữ nguyên, số lệch ở chữ số thứ hai.
 
 Logit difference trung bình: clean 3.57, corrupted −3.82; clean đúng ở 100% prompt; xác suất trung bình của IO 0.386, của S 0.013.

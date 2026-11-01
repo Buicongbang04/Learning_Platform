@@ -38,5 +38,7 @@ logits) bắt mọi lỗi đặt hook sai chỗ. Những cài sai đã thử và
 
 - Hook output của `attn.attn_dropout` khi model đang train: đó là ma trận **sau** dropout, không phải attention.
 - Tách head bằng `view(B, T, D, H)`: shape đúng, số sai.
+- Lấy output của `attn` hoặc `mlp` làm residual stream: đó là độ chỉnh cộng vào stream, không phải stream. Logit lens trên nó ở tầng cuối
+  không trùng model; sổ sách `resid_pre + attn_out = resid_mid` bắt được ngay.
 - Model dùng `F.scaled_dot_product_attention` (bản tối ưu của PyTorch) không lộ ma trận attention: phải tính lại từ q, k, hoặc
   tắt đường nhanh. Lớp `GPT` của module 05 tính tay nên hook được.

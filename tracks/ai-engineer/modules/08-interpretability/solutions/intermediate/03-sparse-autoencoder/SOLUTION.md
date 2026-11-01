@@ -43,10 +43,10 @@ lại các hướng kém hơn: FVU thấp không có nghĩa là từ điển đ�
 
 Activation: IWSLT15 `train.en` (TED), ngữ cảnh 128 token, bỏ vị trí 0; đánh giá trên `tst2012.en` + `tst2013.en` (56 642 token). Norm
 stream tầng 6: vị trí 0 trung bình 3 029, các vị trí khác 77.6; `scale` = 0.354. CE trên tập đánh giá: model gốc 3.383, zero ablation
-tầng 6 là 10.109, mean ablation 7.095.
+tầng 6 là 10.109, mean ablation 7.098 (cấu hình GPU) và 7.095 (cấu hình CPU, ít dữ liệu tính mean hơn).
 
-**Cấu hình GPU** (1 000 125 token, 6 144 latent, 976 bước batch 4 096; RTX 3060 của PC dùng chung với tiến trình khác, cả notebook 247
-và 395 giây ở hai lần chạy, VRAM dưới 2 GB; thu activation 47 giây, mỗi SAE khoảng 43 giây):
+**Cấu hình GPU** (1 000 125 token, 6 144 latent, 976 bước batch 4 096; RTX 3060 của PC, tiến trình khác chiếm khoảng 3.8 GB lúc
+chạy; cả notebook 249 giây, VRAM dưới 2 GB; thu activation 48 giây, mỗi SAE 43–45 giây):
 
 | SAE | FVU | L0 | Latent chết | CE ghép SAE | Recovered (zero) | Recovered (mean) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -77,7 +77,7 @@ load average khoảng 15):
   3177 bật ở "[ average]" sau " the"/" an"; latent 172 ở token "D"/"d" (C.[D]., I.[D]., [D]iclofenac, [d]itches); latent 2861 ở danh từ
   quảng bá, cổ động ([ marketing], [ slogans], [ stickers], [ chants]); latent 3170 ở vị ngữ ngay sau "answer was/is" ([ yes], [ correlation]);
   latent 5611 lẫn lộn (token đầu của tên riêng, thương hiệu, từ hiếm: [ Gary], [ Disney], [ Microsoft], [ hipp]os). Latent thứ sáu
-  (3094, [ neighbor]) rất sạch. Bốn trên sáu đặt tên được ngay, một polysemantic rõ, một ở giữa. Top activation chỉ cho thấy latent bật
+  (3094, [ neighbor]) rất sạch. Năm trên sáu đặt tên được (3170 lỏng hơn cả: "vị ngữ ngay sau answer was/is"), một polysemantic rõ (5611). Top activation chỉ cho thấy latent bật
   mạnh **ở đâu** trên tập đánh giá; nó không cho thấy latent bật yếu ở đâu, có gây ra hành vi gì không, hay tên gọi có đúng trên dữ liệu
   khác không. Lần chạy CPU (SAE khác) cho các latent khác; số thứ tự latent không so được giữa hai SAE.
 

@@ -25,7 +25,7 @@ xong bạn có một checklist dùng lại cho mọi phân tích interpretabilit
 
 **Phần cứng:** CPU · ~150 phút
 
-Thời gian trên là thời gian điều tra; cả notebook chạy khoảng 1 phút (65 giây) trên CPU 4 luồng (đo trên PC dùng chung), lần đầu cần tải
+Thời gian trên là thời gian điều tra; cả notebook chạy khoảng 1 phút (62 tới 67 giây) trên CPU 4 luồng (đo trên PC dùng chung), lần đầu cần tải
 GPT-2 small. `starter/broken_analysis.ipynb` là bản phân tích GPT-2 small của một đồng nghiệp: năm hàm (cache residual stream, logit
 lens, probe có control task, activation patching, đánh giá SAE), bốn thí nghiệm và bốn kết luận đã viết vào báo cáo. Trong các hàm
 có **4 bug im lặng** cố ý. Đề không nói chúng nằm ở đâu, và không phải hàm nào cũng có bug.

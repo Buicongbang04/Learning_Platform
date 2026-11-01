@@ -2,7 +2,7 @@
 
 Bài không có code lời giải: bản sửa chỉ là 4 dòng, giá trị nằm ở các phép thử có đáp án biết trước và ở việc viết lại kết luận.
 Dưới đây là 4 bug, triệu chứng đo được của **từng bug khi chỉ còn mình nó** (3 bug kia đã sửa), phép thử khoanh vùng, cách sửa và kết
-luận đúng. Số liệu: GPT-2 small trong lớp `GPT` module 05, CPU 4 luồng, ngày 2026-11-01; mỗi lần chạy cả notebook khoảng 65 giây.
+luận đúng. Số liệu: GPT-2 small trong lớp `GPT` module 05, CPU 4 luồng, ngày 2026-11-01; mỗi lần chạy cả notebook 62 tới 67 giây.
 
 ## Bốn bug
 

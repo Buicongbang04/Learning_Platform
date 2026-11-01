@@ -34,7 +34,7 @@ bắt buộc.
 [module 05](../../../../05-transformers-llm-architecture/exercises/advanced/01-gpt-mini-vietnamese/README.md) (định dạng đặc tả ở
 notebook của bài đó: khoá `format`, `config`, `state_dict`, `tokenizer`). Chưa có checkpoint: train lại cấu hình laptop của bài đó
 (4 tầng, `n_embd` 256, khoảng 5 phút trên GPU); không có GPU: train bản CPU của bài Intermediate 01 module 05 rồi lưu bằng
-`save_checkpoint`. Model càng nhỏ, càng ít cơ chế rõ: ghi điều đó vào báo cáo thay vì coi là thất bại.
+`save_checkpoint` (hàm bạn viết ở bài Advanced 01 module 05, định dạng `gpt-mini-v1`). Model càng nhỏ, càng ít cơ chế rõ: ghi điều đó vào báo cáo thay vì coi là thất bại.
 
 1. Trong `starter/interpret_gpt_mini.ipynb`, viết 2 hàm được chấm: `top_examples` và `bootstrap_ci` (đặc tả trong notebook).
 2. Thực hiện các phần theo khung gợi ý trong notebook: bản đồ head + ablation, logit lens, một probe có đủ đối chứng (thuộc tính tiếng

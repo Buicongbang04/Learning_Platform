@@ -111,7 +111,7 @@ input), `register_forward_hook(fn)` nhận input và **output** (trả tensor th
 | --- | --- | --- |
 | Residual stream vào Block $$l$$ | input của `blocks[l]` | output của `blocks[l].ln1` là stream **đã chuẩn hoá**, không phải residual |
 | Stream sau attention | input của `blocks[l].ln2` | |
-| Output attention / MLP | output của `blocks[l].attn` / `.mlp` | đây là "độ chỉnh" cộng vào stream, không phải stream |
+| Output attention / MLP | output của `blocks[l].attn` / `.mlp` | kiểm bằng sổ sách residual: stream vào + output attention = stream sau attention |
 | Ma trận attention | output của `blocks[l].attn.attn_dropout` | khi model ở chế độ train, đó là ma trận **sau** dropout |
 | Output từng head | input của `blocks[l].attn.proj` | tách head theo cột `h*head_dim .. (h+1)*head_dim` |
 
@@ -138,7 +138,7 @@ print("cosine(x, LN(x)):", torch.nn.functional.cosine_similarity(x, y, dim=-1).r
 Kết quả: norm khoảng 40 trước LayerNorm, khoảng 1.2 sau đó, và cosine giữa hai vector chỉ 0.18 tới 0.20. Probe, lens hay SAE train
 trên một trong hai sẽ cho kết quả khác hẳn trên cái kia, nên mọi báo cáo phải ghi rõ đo ở điểm nào. Trên GPT-2 small thật (10 ngữ
 cảnh TED), norm trung bình của residual stream ra khỏi tầng 0, 3, 6, 9, 11 là 52, 67, 88, 158, 454, còn ở vị trí đầu (token
-`<|endoftext|>`) là khoảng 2 800 tới 3 100 ở các tầng 3–9: vị trí đầu là một "attention sink" mà nhiều head đổ attention vào khi không
+`<|endoftext|>`) là khoảng 2 800–3 200 ở các tầng 3–9: vị trí đầu là một "attention sink" mà nhiều head đổ attention vào khi không
 có gì để làm, và mọi thống kê gộp (SAE, probe, chuẩn hoá) phải loại nó ra. Bài Basic 01 viết `run_with_cache` đặt đủ các máy đo trên và
 kiểm chúng bằng chính tính cộng: tổng các thành phần phải bằng stream cuối, và `lm_head(ln_f(·))` của stream cuối phải bằng logits.
 
@@ -348,8 +348,8 @@ $$
 $$
 
 Mỗi số hạng là **đóng góp trực tiếp** của một head hoặc một MLP lên câu trả lời. Hai giới hạn: $$\sigma$$ đổi khi bỏ một thành phần, nên
-DLA không phải hiệu ứng khi xoá thành phần đó; và DLA bỏ sót mọi thành phần tác động **gián tiếp** (qua head khác). Mục 5 cho thấy một
-lớp head có hiệu ứng nhân quả lớn mà DLA gần bằng 0. Bài Basic 02 viết logit lens và DLA; bài Intermediate 01 đo logit lens trên GPT-2
+DLA không phải hiệu ứng khi xoá thành phần đó; và DLA bỏ sót mọi thành phần tác động **gián tiếp** (qua head khác). Wang và cộng sự (mục 5)
+cho thấy một lớp head có hiệu ứng nhân quả lớn mà DLA gần bằng 0. Bài Basic 02 viết logit lens và DLA; bài Intermediate 01 đo logit lens trên GPT-2
 small.
 
 ## 5. Activation patching và causal tracing
@@ -382,8 +382,9 @@ flowchart TB
 ```
 
 Hai câu hỏi khác nhau: denoising hỏi "riêng thành phần này **đủ** để khôi phục chưa", noising hỏi "phá riêng thành phần này có làm hỏng
-không, tức nó có **cần** không". Một mạch có nhiều đường song song sẽ cho denoising nhỏ ở từng đường nhưng noising cũng nhỏ; một thành
-phần là nút cổ chai cho cả hai lớn.
+không, tức nó có **cần** không". Khi các đường song song **cộng** hiệu ứng (additive), denoising từng đường cho hiệu ứng nhỏ và noising từng đường cũng nhỏ; khi chúng là
+đường **dự phòng** (OR, backup), denoise một đường đã khôi phục gần hết trong khi noise một đường gần như không phá gì; một thành phần là nút
+cổ chai cho cả hai hiệu ứng lớn.
 
 ### Một kiểm tra miễn phí
 
@@ -488,7 +489,7 @@ và loại vị trí đầu (norm cực lớn, mục 1).
 
 | Trục | Thước đo | Bẫy |
 | --- | --- | --- |
-| Tái dựng | FVU $$= \sum\lVert x - \hat x\rVert^2 / \sum\lVert x - \bar x\rVert^2$$ | chia cho $$\sum \lVert x\rVert^2$$ (không trừ trung bình) làm số đẹp giả khi stream có độ lệch lớn |
+| Tái dựng | FVU $$= \sum\lVert x - \hat x\rVert^2 / \sum\lVert x - \bar x\rVert^2$$ | kiểm hàm FVU bằng một SAE chỉ trả về trung bình của dữ liệu: phải ra đúng 1 |
 | Độ thưa | L0 trung bình; tỉ lệ latent **chết** (không bật trên một tập lớn), latent quá dày | so FVU của hai SAE khác L0 là vô nghĩa |
 | Trung thành | CE khi ghép SAE vào model; loss recovered $$= \frac{CE_{abl} - CE_{SAE}}{CE_{abl} - CE_{gốc}}$$ | zero ablation residual stream làm $$CE_{abl}$$ rất tệ nên tỉ lệ đẹp; báo cả CE tăng tuyệt đối |
 

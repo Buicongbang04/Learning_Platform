@@ -93,12 +93,12 @@ questions:
 - id: probe-claim
   kind: knowledge
   type: single
-  prompt: Probe ở tầng 0 đạt 0.98 với selectivity dương. Kết luận nào được phép?
+  prompt: Một probe đạt accuracy cao với selectivity dương. Kết luận nào được phép?
   options:
   - id: a
     text: GPT-2 dùng đúng hướng probe này để dự đoán token kế tiếp
   - id: b
-    text: Thông tin này giải mã tuyến tính được từ stream ở tầng 0
+    text: Thông tin này giải mã tuyến tính được từ stream ở tầng đó
   - id: c
     text: Probe học thuộc token id nên kết quả không có giá trị gì
   - id: d

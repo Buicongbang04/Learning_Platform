@@ -59,7 +59,7 @@ Thứ tự tầng khớp cơ chế hai bước: head previous-token (tầng 2–
   thấy hiệu ứng thật trên bản 2 còn lớn hơn (8.73 so với 2.19 với 4 head). Với 4 head, zero ablation cho loss bản 2 thấp hơn mean
   ablation: phép can thiệp lạ có thể vô tình bật đường khác.
 - Tắt cùng số head ngẫu nhiên chỉ làm loss bản 2 tăng dưới 1.2 nat: hiệu ứng là của head induction chứ không phải của "tắt 4 head
-  bất kỳ". Ablation chứng minh 5 head này **cần** cho hành vi trên dữ liệu này; nó không chứng minh chúng **đủ**, cũng không nói
+  bất kỳ". Ablation chứng minh 4 head này **cần** cho hành vi trên dữ liệu này; nó không chứng minh chúng **đủ**, cũng không nói
   chúng làm gì trên văn bản thường.
 
 ### Logit lens (20 ngữ cảnh TED)

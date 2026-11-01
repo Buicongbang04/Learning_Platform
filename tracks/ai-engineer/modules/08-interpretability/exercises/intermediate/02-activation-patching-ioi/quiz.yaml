@@ -57,7 +57,7 @@ questions:
   prompt: Patch output attention của tầng 10 và 11 (clean vào corrupted) cho hiệu ứng thế nào?
   options:
   - id: a
-    text: Âm, chúng đẩy ngược đáp án đúng
+    text: Âm, chúng làm logit difference giảm
   - id: b
     text: Gần 1, chúng khôi phục gần hết đáp án
   - id: c

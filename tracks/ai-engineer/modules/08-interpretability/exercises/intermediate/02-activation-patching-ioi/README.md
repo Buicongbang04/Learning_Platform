@@ -23,7 +23,7 @@ thí nghiệm patching đúng, đọc được bảng kết quả, và nói đư
 
 **Phần cứng:** CPU · ~120 phút
 
-Thời gian trên là thời gian làm bài. Notebook lời giải chạy khoảng 3 phút trên CPU 4 luồng (176 giây, PC dùng chung), nhanh hơn
+Thời gian trên là thời gian làm bài. Notebook lời giải chạy khoảng 3 phút trên CPU 4 luồng (176 tới 206 giây, PC dùng chung), nhanh hơn
 nhiều nếu chạy bằng kernel `ai-gpu`. Cần bài Basic 01 (`run_with_cache`) và bài Intermediate 01 (`gpt2_into_gpt_mini`); chưa xong
 thì notebook tự dùng lời giải. Đọc mục 5 phần lý thuyết. Mở `starter/patching.ipynb`:
 

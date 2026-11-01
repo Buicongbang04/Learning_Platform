@@ -69,7 +69,7 @@ Một mạch hai head thực hiện "[A][B] ... [A] → [B]": thấy token hiệ
 
 Đo: dãy `[BOS] + r + r` với `r` ngẫu nhiên; điểm induction là attention trung bình từ vị trí t ở nửa sau tới t − half + 1. Kiểm nhân
 quả: mean-ablate các head điểm cao, loss trên nửa sau phải vọt lên còn loss nửa đầu không đổi, và tắt cùng số head ngẫu nhiên thì
-không. Olsson và cộng sự (2022) cho thấy induction head xuất hiện đột ngột trong train (phase change) cùng lúc với khả năng in-context
+hiệu ứng ít hơn rõ (trên model nhỏ, vài cặp head ngẫu nhiên cũng có thể gây hại nhiều). Olsson và cộng sự (2022) cho thấy induction head xuất hiện đột ngột trong train (phase change) cùng lúc với khả năng in-context
 learning tăng vọt, nên đây là một cơ chế nền của ICL, dù không phải toàn bộ.
 
 ## Zero ablation, mean ablation, resample ablation khác nhau thế nào? Chọn cái nào?
@@ -86,7 +86,7 @@ không chứng minh head đó vô dụng.
 
 ## Logit lens là gì? Vì sao phải áp LayerNorm cuối, và tuned lens sửa được gì?
 
-Logit lens (nostalgebraist, 2020) đọc residual stream ở tầng giữa bằng chính đường ra của model: $$\mathrm{softmax}(W_U\,\mathrm{LN}_f(x_l))$$.
+Logit lens (nostalgebraist, 2020) đọc residual stream ở tầng giữa bằng chính đường ra của model: $$\mathrm{softmax}\big(\mathrm{LN}_f(x_l)\,W_U^\top\big)$$.
 Nó cho thấy dự đoán hình thành dần qua các tầng. Phải áp `ln_f` vì unembedding được train để đọc stream **đã chuẩn hoá**: stream giữa
 chừng có norm khác hẳn (thường tăng theo tầng, có vài chiều cực lớn), bỏ `ln_f` thì logits sai thang và lệch hướng, cross-entropy vô
 nghĩa.
@@ -127,7 +127,7 @@ hơn). Hi vọng: mỗi latent ứng với một đặc trưng đơn nghĩa, đ�
 
 Ba trục, luôn báo cùng nhau:
 
-- **Tái dựng**: FVU (fraction of variance unexplained) so với phương sai **quanh trung bình**.
+- **Tái dựng**: FVU (fraction of variance unexplained), $$1 - R^2$$; kiểm bằng một SAE chỉ trả về trung bình (phải ra đúng 1).
 - **Độ thưa**: L0 trung bình; tỉ lệ latent **chết** (không bật trên một tập lớn) và latent bật quá dày.
 - **Trung thành với model**: ghép SAE vào chỗ activation, đo cross-entropy; "loss recovered" =
   $$\frac{CE_{abl} - CE_{SAE}}{CE_{abl} - CE_{gốc}}$$.
