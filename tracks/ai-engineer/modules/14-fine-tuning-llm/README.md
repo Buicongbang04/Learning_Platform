@@ -303,7 +303,7 @@ Qwen2.5-7B bằng QLoRA trên bài thật của Advanced 01 (chuỗi ngắn, bat
 - Full fine-tune 0.5B vẫn vừa GPU 12GB nhờ checkpointing; trên GPU 4GB của laptop chỉ LoRA (hoặc QLoRA) với chuỗi ngắn hơn,
   batch nhỏ hơn mới vừa: các bài Intermediate giới hạn số token mỗi batch để đỉnh nằm dưới 4 GiB.
 
-Ước lượng cho máy của bạn: dùng công thức của module 09 mục 7 cho trọng số, cộng tham số LoRA × (2 + 2 + 8) byte, cộng
+Ước lượng cho máy của bạn: dùng công thức của module 09 mục 7 cho trọng số, cộng tham số LoRA × (4 + 4 + 8) byte (PEFT giữ adapter ở fp32), cộng
 activation (đo một bước như trên là cách nhanh nhất). Bài Advanced 01 cho bạn viết bộ ước lượng và so với số đo.
 
 ## 5. Chuẩn bị dữ liệu

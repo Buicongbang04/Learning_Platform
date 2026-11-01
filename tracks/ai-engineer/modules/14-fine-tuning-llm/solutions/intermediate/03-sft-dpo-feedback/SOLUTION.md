@@ -56,7 +56,7 @@ Chạy lại cả notebook ba lần (kernel GPU không tất định tuyệt đ�
   `logps/chosen` rơi từ -2.1 xuống -11.0: model hạ xác suất của **cả** câu đúng, chỉ là hạ câu sai nhanh hơn. Kết quả: mọi câu
   thành `{"sentiment": "neutral", "topic": "others"}`. Lần chạy đầu với cấu hình này còn làm hỏng cả định dạng (output chỉ
   còn chữ `neutral`). Bài học: reward ngầm là thước đo **tương đối**, không thay được thước đo tác vụ; theo dõi
-  `logps/chosen`; learning rate của DPO nhỏ hơn SFT nhiều lần. Thêm một số hạng SFT vào loss (`loss_type=["sigmoid", "sft"]`
+  `logps/chosen`; learning rate của DPO nhỏ hơn SFT nhiều lần (giá trị mặc định của `DPOConfig` trong TRL 1.17 là 1e-6). Thêm một số hạng SFT vào loss (`loss_type=["sigmoid", "sft"]`
   của TRL, kiểu RPO) giữ được xác suất của câu đúng.
 - **Đối chứng công bằng**: SFT thêm trên đúng pool đó (nhãn vàng của cả 3 426 câu) không thêm gì (0.809 trên test). Với bài
   phân loại có nhãn, SFT đã khai thác gần hết tín hiệu; DPO chỉ đáng khi có thứ "câu A tốt hơn câu B" mà nhãn đúng/sai không
@@ -64,6 +64,10 @@ Chạy lại cả notebook ba lần (kernel GPU không tất định tuyệt đ�
 - **Giới hạn của cặp on-policy**: nhãn vàng của UIT-VSFC có nhiễu (cặp in ra đầu tiên của notebook: "cô dạy nhanh quá, khó
   hiểu dẫn đến chán nản" có nhãn vàng positive, model SFT đoán negative). DPO đẩy model về phía nhãn vàng ở mọi cặp, kể cả
   khi nhãn sai.
+
+Một chi tiết bộ nhớ: `SFTConfig` và `DPOConfig` của TRL 1.17 **bật gradient checkpointing mặc định**, nên VRAM đỉnh ở
+trên thấp. Tắt nó (`gradient_checkpointing=False`) với batch 16 thì một lần chạy thử ở bài Advanced 01 vượt 7 GiB và hết
+bộ nhớ trên GPU đang dùng chung.
 
 ## Bẫy thường gặp
 

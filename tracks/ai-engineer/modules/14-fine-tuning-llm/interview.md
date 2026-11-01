@@ -56,10 +56,11 @@ merge thì merge vào bản bf16 gốc rồi quantize lại cho phục vụ, và
 Tính theo khoản (7.6 tỉ tham số):
 
 - Full fine-tune bf16 + AdamW: trọng số 15 GB + gradient 15 GB + hai trạng thái AdamW 30 GB (bf16) tới 60 GB (fp32): không vừa.
-- LoRA bf16: trọng số 15 GB (đóng băng), tham số LoRA r = 16 khoảng 40 triệu × (2 + 2 + 8) byte, khoảng 0.5 GB, cộng
+- LoRA bf16: trọng số 15 GB (đóng băng), tham số LoRA r = 16 khoảng 40 triệu × (4 + 4 + 8) byte (adapter fp32 như mặc định của PEFT, gradient, hai trạng thái AdamW), khoảng 0.65 GB, cộng
   activation. Vừa 24 GB với batch nhỏ, gradient checkpointing, chuỗi không quá dài.
-- QLoRA: trọng số tuyến tính khoảng 3.4 GB ở 4.127 bit, embedding và `lm_head` bf16 khoảng 2 GB (7B không dùng chung hai
-  ma trận này), cộng adapter và activation: vừa cả GPU 12 GB.
+- QLoRA: lớp tuyến tính ở khoảng 4.127 bit mỗi tham số, nhưng embedding và `lm_head` vẫn bf16 (7B không dùng chung hai ma
+  trận này, mỗi cái 152 nghìn × 3 584), cộng adapter và activation: vừa cả GPU 12 GB. Đừng quên phần không lượng tử hoá khi
+  ước lượng: với từ vựng lớn nó không hề nhỏ.
 
 Activation là khoản khó đoán nhất (tỉ lệ batch × độ dài × số tầng, logits cỡ batch × độ dài × 152 nghìn từ vựng ở fp32).
 Câu trả lời tốt kết thúc bằng "đo một bước train với cấu hình thật" thay vì tin hoàn toàn vào ước lượng.

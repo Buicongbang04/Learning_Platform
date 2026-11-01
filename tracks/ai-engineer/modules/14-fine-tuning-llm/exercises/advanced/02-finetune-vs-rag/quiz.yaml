@@ -35,7 +35,7 @@ questions:
   - id: b
     text: Khoảng một phần tư số câu
   - id: c
-    text: Ngang BM25, khoảng 43%
+    text: Ngang BM25 trên cùng 300 câu đó
   - id: d
     text: Hơn BM25, trên 60%
 - id: sft-seen
