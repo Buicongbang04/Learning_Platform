@@ -5,7 +5,7 @@ cho 40 máy giống hệt nhau qua hàng trăm lần thay đổi. Công cụ ch�
 thứ bạn gặp nhiều nhất ở các team vận hành VM. Nhưng câu hỏi senior không phải "viết playbook thế nào" mà là: khi nào cấu hình máy
 đang chạy, khi nào thay máy bằng image dựng sẵn, và làm sao biết một lần deploy "xanh" thật sự đã làm đúng việc.
 
-Bài tập chạy Ansible thật tới các container có SSH do test dựng, không bao giờ vào máy bạn.
+Bài tập chạy Ansible thật tới các container có SSH do test dựng; phần chạy trên máy bạn nằm trong sandbox (mục 0).
 
 Sau module này bạn sẽ:
 
@@ -106,35 +106,38 @@ Helper `AnsibleLab` của testkit:
 
 1. Build image target, chạy N container, sinh cặp khoá ed25519 trong thư mục tạm, đọc khoá host của từng container rồi **ghim** vào
    một `known_hosts` riêng.
-2. Sinh `ssh_config` riêng (`StrictHostKeyChecking yes`, `IdentityAgent none`, `GlobalKnownHostsFile /dev/null`, một
-   `ProxyCommand` chỉ mở kết nối tới `127.0.0.1:<cổng của lab>`), `ansible.cfg` riêng, inventory `lab.ini` chỉ liệt kê tên máy
-   (truyền **sau** inventory của bài), và tệp extra vars `lab-conn.yml` luôn truyền cuối cùng bằng `-e @lab-conn.yml`.
-3. Chép thư mục bài vào thư mục tạm, chạy `ansible-playbook` trong sandbox bwrap: `HOME` tạm, `ANSIBLE_CONFIG` trỏ tệp của lab (nên
-   `ansible.cfg` trong thư mục bài, `~/.ansible.cfg`, `/etc/ansible` không được đọc), `~/.ssh` bị che, env dựng từ đầu.
+2. Sinh tệp điều khiển trong một thư mục tạm riêng: `ssh_config` (`StrictHostKeyChecking yes`, `IdentityAgent none`,
+   `GlobalKnownHostsFile /dev/null`, một `ProxyCommand` chỉ mở kết nối tới `127.0.0.1:<cổng của lab>`), `ansible.cfg`, inventory
+   `lab.ini` chỉ liệt kê tên máy (truyền **sau** inventory của bài), và tệp extra vars `lab-conn.yml` luôn truyền cuối cùng bằng
+   `-e @lab-conn.yml`. Sandbox chỉ thấy thư mục này ở chế độ chỉ đọc, và lab ghi lại nó trước mỗi lệnh.
+3. Chép thư mục bài vào thư mục làm việc tạm, chạy `ansible-playbook` trong sandbox bwrap: `HOME` tạm, `ANSIBLE_CONFIG` trỏ tệp của
+   lab (nên `ansible.cfg` trong thư mục bài, `~/.ansible.cfg`, `/etc/ansible` không được đọc), `~/.ssh` bị che, env dựng từ đầu.
 4. Đọc kết quả từng task qua một callback của lab (máy nào, task nào, module gì, `changed`, handler hay không, kết nối qua đâu),
    không parse output.
 
-Cách lab giữ bài Ansible khỏi máy bạn, theo thứ tự từ chỗ thật sự chặn tới chỗ chỉ báo sớm:
+Cách lab giữ bài Ansible khỏi máy bạn, chia theo vai trò:
 
-- **Sandbox.** `ansible-playbook` chạy trong bwrap: `/` chỉ đọc, `~/.ssh` và thông tin đăng nhập khác bị che, không SSH agent,
-  chỉ thư mục tạm của lab ghi được. Kể cả khi một task chạy trên máy điều khiển, nó không sửa được gì của bạn.
-- **Biến kết nối bị ghim bằng extra vars.** Extra vars đứng cao nhất trong precedence (mục 4), thắng `set_fact`, inventory (kể cả
-  inventory động), `vars:` và cả từ khoá `connection:` của play hay task. `lab-conn.yml` đặt `ansible_connection: ssh`,
-  `ansible_host`/`ansible_port` theo bảng cổng của lab (máy không thuộc lab, kể cả `localhost` ngầm định, nhận `0.0.0.0:1`),
-  `ansible_user: root`, `ansible_ssh_args` của lab, `ansible_ssh_common_args`/`ansible_ssh_extra_args`/`ansible_scp_extra_args`/
-  `ansible_sftp_extra_args` rỗng, `ansible_ssh_executable: ssh`, `ansible_host_key_checking: true`, khoá riêng của lab. Đặt các
-  biến này ở chỗ khác không có tác dụng; `become` và `become_user` vẫn dùng bình thường.
-- **ProxyCommand và khoá host đã ghim.** ssh chỉ mở được kết nối tới `127.0.0.1:<cổng của từng container>` và chỉ tin khoá host của
-  các container đó, nên sshd của máy bạn hay container khác đều bị từ chối.
-- **Callback kiểm sau khi chạy.** Lần chạy bị đánh dấu lỗi khi có task trên host ngoài lab, task không đi bằng ssh tới đúng cổng của
+- **Ranh giới cho code chạy trên máy điều khiển: sandbox.** `ansible-playbook` và mọi thứ nó chạy trên máy bạn (script inventory
+  động, lookup, một task lỡ chạy local) nằm trong bwrap: `/` chỉ đọc, `~/.ssh` và thông tin đăng nhập khác bị che, không SSH agent,
+  chỉ thư mục làm việc tạm của lab ghi được.
+- **Thứ giữ kết nối trong lab: biến ghim, tệp điều khiển chỉ đọc, khoá host ghim, ProxyCommand.**
+  - Extra vars đứng cao nhất trong precedence (mục 4), thắng `set_fact`, inventory (kể cả inventory động), `vars:` và cả từ khoá
+    `connection:`. `lab-conn.yml` đặt `ansible_connection: ssh`; `ansible_host`, `ansible_port` và cả tên cũ `ansible_ssh_host`,
+    `ansible_ssh_port` (plugin ssh lấy tên khai báo sau cùng) theo bảng cổng của lab, máy không thuộc lab (kể cả `localhost` ngầm
+    định) nhận `0.0.0.0:1`; `ansible_user`/`ansible_ssh_user: root`; đối số, chương trình, khoá, control path và pipelining của ssh.
+    Đặt các biến này ở chỗ khác không có tác dụng; `become` và `become_user` vẫn dùng bình thường.
+  - Các tệp đó (cùng `ssh_config`, `known_hosts`, callback, script proxy) nằm trong thư mục mà sandbox chỉ thấy ở chế độ chỉ đọc:
+    script inventory của bài thử ghi đè chúng nhận lỗi `EROFS`, và lab còn ghi lại chúng trước mỗi lệnh.
+  - ssh chỉ mở được kết nối tới `127.0.0.1:<cổng của từng container>` (ProxyCommand) và chỉ tin khoá host của các container đó.
+- **Phát hiện: callback của lab.** Lần chạy bị đánh dấu lỗi khi có task trên host ngoài lab, task không đi bằng ssh tới đúng cổng của
   máy đó, kết nối bị ProxyCommand chặn, hay khi bài cố đặt một biến kết nối bị ghim (qua `set_fact`, biến inventory, `vars:`,
-  `connection:`): giá trị đã bị bỏ qua, nhưng thói quen đó nguy hiểm ở production nên test báo ra.
-- **Phép quét tĩnh trước khi chạy.** Test từ chối tệp nào trong thư mục bài có `connection:`, `ansible_connection`, `ansible_host`,
-  `ansible_port`, `ansible_ssh_*`, `host_key_checking`, `delegate_to`, `local_action`, `add_host`, lookup `pipe`/`lines`, escape
-  `\xNN`/`\uNNNN`, `localhost`, địa chỉ 127.0.0.0/8 (kể cả `127.1`), `0.0.0.0`, `::1` (ngoài `templates/` và `files/`), hay thư mục
-  `*_plugins`, `collections`. Quét văn bản thô, kể cả chú thích. Đây là **tín hiệu sớm** để bạn sửa thói quen, không phải ranh giới
-  an toàn: tên khoá dựng bằng Jinja2 hay script inventory lách được nó, và các lớp trên mới là chỗ chặn. Bài inventory động
-  (Intermediate 03) không kết nối máy nào nên không qua phép quét và được dùng `ansible_host`.
+  `connection:`). Đây là phát hiện, không phải ranh giới: tệp sự kiện phải ghi được để callback ghi vào.
+- **Tín hiệu dạy học: phép quét tĩnh trước khi chạy.** Test từ chối tệp nào trong thư mục bài có `connection:`, `ansible_connection`,
+  `ansible_host`, `ansible_port`, `ansible_ssh_*`, `host_key_checking`, `delegate_to`, `local_action`, `add_host`, lookup
+  `pipe`/`lines`, escape `\xNN`/`\uNNNN`, `localhost`, địa chỉ 127.0.0.0/8 (kể cả `127.1`), `0.0.0.0`, `::1` (ngoài `templates/` và
+  `files/`), hay thư mục `*_plugins`, `collections`. Quét văn bản thô, kể cả chú thích. Nó giúp bạn bỏ thói quen sớm; tên khoá dựng
+  bằng Jinja2 hay script inventory lách được nó, nên nó không phải chỗ chặn. Bài inventory động (Intermediate 03) không kết nối máy
+  nào nên không qua phép quét và được dùng `ansible_host`.
 
 Test chạy `uv run pytest <thư mục bài> -q -rs`. Bài có target mất 15 giây tới 1,5 phút. Máy nhiều core thì ghim như module 06:
 
