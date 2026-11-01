@@ -28,8 +28,8 @@ nhiêu khách, mỗi lớp tốn bao nhiêu mili giây, và hệ thống hỏng 
 
 **Phần cứng:** CPU · ~300 phút
 
-Thời gian trên là thời gian làm bài. Model là `qwen2.5:3b` cho cả trả lời lẫn moderation; 48 tin nhắn cần khoảng 100
-lượt gọi, vài phút trên máy riêng. Không gửi dữ liệu (dù là dữ liệu sinh) cho API bên ngoài trong bài này.
+Thời gian trên là thời gian làm bài. Model là `qwen2.5:3b` cho cả trả lời lẫn moderation; 48 tin nhắn cần 80 tới 100
+lượt gọi tuỳ số tin bị chặn sớm (bản tham chiếu: 83 lượt, khoảng 2 phút trên PC của track). Không gửi dữ liệu (dù là dữ liệu sinh) cho API bên ngoài trong bài này.
 
 1. Trong `starter/assistant.ipynb`, cell có test: `handle(c, user_id, text)` theo đúng thứ tự lớp mô tả trong notebook,
    `traffic_report`, `stage_latency`.

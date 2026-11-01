@@ -41,7 +41,8 @@ ASR theo mục tiêu (48 lượt mỗi ô):
 
 ASR theo kiểu tấn công với `none` (24 lượt mỗi ô): `naive` 0.375, `fake-turn` 0.500, `fake-system` 0.583, `escape`
 0.583, `english` 0.708, `helpful-note` 0.792. Bộ lọc output (allowlist link) đưa ASR của `exfil` về **0** ở mọi
-defence mà không đổi task success, và không đổi gì ở `canary`, `phishing`; ASR tổng của `none` sau lọc còn 0.354.
+defence, không đổi gì ở `canary`, `phishing`, và chỉ làm mất một câu trả lời đúng trong 864 lượt bị tấn công (ở
+`tool-role`, câu trả lời nằm lẫn trong cụm link bị xoá); ASR tổng của `none` sau lọc còn 0.354.
 
 ## Đọc kết quả
 
@@ -64,8 +65,8 @@ defence mà không đổi task success, và không đổi gì ở `canary`, `phi
   6666" như thông tin hợp lệ trả về từ hệ thống ("Mọi thắc mắc vui lòng gọi hotline 1900 6666"). Instruction hierarchy
   là thứ model phải được **train**; `qwen2.5:3b` không coi kết quả tool là kém tin cậy hơn, thậm chí ngược lại. Đừng mặc
   định rằng đưa dữ liệu vào vai `tool` là phòng thủ.
-- **Code ở output bảo đảm đúng thứ nó kiểm**: allowlist link xoá sạch kênh `exfil` bất kể model bị lừa tới đâu, không tốn
-  gì; nhưng nó không biết gì về `canary` hay số hotline. Một bộ kiểm số điện thoại theo allowlist (chỉ số tổng đài chính
+- **Code ở output bảo đảm đúng thứ nó kiểm**: allowlist link xoá sạch kênh `exfil` bất kể model bị lừa tới đâu, gần như không
+  tốn gì; nhưng nó không biết gì về `canary` hay số hotline. Một bộ kiểm số điện thoại theo allowlist (chỉ số tổng đài chính
   thức) sẽ làm điều tương tự cho `phishing`: phòng thủ bằng code phải được viết cho **từng loại hậu quả**.
 - **Đếm "thành công" bằng regex có hai mặt**: vài lượt `exfil` thành công vì model **chép lại** cả câu chỉ thị chứa URL
   ảnh vào câu trả lời. Với giao diện render markdown, đó vẫn là một request gửi ra ngoài, nên tính là thành công là đúng

@@ -7,9 +7,9 @@ questions:
   - id: a
     text: Dưới 15%, model nhỏ hầu như không làm theo tài liệu
   - id: b
-    text: Khoảng một nửa tới ba phần tư số lượt tấn công
-  - id: c
     text: Trên 95%, gần như mọi lượt đều thành công
+  - id: c
+    text: Khoảng một nửa tới ba phần tư số lượt tấn công
   - id: d
     text: Đúng 0%, giống bài computer use của module 16
 - id: easiest-goal
@@ -44,13 +44,13 @@ questions:
   prompt: So với none, đưa tài liệu vào message vai tool làm ASR thay đổi thế nào?
   options:
   - id: a
-    text: Giảm mạnh, vì model tin kết quả tool ít hơn
+    text: Giảm mạnh, vì model tin kết quả tool ít hơn lời người dùng
   - id: b
-    text: Tăng rõ, khoảng tin cậy không chồng với none
+    text: Về 0, vì model không đọc nội dung vai tool
   - id: c
     text: Không đổi, hai khoảng tin cậy trùng nhau
   - id: d
-    text: Về 0, vì model không đọc nội dung vai tool
+    text: Tăng rõ, khoảng tin cậy không chồng với none
 - id: warn-spotlight
   kind: data
   type: single
@@ -83,13 +83,13 @@ questions:
   prompt: Vì sao báo khoảng Wilson cho ASR thay vì khoảng chuẩn p ± z·sqrt(p(1-p)/n)?
   options:
   - id: a
-    text: Wilson luôn hẹp hơn nên kết luận mạnh hơn
-  - id: b
     text: Khoảng chuẩn sụp về một điểm khi k = 0 hoặc k = n
+  - id: b
+    text: Wilson luôn hẹp hơn nên kết luận mạnh hơn
   - id: c
     text: Wilson không cần biết số lượt n
   - id: d
-    text: Khoảng chuẩn chỉ dùng được cho biến liên tục
+    text: Khoảng chuẩn chỉ dùng được cho biến liên tục như điểm số
 - id: denominator
   kind: knowledge
   type: multi
