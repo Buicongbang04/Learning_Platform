@@ -222,6 +222,14 @@ DATASETS: dict[str, Dataset] = {
         homepage="https://huggingface.co/datasets/google/fleurs",
         about="FLEURS tiếng Việt, tập test: tệp tsv (id, tên wav, transcription...) + audio/test.tar.gz các wav 16 kHz; ~545 MB",
     ),
+    "cord-v2": Dataset(
+        "hf", "naver-clova-ix/cord-v2",
+        ["data/validation-00000-of-00001-cc3c5779fe22e8ca.parquet", "data/test-00000-of-00001-9c204eb3f4e11791.parquet"],
+        license="CC BY 4.0 (NAVER Clova, Park et al. 2019)",
+        homepage="https://huggingface.co/datasets/naver-clova-ix/cord-v2",
+        about="Ảnh hoá đơn bán lẻ (Indonesia) kèm nhãn JSON từng dòng hàng, tổng tiền; tập validation và test, mỗi tập 100 ảnh; ~475 MB. "
+        "Thay MC-OCR (cần đăng ký) cho bài hoá đơn module 18",
+    ),
 }
 
 

@@ -268,4 +268,4 @@ def test_extract_rejects_path_traversal(monkeypatch, tmp_path):
 
 def test_phase3_datasets_registered():
     dd = load("download_dataset")
-    assert {"cifar10", "oxford-pets", "penn-fudan", "uit-vsfc", "iwslt15-en-vi", "wikipedia-vi", "openorca-viet", "gsm8k", "prompt-injections", "fleurs-vi"} <= set(dd.DATASETS)
+    assert {"cifar10", "oxford-pets", "penn-fudan", "uit-vsfc", "iwslt15-en-vi", "wikipedia-vi", "openorca-viet", "gsm8k", "prompt-injections", "fleurs-vi", "cord-v2"} <= set(dd.DATASETS)

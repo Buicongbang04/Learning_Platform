@@ -351,10 +351,11 @@ Không có `legal_corpus.json` lồng `articles` như dự kiến ban đầu; re
 | `gsm8k` | 7 473 train + 1 319 test; cột `question`, `answer` (đáp số sau `####`) | [HF openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) | MIT | 15 |
 | `prompt-injections` | 546 train (343 nhãn 0, 203 nhãn 1) + 116 test; cột `text`, `label` (1 = injection); lẫn tiếng Anh và tiếng Đức | [HF deepset/prompt-injections](https://huggingface.co/datasets/deepset/prompt-injections) | Apache-2.0 | 19 |
 | `fleurs-vi` | tập test tiếng Việt: `data/vi_vn/test.tsv` 857 dòng (cột 1 id, 2 tên wav, 3 câu gốc, 4 chuẩn hoá) + `data/vi_vn/audio/test.tar.gz` 857 wav 16 kHz (520 MB) | [HF google/fleurs](https://huggingface.co/datasets/google/fleurs) | CC BY 4.0 | 18 |
+| `cord-v2` | ảnh hoá đơn bán lẻ Indonesia: `data/validation-*.parquet` 100 + `data/test-*.parquet` 100 dòng; cột `image` (bytes) và `ground_truth` (JSON: `gt_parse.menu` từng dòng hàng, `sub_total`, `total`) | [HF naver-clova-ix/cord-v2](https://huggingface.co/datasets/naver-clova-ix/cord-v2) | CC BY 4.0 | 18 |
 
 Không qua registry: `FashionMNIST` (đã có ở `data/raw/fashion-mnist/FashionMNIST/raw`, đọc bằng `torchvision.datasets.FashionMNIST("data/raw/fashion-mnist")`), MNIST dùng `mnist` ở trên, Gymnasium (FrozenLake, CartPole, LunarLander cần `box2d`), ALE Atari (ROM đóng gói sẵn trong `ale-py`), Iris và moons (`sklearn.datasets`).
 
-**Cần người học làm (không tự thay):** MC-OCR 2021 (module 17, hoá đơn tiếng Việt) cần đăng ký với ban tổ chức ([mc-ocr](https://rivf2021-mc-ocr.vietnlp.com/)) rồi tải thủ công; chưa có trong registry. Common Voice vi (Mozilla) cần đăng nhập HF và chấp nhận điều khoản nên bài âm thanh dùng `fleurs-vi` thay thế. Model lớn (Qwen2.5, Pythia, Whisper) chưa tải: mỗi module tự tải trong cell `explore`.
+**Cần người học làm:** MC-OCR 2021 (hoá đơn tiếng Việt) cần đăng ký với ban tổ chức ([mc-ocr](https://rivf2021-mc-ocr.vietnlp.com/)) rồi tải thủ công; chưa có trong registry. Người học đồng ý (2026-11-02) dùng `cord-v2` thay cho bài hoá đơn của module 18; có MC-OCR thì đổi bộ dữ liệu theo hướng dẫn trong bài. Common Voice vi (Mozilla) cần đăng nhập HF và chấp nhận điều khoản nên bài âm thanh dùng `fleurs-vi` thay thế. Model lớn (Qwen2.5, Pythia, Whisper) chưa tải: mỗi module tự tải trong cell `explore`.
 
 #### Thư viện giai đoạn 3 ↔ module
 
