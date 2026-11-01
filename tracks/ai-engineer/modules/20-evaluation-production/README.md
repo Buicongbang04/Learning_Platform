@@ -132,8 +132,9 @@ xung quanh. Hai cách đo online phổ biến:
 | Đo được | mọi thứ, kể cả chi phí, độ trễ, an toàn | chỉ **thứ tự ưu tiên** giữa hai bảng xếp hạng |
 | Dùng cho | quyết định ra mắt, đo tác động kinh doanh | lọc nhanh nhiều ứng viên ranker trước khi A/B |
 
-Interleaving (Joachims 2002; team-draft của Radlinski et al. 2008) cần ít người dùng hơn hẳn để thấy cùng một khác biệt
-thứ hạng; bài Advanced 01 đo bao nhiêu lần ít hơn trên Zalo Legal với người dùng mô phỏng. Nó không thay A/B: interleaving
+Interleaving (Joachims 2002; team-draft của Radlinski et al. 2008) cần ít người dùng hơn để thấy cùng một khác biệt thứ
+hạng; mức lợi phụ thuộc phương sai giữa người dùng và số câu mà hai hệ thống trả khác nhau. Bài Advanced 01 đo nó trên Zalo
+Legal với người dùng mô phỏng. Nó không thay A/B: interleaving
 không nói gì về độ trễ hay chi phí, và chỉ áp dụng khi output là danh sách.
 
 Với hệ thống LLM sinh chữ (không phải danh sách), tín hiệu online thường là: người dùng bấm thích/không thích (thưa và
