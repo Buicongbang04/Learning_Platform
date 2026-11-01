@@ -1350,3 +1350,25 @@ def tempfile_root() -> str:
 def test_docker_lab_compose_refuses_outside_with(tmp_path):
     with pytest.raises(RuntimeError):
         testkit.DockerLab().compose(tmp_path / "compose.yaml")
+
+
+def test_docker_lab_stop_measures_grace_period_and_exit_code():
+    image = require_real_docker()
+    with testkit.DockerLab() as lab:
+        lab.start("ignores", image, "sleep", "300")
+        lab.start("traps", image, "sh", "-c", "trap 'echo da-dung; exit 0' TERM; echo san-sang; while :; do sleep 0.2; done")
+        lab.wait_log("traps", "san-sang", timeout=20)
+        slow = lab.stop("ignores", timeout=3)
+        fast = lab.stop("traps", timeout=3)
+        assert slow >= 2.5, f"sleep là PID 1 không có handler SIGTERM, phải chờ hết 3 giây rồi bị SIGKILL ({slow:.1f}s)"
+        assert lab.state("ignores")["ExitCode"] == 137
+        assert fast < 2.5, f"Container bắt SIGTERM phải dừng ngay ({fast:.1f}s)"
+        assert lab.state("traps")["ExitCode"] == 0
+        assert "da-dung" in lab.logs("traps")
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_docker_lab_stop_refuses_outside_with():
+    lab = testkit.DockerLab()
+    with pytest.raises(RuntimeError):
+        lab.stop("x")

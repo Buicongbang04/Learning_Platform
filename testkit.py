@@ -615,6 +615,25 @@ class DockerLab:
             time.sleep(0.2)
         pytest.fail(f"Container {alias} không in '{text}' sau {timeout} giây. {self._log_tail(alias)}")
 
+    def stop(self, alias: str, timeout: int = 10) -> float:
+        """`docker stop -t timeout`: gửi STOPSIGNAL của image, quá `timeout` giây thì SIGKILL. Trả số giây đã chờ, để test
+        đo được container có dừng sạch khi nhận SIGTERM hay không (mã thoát đọc bằng `state`)."""
+        self._require_entered()
+        start = time.monotonic()
+        result = _docker("stop", "-t", str(timeout), self.name(alias), timeout=timeout + 60)
+        if result.returncode != 0:
+            pytest.fail(f"docker stop {alias} lỗi: {result.stderr.strip()}")
+        return time.monotonic() - start
+
+    def state(self, alias: str) -> dict:
+        """Mục `State` của container: `Status`, `Running`, `ExitCode`, `OOMKilled`, `Health` (khi image có HEALTHCHECK)."""
+        import json
+
+        result = _docker("inspect", "-f", "{{json .State}}", self.name(alias))
+        if result.returncode != 0:
+            pytest.fail(f"Không đọc được trạng thái container {alias}: {result.stderr.strip()}")
+        return json.loads(result.stdout)
+
     def ip(self, alias: str) -> str:
         result = _docker("inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", self.name(alias))
         return result.stdout.strip()
