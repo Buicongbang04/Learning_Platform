@@ -759,6 +759,7 @@ TOOL_DENYLIST_GOOD = {
     "run-sandboxed-keyword": 'testkit.run_sandboxed(cmd=["kubectl", "version"], writable=[t], cwd=t, env={})\n',
     "run-sandboxed-variable": 'cmd = ["tofu", "plan"]\nrun_sandboxed(cmd, writable=[t], cwd=t, env={})\n',
     "sandbox-command-docker": 'argv = sandbox_command(["docker", "version"], writable=[t], cwd=t, env={})\n',
+    "tofu-lab": 'with TofuLab(ex.path("infra")) as lab:\n    lab.init()\n    lab.apply()\n    assert lab.output("bucket")\n',
     "act-run-helper": 'result = act_run(tmp_path / "project", job="build")\nassert act_job_results(result) == {"build": True}\n',
     "testkit-act-run": 'testkit.act_run(project, event="push", secrets={"DEPLOY_TOKEN": "x"}, timeout=300)\n',
     "run-sandboxed-shell-c": 'run_sandboxed(["bash", "-c", "tofu init && tofu plan"], writable=[t], cwd=t, env={})\n',

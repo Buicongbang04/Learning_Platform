@@ -5,7 +5,7 @@
 # Bật theo nhóm:
 #   docker compose -f setup/docker-compose.yml --profile nosql up -d
 # Nhóm: sql (postgres), nosql (mongo, redis, cassandra, neo4j), lake (minio),
-#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), devops (mailpit, registry), all (các nhóm trên, không gồm devops)
+#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), devops (mailpit, registry, localstack-devops), all (các nhóm trên, không gồm devops)
 # Tắt (giữ dữ liệu):     docker compose -f setup/docker-compose.yml --profile all down
 # Tắt và xoá dữ liệu:    docker compose -f setup/docker-compose.yml --profile all down -v
 #
@@ -254,6 +254,26 @@ services:
       timeout: 3s
       retries: 10
 
+  localstack-devops:
+    # LocalStack riêng của track DevOps (module 08, capstone m05), tách hẳn service `localstack` của track DE:
+    # cổng khác, volume khác, profile devops. Cùng image ghim với DE nên không cần LOCALSTACK_AUTH_TOKEN.
+    image: localstack/localstack:4.4.0
+    profiles: [devops]
+    cpuset: "${DEVOPS_CPUSET:-}"
+    environment:
+      SERVICES: s3,iam,sts,dynamodb,kms,ssm,secretsmanager
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "127.0.0.1:${LOCALSTACK_DEVOPS_PORT:-14566}:4566"
+    volumes:
+      - devops_localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:4566/_localstack/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
 # Mọi service chung network `de-net`: từ Metabase kết nối Postgres bằng host `postgres`,
 # từ container khác kết nối Kafka bằng `kafka:9092`.
 networks:
@@ -271,3 +291,5 @@ volumes:
   metabase_data:
   superset_data:
   localstack_data:
+  devops_localstack_data:
+    name: devops-track-localstack-data

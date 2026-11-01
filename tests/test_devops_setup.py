@@ -285,3 +285,41 @@ def test_act_runner_caches_every_sample_app_requirement():
     assert set(app) <= cached
     for dev in ROOT.glob("tracks/devops/modules/*/exercises/*/*/tests/fixtures/repo/requirements-dev.txt"):
         assert set(dev.read_text(encoding="utf-8").split()) <= cached, dev
+
+
+DE_LOCALSTACK_BLOCK = '''  localstack:
+    # Giả lập API AWS (S3, IAM, STS...) trên máy local cho module 11-cloud, không tốn tiền.
+    # Pin bản 4.x community: các bản mới hơn có thể yêu cầu LOCALSTACK_AUTH_TOKEN.
+    image: localstack/localstack:4.4.0
+    profiles: [cloud, all]
+    environment:
+      SERVICES: s3,iam,sts
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "${LOCALSTACK_PORT:-4566}:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:4566/_localstack/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+'''
+
+
+def test_de_localstack_block_byte_identical():
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert text.count(DE_LOCALSTACK_BLOCK + "\n") == 1
+    assert text.endswith("  localstack_data:\n  devops_localstack_data:\n    name: devops-track-localstack-data\n")
+
+
+def test_env_example_lists_localstack_devops_port():
+    assert "# LOCALSTACK_DEVOPS_PORT=14566" in (ROOT / "setup" / ".env.example").read_text(encoding="utf-8").splitlines()
+
+
+def test_devops_tools_documents_tofu_and_localstack_devops():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    assert "| tofu (OpenTofu) |" in text and testkit.TOFU_MIN_VERSION in text and testkit.TOFU_VERSION in text
+    assert testkit.LOCALSTACK_DEVOPS_START in text and "rm -fsv localstack-devops" in text
+    assert "docker volume rm devops-track-localstack-data" in text and testkit.TOFU_AWS_PROVIDER in text

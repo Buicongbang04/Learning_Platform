@@ -2,6 +2,7 @@
 
 import os
 import pwd
+import re
 import shutil
 import subprocess
 import sys
@@ -2293,3 +2294,371 @@ def test_act_runner_works_without_internet(monkeypatch, tmp_path):
     assert testkit.act_job_results(result) == {"offline": True}, result.stdout[-3000:]
     assert testkit.act_outputs(result)["offline"] == {"internet": "none", "imported": "0.143.1"}
     assert "Downloading" not in result.stdout
+
+
+TOFU_REQUIRED = pytest.mark.skipif(
+    shutil.which("tofu") is None or testkit.sandbox_ready() is not None, reason="Cần tofu và bwrap dùng được")
+TOFU_PROVIDER = f"""
+terraform {{
+  required_providers {{
+    aws = {{ source = "hashicorp/aws", version = "{testkit.TOFU_AWS_PROVIDER}" }}
+  }}
+}}
+variable "prefix" {{
+  type = string
+}}
+"""
+CALLER_IDENTITY = (
+    '<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><GetCallerIdentityResult>'
+    "<Arn>arn:aws:iam::123456789012:user/devops-ex</Arn><UserId>AIDADEVOPSEX</UserId><Account>123456789012</Account>"
+    "</GetCallerIdentityResult><ResponseMetadata><RequestId>devops-ex</RequestId></ResponseMetadata></GetCallerIdentityResponse>"
+)
+
+
+@pytest.fixture
+def recorder():
+    """Endpoint AWS giả trên loopback: ghi lại mọi request, trả lời như STS GetCallerIdentity."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    seen: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode("utf-8", "replace")
+            seen.append(f"{self.headers.get('Host')} {body}")
+            data = CALLER_IDENTITY.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/xml")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}", seen
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_tofu_env_isolated(monkeypatch, tmp_path):
+    for key, value in {"AWS_PROFILE": "prod", "AWS_ENDPOINT_URL": "https://real.example", "TF_CLI_CONFIG_FILE": "/home/x/.terraformrc",
+                       "TF_PLUGIN_CACHE_DIR": "/elsewhere", "AWS_SESSION_TOKEN": "secret", "HTTPS_PROXY": "http://corp:3128"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("LOCALSTACK_DEVOPS_PORT", "24566")
+    home = tmp_path / "home"
+    env = testkit.tofu_env(home, prefix="devops-ex-abc12345")
+    for key, value in {"AWS_ACCESS_KEY_ID": "test", "AWS_SECRET_ACCESS_KEY": "test", "AWS_REGION": "us-east-1",
+                       "AWS_CONFIG_FILE": "/dev/null", "AWS_SHARED_CREDENTIALS_FILE": "/dev/null", "AWS_EC2_METADATA_DISABLED": "true",
+                       "TF_IN_AUTOMATION": "1", "TF_INPUT": "0", "TF_VAR_prefix": "devops-ex-abc12345", "HOME": str(home),
+                       "AWS_ENDPOINT_URL": "http://127.0.0.1:24566"}.items():
+        assert env[key] == value, key
+    assert not {"AWS_PROFILE", "AWS_SESSION_TOKEN", "TF_PLUGIN_CACHE_DIR"} & env.keys()
+    config = Path(env["TF_CLI_CONFIG_FILE"])
+    assert config.is_relative_to(home) and config.is_file()
+    text = config.read_text(encoding="utf-8")
+    assert "disable_checkpoint = true" in text and "filesystem_mirror" in text and str(testkit.tofu_plugin_dir()) in text
+    assert "plugin_cache_dir" not in text and "direct" not in text
+    proxy = env["HTTPS_PROXY"]
+    assert proxy.startswith("http://127.0.0.1:") and env["HTTP_PROXY"] == env["https_proxy"] == env["http_proxy"] == proxy
+    assert env["NO_PROXY"] == env["no_proxy"] and "127.0.0.1" in env["NO_PROXY"].split(",")
+    assert str(Path.home()) not in "".join(v for k, v in env.items() if k != "TF_CLI_CONFIG_FILE").replace(str(testkit.tofu_plugin_dir()), "")
+
+
+def test_tofu_env_fetch_mode_uses_shared_cache(tmp_path):
+    env = testkit.tofu_env(tmp_path, prefix="devops-ex-abc12345", fetch=True)
+    assert env["TF_PLUGIN_CACHE_DIR"] == str(testkit.tofu_plugin_dir())
+    text = Path(env["TF_CLI_CONFIG_FILE"]).read_text(encoding="utf-8")
+    assert f'plugin_cache_dir = "{testkit.tofu_plugin_dir()}"' in text and "filesystem_mirror" not in text
+    assert "HTTPS_PROXY" not in env and env["AWS_ENDPOINT_URL"].startswith("http://127.0.0.1:")
+
+
+def test_tofu_plugin_dir_follows_xdg(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    assert testkit.tofu_plugin_dir() == tmp_path / "devops-track" / "tofu-plugins"
+
+
+def test_tofu_blackhole_proxy_refuses_connections():
+    import socket
+    import urllib.parse
+
+    url = urllib.parse.urlsplit(testkit.tofu_env(Path(testkit.tempfile.mkdtemp()), prefix="devops-ex-x")["HTTPS_PROXY"])
+    with pytest.raises(ConnectionRefusedError):
+        socket.create_connection((url.hostname, url.port), timeout=2)
+
+
+def test_tofu_lab_prefix_is_unique_and_scoped():
+    first, second = testkit.TofuLab(), testkit.TofuLab()
+    assert first.prefix != second.prefix
+    assert all(re.fullmatch(r"devops-ex-[0-9a-f]{8}", lab.prefix) for lab in (first, second))
+
+
+def test_tofu_lab_refuses_use_outside_with():
+    with pytest.raises(RuntimeError):
+        testkit.TofuLab().init()
+
+
+def test_localstack_devops_separate_from_de(monkeypatch):
+    import yaml
+
+    data = yaml.safe_load((testkit.ROOT / "setup" / "docker-compose.yml").read_text(encoding="utf-8"))
+    de, devops = data["services"]["localstack"], data["services"]["localstack-devops"]
+    assert devops["image"] == de["image"] == "localstack/localstack:4.4.0"
+    assert devops["profiles"] == ["devops"] and "devops" not in de["profiles"]
+    assert devops["ports"] == ["127.0.0.1:${LOCALSTACK_DEVOPS_PORT:-14566}:4566"]
+    assert devops["cpuset"] == "${DEVOPS_CPUSET:-}"
+    assert {"s3", "iam", "sts", "dynamodb", "kms"} <= set(devops["environment"]["SERVICES"].split(","))
+    volume = devops["volumes"][0].split(":")[0]
+    assert volume != "localstack_data" and data["volumes"][volume]["name"] == "devops-track-localstack-data"
+    assert de["volumes"] == ["localstack_data:/var/lib/localstack"] and data["volumes"]["localstack_data"] is None
+    assert "healthcheck" in devops
+    assert testkit.SERVICES["localstack-devops"] == ("LOCALSTACK_DEVOPS_HOST", "localhost", "LOCALSTACK_DEVOPS_PORT", 14566)
+    monkeypatch.delenv("LOCALSTACK_DEVOPS_PORT", raising=False)
+    monkeypatch.delenv("LOCALSTACK_PORT", raising=False)
+    assert testkit.localstack_devops_endpoint() == "http://127.0.0.1:14566"
+    assert testkit._port("localstack") != testkit._port("localstack-devops")
+
+
+def test_localstack_sweep_refuses_de_port(monkeypatch):
+    monkeypatch.setenv("LOCALSTACK_PORT", "4566")
+    monkeypatch.setenv("LOCALSTACK_DEVOPS_PORT", "4566")
+    import boto3
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: pytest.fail("không được gọi boto3 khi cổng trùng DE"))
+    with pytest.raises(RuntimeError, match="localstack"):
+        testkit.localstack_sweep("devops-ex-abc12345")
+
+
+@pytest.mark.parametrize("prefix", ["", "devops-ex-", "devops-ex", "prod-", "devops-ex-ab"])
+def test_localstack_sweep_refuses_broad_prefix(prefix):
+    with pytest.raises(ValueError):
+        testkit.localstack_sweep(prefix)
+
+
+def test_localstack_sweep_targets_devops_endpoint_only(monkeypatch):
+    monkeypatch.setenv("LOCALSTACK_DEVOPS_PORT", "24566")
+    monkeypatch.setenv("LOCALSTACK_PORT", "4566")
+    import boto3
+
+    endpoints = []
+
+    class Empty:
+        def get_paginator(self, name):
+            return self
+
+        def paginate(self, **kwargs):
+            return []
+
+        def list_buckets(self, **kwargs):
+            return {"Buckets": [{"Name": "devops-ex-other999-b"}, {"Name": "de-data"}]}
+
+    def client(service, **kwargs):
+        endpoints.append((service, kwargs["endpoint_url"]))
+        return Empty()
+
+    monkeypatch.setattr(boto3, "client", client)
+    assert testkit.localstack_sweep("devops-ex-abc12345") == []
+    assert endpoints and {e for _, e in endpoints} == {"http://127.0.0.1:24566"}
+
+
+def test_require_localstack_devops_skips_on_de_port(monkeypatch):
+    monkeypatch.setenv("LOCALSTACK_PORT", "4566")
+    monkeypatch.setenv("LOCALSTACK_DEVOPS_PORT", "4566")
+    with pytest.raises(pytest.skip.Exception, match="LOCALSTACK_DEVOPS_PORT"):
+        testkit.Exercise.require_localstack_devops()
+
+
+def test_require_localstack_devops_skips_when_down(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: False)
+    with pytest.raises(pytest.skip.Exception, match="--profile devops up -d --wait localstack-devops"):
+        testkit.Exercise.require_localstack_devops()
+
+
+def test_require_localstack_devops_rejects_other_server(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: True)
+    health = {"services": {"s3": "available", "dynamodb": "disabled"}, "edition": "community"}
+    monkeypatch.setattr(testkit, "_localstack_health", lambda endpoint: health)
+    with pytest.raises(pytest.skip.Exception, match="không phải localstack-devops"):
+        testkit.Exercise.require_localstack_devops()
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("could not connect to registry.opentofu.org: failed to request discovery document", True),
+    ('Get "https://github.com/x": dial tcp: lookup github.com: no such host', True),
+    ("proxyconnect tcp: dial tcp 127.0.0.1:9: connect: connection refused", True),
+    ("net/http: TLS handshake timeout", True),
+    ("Error: Unsupported argument\n  on main.tf line 3", False),
+    ("no available releases match the given constraints >= 99.0.0", False),
+])
+def test_tofu_network_error_detection(text, expected):
+    assert testkit.tofu_failed_on_network(text) is expected
+
+
+@TOFU_REQUIRED
+def test_tofu_lab_ignores_user_terraformrc(tmp_path, recorder):
+    endpoint, _ = recorder
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        for where in (lab.home, lab.workdir):
+            (where / ".terraformrc").write_text("this is { not valid\n", encoding="utf-8")
+        clean = lab.run("version")
+        assert "problems with the CLI configuration" not in clean.stdout + clean.stderr
+        control = testkit.run_sandboxed(["tofu", "version"], writable=[lab.home], cwd=lab.home, env={})
+        assert "problems with the CLI configuration" in control.stdout + control.stderr, "Phép đối chứng phải đọc được .terraformrc"
+
+
+@TOFU_REQUIRED
+def test_tofu_provider_without_endpoint_cannot_reach_real_aws(recorder):
+    endpoint, seen = recorder
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER + """
+provider "aws" {}
+data "aws_caller_identity" "me" {}
+output "account" { value = data.aws_caller_identity.me.account_id }
+output "prefix" { value = var.prefix }
+""")
+        lab.init()
+        lab.apply()
+        assert lab.output() == {"account": "123456789012", "prefix": lab.prefix}
+        assert any("GetCallerIdentity" in request for request in seen)
+        count = len(seen)
+        lab.write("main.tf", TOFU_PROVIDER + """
+provider "aws" {
+  max_retries = 1
+  endpoints {
+    sts = "https://sts.us-east-1.amazonaws.com"
+  }
+}
+data "aws_caller_identity" "me" {}
+""")
+        result = lab.plan(check=False)
+        assert result.returncode != 0
+        assert "proxyconnect" in result.stdout + result.stderr
+        assert len(seen) == count
+        lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {}\n')
+
+
+@TOFU_REQUIRED
+def test_tofu_init_offline_after_first_fetch(monkeypatch, recorder):
+    endpoint, _ = recorder
+    config = TOFU_PROVIDER + 'provider "aws" {}\n'
+    with testkit.TofuLab(endpoint=endpoint) as first:
+        first.write("main.tf", config)
+        first.init()
+    monkeypatch.setattr(testkit.TofuLab, "_fetch", lambda self: pytest.fail("provider đã có trong mirror, không được tải lại"))
+    with testkit.TofuLab(endpoint=endpoint) as second:
+        second.write("main.tf", config)
+        result = second.init()
+        assert f"Installed hashicorp/aws v{testkit.TOFU_AWS_PROVIDER}" in result.stdout
+        assert second.env["HTTPS_PROXY"].startswith("http://127.0.0.1:")
+        assert (second.workdir / ".terraform" / "providers").is_dir()
+
+
+@TOFU_REQUIRED
+def test_tofu_init_skips_when_provider_missing_and_offline(monkeypatch, tmp_path, recorder):
+    endpoint, _ = recorder
+    monkeypatch.setattr(testkit, "tofu_plugin_dir", lambda: tmp_path / "empty-plugins")
+    original = testkit.TofuLab._fetch_env
+
+    def offline(self):
+        env = original(self)
+        proxy = testkit.tofu_env(self.home, prefix=self.prefix, endpoint=self.endpoint)["HTTPS_PROXY"]
+        return {**env, "HTTPS_PROXY": proxy, "https_proxy": proxy, "HTTP_PROXY": proxy, "http_proxy": proxy}
+
+    monkeypatch.setattr(testkit.TofuLab, "_fetch_env", offline)
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {}\n')
+        with pytest.raises(pytest.skip.Exception, match="cần mạng"):
+            lab.init()
+    assert not any((tmp_path / "empty-plugins").rglob("terraform-provider-aws*"))
+
+
+@TOFU_REQUIRED
+def test_tofu_init_real_error_fails_not_skips(recorder):
+    endpoint, _ = recorder
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {\n  no_such_argument = 1\n}\nresource "x" {\n')
+        with pytest.raises(pytest.fail.Exception):
+            lab.init()
+
+
+LOCALSTACK_REQUIRED = pytest.mark.skipif(
+    shutil.which("tofu") is None or not testkit.service_up("localstack-devops"), reason="Cần tofu và localstack-devops đang chạy")
+BUCKET_CONFIG = TOFU_PROVIDER + """
+provider "aws" {}
+resource "aws_s3_bucket" "data" {
+  bucket = "${var.prefix}-data"
+}
+output "bucket" {
+  value = aws_s3_bucket.data.bucket
+}
+"""
+
+
+def localstack_client(service):
+    import boto3
+
+    return boto3.client(service, endpoint_url=testkit.localstack_devops_endpoint(), region_name="us-east-1",
+                        aws_access_key_id="test", aws_secret_access_key="test")
+
+
+def buckets_with(prefix):
+    return [b["Name"] for b in localstack_client("s3").list_buckets()["Buckets"] if b["Name"].startswith(prefix)]
+
+
+@LOCALSTACK_REQUIRED
+def test_tofu_lab_apply_and_destroy_bucket():
+    with testkit.TofuLab() as lab:
+        lab.write("main.tf", BUCKET_CONFIG)
+        lab.init()
+        lab.apply()
+        assert lab.output("bucket") == f"{lab.prefix}-data"
+        assert buckets_with(lab.prefix) == [f"{lab.prefix}-data"]
+        assert "aws_s3_bucket.data" in lab.state("list").stdout.split()
+    assert lab.destroy_result is not None and lab.destroy_result.returncode == 0
+    assert lab.swept == []
+    assert buckets_with(lab.prefix) == []
+    assert not lab.root.exists()
+
+
+@LOCALSTACK_REQUIRED
+def test_tofu_lab_destroys_on_error():
+    lab = testkit.TofuLab()
+    with pytest.raises(RuntimeError, match="giữa chừng"):
+        with lab:
+            lab.write("main.tf", BUCKET_CONFIG)
+            lab.init()
+            lab.apply()
+            assert buckets_with(lab.prefix) == [f"{lab.prefix}-data"]
+            raise RuntimeError("lỗi giữa chừng")
+    assert lab.destroy_result.returncode == 0
+    assert buckets_with(lab.prefix) == []
+
+
+@LOCALSTACK_REQUIRED
+def test_tofu_lab_sweep_removes_orphans_with_its_prefix_only():
+    keep = f"devops-ex-keep{os.getpid()}"
+    s3, dynamodb, iam = localstack_client("s3"), localstack_client("dynamodb"), localstack_client("iam")
+    s3.create_bucket(Bucket=keep)
+    try:
+        with testkit.TofuLab() as lab:
+            s3.create_bucket(Bucket=f"{lab.prefix}-orphan")
+            s3.put_object(Bucket=f"{lab.prefix}-orphan", Key="x.txt", Body=b"x")
+            dynamodb.create_table(TableName=f"{lab.prefix}-lock", BillingMode="PAY_PER_REQUEST",
+                                  KeySchema=[{"AttributeName": "LockID", "KeyType": "HASH"}],
+                                  AttributeDefinitions=[{"AttributeName": "LockID", "AttributeType": "S"}])
+            iam.create_role(RoleName=f"{lab.prefix}-role", AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}')
+            iam.put_role_policy(RoleName=f"{lab.prefix}-role", PolicyName="inline", PolicyDocument=(
+                '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListBucket","Resource":"*"}]}'))
+        assert sorted(lab.swept) == sorted([f"s3:{lab.prefix}-orphan", f"dynamodb:{lab.prefix}-lock", f"iam-role:{lab.prefix}-role"])
+        assert buckets_with(lab.prefix) == []
+        assert not [t for t in dynamodb.list_tables()["TableNames"] if t.startswith(lab.prefix)]
+        assert not [r for r in iam.list_roles()["Roles"] if r["RoleName"].startswith(lab.prefix)]
+        assert keep in buckets_with(keep)
+    finally:
+        s3.delete_bucket(Bucket=keep)

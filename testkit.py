@@ -24,6 +24,7 @@ Trong test:
     repo = GitRepo(tmp_path / "repo", tmp_path / "home", writable=[tmp_path]); repo.out("log"); repo.taint()  # bài git
     result = act_run(project_dir, job="build"); act_job_results(result) == {"build": True}  # bài CI: workflow chạy bằng act
     registry = ex.require_registry(); ref = lab.push(tag, "api")  # registry local, close() xoá manifest đã push
+    with TofuLab(ex.path("infra")) as lab: lab.init(); lab.apply(); lab.output("bucket")  # bài IaC: tofu trong sandbox, LocalStack riêng, close() destroy
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ import zipfile
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -79,6 +81,7 @@ SERVICES = {
     "localstack": ("LOCALSTACK_HOST", "localhost", "LOCALSTACK_PORT", 4566),
     "mailpit": ("MAILPIT_HOST", "localhost", "MAILPIT_SMTP_PORT", 11025),
     "registry": ("REGISTRY_HOST", "localhost", "DEVOPS_REGISTRY_PORT", 15000),
+    "localstack-devops": ("LOCALSTACK_DEVOPS_HOST", "localhost", "LOCALSTACK_DEVOPS_PORT", 14566),
 }
 
 def _port(name: str) -> int:
@@ -1596,6 +1599,356 @@ def act_run(
     return result
 
 
+TOFU_VERSION = "1.13.2"
+TOFU_MIN_VERSION = "1.10"
+TOFU_AWS_PROVIDER = "6.12.0"
+TOFU_TIMEOUT = 300
+TOFU_REGION = "us-east-1"
+LOCALSTACK_DEVOPS_START = "docker compose -f setup/docker-compose.yml --profile devops up -d --wait localstack-devops"
+_TOFU_PREFIX = re.compile(rf"{DOCKER_PREFIX}[a-z0-9]{{6,}}")
+_TOFU_NETWORK_ERRORS = re.compile(
+    r"could not connect to|failed to request discovery document|no such host|i/o timeout|connection refused|connection reset"
+    r"|TLS handshake timeout|network is unreachable|Temporary failure in name resolution|server misbehaving"
+    r"|context deadline exceeded|proxyconnect",
+    re.I,
+)
+_TOFU_COPY_IGNORE = (*_COPY_IGNORE, ".terraform", "terraform.tfstate", "terraform.tfstate.backup", ".terraform.tfstate.lock.info")
+_BLACKHOLE: socket.socket | None = None
+
+
+def tofu_plugin_dir() -> Path:
+    base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(base) / "devops-track" / "tofu-plugins"
+
+
+def localstack_devops_endpoint() -> str:
+    host = os.environ.get(SERVICES["localstack-devops"][0], SERVICES["localstack-devops"][1])
+    return f"http://{'127.0.0.1' if host == 'localhost' else host}:{_port('localstack-devops')}"
+
+
+def _localstack_devops_checked() -> str:
+    if _port("localstack-devops") == _port("localstack"):
+        raise RuntimeError(
+            f"Cổng localstack-devops ({_port('localstack-devops')}) trùng cổng localstack của track DE; từ chối đụng vào "
+            "LocalStack của DE. Đổi LOCALSTACK_DEVOPS_PORT trong setup/.env")
+    return localstack_devops_endpoint()
+
+
+def _localstack_health(endpoint: str) -> dict | None:
+    import json
+    import urllib.request
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f"{endpoint}/_localstack/health", timeout=3) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _blackhole_proxy() -> str:
+    """Cổng loopback đã bind nhưng không listen (giữ suốt phiên pytest): mọi kết nối tới đó bị từ chối ngay."""
+    global _BLACKHOLE
+    if _BLACKHOLE is None:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("127.0.0.1", 0))
+        _BLACKHOLE = sock
+    return f"http://127.0.0.1:{_BLACKHOLE.getsockname()[1]}"
+
+
+def tofu_failed_on_network(output: str) -> bool:
+    return bool(_TOFU_NETWORK_ERRORS.search(output))
+
+
+def tofu_env(home: Path, *, prefix: str, endpoint: str | None = None, fetch: bool = False) -> dict[str, str]:
+    """Env dựng từ đầu cho `tofu` trong sandbox: `HOME` tạm, thông tin đăng nhập giả, endpoint LocalStack riêng của DevOps.
+
+    Không bao giờ ra AWS thật: `AWS_ENDPOINT_URL` (provider AWS và backend s3 đều đọc) trỏ mọi service về LocalStack nên
+    provider không khai báo endpoint vẫn gọi LocalStack; mọi request không tới loopback (kể cả endpoint AWS thật ghi thẳng
+    trong `endpoints {}`) đi qua proxy chết `HTTPS_PROXY` và bị từ chối trước cả bước tra DNS.
+
+    Provider lấy offline: tệp CLI config sinh trong `home` chỉ cài từ `filesystem_mirror` ở `tofu_plugin_dir()` (OpenTofu
+    tạo symlink, không chép). `fetch=True` là env của bước tải lần đầu: có mạng, không proxy, `TF_PLUGIN_CACHE_DIR` và
+    `plugin_cache_dir` cùng thư mục đó (cache của OpenTofu có đúng bố cục của mirror dạng unpacked).
+    """
+    home = Path(home)
+    plugins = tofu_plugin_dir()
+    plugins.mkdir(parents=True, exist_ok=True)
+    endpoint = endpoint or localstack_devops_endpoint()
+    config_dir = home / ".devops-tofu"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    if fetch:
+        config = config_dir / "fetch.tfrc"
+        config.write_text(f'disable_checkpoint = true\nplugin_cache_dir = "{plugins}"\n', encoding="utf-8")
+    else:
+        config = config_dir / "cli.tfrc"
+        config.write_text(
+            f'disable_checkpoint = true\nprovider_installation {{\n  filesystem_mirror {{\n    path = "{plugins}"\n  }}\n}}\n',
+            encoding="utf-8")
+    env = {
+        "HOME": str(home),
+        "AWS_ACCESS_KEY_ID": "test",
+        "AWS_SECRET_ACCESS_KEY": "test",
+        "AWS_REGION": TOFU_REGION,
+        "AWS_CONFIG_FILE": "/dev/null",
+        "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "AWS_ENDPOINT_URL": endpoint,
+        "TF_CLI_CONFIG_FILE": str(config),
+        "TF_IN_AUTOMATION": "1",
+        "TF_INPUT": "0",
+        "CHECKPOINT_DISABLE": "1",
+        "TF_VAR_prefix": prefix,
+    }
+    if fetch:
+        env["TF_PLUGIN_CACHE_DIR"] = str(plugins)
+        return env
+    proxy = _blackhole_proxy()
+    no_proxy = ",".join(dict.fromkeys(["127.0.0.1", "localhost", "::1", urlsplit(endpoint).hostname or "127.0.0.1"]))
+    for key in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        env[key] = proxy
+    env["NO_PROXY"] = env["no_proxy"] = no_proxy
+    return env
+
+
+def localstack_sweep(prefix: str) -> list[str]:
+    """Xoá trên `localstack-devops` (không bao giờ trên `localstack` của DE) mọi bucket S3, bảng DynamoDB, IAM role và IAM
+    policy có tên bắt đầu bằng `prefix` (`devops-ex-<id>`); trả danh sách `loại:tên` đã xoá."""
+    if not _TOFU_PREFIX.fullmatch(prefix):
+        raise ValueError(f"Tiền tố {prefix!r} quá rộng; chỉ nhận devops-ex-<id> của một lab")
+    endpoint = _localstack_devops_checked()
+    import boto3
+    from botocore.config import Config
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    options = {"endpoint_url": endpoint, "region_name": TOFU_REGION, "aws_access_key_id": "test", "aws_secret_access_key": "test",
+               "config": Config(connect_timeout=3, read_timeout=30, retries={"max_attempts": 2}, proxies={})}
+    removed: list[str] = []
+    errors = (BotoCoreError, ClientError)
+
+    s3 = boto3.client("s3", **options)
+    try:
+        names = [b["Name"] for b in s3.list_buckets().get("Buckets", []) if b["Name"].startswith(prefix)]
+    except errors:
+        names = []
+    for name in names:
+        try:
+            for page in s3.get_paginator("list_object_versions").paginate(Bucket=name):
+                objects = [{"Key": o["Key"], "VersionId": o["VersionId"]} for o in page.get("Versions", []) + page.get("DeleteMarkers", [])]
+                if objects:
+                    s3.delete_objects(Bucket=name, Delete={"Objects": objects, "Quiet": True})
+            s3.delete_bucket(Bucket=name)
+            removed.append(f"s3:{name}")
+        except errors:
+            pass
+
+    dynamodb = boto3.client("dynamodb", **options)
+    try:
+        tables = [t for page in dynamodb.get_paginator("list_tables").paginate() for t in page.get("TableNames", []) if t.startswith(prefix)]
+    except errors:
+        tables = []
+    for name in tables:
+        try:
+            dynamodb.delete_table(TableName=name)
+            removed.append(f"dynamodb:{name}")
+        except errors:
+            pass
+
+    iam = boto3.client("iam", **options)
+    try:
+        roles = [r["RoleName"] for page in iam.get_paginator("list_roles").paginate() for r in page.get("Roles", [])
+                 if r["RoleName"].startswith(prefix)]
+    except errors:
+        roles = []
+    for name in roles:
+        try:
+            for policy in iam.list_attached_role_policies(RoleName=name).get("AttachedPolicies", []):
+                iam.detach_role_policy(RoleName=name, PolicyArn=policy["PolicyArn"])
+            for policy in iam.list_role_policies(RoleName=name).get("PolicyNames", []):
+                iam.delete_role_policy(RoleName=name, PolicyName=policy)
+            for profile in iam.list_instance_profiles_for_role(RoleName=name).get("InstanceProfiles", []):
+                iam.remove_role_from_instance_profile(InstanceProfileName=profile["InstanceProfileName"], RoleName=name)
+            iam.delete_role(RoleName=name)
+            removed.append(f"iam-role:{name}")
+        except errors:
+            pass
+    try:
+        policies = [p for page in iam.get_paginator("list_policies").paginate(Scope="Local") for p in page.get("Policies", [])
+                    if p["PolicyName"].startswith(prefix)]
+    except errors:
+        policies = []
+    for policy in policies:
+        try:
+            for version in iam.list_policy_versions(PolicyArn=policy["Arn"]).get("Versions", []):
+                if not version["IsDefaultVersion"]:
+                    iam.delete_policy_version(PolicyArn=policy["Arn"], VersionId=version["VersionId"])
+            iam.delete_policy(PolicyArn=policy["Arn"])
+            removed.append(f"iam-policy:{policy['PolicyName']}")
+        except errors:
+            pass
+    return removed
+
+
+class TofuLab:
+    """Thư mục làm việc OpenTofu riêng của một test. Chỉ dùng bằng `with TofuLab(thư_mục_cấu_hình) as lab:` (không truyền
+    thư mục thì bắt đầu rỗng, ghi tệp bằng `lab.write`).
+
+    Cấu hình được chép vào thư mục tạm (bỏ `.terraform`, state), `init/plan/apply/output/state/destroy` chạy `tofu` qua
+    `run_sandboxed` với env `tofu_env` (endpoint `localstack-devops`, không ra AWS thật). Tên tài nguyên dùng
+    `var.prefix` = `lab.prefix` (`devops-ex-<id>`). `close()` luôn chạy `destroy -auto-approve -lock=false`, kể cả khi lỗi
+    hay Ctrl-C, rồi `localstack_sweep(lab.prefix)` xoá tài nguyên mồ côi (state mất khi apply bị ngắt) và xoá thư mục tạm.
+
+    `init` cài provider offline từ mirror `tofu_plugin_dir()`; thiếu provider thì tải một lần (`tofu init -backend=false`
+    có mạng, ghi vào cùng thư mục) rồi init offline lại; không tải được vì mạng thì skip. `endpoint=` chỉ dành cho test
+    của testkit (server giả): khi đó không cần LocalStack và không sweep.
+    """
+
+    def __init__(self, source: Path | None = None, *, endpoint: str | None = None, timeout: float = TOFU_TIMEOUT) -> None:
+        self.id = uuid.uuid4().hex[:8]
+        self.prefix = f"{DOCKER_PREFIX}{self.id}"
+        self.source = Path(source) if source is not None else None
+        self.endpoint = endpoint
+        self.timeout = timeout
+        self.root: Path | None = None
+        self.home: Path | None = None
+        self.workdir: Path | None = None
+        self.env: dict[str, str] = {}
+        self.destroy_result: subprocess.CompletedProcess | None = None
+        self.swept: list[str] = []
+        self._sweep = endpoint is None
+        self._entered = False
+
+    def __enter__(self) -> "TofuLab":
+        self._entered = True
+        try:
+            self._open()
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def _open(self) -> None:
+        Exercise.require_tool("tofu", TOFU_MIN_VERSION)
+        reason = sandbox_ready()
+        if reason:
+            pytest.skip(SANDBOX_SKIP.format(reason=reason))
+        if self.endpoint is None:
+            self.endpoint = Exercise.require_localstack_devops()
+        self.root = Path(tempfile.mkdtemp(prefix=f"{self.prefix}-"))
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.workdir = self.root / "work"
+        if self.source is not None:
+            shutil.copytree(self.source, self.workdir, ignore=shutil.ignore_patterns(*_TOFU_COPY_IGNORE))
+        else:
+            self.workdir.mkdir()
+        self.env = tofu_env(self.home, prefix=self.prefix, endpoint=self.endpoint)
+
+    def _require_entered(self) -> None:
+        if not self._entered or self.workdir is None:
+            raise RuntimeError("Dùng TofuLab bằng `with TofuLab(...) as lab:` để tài nguyên luôn được destroy")
+
+    def _execute(self, args: list[str], env: dict[str, str], writable: list[Path], timeout: float | None) -> subprocess.CompletedProcess:
+        limit = timeout or self.timeout
+        try:
+            return run_sandboxed(["tofu", *args], writable=writable, cwd=self.workdir, env=env, timeout=limit)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"tofu {' '.join(args)} chạy quá {limit:.0f}s")
+
+    @staticmethod
+    def _failure(args, result: subprocess.CompletedProcess) -> str:
+        output = f"{result.stdout}\n{result.stderr}".strip()
+        return f"tofu {' '.join(args)} lỗi (mã {result.returncode}):\n{output[-DOCKER_LOG_CHARS:]}"
+
+    def write(self, name: str, text: str) -> Path:
+        self._require_entered()
+        path = self.workdir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def run(self, *args: str, check: bool = True, timeout: float | None = None) -> subprocess.CompletedProcess:
+        """Chạy `tofu <args>` trong sandbox (ví dụ `lab.run("validate")`, `lab.run("fmt", "-check")`)."""
+        self._require_entered()
+        result = self._execute(list(args), self.env, [self.workdir, self.home], timeout)
+        if check and result.returncode != 0:
+            pytest.fail(self._failure(args, result))
+        return result
+
+    def _fetch_env(self) -> dict[str, str]:
+        return tofu_env(self.home, prefix=self.prefix, endpoint=self.endpoint, fetch=True)
+
+    def _fetch(self) -> None:
+        args = ["init", "-backend=false", "-input=false"]
+        result = self._execute(args, self._fetch_env(), [self.workdir, self.home, tofu_plugin_dir()], self.timeout)
+        if result.returncode == 0:
+            return
+        output = f"{result.stdout}\n{result.stderr}"
+        if tofu_failed_on_network(output):
+            last = next((line.strip() for line in reversed(output.splitlines()) if line.strip()), "")
+            pytest.skip(
+                f"Provider chưa có trong {tofu_plugin_dir()} và không tải được: lần đầu cần mạng để tải provider, sau đó "
+                f"test chạy offline. Có mạng rồi chạy lại test. Lỗi: {last}")
+        pytest.fail(self._failure(args, result))
+
+    def init(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        self._require_entered()
+        argv = ["init", "-input=false", *args]
+        result = self.run(*argv, check=False)
+        if result.returncode != 0:
+            self._fetch()
+            result = self.run(*argv, check=False)
+        if check and result.returncode != 0:
+            pytest.fail(self._failure(argv, result))
+        return result
+
+    def plan(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        """`-detailed-exitcode` thì mã 2 (có thay đổi) cũng tính là thành công."""
+        result = self.run("plan", "-input=false", *args, check=False)
+        ok = {0, 2} if "-detailed-exitcode" in args else {0}
+        if check and result.returncode not in ok:
+            pytest.fail(self._failure(["plan", *args], result))
+        return result
+
+    def apply(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        return self.run("apply", "-auto-approve", "-input=false", *args, check=check)
+
+    def output(self, name: str | None = None) -> Any:
+        """Không có `name`: dict tên output -> giá trị; có `name`: giá trị của output đó."""
+        import json
+
+        data = json.loads(self.run("output", "-json", *([name] if name else [])).stdout)
+        return data if name else {key: value["value"] for key, value in data.items()}
+
+    def state(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        return self.run("state", *args, check=check)
+
+    def destroy(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        return self.run("destroy", "-auto-approve", "-input=false", *args, check=check)
+
+    def close(self) -> None:
+        outcome = (Exception, pytest.fail.Exception, pytest.skip.Exception)
+        try:
+            if self.workdir is not None and (self.workdir / ".terraform").is_dir():
+                try:
+                    self.destroy_result = self._execute(["destroy", "-auto-approve", "-input=false", "-lock=false"], self.env,
+                                                        [self.workdir, self.home], self.timeout)
+                except outcome:
+                    self.destroy_result = None
+        finally:
+            try:
+                if self._sweep and self.root is not None:
+                    self.swept = localstack_sweep(self.prefix)
+            except outcome:
+                pass
+            finally:
+                if self.root is not None:
+                    shutil.rmtree(self.root, ignore_errors=True)
+
+
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
 _MAGIC = re.compile(r"^(\s*)(?:[%!]|[\w, ]+=\s*[%!]).*$")
 
@@ -1808,6 +2161,24 @@ class Exercise:
                 f"DEVOPS_REGISTRY_PORT trong setup/.env rồi chạy: {start}"
             )
         return registry_address()
+
+    @staticmethod
+    def require_localstack_devops() -> str:
+        """Skip khi `localstack-devops` (profile `devops`) chưa chạy, cổng của nó trùng `localstack` của DE, hoặc cổng đó là
+        server khác (LocalStack của DE bật S3/IAM/STS nhưng tắt DynamoDB); trả endpoint. Test IaC dùng qua `TofuLab`."""
+        if _port("localstack-devops") == _port("localstack"):
+            pytest.skip(
+                f"LOCALSTACK_DEVOPS_PORT ({_port('localstack-devops')}) trùng LOCALSTACK_PORT của track DE; bài DevOps không "
+                "dùng LocalStack của DE. Đổi LOCALSTACK_DEVOPS_PORT trong setup/.env")
+        endpoint = localstack_devops_endpoint()
+        if not service_up("localstack-devops"):
+            pytest.skip(f"LocalStack của track DevOps chưa chạy. Bật bằng: {LOCALSTACK_DEVOPS_START}")
+        services = (_localstack_health(endpoint) or {}).get("services", {})
+        if any(services.get(name) in (None, "disabled") for name in ("s3", "iam", "sts", "dynamodb")):
+            pytest.skip(
+                f"Cổng {_port('localstack-devops')} đang mở nhưng không phải localstack-devops (thiếu S3, IAM, STS hay "
+                f"DynamoDB). Đổi LOCALSTACK_DEVOPS_PORT trong setup/.env rồi chạy: {LOCALSTACK_DEVOPS_START}")
+        return endpoint
 
     @staticmethod
     def require_tool(name: str, min_version: str | None = None) -> None:

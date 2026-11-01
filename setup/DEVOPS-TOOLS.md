@@ -19,6 +19,7 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | trivy (kèm DB lỗ hổng ở `~/.cache/devops-track/trivy`) | 06 Containers | 0.76 | [Cài đặt](../tracks/devops/modules/06-containers/README.md#0-cài-đặt) |
 | act | 07 CI/CD & artifacts (chạy workflow GitHub Actions trên máy; image runner `devops-track/act-runner:1.0-9d5fff50` (đuôi là hash của Dockerfile và requirements-ci.txt, đổi khi hai tệp đổi) build một lần từ `setup/act-runner/` trên `node:24.22.2-trixie-slim`, có sẵn uv, CPython 3.12.13 và wheel nên chấm offline; cache action ở `~/.cache/devops-track/act`) | 0.2.94 | [Cài đặt](../tracks/devops/modules/07-cicd-artifacts/README.md#0-cài-đặt) |
 | actionlint | 07 CI/CD & artifacts (kiểm tĩnh workflow; thiếu thì riêng test actionlint skip) | 1.7 | [Cài đặt](../tracks/devops/modules/07-cicd-artifacts/README.md#0-cài-đặt) |
+| tofu (OpenTofu) | 08 IaC & provisioning (bản đã kiểm 1.13.2; test chạy `tofu` trong sandbox với LocalStack riêng `localstack-devops`, provider `hashicorp/aws` 6.12.0 tải một lần vào `~/.cache/devops-track/tofu-plugins` rồi dùng offline) | 1.10 | [Cài đặt](../tracks/devops/modules/08-iac-provisioning/README.md#0-cài-đặt) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
@@ -45,6 +46,19 @@ docker compose -f setup/docker-compose.yml --profile devops rm -fsv registry
 ```
 
 Registry ở `localhost:15000`, chỉ mở trên `127.0.0.1`; Docker cho push lên `localhost` qua HTTP mà không cần cấu hình `insecure-registries`. Đổi cổng bằng `DEVOPS_REGISTRY_PORT` trong `setup/.env`. Registry bật `REGISTRY_STORAGE_DELETE_ENABLED` để test xoá được image đã push: test đặt image dưới tên `devops-ex-<id>/...` và xoá manifest khi xong. Tên repository rỗng vẫn hiện trong `/v2/_catalog` tới khi xoá volume bằng lệnh `rm -fsv` ở trên.
+
+## Dịch vụ phụ trợ: LocalStack riêng cho IaC
+
+Module 08 và capstone m05 tạo bucket S3, bảng DynamoDB, IAM role, khoá KMS... bằng OpenTofu trên một LocalStack riêng của track DevOps: service `localstack-devops` (cùng image `localstack/localstack:4.4.0` với track DE, bản community không cần `LOCALSTACK_AUTH_TOKEN`), profile `devops`, không thuộc `all`. Nó tách hẳn service `localstack` của track Data Engineer: cổng khác, volume khác (`devops-track-localstack-data`), nên bài DevOps không bao giờ đụng dữ liệu của DE.
+
+```bash
+docker compose -f setup/docker-compose.yml --profile devops up -d --wait localstack-devops
+docker compose -f setup/docker-compose.yml --profile devops stop localstack-devops
+docker compose -f setup/docker-compose.yml --profile devops rm -fsv localstack-devops
+docker volume rm devops-track-localstack-data
+```
+
+Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM và Secrets Manager. Lần chạy test đầu tiên tải provider `hashicorp/aws` 6.12.0 (khoảng 150 MB, giải nén khoảng 780 MB) vào `~/.cache/devops-track/tofu-plugins`; từ đó test chạy offline. Provider mới hơn 6.12 chưa chạy được với LocalStack 4.4.0 (bảng DynamoDB, tag bucket S3), nên bài tập ghim đúng bản này.
 
 ## Ghim CPU
 
