@@ -6,7 +6,7 @@ files:
   - path: starter/guards.py
     note: delimit, datamark, guard TODO
   - path: starter/simweb.py
-    note: Trang web giả lập, 8 task (không sửa)
+    note: Trang web giả lập, 8 task; chỉ được thêm kiểu injection mới trong build_site
   - path: starter/agent.ipynb
     note: Tool trình duyệt, chạy agent, đo
   - path: starter/REPORT.md

@@ -610,7 +610,7 @@ Mã do model viết là mã không tin cậy. Chạy nó cần ít nhất:
 | Thời gian | `subprocess` với timeout, giết **cả nhóm tiến trình** (test có thể tự sinh tiến trình con) | cgroup CPU, giới hạn wall-clock |
 | Mạng | `unshare -rn` (namespace mạng riêng, không cần root) nếu máy hỗ trợ | Container không mạng, gVisor, Firecracker microVM |
 | Môi trường | Biến môi trường tối thiểu: không lọt key API của bạn vào sandbox | Secret không bao giờ vào sandbox |
-| Chấm | Chép **mã nguồn** sang thư mục sạch cùng **test ẩn**, bỏ các tệp pytest/Python tự nạp (`conftest.py`, `sitecustomize.py`) | Như vậy, cộng kiểm tra mã không đọc test ẩn, không có plugin hay tệp cấu hình lạ |
+| Chấm | Chỉ chép các tệp mã nguồn **gốc** của task sang thư mục sạch cùng **test ẩn** (tệp agent tự thêm như `conftest.py`, `sitecustomize.py`, một `pytest.py` giả đều có thể đổi kết quả) | Như vậy, cộng chạy chấm trong sandbox riêng; mã của agent vẫn chạy lúc chấm nên không bao giờ coi là kín hoàn toàn |
 
 Dòng cuối chặn một hành vi có thật: khi test fail mãi, model nhỏ có lúc **sửa test** cho pass thay vì sửa mã (bản tham
 chiếu của bài Advanced 01 ghi được hiện tượng này). Chấm bằng test do agent kiểm soát là đo khả năng lách, không phải

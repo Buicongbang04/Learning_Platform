@@ -41,16 +41,16 @@ questions:
 - id: extraction-fp
   kind: data
   type: single
-  prompt: Trong 84 lượt chuyện phiếm, `extract_facts` với `qwen2.5:3b` vẫn trích ra "thông tin" ở khoảng bao nhiêu lượt?
+  prompt: Trong 84 lượt chuyện phiếm, `extract_facts` với `qwen2.5:3b` vẫn trích ra "thông tin" ở bao nhiêu lượt?
   options:
   - id: a
     text: Không lượt nào, LLM bỏ qua hết
   - id: b
-    text: Một số ít, dưới 20 lượt
+    text: Từ 1 tới 20 lượt
   - id: c
-    text: Khoảng một nửa (trên 30 lượt)
+    text: Từ 21 tới 60 lượt
   - id: d
-    text: Gần như mọi lượt phiếm
+    text: Hơn 60 lượt, gần như mọi lượt
 - id: recency-tradeoff
   kind: knowledge
   type: single

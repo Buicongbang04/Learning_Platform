@@ -69,8 +69,9 @@ run-length encoding, số căn cước, số điện thoại...) và task sửa 
 
 - Test của `sandbox.py` pass: đường dẫn ra ngoài (kể cả qua symlink) bị chặn; đếm đúng pass/fail/error (kể cả lỗi
   import khi thu thập test); timeout giết cả tiến trình cháu; biến môi trường của bạn không lọt vào sandbox; mạng bị
-  chặn khi máy có `unshare`; `grade` dùng test ẩn, bỏ qua test agent đã sửa và các tệp `conftest.py`/`sitecustomize.py` agent tự ghi, không
-  sửa thư mục của agent.
+  chặn khi máy có `unshare`; `grade` dùng test ẩn và chỉ chép các tệp mã nguồn gốc của task (test agent đã sửa, `conftest.py`,
+  `sitecustomize.py`, `pytest.py` giả do agent tự thêm đều bị bỏ), không sửa thư mục của agent. Cách này chặn các đường
+  lách đã biết, không biến việc chấm thành kín hoàn toàn.
 - `REPORT.md` không còn TODO, ít nhất 500 từ, có bảng.
 - Nội dung chấm theo rubric trong `SOLUTION.md`.
 

@@ -18,7 +18,7 @@ questions:
   prompt: So theo cặp ReAct văn bản với native trên 24 task, có bao nhiêu task native đúng mà ReAct sai?
   options:
   - id: a
-    text: 5 tới 7 task
+    text: 4 tới 7 task
   - id: b
     text: 0 tới 3 task
   - id: c

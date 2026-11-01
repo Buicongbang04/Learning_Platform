@@ -28,16 +28,16 @@ questions:
 - id: visible-vs-edge
   kind: knowledge
   type: single
-  prompt: Mỗi task chỉ cho agent thấy 1 test, còn test ẩn có nhiều trường hợp biên. Thiết kế đó đo được điều gì?
+  prompt: Vì sao bộ test agent được thấy chỉ giữ rất nhỏ (1 test mỗi task), thay vì đưa luôn cả test ẩn cho agent chạy?
   options:
   - id: a
-    text: Tốc độ chạy pytest trong sandbox khi có nhiều test
+    text: Để pytest trong sandbox chạy nhanh hơn ở mỗi bước
   - id: b
-    text: Agent có làm đúng yêu cầu hay chỉ khớp ví dụ đã thấy
+    text: Để agent có tín hiệu kiểm tra mà không khớp được đề chấm
   - id: c
-    text: Model có đọc được tiếng Việt trong TASK.md không
+    text: Vì context của model 3B không chứa nổi nhiều test
   - id: d
-    text: Sandbox có chặn được mạng khi chạy test ẩn không
+    text: Vì test ẩn cần mạng nên không chạy được cho agent
 - id: most-hidden
   kind: data
   type: single

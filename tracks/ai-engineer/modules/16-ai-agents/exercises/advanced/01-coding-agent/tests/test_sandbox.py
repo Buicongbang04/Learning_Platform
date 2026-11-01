@@ -131,6 +131,25 @@ def test_grade_ignores_hook_files(sb, tmp_path):
     write(work, "conftest.py", "import pytest\n\n\n@pytest.hookimpl(hookwrapper=True)\n"
                                "def pytest_runtest_makereport(item, call):\n    outcome = yield\n"
                                "    outcome.get_result().outcome = 'passed'\n")
-    write(work, "sitecustomize.py", "import builtins\n")
     assert sb.run_pytest(work, timeout=30).ok, "conftest.py của agent làm test thấy được 'pass' dù mã còn bug"
-    assert not sb.grade(task, work).ok, "grade không được chép conftest.py/sitecustomize.py của agent"
+    assert not sb.grade(task, work).ok, "grade không được chép conftest.py của agent"
+
+
+def test_grade_ignores_sitecustomize(sb, tmp_path):
+    task = TASKS / "03-fix-median"
+    work = tmp_path / "work"
+    shutil.copytree(task / "repo", work)
+    write(work, "sitecustomize.py", "import sys\nprint('5 passed in 0.01s')\nsys.stdout.flush()\nimport os\nos._exit(0)\n")
+    assert sb.run_pytest(work, timeout=30).ok, "sitecustomize.py chạy lúc Python khởi động, giả kết quả pytest"
+    assert not sb.grade(task, work).ok, "grade không được chép sitecustomize.py của agent"
+
+
+def test_grade_ignores_fake_pytest_module(sb, tmp_path):
+    task = TASKS / "03-fix-median"
+    work = tmp_path / "work"
+    shutil.copytree(task / "repo", work)
+    write(work, "pytest.py", "print('5 passed in 0.01s')\n")
+    assert sb.run_pytest(work, timeout=30).ok, "pytest.py giả che pytest thật qua PYTHONPATH"
+    assert not sb.grade(task, work).ok, "grade chỉ chép các tệp mã nguồn gốc của task"
+    write(work, "helpers/extra.py", "X = 1\n")
+    assert not sb.grade(task, work).ok

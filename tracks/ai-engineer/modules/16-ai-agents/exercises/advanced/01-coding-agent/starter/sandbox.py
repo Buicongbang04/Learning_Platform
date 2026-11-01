@@ -78,8 +78,10 @@ def source_files(workdir: Path) -> dict[str, str]:
 def grade(task_dir: Path, workdir: Path, timeout: float = 20) -> TestRun:
     """Chấm kết quả của agent bằng test ẩn.
 
-    Chép source_files(workdir) (KHÔNG chép tests/ của agent) vào một thư mục tạm mới, đặt
-    task_dir/hidden/test_hidden.py vào tests/ của thư mục đó, rồi run_pytest.
+    Chỉ chép những tệp có đường dẫn nằm trong source_files(task_dir / "repo") (danh sách tệp mã nguồn GỐC của task),
+    lấy nội dung từ workdir (tệp agent đã xoá thì bỏ qua), vào một thư mục tạm mới; đặt task_dir/hidden/test_hidden.py
+    vào tests/ của thư mục đó, rồi run_pytest. Mọi tệp agent tự thêm (một `pytest.py` giả che pytest thật qua
+    PYTHONPATH, `conftest.py`, `sitecustomize.py`...) và thư mục tests/ của agent đều không được chép.
     """
     # TODO
     raise NotImplementedError
