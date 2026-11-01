@@ -241,3 +241,29 @@ def test_devops_tools_documents_act_and_registry():
     text = TOOLS_DOC.read_text(encoding="utf-8")
     assert "| act |" in text and testkit.ACT_MIN_VERSION in text and testkit.ACT_IMAGE in text
     assert "up -d registry" in text and "DEVOPS_REGISTRY_PORT" in text
+
+
+ACT_RUNNER = ROOT / "setup" / "act-runner"
+
+
+def test_act_runner_base_is_pinned_by_digest():
+    text = (ACT_RUNNER / "Dockerfile").read_text(encoding="utf-8")
+    bases = re.findall(r"^FROM\s+(\S+)", text, re.M)
+    assert len(bases) == 1
+    assert re.fullmatch(rf"{re.escape(testkit.ACT_BASE_IMAGE)}@sha256:[0-9a-f]{{64}}", bases[0])
+
+
+def test_act_runner_tag_matches_label_and_build_command():
+    text = (ACT_RUNNER / "Dockerfile").read_text(encoding="utf-8")
+    version = re.search(r'devops-track\.act-runner="([^"]+)"', text).group(1)
+    assert testkit.ACT_IMAGE == f"devops-track/act-runner:{version}"
+    assert f"-t {testkit.ACT_IMAGE} setup/act-runner" in testkit.ACT_IMAGE_BUILD
+    assert "UV_OFFLINE=1" in text and "UV_PYTHON_DOWNLOADS=never" in text
+
+
+def test_act_runner_caches_every_sample_app_requirement():
+    cached = set((ACT_RUNNER / "requirements-ci.txt").read_text(encoding="utf-8").split())
+    app = (ROOT / "tracks" / "devops" / "sample-app" / "requirements.txt").read_text(encoding="utf-8").split()
+    assert set(app) <= cached
+    for dev in ROOT.glob("tracks/devops/modules/*/exercises/*/*/tests/fixtures/repo/requirements-dev.txt"):
+        assert set(dev.read_text(encoding="utf-8").split()) <= cached, dev

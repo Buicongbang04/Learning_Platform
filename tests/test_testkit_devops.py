@@ -400,6 +400,18 @@ def test_require_image_missing_skips(monkeypatch):
     assert "docker pull nginx:1.30.6-alpine" in str(info.value)
 
 
+def test_act_run_skips_with_build_command_when_runner_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit.Exercise, "require_tool", staticmethod(lambda name, v=None: None))
+    monkeypatch.setattr(testkit, "_docker", lambda *args, timeout=60: subprocess.CompletedProcess(args, 1, "", "No such image"))
+    project = tmp_path / "p"
+    (project / ".github" / "workflows").mkdir(parents=True)
+    (project / ".github" / "workflows" / "ci.yml").write_text("name: ci\non: push\njobs: {}\n", encoding="utf-8")
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.act_run(project)
+    assert testkit.ACT_IMAGE_BUILD in str(info.value) and "setup/act-runner" in str(info.value)
+    assert "docker pull devops-track" not in str(info.value)
+
+
 def test_docker_lab_refuses_start_outside_with(monkeypatch):
     fake = FakeDocker()
     monkeypatch.setattr(testkit.subprocess, "run", fake)
@@ -1443,7 +1455,7 @@ class FakeActWorld:
         self.required: list[tuple] = []
         self.killed: list[tuple[int, int]] = []
         monkeypatch.setattr(testkit.Exercise, "require_tool", staticmethod(lambda name, v=None: self.required.append(("tool", name, v))))
-        monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda image: self.required.append(("image", image))))
+        monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda image, hint=None: self.required.append(("image", image))))
         monkeypatch.setattr(testkit, "_docker", self.docker)
         monkeypatch.setattr(testkit.os, "killpg", lambda pid, sig: self.killed.append((pid, sig)))
 
@@ -1661,8 +1673,9 @@ def test_act_run_allows_actions_only_when_skipped_locally(monkeypatch, tmp_path)
     testkit.act_run(write_project(tmp_path / "a", GUARDED_PUSH.format(guard="if: ${{ !env.ACT }}")))
     testkit.act_run(write_project(tmp_path / "b", GUARDED_PUSH.format(guard="if: github.ref == 'refs/heads/main' && !env.ACT")))
     assert len(world.processes) == 2
-    stub = flag(world.processes[0].args, "--local-repository")
-    assert stub.startswith("docker/build-push-action@v6=") and "actions/checkout" not in " ".join(world.processes[0].args)
+    argv = world.processes[0].args
+    stubs = [argv[i + 1] for i, a in enumerate(argv) if a == "--local-repository"]
+    assert sorted(s.split("=", 1)[0] for s in stubs) == ["actions/checkout@v4", "docker/build-push-action@v6"]
     for guard in ("", "if: ${{ env.ACT }}", "if: github.ref == 'refs/heads/main'"):
         with pytest.raises(pytest.fail.Exception) as info:
             testkit.act_run(write_project(tmp_path / f"c{len(guard)}", GUARDED_PUSH.format(guard=guard)))
@@ -2004,6 +2017,11 @@ jobs:
     "!env.ACT && github.ref == 'refs/heads/main'",
     "github.ref == 'refs/heads/main' && !env.ACT",
     "${{ github.event_name == 'push' && !env.ACT && github.ref == 'a || b' }}",
+    "${{ !cancelled() && !env.ACT }}",
+    "failure() && !env.ACT",
+    "always() && !env.ACT",
+    "success() && github.ref == 'refs/heads/main' && !env.ACT",
+    "cancelled() && !env.ACT",
 ])
 def test_act_guard_accepts(condition):
     assert testkit._act_skipped_locally(condition)
@@ -2026,7 +2044,12 @@ def test_act_guard_accepts(condition):
     "!env.ACTION",
     "${{ !env.ACT }} || true",
     "${{ !env.ACT }} && ${{ true }}",
-    "always() && !env.ACT",
+    "!(x&&!env.ACT&&y)",
+    "always() || !env.ACT",
+    "contains(github.ref, 'x') && !env.ACT",
+    "always() && (!env.ACT)",
+    "!always() && !env.ACT && x()",
+    "!env.ACT && hashFiles('a')",
 ])
 def test_act_guard_refuses_bypasses(condition):
     assert not testkit._act_skipped_locally(condition)
@@ -2165,3 +2188,69 @@ def test_act_run_refuses_event_with_newline(monkeypatch, tmp_path):
     FakeActWorld(monkeypatch)
     with pytest.raises(ValueError):
         testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW), event="push\n")
+
+
+@pytest.mark.parametrize("checkout,expected", [
+    ("        with:\n          ref: ${{ github.sha }}\n", "ref"),
+    ("        with:\n          repository: x/y\n", "repository"),
+    ("        with:\n          token: abc\n          fetch-depth: 0\n", "token"),
+    ("        with: x\n", "không phải bảng"),
+])
+def test_act_run_refuses_checkout_that_act_would_clone(monkeypatch, tmp_path, checkout, expected):
+    world = FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, SIMPLE_WORKFLOW.replace("      - uses: actions/checkout@v4\n",
+                                                              "      - uses: actions/checkout@v4\n" + checkout))
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(project)
+    assert "actions/checkout" in str(info.value) and expected in str(info.value)
+    assert world.processes == []
+
+
+def test_act_run_allows_safe_checkout_inputs(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    checkout = "        with:\n          fetch-depth: 0\n          persist-credentials: false\n"
+    project = write_project(tmp_path, SIMPLE_WORKFLOW.replace("      - uses: actions/checkout@v4\n",
+                                                              "      - uses: actions/checkout@v4\n" + checkout))
+    testkit.act_run(project)
+    argv = world.processes[0].args
+    assert flag(argv, "--local-repository").startswith("actions/checkout@v4=")
+
+
+def act_result(text: str) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(["act"], 1, text, "")
+
+
+SETUP_STEPS = ("Cài uv", "Cài Python và dependency")
+
+
+def test_act_failed_on_network_in_setup_step():
+    text = (
+        "[test] ⭐ Run Main Cài uv\n"
+        "[test]   | Tải lỗi: ENOTFOUND\n"
+        "[test]   ❌  Failure - Main Cài uv [1.2s]\n"
+        "[test] 🏁  Job failed\n"
+    )
+    assert testkit.act_failed_on_network(act_result(text), SETUP_STEPS) is True
+
+
+def test_act_failed_on_network_uv_dns_error():
+    text = (
+        "[test] ⭐ Run Main Cài Python và dependency\n"
+        "[test]   | error: Failed to fetch: `https://pypi.org/simple/fastapi/`\n"
+        "[test]   |   Caused by: dns error: failed to lookup address information\n"
+        "[test]   ❌  Failure - Main Cài Python và dependency [3.0s]\n"
+    )
+    assert testkit.act_failed_on_network(act_result(text), SETUP_STEPS) is True
+
+
+@pytest.mark.parametrize("text", [
+    "[test] ⭐ Run Main Test\n[test]   | ConnectionError: Could not connect to redis\n[test]   ❌  Failure - Main Test [1s]\n",
+    "[test] ⭐ Run Main Cài uv\n[test]   | /tmp/uv.tar.gz: FAILED\n[test]   ❌  Failure - Main Cài uv [1s]\n",
+    "[test] ⭐ Run Main Cài uv\n[test]   | Tải lỗi: ENOTFOUND\n[test]   ✅  Success - Main Cài uv [1s]\n"
+    "[test] ⭐ Run Main Test\n[test]   | 1 failed\n[test]   ❌  Failure - Main Test [1s]\n",
+    "[test] ⭐ Run Main Cài Python và dependency\n[test]   | dns error\n[test]   | Downloaded fastapi\n"
+    "[test]   | error: No solution found when resolving dependencies\n[test]   ❌  Failure - Main Cài Python và dependency [1s]\n",
+    "[a] ⭐ Run Main Cài uv\n[b]   | ENOTFOUND\n[a]   ❌  Failure - Main Cài uv [1s]\n",
+])
+def test_act_failed_on_network_only_for_setup_step_network_errors(text):
+    assert testkit.act_failed_on_network(act_result(text), SETUP_STEPS) is False

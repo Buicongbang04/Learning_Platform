@@ -240,6 +240,41 @@ def build_failed_on_network(output: str) -> bool:
     return bool(hits) and not any(_FETCH_PROGRESS.search(line) for line in lines[hits[-1] + 1:])
 
 
+_ACT_NETWORK_ERRORS = re.compile(
+    _NETWORK_ERRORS.pattern + r"|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|dns error|"
+    r"error sending request|Failed to fetch|Could not connect|fetch failed"
+)
+_ACT_FETCH_PROGRESS = re.compile(_FETCH_PROGRESS.pattern + r"|\b(?:Downloaded|Prepared|Installed) ")
+_ACT_STEP_START = re.compile(r"^\[([^\]]+)\]\s+⭐\s+Run (?:Pre |Main |Post )?(.+?)\s*$")
+_ACT_STEP_FAILED = re.compile(r"^\[([^\]]+)\]\s+❌\s+Failure - (?:Pre |Main |Post )?(.+?) \[[^\]]*\]\s*$")
+
+
+def act_failed_on_network(result: subprocess.CompletedProcess, step_names) -> bool:
+    """True khi trong output của `act_run` có một bước tên thuộc `step_names` bị fail và chính output của bước đó (các dòng
+    giữa `⭐ Run ... <bước>` và `❌ Failure - ... <bước>` của cùng job) có lỗi mạng, sau lỗi mạng cuối không còn dấu hiệu tải
+    thành công. Lỗi mạng ở bước khác, hay bước cài đặt fail vì lý do khác, đều False: test fail thay vì skip."""
+    wanted = set(step_names)
+    current: dict[str, tuple[str, list[str]]] = {}
+    for line in f"{result.stdout or ''}\n{result.stderr or ''}".splitlines():
+        start = _ACT_STEP_START.match(line)
+        if start:
+            current[start.group(1)] = (start.group(2), [])
+            continue
+        failed = _ACT_STEP_FAILED.match(line)
+        if failed:
+            job, step = failed.groups()
+            name, lines = current.pop(job, ("", []))
+            if step in wanted and name == step:
+                hits = [i for i, text in enumerate(lines) if _ACT_NETWORK_ERRORS.search(text)]
+                if hits and not any(_ACT_FETCH_PROGRESS.search(text) for text in lines[hits[-1] + 1:]):
+                    return True
+            continue
+        job = re.match(r"^\[([^\]]+)\]", line)
+        if job and job.group(1) in current:
+            current[job.group(1)][1].append(line)
+    return False
+
+
 def free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -1119,7 +1154,14 @@ class GitRepo:
         return result.stdout.strip()
 
 
-ACT_IMAGE = "node:24.22.2-trixie-slim"
+ACT_IMAGE = "devops-track/act-runner:1.0"
+ACT_BASE_IMAGE = "node:24.22.2-trixie-slim"
+ACT_IMAGE_BUILD = f"docker pull {ACT_BASE_IMAGE} && docker build --pull=false -t {ACT_IMAGE} setup/act-runner"
+ACT_CHECKOUT_INPUTS = frozenset({
+    "persist-credentials", "fetch-depth", "fetch-tags", "clean", "lfs", "submodules", "show-progress", "filter",
+    "sparse-checkout", "sparse-checkout-cone-mode", "set-safe-directory", "path",
+})
+ACT_STATUS_FUNCTIONS = frozenset({"always()", "success()", "failure()", "cancelled()", "!cancelled()"})
 ACT_MIN_VERSION = "0.2.94"
 ACT_MEMORY = "1g"
 ACT_PIDS_LIMIT = 512
@@ -1167,18 +1209,20 @@ def _act_workflow_files(repo: Path) -> list[Path]:
 
 def _act_skipped_locally(condition) -> bool:
     """True khi `if:` chắc chắn sai dưới act: biểu thức (bỏ `${{ }}` và khoảng trắng) đúng bằng `!env.ACT`, hoặc là chuỗi
-    `&&` ở cấp trên cùng có một vế đúng bằng `!env.ACT`. Chuỗi trong nháy đơn được thay bằng chỗ giữ trước khi xét; có
-    `||`, ngoặc, nháy kép, `!=`, `$`, `{`, `}` thì không công nhận."""
+    `&&` ở cấp trên cùng có một vế đúng bằng `!env.ACT` và mọi vế có ngoặc khác đúng bằng một hàm trạng thái
+    (`always()`, `success()`, `failure()`, `cancelled()`, `!cancelled()`). Chuỗi trong nháy đơn được thay bằng chỗ giữ trước
+    khi xét; có `||`, nháy kép, `!=`, `$`, `{`, `}` hay ngoặc ở chỗ khác thì không công nhận."""
     text = str(condition or "").strip()
     if text.startswith("${{") and text.endswith("}}"):
         text = text[3:-2]
     text = re.sub(r"'(?:[^']|'')*'", "'S'", text)
     text = re.sub(r"\s+", "", text)
-    if text == "!env.ACT":
-        return True
-    if any(token in text for token in ("||", "(", ")", '"', "!=", "$", "{", "}")):
+    if any(token in text for token in ("||", '"', "!=", "$", "{", "}")):
         return False
-    return "!env.ACT" in text.split("&&")
+    terms = text.split("&&")
+    if "!env.ACT" not in terms:
+        return False
+    return all(term in ACT_STATUS_FUNCTIONS for term in terms if "(" in term or ")" in term)
 
 
 _ACT_REMOTE_ACTION = re.compile(r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)@([A-Za-z0-9_.-][A-Za-z0-9_./-]*)")
@@ -1202,7 +1246,18 @@ def _act_step_problem(where: str, step) -> str | None:
     uses = step.get("uses") if isinstance(step, dict) else None
     if uses is not None and (not isinstance(uses, str) or re.search(r"\s", uses) or not uses):
         return f"{where}: `uses: {uses!r}` không hợp lệ: không được rỗng hay chứa khoảng trắng, xuống dòng"
-    if not uses or uses.split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
+    if not uses:
+        return None
+    if uses.split("@", 1)[0] == "actions/checkout":
+        options = step.get("with") or {}
+        extra = sorted(str(k) for k in options) if isinstance(options, dict) else ["(không phải bảng key: value)"]
+        extra = [k for k in extra if k not in ACT_CHECKOUT_INPUTS]
+        if extra:
+            return (f"{where}: actions/checkout có `with:` {', '.join(extra)}; khi chấm, act chỉ chép thẳng repo vào job khi "
+                    "không đặt ref/repository (và input lạ khác), nếu không nó tải actions/checkout thật từ GitHub. Bỏ các "
+                    f"input đó; được dùng: {', '.join(sorted(ACT_CHECKOUT_INPUTS))}")
+        return None
+    if uses.split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
         return None
     allowed = ", ".join(ACT_ALLOWED_ACTIONS)
     if str(uses).startswith(("docker://", "./", "../", "/")):
@@ -1217,7 +1272,9 @@ def _act_step_problem(where: str, step) -> str | None:
 
 def _act_guarded_stubs(repo: Path, root: Path) -> list[str]:
     """Bước `uses:` có `if: !env.ACT` không chạy dưới act, nhưng act vẫn clone action của nó lúc dựng job. Thay mỗi action
-    đó bằng một action composite rỗng cục bộ (`--local-repository`) để không tải gì từ mạng và không có mã lạ nào trên máy."""
+    đó bằng một action composite rỗng cục bộ (`--local-repository`) để không tải gì từ mạng và không có mã lạ nào trên máy.
+    Mọi `actions/checkout@<ref>` cũng được thay (act chép repo cục bộ nên không cần mã của action): nếu act vì lý do nào đó
+    không nhận ra checkout cục bộ, nó vẫn không tải gì."""
     import yaml
 
     stubs: dict[str, Path] = {}
@@ -1227,9 +1284,10 @@ def _act_guarded_stubs(repo: Path, root: Path) -> list[str]:
         jobs = data.get("jobs") if isinstance(data, dict) else None
         for job in (jobs or {}).values() if isinstance(jobs, dict) else ():
             for step in (job.get("steps") or []) if isinstance(job, dict) else []:
-                if not isinstance(step, dict) or not step.get("uses") or not _act_skipped_locally(step.get("if")):
+                if not isinstance(step, dict) or not step.get("uses"):
                     continue
-                if str(step["uses"]).split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
+                allowed = str(step["uses"]).split("@", 1)[0] in ACT_ALLOWED_ACTIONS
+                if not allowed and not _act_skipped_locally(step.get("if")):
                     continue
                 parsed = _act_remote_action(step["uses"])
                 if parsed is None:
@@ -1484,7 +1542,8 @@ def act_run(
         raise ValueError(f"Tên event không hợp lệ: {event!r}")
     Exercise.require_tool("act", ACT_MIN_VERSION)
     Exercise.require_tool("git")
-    Exercise.require_image(ACT_IMAGE)
+    Exercise.require_image(ACT_IMAGE, hint=f"Image runner do track tự build một lần. Từ gốc repo chạy: {ACT_IMAGE_BUILD} "
+                           "(xem module 07, mục 0. Cài đặt)")
     run_id = uuid.uuid4().hex[:8]
     root = Path(tempfile.mkdtemp(prefix=f"{DOCKER_PREFIX}{run_id}-act-"))
     try:
@@ -1744,10 +1803,10 @@ class Exercise:
             pytest.skip("Docker daemon chưa chạy hoặc user chưa có quyền dùng docker")
 
     @staticmethod
-    def require_image(image: str) -> None:
+    def require_image(image: str, hint: str | None = None) -> None:
         Exercise.require_tool("docker")
         if _docker("image", "inspect", image).returncode != 0:
-            pytest.skip(f"Chưa có image {image}. Tải bằng: docker pull {image}")
+            pytest.skip(f"Chưa có image {image}. {hint or f'Tải bằng: docker pull {image}'}")
 
     @staticmethod
     def require_cluster(name: str = "devops-lab") -> None:
