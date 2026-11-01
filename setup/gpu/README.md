@@ -14,6 +14,7 @@ vì env gốc dùng torch **CPU** (`pytorch-cpu`), còn ở đây dùng torch **
 | trl | >= 1.17 (1.17.0) | |
 | bitsandbytes | >= 0.50 (0.50.2) | lượng tử hóa 4-bit cho QLoRA |
 | datasets | >= 5.1 (5.1.0) | |
+| kagglehub | >= 0.3 (1.0.2) | để notebook chạy bằng kernel `ai-gpu` import được `data.download_dataset` (`ex.dataset`, `ensure`) |
 | gymnasium[classic-control,box2d] / ale-py / imageio[ffmpeg] | 1.4.0 / 0.12.1 / 2.38.1 | RL trên GPU (Atari) và quay video, module 07 |
 
 Phiên bản chính xác đã khóa trong `uv.lock`.

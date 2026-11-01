@@ -23,6 +23,7 @@ dependencies = [
     "gymnasium[classic-control,box2d]==1.4.0",
     "ale-py==0.12.1",
     "imageio[ffmpeg]==2.38.1",
+    "kagglehub>=0.3",
     "ipykernel>=6.29",
 ]
 
