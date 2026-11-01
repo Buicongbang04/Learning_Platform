@@ -15,8 +15,8 @@ _ANSWER_TAG = re.compile(r"<answer>(.*?)</answer>", re.S)
 _BOXED = re.compile(r"\\boxed\{((?:[^{}]|\{[^{}]*\})*)\}")
 _HASHES = re.compile(r"####(.*)")
 _PHRASE = re.compile(r"answer\s*(?:is|:)(.*)", re.I)
-_FORMAT = re.compile(r"\s*<think>((?:(?!</?think>|</?answer>).)*\S(?:(?!</?think>|</?answer>).)*)</think>\s*"
-                     r"<answer>((?:(?!</?answer>|</?think>).)*)</answer>\s*", re.S)
+_LETTER = re.compile(r"[^\W\d_]")
+_WORD = re.compile(r"[^\W_]")
 
 
 def normalize_number(text: str) -> str | None:
@@ -75,14 +75,19 @@ def is_correct(completion: str, gold: str) -> bool:
 
 
 def format_reward(completion: str) -> float:
-    """1.0 nếu completion đúng khung <think>...</think><answer>SỐ</answer>, ngược lại 0.0."""
-    match = _FORMAT.fullmatch(completion)
-    return 1.0 if match and normalize_number(match.group(2)) is not None else 0.0
+    """1.0 nếu có lập luận rồi đúng một \\boxed{SỐ} ở cuối (sau đó không còn chữ hay số), ngược lại 0.0."""
+    if completion.count("\\boxed{") != 1:
+        return 0.0
+    match = _BOXED.search(completion)
+    if not match or normalize_number(match.group(1)) is None:
+        return 0.0
+    before, after = completion[:match.start()], completion[match.end():]
+    return 1.0 if _LETTER.search(before) and not _WORD.search(after) else 0.0
 
 
 def correctness_reward(completion: str, gold: str) -> float:
-    """1.0 nếu thẻ <answer> cuối cùng chứa đúng một số bằng gold, ngược lại 0.0."""
-    spans = _ANSWER_TAG.findall(completion)
+    """1.0 nếu \\boxed{} cuối cùng chứa đúng một số bằng gold, ngược lại 0.0."""
+    spans = _BOXED.findall(completion)
     return 1.0 if spans and normalize_number(spans[-1]) == gold else 0.0
 
 

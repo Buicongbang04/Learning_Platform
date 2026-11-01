@@ -18,10 +18,16 @@ dùng regex số trong văn bản tự do với lookbehind `(?<![\w.])`: dấu `
 hours`), không phải số âm.
 
 **Hai reward, hai mức nghiêm.** `extract_answer` cố đọc được càng nhiều càng tốt, vì nó dùng để **đo**. Reward thì dùng
-để **dạy**, nên phải chặt: `correctness_reward` chỉ cho điểm khi nội dung thẻ `<answer>` cuối là **đúng một số**.
-Nếu dùng cách dễ dãi "đáp án nằm trong các số của thẻ", model sẽ học viết `<answer>17 or 18</answer>` (liệt kê nhiều
-đáp án) và reward tăng mà khả năng giải toán không đổi: reward hacking ở dạng đơn giản nhất. `format_reward` dùng
-`re.fullmatch` cho cả chuỗi với tempered token `(?:(?!</?think>|</?answer>).)*` để chặn chữ thừa, thẻ lặp, thẻ lồng.
+để **dạy**, nên phải chặt: `correctness_reward` chỉ cho điểm khi nội dung `\boxed{}` cuối là **đúng một số**. Nếu
+dùng cách dễ dãi "đáp án nằm trong các số của hộp", model sẽ học viết `\boxed{17 or 18}` (liệt kê nhiều đáp án) và
+reward tăng mà khả năng giải toán không đổi: reward hacking ở dạng đơn giản nhất. `format_reward` đếm `\boxed{` (đúng
+một), kiểm nội dung bằng `normalize_number`, rồi kiểm hai phía: trước hộp có chữ cái (có lập luận), sau hộp không còn
+chữ hay số (đáp số là thứ cuối cùng, không có "Hope this helps!" hay một đáp số thứ hai).
+
+Vì sao khung `\boxed` mà không phải `<think>...</think><answer>...</answer>` như DeepSeek-R1? Mục 4 lý thuyết đo:
+Qwen2.5-0.5B-Instruct gần như không bao giờ tự viết khung thẻ (kể cả khi prompt có ví dụ hay khi điền sẵn `<think>`),
+nên reward định dạng thẻ bằng 0 ở mọi lời giải và GRPO không có tín hiệu. Model được train sẵn với `\boxed`, nên chọn
+khung model đã biết là cách rẻ nhất để tránh vấn đề cold start; `extract_answer` vẫn đọc thẻ `<answer>` cho model khác.
 
 ## Vì sao từng chi tiết quan trọng (số đo trên GSM8K)
 

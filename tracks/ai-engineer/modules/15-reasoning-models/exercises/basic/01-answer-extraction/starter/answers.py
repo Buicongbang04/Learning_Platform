@@ -39,13 +39,13 @@ def is_correct(completion: str, gold: str) -> bool:
 
 
 def format_reward(completion: str) -> float:
-    """1.0 nếu completion đúng khung <think>...</think><answer>SỐ</answer>, ngược lại 0.0."""
+    """1.0 nếu có lập luận rồi đúng một \\boxed{SỐ} ở cuối (sau đó không còn chữ hay số), ngược lại 0.0."""
     # TODO
     raise NotImplementedError
 
 
 def correctness_reward(completion: str, gold: str) -> float:
-    """1.0 nếu thẻ <answer> cuối cùng chứa đúng một số bằng gold, ngược lại 0.0."""
+    """1.0 nếu \\boxed{} cuối cùng chứa đúng một số bằng gold, ngược lại 0.0."""
     # TODO
     raise NotImplementedError
 

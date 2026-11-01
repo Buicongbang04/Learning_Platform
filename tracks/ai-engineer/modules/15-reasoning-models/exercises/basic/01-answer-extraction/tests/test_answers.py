@@ -68,37 +68,38 @@ def test_is_correct_compares_values(ans):
 
 
 @pytest.mark.parametrize("completion, expected", [
-    ("<think>16-3-4=9; 9*2=18</think><answer>18</answer>", 1.0),
-    ("  <think>\n9 eggs, $2 each\n</think>\n<answer> $18 </answer>\n", 1.0),
-    ("<think>  </think><answer>18</answer>", 0.0),
-    ("<think>ok</think><answer>18</answer> Hope this helps!", 0.0),
-    ("Sure! <think>ok</think><answer>18</answer>", 0.0),
-    ("<think>ok</think><answer>eighteen</answer>", 0.0),
-    ("<think>ok</think><answer>17 or 18</answer>", 0.0),
-    ("<think>a</think><answer>1</answer><think>b</think><answer>18</answer>", 0.0),
-    ("<think>a <answer>3</answer></think><answer>18</answer>", 0.0),
-    ("<answer>18</answer>", 0.0),
+    ("Janet sells 16 - 3 - 4 = 9 eggs, 9 * 2 = 18.\nThe answer is \\boxed{18}.", 1.0),
+    ("She earns 9 * 2 dollars, so $\\boxed{\\$18}$", 1.0),
+    ("Total per day:\n\\[\n\\boxed{1,800}\n\\]\n", 1.0),
+    ("\\boxed{18}", 0.0),
+    ("We get \\boxed{18} dollars per day.", 0.0),
+    ("Step one gives \\boxed{9}, then \\boxed{18}", 0.0),
+    ("So it is \\boxed{18} \\boxed{18}", 0.0),
+    ("Answer: \\boxed{eighteen}", 0.0),
+    ("Answer: \\boxed{17 or 18}", 0.0),
     ("The answer is 18.", 0.0),
+    ("Answer: \\boxed{18}\n\nHope this helps!", 0.0),
+    ("The total is \\boxed{18} (= 20 - 2)", 0.0),
 ])
 def test_format_reward(ans, completion, expected):
     assert ans.format_reward(completion) == expected
 
 
-def test_correctness_reward_needs_tag_and_one_number(ans):
-    assert ans.correctness_reward("<think>x</think><answer>18</answer>", "18") == 1.0
-    assert ans.correctness_reward("blah <answer>$18.00</answer> more text", "18") == 1.0
-    assert ans.correctness_reward("<answer>17</answer> no wait <answer>18</answer>", "18") == 1.0
-    assert ans.correctness_reward("The answer is 18.", "18") == 0.0, "không có thẻ thì không có điểm đúng"
-    assert ans.correctness_reward("<answer>17 or 18</answer>", "18") == 0.0, "liệt kê nhiều số là lách reward"
-    assert ans.correctness_reward("<answer>18</answer> no wait <answer>17</answer>", "18") == 0.0
+def test_correctness_reward_needs_box_and_one_number(ans):
+    assert ans.correctness_reward("9 * 2 = 18, so \\boxed{18}", "18") == 1.0
+    assert ans.correctness_reward("cost: \\boxed{\\$18.00} per day, nice", "18") == 1.0
+    assert ans.correctness_reward("\\boxed{17}, no wait: \\boxed{18}", "18") == 1.0
+    assert ans.correctness_reward("The answer is 18.", "18") == 0.0, "không có \\boxed thì không có điểm đúng"
+    assert ans.correctness_reward("\\boxed{17 or 18}", "18") == 0.0, "liệt kê nhiều số là lách reward"
+    assert ans.correctness_reward("\\boxed{18}, no wait: \\boxed{17}", "18") == 0.0
 
 
 def test_total_reward(ans):
-    good = "<think>9 * 2 = 18</think><answer>18</answer>"
+    good = "Half of 36 is 18, so \\boxed{18}."
     assert ans.total_reward(good, "18") == pytest.approx(1.2)
     assert ans.total_reward(good, "17") == pytest.approx(0.2)
     assert ans.total_reward(good, "18", format_weight=0.5) == pytest.approx(1.5)
-    assert ans.total_reward("text <answer>18</answer>", "18") == pytest.approx(1.0)
+    assert ans.total_reward("\\boxed{18} dollars", "18") == pytest.approx(1.0)
     assert ans.total_reward("The answer is 18", "18") == 0.0
 
 

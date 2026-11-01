@@ -40,12 +40,11 @@ cách lách reward thay vì học giải toán. Bài này viết bộ trích đ�
    "Số" trong văn bản tự do: có thể có `$` đứng trước, phẩy ngăn hàng nghìn, phần thập phân, dạng `a/b`. Dấu `-` chỉ là
    dấu âm khi **không** đứng ngay sau chữ hoặc số: `3-4 hours` là hai số 3 và 4, `to -4 degrees` là -4.
 4. `is_correct(completion, gold) -> bool`.
-5. `format_reward(completion) -> float`: 1.0 khi **cả** completion (cho phép khoảng trắng hai đầu và giữa hai khối) đúng
-   khung `<think>LẬP LUẬN</think><answer>SỐ</answer>`: lập luận có ít nhất một ký tự không phải khoảng trắng, không chứa
-   thẻ nào khác; trong thẻ answer là đúng một số theo `normalize_number`; không có gì trước `<think>` hay sau
-   `</answer>`. Ngược lại 0.0.
-6. `correctness_reward(completion, gold) -> float`: 1.0 khi nội dung thẻ `<answer>` **cuối cùng** là đúng một số và bằng
-   `gold`; không có thẻ, hoặc trong thẻ không phải đúng một số (`17 or 18`), thì 0.0.
+5. `format_reward(completion) -> float`: 1.0 khi completion đúng khung mà Qwen2.5 dùng cho toán: có lập luận (ít nhất một
+   chữ cái) **trước** đúng **một** `\boxed{...}`, trong hộp là đúng một số theo `normalize_number`, và sau hộp không còn
+   chữ hay số nào (chỉ khoảng trắng, dấu câu, `$`, `\]`). Ngược lại 0.0.
+6. `correctness_reward(completion, gold) -> float`: 1.0 khi nội dung `\boxed{}` **cuối cùng** là đúng một số và bằng
+   `gold`; không có hộp, hoặc trong hộp không phải đúng một số (`17 or 18`), thì 0.0.
 7. `total_reward(completion, gold, format_weight=0.2)`: tổng hai reward trên, reward định dạng nhân trọng số.
 
 Chỉ dùng thư viện chuẩn. Test cuối đọc GSM8K thật (tự skip nếu chưa tải).
@@ -55,8 +54,8 @@ Chỉ dùng thư viện chuẩn. Test cuối đọc GSM8K thật (tự skip nế
 - `normalize_number` cho cùng một dạng với `2.5`, `2.50`, `5/2`, `$2.50`, `10/4`; từ chối `1,2`, `1,0000`, `12 eggs`, `10/0`.
 - `extract_answer` đúng thứ tự ưu tiên trên 14 câu trả lời mẫu (thẻ answer, `\boxed`, `####`, "answer is", số cuối;
   số âm, khoảng `3-4`, phân số, tiền có phẩy).
-- `format_reward` bắt được 11 trường hợp: chữ thừa trước hoặc sau, lập luận rỗng, hai cặp thẻ, thẻ lồng, đáp số bằng chữ hoặc nhiều số.
-- `correctness_reward` không cho điểm câu `<answer>17 or 18</answer>` khi đáp án là 18.
+- `format_reward` đúng trên 12 trường hợp: chữ hoặc số thừa sau hộp, không có lập luận, hai hộp, đáp số bằng chữ hoặc nhiều số.
+- `correctness_reward` không cho điểm `\boxed{17 or 18}` khi đáp án là 18, và chấm theo hộp **cuối cùng**.
 - Trên GSM8K thật: đọc được đáp số của cả 8 792 câu, và `extract_answer` trên lời giải mẫu của 1 319 câu test trả đúng đáp số.
 
 ## Gợi ý
@@ -70,6 +69,6 @@ hoặc số cuối".
 
 ### Gợi ý 2
 
-Lookbehind `(?<![\w.])` trước dấu trừ trong regex số giải quyết cả `3-4` lẫn `x-5`. Với `format_reward`, viết một regex
-cho cả chuỗi (`re.fullmatch`) với hai nhóm, rồi kiểm nhóm đáp số bằng `normalize_number`; để chặn thẻ lồng trong phần
-lập luận, dùng tempered token `(?:(?!</?think>|</?answer>).)*` với cờ `re.S`.
+Lookbehind `(?<![\w.])` trước dấu trừ trong regex số giải quyết cả `3-4` lẫn `x-5`. Với `format_reward`, đếm số lần
+xuất hiện của `\boxed{` trước, rồi tách phần trước và phần sau hộp: hai regex nhỏ "có chữ cái" và "có chữ hoặc số" là
+đủ. Lớp ký tự `[^\W\d_]` khớp đúng chữ cái (kể cả chữ có dấu).
