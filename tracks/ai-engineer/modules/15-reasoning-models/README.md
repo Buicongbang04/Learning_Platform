@@ -487,6 +487,9 @@ flowchart TD
 - **Kích thước nhiễu.** Với 500 câu và accuracy quanh 40%, sai số chuẩn của một accuracy là $$\sqrt{0.4 \cdot 0.6 / 500} \approx 0.022$$,
   khoảng tin cậy 95% khoảng ±4.3 điểm. Hiệu của hai model trên **cùng** câu hẹp hơn (bootstrap theo cặp, module 11 mục 7),
   vì câu khó thì khó với cả hai: đó là lý do luôn so theo cặp.
+- **Cấu hình sinh là một phần của thước đo.** Cùng `Qwen2.5-0.5B-Instruct`, cùng 500 câu, cùng greedy, chỉ đổi batch sinh từ
+  64 sang 128: accuracy 0.430 thành 0.436, và 51 câu đổi kết quả (đo ở bản tham chiếu của module). Greedy với bf16 không tất
+  định theo cấu hình batch; trước và sau phải đo bằng cùng một hàm sinh, cùng batch.
 - **Seed.** RL trên LLM có phương sai giữa các lần train lớn (như module 07 mục 6). Một seed tốt hơn là một giai thoại.
 - **Bộ trích là một phần của thước đo.** Mục 1 cho thấy trên cùng câu trả lời, bộ trích sai cách cho gần 0 và các bộ trích
   hợp lý vẫn lệch nhau vài điểm. Ghi bộ trích, và báo cả thước đo chặt lẫn dễ dãi khi có train định dạng.

@@ -143,5 +143,6 @@ như R1-Zero báo cáo. (2) Thiên vị của loss: gộp kiểu GRPO gốc (tru
 của lời giải sai và dài bị phạt nhẹ hơn lời giải sai và ngắn, nên model không có áp lực rút ngắn lời giải sai; Dr. GRPO
 và DAPO bỏ thiên vị này bằng cách chia cho hằng số hoặc tổng số token. (3) Cắt cụt: lời giải chạm `max_completion_length`
 bị cắt thường sai, kéo theo tín hiệu nhiễu (DAPO lọc hoặc phạt mềm mẫu quá dài). Không tự động tốt: phải xem độ dài tăng
-có đi cùng độ chính xác trên tập giữ lại không, và chi phí inference tăng theo. Với model nhỏ và GSM8K, độ dài có thể
-**giảm** (model học bỏ phần thừa để kịp định dạng); điều đáng báo cáo là xu hướng và lý do, không phải một chiều cố định.
+có đi cùng độ chính xác trên tập giữ lại không, và chi phí inference tăng theo. Độ dài cũng không nhất thiết tăng: reward phạt
+lời giải bị cắt hay chữ thừa có thể kéo nó theo hướng ngược lại. Điều đáng báo cáo là xu hướng đo được trên nhiều seed và lý
+do, không phải một chiều mặc định.
