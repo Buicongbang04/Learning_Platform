@@ -63,5 +63,6 @@ chứ không nhận một model đã tạo. `StratifiedKFold(...).split(texts, y
 
 ### Gợi ý 2
 
-FPR không tăng khi ngưỡng tăng, nên duyệt các giá trị điểm từ nhỏ tới lớn và dừng ở giá trị đầu tiên đạt điều kiện.
-`np.unique` vừa bỏ trùng vừa sắp tăng dần. Với `metrics_at`, ép `y` về `bool` trước khi dùng `&` và `~`.
+Hỏi: khi ngưỡng tăng thì FPR và recall đi theo hướng nào? Câu trả lời cho biết nên xét các ngưỡng ứng viên theo thứ tự
+nào và dừng ở đâu. Các ngưỡng ứng viên chỉ cần là các giá trị điểm có trong `scores`. Với `metrics_at`, ép `y` về `bool`
+trước khi dùng `&` và `~`.

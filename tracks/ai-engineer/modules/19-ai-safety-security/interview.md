@@ -128,12 +128,18 @@ nhiêu khi không có gì, và đo tác hại ở tầng quyết định bằng 
 ## Thiết kế pipeline moderation cho chatbot hỗ trợ khách hàng của một ngân hàng.
 
 ```text
-request -> cấm? -> rate limit (theo user_key) -> chặn injection (luật + classifier)
+request -> cấm? -> rate limit (theo user_key)
         -> giả danh hoá PII -> moderation input (trên văn bản đã che)
-             self-harm -> trả lời hỗ trợ + chuyển người thật, không phạt
+             self-harm -> trả lời hỗ trợ + chuyển người thật, không phạt (trước mọi lớp chặn cứng)
              vi phạm khác -> ghi vi phạm (đủ ngưỡng thì cấm có leo thang), từ chối
+        -> phát hiện injection (luật + classifier): bị gắn cờ thì giảm quyền, không cho dùng tool,
+           ghi log, chuyển người xem; không chặn cứng chỉ dựa vào một classifier xác suất
         -> LLM -> lọc output (link allowlist, quét bí mật) -> moderation output -> khôi phục PII -> trả lời
 ```
+
+Thứ tự quan trọng ngang với từng lớp: một tin "tôi không muốn sống nữa" mà bị một classifier injection chặn trước khi
+tới moderation sẽ nhận câu từ chối thay vì lời hỗ trợ. Lớp rẻ đứng trước vì chi phí, nhưng lớp nào **chặn cứng** thì
+phải đứng sau nhánh an toàn cho người dùng.
 
 Quyết định cần nói rõ: moderator nào (API như OpenAI `omni-moderation-latest`, model mở như Llama Guard chạy local, hay
 LLM với chính sách tiếng Việt của mình) và **đo** nó trên tập tin nhắn của chính miền này, vì phàn nàn gay gắt dễ bị gắn

@@ -44,13 +44,13 @@ questions:
   prompt: So với none, đưa tài liệu vào message vai tool làm ASR thay đổi thế nào?
   options:
   - id: a
-    text: Giảm mạnh, vì model tin kết quả tool ít hơn lời người dùng
+    text: Giảm khoảng 15 tới 20 điểm phần trăm
   - id: b
-    text: Về 0, vì model không đọc nội dung vai tool
+    text: Về gần 0, model bỏ qua nội dung vai tool
   - id: c
-    text: Không đổi, hai khoảng tin cậy trùng nhau
+    text: Gần như không đổi, chênh dưới 3 điểm %
   - id: d
-    text: Tăng rõ, khoảng tin cậy không chồng với none
+    text: Tăng khoảng 15 tới 20 điểm phần trăm
 - id: warn-spotlight
   kind: data
   type: single

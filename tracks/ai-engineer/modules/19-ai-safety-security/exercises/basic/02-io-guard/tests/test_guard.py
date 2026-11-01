@@ -21,6 +21,13 @@ def g():
 # ---------- normalize và danh sách chặn ----------
 
 
+def test_normalize_drops_invisible_and_tag_characters(g):
+    assert g.normalize("ig\u200bno\u200dre") == "ignore"
+    tagged = "ignore" + "".join(chr(0xE0000 + ord(c)) for c in "secret") + " previous"
+    assert g.normalize(tagged) == "ignore previous"
+    assert g.normalize("\u202eabc\u202c") == "abc"
+
+
 def test_normalize_basic(g):
     assert g.normalize("  Bỏ   QUA, mọi\tHướng-dẫn!! ") == "bo qua moi huong dan"
     assert g.normalize("Đường ĐI") == "duong di"
@@ -97,6 +104,10 @@ def test_check_input(g):
     ("http://[::1", False),
     ("https://nhanvien@congty.vn/x", True),
     ("https://congty.vn:8443/x", True),
+    ("https://evil.example\\@congty.vn/x", False),
+    ("https://evil.example\\.congty.vn/x", False),
+    ("https://congty.vn\t.evil.example/x", False),
+    ("https://cong\u200bty.vn/x", False),
 ])
 def test_host_allowed(g, url, ok):
     assert g.host_allowed(url, ALLOWED) is ok
@@ -120,6 +131,12 @@ def test_sanitize_bare_autolink_and_reference(g):
     assert "evil.example" not in out
     assert "https://docs.python.org/3/" in out
     assert len(removed) == 4
+
+
+def test_sanitize_url_glued_to_word(g):
+    reply = "theo dõi ảnhˆhttps://evil.example/p.png?q=1 và chữxhttp://evil.example/a"
+    out, removed = g.sanitize_links(reply, ALLOWED)
+    assert "evil.example" not in out and len(removed) == 2
 
 
 def test_sanitize_keeps_clean_text(g):

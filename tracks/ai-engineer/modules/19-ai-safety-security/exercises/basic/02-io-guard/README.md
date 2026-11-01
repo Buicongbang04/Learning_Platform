@@ -34,14 +34,16 @@ Trong `starter/guard.py`, chỉ dùng thư viện chuẩn:
 3. `check_input(text, *, max_chars, deny) -> Verdict`: lý do theo thứ tự `"empty"` (sau `normalize` không còn gì),
    `"too_long"` (`len(text) > max_chars`, tính trên chuỗi gốc), rồi `"denied:<cụm>"` cho từng cụm bị chặn;
    `allowed` là không có lý do nào.
-4. `host_allowed(url, allowed)`: lấy **hostname** bằng `urlsplit` (không phải chuỗi giữa `//` và `/`: phần
-   `user@` và `:cổng` không phải host), bỏ dấu chấm cuối, chữ thường; đúng khi host bằng một tên miền trong `allowed`
-   hoặc kết thúc bằng `"." + tên miền`. URL không parse được thì `False`.
+4. `host_allowed(url, allowed)`: URL chứa dấu `\`, khoảng trắng, ký tự điều khiển (nhóm `Cc`) hoặc ký tự vô hình (nhóm
+   `Cf`) thì `False` ngay. Còn lại lấy **hostname** bằng `urlsplit` (không phải chuỗi giữa `//` và `/`: phần `user@` và
+   `:cổng` không phải host), bỏ dấu chấm cuối, chữ thường; đúng khi host bằng một tên miền trong `allowed` hoặc kết thúc
+   bằng `"." + tên miền`. URL không parse được thì `False`.
 5. `sanitize_links(reply, allowed) -> (reply_mới, removed)`:
    - link markdown `[chữ](url)` tới host lạ: giữ `chữ`, bỏ link;
    - ảnh markdown `![chữ](url)` tới host lạ: bỏ **cả cụm** (trình duyệt tự tải ảnh, URL ảnh là kênh gửi dữ liệu ra
      ngoài không cần người dùng bấm);
-   - autolink `<http...>` và URL trần (`http://`, `https://`, `www.`) tới host lạ: thay bằng `[link đã bị xoá]`;
+   - autolink `<http...>` và URL trần (`http://`, `https://`, `www.`, kể cả khi dính liền sau một chữ khác) tới host
+     lạ: thay bằng `[link đã bị xoá]`;
    - URL không có scheme thì thêm `http://` trước khi kiểm host; `removed` là các URL đã xoá theo thứ tự xử lý.
 6. `check_tool_call(call, policy) -> list[str]`: `call` là `{"name": ..., "arguments": {...}}`, `policy` ánh xạ tên
    tool tới luật từng tham số (`pattern`: chuỗi khớp **toàn bộ** regex; `enum`: nằm trong danh sách; `max`: số, không
@@ -53,7 +55,9 @@ Trong `starter/guard.py`, chỉ dùng thư viện chuẩn:
 
 - Cụm bị chặn được nhận ra qua chữ hoa, xuống dòng, chữ toàn khổ, zero-width, Cyrillic, chữ cách quãng, gạch nối,
   ký tự đảo chiều, tiếng Việt có dấu, không dấu và NFD; câu bình thường chứa một phần của cụm không bị chặn.
-- `host_allowed` đúng 12 ca, gồm tên miền giả dạng `congty.vn.evil.example`, `evilcongty.vn`, `congty.vn@evil.example`.
+- `host_allowed` đúng 16 ca, gồm tên miền giả dạng `congty.vn.evil.example`, `evilcongty.vn`, `congty.vn@evil.example`,
+  và URL có `\`, tab hay ký tự vô hình.
+- `normalize` bỏ ký tự vô hình, ký tự đảo chiều và tag characters (`U+E0000` tới `U+E007F`).
 - `sanitize_links` xoá ảnh, link, autolink, URL trần, cả link kiểu tham chiếu `[1]: https://...`; giữ nguyên link được
   phép và văn bản không có link.
 - `check_tool_call` chặn 11 lời gọi sai (tool lạ, email ngoài miền, xuống dòng chèn `bcc`, tham số thừa, thiếu tham

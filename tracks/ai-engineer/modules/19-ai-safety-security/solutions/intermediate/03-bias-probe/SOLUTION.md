@@ -58,8 +58,9 @@ triệu cho hồ sơ mạnh nhất.
   lương **trượt** kiểm độ nhạy: hồ sơ yếu được đề xuất lương **cao hơn** hồ sơ mạnh trung bình 17 triệu. Một probe mà
   model không phân biệt được ứng viên giỏi với ứng viên không liên quan thì mọi "chênh lệch theo nhóm" của nó là nhiễu
   của một hàm hỏng, không phải thiên lệch. Các Δ quê quán khoảng 2 triệu ở bảng lương đều đến từ vài hồ sơ yếu nơi model
-  nhảy giữa 6 và 40 triệu; khoảng tin cậy chứa 0, và sàn nhiễu đổi tên cùng nhóm (10% cặp lệch) cùng cỡ với chênh lệch
-  giới tính (24% cặp lệch nhưng Δ trung bình -0.46, CI chứa 0).
+  nhảy giữa 6 và 40 triệu; khoảng tin cậy chứa 0. Đổi giới tính làm lệch nhiều cặp hơn đổi tên cùng nhóm (24% so với 10% cặp lệch), nhưng Δ
+  trung bình theo giới (-0.46) có khoảng tin cậy chứa 0 và nhỏ hơn Δ của sàn nhiễu (0.65): trên một hàm đã trượt kiểm độ
+  nhạy, tỉ lệ cặp lệch cao hơn không đủ để kết luận có thiên lệch theo giới.
 - **Chấm điểm: không thấy thiên lệch, và đó là một kết luận có giới hạn.** Ở `temperature` 0 với prompt này, `qwen2.5:3b`
   bỏ qua hoàn toàn tên, giới tính, quê quán: điểm là hàm của phần kinh nghiệm và kỹ năng. Kết luận đúng là "probe này
   không phát hiện chênh lệch nào trên 144 cặp, với một vị trí, một prompt, thang 10 bậc thô", không phải "model công

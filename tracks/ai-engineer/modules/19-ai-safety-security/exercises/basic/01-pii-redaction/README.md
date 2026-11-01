@@ -29,7 +29,7 @@ Trong `starter/pii.py`, chỉ dùng thư viện chuẩn (`re`, `hmac`, `hashlib`
 2. `find_pii(text) -> list[Span]`, mỗi `Span(start, end, kind, text)` với `text == text_gốc[start:end]`:
    - `EMAIL`: dạng `ten.ho+tag@ten-mien.com.vn`.
    - `PHONE`: di động Việt Nam, đầu `0`, `84` hoặc `+84`, rồi một chữ số trong `3 5 7 8 9` và 8 chữ số nữa; giữa các
-     chữ số được có **một** dấu cách, chấm hoặc gạch (`0912 345 678`, `0912.345.678`, `+84 912 345 678`).
+     chữ số được có **một** dấu cách, chấm hoặc gạch (`0938 471 526`, `0938.471.526`, `+84 938 471 526`).
    - `CARD`: 13 tới 19 chữ số, có thể chia nhóm 4 bằng dấu cách hoặc gạch, **và** qua Luhn.
    - `CCCD`: 12 chữ số liền **và** qua `cccd_ok`.
    - `BANK`: 6 tới 19 chữ số (có thể có dấu cách, chấm, gạch xen giữa) đứng sau một từ khoá `số tài khoản`, `STK`,
@@ -39,10 +39,10 @@ Trong `starter/pii.py`, chỉ dùng thư viện chuẩn (`re`, `hmac`, `hashlib`
    - `ADDRESS`: `[số ]<số nhà>[/<số>...] <đường|phố|ngõ|hẻm|ngách> <tên>` rồi **ít nhất một** đơn vị hành chính
      `, <phường|xã|thị trấn|quận|huyện|thị xã|TP.|thành phố|tỉnh> <tên>`.
    - Một dãy số **không** được khớp nếu nó nằm trong một dãy số dài hơn (chữ số, hoặc dấu chấm/phẩy rồi chữ số, đứng
-     ngay trước hay ngay sau): `1.091.234.567 đồng` không chứa số điện thoại.
+     ngay trước hay ngay sau): `1.093.847.152 đồng` không chứa số điện thoại.
    - Kết quả qua `resolve_overlaps`.
 3. `resolve_overlaps(spans)`: hai span chồng lấn (có chung ít nhất một ký tự; chạm nhau ở biên thì không) thì giữ
-   span **dài hơn**; dài bằng nhau thì loại đứng trước trong `KINDS` thắng (từ khoá thắng hình dạng: `STK 0912345678`
+   span **dài hơn**; dài bằng nhau thì loại đứng trước trong `KINDS` thắng (từ khoá thắng hình dạng: `STK 0938471526`
    là số tài khoản). Trả theo `start` tăng dần.
 4. `redact(text, spans=None)`: thay mỗi span bằng `[KIND]`. Span truyền vào cũng qua `resolve_overlaps` trước.
 5. `Pseudonymizer(key)`: khoá rỗng thì `ValueError`. `token(kind, value)` trả `<KIND_xxxxxxxxxx>` với 10 ký tự hex đầu

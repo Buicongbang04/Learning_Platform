@@ -28,7 +28,7 @@ questions:
 - id: best-test
   kind: data
   type: single
-  prompt: Mô hình nào có AUC cao nhất trên tập test deepset?
+  prompt: Mô hình nào có AUC cao nhất (theo con số đo được) trên tập test deepset?
   options:
   - id: a
     text: TF-IDF theo từ, 1 tới 2 gram
@@ -37,7 +37,7 @@ questions:
   - id: c
     text: Embedding bge-m3 cộng logistic regression
   - id: d
-    text: Ba mô hình ngang nhau trong nhiễu của 116 câu
+    text: TF-IDF từ và ký tự bằng nhau, cao hơn embedding
 - id: vi-word
   kind: data
   type: single

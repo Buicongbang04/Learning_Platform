@@ -1,3 +1,5 @@
+"""Mọi số điện thoại, mã và tên trong tệp là dữ liệu hư cấu."""
+
 import re
 
 import numpy as np
@@ -9,7 +11,7 @@ from llmkit import FakeLLM
 from testkit import Exercise
 
 ex = Exercise(__file__)
-PHONE = "0912 345 678"
+PHONE = "0938 471 526"
 
 
 @pytest.fixture(scope="module")

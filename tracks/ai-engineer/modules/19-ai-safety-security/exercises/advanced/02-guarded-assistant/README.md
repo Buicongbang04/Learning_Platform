@@ -29,14 +29,15 @@ nhiêu khách, mỗi lớp tốn bao nhiêu mili giây, và hệ thống hỏng 
 **Phần cứng:** CPU · ~300 phút
 
 Thời gian trên là thời gian làm bài. Model là `qwen2.5:3b` cho cả trả lời lẫn moderation; 48 tin nhắn cần 80 tới 100
-lượt gọi tuỳ số tin bị chặn sớm (bản tham chiếu: 83 lượt, khoảng 2 phút trên PC của track). Không gửi dữ liệu (dù là dữ liệu sinh) cho API bên ngoài trong bài này.
+lượt gọi tuỳ số tin bị chặn sớm (bản tham chiếu: 81 lượt, vài phút trên PC của track khi Ollama dùng chung). Không gửi dữ liệu (dù là dữ liệu sinh) cho API bên ngoài trong bài này.
 
 1. Trong `starter/assistant.ipynb`, cell có test: `handle(c, user_id, text)` theo đúng thứ tự lớp mô tả trong notebook,
    `traffic_report`, `stage_latency`.
 2. Ghép thành phần thật trong các cell `explore`:
    - code của bạn ở ba bài Basic: `pii.py` (`Pseudonymizer`), `guard.py` (`find_denied`, `sanitize_links`), `abuse.py`
      (`user_key`, `TokenBucket`, `AbuseTracker`), nạp từ `starter/` của từng bài;
-   - `injection_check`: danh sách chặn sau chuẩn hoá cộng classifier TF-IDF char của bài Intermediate 01;
+   - `injection_check`: `guard.find_denied` với danh sách `DENY` cộng classifier dựng đúng theo `CLASSIFIER` (cả hai ghim
+     sẵn trong notebook, để kết quả so được với bản tham chiếu);
    - `moderate`: `qwen2.5:3b` với chính sách của bạn (nhóm vi phạm, định nghĩa từng nhóm, phàn nàn gay gắt không phải vi
      phạm) qua JSON schema; JSON hỏng là một cờ riêng, không phải "sạch";
    - system prompt cho trợ lý: chỉ trả lời về ngân hàng, giữ nguyên token PII, không đoán giá trị thật;
@@ -46,6 +47,10 @@ lượt gọi tuỳ số tin bị chặn sớm (bản tham chiếu: 83 lượt, 
    tiếp của một người dùng để thử rate limit. In `traffic_report`, `stage_latency`, đếm giá trị PII thô có trong mọi
    prompt đã gửi tới model, và đọc tận mắt câu trả lời có token PII.
 4. Viết `starter/REPORT.md`, rồi làm phần trắc nghiệm của bài trong app.
+
+`handle` phải đúng đặc tả trong notebook để test pass. Nếu khi đọc kết quả bạn thấy nên đổi kiến trúc (thứ tự lớp, cách
+xử lý một loại tin), hãy viết đề xuất trong `REPORT.md` hoặc cài thử một `handle_v2` trong cell `explore` và so hai bảng,
+đừng sửa `handle`.
 
 **Một `REPORT.md` tốt**:
 
@@ -60,8 +65,8 @@ lượt gọi tuỳ số tin bị chặn sớm (bản tham chiếu: 83 lượt, 
 ## Tiêu chí đạt
 
 - Test của `handle`, `traffic_report`, `stage_latency` pass: đúng thứ tự lớp, người bị cấm không tiêu rate limit, chặn
-  injection trước mọi lời gọi model, moderator và LLM chỉ thấy văn bản đã che, nhánh tự hại không gọi LLM và không phạt
-  người dùng, lọc output trước moderation output, khôi phục PII cho người dùng, bảng đếm và bảng độ trễ đúng.
+  injection trước mọi lời gọi model, moderator và LLM chỉ thấy văn bản đã che, tin được moderator gắn nhãn `self-harm` đi
+  nhánh hỗ trợ, không gọi LLM và không bị ghi vi phạm ở lớp moderation, lọc output trước moderation output, khôi phục PII cho người dùng, bảng đếm và bảng độ trễ đúng.
 - Lần chạy thật: 0 giá trị PII thô trong prompt gửi tới model.
 - `REPORT.md` không còn TODO, ít nhất 500 từ, có bảng.
 - Nội dung chấm theo rubric trong `SOLUTION.md`.
@@ -75,6 +80,6 @@ nào. Trả kết quả qua một hàm `result(status, reply, flags)` dùng chun
 
 ### Gợi ý 2
 
-Đặt bước giả danh hoá **trước** moderation input: moderator cũng là một model, và nếu sau này bạn đổi sang moderation API
-của bên thứ ba thì nó cũng là nơi dữ liệu đi tới. Nạp code Basic bằng `importlib.util.spec_from_file_location(tên,
-đường_dẫn)` rồi `spec.loader.exec_module(module)`; đường dẫn tính từ gốc repo.
+Khi đếm giá trị PII thô, đếm trên **mọi** prompt gửi tới model, không chỉ prompt của lời gọi trả lời. Nạp code Basic bằng
+`importlib.util.spec_from_file_location(tên, đường_dẫn)`, đặt module vào `sys.modules[tên]` (dataclass cần điều này), rồi
+`spec.loader.exec_module(module)`; đường dẫn tính từ gốc repo.

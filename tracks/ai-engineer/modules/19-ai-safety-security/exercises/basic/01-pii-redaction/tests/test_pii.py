@@ -1,4 +1,4 @@
-"""Test bài PII. Mọi giá trị trong tệp là dữ liệu sinh, không phải PII thật."""
+"""Test bài PII. Mọi số điện thoại, CCCD, số tài khoản, email trong tệp là dữ liệu hư cấu, không phải PII thật."""
 
 import random
 import re
@@ -126,12 +126,12 @@ def kinds(spans):
 
 
 def test_phone_formats(pii):
-    for phone in ["0912345678", "0912 345 678", "0912.345.678", "+84 912 345 678", "+84912345678", "038-123-4567"]:
+    for phone in ["0938471526", "0938 471 526", "0938.471.526", "+84 938 471 526", "+84938471526", "038-123-4567"]:
         assert kinds(pii.find_pii(f"Gọi {phone} nhé.")) == [("PHONE", phone)], phone
 
 
 def test_phone_not_inside_longer_numbers(pii):
-    for text in ["Mã đơn 1234567890912345678.", "Mã 20912345678 lỗi", "Số tiền 1.091.234.567 đồng", "0212345678"]:
+    for text in ["Mã đơn 1234567890938471526.", "Mã 20938471526 lỗi", "Số tiền 1.093.847.152 đồng", "0212345678"]:
         assert [s for s in pii.find_pii(text) if s.kind == "PHONE"] == [], text
 
 
@@ -155,10 +155,10 @@ def test_cccd_needs_valid_province(pii):
 
 
 def test_bank_and_cmnd_need_keyword(pii):
-    assert kinds(pii.find_pii("STK: 0071001234568 Vietcombank")) == [("BANK", "0071001234568")]
+    assert kinds(pii.find_pii("STK: 0461002937581 Vietcombank")) == [("BANK", "0461002937581")]
     assert kinds(pii.find_pii("Số tài khoản là 1903 4567 8901 23.")) == [("BANK", "1903 4567 8901 23")]
     assert kinds(pii.find_pii("CMND số 025123456 cấp năm 2010")) == [("CMND", "025123456")]
-    assert pii.find_pii("Mã sản phẩm 0071001234568 còn hàng") == []
+    assert pii.find_pii("Mã sản phẩm 0461002937581 còn hàng") == []
     assert pii.find_pii("Đơn 025123456 đã giao") == []
 
 
@@ -169,7 +169,7 @@ def test_address(pii):
 
 
 def test_spans_have_offsets(pii):
-    text = "A: 0912345678, B: x@vidu.vn"
+    text = "A: 0938471526, B: x@vidu.vn"
     for s in pii.find_pii(text):
         assert text[s.start:s.end] == s.text
 
@@ -188,12 +188,12 @@ def test_resolve_overlaps(pii):
 
 
 def test_keyword_beats_phone_shape(pii):
-    spans = pii.find_pii("STK 0912345678 tại MB")
-    assert kinds(spans) == [("BANK", "0912345678")]
+    spans = pii.find_pii("STK 0938471526 tại MB")
+    assert kinds(spans) == [("BANK", "0938471526")]
 
 
 def test_redact_multiple_spans(pii):
-    text = "Gọi 0912345678 hoặc mail a.b@vidu.vn, CCCD 079203001234."
+    text = "Gọi 0938471526 hoặc mail a.b@vidu.vn, CCCD 079203001234."
     assert pii.redact(text) == "Gọi [PHONE] hoặc mail [EMAIL], CCCD [CCCD]."
 
 
@@ -209,14 +209,14 @@ def test_redact_with_given_overlapping_spans(pii):
 
 def test_pseudonymize_roundtrip(pii):
     p = pii.Pseudonymizer(b"khoa-bi-mat-1")
-    text = "Chị Thu (0912 345 678, thu@vidu.vn) gọi lại từ +84912345678, CCCD 079203001234."
+    text = "Chị Thu (0938 471 526, thu@vidu.vn) gọi lại từ +84938471526, CCCD 079203001234."
     out = p.pseudonymize(text)
-    for raw in ["0912 345 678", "thu@vidu.vn", "+84912345678", "079203001234"]:
+    for raw in ["0938 471 526", "thu@vidu.vn", "+84938471526", "079203001234"]:
         assert raw not in out
     tokens = re.findall(r"<[A-Z]+_[0-9a-f]{10}>", out)
     assert len(tokens) == 4
     assert tokens[0] == tokens[2], "cùng số điện thoại (khác cách viết) phải ra cùng token"
-    assert p.restore(out).replace("+84912345678", "0912 345 678") == text.replace("+84912345678", "0912 345 678")
+    assert p.restore(out).replace("+84938471526", "0938 471 526") == text.replace("+84938471526", "0938 471 526")
     assert p.restore("Không có token nào") == "Không có token nào"
 
 
@@ -231,10 +231,10 @@ def test_pseudonymize_is_keyed_and_stable(pii):
 
 def test_restore_inside_llm_reply(pii):
     p = pii.Pseudonymizer(b"k")
-    masked = p.pseudonymize("Khách 0987654321 hỏi về đơn hàng.")
+    masked = p.pseudonymize("Khách 0976203418 hỏi về đơn hàng.")
     tok = re.search(r"<PHONE_[0-9a-f]{10}>", masked).group()
     reply = f"Tôi sẽ gọi lại cho số {tok} trong hôm nay. <PHONE_0000000000> là token lạ."
-    assert p.restore(reply) == "Tôi sẽ gọi lại cho số 0987654321 trong hôm nay. <PHONE_0000000000> là token lạ."
+    assert p.restore(reply) == "Tôi sẽ gọi lại cho số 0976203418 trong hôm nay. <PHONE_0000000000> là token lạ."
 
 
 # ---------- đo trên tập sinh ----------

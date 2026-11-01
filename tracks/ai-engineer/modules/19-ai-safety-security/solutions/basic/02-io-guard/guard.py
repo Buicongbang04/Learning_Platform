@@ -54,6 +54,8 @@ def check_input(text: str, *, max_chars: int, deny: list[str]) -> Verdict:
 
 
 def host_allowed(url: str, allowed: set[str]) -> bool:
+    if "\\" in url or any(ch.isspace() or unicodedata.category(ch) in ("Cc", "Cf") for ch in url):
+        return False
     try:
         host = (urlsplit(url).hostname or "").rstrip(".").lower()
     except ValueError:
@@ -63,7 +65,7 @@ def host_allowed(url: str, allowed: set[str]) -> bool:
 
 _MD = re.compile(r"!?\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 _AUTOLINK = re.compile(r"<(https?://[^>\s]+)>")
-_BARE = re.compile(r"(?i)\b(?:https?://|www\.)[^\s<>()\"']+")
+_BARE = re.compile(r"(?i)(?:https?://|www\.)[^\s<>()\"']+")
 
 
 def sanitize_links(reply: str, allowed: set[str]) -> tuple[str, list[str]]:

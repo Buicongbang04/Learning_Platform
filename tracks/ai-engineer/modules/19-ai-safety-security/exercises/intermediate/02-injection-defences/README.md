@@ -17,9 +17,9 @@ run:
 
 Tấn công một trợ lý văn phòng bằng prompt injection **gián tiếp** (chỉ thị nằm trong tài liệu nó đọc) và đo cả hai phía
 của mọi phòng thủ: tỉ lệ tấn công thành công và tỉ lệ trả lời đúng. Bạn thấy tận mắt phòng thủ bằng prompt giảm được bao
-nhiêu, mất gì, và phòng thủ bằng code ở output bảo đảm được gì. Bài đi sâu hơn bài computer use của module 16: ở đó
-injection không thành công lần nào; ở đây bộ tấn công được thiết kế để thành công trên model không phòng thủ, nên mới so
-được các phòng thủ.
+nhiêu, mất gì, và phòng thủ bằng code ở output bảo đảm được gì. Bài đi sâu hơn bài computer use của [module 16](../../../../16-ai-agents/README.md): ở đó có một kiểu
+injection (báo giá giả) thành công trên vài lượt; ở đây một bộ tấn công ghim nhiều kiểu, nhiều mục tiêu, đủ lượt để so
+các phòng thủ có khoảng tin cậy.
 
 ## Đề bài
 
@@ -58,7 +58,7 @@ Câu trả lời của LLM có thể lệch vài lượt giữa các máy và ph
 
 Viết `build_messages` bằng một chuỗi `if defence == ...`, dựng sẵn hai chuỗi dùng chung (user dạng "Tài liệu ... Câu
 hỏi ..." và system có cảnh báo) rồi ghép. So từng chữ với bảng trong notebook: test so bằng `==`. Với `clean_markers`,
-chuẩn hoá NFC trước rồi `re.sub(re.escape(marker), "", text, flags=re.IGNORECASE)`.
+nghĩ xem một dấu phân cách có thể "trông giống" mà khác byte theo những cách nào, và xử lý trước khi xoá.
 
 ### Gợi ý 2
 

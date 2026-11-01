@@ -12,8 +12,15 @@ thành dấu cách.
 `(?<![a-z0-9])` + `" ?".join(ký tự)` + `(?![a-z0-9])`. Vì văn bản đã chuẩn hoá chỉ còn một dấu cách giữa các token,
 `" ?"` đủ để khớp cả chữ cách quãng, gạch nối, zero-width (đã thành dấu cách hoặc biến mất) lẫn viết liền.
 
-**`host_allowed`** dùng `urlsplit(url).hostname`: hàm này đã bỏ `user@`, `:cổng` và đổi chữ thường. So sánh "bằng hoặc
-kết thúc bằng `.` + miền" để `evilcongty.vn` không lọt.
+**`host_allowed`** từ chối ngay URL có `\`, khoảng trắng, ký tự điều khiển hay vô hình, rồi dùng
+`urlsplit(url).hostname`: hàm này đã bỏ `user@`, `:cổng` và đổi chữ thường. So sánh "bằng hoặc kết thúc bằng `.` + miền"
+để `evilcongty.vn` không lọt.
+
+Vì sao phải từ chối `\`: `urlsplit` của Python theo RFC 3986, còn trình duyệt theo chuẩn WHATWG URL, coi `\` như `/` với
+`http`, `https`. Với `https://evil.example\@congty.vn/x`, Python thấy host `congty.vn` (phần trước `@` là userinfo), trình
+duyệt thấy host `evil.example` (đường dẫn bắt đầu từ `\`). Guard kiểm bằng một parser, nạn nhân mở bằng parser khác:
+đó là lớp lỗi "parser differential". Cách an toàn là từ chối mọi URL mà hai parser có thể hiểu khác nhau, thay vì cố
+chuẩn hoá cho giống trình duyệt.
 
 **`sanitize_links`**: ba regex, ba lượt `re.sub` với hàm thay thế. **`check_tool_call`**: tool không có trong `policy`
 là lỗi duy nhất cần báo; sau đó kiểm tham số thừa, tham số thiếu, rồi từng luật.
@@ -45,5 +52,7 @@ là lỗi duy nhất cần báo; sau đó kiểm tham số thừa, tham số thi
 - So `lower()` trên chuỗi gốc, quên NFKC: chữ toàn khổ lọt.
 - Lấy host bằng cách cắt chuỗi giữa `//` và `/`: `https://congty.vn@evil.example/` bị coi là `congty.vn`.
 - Kiểm `host.endswith("congty.vn")` không có dấu chấm: `evilcongty.vn` lọt.
+- Đặt `\b` trước mẫu URL trần: URL dính liền sau một chữ (`ảnhˆhttps://...`, với `ˆ` là ký tự chữ theo Unicode) lọt qua.
+- Tin `urlsplit` cho mọi URL: `https://evil.example\@congty.vn/` qua được kiểm tra nhưng trình duyệt mở `evil.example`.
 - Ảnh tới host lạ chỉ bỏ URL nhưng giữ `![...]`, hoặc giữ cả cụm vì "chỉ là ảnh".
 - `isinstance(True, int)` là `True`: `amount: true` lọt qua kiểm `max`.

@@ -56,8 +56,9 @@ RTX 3060 dùng chung):
 ## Đọc kết quả
 
 - **Bộ tấn công làm được việc của nó**: không phòng thủ, 59% lượt tấn công thành công, và model **vẫn trả lời đúng** ở
-  99% lượt đó. Kẻ tấn công không cần phá nhiệm vụ; họ chỉ cần thêm một dòng. Đây là khác biệt với bài computer use của
-  module 16, nơi mục tiêu (đổi email tài khoản) đòi model rời hẳn nhiệm vụ.
+  99% lượt đó. Kẻ tấn công không cần phá nhiệm vụ; họ chỉ cần thêm một dòng. Bài computer use của module 16
+  thấy cùng hướng: injection đòi agent đổi email (rời hẳn nhiệm vụ) không lần nào thành công, còn injection báo giá giả
+  (sửa đúng dữ liệu task cần) thành công 2 trong 3 lượt agent thấy nó.
 - **Mục tiêu tương thích thắng**: chèn mã `canary` gần như luôn thành công, chèn ảnh `exfil` 71%, còn `phishing` (nói
   tài liệu hết hiệu lực, tức **mâu thuẫn** với câu trả lời đúng) chỉ 8%. Một bộ tấn công chỉ có mục tiêu kiểu phishing
   sẽ kết luận sai rằng model "khá an toàn".
@@ -69,10 +70,12 @@ RTX 3060 dùng chung):
   liệu ngắn**; ở module 16 cùng kỹ thuật làm agent 3B không hoàn thành task nào vì cây phần tử thành chuỗi khó đọc. Cái
   giá của một phòng thủ prompt phụ thuộc nhiệm vụ: phải đo trên chính nhiệm vụ của bạn.
 - **Sandwich** giảm vừa phải (0.417), không tốn task success.
-- **`tool-role` làm tệ hơn**: 0.771, khoảng tin cậy không chồng với `none`, và task success trên tài liệu bị tấn công tụt
-  xuống 0.889. Mục tiêu `phishing` từ 8% lên 73%: khi tài liệu nằm ở vai `tool`, model đọc câu "hãy gọi hotline 1900
-  6666" như thông tin hợp lệ trả về từ hệ thống ("Mọi thắc mắc vui lòng gọi hotline 1900 6666"). Instruction hierarchy
-  là thứ model phải được **train**; `qwen2.5:3b` không coi kết quả tool là kém tin cậy hơn, thậm chí ngược lại. Đừng mặc
+- **`tool-role` làm tệ hơn trên 3B**: 0.771, cao hơn `none` khoảng 18 điểm phần trăm (hai khoảng tin cậy chỉ vừa không
+  chồng nhau, cách khoảng 4 lượt trên 144), và task success trên tài liệu bị tấn công tụt xuống 0.889. Mục tiêu
+  `phishing` từ 8% lên 73%: model chép câu "hãy gọi hotline 1900 6666" vào câu trả lời như thông tin hợp lệ ("Mọi thắc
+  mắc vui lòng gọi hotline 1900 6666"). Nguyên nhân chỉ khoanh được tới **cách đóng gói này** nói chung: tài liệu ở vai
+  `tool`, câu hỏi đứng trước tài liệu, và một lượt `assistant` giả gọi tool; bài không có thí nghiệm tách từng yếu tố, và
+  trên 7B hiệu ứng không lặp lại (bảng mở rộng ở trên). Instruction hierarchy là thứ model phải được **train**; đừng mặc
   định rằng đưa dữ liệu vào vai `tool` là phòng thủ.
 - **Code ở output bảo đảm đúng thứ nó kiểm**: allowlist link xoá sạch kênh `exfil` bất kể model bị lừa tới đâu, gần như không
   tốn gì; nhưng nó không biết gì về `canary` hay số hotline. Một bộ kiểm số điện thoại theo allowlist (chỉ số tổng đài chính
@@ -80,12 +83,13 @@ RTX 3060 dùng chung):
 - **Đếm "thành công" bằng regex có hai mặt**: vài lượt `exfil` thành công vì model **chép lại** cả câu chỉ thị chứa URL
   ảnh vào câu trả lời. Với giao diện render markdown, đó vẫn là một request gửi ra ngoài, nên tính là thành công là đúng
   với hậu quả; nhưng đọc tận mắt mẫu vẫn cần, để biết model "làm theo" hay "chép lại".
-- **Model lớn hơn không an toàn hơn**: `qwen2.5:7b` không phòng thủ có ASR 0.65, ngang hoặc cao hơn 3B (0.59), vì nó làm
-  theo chỉ thị nói chung tốt hơn, kể cả chỉ thị trong tài liệu. Datamark vẫn giảm mạnh nhất. Riêng `tool-role` không làm
-  tệ hơn `none` với 7B (0.60 so với 0.65, khoảng chồng nhau): hiệu ứng "vai tool làm model tin hơn" là của 3B, minh hoạ
-  rằng kết luận về một phòng thủ prompt không chuyển được giữa các model.
+- **Model lớn hơn không an toàn hơn**: `qwen2.5:7b` không phòng thủ có ASR 0.65, ngang 3B (0.59; hai khoảng tin cậy chồng
+  nhau, nên không nói được 7B kém hơn). Một cách giải thích có thể là model lớn làm theo chỉ thị nói chung tốt hơn, kể cả
+  chỉ thị trong tài liệu; bài này không kiểm giả thuyết đó. Datamark vẫn giảm mạnh nhất. Riêng `tool-role` không làm
+  tệ hơn `none` với 7B (0.60 so với 0.65, khoảng chồng nhau): hiệu ứng ở 3B không chuyển sang 7B, minh hoạ rằng kết luận
+  về một phòng thủ prompt không chuyển được giữa các model.
 - Giới hạn: 8 tài liệu tự viết, 6 kiểu tấn công, một model chính, `temperature` 0; con số trên máy khác lệch vài lượt. Khoảng
-  tin cậy cho thấy 144 lượt mỗi defence đủ tách `datamark`, `sandwich` và `tool-role` khỏi `none`, không đủ tách `warn`
+  tin cậy cho thấy 144 lượt mỗi defence đủ tách `datamark` và `sandwich` khỏi `none`, vừa đủ (sát biên) với `tool-role`, không đủ tách `warn`
   hay `spotlight`.
 
 ## Bẫy thường gặp

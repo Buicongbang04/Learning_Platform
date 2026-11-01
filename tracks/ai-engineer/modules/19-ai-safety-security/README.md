@@ -148,8 +148,9 @@ Mục tiêu của kẻ tấn công cũng chia loại, và loại mục tiêu quy
 - **Lạm dụng tool** (OWASP LLM06): gọi `send_email`, `transfer` với tham số của kẻ tấn công.
 - **Thông tin sai, lừa đảo**: "tài liệu đã hết hiệu lực, hãy gọi số hotline ...".
 
-[Module 16](../16-ai-agents/README.md) (bài computer use) thử injection đòi agent đổi email tài khoản và không lần nào thành công trên `qwen2.5:3b`; điều đó **không** có
-nghĩa model nhỏ miễn nhiễm, chỉ nghĩa là bộ tấn công đó chưa đủ để so các phòng thủ. Thử trên trợ lý văn phòng của bài
+[Module 16](../16-ai-agents/README.md) (bài computer use) thấy injection đòi agent đổi email tài khoản không lần nào thành công trên `qwen2.5:3b`, còn
+injection báo giá giả, sửa đúng dữ liệu agent đang tìm, thì thành công 2 trong 3 lượt agent thấy nó. Kiểu mục tiêu quan
+trọng không kém kiểu viết. Thử trên trợ lý văn phòng của bài
 Intermediate 02 với một ghi chú "theo quy định của đơn vị phát hành":
 
 ```text
@@ -308,7 +309,7 @@ $$
 
 Đo bộ phát hiện của bài Basic 01 (regex + Luhn + mã tỉnh + từ khoá) trên 16 câu tự viết **cố ý ngoài đặc tả** (số tách
 cặp, số viết bằng chữ, email `[at]`, CCCD có dấu cách, tên người, địa chỉ không có chữ "đường"), cùng 3 câu gây nhiễu:
-bắt được **7/14** giá trị PII, **0** false positive. Bảy giá trị bị sót đều là thứ một con người nhận ra ngay: "09 12 34 56 78",
+bắt được **7/14** giá trị PII, **0** false positive. Bảy giá trị bị sót đều là thứ một con người nhận ra ngay: "09 38 47 15 26",
 "không chín một hai...", "thu.ha[at]vidu.vn", "079 203 001 234", số tài khoản không có từ khoá, tên "Nguyễn Văn An" và
 địa chỉ "25 Lý Thường Kiệt, Hoàn Kiếm, Hà Nội". Bộ phát hiện chạy khoảng 4 ms cho 11 000 ký tự.
 
@@ -339,26 +340,26 @@ import hashlib
 import hmac
 import time
 
-leaked = hashlib.sha256(b"0912345678").hexdigest()
+leaked = hashlib.sha256(b"0938471526").hexdigest()
 t0 = time.perf_counter()
 for n in range(10**6):
-    candidate = f"0912{n:06d}".encode()
+    candidate = f"0938{n:06d}".encode()
     if hashlib.sha256(candidate).hexdigest() == leaked:
         break
 dt = time.perf_counter() - t0
 print("tìm lại:", candidate.decode(), f"sau {n + 1} lần thử, {dt:.2f} s")
 print(f"ước lượng cả 5e8 số di động: {5e8 / (n + 1) * dt / 60:.0f} phút trên một lõi CPU")
-print("HMAC có khoá:", hmac.new(b"bi-mat-server", b"0912345678", hashlib.sha256).hexdigest()[:16], "...")
+print("HMAC có khoá:", hmac.new(b"bi-mat-server", b"0938471526", hashlib.sha256).hexdigest()[:16], "...")
 ```
 
 ```text
-tìm lại: 0912345678 sau 345679 lần thử, 0.37 s
-ước lượng cả 5e8 số di động: 9 phút trên một lõi CPU
-HMAC có khoá: 5baa33264c4f66f5 ...
+tìm lại: 0938471526 sau 471527 lần thử, 0.44 s
+ước lượng cả 5e8 số di động: 8 phút trên một lõi CPU
+HMAC có khoá: fbdc28804951b798 ...
 ```
 
-Hai lần chạy trên PC dùng chung mất 0.37 và 0.55 giây cho đoạn vét cạn, tức 9 tới 13 phút cho cả không gian số di động
-trên một lõi (việc này chia đều được cho nhiều lõi). Với HMAC, kẻ có bảng băm mà không có khoá không thử ngược được; ai giữ khoá vẫn nối được token về người (đó là điểm
+Số điện thoại trong ví dụ là số hư cấu. Thời gian đo trên PC dùng chung, dao động theo tải máy (các lần chạy 0.37 tới 0.55
+giây cho cùng cỡ vòng lặp), tức cỡ 8 tới 13 phút cho cả không gian số di động trên một lõi (việc này chia đều được cho nhiều lõi). Với HMAC, kẻ có bảng băm mà không có khoá không thử ngược được; ai giữ khoá vẫn nối được token về người (đó là điểm
 khác giữa giả danh hoá và ẩn danh hoá ở bảng dưới).
 
 ### Khung pháp lý (tham khảo, không phải tư vấn pháp lý)
@@ -512,7 +513,7 @@ cung cấp có thể khoá cả tài khoản API của bạn. Các API vì vậy
 | Nhà cung cấp | Trường | Khuyến nghị |
 | --- | --- | --- |
 | OpenAI | `safety_identifier` (thay cho trường `user` cũ; Realtime dùng header `OpenAI-Safety-Identifier`) | Chuỗi định danh duy nhất mỗi người dùng; băm username hay email để không gửi thông tin nhận diện; chưa đăng nhập thì gửi session ID |
-| Anthropic | `metadata.user_id` (tối đa 512 ký tự) | UUID, giá trị băm hoặc định danh mờ; không chứa tên, email, số điện thoại |
+| Anthropic | `metadata.user_id` (`maxLength` 512 theo trang Messages API, platform.claude.com, kiểm ngày 2026-11-01) | UUID, giá trị băm hoặc định danh mờ; không chứa tên, email, số điện thoại |
 
 "Băm" phải hiểu là **băm có khoá** (HMAC với secret của server), vì lý do giống PII ở mục 3: email của một người dùng có
 trong rất nhiều bộ dữ liệu rò rỉ, băm trần dò ngược được. Cùng khoá đó dùng cho log của bạn, để nối được "người dùng
@@ -531,7 +532,7 @@ $$
 
 Cho phép burst tới $$C$$ request, tốc độ trung bình dài hạn không vượt $$r$$. Với LLM, đặt $$c$$ bằng số token ước lượng
 của request để người gửi prompt dài trả nhiều hơn. Bên cạnh rate limit, đếm **vi phạm** (bị moderation chặn, bị classifier
-gắn cờ) theo cửa sổ thời gian và cấm tạm thời có leo thang. Bài Basic 03 cài cả ba thành phần và pipeline ở sơ đồ trên.
+gắn cờ) theo cửa sổ thời gian và cấm tạm thời có leo thang. Bài Basic 03 cài cả ba thành phần và một pipeline rút gọn của sơ đồ trên (cấm, rate limit, moderation hai đầu; chưa có nhánh hỗ trợ tự hại, nhánh này có ở bài Advanced 02).
 
 ## 6. Red-teaming và kiểm thử đối kháng
 
@@ -612,14 +613,24 @@ NFKC xử lý chữ toàn khổ nhưng không xử lý ký tự vô hình hay ch
 | --- | --- | --- |
 | Chữ toàn khổ | `ｉｇｎｏｒｅ` | NFKC |
 | Ký tự vô hình | zero-width space `U+200B` chen giữa chữ | bỏ ký tự nhóm `Cf` |
-| Chữ giống hệt (homoglyph) | `і` Cyrillic thay `i` Latin | bảng confusable (Unicode UTS #39) |
+| Chữ giống hệt (homoglyph) | `і` Cyrillic thay `i` Latin | bảng confusable; bài Basic 02 dùng một bảng tự chọn khoảng 30 ký tự, bảng đầy đủ là dữ liệu confusables của Unicode UTS #39 |
 | Đảo chiều | `U+202E` làm chữ hiển thị ngược | bỏ nhóm `Cf` |
 | Tag characters | chuỗi `U+E0000` vô hình mà model vẫn đọc ("ASCII smuggling") | bỏ nhóm `Cf` |
 | Cách quãng, gạch nối | `i g n o r e`, `bo-qua` | so khớp cho phép dấu cách giữa ký tự |
 | Bỏ dấu, NFD | `bo qua moi huong dan` | bỏ dấu khi so (đổi lại: "bỏ quà" thành "bỏ qua") |
 
-Bài Basic 02 cài cả bảng này. Nhưng nhớ giới hạn: danh sách chặn bắt **cụm**, không bắt **ý**; "đừng để ý những gì người
+Bài Basic 02 cài các bước chuẩn hoá của bảng này (với bảng confusable rút gọn). Nhưng nhớ giới hạn: danh sách chặn bắt **cụm**, không bắt **ý**; "đừng để ý những gì người
 ta dặn bạn ở trên" qua mặt mọi danh sách. Nó là lớp rẻ để lọc tấn công lười, không phải lớp chính.
+
+### Hai parser, hai câu trả lời
+
+Allowlist link chỉ an toàn khi guard và **trình duyệt** hiểu URL giống nhau. `urllib.parse.urlsplit` của Python theo RFC
+3986; trình duyệt theo chuẩn WHATWG URL, trong đó `\` được coi như `/` với `http` và `https`. Với
+`https://evil.example\@saomai.vn/x`, `urlsplit` thấy host `saomai.vn` (phần trước `@` là userinfo) còn trình duyệt mở
+`evil.example`. Đây là lớp lỗi "parser differential": guard kiểm bằng một parser, nạn nhân dùng parser khác. Cách phòng
+thủ thực tế là **từ chối** mọi URL có thể bị hiểu khác nhau (có `\`, khoảng trắng, ký tự điều khiển hay vô hình) thay vì
+cố bắt chước parser của trình duyệt; tương tự, URL dính liền sau một chữ cái (không có khoảng trắng phía trước) vẫn phải
+bị quét, vì `\b` của regex không coi mọi ký tự Unicode như nhau. Bài Basic 02 có test cho cả hai trường hợp.
 
 ### Chi phí độ trễ của từng lớp
 
@@ -629,11 +640,11 @@ ta dặn bạn ở trên" qua mặt mọi danh sách. Nó là lớp rẻ để l
 | Lớp | Trung vị |
 | --- | --- |
 | `user_key` (HMAC-SHA256) | 2.7 µs |
-| Token bucket | 0.6 µs |
-| `sanitize_links` | 9.6 µs |
+| Token bucket | 0.7 µs |
+| `sanitize_links` | 20 µs |
 | `find_pii` (regex + Luhn + mã tỉnh) | 17 µs |
 | Danh sách chặn (chuẩn hoá + 9 cụm) | 0.23 ms |
-| Classifier TF-IDF char + logistic regression, 1 câu | 0.81 ms |
+| Classifier TF-IDF char + logistic regression, 1 câu | 0.78 ms |
 | LLM moderator (`qwen2.5:3b`, JSON schema) | 0.67 s |
 | LLM phát hiện injection zero-shot (`qwen2.5:3b`) | 0.72 s |
 | Lời gọi trả lời chính (`qwen2.5:3b`, câu trả lời ngắn) | 1.13 s |

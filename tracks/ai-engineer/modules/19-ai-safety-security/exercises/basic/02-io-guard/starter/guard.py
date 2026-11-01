@@ -44,7 +44,8 @@ def check_input(text: str, *, max_chars: int, deny: list[str]) -> Verdict:
 
 
 def host_allowed(url: str, allowed: set[str]) -> bool:
-    """Host của URL là một tên miền trong `allowed` hoặc tên miền con của nó."""
+    """Host của URL là một tên miền trong `allowed` hoặc tên miền con của nó; URL có `\\`, khoảng trắng, ký tự
+    điều khiển hay vô hình thì False."""
     # TODO
     raise NotImplementedError
 

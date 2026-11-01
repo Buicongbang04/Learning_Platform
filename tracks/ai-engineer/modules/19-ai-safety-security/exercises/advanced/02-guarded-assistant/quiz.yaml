@@ -1,30 +1,30 @@
 questions:
 - id: self-harm-order
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Trong bản tham chiếu, hai tin nhắn tự hại được xử lý thế nào?
+  prompt: Theo đúng thứ tự lớp của đặc tả, vì sao một tin nhắn tự hại có thể không bao giờ tới nhánh hỗ trợ?
   options:
   - id: a
-    text: Cả hai tới nhánh hỗ trợ đúng như thiết kế ban đầu
+    text: Vì nhánh hỗ trợ chỉ chạy sau khi LLM đã trả lời xong
   - id: b
-    text: Bị classifier injection chặn trước moderation
+    text: Lớp chặn injection xác suất đứng trước và có thể chặn cứng nó
   - id: c
-    text: Moderator bỏ sót, LLM trả lời như một tin bình thường
+    text: Vì moderator không đọc được tiếng Việt nên luôn bỏ sót
   - id: d
-    text: Bị rate limit vì cùng một người dùng gửi liên tiếp
+    text: Vì rate limit luôn chạy sau moderation trong đặc tả
 - id: false-block
   kind: data
   type: single
-  prompt: Lớp chặn injection (classifier deepset, ngưỡng 0.425) chặn oan bao nhiêu trong 23 tin bình thường và tin có PII?
+  prompt: Với DENY và CLASSIFIER ghim trong notebook, lớp chặn injection chặn oan bao nhiêu trong 23 tin bình thường và tin có PII?
   options:
   - id: a
     text: Không chặn oan tin nào
   - id: b
     text: Đúng một tin, do số điện thoại
   - id: c
-    text: Khoảng một phần tư
+    text: Từ 3 tới 10 tin
   - id: d
-    text: Hơn ba phần tư số tin đó
+    text: Hơn 15 tin trong số đó
 - id: pii-raw
   kind: knowledge
   type: single
@@ -39,9 +39,9 @@ questions:
   - id: d
     text: Moderator cũng là model; dữ liệu gửi tới nó cũng rời hệ thống
 - id: latency
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Theo bảng độ trễ tham chiếu, hai lượt moderation cộng lại so với lời gọi trả lời chính thế nào?
+  prompt: Pipeline có moderation hai đầu bằng LLM và một lời gọi trả lời. Hai lượt moderation cộng lại thường tốn cỡ nào so với lời gọi chính?
   options:
   - id: a
     text: Gần bằng chính lời gọi trả lời

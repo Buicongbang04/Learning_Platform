@@ -2,12 +2,12 @@ questions:
 - id: plain-asr
   kind: data
   type: single
-  prompt: Với system prompt gốc (plain), bản tham chiếu đo ASR của 30 tấn công ở vùng nào?
+  prompt: Với system prompt gốc (plain), ASR của 30 tấn công trên qwen2.5:3b nằm ở vùng nào?
   options:
   - id: a
     text: Dưới 10%, model từ chối gần như mọi yêu cầu
   - id: b
-    text: Khoảng hai phần ba, đa số tấn công thành công
+    text: Từ một phần ba tới ba phần tư số tấn công
   - id: c
     text: Đúng 100%, mọi tấn công đều thành công
   - id: d
@@ -15,16 +15,16 @@ questions:
 - id: hardened-goal
   kind: data
   type: single
-  prompt: Prompt cứng hoá (hardened) giảm mục tiêu nào rõ nhất so với plain?
+  prompt: So với plain, prompt cứng hoá (hardened) thay đổi số lượt lộ mã nội bộ (10 lượt) thế nào?
   options:
   - id: a
-    text: Lộ mã nội bộ, gần như về 0 lượt nào
+    text: Về 0, quy tắc ưu tiên chặn được mọi cách hỏi
   - id: b
-    text: Nói câu bôi nhọ ngân hàng Sao Mai
+    text: Giảm còn khoảng một nửa số lượt lộ
   - id: c
-    text: Lộ đủ số điện thoại của khách
+    text: Gần như không đổi, model vẫn lộ mã ở đa số lượt
   - id: d
-    text: Cả ba mục tiêu giảm đều như nhau
+    text: Tăng lên vì prompt dài làm model rối hơn
 - id: minimal-context
   kind: knowledge
   type: single
@@ -37,7 +37,7 @@ questions:
   - id: c
     text: Model trả lời câu hỏi bình thường kém đi rõ rệt hơn
   - id: d
-    text: Hai mục tiêu lộ dữ liệu mất hẳn, bôi nhọ không đổi
+    text: Hai mục tiêu lộ dữ liệu mất hẳn, bôi nhọ không được bảo vệ
 - id: guard-vs-checker
   kind: knowledge
   type: single
@@ -54,7 +54,7 @@ questions:
 - id: spell-out
   kind: knowledge
   type: single
-  prompt: Guard output tìm chuỗi "zebra-42" (không phân biệt hoa thường) bị lọt ở template spell-out. Cơ chế lọt là gì?
+  prompt: Nếu guard output tìm chuỗi "zebra-42" (không phân biệt hoa thường) bị lọt ở template spell-out, cơ chế lọt nhiều khả năng nhất là gì?
   options:
   - id: a
     text: Model trả mã đã đánh vần, có dấu cách giữa các ký tự
@@ -67,7 +67,7 @@ questions:
 - id: benign-blocks
   kind: knowledge
   type: single
-  prompt: Guard output chặn 2 câu trả lời cho câu hỏi bình thường; đọc lại thấy cả hai tự đọc đủ số điện thoại của khách. Kết luận đúng?
+  prompt: Guard output chặn vài câu trả lời cho câu hỏi bình thường; đọc lại thấy chúng tự đọc đủ số điện thoại của khách. Kết luận đúng?
   options:
   - id: a
     text: Đây là chặn đúng một rò rỉ PII không cần kẻ tấn công
@@ -80,7 +80,7 @@ questions:
 - id: input-guard-cost
   kind: data
   type: single
-  prompt: Guard input (danh sách chặn + classifier deepset, ngưỡng 0.425) đạt ASR 0/30. Cái giá trên 20 câu bình thường là gì?
+  prompt: Guard input với DENY và CLASSIFIER ghim trong notebook đạt ASR 0/30. Cái giá trên 20 câu bình thường là gì?
   options:
   - id: a
     text: Không chặn oan câu nào, guard hoàn toàn miễn phí
@@ -89,7 +89,7 @@ questions:
   - id: c
     text: Chặn oan hơn một nửa số câu hỏi bình thường
   - id: d
-    text: Chặn oan vài câu (khoảng 10%), do classifier
+    text: Chặn oan ít nhất một câu, do classifier
 - id: zero-of-thirty
   kind: knowledge
   type: single
