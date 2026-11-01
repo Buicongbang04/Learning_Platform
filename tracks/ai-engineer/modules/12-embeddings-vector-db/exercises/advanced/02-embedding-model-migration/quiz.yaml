@@ -1,0 +1,79 @@
+questions:
+- id: nomic-vi
+  kind: data
+  type: single
+  prompt: Trên cùng pool, Recall@10 của `nomic-embed-text` (có tiền tố) so với `bge-m3` thế nào?
+  options:
+  - id: a
+    text: Hai model cho kết quả gần ngang nhau
+  - id: b
+    text: nomic thấp hơn khoảng 0.05
+  - id: c
+    text: nomic dưới 0.2, bge-m3 trên 0.9
+  - id: d
+    text: nomic cao hơn nhờ có tiền tố
+- id: binary-plain
+  kind: data
+  type: single
+  prompt: Nhị phân hoá `bge-m3` (128 byte mỗi vector) và tìm bằng Hamming, không rescoring. Recall@10 trên cả corpus đổi ra sao so với float32?
+  options:
+  - id: a
+    text: Không đổi gì
+  - id: b
+    text: Tụt khoảng 0.04
+  - id: c
+    text: Tụt còn khoảng 0.3
+  - id: d
+    text: Tăng khoảng 0.04
+- id: int8-vs-truncate
+  kind: data
+  type: single
+  prompt: Cùng 1 024 byte mỗi vector, int8 đủ 1 024 chiều so với float32 cắt còn 256 chiều, cách nào giữ MRR@10 tốt hơn?
+  options:
+  - id: a
+    text: Cắt còn 256 chiều
+  - id: b
+    text: Int8 đủ 1 024 chiều
+  - id: c
+    text: Hai cách ngang nhau
+  - id: d
+    text: Không so được vì khác chiều
+- id: mix-spaces
+  kind: knowledge
+  type: single
+  prompt: Trong lúc migrate, vì sao không thể vừa giữ vector cũ vừa thêm vector mới vào cùng một index?
+  options:
+  - id: a
+    text: Hai model cho hai không gian, cosine chéo vô nghĩa
+  - id: b
+    text: Vector DB không cho phép hai lần upsert cùng một id
+  - id: c
+    text: Index chỉ nhận các vector có cùng thời điểm tạo ra
+  - id: d
+    text: Vector mới luôn dài hơn nên thắng mọi truy vấn
+- id: binary-rescore
+  kind: knowledge
+  type: single
+  prompt: Nhị phân hoá giảm vector 32 lần. Cách thường dùng để lấy lại chất lượng là gì?
+  options:
+  - id: a
+    text: Tăng số chiều của embedding model lên gấp đôi rồi embed lại
+  - id: b
+    text: Lấy vài trăm ứng viên rồi xếp lại bằng vector gốc
+  - id: c
+    text: Đổi khoảng cách Hamming sang khoảng cách L1 trên bit
+  - id: d
+    text: Chuẩn hoá L2 các vector nhị phân trước khi tìm
+- id: switch-criteria
+  kind: knowledge
+  type: single
+  prompt: Tiêu chí chuyển alias sang index mới nên được đặt khi nào?
+  options:
+  - id: a
+    text: Sau khi xem kết quả shadow read
+  - id: b
+    text: Trước khi bắt đầu backfill và đánh giá
+  - id: c
+    text: Khi người dùng bắt đầu phàn nàn
+  - id: d
+    text: Không cần, cứ chuyển khi backfill xong
