@@ -79,8 +79,8 @@ xác trên tập giữ lại bằng bộ trích độc lập; sandbox cho code; 
 ## Distillation từ reasoning model khác RL trực tiếp ra sao? Khi nào chọn cái nào?
 
 Distill: cho model thầy (lớn, đã giỏi) sinh lời giải, lọc lời giải đúng (rejection sampling), SFT model trò. Rẻ, ổn định,
-dùng hạ tầng SFT sẵn có (module 14). DeepSeek-R1 báo cáo distill từ R1 cho model 7B tới 32B tốt hơn chạy RL trực tiếp
-trên chính các model đó. RL thì không cần thầy, khám phá được cách giải mới vượt dữ liệu, nhưng đắt (sinh trong vòng
+dùng hạ tầng SFT sẵn có (module 14). DeepSeek-R1 báo cáo trên Qwen2.5-32B: distill từ R1 tốt hơn chạy RL quy mô lớn trực tiếp
+trên chính model đó. RL thì không cần thầy, khám phá được cách giải mới vượt dữ liệu, nhưng đắt (sinh trong vòng
 lặp), nhạy siêu tham số và cần model đủ mạnh để reward không toàn 0. Thực tế: distill trước (hoặc SFT cold start), RL sau
 để mài; RL thẳng khi không có thầy tốt hơn, hoặc khi tác vụ có verifier mà dữ liệu mẫu thì không có. Lưu ý giấy phép: điều
 khoản của nhiều API cấm dùng output để train model cạnh tranh; model mở như R1, Qwen có giấy phép riêng cần đọc.

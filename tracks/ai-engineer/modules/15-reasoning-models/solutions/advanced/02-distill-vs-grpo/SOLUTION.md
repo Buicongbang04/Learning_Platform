@@ -44,8 +44,9 @@ Greedy trên 500 câu test ghim, tối đa 512 token:
 | GRPO 60 bước, seed 1 | 0.468 | 0.468 | 0.976 | 250 | +0.032 [−0.008, +0.074] |
 | Thầy `Qwen2.5-3B-Instruct` (tham khảo) | 0.828 | 0.816 | 0.644 | 313 | |
 
-So trực tiếp: distill − tự học +0.018 [−0.026, +0.062]; distill − GRPO seed 0 −0.012 [−0.058, +0.034], seed 1 +0.002
-[−0.044, +0.046].
+So trực tiếp: distill − tự học +0.018 [−0.026, +0.062] (cùng cách đo, batch 64). Distill − GRPO seed 0 −0.012 [−0.058,
++0.034], seed 1 +0.002 [−0.044, +0.046]: phép bootstrap này trộn hai cách đo (distill sinh batch 64, GRPO batch 128), nên chỉ
+dùng để thấy hai nhánh không tách được, không dùng để xếp hạng.
 
 Một kiểm tra nhiễu đáng nhớ: **cùng model gốc**, chỉ đổi batch sinh từ 64 sang 128, accuracy đi từ 0.430 lên 0.436 và **51
 trên 500 câu đổi kết quả** (nguyên nhân thường gặp: phép cộng bf16 theo thứ tự khác nhau khi batch khác, greedy rẽ nhánh ở token gần hoà; bản tham chiếu không tách nguyên nhân). Đó là lý do bảng ghi hiệu
@@ -54,7 +55,9 @@ của mỗi phương pháp so với model gốc **đo cùng cấu hình**, và l
 ## Đọc kết quả
 
 - **Ba nhánh cùng tăng 2 tới 5 điểm, không nhánh nào thắng rõ nhánh nào.** Mọi hiệu đo trực tiếp giữa hai nhánh có
-  khoảng tin cậy chứa 0. Kết luận trung thực: ở quy mô 800 câu train, cả ba đều chủ yếu dạy **khung**, và năng lực tăng ít.
+  khoảng tin cậy chứa 0. Kết luận trung thực: ở quy mô 800 câu train, thứ đổi nhiều nhất ở cả ba nhánh là tỉ lệ đúng khung (65% lên 82 tới
+  97%); phần accuracy do khung chỉ khoảng 0 tới 1 điểm (accuracy dễ dãi +2.2 / +4.0 / +3.2 tới +4.6 so với `boxed_correct`
+  +2.2 / +4.4 / +4.4 tới +5.6), và mức tăng accuracy còn lại vài điểm, phần lớn trong nhiễu.
 - **Thầy giỏi hơn hẳn mà trò chỉ nhích.** Thầy đúng 82.8%, trò sau distill 47%. 960 lời giải không đủ để chuyển năng lực;
   DeepSeek-R1 distill bằng 800 nghìn mẫu. Distill hơn tự học ở **dữ liệu**: độ phủ câu 93.8% so với 73.6%, nên trò thấy lời
   giải đúng của cả những câu nó chưa giải được; với lượng dữ liệu này lợi thế đó chưa thành điểm đo được.

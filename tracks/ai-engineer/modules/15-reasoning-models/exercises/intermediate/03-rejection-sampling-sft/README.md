@@ -53,8 +53,8 @@ SFT LoRA bằng TRL, đo trước/sau trên 500 câu test ghim. Sau đó làm ph
 
 ### Gợi ý 1
 
-Thứ tự "ngắn trước, bằng nhau giữ thứ tự xuất hiện" là đúng tính chất của `sorted(..., key=len)`: sort của Python ổn định.
-Khử trùng trước khi sort, dùng một `set` các khoá đã chuẩn hoá khoảng trắng.
+Thứ tự "ngắn trước, bằng nhau giữ thứ tự xuất hiện" là một tính chất mà sort của Python có sẵn (sort ổn định). Nghĩ xem
+nên khử trùng trước hay sau khi sắp xếp để giữ đúng "bản xuất hiện đầu".
 
 ### Gợi ý 2
 

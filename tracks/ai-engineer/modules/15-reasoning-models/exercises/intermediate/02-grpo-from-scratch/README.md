@@ -25,7 +25,7 @@ không, và vì sao "reward tăng" chưa phải là "model giỏi hơn".
 **Phần cứng:** GPU 4GB · ~120 phút
 
 Thời gian trên là thời gian làm bài. Notebook lời giải train 30 bước (8 câu × 8 lời giải mỗi bước) và đo trước/sau trên
-200 câu test; số phút và VRAM đỉnh đo trên PC của track ghi ở `SOLUTION.md` (cấu hình chọn để vừa GPU 4GB: micro-batch 8,
+200 câu test; số phút và VRAM đỉnh đo trên PC của track ghi ở `SOLUTION.md` (cấu hình chọn để vừa GPU 4GB: micro-batch 2,
 gradient checkpointing, logits chỉ cho phần completion). Kernel CPU chạy bản thu nhỏ (2 bước, 6 câu đo) để kiểm code.
 Đọc mục 4 lý thuyết. Chạy bằng kernel `ai-gpu`.
 

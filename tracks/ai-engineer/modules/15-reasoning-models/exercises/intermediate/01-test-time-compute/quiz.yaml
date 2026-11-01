@@ -15,16 +15,16 @@ questions:
 - id: cot-cost
   kind: data
   type: single
-  prompt: Số token ra trung bình của CoT so với trả lời thẳng (qwen2.5:3b) gấp khoảng bao nhiêu lần?
+  prompt: So số token ra trung bình của CoT với của trả lời thẳng (qwen2.5:3b).
   options:
   - id: a
-    text: Khoảng 2 lần
+    text: CoT nhiều hơn khoảng 2 lần
   - id: b
-    text: Khoảng 10 lần
+    text: CoT nhiều hơn khoảng 10 lần
   - id: c
-    text: Gần như bằng nhau
+    text: Hai chế độ gần như bằng nhau
   - id: d
-    text: Hơn 50 lần
+    text: CoT nhiều hơn trên 50 lần
 - id: one-sample
   kind: data
   type: single
@@ -67,10 +67,10 @@ questions:
 - id: bon-logprob
   kind: data
   type: single
-  prompt: Best-of-N chọn theo log-prob trung bình của chính model diễn biến thế nào khi k tăng tới 16?
+  prompt: Best-of-N chọn theo log-prob trung bình của chính model so với bỏ phiếu khi k lớn thế nào?
   options:
   - id: a
-    text: Tụt sau bỏ phiếu, k = 16 không hơn k = 8
+    text: Tụt xuống dưới bỏ phiếu khi k lớn
   - id: b
     text: Bằng pass@k vì log-prob là verifier tốt
   - id: c

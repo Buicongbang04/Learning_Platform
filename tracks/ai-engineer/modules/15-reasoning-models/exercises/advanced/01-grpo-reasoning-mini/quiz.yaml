@@ -35,7 +35,7 @@ questions:
   - id: b
     text: Gần như không đổi ở cả hai seed
   - id: c
-    text: Ngắn đi ở cả hai, mức giảm rất khác nhau
+    text: Ngắn đi ở cả hai seed
   - id: d
     text: Một seed dài ra, một seed ngắn đi
 - id: coverage
@@ -50,7 +50,7 @@ questions:
   - id: c
     text: Bằng pass@1 vì mọi mẫu giống hệt nhau
   - id: d
-    text: Tăng vài điểm ở cả hai seed
+    text: Không tụt; thay đổi trong vài điểm
 - id: hacking
   kind: data
   type: single
@@ -63,7 +63,7 @@ questions:
   - id: c
     text: Không thấy; lỗi còn lại là hiểu sai đề
   - id: d
-    text: Có, model chép một số trong đề vào hộp
+    text: Có, phần lớn câu sai chép số trong đề
 - id: two-metrics
   kind: knowledge
   type: single

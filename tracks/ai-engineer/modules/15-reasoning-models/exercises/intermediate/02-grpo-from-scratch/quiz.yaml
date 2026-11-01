@@ -46,11 +46,11 @@ questions:
   - id: a
     text: Dài gấp rưỡi, model nghĩ lâu hơn
   - id: b
-    text: Ngắn đi khoảng một phần mười
+    text: Ngắn đi
   - id: c
     text: Giữ nguyên tới từng token
   - id: d
-    text: Ngắn đi còn một nửa
+    text: Dài gấp ba, chạm giới hạn
 - id: kl-clip
   kind: data
   type: single

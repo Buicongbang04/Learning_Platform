@@ -69,6 +69,6 @@ hoặc số cuối".
 
 ### Gợi ý 2
 
-Lookbehind `(?<![\w.])` trước dấu trừ trong regex số giải quyết cả `3-4` lẫn `x-5`. Với `format_reward`, đếm số lần
-xuất hiện của `\boxed{` trước, rồi tách phần trước và phần sau hộp: hai regex nhỏ "có chữ cái" và "có chữ hoặc số" là
-đủ. Lớp ký tự `[^\W\d_]` khớp đúng chữ cái (kể cả chữ có dấu).
+Dấu trừ chỉ là dấu âm khi ký tự **đứng trước** nó không phải chữ hay số: regex có cú pháp để đặt điều kiện lên ký tự
+đứng trước mà không "ăn" ký tự đó. Với `format_reward`, chia completion thành phần trước hộp, nội dung hộp và phần sau hộp,
+rồi kiểm từng phần theo đúng ba điều kiện của đề.

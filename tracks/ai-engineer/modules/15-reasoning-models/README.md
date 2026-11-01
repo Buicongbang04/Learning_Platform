@@ -19,7 +19,7 @@ uv run python data/download_dataset.py gsm8k
 
 Model: `Qwen2.5-0.5B-Instruct` qua Transformers (vừa GPU 4GB, khoảng 1 GB trọng số bf16) cho mọi thí nghiệm train, và
 `qwen2.5:3b` qua Ollama cho thí nghiệm prompt. Mọi con số dưới đây đo ngày 2026-11-01 trên PC của track (Xeon E5-2696 v3,
-RTX 3060 12GB, có lúc dùng chung với một job Ollama khác; PyTorch 2.14, Transformers 5.22, PEFT 0.21.2, TRL 1.17).
+RTX 3060 12GB, có lúc dùng chung với một job Ollama khác; PyTorch 2.14, Transformers 5.22, PEFT 0.21.2, TRL 1.16 ở env gốc và 1.17 ở env `ai-gpu`).
 Thông tin về model và API đóng kiểm trên tài liệu chính thức cùng ngày, ghi nguồn tại chỗ.
 
 Sau module này bạn sẽ:
@@ -71,8 +71,8 @@ Qwen khuyến nghị: "Please reason step by step, and put your final answer wit
 | "Answer with only the final number" (tối đa 32 token) | 0.010 | 8 | 8 giây |
 | CoT, `\boxed{}` (tối đa 512 token) | 0.430 | 304 | 95 giây |
 
-Model 0.5B gần như không làm được phép tính nhiều bước "trong đầu"; viết ra thì gần một nửa số câu đúng, đổi lại gấp khoảng
-40 lần token và 12 lần thời gian. Bài Intermediate 01 đo cùng phép so với `qwen2.5:3b` kèm khoảng tin cậy.
+Model 0.5B gần như không làm được phép tính nhiều bước "trong đầu"; viết ra thì gần một nửa số câu đúng, đổi lại tốn nhiều
+token và thời gian hơn hẳn (hai cột cuối). Bài Intermediate 01 đo cùng phép so với `qwen2.5:3b` kèm khoảng tin cậy.
 
 CoT không phải lúc nào cũng đáng: với tác vụ một bước (phân loại cảm xúc ở module 11 mục 7) nó chỉ hơn trong mức nhiễu mà
 tốn gấp nhiều lần token. Quyết định bằng số đo trên tập của bạn.
@@ -85,19 +85,20 @@ sửa. Bộ trích đáp số quyết định con số bạn báo cáo. Bài Bas
 cùng các bẫy: phẩy hàng nghìn (93 đáp án gold của GSM8K có phẩy), số âm khác dấu gạch nối của khoảng `3-4`, số đầu tiên
 thường là dữ kiện đề bài chứ không phải đáp số.
 
-Cùng câu trả lời greedy CoT trên 200 câu test đầu, chỉ đổi bộ trích:
+Cùng câu trả lời greedy CoT của Qwen2.5-0.5B trên 200 câu test đầu, chỉ đổi bộ trích:
 
-| Bộ trích | Qwen2.5-0.5B | `qwen2.5:3b` |
-| --- | --- | --- |
-| số đầu tiên trong câu trả lời | 0.005 | 0.005 |
-| số cuối cùng, regex ngây thơ (không hiểu phẩy hàng nghìn, `$`) | 0.415 | 0.745 |
-| bộ trích có ưu tiên của bài Basic 01 | 0.430 | 0.775 |
-| chặt như reward: nội dung `\boxed{}` cuối là đúng một số và đúng | 0.415 | 0.765 |
-| (tỉ lệ câu trả lời đúng khung đầy đủ của `format_reward`) | 0.69 | 0.54 |
+| Bộ trích | Accuracy |
+| --- | --- |
+| số đầu tiên trong câu trả lời | 0.005 |
+| số cuối cùng, regex ngây thơ (không hiểu phẩy hàng nghìn, `$`) | 0.415 |
+| bộ trích có ưu tiên của bài Basic 01 | 0.430 |
+| chặt như reward: nội dung `\boxed{}` cuối là đúng một số và đúng | 0.415 |
+| (tỉ lệ câu trả lời đúng khung đầy đủ của `format_reward`) | 0.69 |
 
-Bộ trích sai cách (số đầu tiên, thường là dữ kiện đề bài) cho gần 0; giữa các bộ trích hợp lý vẫn lệch 1.5 tới 3 điểm, cỡ
-mức tăng của nhiều kỹ thuật ở mục sau. Hàng cuối cho thấy model 3B **giải** đúng nhiều hơn nhưng **viết đúng khung chặt**
-ít hơn 0.5B (hay viết thêm đơn vị hoặc câu kết sau hộp): khi train bằng reward định dạng, hai thứ đó phải đo riêng (mục 4, 7).
+Bộ trích sai cách (số đầu tiên, thường là dữ kiện đề bài) cho gần 0; giữa các bộ trích hợp lý vẫn lệch 1.5 điểm, cỡ mức
+tăng của nhiều kỹ thuật ở mục sau. Trên câu trả lời của `qwen2.5:3b`, bộ trích có ưu tiên vẫn cao nhất và "số đầu tiên" vẫn gần 0;
+model lớn hơn cũng không nhất thiết viết đúng khung chặt nhiều hơn (nó hay viết thêm đơn vị hoặc câu kết sau hộp): **giải** đúng và **viết đúng
+khung** là hai thứ phải đo riêng, nhất là khi train bằng reward định dạng (mục 4, 7).
 
 ## 2. Test-time compute: sinh nhiều lời giải, bỏ phiếu, verifier
 
@@ -236,7 +237,7 @@ chúng:
 | Nhà cung cấp | Điều khiển | Thấy được gì | Nguồn |
 | --- | --- | --- | --- |
 | OpenAI | `reasoning.effort` (Responses API) hoặc `reasoning_effort` (Chat Completions); giá trị tuỳ model, trong các mức `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | không thấy token suy nghĩ thô; bản tóm tắt khi bật `summary` | trang "Reasoning models" |
-| Anthropic | `thinking: {type: "adaptive"}` cộng `output_config: {effort: ...}`; kiểu cũ `{type: "enabled", budget_tokens: N}` (tối thiểu 1 024) đã deprecated và bị các model từ Claude 4.7 trở đi từ chối | thinking dạng tóm tắt; số token ở `usage.output_tokens_details.thinking_tokens` | trang "Extended thinking" |
+| Anthropic | `thinking: {type: "adaptive"}` cộng `output_config: {effort: ...}`; kiểu cũ `{type: "enabled", budget_tokens: N}` (tối thiểu 1 024) đã deprecated và bị các model từ Claude 4.7 trở đi từ chối | từ Claude 5 (và Opus 4.7, 4.8) thinking mặc định `display: "omitted"` (khối thinking rỗng), muốn đọc bản tóm tắt thì đặt `display: "summarized"`; số token ở `usage.output_tokens_details.thinking_tokens` | trang "Extended thinking", "Thinking" (kiểm 2026-11-02) |
 | Google Gemini | `thinking_level` (`minimal`/`low`/`medium`/`high`, tuỳ model), mặc định tự điều chỉnh | tóm tắt khi bật `thinking_summaries` | trang "Gemini thinking" |
 | Model mở | Qwen3: bật tắt chế độ nghĩ trong chat template; gpt-oss: mức effort trong system prompt; mọi model: budget forcing | thấy toàn bộ | model card |
 
@@ -324,7 +325,7 @@ không thể "ăn điểm" chỉ bằng khung. Nếu cả bốn cùng đúng và
 | DAPO (ByteDance Seed) | loss gộp theo **token** trên cả batch; clip-higher $$\epsilon_{\text{high}} = 0.28$$; dynamic sampling bỏ nhóm std = 0; phạt mềm lời giải quá dài; bỏ KL | ổn định train dài, giữ entropy (khám phá) |
 | GSPO (Qwen) | ratio ở mức **chuỗi** (trung bình log-ratio) thay vì từng token | ratio từng token nhiễu, nhất là với MoE |
 
-TRL 1.17 đi theo hướng đó: mặc định `loss_type="dapo"`, `beta=0.0` (không nạp reference), `scale_rewards="group"`,
+TRL 1.16/1.17 đi theo hướng đó: mặc định `loss_type="dapo"`, `beta=0.0` (không nạp reference), `scale_rewards="group"`,
 `epsilon=0.2`, `num_generations=8`, `temperature=1.0`, `num_iterations=1`. Với `num_iterations=1` mỗi batch chỉ dùng một
 bước gradient, ratio luôn bằng 1 ở bước đó và phép cắt không bao giờ kích hoạt: clip chỉ có tác dụng khi dùng lại batch
 (μ > 1) hoặc khi lượt sinh và lượt train lệch nhau.
@@ -377,8 +378,8 @@ server riêng), OpenRLHF và veRL tách hẳn máy sinh và máy train. Env củ
 
 Policy và reference là cùng một model khi dùng LoRA: tắt adapter (`model.disable_adapter()`) là ra reference, không cần bản
 thứ hai trong bộ nhớ (TRL làm vậy tự động khi `beta > 0` với `peft_config`). Ba khoản lớn còn lại: KV cache khi sinh
-(tỉ lệ với số lời giải × độ dài, module 05 mục 5), activation khi backward (gradient checkpointing chia đôi, module 14
-mục 4), và **logits**: vocab của Qwen2.5 là 151 936, nên logits fp32 của 64 chuỗi × 400 token là khoảng 15.6 GB. Chỉ tính
+(tỉ lệ với số lời giải × độ dài, module 05 mục 5), activation khi backward (gradient checkpointing giảm nó: module 14 mục 4 đo LoRA trên Qwen2.5-0.5B
+đi từ 8.29 xuống 4.61 GiB), và **logits**: vocab của Qwen2.5 là 151 936, nên logits fp32 của 64 chuỗi × 400 token là khoảng 15.6 GB. Chỉ tính
 logits cho phần completion (`logits_to_keep`), chia micro-batch, và lấy log-prob bằng `gather` trừ `logsumexp` thay vì
 log-softmax cả ma trận: bài Intermediate 02 làm cả ba để vừa GPU 4GB.
 

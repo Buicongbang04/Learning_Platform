@@ -28,8 +28,8 @@ phần tăng do **định dạng** khỏi phần tăng do **giải đúng hơn**
 
 Thời gian trên là thời gian làm bài (code, chạy, đọc mẫu, viết báo cáo). Máy chạy riêng: bản tham chiếu với cấu hình `PC`
 mất khoảng thời gian ghi ở `SOLUTION.md` cho mỗi seed (train + đo), RTX 3060 12GB. **Laptop GPU 4GB:** cấu hình `LAPTOP`
-trong notebook (micro-batch nhỏ hơn, completion ngắn hơn) vừa 4GB; mức tăng nhỏ hơn và nhiễu hơn, báo cáo phải ghi
-rõ cấu hình. Không đủ thời gian cho hai seed trên laptop thì một seed kèm khoảng tin cậy bootstrap và nói rõ giới hạn đó.
+trong notebook (micro-batch 2 thay cho 4, completion tối đa 320 thay cho 384 token, cùng 60 bước) **chưa đo trên laptop**;
+nó được ước lượng từ VRAM đỉnh 2.1 tới 2.2 GiB của cấu hình `PC`. Báo cáo phải ghi rõ cấu hình bạn đã chạy. Không đủ thời gian cho hai seed trên laptop thì một seed kèm khoảng tin cậy bootstrap và nói rõ giới hạn đó.
 Đọc mục 4, 5, 7 lý thuyết; làm Intermediate 02 trước.
 
 1. Trong `starter/grpo_trl.ipynb`, cell chấm điểm: dán các hàm từ Basic 01 và Intermediate 01; viết `build_rows`,
@@ -40,8 +40,8 @@ rõ cấu hình. Không đủ thời gian cho hai seed trên laptop thì một s
 
 **Một `REPORT.md` tốt:**
 
-- Mở bằng con số: "accuracy greedy 500 câu từ X lên Y (hiệu Z, khoảng tin cậy 95% [a, b], 2 seed), trong đó phần lớn/nhỏ
-  đến từ định dạng". Không mở bằng định nghĩa GRPO.
+- Mở bằng con số: "accuracy greedy 500 câu từ X lên Y (hiệu Z, khoảng tin cậy 95% [a, b], 2 seed); W điểm trong đó đến từ
+  định dạng (chênh lệch giữa `boxed_correct` và `accuracy`)". Không mở bằng định nghĩa GRPO.
 - Hai thước đo cạnh nhau: `accuracy` (bộ trích dễ dãi, đo khả năng giải) và `boxed_correct` (đúng như reward, đo cả định
   dạng). Mức tăng chỉ có ở cột thứ hai là model học **khung**, không học **toán**.
 - Đường cong theo bước: reward từng phần, độ dài, tỉ lệ nhóm std = 0; giải thích hình dạng của chúng.

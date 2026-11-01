@@ -60,10 +60,12 @@ Log của TRL (trung bình 10 bước đầu → 10 bước cuối, trên lời 
 
 ## Đọc kết quả
 
-- **Mức tăng thật nhưng nhỏ, và phần lớn là khung.** Accuracy theo bộ trích dễ dãi tăng 3.2 tới 4.6 điểm; khoảng tin cậy của
-  seed 1 chứa 0. Thước đo như reward tăng 4.4 tới 5.6 điểm và cả hai khoảng không chứa 0, vì một phần mức tăng là các lời
-  giải trước đây đúng nhưng không có hộp (32 câu không hộp xuống 3 và 5 câu). Đúng khung từ 65% lên trên 97% ở cả hai seed:
-  đó là thứ GRPO học chắc chắn nhất trong 60 bước.
+- **Thay đổi lớn nhất là tỉ lệ đúng khung; mức tăng accuracy nhỏ.** Đúng khung từ 65% lên trên 97% ở cả hai seed: đó là
+  thứ GRPO học chắc chắn nhất trong 60 bước. Phần accuracy do khung thì nhỏ: `boxed_correct` tăng 5.6 / 4.4 điểm, accuracy
+  dễ dãi tăng 4.6 / 3.2 điểm, tức khoảng 1 điểm đến từ việc đáp số đúng nay nằm trong hộp (32 câu gốc không có hộp xuống 3
+  và 5). Tách theo câu: trong 72 / 66 câu sai → đúng chỉ 6 câu là câu gốc không có hộp; trên 468 câu mà model gốc đã có hộp,
+  accuracy dễ dãi vẫn tăng 0.455 → 0.494 / 0.479. 2 tới 4 điểm còn lại đó nằm ở cột dễ dãi, nhưng chỉ seed 0 có khoảng tin
+  cậy không chứa 0.
 - **Hai seed, hai phong cách.** Seed 0 bỏ hẳn kiểu "To determine..., 1. 2. 3." (384 lời giải có danh sách bước xuống 5),
   viết một đoạn liền, ngắn còn một nửa; seed 1 giữ phong cách cũ, chỉ ngắn đi 18%. Cùng cấu hình, khác seed, khác hẳn độ dài:
   một seed thì không kết luận được "GRPO làm lời giải ngắn đi bao nhiêu". Một nguồn đo được của áp lực rút ngắn: lời giải chạm 384 token
@@ -73,14 +75,16 @@ Log của TRL (trung bình 10 bước đầu → 10 bước cuối, trên lời 
   (mỗi bước là 8 câu khác nhau, độ khó khác nhau), vậy mà accuracy trên tập giữ lại vẫn tăng. Tỉ lệ nhóm std = 0 tăng từ
   khoảng 10% lên 30%: khung đã gần 1 nên nhiều nhóm có reward giống nhau hơn, tín hiệu học ít dần; muốn train tiếp thì cần câu
   khó hơn hoặc dynamic sampling.
-- **Độ phủ không hẹp lại ở k = 8.** pass@8 tăng (0.736 lên 0.775 tới 0.790). Kết quả của Yue và cộng sự (RL thu hẹp độ phủ)
-  nói về k vài trăm và train dài; 60 bước ở đây chưa đủ để thấy, và đo k = 8 thì không thấy được.
+- **Độ phủ không tụt ở k = 8; thay đổi trong vài điểm.** pass@8 0.736 → 0.790 / 0.775; bootstrap theo cặp +0.054
+  [+0.001, +0.105] (seed 0) và +0.039 [−0.008, +0.087] (seed 1): sát hoặc trong nhiễu. Hai bên đo không cùng cách: model gốc
+  lấy 16 mẫu (Intermediate 01, batch 64, pass@8 ước lượng không chệch từ 16), sau GRPO lấy 8 mẫu ở batch 128. Kết quả của Yue
+  và cộng sự (RL thu hẹp độ phủ) nói về k vài trăm và train dài; 60 bước và k = 8 không đủ để thấy.
 - **Không thấy reward hacking.** Không lời giải nào có hai hộp hay hộp rỗng; số câu sai mà đáp số chép lại một số trong đề
   giảm (33 xuống 23 và 22). Đọc các câu đúng → sai thấy lỗi suy luận thật: tính overtime 45 giờ thay vì 5 giờ, trả lời "hiệu
   hai tuổi" khi đề hỏi tuổi của một người, lấy quãng đường còn lại chia cho thời gian đã đi. Lời giải ngắn hơn bỏ bớt bước
   diễn giải đề, và đó là chỗ model nhỏ hay hiểu sai.
-- **So với hai nhánh khác** (bảng ở Advanced 02): tự học (Intermediate 03) +2.2 điểm, GRPO +3.2 tới +4.6; đều đổi khung nhiều
-  hơn đổi năng lực.
+- **So với hai nhánh khác** (bảng ở Advanced 02): tự học (Intermediate 03) +2.2 điểm, GRPO +3.2 tới +4.6; cả ba nhánh đổi tỉ
+  lệ đúng khung nhiều nhất, còn accuracy tăng vài điểm, phần lớn trong nhiễu.
 ## Rubric
 
 | Tiêu chí | Điểm | Đạt khi |

@@ -63,5 +63,5 @@ trước khi chạy model.
 
 ### Gợi ý 2
 
-Bootstrap không cần vòng lặp Python: `rng.integers(0, n, size=(n_boot, n))` cho ma trận chỉ số, `b[idx].mean(axis=1) -
-a[idx].mean(axis=1)` cho mọi hiệu một lần. Dùng cùng `idx` cho cả hai cột là toàn bộ ý nghĩa của "theo cặp".
+Bootstrap viết được không cần vòng lặp Python nếu bạn sinh một lần cả ma trận chỉ số lấy mẫu lại. Điều quyết định là
+"theo cặp": mỗi lần lấy mẫu lại, hai cột phải dùng **cùng** các câu.
