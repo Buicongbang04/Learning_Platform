@@ -783,3 +783,338 @@ def test_docker_lab_log_tail_is_capped(monkeypatch):
     monkeypatch.setattr(testkit, "_docker", lambda *a, **kw: subprocess.CompletedProcess(a, 0, huge, ""))
     tail = lab._log_tail("api")
     assert tail.endswith("CUOI") and len(tail) < 4200
+
+
+BASE = "python:3.12.16-alpine3.24"
+
+
+def build_fake(fail_build: bool = False):
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(list(cmd))
+        if cmd[1:3] == ["context", "show"]:
+            return subprocess.CompletedProcess(cmd, 0, "default\n", "")
+        if cmd[1:3] == ["buildx", "inspect"]:
+            return subprocess.CompletedProcess(cmd, 0, "Name:          default\nDriver:        docker\n", "")
+        if cmd[1:3] == ["buildx", "build"] and fail_build:
+            return subprocess.CompletedProcess(cmd, 1, "", "#5 ERROR: process did not complete successfully\n")
+        if cmd[1:3] == ["images", "-q"]:
+            return subprocess.CompletedProcess(cmd, 0, "abc123\nabc123\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    return run, calls
+
+
+def write_dockerfile(path: Path, body: str) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "Dockerfile").write_text(f"FROM {BASE}\n{body}\n", encoding="utf-8")
+    return path
+
+
+def test_docker_lab_build_argv(monkeypatch, tmp_path):
+    monkeypatch.setenv("DEVOPS_CPUSET", "2-3")
+    monkeypatch.setattr(testkit, "_BUILDER", None)
+    monkeypatch.setenv("BUILDX_BUILDER", "may-cua-nguoi-hoc")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "bi-mat")
+    run, calls = build_fake()
+    seen_env = {}
+    monkeypatch.setattr(testkit.subprocess, "run", lambda cmd, **kw: (seen_env.update({tuple(cmd[:3]): kw.get("env")}), run(cmd, **kw))[1])
+    context = write_dockerfile(tmp_path / "app", "RUN true")
+    with testkit.DockerLab() as lab:
+        tag = lab.build(context, "api", build_args={"APP_VERSION": "1.2.3"})
+        assert tag == f"devops-ex-{lab.id}/api:test"
+    build = next(c for c in calls if c[1:3] == ["buildx", "build"])
+    pairs = [build[i : i + 2] for i in range(len(build))]
+    assert ["--builder", "default"] in pairs, "Luôn dùng builder driver docker của context hiện tại, không theo BUILDX_BUILDER"
+    assert "--pull=false" in build and "--load" in build
+    assert ["--label", "devops-ex=1"] in pairs and ["--label", f"devops-ex.lab={lab.id}"] in pairs
+    assert ["--cpuset-cpus", "2-3"] in pairs and ["--memory", testkit.DOCKER_BUILD_MEMORY] in pairs
+    assert ["--build-arg", "APP_VERSION=1.2.3"] in pairs and ["-t", tag] in pairs
+    assert build[-1] == str(context.resolve())
+    for forbidden in ("--network", "--ssh", "--secret", "--allow", "--add-host", "--privileged"):
+        assert not any(a == forbidden or a.startswith(forbidden + "=") for a in build), forbidden
+    env = seen_env[("docker", "buildx", "build")]
+    assert env is not None and "AWS_SECRET_ACCESS_KEY" not in env and "BUILDX_BUILDER" not in env
+    removed = [c for c in calls if c[1:3] == ["rmi", "-f"]]
+    assert removed[0] == ["docker", "rmi", "-f", tag]
+    assert removed[1] == ["docker", "rmi", "-f", "abc123"], "Lọc theo nhãn của đúng lab này làm dự phòng"
+    listed = next(c for c in calls if c[1:3] == ["images", "-q"])
+    assert listed[-1] == f"label=devops-ex.lab={lab.id}"
+
+
+def test_docker_lab_build_rejects_bad_alias_and_outside(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit, "_BUILDER", None)
+    run, calls = build_fake()
+    monkeypatch.setattr(testkit.subprocess, "run", run)
+    context = write_dockerfile(tmp_path / "app", "RUN true")
+    (tmp_path / "Dockerfile.outside").write_text(f"FROM {BASE}\n", encoding="utf-8")
+    with testkit.DockerLab() as lab:
+        with pytest.raises(ValueError):
+            lab.build(context, "API Server")
+        with pytest.raises(pytest.fail.Exception, match="ngoài"):
+            lab.build(context, "api", dockerfile="../Dockerfile.outside")
+    assert not any(c[1:3] == ["buildx", "build"] for c in calls)
+
+
+def test_docker_lab_build_refuses_outside_with(tmp_path):
+    with pytest.raises(RuntimeError):
+        testkit.DockerLab().build(tmp_path, "api")
+
+
+def test_docker_lab_build_failure_reports_log_and_cleans(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit, "_BUILDER", None)
+    run, calls = build_fake(fail_build=True)
+    monkeypatch.setattr(testkit.subprocess, "run", run)
+    context = write_dockerfile(tmp_path / "app", "RUN exit 3")
+    with pytest.raises(pytest.fail.Exception, match="process did not complete"):
+        with testkit.DockerLab() as lab:
+            lab.build(context, "api")
+    assert ["docker", "rmi", "-f", f"devops-ex-{lab.id}/api:test"] in calls
+
+
+def build_cpuset() -> str:
+    count = os.cpu_count() or 1
+    return "12-13" if count >= 36 else str(count - 1)
+
+
+def test_docker_lab_build_tags_labels_and_removes(monkeypatch, tmp_path):
+    require_real_docker(BASE)
+    cpuset = build_cpuset()
+    monkeypatch.setenv("DEVOPS_CPUSET", cpuset)
+    context = write_dockerfile(
+        tmp_path / "app",
+        "ARG GREETING\nRUN cat /sys/fs/cgroup/cpuset.cpus.effective > /build-cpuset && cat /sys/fs/cgroup/memory.max > /build-mem "
+        "&& echo \"$GREETING\" > /greeting\nLABEL org.opencontainers.image.title=olist",
+    )
+    with testkit.DockerLab() as lab:
+        tag = lab.build(context, "api", build_args={"GREETING": "xin-chao"})
+        assert tag == f"devops-ex-{lab.id}/api:test"
+        labels = lab.image_inspect(tag)["Config"]["Labels"]
+        assert labels["devops-ex"] == "1" and labels["devops-ex.lab"] == lab.id
+        assert labels["org.opencontainers.image.title"] == "olist"
+        history = lab.history(tag)
+        assert isinstance(history, list) and any("GREETING" in step.get("CreatedBy", "") for step in history)
+        out = lab.run_once("check", tag, "sh", "-c", "cat /build-cpuset /build-mem /greeting; grep NoNewPrivs /proc/self/status")
+        lines = out.stdout.split("\n")
+        assert lines[0] == cpuset, f"Bước RUN của build phải bị ghim vào {cpuset}: {out.stdout}"
+        assert int(lines[1]) == 1024 ** 3, f"Bước RUN của build phải bị giới hạn {testkit.DOCKER_BUILD_MEMORY}: {out.stdout}"
+        assert lines[2] == "xin-chao"
+        assert lines[3].split() == ["NoNewPrivs:", "1"]
+        assert lab.name("check") not in testkit.docker_leftovers(lab.id)
+        assert testkit.docker_leftovers(lab.id)
+    assert testkit._docker("image", "inspect", tag).returncode != 0
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_docker_lab_build_real_error_cleans_up(tmp_path):
+    require_real_docker(BASE)
+    context = write_dockerfile(tmp_path / "app", "RUN echo buoc-build-hong && exit 3")
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception) as info:
+        with lab:
+            lab.build(context, "api")
+    assert "buoc-build-hong" in str(info.value)
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_docker_lab_close_keeps_foreign_images(tmp_path):
+    require_real_docker(BASE)
+    context = write_dockerfile(tmp_path / "app", "RUN echo ok > /ok")
+    with testkit.DockerLab() as lab:
+        lab.build(context, "api")
+    assert testkit._docker("image", "inspect", BASE).returncode == 0, "Không bao giờ xoá image base của người học"
+
+
+def write_compose(path: Path, text: str) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    file = path / "compose.yaml"
+    file.write_text(text, encoding="utf-8")
+    return file
+
+
+WEB_COMPOSE = f"""
+name: shop-cua-nguoi-hoc
+services:
+  web:
+    image: {BASE}
+    container_name: web-co-dinh
+    command: ["python", "-m", "http.server", "8000"]
+    ports: ["0.0.0.0:8080:8000"]
+    cpuset: "${{DEVOPS_CPUSET:-}}"
+    mem_limit: 2g
+    environment:
+      GREETING: ${{GREETING:-mac-dinh}}
+      LEAK: ${{AWS_SECRET_ACCESS_KEY:-khong-co}}
+    volumes: ["./site:/srv/site:ro", "data:/data"]
+  api:
+    build: ./api
+    image: shop-api:dev
+    command: ["sh", "-c", "cat /built && sleep 300"]
+volumes:
+  data: {{}}
+"""
+
+
+def inspect_container(name: str) -> dict:
+    import json
+
+    result = testkit._docker("inspect", name)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)[0]
+
+
+def test_docker_lab_compose_override_pins_and_loopback(monkeypatch, tmp_path):
+    require_real_docker(BASE)
+    import httpx
+
+    cpuset = build_cpuset()
+    monkeypatch.setenv("DEVOPS_CPUSET", cpuset)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "bi-mat-that")
+    file = write_compose(tmp_path / "proj", WEB_COMPOSE)
+    (tmp_path / "proj" / "site").mkdir()
+    write_dockerfile(tmp_path / "proj" / "api", "RUN echo built > /built")
+    with testkit.DockerLab() as lab:
+        project = lab.compose(file, env={"GREETING": "xin-chao"})
+        assert project.name == f"devops-ex-{lab.id}"
+        port = project.port("web", 8000)
+        assert port != 8080
+        deadline = testkit.time.monotonic() + 30
+        while testkit.time.monotonic() < deadline:
+            try:
+                assert httpx.get(f"http://127.0.0.1:{port}/", timeout=2).status_code == 200
+                break
+            except httpx.HTTPError:
+                testkit.time.sleep(0.2)
+        else:
+            pytest.fail("web không trả lời trên cổng loopback")
+        web = inspect_container(project.container("web"))
+        assert web["Name"].lstrip("/").startswith(f"devops-ex-{lab.id}"), "container_name cố định bị bỏ để không đụng tên khác"
+        host = web["HostConfig"]
+        assert host["CpusetCpus"] == cpuset
+        assert host["Memory"] == 256 * 1024 ** 2 and host["PidsLimit"] == 256
+        assert "no-new-privileges:true" in host["SecurityOpt"]
+        assert [b["HostIp"] for b in host["PortBindings"]["8000/tcp"]] == ["127.0.0.1"]
+        assert web["Config"]["Labels"]["devops-ex"] == "1"
+        env = dict(item.split("=", 1) for item in web["Config"]["Env"])
+        assert env["GREETING"] == "xin-chao"
+        assert env["LEAK"] == "khong-co", "Compose chạy với env dựng từ đầu, không đọc biến cloud của người học"
+        assert project.exec("web", "sh", "-c", "grep NoNewPrivs /proc/self/status").stdout.split() == ["NoNewPrivs:", "1"]
+        api = inspect_container(project.container("api"))
+        assert api["Config"]["Image"] == f"devops-ex-{lab.id}/api:test", "Service có build: được build bằng DockerLab.build"
+        assert project.exec("api", "cat", "/built").stdout.strip() == "built"
+        assert "built" in project.logs("api")
+        assert {row["Service"] for row in project.ps()} == {"web", "api"}
+        assert testkit._docker("image", "inspect", "shop-api:dev").returncode != 0, "Không tạo tag cố định của người học"
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_docker_lab_compose_cleanup_on_error(tmp_path):
+    require_real_docker(BASE)
+    file = write_compose(tmp_path / "proj", f"""
+services:
+  sleeper:
+    image: {BASE}
+    command: ["sleep", "300"]
+    volumes: ["data:/data"]
+volumes:
+  data: {{}}
+""")
+    lab = testkit.DockerLab()
+    with pytest.raises(RuntimeError):
+        with lab:
+            lab.compose(file)
+            leftovers = testkit.docker_leftovers(lab.id)
+            assert any(name.endswith("_data") for name in leftovers), leftovers
+            raise RuntimeError("lỗi giữa chừng")
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_docker_lab_compose_up_failure_shows_logs(tmp_path):
+    require_real_docker(BASE)
+    file = write_compose(tmp_path / "proj", f"""
+services:
+  crash:
+    image: {BASE}
+    command: ["sh", "-c", "echo cau-hinh-sai; exit 3"]
+""")
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception) as info:
+        with lab:
+            lab.compose(file)
+    assert "cau-hinh-sai" in str(info.value)
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+@pytest.mark.parametrize(
+    "service,expected",
+    [
+        ("    privileged: true\n", "privileged"),
+        ("    network_mode: host\n", "network_mode: host"),
+        ("    pid: host\n", "pid: host"),
+        ("    volumes: ['/etc:/hostetc:ro']\n", "/etc"),
+        ("    volumes: ['/var/run/docker.sock:/var/run/docker.sock']\n", "docker.sock"),
+        ("    cap_add: [SYS_ADMIN]\n", "SYS_ADMIN"),
+        ("    devices: ['/dev/kmsg:/dev/kmsg']\n", "devices"),
+        ("    security_opt: ['seccomp=unconfined']\n", "unconfined"),
+        ("    build: ..\n", "build"),
+        ("    env_file: [../secret.env]\n", "env_file"),
+    ],
+)
+def test_docker_lab_compose_refuses_unsafe(tmp_path, service, expected):
+    require_real_docker(BASE)
+    (tmp_path / "secret.env").write_text("TOKEN=bi-mat\n", encoding="utf-8")
+    (tmp_path / "Dockerfile").write_text(f"FROM {BASE}\n", encoding="utf-8")
+    file = write_compose(tmp_path / "proj", f"services:\n  bad:\n    image: {BASE}\n    command: ['sleep', '300']\n{service}")
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception) as info:
+        with lab:
+            lab.compose(file)
+    message = str(info.value)
+    assert expected in message and "bad" in message, message
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+@pytest.mark.parametrize(
+    "top,expected",
+    [
+        ("networks:\n  default:\n    name: de-learning_default\n    external: true\n", "external"),
+        ("volumes:\n  data:\n    external: true\n", "external"),
+        ("volumes:\n  data:\n    driver_opts: {type: none, o: bind, device: /etc}\n", "driver_opts"),
+    ],
+)
+def test_docker_lab_compose_refuses_foreign_resources(tmp_path, top, expected):
+    require_real_docker(BASE)
+    file = write_compose(tmp_path / "proj", f"services:\n  app:\n    image: {BASE}\n    volumes: ['data:/data']\n{top}")
+    if "volumes:\n" not in top:
+        file.write_text(file.read_text() + "volumes:\n  data: {}\n", encoding="utf-8")
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception, match=expected):
+        with lab:
+            lab.compose(file)
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_compose_problems_unit(tmp_path):
+    root = tmp_path / "proj"
+    config = {
+        "services": {
+            "ok": {"image": "x", "volumes": [{"type": "bind", "source": str(root / "conf"), "target": "/c"},
+                                              {"type": "volume", "source": "data", "target": "/d"}],
+                   "cap_add": ["NET_BIND_SERVICE"], "network_mode": "service:other", "volumes_from": ["other"]},
+            "bad": {"image": "x", "ipc": "host", "network_mode": "container:portainer", "volumes_from": ["container:portainer"],
+                    "cgroup_parent": "/system.slice"},
+        },
+        "networks": {"default": {"name": "x_default"}},
+        "volumes": {"data": {"name": "x_data"}},
+    }
+    problems = testkit._compose_problems(config, root)
+    joined = "\n".join(problems)
+    assert all("ok" not in p.split(":")[0] for p in problems), joined
+    for text in ("ipc: host", "container:portainer", "cgroup_parent"):
+        assert text in joined
+
+
+def test_docker_lab_compose_refuses_outside_with(tmp_path):
+    with pytest.raises(RuntimeError):
+        testkit.DockerLab().compose(tmp_path / "compose.yaml")

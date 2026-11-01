@@ -19,6 +19,7 @@ Trong test:
     ex.require_cluster()                    # bài DevOps: skip nếu chưa có cluster kind devops-lab
     ex.require_image("nginx:1.30.6-alpine") # bài DevOps: skip nếu image Docker chưa pull
     with DockerLab() as lab: lab.start("web", "nginx:1.30.6-alpine", ports=[80])  # dựng mọi thứ trong `with`
+    tag = lab.build(ctx, "api"); project = lab.compose(ctx / "compose.yaml"); project.port("api", 8000)  # trong `with`
     run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})  # bài DevOps: chạy script trong bwrap
     repo = GitRepo(tmp_path / "repo", tmp_path / "home", writable=[tmp_path]); repo.out("log"); repo.taint()  # bài git
 """
@@ -174,7 +175,16 @@ DOCKER_MEMORY = "256m"
 DOCKER_PIDS_LIMIT = 256
 DOCKER_LOG_LINES = 40
 DOCKER_LOG_CHARS = 4000
+DOCKER_LAB_LABEL = "devops-ex.lab"
+DOCKER_BUILD_MEMORY = "1g"
+COMPOSE_MIN_VERSION = (2, 24, 4)
 _PORT_TAKEN = ("port is already allocated", "address already in use")
+_IMAGE_ALIAS = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,62}$")
+_DOCKER_ENV_KEEP = ("PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY", "XDG_RUNTIME_DIR")
+_SAFE_CAPS = {"CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "SETGID", "SETUID", "SETPCAP", "NET_BIND_SERVICE",
+              "NET_RAW", "SYS_CHROOT", "MKNOD", "AUDIT_WRITE", "SETFCAP"}
+_BUILD_KEYS = {"context", "dockerfile", "args", "target"}
+_BUILDER: str | None = None
 
 
 def free_port() -> int:
@@ -188,11 +198,200 @@ def _docker(*args: str, timeout: float = 60) -> subprocess.CompletedProcess:
 
 
 def docker_leftovers(lab_id: str) -> list[str]:
-    """Container và network còn sót của một DockerLab (theo tiền tố `devops-ex-<id>`); rỗng nghĩa là đã dọn sạch."""
+    """Container, network, volume (theo tiền tố `devops-ex-<id>`) và image (theo nhãn `devops-ex.lab=<id>`) còn sót của
+    một DockerLab; rỗng nghĩa là đã dọn sạch."""
     prefix = f"{DOCKER_PREFIX}{lab_id}"
     containers = _docker("ps", "-a", "--filter", f"name={prefix}", "--format", "{{.Names}}").stdout.split()
     networks = _docker("network", "ls", "--filter", f"name={prefix}", "--format", "{{.Name}}").stdout.split()
-    return containers + networks
+    volumes = _docker("volume", "ls", "--filter", f"name={prefix}", "--format", "{{.Name}}").stdout.split()
+    images = _docker("images", "-q", "--filter", f"label={DOCKER_LAB_LABEL}={lab_id}").stdout.split()
+    return containers + networks + volumes + sorted(set(images))
+
+
+def _docker_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Env dựng từ đầu cho `docker buildx build` và `docker compose`: chỉ giữ biến để tìm daemon, không mang biến cloud,
+    `BUILDX_*` hay `COMPOSE_*` của người học vào build hay vào phép thay biến của compose."""
+    env = {key: os.environ[key] for key in _DOCKER_ENV_KEEP if key in os.environ}
+    env.update({"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"})
+    env.update(extra or {})
+    return env
+
+
+def _output_tail(result: subprocess.CompletedProcess) -> str:
+    lines = f"{result.stdout or ''}{result.stderr or ''}".rstrip().splitlines()[-DOCKER_LOG_LINES:]
+    return "\n".join(lines)[-DOCKER_LOG_CHARS:] or "(không có output)"
+
+
+def _build_builder() -> str:
+    """Builder driver `docker` của context hiện tại. Đã kiểm (buildx 0.38.1, BuildKit 0.34.0): driver này áp
+    `--cpuset-cpus` và `--memory` lên cgroup của bước RUN, nên không cần builder `docker-container` riêng."""
+    global _BUILDER
+    if _BUILDER:
+        return _BUILDER
+    name = _docker("context", "show").stdout.strip() or "default"
+    info = _docker("buildx", "inspect", name)
+    driver = re.search(r"^Driver:\s*(\S+)", info.stdout or "", re.M)
+    if info.returncode != 0 or not driver:
+        pytest.skip("Cần docker buildx (BuildKit) để build image. Xem setup/DEVOPS-TOOLS.md")
+    if driver.group(1) != "docker":
+        pytest.skip(f"Builder {name} dùng driver {driver.group(1)}, không phải docker; test cần builder driver docker để "
+                    "giới hạn CPU và RAM của bước build có hiệu lực")
+    _BUILDER = name
+    return name
+
+
+def _compose_version_ok() -> str | None:
+    result = _run_tool(["docker", "compose", "version", "--short"])
+    have = parse_version(result.stdout) if result is not None and result.returncode == 0 else None
+    if have is None:
+        return "Chưa có docker compose v2. Xem setup/DEVOPS-TOOLS.md"
+    if not version_at_least(have, COMPOSE_MIN_VERSION):
+        need = ".".join(map(str, COMPOSE_MIN_VERSION))
+        return f"docker compose {'.'.join(map(str, have))} cũ hơn {need} (cần `!reset`/`!override` trong tệp override)"
+    return None
+
+
+def _inside(path: str | Path, root: Path) -> bool:
+    return Path(path).resolve().is_relative_to(root.resolve())
+
+
+def _compose_problems(config: dict, root: Path) -> list[str]:
+    """Lý do từ chối một project compose (cấu hình đã resolve bằng `docker compose config --no-env-resolution`): mọi thứ
+    cho container quyền trên máy host, đọc tệp ngoài `root`, hay gắn vào network/volume không do project tạo."""
+    problems = []
+    for name, svc in (config.get("services") or {}).items():
+        where = f"service {name}"
+        if svc.get("privileged"):
+            problems.append(f"{where}: privileged: true cho container gần như toàn quyền trên máy host")
+        network_mode = str(svc.get("network_mode") or "")
+        if network_mode == "host" or network_mode.startswith("container:"):
+            problems.append(f"{where}: network_mode: {network_mode} dùng chung mạng của máy host hay container khác, "
+                            "cổng không còn bị giới hạn ở 127.0.0.1")
+        for key in ("pid", "ipc", "uts", "userns_mode", "cgroup"):
+            value = str(svc.get(key) or "")
+            if value == "host" or value.startswith("container:"):
+                problems.append(f"{where}: {key}: {value} bỏ cách ly namespace với máy host hay container khác")
+        if svc.get("devices"):
+            problems.append(f"{where}: devices cho container truy cập thiết bị của máy host")
+        if svc.get("cgroup_parent"):
+            problems.append(f"{where}: cgroup_parent đặt container ra ngoài cgroup do Docker quản lý")
+        caps = {str(cap).upper().removeprefix("CAP_") for cap in svc.get("cap_add") or []} - _SAFE_CAPS
+        if caps:
+            problems.append(f"{where}: cap_add {', '.join(sorted(caps))} cho container quyền quản trị máy host")
+        for opt in svc.get("security_opt") or []:
+            if "unconfined" in str(opt) or str(opt).replace("=", ":") == "no-new-privileges:false":
+                problems.append(f"{where}: security_opt {opt} tắt lớp bảo vệ của container")
+        for volume in svc.get("volumes") or []:
+            kind, source = volume.get("type"), volume.get("source", "")
+            if kind == "bind" and not _inside(source, root):
+                hint = " (socket Docker = quyền root trên máy host)" if str(source).endswith("docker.sock") else ""
+                problems.append(f"{where}: bind mount {source}{hint} nằm ngoài thư mục {root}")
+            elif kind not in ("bind", "volume", "tmpfs"):
+                problems.append(f"{where}: volume kiểu {kind} không được hỗ trợ")
+        for source in svc.get("volumes_from") or []:
+            if str(source).startswith("container:"):
+                problems.append(f"{where}: volumes_from {source} lấy volume của container ngoài project")
+        for env_file in svc.get("env_file") or []:
+            path = env_file.get("path") if isinstance(env_file, dict) else env_file
+            if path and not _inside(path, root):
+                problems.append(f"{where}: env_file {path} nằm ngoài thư mục {root}")
+        build = svc.get("build")
+        if build:
+            context = Path(build.get("context", root))
+            if not _inside(context, root):
+                problems.append(f"{where}: build context {context} nằm ngoài thư mục {root}")
+            elif not _inside(context / build.get("dockerfile", "Dockerfile"), context):
+                problems.append(f"{where}: build dockerfile {build.get('dockerfile')} nằm ngoài build context")
+            extra = sorted(set(build) - _BUILD_KEYS)
+            if extra:
+                problems.append(f"{where}: build chỉ hỗ trợ {', '.join(sorted(_BUILD_KEYS))}, không hỗ trợ {', '.join(extra)}")
+    for kind in ("networks", "volumes"):
+        for name, spec in (config.get(kind) or {}).items():
+            spec = spec or {}
+            if spec.get("external"):
+                problems.append(f"{kind} {name}: external: true gắn vào tài nguyên có sẵn không do project tạo")
+            if spec.get("driver_opts"):
+                problems.append(f"{kind} {name}: driver_opts có thể bind thư mục của máy host")
+            if kind == "networks" and spec.get("driver") in ("host", "macvlan", "ipvlan"):
+                problems.append(f"networks {name}: driver {spec['driver']} đưa container ra mạng của máy host")
+    for kind in ("configs", "secrets"):
+        for name, spec in (config.get(kind) or {}).items():
+            path = (spec or {}).get("file")
+            if path and not _inside(path, root):
+                problems.append(f"{kind} {name}: tệp {path} nằm ngoài thư mục {root}")
+            if (spec or {}).get("environment") or (spec or {}).get("external"):
+                problems.append(f"{kind} {name}: chỉ hỗ trợ `file:` trong thư mục {root}")
+    return problems
+
+
+class _Reset:
+    pass
+
+
+class _Override(list):
+    pass
+
+
+def _dump_override(data: dict) -> str:
+    import yaml
+
+    class Dumper(yaml.SafeDumper):
+        pass
+
+    Dumper.add_representer(_Reset, lambda dumper, _: dumper.represent_scalar("!reset", "null"))
+    Dumper.add_representer(_Override, lambda dumper, value: dumper.represent_sequence("!override", list(value)))
+    return yaml.dump(data, Dumper=Dumper, sort_keys=False, allow_unicode=True)
+
+
+class ComposeProject:
+    """Project compose do `DockerLab.compose` dựng; mọi lệnh chạy với `-p devops-ex-<id>`, tệp của người học và tệp
+    override do testkit sinh ra."""
+
+    def __init__(self, file: Path, name: str, override: Path, env: dict[str, str]) -> None:
+        self.file = file
+        self.name = name
+        self.override = override
+        self.env = env
+        self.ports: dict[str, dict[int, int]] = {}
+
+    def command(self, *args: str, override: bool = True) -> list[str]:
+        files = ["-f", str(self.file)] + (["-f", str(self.override)] if override else [])
+        return ["docker", "compose", "-p", self.name, "--project-directory", str(self.file.parent), *files, *args]
+
+    def run(self, *args: str, override: bool = True, timeout: float = 120) -> subprocess.CompletedProcess:
+        return subprocess.run(self.command(*args, override=override), capture_output=True, text=True, timeout=timeout,
+                              env=_docker_env(self.env))
+
+    def port(self, service: str, container_port: int) -> int:
+        return self.ports[service][container_port]
+
+    def ps(self) -> list[dict]:
+        import json
+
+        result = self.run("ps", "-a", "--format", "json")
+        text = result.stdout.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            return json.loads(text)
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+    def container(self, service: str) -> str:
+        names = [row["Name"] for row in self.ps() if row.get("Service") == service]
+        if not names:
+            pytest.fail(f"Không thấy container của service {service} trong project {self.name}")
+        return names[0]
+
+    def logs(self, service: str | None = None, tail: int | None = None) -> str:
+        args = ["logs", "--no-color"] + (["--tail", str(tail)] if tail else []) + ([service] if service else [])
+        result = self.run(*args)
+        return result.stdout + result.stderr
+
+    def exec(self, service: str, *command: str, timeout: float = 30) -> subprocess.CompletedProcess:
+        return self.run("exec", "-T", service, *command, timeout=timeout)
+
+    def down(self) -> None:
+        self.run("down", "-v", "--remove-orphans", "--timeout", "5", timeout=180)
 
 
 class DockerLab:
@@ -211,6 +410,9 @@ class DockerLab:
         self.network = f"{DOCKER_PREFIX}{self.id}"
         self.names: list[str] = []
         self.ports: dict[str, dict[int, int]] = {}
+        self.images: list[str] = []
+        self.project: ComposeProject | None = None
+        self._tmp: Path | None = None
         self._network_created = False
         self._entered = False
 
@@ -344,10 +546,175 @@ class DockerLab:
             time.sleep(0.2)
         pytest.fail(f"{url} không trả lời sau {timeout} giây. {self._log_tail(alias)}")
 
+    def build(self, context: Path, alias: str, *, dockerfile: str = "Dockerfile", build_args: dict | None = None,
+              target: str | None = None, memory: str = DOCKER_BUILD_MEMORY, timeout: float = 600) -> str:
+        """Build image từ `context` (tệp của người học) bằng builder driver docker, trả tag `devops-ex-<id>/<alias>:test`.
+
+        Bước RUN bị ghim CPU theo `docker_cpu_args()` và giới hạn RAM `memory`; `--pull=false` nên build chạy offline khi
+        đã có image base. Không truyền `--network`, `--ssh`, `--secret`, `--allow` nên Dockerfile không lấy được mạng
+        host, SSH agent hay bí mật. Image mang nhãn `devops-ex=1` và `devops-ex.lab=<id>`, bị `rmi -f` khi đóng.
+        """
+        self._require_entered()
+        if not _IMAGE_ALIAS.match(alias):
+            raise ValueError(f"alias {alias!r} phải là chữ thường, số, '.', '_', '-'")
+        context = Path(context).resolve()
+        path = (context / dockerfile).resolve()
+        if not path.is_relative_to(context):
+            pytest.fail(f"Dockerfile {dockerfile} nằm ngoài build context {context}")
+        builder = _build_builder()
+        tag = f"{self.network}/{alias}:test"
+        if tag not in self.images:
+            self.images.append(tag)
+        args = ["docker", "buildx", "build", "--builder", builder, "--load", "--pull=false", "--progress=plain",
+                "--label", DOCKER_LABEL, "--label", f"{DOCKER_LAB_LABEL}={self.id}", "--memory", memory, *docker_cpu_args(),
+                "-f", str(path), "-t", tag]
+        for key, value in (build_args or {}).items():
+            args += ["--build-arg", f"{key}={value}"]
+        if target:
+            args += ["--target", target]
+        args.append(str(context))
+        try:
+            result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=_docker_env())
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"docker build {alias} chạy quá {timeout} giây")
+        if result.returncode != 0:
+            pytest.fail(f"docker build {alias} lỗi (mã {result.returncode}). {DOCKER_LOG_LINES} dòng cuối:\n{_output_tail(result)}")
+        return tag
+
+    def image_inspect(self, tag: str) -> dict:
+        import json
+
+        result = _docker("image", "inspect", tag)
+        if result.returncode != 0:
+            pytest.fail(f"Không có image {tag}: {result.stderr.strip()}")
+        return json.loads(result.stdout)[0]
+
+    def history(self, tag: str) -> list[dict]:
+        """Các layer của image, mới nhất trước (`docker history --no-trunc`)."""
+        import json
+
+        result = _docker("history", "--no-trunc", "--format", "{{json .}}", tag)
+        if result.returncode != 0:
+            pytest.fail(f"Không đọc được history của {tag}: {result.stderr.strip()}")
+        return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+
+    def compose(self, file: Path, *, env: dict | None = None, memory: str = DOCKER_MEMORY,
+                pids_limit: int = DOCKER_PIDS_LIMIT, wait: bool = True, timeout: float = 180) -> ComposeProject:
+        """`docker compose up -d` tệp `file` của người học với project `devops-ex-<id>` và một tệp override sinh ra.
+
+        Từ chối (fail kèm lý do) tệp có `privileged`, `network_mode`/`pid`/`ipc: host`, bind mount, `env_file` hay build
+        context ngoài thư mục chứa `file`, `cap_add` quyền quản trị, `devices`, network/volume `external`. Mọi service bị
+        override: cpuset, `mem_limit`, `pids_limit`, nhãn `devops-ex=1`, `security_opt: [no-new-privileges:true]`, cổng
+        remap về `127.0.0.1:<cổng trống>` (đọc bằng `project.port(service, cổng)`), bỏ `container_name`. Service có
+        `build:` được build bằng `DockerLab.build`; image khác phải có sẵn (`--pull never`). Compose chạy với env dựng từ
+        đầu cộng `env`. `close()` chạy `down -v --remove-orphans`. Mỗi lab một project.
+        """
+        import json
+
+        self._require_entered()
+        if self.project is not None:
+            raise RuntimeError("Mỗi DockerLab chỉ dựng một project compose")
+        reason = _compose_version_ok()
+        if reason:
+            pytest.skip(reason)
+        file = Path(file).resolve()
+        root = file.parent
+        cpus = docker_cpu_args()
+        cpuset = cpus[1] if cpus else ""
+        if self._tmp is None:
+            self._tmp = Path(tempfile.mkdtemp(prefix=f"{self.network}-"))
+        project = ComposeProject(file, self.network, self._tmp / "compose.override.yaml",
+                                 {"DEVOPS_CPUSET": cpuset, **{k: str(v) for k, v in (env or {}).items()}})
+        self.project = project
+        result = project.run("config", "--no-env-resolution", "--format", "json", override=False)
+        if result.returncode != 0:
+            pytest.fail(f"docker compose config lỗi với {file.name}: {result.stderr.strip()}")
+        config = json.loads(result.stdout)
+        problems = _compose_problems(config, root)
+        if problems:
+            pytest.fail(f"Tệp {file.name} bị từ chối vì phá cách ly của bài tập:\n- " + "\n- ".join(problems))
+        services = config.get("services") or {}
+        built: dict[tuple, str] = {}
+        images: dict[str, str] = {}
+        for name, svc in services.items():
+            spec = svc.get("build")
+            if spec:
+                key = (spec.get("context"), spec.get("dockerfile", "Dockerfile"), json.dumps(spec.get("args") or {}, sort_keys=True),
+                       spec.get("target"))
+                if key not in built:
+                    built[key] = self.build(Path(spec["context"]), name.lower(), dockerfile=spec.get("dockerfile", "Dockerfile"),
+                                            build_args=spec.get("args"), target=spec.get("target"))
+                images[name] = built[key]
+            elif svc.get("image") and _docker("image", "inspect", svc["image"]).returncode != 0:
+                pytest.skip(f"Chưa có image {svc['image']}. Tải bằng: docker pull {svc['image']}")
+        up = ["up", "-d", "--pull", "never", "--no-build"] + (["--wait", "--wait-timeout", str(int(timeout))] if wait else [])
+        for _ in range(3):
+            override, ports = self._compose_override(services, images, cpuset, memory, pids_limit)
+            project.override.write_text(_dump_override(override), encoding="utf-8")
+            try:
+                result = project.run(*up, timeout=timeout + 60)
+            except subprocess.TimeoutExpired:
+                pytest.fail(f"docker compose up chạy quá {timeout} giây. {DOCKER_LOG_LINES} dòng log cuối:\n"
+                            f"{project.logs(tail=DOCKER_LOG_LINES)[-DOCKER_LOG_CHARS:]}")
+            if result.returncode == 0:
+                project.ports = ports
+                return project
+            if not any(text in result.stderr for text in _PORT_TAKEN):
+                break
+            project.down()
+        logs = project.logs(tail=DOCKER_LOG_LINES).rstrip()[-DOCKER_LOG_CHARS:] or "(không có log)"
+        pytest.fail(f"docker compose up lỗi: {result.stderr.strip()[-DOCKER_LOG_CHARS:]}\n{DOCKER_LOG_LINES} dòng log cuối:\n{logs}")
+
+    def _compose_override(self, services: dict, images: dict[str, str], cpuset: str, memory: str,
+                          pids_limit: int) -> tuple[dict, dict[str, dict[int, int]]]:
+        override: dict[str, dict] = {}
+        ports: dict[str, dict[int, int]] = {}
+        for name, svc in services.items():
+            item: dict[str, Any] = {
+                "labels": {"devops-ex": "1", DOCKER_LAB_LABEL: self.id},
+                "security_opt": _Override(["no-new-privileges:true"]),
+                "cpuset": cpuset if cpuset else _Reset(),
+                "mem_limit": memory,
+                "pids_limit": pids_limit,
+                "deploy": {"resources": {"limits": {"memory": memory, "pids": pids_limit}}},
+                "pull_policy": "never",
+            }
+            if "memswap_limit" in svc:
+                item["memswap_limit"] = _Reset()
+            if "container_name" in svc:
+                item["container_name"] = _Reset()
+            if name in images:
+                item["build"] = _Reset()
+                item["image"] = images[name]
+            if svc.get("ports"):
+                mapping = {int(p["target"]): free_port() for p in svc["ports"]}
+                item["ports"] = _Override([f"127.0.0.1:{mapping[int(p['target'])]}:{p['target']}/{p.get('protocol', 'tcp')}"
+                                           for p in svc["ports"]])
+                ports[name] = mapping
+            override[name] = item
+        return {"services": override}, ports
+
     def close(self) -> None:
+        if self.project is not None:
+            try:
+                self.project.down()
+            except (OSError, subprocess.TimeoutExpired):
+                pass
         for name in self.names:
             try:
                 _docker("rm", "-f", name)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        for tag in self.images:
+            try:
+                _docker("rmi", "-f", tag)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if self.images:
+            try:
+                ids = _docker("images", "-q", "--filter", f"label={DOCKER_LAB_LABEL}={self.id}").stdout.split()
+                if ids:
+                    _docker("rmi", "-f", *sorted(set(ids)))
             except (OSError, subprocess.TimeoutExpired):
                 pass
         if self._network_created:
@@ -355,6 +722,8 @@ class DockerLab:
                 _docker("network", "rm", self.network)
             except (OSError, subprocess.TimeoutExpired):
                 pass
+        if self._tmp is not None:
+            shutil.rmtree(self._tmp, ignore_errors=True)
 
 
 _BWRAP_ISOLATION = ["--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--new-session"]
