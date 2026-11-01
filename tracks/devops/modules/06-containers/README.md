@@ -331,8 +331,8 @@ build. Basic 01 đo: image API Olist Shop từ 869 MB xuống 293 MB, phần l�
 | `scratch` / `distroless/static` | vài MB cộng binary | Không | Không có | Bề mặt tấn công nhỏ nhất | Chỉ cho binary tĩnh (Go, Rust); thiếu CA cert, tzdata nếu quên chép |
 | Chainguard, Wolfi, UBI micro | thay đổi | Tuỳ biến thể | glibc | Build lại hằng ngày, ít CVE, SBOM sẵn | Bản miễn phí chỉ có tag `latest`; cần đánh giá nhà cung cấp |
 
-Không có lựa chọn đúng cho mọi trường hợp. Intermediate 02 cho số liệu: image distroless ít gói như alpine nhưng có nhiều CVE
-hơn cả slim, vì cách Debian và Alpine ghi nhận lỗ hổng khác nhau. Hỏi thứ cần hỏi: image có thứ gì không dùng lúc chạy, và các
+Không có lựa chọn đúng cho mọi trường hợp. Số liệu đo ngày 2026-11-01 ở mục 6: lúc đó image distroless ít gói như
+alpine nhưng tổng CVE cao hơn cả slim, vì cách Debian và Alpine ghi nhận lỗ hổng khác nhau (con số sẽ đổi khi bạn đo lại). Hỏi thứ cần hỏi: image có thứ gì không dùng lúc chạy, và các
 lỗ hổng **có bản vá** ở đâu.
 
 ## 3. Chạy container an toàn
@@ -396,7 +396,8 @@ socket (Advanced 02).
 
 Rootless dựa trên user namespace: dải UID trong `/etc/subuid` (ví dụ `bangbc:100000:65536`) được ánh xạ thành UID 0-65535 trong
 container. Thoát được container thì kẻ tấn công chỉ là UID 100000 vô danh trên host. Kubernetes có user namespace cho pod
-(`hostUsers: false`) từ 1.33 bật mặc định ở mức beta, đáng theo dõi cho module 11.
+(`hostUsers: false`): có từ v1.28, stable (GA) từ v1.36 theo tài liệu kubernetes.io; cần kernel 6.3 trở lên, containerd 2.0 hoặc
+CRI-O 1.25, runc 1.2 hoặc crun 1.9. Module 11 dùng lại.
 
 ## 4. Vòng đời tiến trình: PID 1, tín hiệu và healthcheck
 
@@ -405,9 +406,9 @@ container. Thoát được container thì kẻ tấn công chỉ là UID 100000 
 | Viết trong Dockerfile | Docker ghi thành | PID 1 là |
 | --- | --- | --- |
 | `CMD ["uvicorn", "app:app"]` | `["uvicorn", "app:app"]` | uvicorn |
-| `CMD uvicorn app:app` | `["/bin/sh", "-c", "uvicorn app:app"]` | `sh` (trên Debian trixie, `dash` không `exec` lệnh cuối) |
-| `ENTRYPOINT ["/entrypoint.sh"]`, script gọi `python app.py` | `["/entrypoint.sh"]` | `sh` chạy script; Python là con |
-| Script kết thúc bằng `exec python app.py` | `["/entrypoint.sh"]` | Python (sau `exec`) |
+| `CMD uvicorn app:app` | `["/bin/sh", "-c", "uvicorn app:app"]` | `sh` (trên Debian trixie, `dash` không `exec` lệnh trong `-c`) |
+| `CMD cd /srv && gunicorn app:app` | `["/bin/sh", "-c", "cd /srv && gunicorn app:app"]` | `sh`; gunicorn là con |
+| `ENTRYPOINT ["tini", "--"]` cộng `CMD ["gunicorn", "app:app"]` | Như viết | `tini`, chuyển tín hiệu cho gunicorn |
 
 ### PID 1 khác mọi tiến trình khác
 
@@ -418,20 +419,20 @@ nữa, PID 1 phải `wait()` các tiến trình mồ côi, nếu không chúng t
 ```mermaid
 sequenceDiagram
   participant O as docker stop / kubelet
-  participant S as PID 1 = sh (entrypoint.sh)
-  participant W as worker.py (PID 7)
+  participant S as PID 1 = sh -c "cd /srv && gunicorn app:app"
+  participant W as gunicorn (tiến trình con)
   O->>S: SIGTERM (STOPSIGNAL của image)
   Note over S: Không có handler, kernel bỏ tín hiệu.<br/>Shell cũng không chuyển cho con
-  W-->>W: Vẫn xử lý batch, không biết gì
+  W-->>W: Vẫn nhận request, không biết sắp bị tắt
   O->>O: Chờ grace period (Docker 10 giây, Kubernetes 30 giây)
   O->>S: SIGKILL
-  Note over S,W: Namespace bị huỷ, mọi tiến trình chết ngay.<br/>Batch đang dở mất, exit 137
+  Note over S,W: Namespace bị huỷ, mọi tiến trình chết ngay.<br/>Request đang xử lý bị cắt, exit 137
 ```
 
-Cách sửa, từ đơn giản tới đầy đủ: `exec` ở cuối script để app thành PID 1 (app phải tự xử lý SIGTERM); dùng init nhỏ `tini` làm
-PID 1 (`ENTRYPOINT ["tini", "--", ...]`) để chuyển tín hiệu và dọn zombie; hoặc `docker run --init` / compose `init: true` khi
-không sửa được image. `STOPSIGNAL SIGQUIT` cho Nginx dừng êm, `SIGINT` cho vài app chỉ bắt Ctrl-C. Intermediate 01 là sự cố đúng
-chuỗi trên.
+Với ví dụ trên: viết CMD dạng exec với `WORKDIR /srv` thay cho `cd` để gunicorn là PID 1 (app phải tự xử lý SIGTERM, gunicorn
+có sẵn); dùng init nhỏ `tini` làm PID 1 để chuyển tín hiệu và dọn zombie khi app sinh tiến trình con; hoặc `docker run --init` /
+compose `init: true` khi không sửa được image. `STOPSIGNAL SIGQUIT` cho Nginx dừng êm, `SIGINT` cho vài app chỉ bắt Ctrl-C.
+Triệu chứng chung để nhận ra: mọi lần dừng mất đúng bằng grace period và kết thúc bằng 137.
 
 ### Mã thoát
 
@@ -548,10 +549,12 @@ Số liệu đo ngày 2026-11-01 (DB cùng ngày):
 | `python:3.12.16-alpine3.24` | 39 | 6 | 6, đều ở `pip` |
 | `gcr.io/distroless/python3-debian13:nonroot` | 38 | 176 | 0 |
 
-Distroless ít gói mà nhiều CVE nhất: các gói Debian còn lại mang mọi CVE Debian đánh dấu "affected" (phần lớn LOW/MEDIUM, nhiều
-cái không áp dụng trong container). Alpine báo ít một phần vì secdb của Alpine chỉ ghi lỗ hổng đã vá. Không image nào có lỗ hổng
-HIGH/CRITICAL có bản vá; mọi CVE có bản vá nằm ở `pip`, thứ một job không cần lúc chạy. Kết luận cho chính sách: đo số gói và lỗ
-hổng có bản vá, gỡ thứ không dùng, và đừng chọn image chỉ vì tổng CVE nhỏ.
+Lúc đo ngày 2026-11-01, distroless ít gói như alpine mà tổng CVE còn cao hơn slim: các gói Debian còn lại mang mọi CVE Debian
+đánh dấu "affected" (phần lớn LOW/MEDIUM, nhiều cái không áp dụng trong container). Alpine báo ít một phần vì secdb của Alpine chỉ
+ghi lỗ hổng đã vá. Khi bạn đo lại, con số sẽ khác: image được build lại, DB được cập nhật, thứ hạng có thể đảo. Bài học thì giữ
+nguyên: ít gói không có nghĩa là không có CVE; độ mới của image nền (build lại gần đây chưa, có digest mới chưa) quan trọng ngang
+việc chọn loại image; và lỗ hổng có bản vá hôm đó đều nằm ở `pip`, thứ một job không cần lúc chạy. Kết luận cho chính sách: đo số
+gói và lỗ hổng có bản vá, gỡ thứ không dùng, rebuild khi image nền có bản mới, và đừng chọn image chỉ vì tổng CVE nhỏ.
 
 ### Các scanner khác
 

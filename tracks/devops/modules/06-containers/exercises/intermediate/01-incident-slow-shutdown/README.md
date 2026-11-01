@@ -45,10 +45,12 @@ mặc định `sa-east-1`) như script khởi động đang làm. Không đổi 
 
 - `docker stop` xong trong dưới 5 giây (grace period là 10 giây).
 - Container thoát mã 0 (`State.ExitCode`).
-- Log có dòng `dừng sạch` của worker.
+- Log có hai dòng JSON do chính worker in: `nhận tín hiệu, hoàn tất batch đang dở` với `"signal": "SIGTERM"`, rồi
+  `đã ack batch cuối, dừng sạch` có trường `batches`. Dòng chữ do script in ra không tính.
 - Log có queue `olist-orders-us-east-1`: script khởi động vẫn chạy và vẫn đọc `REGION`.
 - Một test build bản production lúc sự cố (`tests/fixtures/incident/`) và đòi nó tái hiện đúng triệu chứng: dừng mất ít nhất 8
-  giây, mã 137, không có dòng `dừng sạch`.
+  giây, mã 137, worker không log tín hiệu nào. Một test khác build một bản "sửa" giả (`tests/fixtures/trap-only/`: dừng nhanh, mã 0,
+  in chữ `dừng sạch`, nhưng worker không nhận SIGTERM) và đòi phép kiểm trên bắt được nó.
 - Giải thích được vì sao Ctrl-C trên máy dev không tái hiện được lỗi.
 
 ## Gợi ý
@@ -61,5 +63,5 @@ tiến trình trong container. Log `order-sync sẵn sàng` in ra `pid` của wo
 ### Gợi ý 2
 
 Dựng lại môi trường sự cố rồi xem cây tiến trình từ máy host: `docker top <container>` hoặc
-`docker exec <container> cat /proc/1/cmdline | tr '\0' ' '`. Kernel đối xử với PID 1 của một PID namespace khác với mọi tiến
-trình khác ở chỗ nào?
+`docker exec <container> cat /proc/1/cmdline | tr '\0' ' '`. Mục 4 của lý thuyết giải thích vì sao tiến trình nào giữ PID 1
+lại quan trọng.

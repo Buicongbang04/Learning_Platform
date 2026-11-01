@@ -29,24 +29,25 @@ Trên Kubernetes, kubelet gọi thẳng containerd (hoặc CRI-O) qua CRI; Docke
    có dòng `Memory cgroup out of memory: Killed process`. Không có traceback vì SIGKILL không bắt được. Xem đồ thị bộ nhớ
    (`docker stats`, `container_memory_working_set_bytes`), tìm rò rỉ hay batch quá lớn, rồi mới quyết tăng limit.
 2. **Hết grace period**: `docker stop` hay Kubernetes gửi SIGTERM, tiến trình không dừng trong thời hạn (10 giây Docker, 30 giây
-   Kubernetes) nên bị SIGKILL. `OOMKilled` là `false`; thời gian dừng đúng bằng grace period. Thường do PID 1 là shell nuốt SIGTERM.
+   Kubernetes) nên bị SIGKILL. `OOMKilled` là `false`; thời gian dừng đúng bằng grace period. Tín hiệu không tới được app, hoặc app nhận mà không dừng kịp.
 
 Phân biệt hai trường hợp bằng `OOMKilled`, thời gian dừng và log của orchestrator (`Reason: OOMKilled` trong `kubectl describe pod`).
 
-## (Sự cố) Mỗi lần deploy, container cũ mất đúng 10 giây mới dừng và vài job bị xử lý hai lần. Bạn làm gì?
+## (Sự cố) Bảo mật vừa bật rootfs chỉ đọc cho mọi service. API Python khởi động lại liên tục, log báo `OSError: [Errno 30] Read-only file system`. Bạn làm gì?
 
-"Đúng bằng grace period" là chữ ký của tiến trình không nhận SIGTERM. Các bước:
+Đừng tắt `read_only` cho cả service để "chữa cháy"; tìm đúng chỗ app ghi và mở đúng chỗ đó.
 
-1. Xác nhận: `time docker stop <c>` khoảng 10 giây, `State.ExitCode` 137, log không có dòng tắt êm của app.
-2. Xem PID 1: `docker top <c>` hoặc `docker exec <c> cat /proc/1/cmdline`. Nếu là `/bin/sh /entrypoint.sh` hay `sh -c ...` thì
-   app chỉ là tiến trình con. Kernel không giao SIGTERM cho PID 1 khi nó không cài handler, và shell không chuyển tín hiệu.
-3. Sửa tối thiểu: `exec` ở dòng cuối script (app thành PID 1 và tự xử lý SIGTERM), hoặc `tini` làm PID 1 nếu app sinh tiến trình
-   con, hoặc `init: true` nếu không sửa được image. CMD/ENTRYPOINT luôn dạng exec.
-4. Chứng minh bằng hành vi: `docker stop` dưới một giây, mã 0, có log tắt êm.
-5. Phòng ngừa: test dừng container trong CI, dashboard thời gian dừng khi deploy, và xử lý idempotent ở phía tiêu thụ hàng đợi để
-   lần dừng không sạch tiếp theo không gây xử lý trùng.
-
-Lý do máy dev không tái hiện: Ctrl-C gửi SIGINT cho cả process group ở foreground, và app không phải PID 1 của namespace nào.
+1. Khoanh vùng: chỉ service bị bật `read_only` mới lỗi, lỗi xảy ra lúc khởi động, traceback chỉ đường dẫn (`/app/.cache`,
+   `/home/app/.config`, `/var/run/app.pid`...). Một lỗi thường che lỗi sau: sửa một đường dẫn rồi chạy lại.
+2. Liệt kê mọi chỗ ghi một lần cho đủ: chạy image **không** `--read-only` ở staging, cho nó chạy vài phút qua các luồng chính, rồi
+   `docker diff <c>` liệt kê tệp được thêm (`A`) hay sửa (`C`). Cộng thêm thư viện hay ghi ngầm: cache của pip, matplotlib,
+   Hugging Face (`HOME`, `XDG_CACHE_HOME`), `__pycache__` (`PYTHONDONTWRITEBYTECODE=1`), tệp tạm (`/tmp`).
+3. Sửa tối thiểu: tmpfs (Docker, compose `tmpfs:`) hay `emptyDir` (Kubernetes, có `sizeLimit`) cho đúng các thư mục đó; trỏ cache
+   về `/tmp` bằng biến môi trường; dữ liệu cần sống qua lần khởi động lại thì là volume, không phải tmpfs.
+4. Chứng minh: container khởi động sạch với `read_only`, healthcheck xanh, các luồng chính chạy, `docker diff` không còn gì ngoài
+   các mount đã khai báo.
+5. Phòng ngừa: CI chạy smoke test image với `--read-only --tmpfs /tmp` để lỗi lộ trước khi lên production; ghi các thư mục ghi được
+   vào README của service; tmpfs tính vào giới hạn RAM của container, nên đặt kích thước để tránh OOM kill.
 
 ## Multi-stage build giải quyết vấn đề gì? Viết một Dockerfile multi-stage cho API Python.
 

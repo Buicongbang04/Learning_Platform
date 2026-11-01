@@ -1372,3 +1372,25 @@ def test_docker_lab_stop_refuses_outside_with():
     lab = testkit.DockerLab()
     with pytest.raises(RuntimeError):
         lab.stop("x")
+
+
+BUILD_LOGS = Path(__file__).parent / "fixtures" / "build_logs"
+
+
+@pytest.mark.parametrize("log,expected", [
+    ("pip-offline.log", True),
+    ("apt-offline.log", True),
+    ("pip-retry-then-missing-package.log", False),
+])
+def test_build_failed_on_network(log, expected):
+    assert testkit.build_failed_on_network((BUILD_LOGS / log).read_text(encoding="utf-8")) is expected
+
+
+def test_build_failed_on_network_ignores_other_steps():
+    text = (
+        "#5 [2/3] RUN pip install six\n#5 1.0 WARNING: Retrying after NewConnectionError: Failed to establish a new connection\n"
+        "#5 2.0 Successfully installed six-1.16.0\n#5 DONE 2.1s\n"
+        "#6 [3/3] RUN python -c 'import nope'\n#6 0.5 ModuleNotFoundError: No module named 'nope'\n"
+        "#6 ERROR: process \"/bin/sh -c python -c 'import nope'\" did not complete successfully: exit code: 1\n"
+    )
+    assert testkit.build_failed_on_network(text) is False

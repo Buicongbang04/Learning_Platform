@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from testkit import ROOT, DockerLab, Exercise
+from testkit import ROOT, DockerLab, Exercise, build_failed_on_network
 
 ex = Exercise(__file__)
 BASE = "python:3.12.16-slim-trixie"
@@ -15,10 +15,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 BUILD_TOOLS = ("gcc", "cc", "g++", "c++", "make", "ld")
 ROOT_USERS = {"", "root", "0", "0:0", "root:root", "root:0", "0:root"}
 SIZE_RATIO = 0.75
-NETWORK_ERRORS = (
-    "Temporary failure in name resolution", "Temporary failure resolving", "Could not resolve", "Failed to establish a new "
-    "connection", "Network is unreachable", "NewConnectionError", "Connection timed out", "Read timed out",
-)
 PROBE = (
     "import json, os, shutil; "
     f"print(json.dumps({{'uid': os.getuid(), 'tools': [t for t in {BUILD_TOOLS!r} if shutil.which(t)]}}))"
@@ -42,7 +38,7 @@ class Images:
         try:
             return self.lab.build(self.context(dockerfile, alias), alias)
         except pytest.fail.Exception as error:
-            if any(text in str(error) for text in NETWORK_ERRORS):
+            if build_failed_on_network(str(error)):
                 pytest.skip("Build cần mạng ở lần đầu để tải gói apt và pip (BuildKit giữ cache cho lần sau). Kiểm kết nối "
                             "mạng rồi chạy lại.")
             raise

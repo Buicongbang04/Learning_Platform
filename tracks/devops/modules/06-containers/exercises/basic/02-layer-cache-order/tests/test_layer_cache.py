@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from testkit import DockerLab, Exercise
+from testkit import DockerLab, Exercise, build_failed_on_network
 
 ex = Exercise(__file__)
 BASE = "python:3.12.16-slim-trixie"
@@ -14,10 +14,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 APP = FIXTURES / "app"
 SECRET = "OLIST_EXPORT_TOKEN=dev-only-4f9c2a7e-khong-duoc-vao-image\n"
 LEAKS = (".env", "export_checks.py", "notes.md")
-NETWORK_ERRORS = (
-    "Temporary failure in name resolution", "Temporary failure resolving", "Could not resolve", "Failed to establish a new "
-    "connection", "Network is unreachable", "NewConnectionError", "Connection timed out", "Read timed out",
-)
 FIND_LEAKS = (
     "import json, os; "
     f"names = {LEAKS!r}; "
@@ -43,7 +39,7 @@ def build(lab: DockerLab, context: Path, alias: str) -> str:
     try:
         return lab.build(context, alias)
     except pytest.fail.Exception as error:
-        if any(text in str(error) for text in NETWORK_ERRORS):
+        if build_failed_on_network(str(error)):
             pytest.skip("Build cần mạng ở lần đầu để tải gói pip (BuildKit giữ cache cho lần sau). Kiểm kết nối mạng rồi "
                         "chạy lại.")
         raise

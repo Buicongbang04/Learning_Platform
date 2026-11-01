@@ -218,6 +218,25 @@ _COPY_IGNORE = (".git", ".venv", "node_modules", "__pycache__", ".pytest_cache")
 _BUILDER: str | None = None
 
 
+_NETWORK_ERRORS = re.compile(
+    r"Temporary failure in name resolution|Temporary failure resolving|Could not resolve|Name or service not known|"
+    r"Failed to establish a new connection|Network is unreachable|NewConnectionError|Connection timed out|Read timed out"
+)
+_FETCH_PROGRESS = re.compile(r"\b(?:Collecting|Downloading|Using cached|Successfully|Installing collected|Get:\d+|Fetched)\b")
+
+
+def build_failed_on_network(output: str) -> bool:
+    """True khi bước build bị lỗi chết vì mạng: xét output của đúng bước lỗi (`#N ERROR:` của BuildKit), có dòng lỗi mạng và
+    sau dòng lỗi mạng cuối cùng không còn dấu hiệu tải thành công. Retry đã hồi phục rồi mới lỗi thật (gói không tồn tại,
+    lỗi ở bước khác) thì False, để test fail thay vì skip."""
+    lines = output.splitlines()
+    failed = re.findall(r"^#(\d+) ERROR:", output, re.M)
+    if failed:
+        lines = [line for line in lines if line.startswith(f"#{failed[-1]} ")]
+    hits = [i for i, line in enumerate(lines) if _NETWORK_ERRORS.search(line)]
+    return bool(hits) and not any(_FETCH_PROGRESS.search(line) for line in lines[hits[-1] + 1:])
+
+
 def free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
