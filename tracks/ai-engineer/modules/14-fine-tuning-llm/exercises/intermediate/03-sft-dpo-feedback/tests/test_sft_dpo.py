@@ -59,12 +59,15 @@ def test_macro_f1_matches_sklearn_and_counts_invalid_as_wrong(nb):
 
 
 def test_preference_pairs(nb):
-    sentences = ["a .", "b .", "c .", "d ."]
-    gold = [("positive", "lecturer"), ("negative", "facility"), ("neutral", "others"), ("positive", "lecturer")]
+    sentences = ["a .", "b .", "c .", "d .", "e ."]
+    gold = [("positive", "lecturer"), ("negative", "facility"), ("neutral", "others"), ("positive", "lecturer"),
+            ("negative", "lecturer")]
     outputs = ['{"sentiment": "positive", "topic": "lecturer"}', '{"sentiment": "positive", "topic": "facility"}',
-               "Câu này trung tính.", ' {"sentiment": "positive", "topic": "lecturer"} ']
+               "Câu này trung tính.", ' {"sentiment": "positive", "topic": "lecturer"} ',
+               '```json\n{"sentiment": "negative", "topic": "lecturer"}\n```']
     pairs = nb.preference_pairs(sentences, gold, outputs)
-    assert len(pairs) == 2, "chỉ câu model sai mới thành cặp"
+    assert len(pairs) == 3, "chỉ câu model sai (đọc strict) mới thành cặp; bọc trong code fence là sai định dạng"
+    assert pairs[2]["rejected"][0]["content"] == outputs[4]
     p = pairs[0]
     assert set(p) == {"prompt", "chosen", "rejected"}
     assert p["prompt"] == nb.to_chat("b .")

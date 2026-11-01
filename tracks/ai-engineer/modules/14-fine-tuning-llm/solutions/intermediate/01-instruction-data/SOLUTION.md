@@ -15,9 +15,9 @@
   nên tỉ lệ thành phần bằng nhau của hai chữ ký ước lượng Jaccard. Hash nền phải "đủ ngẫu nhiên": thử với `zlib.crc32` (tuyến
   tính trên GF(2)) cho ước lượng lệch hơn 0.1 so với Jaccard thật trên ví dụ của test, BLAKE2b thì không.
 - **`near_duplicate_groups`**: 16 band × 4 hàng. Hai văn bản Jaccard $$s$$ thành ứng viên với xác suất $$1 - (1 - s^4)^{16}$$:
-  khoảng 0.12 ở $$s = 0.3$$, 0.89 ở $$s = 0.6$$, gần 1 từ 0.8. Ứng viên chỉ được nối khi ước lượng Jaccard đạt ngưỡng. Lần
-  thử đầu không kiểm ngưỡng (nối mọi cặp trùng một band) gộp 90 680 trên khoảng 121 nghìn mẫu vào **một** nhóm: văn bản
-  ngắn cùng khuôn chạm nhau ở một band, và union-find bắc cầu hết. Bước kiểm ngưỡng là bắt buộc.
+  khoảng 0.12 ở $$s = 0.3$$, 0.89 ở $$s = 0.6$$, gần 1 từ 0.8. Ứng viên chỉ được nối khi ước lượng Jaccard đạt ngưỡng. Bỏ bước kiểm (nối mọi cặp
+  trùng một band, `threshold=0`) thì trên cùng chữ ký 89 032 trong 121 026 mẫu dồn vào **một** nhóm: văn bản ngắn cùng khuôn
+  chạm nhau ở một band, và union-find bắc cầu hết. Bước kiểm ngưỡng là bắt buộc.
 - **`group_split`**: hash của mã nhóm, không dùng `random`: cùng nhóm luôn cùng phía, thêm dữ liệu mới không xáo lại phép
   chia cũ, chạy lại ở máy khác cho cùng kết quả.
 - **`contamination`**: tập n-gram của mọi văn bản train (từng văn bản riêng), tỉ lệ n-gram của mẫu đánh giá nằm trong đó.

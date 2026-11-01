@@ -86,7 +86,7 @@ tập, số chi tiết ở lời giải):
 
 | Bài | Bài toán | Fine-tune đấu với | Kết quả (định tính) |
 | --- | --- | --- | --- |
-| Intermediate 03 | phân loại phản hồi UIT-VSFC thành JSON | `qwen2.5:3b` chỉ prompt (module 11) | 0.5B sau SFT trả JSON đúng định dạng gần như tuyệt đối và F1 vượt model 3B dùng prompt: tác vụ hẹp, nhãn nhiều, đúng sở trường |
+| Intermediate 03 | phân loại phản hồi UIT-VSFC thành JSON | `qwen2.5:3b` chỉ prompt (module 11) | 0.5B sau SFT trả JSON đúng định dạng ở mọi câu và vượt xa chính nó khi chỉ dùng prompt, nhất là ở trường chủ đề; nhưng ở F1 cảm xúc trên tập ghim cân bằng nó chỉ ngang model 3B dùng prompt, không hơn. DPO sau SFT đổi được trade-off giữa lớp hiếm và lớp phổ biến, hoặc phá hỏng model nếu learning rate quá lớn |
 | Intermediate 02 | trả lời instruction chung, đo bằng exact-match trắc nghiệm | Qwen2.5-3B không fine-tune | SFT làm loss validation giảm và câu trả lời ngắn gọn đúng kiểu dữ liệu, nhưng **không** đuổi kịp model lớn hơn: thứ thiếu là năng lực, không phải hành vi |
 | Advanced 02 | trích dẫn điều luật cho câu hỏi chưa thấy | BM25 (module 13) | model fine-tune thuộc lòng câu đã train nhưng gần như không trích đúng điều cho câu mới; BM25 thắng xa: kiến thức không nạp được bằng SFT |
 
@@ -125,7 +125,7 @@ ids = tok(full, add_special_tokens=False)["input_ids"]
 print(len(ids), "token, trong đó", len(ids) - len(tok(prompt, add_special_tokens=False)["input_ids"]), "token là phần trả lời")
 ```
 
-Kết quả: phần sau prompt là `'{"sentiment": "negative", "topic": "facility"}<|im_end|>\n'`, và chỉ <<SNIP_ANS>> trong <<SNIP_TOT>>
+Kết quả: phần sau prompt là `'{"sentiment": "negative", "topic": "facility"}<|im_end|>\n'`, và chỉ 15 trong 50
 token của hội thoại thuộc phần trả lời (template tự chèn system mặc định 21 token). Với bài phân loại ngắn như thế, tính
 loss trên **cả chuỗi** nghĩa là phần lớn gradient đến từ việc học thuộc system prompt và câu hỏi. Ba quy tắc:
 
@@ -418,7 +418,16 @@ for beta in (1.0, 0.5):
 print("pi_ref       ", np.round(pi_ref, 3))
 ```
 
-<<DPO_TOY>>
+Kết quả:
+
+| | câu 0 | câu 1 | câu 2 | câu 3 | câu 4 | câu 5 | KL(π* ‖ DPO) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| reward thật | 1.0 | 0.5 | 0.0 | -0.5 | 2.0 | -1.0 | |
+| π_ref | 0.161 | 0.124 | 0.270 | 0.158 | 0.083 | 0.204 | |
+| β = 1: DPO | 0.243 | 0.104 | 0.184 | 0.058 | 0.360 | 0.051 | 0.0040 |
+| β = 1: nghiệm đóng π* | 0.258 | 0.121 | 0.159 | 0.056 | 0.362 | 0.044 | |
+| β = 0.5: DPO | 0.169 | 0.040 | 0.058 | 0.010 | 0.718 | 0.006 | 0.0054 |
+| β = 0.5: nghiệm đóng π* | 0.185 | 0.053 | 0.042 | 0.009 | 0.707 | 0.004 | |
 
 Policy học được bằng DPO trùng nghiệm đóng $$\pi^* \propto \pi_{\text{ref}}\exp(r/\beta)$$ tới sai số lấy mẫu, dù không bao giờ thấy
 reward. $$\beta$$ nhỏ thì policy rời reference xa hơn và dồn xác suất vào câu reward cao nhất; module 07 đã cho thấy cái giá

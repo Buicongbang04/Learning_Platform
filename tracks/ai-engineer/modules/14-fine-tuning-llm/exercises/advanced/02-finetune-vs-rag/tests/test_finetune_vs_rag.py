@@ -45,6 +45,7 @@ def test_citation_scores(nb):
     assert out == pytest.approx({"exact": 0.25, "law": 0.5, "format": 0.75})
     assert nb.citation_scores(["b/2+4"], [{"b/2+1", "b/2+4"}])["exact"] == 1.0
     assert nb.citation_scores(["b/22+1"], [{"b/2+1"}])["law"] == 0.0, "văn bản so nguyên chuỗi, không so tiền tố"
+    assert nb.citation_scores(["b/2+1"], [{"b/22+1"}])["law"] == 0.0, "văn bản so nguyên chuỗi, không so tiền tố"
 
 
 def test_report_written():
