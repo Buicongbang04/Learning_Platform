@@ -29,6 +29,12 @@ def test_parse_score(nb, reply, expected):
     assert nb.parse_score(reply) == expected
 
 
+def test_parse_score_key_and_range(nb):
+    assert nb.parse_score('{"salary": 18}', 5, 100, key="salary") == 18
+    assert nb.parse_score('{"salary": 3}', 5, 100, key="salary") is None
+    assert nb.parse_score('{"score": 18}', 5, 100, key="salary") is None
+
+
 def frame(score):
     rows = []
     for cv, g, ni, p in itertools.product(range(3), ["nam", "nữ"], [0, 1], ["HN", "CT"]):

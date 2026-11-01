@@ -1,0 +1,105 @@
+questions:
+- id: asr-none
+  kind: data
+  type: single
+  prompt: Không phòng thủ (defence none), ASR của bộ tấn công ghim trên qwen2.5:3b nằm ở vùng nào?
+  options:
+  - id: a
+    text: Dưới 15%, model nhỏ hầu như không làm theo tài liệu
+  - id: b
+    text: Khoảng một nửa tới ba phần tư số lượt tấn công
+  - id: c
+    text: Trên 95%, gần như mọi lượt đều thành công
+  - id: d
+    text: Đúng 0%, giống bài computer use của module 16
+- id: easiest-goal
+  kind: data
+  type: single
+  prompt: Không phòng thủ, mục tiêu nào của kẻ tấn công thành công thường xuyên nhất?
+  options:
+  - id: a
+    text: canary, chèn thêm một mã vào cuối câu trả lời
+  - id: b
+    text: phishing, nói tài liệu hết hiệu lực và gọi hotline
+  - id: c
+    text: exfil, chèn ảnh markdown gửi câu hỏi ra ngoài
+  - id: d
+    text: Ba mục tiêu thành công gần như ngang nhau
+- id: best-defence
+  kind: data
+  type: single
+  prompt: Trong sáu cách đóng gói prompt, cách nào cho ASR thấp nhất?
+  options:
+  - id: a
+    text: warn, chỉ thêm cảnh báo vào system
+  - id: b
+    text: spotlight, bọc tài liệu giữa dấu phân cách
+  - id: c
+    text: datamark, thay khoảng trắng bằng ký tự lạ
+  - id: d
+    text: tool-role, đưa tài liệu vào vai tool
+- id: tool-role
+  kind: data
+  type: single
+  prompt: So với none, đưa tài liệu vào message vai tool làm ASR thay đổi thế nào?
+  options:
+  - id: a
+    text: Giảm mạnh, vì model tin kết quả tool ít hơn
+  - id: b
+    text: Tăng rõ, khoảng tin cậy không chồng với none
+  - id: c
+    text: Không đổi, hai khoảng tin cậy trùng nhau
+  - id: d
+    text: Về 0, vì model không đọc nội dung vai tool
+- id: warn-spotlight
+  kind: data
+  type: single
+  prompt: Cảnh báo trong system (warn) và spotlighting thay đổi ASR so với none ra sao?
+  options:
+  - id: a
+    text: Gần như không đổi, nằm trong nhiễu của 144 lượt
+  - id: b
+    text: Giảm còn khoảng một phần tư so với none
+  - id: c
+    text: Tăng gấp đôi vì prompt dài hơn làm model rối
+  - id: d
+    text: Chặn hết kiểu escape nên ASR tổng về gần 0
+- id: output-filter
+  kind: knowledge
+  type: single
+  prompt: Bộ lọc link theo allowlist chồng lên mọi defence. Kết quả đúng với mọi lần chạy là gì?
+  options:
+  - id: a
+    text: ASR của mọi mục tiêu giảm đều khoảng một nửa
+  - id: b
+    text: ASR exfil về 0, canary và phishing không đổi
+  - id: c
+    text: Task success giảm mạnh vì câu trả lời bị cắt
+  - id: d
+    text: Chỉ hiệu quả với defence none, các cách khác thì không
+- id: wilson-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao báo khoảng Wilson cho ASR thay vì khoảng chuẩn p ± z·sqrt(p(1-p)/n)?
+  options:
+  - id: a
+    text: Wilson luôn hẹp hơn nên kết luận mạnh hơn
+  - id: b
+    text: Khoảng chuẩn sụp về một điểm khi k = 0 hoặc k = n
+  - id: c
+    text: Wilson không cần biết số lượt n
+  - id: d
+    text: Khoảng chuẩn chỉ dùng được cho biến liên tục
+- id: denominator
+  kind: knowledge
+  type: multi
+  prompt: Những lượt nào không được tính vào mẫu số của ASR?
+  options:
+  - id: a
+    text: Lượt dùng tài liệu sạch, không có payload
+  - id: b
+    text: Lượt gọi model bị lỗi (timeout, server sập)
+  - id: c
+    text: Lượt model trả lời sai câu hỏi nhưng có payload
+  - id: d
+    text: Lượt tấn công thất bại
