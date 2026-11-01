@@ -3117,6 +3117,16 @@ def ansible_tree(tmp_path: Path, files: dict[str, str]) -> Path:
          "lines"),
         ("site.yml", "- hosts: all\n  vars:\n    x: \"{{ lookup( 'pipe' , 'id') }}\"\n", "pipe"),
         ("site.yml", "- hosts: all\n  vars:\n    url: http://localhost:8000\n", "localhost"),
+        ("inventory/hosts.ini", "[workers]\nw1 x=127.1\n", "127.1"),
+        ("inventory/hosts.ini", "[workers]\nw1 x=127.0.0.01\n", "127.0.0.01"),
+        ("group_vars/all.yml", "bind: 0.0.0.0\n", "0.0.0.0"),
+        ("group_vars/all.yml", "addr: 0x7f000001\n", "0x7f000001"),
+        ("group_vars/all.yml", "addr: 2130706433\n", "2130706433"),
+        ("group_vars/all.yml", "addr: \"::ffff:127.0.0.1\"\n", "::ffff:127.0.0.1"),
+        ("group_vars/all.yml", "addr: \"[::]\"\n", "[::]"),
+        ("site.yml", "- hosts: all\n  vars:\n    \"ansible\\u005fconnection\": local\n", "u005f"),
+        ("inventory/hosts.json", "{\"all\": {\"vars\": {\"ansible\\u005fhost\": \"x\"}}}\n", "u005f"),
+        ("group_vars/all.yml", "\"ansible\\x5fport\": 22\n", "x5f"),
     ],
 )
 def test_ansible_problems_reject(tmp_path, rel, text, needle):
@@ -3139,6 +3149,7 @@ def test_ansible_problems_accept_normal_project(tmp_path):
             "- hosts: workers\n  become: true\n  tasks:\n"
             "    - name: Chờ connection ổn định\n      ansible.builtin.wait_for_connection:\n        timeout: 30\n"
             "    - ansible.builtin.debug:\n        msg: \"{{ ansible_hostname }} {{ inventory_hostname }} {{ lookup('ansible.builtin.env', 'X') }}\"\n"
+            "    - ansible.builtin.lineinfile:\n        path: /etc/x\n        regexp: '^ratio=\\d+\\.0$'\n        line: ratio=1.0.0 0.0\n"
         ),
         "roles/r/templates/worker.env.j2": "REDIS_URL=redis://localhost:6379/0\nBIND=127.0.0.1\n",
         "roles/r/files/hosts": "127.0.0.1 localhost\n",
@@ -3227,9 +3238,18 @@ def test_ansible_files_pin_ssh(tmp_path):
                  "UpdateHostKeys no", "BatchMode yes", f"UserKnownHostsFile {tmp_path / 'known_hosts'}"):
         assert line in ssh
     assert files["known_hosts"].splitlines() == ["[127.0.0.1]:41001 ssh-ed25519 AAAA1", "[127.0.0.1]:41002 ssh-ed25519 AAAA2"]
-    inventory = files["lab.ini"]
-    assert "w1 ansible_host=127.0.0.1 ansible_port=41001 ansible_user=root" in inventory
-    assert "ansible_connection" not in inventory and "localhost" not in inventory
+    assert files["lab.ini"].splitlines() == ["w1", "w2"]
+    assert files["allowed"].splitlines() == ["127.0.0.1 41001", "127.0.0.1 41002"]
+    assert f"ProxyCommand {Path(sys.executable).resolve()} {tmp_path / 'devops_ex_proxy.py'} %h %p {tmp_path / 'allowed'}" in ssh
+    pinned = json.loads(files["lab-conn.yml"])
+    assert set(testkit.ANSIBLE_PINNED_VARS) <= set(pinned)
+    assert pinned["ansible_connection"] == "ssh" and pinned["ansible_user"] == "root"
+    assert pinned["devops_ex_lab_port"] == {"w1": 41001, "w2": 41002}
+    assert pinned["devops_ex_lab_addr"] == {"w1": "127.0.0.1", "w2": "127.0.0.1"}
+    assert "default('0.0.0.0')" in pinned["ansible_host"] and "default(1)" in pinned["ansible_port"]
+    assert pinned["ansible_ssh_common_args"] == pinned["ansible_ssh_extra_args"] == ""
+    assert pinned["ansible_host_key_checking"] is True and pinned["ansible_ssh_executable"] == "ssh"
+    assert pinned["ansible_ssh_args"].startswith(f"-F {tmp_path / 'ssh_config'}")
     config = files["ansible.cfg"]
     assert f"-F {tmp_path / 'ssh_config'}" in config and "host_key_checking = True" in config
     assert f"collections_path = {tmp_path / 'collections'}" in config and f"roles_path = {tmp_path / 'roles'}" in config
@@ -3302,8 +3322,102 @@ def test_ansible_lab_rejects_unpinned_host(ansible_lab):
     ansible_lab.write("rogue/site.yml", "- hosts: rogue\n  gather_facts: false\n  tasks:\n    - ansible.builtin.ping:\n")
     with pytest.raises(pytest.fail.Exception) as info:
         ansible_lab.playbook("site.yml", inventory=[str(rogue)], cwd=rogue.parent)
-    assert "ngoài lab" in str(info.value) and "Host key verification failed" in str(info.value)
-    assert "unreachable=1" in str(info.value)
+    message = str(info.value)
+    assert "host ngoài lab: rogue" in message and "ssh tới 0.0.0.0:1 bị chặn" in message and "unreachable=1" in message
+    assert "inventory host vars trên rogue đặt `ansible_host`" in message
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_host_key_pinning_blocks_allowed_port(ansible_lab):
+    ansible_lab.docker.start("rogue2", ansible_lab.image, ports=[22], env={"DEVOPS_EX_AUTHORIZED_KEY": ansible_lab.public_key})
+    ansible_lab.docker.wait_log("rogue2", "Server listening")
+    port = ansible_lab.docker.port("rogue2", 22)
+    allowed = ansible_lab.root / "allowed"
+    original = allowed.read_text(encoding="utf-8")
+    allowed.write_text(original + f"127.0.0.1 {port}\n", encoding="utf-8")
+    try:
+        result = testkit.run_sandboxed(["ssh", "-F", str(ansible_lab.root / "ssh_config"), "-p", str(port), "127.0.0.1", "true"],
+                                       writable=[ansible_lab.root], cwd=ansible_lab.root, env={}, timeout=60)
+    finally:
+        allowed.write_text(original, encoding="utf-8")
+    assert result.returncode != 0 and "Host key verification failed" in result.stderr, result.stderr
+
+
+def bypass_project(lab, name: str, files: dict[str, str]) -> Path:
+    for rel, text in files.items():
+        path = lab.write(f"{name}/{rel}", text)
+        if rel.endswith(".py"):
+            path.chmod(0o755)
+    return lab.root / name
+
+
+LOCAL_MARKER = "- name: Ghi dấu\n      ansible.builtin.copy:\n        dest: {marker}\n        content: chạy ở đây\n"
+
+
+def assert_bypass_blocked(lab, project: Path, needles: tuple[str, ...], inventory=(), on_lab_host: str | None = None):
+    marker = lab.root / f"{project.name}-pwned"
+    site = (project / "site.yml").read_text(encoding="utf-8").replace("MARKER", str(marker))
+    (project / "site.yml").write_text(site, encoding="utf-8")
+    for host in lab.hosts:
+        assert lab.exec(host, "mkdir", "-p", str(lab.root)).returncode == 0
+    with pytest.raises(pytest.fail.Exception) as info:
+        lab.playbook("site.yml", inventory=list(inventory), cwd=project)
+    message = str(info.value)
+    assert "bị lab đánh dấu lỗi" in message
+    for needle in needles:
+        assert needle in message, message
+    assert not marker.exists(), "Task đã chạy trên máy điều khiển"
+    if on_lab_host:
+        assert lab.read(on_lab_host, str(marker)) == "chạy ở đây", "Task phải chạy trên target qua ssh"
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_bypass_templated_set_fact_key(ansible_lab):
+    project = bypass_project(ansible_lab, "bypass-setfact", {"site.yml": (
+        "- hosts: node-a\n  gather_facts: false\n  tasks:\n"
+        "    - ansible.builtin.set_fact:\n        \"{{ 'ansible_' ~ 'connection' }}\": local\n"
+        "        \"{{ 'ansible_ssh_' ~ 'common_args' }}\": -o StrictHostKeyChecking=no\n"
+        "        \"{{ 'ansible_' ~ 'port' }}\": 22\n"
+        "    " + LOCAL_MARKER.format(marker="MARKER")
+    )})
+    assert_bypass_blocked(ansible_lab, project, ("ansible_facts trên node-a đặt `ansible_connection`",
+                                                 "`ansible_ssh_common_args`", "`ansible_port`"), on_lab_host="node-a")
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_bypass_escaped_key(ansible_lab):
+    project = bypass_project(ansible_lab, "bypass-escape", {"site.yml": (
+        "- hosts: node-a\n  gather_facts: false\n  vars:\n    \"ansible\\u005fconnection\": local\n"
+        "    \"ansible\\u005fhost\": 127.0.0.1\n  tasks:\n"
+        "    " + LOCAL_MARKER.format(marker="MARKER")
+    )})
+    assert testkit.ansible_problems(project), "phép quét tĩnh phải bắt escape"
+    assert_bypass_blocked(ansible_lab, project, ("play vars đặt `ansible_connection`", "play vars đặt `ansible_host`"),
+                          on_lab_host="node-a")
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_bypass_dynamic_inventory_script(ansible_lab):
+    script = ("#!/usr/bin/env python3\nimport json\nprint(json.dumps({'all': {'hosts': ['node-a', 'evil']}, '_meta': {'hostvars': {"
+              "'node-a': {'ansible_connection': 'local'}, 'evil': {'ansible_connection': 'local', 'ansible_host': '127.0.0.1'}}}}))\n")
+    project = bypass_project(ansible_lab, "bypass-inventory", {
+        "inventory.py": script,
+        "site.yml": "- hosts: all\n  gather_facts: false\n  tasks:\n    " + LOCAL_MARKER.format(marker="MARKER"),
+    })
+    assert_bypass_blocked(ansible_lab, project, (
+        "inventory host vars trên node-a đặt `ansible_connection`", "host ngoài lab: evil", "ssh tới 0.0.0.0:1 bị chặn"),
+        inventory=[str(project / "inventory.py")], on_lab_host="node-a")
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_bypass_templated_localhost(ansible_lab):
+    project = bypass_project(ansible_lab, "bypass-localhost", {"site.yml": (
+        "- hosts: \"{{ 'local' ~ 'host' }}\"\n  gather_facts: false\n  connection: local\n  tasks:\n"
+        "    " + LOCAL_MARKER.format(marker="MARKER")
+        + "    - ansible.builtin.ping:\n      delegate_to: \"{{ 'local' ~ 'host' }}\"\n"
+    )})
+    assert_bypass_blocked(ansible_lab, project, ("host ngoài lab: localhost", "ssh tới 0.0.0.0:1 bị chặn",
+                                                 "play connection đặt `local`"))
 
 
 @ANSIBLE_REQUIRED
