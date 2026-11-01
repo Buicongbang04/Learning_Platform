@@ -2239,6 +2239,15 @@ ANSIBLE_PINNED_VARS = (
     "ansible_control_path", "ansible_control_path_dir", "ansible_pipelining", "ansible_ssh_pipelining",
 )
 _ANSIBLE_UNREPORTED = ("ansible_user", "ansible_ssh_user")
+_ANSIBLE_PLUGIN_PATHS = (
+    "action_plugins", "become_plugins", "cache_plugins", "cliconf_plugins", "connection_plugins", "filter_plugins",
+    "httpapi_plugins", "inventory_plugins", "lookup_plugins", "netconf_plugins", "strategy_plugins", "terminal_plugins",
+    "test_plugins", "vars_plugins", "doc_fragment_plugins", "library", "module_utils",
+)
+_ANSIBLE_CONTROL_DIRS = ("roles", "collections", "callbacks", "ansible-home", "plugins",
+                         *(f"plugins/{name}" for name in _ANSIBLE_PLUGIN_PATHS))
+_ANSIBLE_WORK_DIRS = ("home", "cp", "events")
+_ANSIBLE_CONNECTION = "ansible.builtin.ssh"
 _ANSIBLE_CONTROL = ("id_ed25519", "id_ed25519.pub", "ssh_config", "known_hosts", "allowed", "devops_ex_proxy.py",
                     "callbacks/devops_ex_events.py", "ansible.cfg", "lab-conn.yml", "lab.ini")
 _ANSIBLE_CONTROLLER_LOOKUP = re.compile(
@@ -2405,9 +2414,10 @@ def ansible_problems(root: Path) -> list[str]:
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root)
         if path.is_dir():
-            if path.name.endswith("_plugins") or path.name == "collections":
-                found.append(f"{rel}/: thư mục `{path.name}` bị từ chối: plugin trong đó chạy trên máy điều khiển (máy của bạn) "
-                             "chứ không trên target. Bài tập chỉ cần module builtin, xoá thư mục này")
+            if path.name.endswith("_plugins") or path.name in ("collections", "library", "module_utils"):
+                found.append(f"{rel}/: thư mục `{path.name}` bị từ chối: Ansible tự nạp plugin, module và module_utils trong đó "
+                             "(cạnh playbook hay trong role) và chúng có thể thay plugin builtin cùng tên, kể cả plugin kết "
+                             "nối. Bài tập chỉ cần `ansible.builtin`, xoá thư mục này")
             continue
         if not path.is_file() or set(_COPY_IGNORE) & set(rel.parts):
             continue
@@ -2467,6 +2477,8 @@ def _ansible_files(control: Path, work: Path, ports: dict[str, int], host_keys: 
         "[defaults]",
         f"roles_path = {control / 'roles'}",
         f"collections_path = {control / 'collections'}",
+        "collections_scan_sys_path = False",
+        *(f"{name} = {control / 'plugins' / name}" for name in _ANSIBLE_PLUGIN_PATHS),
         f"local_tmp = {work / 'home' / '.ansible' / 'tmp'}",
         f"callback_plugins = {control / 'callbacks'}",
         "callbacks_enabled = devops_ex_events",
@@ -2490,7 +2502,7 @@ def _ansible_files(control: Path, work: Path, ports: dict[str, int], host_keys: 
     pinned = {
         _ANSIBLE_LAB_VARS[0]: {host: "127.0.0.1" for host in ports},
         _ANSIBLE_LAB_VARS[1]: dict(ports),
-        "ansible_connection": "ssh",
+        "ansible_connection": _ANSIBLE_CONNECTION,
         "ansible_host": address,
         "ansible_ssh_host": address,
         "ansible_port": port,
@@ -2530,7 +2542,7 @@ def _ansible_env(control: Path, work: Path, events: Path) -> dict[str, str]:
     return {
         "HOME": str(work / "home"),
         "ANSIBLE_CONFIG": str(control / "ansible.cfg"),
-        "ANSIBLE_HOME": str(work / "home" / ".ansible"),
+        "ANSIBLE_HOME": str(control / "ansible-home"),
         "ANSIBLE_NOCOLOR": "1",
         "ANSIBLE_FORCE_COLOR": "0",
         "PYTHONDONTWRITEBYTECODE": "1",
@@ -2596,9 +2608,12 @@ class AnsibleLab:
     sshd chạy bằng root làm PID 1, không có systemd chạy thật.
 
     Thư mục điều khiển `control` (khoá, ssh_config, known_hosts, `allowed`, script proxy, callback, ansible.cfg, `lab-conn.yml`,
-    `lab.ini`) chỉ được mount chỉ đọc vào sandbox và được ghi lại từ bộ nhớ trước mỗi lệnh; thư mục làm việc `root` ghi được
-    (`HOME`, tmp, control path, bài đã chép, tệp sự kiện). Ranh giới cho code của bài chạy trên máy điều khiển là sandbox
-    (che `~/.ssh`, chỉ `root` ghi được). Kết nối được giữ trong lab bởi biến kết nối ghim bằng extra vars `-e
+    `lab.ini`, `ANSIBLE_HOME` và thư mục rỗng cho MỌI đường dẫn plugin, library, module_utils, roles, collections) chỉ được
+    mount chỉ đọc vào sandbox và được ghi lại từ bộ nhớ trước mỗi lệnh. `root` (bài đã chép, tệp test ghi) cũng chỉ đọc trong
+    sandbox; chỉ `root/home` (`HOME`, local tmp), `root/cp` (control path) và `root/events` ghi được. Ranh giới cho code của bài
+    chạy trên máy điều khiển là sandbox (che `~/.ssh`, chỉ ba thư mục đó ghi được). Plugin cạnh playbook hay trong role
+    (`*_plugins/`, `library/`, `module_utils/`) không tắt được bằng cấu hình và (đã thấy với 2.21.5) che được cả
+    `ansible.builtin.ssh`, nên `stage()` từ chối chúng và bài không tạo được chúng lúc chạy vì `root` chỉ đọc. Kết nối được giữ trong lab bởi biến kết nối ghim bằng extra vars `-e
     @<control>/lab-conn.yml` luôn ở cuối (`ANSIBLE_PINNED_VARS`, kể cả tên cũ `ansible_ssh_host/port/user`), tệp điều khiển
     chỉ đọc, `known_hosts` chỉ có khoá host của các container và ProxyCommand chỉ cho `127.0.0.1:<cổng của lab>`.
     `guard_problems` (callback, sự kiện `connect`) là lớp phát hiện: tệp sự kiện phải ghi được nên không phải ranh giới.
@@ -2648,10 +2663,8 @@ class AnsibleLab:
         reason = sandbox_ready()
         if reason:
             pytest.skip(SANDBOX_SKIP.format(reason=reason))
-        for name in ("home", "cp"):
+        for name in _ANSIBLE_WORK_DIRS:
             (self.root / name).mkdir(parents=True, exist_ok=True)
-        for name in ("roles", "collections", "callbacks"):
-            (self.control / name).mkdir(parents=True, exist_ok=True)
         host_keys: dict[str, str] = {}
         if self.hosts:
             Exercise.require_tool("docker")
@@ -2682,17 +2695,25 @@ class AnsibleLab:
         self._write_control()
 
     def _write_control(self) -> None:
-        """Ghi lại mọi tệp điều khiển từ bản trong bộ nhớ trước mỗi lệnh, xoá tệp lạ trong thư mục điều khiển. Sandbox chỉ
-        thấy thư mục này ở chế độ chỉ đọc; bước này là lớp thứ hai nếu có gì ngoài sandbox đã sửa nó."""
-        expected = {self.control / name for name in self._control_files}
-        for path in sorted(self.control.rglob("*"), reverse=True):
-            if path.is_file() and path not in expected:
+        """Ghi lại mọi tệp điều khiển từ bản trong bộ nhớ trước mỗi lệnh (ghi tệp tạm rồi `os.replace`), xoá tệp và thư mục
+        lạ trong thư mục điều khiển, tạo lại các thư mục plugin rỗng. Sandbox chỉ thấy thư mục này ở chế độ chỉ đọc; bước này
+        là lớp thứ hai nếu có gì ngoài sandbox đã sửa nó."""
+        files = {self.control / name for name in self._control_files}
+        dirs = {self.control / name for name in _ANSIBLE_CONTROL_DIRS} | {p.parent for p in files}
+        for path in sorted(self.control.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+            if path.is_symlink() or (path.is_file() and path not in files):
                 path.unlink()
+            elif path.is_dir() and path not in dirs:
+                shutil.rmtree(path, ignore_errors=True)
+        for path in sorted(dirs):
+            path.mkdir(parents=True, exist_ok=True)
         for name, data in self._control_files.items():
             path = self.control / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(data)
-            path.chmod(0o600 if name == "id_ed25519" else 0o644)
+            fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".write-")
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+            os.chmod(tmp, 0o600 if name == "id_ed25519" else 0o644)
+            os.replace(tmp, path)
 
     def _wait_ssh(self, host: str) -> str:
         self.docker.wait_log(host, "Server listening", timeout=ANSIBLE_READY_TIMEOUT)
@@ -2746,13 +2767,14 @@ class AnsibleLab:
         self._require_entered()
         if not args or not str(args[0]).startswith("ansible"):
             raise ValueError("AnsibleLab.run chỉ chạy lệnh ansible-*")
-        base = _ansible_env(self.control, self.root, events or self.root / "events-unused.jsonl")
+        base = _ansible_env(self.control, self.root, events or self.root / "events" / "unused.jsonl")
         clash = sorted(set(env or {}) & {*base, "PATH", "LANG", "LC_ALL"} | {k for k in env or {} if k.startswith("ANSIBLE_")})
         if clash:
             raise ValueError(f"env không được đặt {clash}: lab tự quản các biến này")
         try:
             self._write_control()
-            return run_sandboxed(list(args), writable=[self.root], readonly=[self.control], cwd=Path(cwd or self.root),
+            return run_sandboxed(list(args), writable=[self.root / name for name in _ANSIBLE_WORK_DIRS],
+                                 readonly=[self.control, self.root], cwd=Path(cwd or self.root),
                                  env={**(env or {}), **base},
                                  timeout=timeout or self.timeout, input=input)
         except subprocess.TimeoutExpired:
@@ -2764,7 +2786,7 @@ class AnsibleLab:
         chạy trên host không thuộc lab."""
         self._require_entered()
         self._runs += 1
-        events = self.root / f"events-{self._runs}.jsonl"
+        events = self.root / "events" / f"run-{self._runs}.jsonl"
         sources = [arg for item in inventory for arg in ("-i", str(item))]
         argv = ["ansible-playbook", *sources, "-i", str(self.inventory), playbook, *args, "-e", f"@{self.control / 'lab-conn.yml'}"]
         result = self.run(*argv, cwd=cwd, timeout=timeout, env=env, events=events)
@@ -2785,11 +2807,11 @@ class AnsibleLab:
         found = [f"task trên host ngoài lab: {host}" for host in sorted(run.hosts - set(self.hosts))]
         for event in run.tasks():
             target = event.get("target") or event["host"]
-            expected = ("ssh", "127.0.0.1", str(self.ports.get(target)))
+            expected = (_ANSIBLE_CONNECTION, "127.0.0.1", str(self.ports.get(target)))
             seen = (event.get("connection"), event.get("address"), event.get("port"))
             if target not in self.ports or seen != expected:
                 found.append(f"task '{event['task']}' của {event['host']} chạy qua {seen[0]} tới {seen[1]}:{seen[2]} "
-                             f"(chỉ được ssh tới 127.0.0.1:<cổng của {target}>)")
+                             f"(chỉ được {_ANSIBLE_CONNECTION} tới 127.0.0.1:<cổng của {target}>)")
         for event in run.connections:
             if not event.get("allowed"):
                 found.append(f"ssh tới {event.get('address')}:{event.get('port')} bị chặn: không phải target của lab")
