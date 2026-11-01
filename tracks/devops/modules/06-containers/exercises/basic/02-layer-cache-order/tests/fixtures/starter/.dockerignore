@@ -1,0 +1,1 @@
+# TODO 2: loại khỏi build context những thứ không được vào image: .env (token thật trên máy dev), tests/, ghi chú, cache Python
