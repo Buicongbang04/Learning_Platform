@@ -1,0 +1,64 @@
+questions:
+  - id: success-gap
+    kind: data
+    type: single
+    prompt: Với mô hình click mặc định, tỉ lệ thành công thật của hệ thống A (câu hỏi đầy đủ) và B (cắt 15 từ) chênh nhau khoảng bao nhiêu?
+    options:
+      - { id: a, text: "Khoảng 3 điểm phần trăm (cỡ 0.81 so với 0.79)" }
+      - { id: b, text: "Khoảng 15 điểm phần trăm (cỡ 0.81 so với 0.66)" }
+      - { id: c, text: "Khoảng 40 điểm phần trăm (cỡ 0.81 so với 0.41)" }
+      - { id: d, text: "Bằng nhau, vì click không phụ thuộc thứ hạng" }
+  - id: ab-size
+    kind: data
+    type: single
+    prompt: ab_sample_size với hai tỉ lệ thành công đó (alpha 0.05, power 0.8) cho khoảng bao nhiêu người mỗi nhóm?
+    options:
+      - { id: a, text: "Khoảng 300" }
+      - { id: b, text: "Khoảng 3 000" }
+      - { id: c, text: "Khoảng 30 000" }
+      - { id: d, text: "Khoảng 300 000" }
+  - id: il-vs-ab
+    kind: data
+    type: single
+    prompt: Để đạt power 0.8 trong mô phỏng, interleaving cần ít người dùng hơn A/B khoảng bao nhiêu lần?
+    options:
+      - { id: a, text: "Không ít hơn, hai cách cần như nhau" }
+      - { id: b, text: "Khoảng 2 tới 4 lần" }
+      - { id: c, text: "Khoảng 10 tới 100 lần" }
+      - { id: d, text: "A/B lại cần ít người hơn interleaving" }
+  - id: il-outcomes
+    kind: data
+    type: single
+    prompt: Trên rất nhiều lượt interleaving, tỉ lệ A thắng, B thắng và hoà trông thế nào?
+    options:
+      - { id: a, text: "A thắng gần như mọi lượt, còn hoà thì rất hiếm khi xảy ra trong mô phỏng" }
+      - { id: b, text: "A nhỉnh hơn B vài điểm phần trăm, hoà cỡ một phần sáu số lượt" }
+      - { id: c, text: "B thắng nhiều hơn A vì câu hỏi ngắn gọn hơn" }
+      - { id: d, text: "Hoà chiếm hơn 90% số lượt" }
+  - id: psi-diacritics
+    kind: data
+    type: single
+    prompt: PSI của đặc trưng "tỉ lệ ký tự có dấu" giữa câu hỏi train và test, và giữa câu test với bản không dấu, cỡ bao nhiêu?
+    options:
+      - { id: a, text: "Cả hai dưới 0.1" }
+      - { id: b, text: "Train/test dưới 0.01; test/không dấu lớn hơn 1" }
+      - { id: c, text: "Train/test lớn hơn 1; test với bản không dấu dưới 0.1" }
+      - { id: d, text: "Cả hai trong khoảng 0.1 tới 0.25" }
+  - id: why-small-gain
+    kind: knowledge
+    type: single
+    prompt: Vì sao lợi thế của interleaving trong bài nhỏ hơn con số hay được trích từ các hệ thống search lớn?
+    options:
+      - { id: a, text: "Vì team-draft luôn kém hơn kiểu trộn balanced interleaving" }
+      - { id: b, text: "Hai hệ thống giống nhau ở nhiều câu và người dùng mô phỏng ít khác biệt nhau" }
+      - { id: c, text: "Vì kiểm định dấu yếu hơn z-test trong mọi trường hợp" }
+      - { id: d, text: "Vì 300 câu hỏi quá nhiều so với số người dùng mô phỏng" }
+  - id: peeking
+    kind: knowledge
+    type: single
+    prompt: Một đội xem kết quả A/B mỗi ngày và dừng ngay khi p < 0.05. Hệ quả?
+    options:
+      - { id: a, text: "Không sao, càng xem nhiều càng chắc chắn" }
+      - { id: b, text: "Tỉ lệ dương tính giả tăng cao hơn 5% nhiều" }
+      - { id: c, text: "Power giảm về 0 vì thí nghiệm dừng sớm" }
+      - { id: d, text: "Chỉ ảnh hưởng tới interleaving, không ảnh hưởng A/B" }
