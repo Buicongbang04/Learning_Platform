@@ -59,7 +59,10 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 - **`flock -n` trên fd, exit 75 (`EX_TEMPFAIL`).** Khoá gắn với file descriptor nên tự nhả khi tiến trình chết, không cần
   dọn tệp PID. Exit 75 báo cho cron hay systemd "thử lại sau", khác với lỗi thật.
 - **Idempotent theo timestamp và checksum.** Cùng `BACKUP_TIMESTAMP` mà bản cũ còn nguyên thì `skip`, không dump lại.
-  Đây là thứ giúp một job bị retry (systemd `Restart=on-failure`, CI chạy lại) không tạo bản trùng.
+  Chỉ chống trùng khi bên gọi ghim `BACKUP_TIMESTAMP`: mặc định `date -u +%Y%m%dT%H%M%SZ` cho mỗi lần retry
+  (systemd `Restart=on-failure`, CI chạy lại) một timestamp mới, tức một bản thứ hai. Job định kỳ muốn retry không tạo
+  bản trùng thì ghim theo khung giờ của lịch, ví dụ job mỗi giờ:
+  `BACKUP_TIMESTAMP="$(date -u +%Y%m%dT%H0000Z)" backup.sh`. Retry trong cùng giờ gặp bản đã có và `skip`.
 - **Retention theo tên, chỉ trên thư mục đúng dạng.** Bản lỗi trong `tests/fixtures/defective/ops/backup.sh` dùng
   `ls | sort | tail | xargs rm -rf` và xoá luôn ghi chú hay bản backup tay. Đánh đổi của bản tham chiếu: retention đếm
   theo tên, không kiểm checksum của bản cũ, nên một bản mới bị hỏng vẫn chiếm một suất. Hệ thống thật nên kiểm khôi

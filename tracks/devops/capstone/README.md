@@ -64,8 +64,8 @@ flowchart TD
 
 | Milestone | Sau module | Dùng lại | Tạo ra | Chấm |
 | --- | --- | --- | --- | --- |
-| [M01](milestones/m01-ops-scripts.md) | 02 Scripting | sample-app compose | `bootstrap.sh`, `healthcheck.sh`, `backup.sh` idempotent | pytest |
-| [M02](milestones/m02-nginx-front.md) | 05 Web server & proxy | M01 | cấu hình Nginx: reverse proxy, TLS tự ký, rate limit, truyền `X-Request-ID` | pytest |
+| [M01](milestones/m01-ops-scripts.md) | 02 Scripting | sample-app compose | `bootstrap.sh`, `healthcheck.sh` chạy lại an toàn, `backup.sh` bỏ qua bản đã có cùng timestamp | pytest |
+| [M02](milestones/m02-nginx-front.md) | 05 Web server & proxy | M01 | `gen-cert.sh` tạo cert tự ký, cấu hình Nginx: reverse proxy, TLS, rate limit, truyền `X-Request-ID` | pytest |
 | [M03](milestones/m03-containers.md) | 06 Containers | M02 | Dockerfile multi-stage chạy non-root, image đã quét lỗ hổng | pytest |
 | [M04](milestones/m04-cicd-pipeline.md) | 07 CI/CD & artifact | M03 | workflow GitHub Actions chạy bằng `act`: test, build, push registry local, deploy staging | pytest |
 | [M05](milestones/m05-iac-config.md) | 09 Configuration management | M03, M04 | hạ tầng OpenTofu trên LocalStack, role Ansible cấu hình host | pytest |

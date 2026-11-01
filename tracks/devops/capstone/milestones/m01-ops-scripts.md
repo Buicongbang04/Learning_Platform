@@ -9,7 +9,8 @@ hỏi bạn:
 
 - `bootstrap.sh` dựng stack Olist Shop và chỉ báo xong khi API thật sự sẵn sàng.
 - `healthcheck.sh` hỏi `/readyz` và trả exit code cùng một dòng kết quả nói rõ thành phần nào hỏng.
-- `backup.sh` sao lưu Postgres vào thư mục theo timestamp, có checksum, giữ N bản mới nhất, chạy lại an toàn.
+- `backup.sh` sao lưu Postgres vào thư mục theo timestamp, có checksum, giữ N bản mới nhất, chạy lại
+  cùng timestamp thì bỏ qua bản đã có.
 
 Đây là bài tích hợp sau [module 02 Scripting](../../modules/02-scripting/README.md). Bạn dùng lại những gì module đó
 dạy (strict mode, quoting, `getopts`, exit code là hợp đồng, `trap`, ghi tạm rồi `mv`, `flock`, test script bằng
@@ -130,8 +131,11 @@ Quy tắc:
 - **Lỗi không để lại gì.** `pg_dump` thoát khác 0 hoặc tạo tệp rỗng: exit 1, stdout rỗng, stderr nói lý do, không tạo
   và không xoá mục nào (không áp retention). Bị `SIGTERM` giữa chừng: exit khác 0, stdout rỗng, không còn `DEST/<TS>`
   dở dang hay thư mục tạm; chạy lại sau đó tạo bản bình thường.
-- **Idempotent.** `DEST/<TS>` đã có và checksum khớp: stdout `skip DEST/<TS>`, exit 0, không gọi `pg_dump`, không đụng
-  tệp. Đã có nhưng hỏng (dump bị sửa hoặc mất `SHA256SUMS`): tạo lại, stdout `created DEST/<TS>`.
+- **Idempotent theo timestamp.** `DEST/<TS>` đã có và checksum khớp: stdout `skip DEST/<TS>`, exit 0, không gọi
+  `pg_dump`, không đụng tệp. Đã có nhưng hỏng (dump bị sửa hoặc mất `SHA256SUMS`): tạo lại, stdout `created DEST/<TS>`.
+  Chỉ chống trùng khi cùng `<TS>`: không đặt `BACKUP_TIMESTAMP` thì mỗi lần chạy (kể cả retry của systemd hay CI) lấy
+  giờ hiện tại và tạo một bản mới. Muốn retry không tạo bản trùng, bên gọi ghim timestamp theo khung lịch, ví dụ job
+  mỗi giờ: `BACKUP_TIMESTAMP="$(date -u +%Y%m%dT%H0000Z)" backup.sh`.
 - **Retention.** Sau mỗi lần thành công (`created` hoặc `skip`), trong các thư mục con tên đúng dạng
   `YYYYMMDDTHHMMSSZ`, giữ `KEEP` thư mục có tên lớn nhất và xoá hẳn phần còn lại. Không đụng mọi thứ khác trong `DEST`
   (tệp ghi chú, thư mục backup tay như `manual-before-upgrade/`, tệp khoá).

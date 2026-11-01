@@ -358,6 +358,50 @@ def bootstrap_problems(ops: Ops, api: FakeApi) -> list[str]:
     return found
 
 
+def bootstrap_url_problems(ops: Ops, api: FakeApi) -> list[str]:
+    script, app = ops.stage(free_port())
+    env = {"OLIST_SHOP_APP_DIR": app, "OLIST_SHOP_PROJECT": PROJECT, "OLIST_SHOP_API_URL": api.url}
+    result = ops.run("bootstrap.sh", "-t", 20, env=env, script=script)
+    lines = result.stdout.splitlines()
+    if result.returncode != 0 or not lines or lines[-1] != f"ready {api.url}":
+        return [f"OLIST_SHOP_API_URL={api.url} (cổng trong .env không có gì chạy): bootstrap phải chờ đúng URL đó và in "
+                f"'ready {api.url}', nhận exit {result.returncode} stdout={result.stdout!r}"]
+    return []
+
+
+def bootstrap_env_source_problems(ops: Ops, api: FakeApi) -> list[str]:
+    script, app = ops.stage(api.port)
+    marker = ops.tmp / "env-was-sourced"
+    (app / ".env").write_text((app / ".env.example").read_text() + f"OLIST_SHOP_NOTE=$(touch {marker})\n")
+    result = ops.run("bootstrap.sh", "-t", 20, env={"OLIST_SHOP_APP_DIR": app, "OLIST_SHOP_PROJECT": PROJECT},
+                     script=script)
+    found = []
+    if marker.exists():
+        found.append("bootstrap đã chạy lệnh nằm trong .env: chỉ lọc dòng OLIST_SHOP_API_PORT=, không source tệp")
+    lines = result.stdout.splitlines()
+    if result.returncode != 0 or not lines or lines[-1] != f"ready http://127.0.0.1:{api.port}":
+        found.append(f".env có dòng lạ: bootstrap vẫn phải đọc cổng và in 'ready http://127.0.0.1:{api.port}', "
+                     f"nhận exit {result.returncode} stdout={result.stdout!r}")
+    return found
+
+
+def bootstrap_missing_compose_problems(ops: Ops, api: FakeApi) -> list[str]:
+    script, app = ops.stage(api.port)
+    (app / "compose.yaml").unlink()
+    result = ops.run("bootstrap.sh", "-t", 20, env={"OLIST_SHOP_APP_DIR": app, "OLIST_SHOP_PROJECT": PROJECT},
+                     script=script)
+    found = []
+    if result.returncode != 2:
+        found.append(f"Thiếu compose.yaml: cần exit 2, nhận {result.returncode}")
+    if "compose.yaml" not in result.stderr:
+        found.append(f"Thiếu compose.yaml: stderr phải nói rõ thiếu compose.yaml, nhận {result.stderr[-400:]!r}")
+    if up_calls(ops):
+        found.append("Thiếu compose.yaml: không được gọi docker compose up")
+    if (app / ".env").exists():
+        found.append("Thiếu compose.yaml: kiểm điều kiện trước khi tạo .env")
+    return found
+
+
 def backup_problems(ops: Ops) -> list[str]:
     found = []
     dest = ops.tmp / "pb-fail"
@@ -507,13 +551,16 @@ class TestM01Bootstrap:
         assert not (app / ".env").exists(), "Kiểm điều kiện trước khi thay đổi bất cứ thứ gì"
 
     def test_m01_bootstrap_requires_compose_file(self, ops, api):
-        script, app = ops.stage(api.port)
-        (app / "compose.yaml").unlink()
-        result = ops.run("bootstrap.sh", "-t", 20, env={"OLIST_SHOP_APP_DIR": app, "OLIST_SHOP_PROJECT": PROJECT},
-                         script=script)
-        assert result.returncode == 2, result.stdout + result.stderr
-        assert not up_calls(ops)
-        assert not (app / ".env").exists()
+        found = bootstrap_missing_compose_problems(ops, api)
+        assert not found, "\n".join(found)
+
+    def test_m01_bootstrap_honours_api_url(self, ops, api):
+        found = bootstrap_url_problems(ops, api)
+        assert not found, "\n".join(found)
+
+    def test_m01_bootstrap_does_not_source_env_file(self, ops, api):
+        found = bootstrap_env_source_problems(ops, api)
+        assert not found, "\n".join(found)
 
     def test_m01_bootstrap_up_failure(self, ops, api):
         script, app = ops.stage(api.port)
@@ -740,7 +787,7 @@ def test_m01_shellcheck_clean(project_root, name):
 
 @pytest.mark.usefixtures("healthcheck_tools", "backup_tools")
 def test_m01_checks_catch_defective_scripts(tmp_path, api):
-    """Bản lỗi trong fixtures/defective/ops: curl không -f, down -v rồi ghi đè .env, pg_dump thẳng vào thư mục đích."""
+    """Bản lỗi trong fixtures/defective/ops: curl không -f, source .env, down -v rồi ghi đè .env, pg_dump thẳng vào thư mục đích."""
     defective = Ops(tmp_path, FIXTURES / "defective")
     health = healthcheck_problems(defective, api)
     assert any("failing=redis" in p for p in health), health
@@ -748,6 +795,11 @@ def test_m01_checks_catch_defective_scripts(tmp_path, api):
     assert any("ghi đè" in p for p in boot), boot
     assert any("phá huỷ" in p for p in boot), boot
     assert any("chờ" in p for p in boot), boot
+    checks = {"url": bootstrap_url_problems, "source": bootstrap_env_source_problems,
+              "compose": bootstrap_missing_compose_problems}
+    for name, check in checks.items():
+        (tmp_path / name).mkdir()
+        assert check(Ops(tmp_path / name, FIXTURES / "defective"), api), name
     backup = backup_problems(defective)
     assert any("pg_dump lỗi" in p for p in backup), backup
     assert any("notes.txt" in p for p in backup), backup
