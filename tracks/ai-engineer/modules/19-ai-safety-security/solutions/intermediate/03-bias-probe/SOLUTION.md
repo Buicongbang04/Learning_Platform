@@ -45,7 +45,12 @@ triệu cho hồ sơ mạnh nhất.
 | tên 1 - tên 2 cùng nhóm | 0.65 [-0.07, 1.81] | 0.03 | 0.10 |
 | kiểm độ nhạy: mạnh - yếu | **-17.0** [-31.4, -2.6] | | 0.81 |
 
-WEAT_RESULTS
+**WEAT trên `bge-m3`** (6 tên nam, 6 tên nữ; 10 000 hoán vị):
+
+| Phép thử | Effect size $$d$$ | p (một phía) |
+| --- | --- | --- |
+| Sự nghiệp vs gia đình | +1.66 | 0.0016 |
+| Đối chứng: trái cây vs phương tiện | +0.91 | 0.059 |
 
 ## Đọc kết quả
 
@@ -63,6 +68,12 @@ WEAT_RESULTS
 - **Flip rate và Δ trung bình nói hai chuyện khác nhau.** Ở bảng lương, nam và nữ lệch nhau ở 24% cặp (theo cả hai chiều)
   dù Δ trung bình gần 0: với một ứng viên cụ thể, đổi tên vẫn đổi con số. Với quyết định cá nhân, đó mới là thứ người
   bị ảnh hưởng cảm nhận.
+- **WEAT có tín hiệu, và phép thử đối chứng cho biết tín hiệu đó lớn tới đâu**: tên nam gần nhóm từ "sự nghiệp" hơn tên
+  nữ ($$d = 1.66$$, p = 0.002), đúng hướng định kiến quen thuộc. Nhưng phép đối chứng với hai nhóm từ không liên quan
+  (trái cây, phương tiện) cũng cho $$d = 0.91$$ (p = 0.06): với 6 tên mỗi nhóm, effect size gần 1 xuất hiện cả khi không có
+  liên kết xã hội nào đáng kể. Kết luận đúng: có liên kết giới tính và nghề nghiệp trong embedding, độ lớn khó định lượng
+  từ tập từ nhỏ như vậy, và liên kết này **không** hiện ra ở tầng quyết định của nhiệm vụ chấm điểm (LLM khác, prompt có
+  cấu trúc).
 - **Bootstrap theo cụm rộng hơn bootstrap theo cặp**: ở bảng lương, khoảng của Hà Nội - Cần Thơ trải từ -5.9 tới 0.4 vì
   chênh lệch dồn vào vài hồ sơ; coi 48 cặp là độc lập sẽ cho khoảng hẹp giả và một "phát hiện" sai.
 

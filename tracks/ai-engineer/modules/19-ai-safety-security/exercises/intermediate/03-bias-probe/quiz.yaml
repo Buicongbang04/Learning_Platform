@@ -90,3 +90,16 @@ questions:
     text: Vì WEAT cần ít nhất bốn tập thuộc tính mới tính được effect size
   - id: d
     text: Để tính p-value hai phía thay cho p-value một phía như bình thường
+- id: weat-result
+  kind: data
+  type: single
+  prompt: Với bge-m3, WEAT tên nam/nữ với sự nghiệp/gia đình so với phép thử đối chứng (trái cây/phương tiện) cho kết quả nào?
+  options:
+  - id: a
+    text: Phép chính có effect size lớn hơn đối chứng, nhưng đối chứng cũng không nhỏ
+  - id: b
+    text: Phép chính có effect size gần 0, đối chứng thì lớn hơn nhiều
+  - id: c
+    text: Cả hai đều đúng bằng 0 vì bge-m3 đã khử thiên lệch
+  - id: d
+    text: Cả hai có effect size âm, tên nữ gần sự nghiệp hơn tên nam

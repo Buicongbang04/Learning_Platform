@@ -26,7 +26,9 @@ hình: TF-IDF theo từ, TF-IDF theo ký tự, và embedding `bge-m3` (module 12
 **Phần cứng:** CPU · ~90 phút
 
 Cần bộ `prompt-injections` (546 train, 116 test, cột `text`, `label`) và Ollama với `bge-m3` cho phần embedding (embed
-khoảng 700 câu, khoảng 1 phút). Phần TF-IDF chạy vài giây.
+khoảng 700 câu; cả notebook lời giải chạy khoảng 3 phút trên PC của track khi Ollama dùng chung). Phần TF-IDF chạy vài
+giây. Với vài câu, `bge-m3` qua Ollama trả lỗi `NaN` (module 13 đã gặp); notebook embed lại các câu đó bằng một biến thể
+nhỏ.
 
 Trong `starter/classifier.ipynb`, cell chấm điểm:
 
