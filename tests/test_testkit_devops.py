@@ -4924,3 +4924,117 @@ def test_kube_lab_learner_cannot_create_persistent_volume():
             created = lab.run(["kubectl", "create", "-f", "-"], input=json.dumps(volume))
             assert created.returncode != 0 and "forbidden" in created.stderr.lower(), created.stderr
     assert admin_kubectl("get", "pv", f"{lab.namespace}-pv").returncode != 0
+
+
+@pytest.mark.parametrize("image,ref", [
+    ("postgres:16.15-alpine", "docker.io/library/postgres:16.15-alpine"),
+    ("devops-track/olist-shop:1.0", "docker.io/devops-track/olist-shop:1.0"),
+    ("registry.k8s.io/pause:3.10", "registry.k8s.io/pause:3.10"),
+    ("localhost:5000/api:1", "localhost:5000/api:1"),
+    ("redis", "docker.io/library/redis:latest"),
+    ("docker.io/library/nginx:1.30.6-alpine", "docker.io/library/nginx:1.30.6-alpine"),
+])
+def test_kind_image_ref(image, ref):
+    assert testkit._kind_image_ref(image) == ref
+
+
+def crictl_images(monkeypatch, per_node):
+    calls = []
+
+    def node_exec(node, *cmd, timeout=60, input=None):
+        calls.append((node, cmd))
+        assert cmd == ("crictl", "images", "-o", "json")
+        tags = per_node.get(node, [])
+        return subprocess.CompletedProcess(["docker", "exec", node, *cmd], 0,
+                                           json.dumps({"images": [{"repoTags": [t]} for t in tags]}), "")
+
+    monkeypatch.setattr(testkit, "kind_node_exec", node_exec)
+    return calls
+
+
+def test_require_kind_images_skips_with_load_command(monkeypatch):
+    KubeFake(monkeypatch)
+    calls = crictl_images(monkeypatch, {
+        "devops-lab-worker": ["docker.io/devops-track/olist-shop:1.0", "docker.io/library/redis:7.4.12-alpine"],
+        "devops-lab-worker2": ["docker.io/devops-track/olist-shop:1.0"],
+    })
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_kind_images("devops-track/olist-shop:1.0", "redis:7.4.12-alpine")
+    assert_skip(info, "redis:7.4.12-alpine", "devops-lab-worker2", "kind load docker-image redis:7.4.12-alpine --name devops-lab",
+                "--nodes devops-lab-worker,devops-lab-worker2", "không bao giờ kéo image")
+    assert "olist-shop:1.0 " not in str(info.value).split("kind load")[1].split("--name")[0] + " "
+    assert {node for node, _ in calls} == {"devops-lab-worker", "devops-lab-worker2"}
+
+
+def test_require_kind_images_olist_hint_has_build(monkeypatch):
+    KubeFake(monkeypatch)
+    crictl_images(monkeypatch, {})
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_kind_images(testkit.KUBE_IMAGES["olist"])
+    assert_skip(info, testkit.KUBE_OLIST_BUILD)
+
+
+def test_require_kind_images_present(monkeypatch):
+    KubeFake(monkeypatch)
+    tags = [testkit._kind_image_ref(i) for i in testkit.KUBE_IMAGES.values()]
+    calls = crictl_images(monkeypatch, {"devops-lab-worker": tags, "devops-lab-worker2": tags})
+    testkit.Exercise.require_kind_images(*testkit.KUBE_IMAGES.values())
+    assert all(node != "devops-lab-control-plane" for node, _ in calls)
+
+
+def test_require_kind_images_needs_cluster_first(monkeypatch):
+    KubeFake(monkeypatch, clusters="\n")
+    calls = crictl_images(monkeypatch, {})
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_kind_images("redis:7.4.12-alpine")
+    assert_skip(info, "Chưa có cluster kind devops-lab")
+    assert calls == []
+
+
+def test_kube_images_documented_and_pinned():
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    assert testkit.KUBE_OLIST_BUILD in doc
+    for image in testkit.KUBE_IMAGES.values():
+        assert image in doc
+        assert re.search(r":\d+\.\d+", image), image
+    dockerfile = testkit.KUBE_OLIST_DOCKERFILE.read_text(encoding="utf-8")
+    assert [line.split()[1] for line in dockerfile.splitlines() if line.startswith("FROM")] == ["python:3.12.16-slim-trixie"] * 2
+    assert re.search(r"^USER 10001", dockerfile, re.M)
+
+
+@KUBE_REQUIRED
+def test_require_kind_images_real():
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_kind_images("registry.k8s.io/pause:3.10", "kindest/kindnetd:v20250512-df8de77b")
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_kind_images("devops-track/khong-co-image:0.0")
+    assert_skip(info, "devops-track/khong-co-image:0.0", "devops-lab-worker")
+
+
+@KUBE_REQUIRED
+def test_etcd_snapshot_argv_real(tmp_path):
+    """argv cố định module 10 dùng: etcdctl nằm trong container etcd (image không có etcdutl), crictl chọn container theo tên,
+    snapshot ghi vào /var/lib/etcd, mount ghi được duy nhất chung giữa container etcd và node."""
+    import struct
+
+    testkit.Exercise.require_cluster()
+    with testkit.KubeLab() as lab:
+        lab.kubectl("create", "configmap", "etcd-marker", "--from-literal=a=1")
+        try:
+            saved = testkit.kind_node_exec(
+                "devops-lab-control-plane", "crictl", "exec", "-q", "--name", "^etcd$", "--state", "running", "etcdctl",
+                "--endpoints=https://127.0.0.1:2379", "--cacert=/etc/kubernetes/pki/etcd/ca.crt",
+                "--cert=/etc/kubernetes/pki/etcd/server.crt", "--key=/etc/kubernetes/pki/etcd/server.key",
+                "snapshot", "save", "/var/lib/etcd/devops-ex-snapshot.db", timeout=120)
+            assert saved.returncode == 0, saved.stderr
+            assert "Snapshot saved at /var/lib/etcd/devops-ex-snapshot.db" in saved.stdout + saved.stderr
+            testkit.kind_node_cp("devops-lab-control-plane", "/var/lib/etcd/devops-ex-snapshot.db", tmp_path / "snap.db")
+        finally:
+            testkit.kind_node_exec("devops-lab-control-plane", "rm", "-f", "/var/lib/etcd/devops-ex-snapshot.db",
+                                   "/var/lib/etcd/devops-ex-snapshot.db.part")
+        data = (tmp_path / "snap.db").read_bytes()
+        assert struct.unpack_from("<I", data, 16)[0] == 0xED0CDAED
+        assert f"/registry/configmaps/{lab.namespace}/etcd-marker".encode() in data
+        status = testkit.kind_node_exec("devops-lab-control-plane", "crictl", "exec", "-q", "--name", "^etcd$", "--state",
+                                        "running", "etcdutl", "version")
+        assert status.returncode != 0

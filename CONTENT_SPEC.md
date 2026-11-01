@@ -361,9 +361,10 @@ lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, khô
 - `ex.require_tool(name, min_version)`: thiếu công cụ, phiên bản cũ hơn mức tối thiểu (so sau khi đệm số 0: `1.27`
   bằng `1.27.0`), không đọc được phiên bản (thông báo riêng, chỉ lệnh để tự kiểm), hay (với `docker`) daemon tắt hoặc
   user không có quyền socket thì skip.
-- `ex.require_image(image)`, `ex.require_service(name)`, `ex.require_registry()`, `ex.require_cluster(name="devops-lab")`: skip khi chưa có
-  image, service compose, registry local hay cluster kind (`require_cluster` có bốn thông báo riêng: Docker tắt, chưa có
-  cluster, node đang dừng kèm lệnh `docker start`, `/readyz` không trả `ok` trong 5 giây).
+- `ex.require_image(image)`, `ex.require_service(name)`, `ex.require_registry()`, `ex.require_cluster(name="devops-lab")`,
+  `ex.require_kind_images(*images)`: skip khi chưa có image, service compose, registry local, cluster kind hay image trong
+  worker của cluster (`require_cluster` có bốn thông báo riêng: Docker tắt, chưa có cluster, node đang dừng kèm lệnh
+  `docker start`, `/readyz` không trả `ok` trong 5 giây).
 - Thông báo skip chỉ chỗ sửa: `setup/DEVOPS-TOOLS.md`, lệnh `docker pull` hay `docker compose ... up -d`. Skip không
   tính là đạt; `SOLUTION=1` phải pass không skip khi đã cài đủ công cụ.
 
@@ -408,8 +409,17 @@ lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, khô
   tạo PV `local` trong thư mục riêng của worker, không mount từ máy host: thư mục bind từ host cho pod root tạo được tệp
   setuid trên máy host), PV động dùng StorageClass `standard` có sẵn.
 - Việc của admin trong CKA: cordon, drain, taint qua `lab.node_action(spec)` (chỉ worker); etcd snapshot là một lời gọi
-  `kind_node_exec("devops-lab-control-plane", ...)` với argv hằng (etcdctl trong container etcd qua `crictl exec`, cờ
-  chứng chỉ trỏ `/etc/kubernetes/pki/etcd/`); restore etcd và nâng cấp bằng kubeadm là lab tay trong README, chấm bằng rubric,
-  testkit không làm. CustomResourceDefinition trong `allow` chỉ cho tạo CRD; custom resource của nó cần
+  `kind_node_exec("devops-lab-control-plane", ...)` với argv hằng. **Đã kiểm 2026-11-02** (etcd 3.6.4, crictl 1.33.0): node không có
+  etcdctl, image `registry.k8s.io/etcd:3.6.4-0` có `etcdctl` nhưng không có `etcdutl` hay shell; argv là `crictl exec -q --name ^etcd$
+  --state running etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt
+  --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save
+  /var/lib/etcd/devops-ex-snapshot.db` (`crictl exec` nhận bộ lọc `--name` thay cho ID container; `/var/lib/etcd` là mount ghi được
+  duy nhất chung giữa container etcd và node), rồi `kind_node_cp` về máy và `rm -f` trong `finally`. etcdctl 3.6 bỏ `snapshot
+  status`, nên test kiểm tệp trên máy (magic bbolt `0xED0CDAED` ở offset 16, khoá `/registry/...` của object vừa tạo). Restore
+  etcd và nâng cấp bằng kubeadm là lab tay trong README, chấm bằng rubric, testkit không làm.
+- Image cho pod của bài (`KUBE_IMAGES`: `devops-track/olist-shop:1.0` build từ `setup/kind/olist-shop.Dockerfile`,
+  `postgres:16.15-alpine`, `redis:7.4.12-alpine`, `nginx:1.30.6-alpine`) phải nạp sẵn vào hai worker; test gọi
+  `ex.require_kind_images(...)` trước khi apply để skip kèm lệnh `kind load` thay vì để pod kéo image từ Internet hay kẹt
+  `ImagePullBackOff`. Manifest của bài dùng đúng tag này (không `latest`). CustomResourceDefinition trong `allow` chỉ cho tạo CRD; custom resource của nó cần
   quyền thêm, thêm vào `KubeLab` (kèm test) khi bài cần.
 - metrics-server (HPA ở module 11) chưa cài sẵn; module 11 cài từ manifest ghim lưu trong repo, cờ `--kubelet-insecure-tls`.

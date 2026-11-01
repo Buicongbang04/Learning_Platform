@@ -850,8 +850,11 @@ TOOL_DENYLIST_GOOD = {
     "kind-node-cp-to-node": 'kind_node_cp("devops-lab-worker", tmp_path / "in.txt", "/root/in.txt", to_node=True, timeout=60)\n',
     "kind-node-exec-input": 'kind_node_exec("devops-lab-worker", "tee", "/root/x", input="devops-ex\\n", timeout=30)\n',
     "kind-node-import": 'from testkit import kind_node_exec, kind_node_cp\n',
-    "etcd-snapshot": ('kind_node_exec("devops-lab-control-plane", "crictl", "exec", "etcd", "etcdctl", "--endpoints=https://127.0.0.1:2379", '
-                      '"snapshot", "save", "/var/lib/etcd/snap.db")\n'),
+    "etcd-snapshot": ('kind_node_exec("devops-lab-control-plane", "crictl", "exec", "-q", "--name", "^etcd$", "--state", "running", '
+                      '"etcdctl", "--endpoints=https://127.0.0.1:2379", "--cacert=/etc/kubernetes/pki/etcd/ca.crt", '
+                      '"--cert=/etc/kubernetes/pki/etcd/server.crt", "--key=/etc/kubernetes/pki/etcd/server.key", '
+                      '"snapshot", "save", "/var/lib/etcd/devops-ex-snapshot.db", timeout=120)\n'),
+    "require-kind-images": 'ex.require_kind_images("devops-track/olist-shop:1.0", "postgres:16.15-alpine")\n',
     "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
 }
 

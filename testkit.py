@@ -2992,6 +2992,22 @@ KUBE_SKIP_NOT_READY = (
     "API server của cluster kind {name} chưa sẵn sàng (kubectl get --raw /readyz qua kubeconfig tạm, chờ {seconds} giây: "
     "{detail}). Chờ thêm rồi chạy lại; vẫn lỗi thì xem docker logs {name}-control-plane"
 )
+KUBE_IMAGES = {
+    "olist": "devops-track/olist-shop:1.0",
+    "postgres": "postgres:16.15-alpine",
+    "redis": "redis:7.4.12-alpine",
+    "nginx": "nginx:1.30.6-alpine",
+}
+KUBE_OLIST_DOCKERFILE = ROOT / "setup" / "kind" / "olist-shop.Dockerfile"
+KUBE_OLIST_BUILD = ("docker build --pull=false -f setup/kind/olist-shop.Dockerfile -t devops-track/olist-shop:1.0 "
+                    "tracks/devops/sample-app")
+KUBE_WORKERS = "devops-lab-worker,devops-lab-worker2"
+KUBE_LOAD = "kind load docker-image {images} --name {name} --nodes " + KUBE_WORKERS
+KUBE_SKIP_IMAGES = (
+    "Image chưa nạp vào worker của cluster kind {name} ({detail}); test không bao giờ kéo image từ Internet. Nạp bằng: {load}{build}. "
+    "Docker dùng containerd image store mà lệnh trên báo 'content digest ... not found' thì nạp qua docker save --platform "
+    "linux/amd64 rồi kind load image-archive, xem setup/DEVOPS-TOOLS.md"
+)
 _KIND_LABEL = "io.x-k8s.kind.cluster"
 _KIND_NODE = re.compile(r"devops-lab-(?:control-plane|worker\d*)")
 _KIND_NODE_SHELLS = {"sh", "bash", "dash", "zsh", "ash", "ksh", "busybox", "env"}
@@ -3230,6 +3246,33 @@ def kind_node_cp(node: str, source, dest, *, to_node: bool = False, timeout: flo
     if result.returncode != 0:
         pytest.fail(f"docker cp {' '.join(args)} lỗi: {result.stderr.strip()}")
     return result
+
+
+def _kind_image_ref(image: str) -> str:
+    path, tag = image.rsplit(":", 1) if ":" in image.rsplit("/", 1)[-1] else (image, "latest")
+    first = path.split("/", 1)[0]
+    if "/" not in path:
+        path = f"docker.io/library/{path}"
+    elif "." not in first and ":" not in first and first != "localhost":
+        path = f"docker.io/{path}"
+    return f"{path}:{tag}"
+
+
+def kind_images_missing(images, name: str = KIND_CLUSTER) -> dict[str, list[str]]:
+    """Image trong `images` chưa có trong containerd của từng worker (`crictl images`), theo tên đầy đủ (`postgres:16` là
+    `docker.io/library/postgres:16`). Control plane có taint nên pod của bài không chạy ở đó, không xét."""
+    missing = {}
+    for node in sorted(n for n in kind_nodes(name) if _KUBE_WORKER.fullmatch(n)):
+        result = kind_node_exec(node, "crictl", "images", "-o", "json")
+        try:
+            listed = json.loads(result.stdout).get("images", []) if result.returncode == 0 else []
+        except ValueError:
+            listed = []
+        tags = {tag for item in listed if isinstance(item, dict) for tag in item.get("repoTags") or []}
+        lost = [image for image in images if _kind_image_ref(image) not in tags]
+        if lost:
+            missing[node] = lost
+    return missing
 
 
 def _kube_flatten(documents) -> list:
@@ -4209,3 +4252,17 @@ class Exercise:
         _require_cluster_up(name)
         with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}ready-") as tmp:
             _kube_ready(_KubeAdmin(Path(tmp), name), name)
+
+    @staticmethod
+    def require_kind_images(*images: str, name: str = KIND_CLUSTER) -> None:
+        """Skip khi một image trong `images` chưa nạp vào mọi worker của cluster (`kind load`), để pod không bao giờ phải kéo
+        image từ Internet lúc chấm. Kiểm cluster trước (`require_cluster` cho các thông báo về Docker, cluster, node). Thông
+        báo skip có đúng lệnh `kind load docker-image` cho image còn thiếu, cộng lệnh build khi thiếu image Olist Shop."""
+        _require_cluster_up(name)
+        missing = kind_images_missing(images, name)
+        if missing:
+            wanted = [image for image in images if any(image in lost for lost in missing.values())]
+            detail = "; ".join(f"{node} thiếu {', '.join(lost)}" for node, lost in missing.items())
+            build = f" (build trước: {KUBE_OLIST_BUILD})" if KUBE_IMAGES["olist"] in wanted else ""
+            pytest.skip(KUBE_SKIP_IMAGES.format(name=name, detail=detail, load=KUBE_LOAD.format(images=" ".join(wanted), name=name),
+                                                build=build))
