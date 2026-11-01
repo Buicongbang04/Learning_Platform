@@ -1,0 +1,60 @@
+name: worker-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_VERSION: 0.10.8
+      UV_SHA256_X86_64: f0c566b55683395a62fefb9261a060fa09824914b5682c3b9629fa154762ae2f
+      UV_SHA256_AARCH64: 661860e954f87dcd823251191866af3486484d1a9df60eed56f4586ed7559e3d
+      PYTHON_VERSION: 3.12.13
+    steps:
+      - name: Checkout (actions/checkout v7.0.1)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Ghi chú PR
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.head_ref }}
+        run: printf 'Đang kiểm PR %s từ nhánh %s\n' "$PR_TITLE" "$PR_BRANCH"
+      - name: Cài uv
+        run: |
+          case "$(uname -m)" in
+            x86_64) target=x86_64-unknown-linux-gnu; sum="$UV_SHA256_X86_64" ;;
+            aarch64) target=aarch64-unknown-linux-gnu; sum="$UV_SHA256_AARCH64" ;;
+            *) echo "Không có bản uv cho kiến trúc $(uname -m)" >&2; exit 1 ;;
+          esac
+          node -e 'const [u, o] = process.argv.slice(1); fetch(u).then(r => { if (!r.ok) throw new Error("HTTP " + r.status + " " + u); return r.arrayBuffer(); }).then(b => require("fs").writeFileSync(o, Buffer.from(b))).catch(e => { console.error("Tải lỗi: " + ((e.cause && e.cause.code) || e.message)); process.exit(1); })' \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${target}.tar.gz" "$RUNNER_TEMP/uv.tar.gz"
+          echo "${sum}  $RUNNER_TEMP/uv.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/uv.tar.gz" -C "$RUNNER_TEMP/bin" --strip-components=1 "uv-${target}/uv"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Cài Python và dependency
+        run: |
+          uv venv --python "$PYTHON_VERSION" "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" -r requirements.txt -r requirements-dev.txt
+      - name: Test worker
+        run: '"$RUNNER_TEMP/venv/bin/python" -m pytest -q tests/test_worker.py --junitxml=worker-report.xml'
+      - name: Lưu báo cáo test (actions/upload-artifact v7.0.2)
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: worker-report
+          path: worker-report.xml
+          retention-days: 7

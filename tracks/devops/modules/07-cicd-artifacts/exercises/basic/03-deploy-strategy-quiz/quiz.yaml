@@ -1,0 +1,83 @@
+questions:
+  - id: risky-pricing-change
+    kind: knowledge
+    type: single
+    prompt: "API Olist Shop (stateless, 12 pod) đổi logic tính phí vận chuyển, rủi ro cao. Bạn muốn 5% traffic thật đi vào bản mới, so tỉ lệ lỗi và p95 với bản cũ, vượt ngưỡng thì tự quay lại. Chọn chiến lược nào?"
+    options:
+      - { id: a, text: "Rolling update với maxUnavailable 25%, xem dashboard sau khi xong" }
+      - { id: b, text: "Canary có bước 5% và phân tích metric tự động" }
+      - { id: c, text: "Blue/green: dựng đủ 12 pod mới rồi chuyển toàn bộ traffic" }
+      - { id: d, text: "Recreate trong khung giờ ít khách để giảm người bị ảnh hưởng" }
+  - id: protocol-switch
+    kind: knowledge
+    type: single
+    prompt: "Bản mới của API đổi định dạng token phiên, frontend và API phải đổi cùng lúc: không được có thời điểm bản cũ và bản mới cùng nhận request. Cụm còn dư tài nguyên gấp đôi. Cần quay lại trong vài giây nếu lỗi. Chọn gì?"
+    options:
+      - { id: a, text: "Canary 1% rồi tăng dần lên 100% trong vòng một giờ tới" }
+      - { id: b, text: "Rolling update chậm, mỗi lần thay một pod" }
+      - { id: c, text: "Blue/green: môi trường mới đầy đủ, đổi router một lần" }
+      - { id: d, text: "Feature flag bật cho 10% người dùng trước tiên" }
+  - id: exclusive-worker
+    kind: knowledge
+    type: single
+    prompt: "Worker tính doanh thu giữ khoá độc quyền trên bảng revenue_by_state; hai phiên bản chạy song song sẽ ghi đè kết quả của nhau. Job chạy theo lô, chậm 2 phút không ai thấy. Chiến lược hợp lý nhất?"
+    options:
+      - { id: a, text: "Recreate: dừng hết bản cũ rồi mới chạy bản mới" }
+      - { id: b, text: "Canary 10% số worker để so kết quả hai bản" }
+      - { id: c, text: "Rolling update với maxSurge 1 như mặc định" }
+      - { id: d, text: "Blue/green, giữ cả hai nhóm worker cùng chạy để so sánh" }
+  - id: launch-date
+    kind: knowledge
+    type: single
+    prompt: "Luồng checkout mới đã code xong nhưng marketing chỉ cho ra mắt sau 2 tuần, theo vùng. Team làm trunk-based, merge vào main mỗi ngày và deploy liên tục. Làm sao để code lên production mà khách chưa thấy?"
+    options:
+      - { id: a, text: "Giữ code trên nhánh dài hạn, 2 tuần sau mới merge một lần" }
+      - { id: b, text: "Deploy bằng blue/green rồi để môi trường xanh tắt tới ngày ra mắt" }
+      - { id: c, text: "Canary 0% traffic cho tới ngày ra mắt rồi tăng dần" }
+      - { id: d, text: "Feature flag tắt mặc định, bật theo vùng vào ngày ra mắt" }
+  - id: rename-column
+    kind: knowledge
+    type: single
+    prompt: "Cần đổi tên cột customer_state thành state trong bảng customers mà không downtime, API deploy bằng rolling update. Cách nào an toàn?"
+    options:
+      - { id: a, text: "Một release: migration đổi tên cột chạy ngay trước khi rollout bản mới" }
+      - { id: b, text: "Nhiều release: thêm cột mới, ghi cả hai, backfill, đổi chỗ đọc, cuối cùng xoá cột cũ" }
+      - { id: c, text: "Dùng blue/green vì môi trường xanh có cơ sở dữ liệu riêng" }
+      - { id: d, text: "Chặn mọi request ghi trong lúc rollout rồi mở lại" }
+  - id: fastest-rollback
+    kind: knowledge
+    type: single
+    prompt: "Bản sha-3f9c2a1b7d10 vừa lên production làm lỗi 5xx tăng vọt. Cách quay lại nhanh và chắc chắn nhất?"
+    options:
+      - { id: a, text: "git revert commit lỗi, chờ CI build image mới rồi deploy" }
+      - { id: b, text: "Build lại commit trước đó từ đầu để có image sạch" }
+      - { id: c, text: "Deploy lại digest của bản trước, lấy từ lịch sử deploy" }
+      - { id: d, text: "Đẩy lại tag latest trỏ về image cũ cho các node tự kéo" }
+  - id: canary-within-threshold
+    kind: knowledge
+    type: single
+    prompt: "Ngưỡng đã thống nhất trước: lỗi của canary không vượt baseline quá 0,5 điểm phần trăm, p95 không tăng quá 10%. Canary 10% sau 15 phút: lỗi 0,42% (baseline 0,35%), p95 tăng 3%, đủ mẫu. Làm gì?"
+    options:
+      - { id: a, text: "Rollback, vì tỉ lệ lỗi của canary cao hơn baseline" }
+      - { id: b, text: "Sang bước tiếp theo của kế hoạch canary" }
+      - { id: c, text: "Đẩy thẳng lên 100% vì mọi chỉ số đều ổn" }
+      - { id: d, text: "Dừng lại và họp team để quyết định bằng cảm nhận" }
+  - id: mirror-traffic
+    kind: knowledge
+    type: single
+    prompt: "Service gợi ý sản phẩm viết lại hoàn toàn. Bạn muốn chạy nó với đúng traffic production để đo độ trễ và so kết quả với bản cũ, nhưng khách hàng không bao giờ nhận response từ bản mới. Chọn gì?"
+    options:
+      - { id: a, text: "Shadow (mirror) traffic, bỏ response của bản mới" }
+      - { id: b, text: "Canary 1% với khách hàng nội bộ trước tiên" }
+      - { id: c, text: "Blue/green, chuyển hết traffic sang rồi xem metric" }
+      - { id: d, text: "A/B test chia đôi người dùng theo cookie" }
+  - id: zero-downtime-rolling
+    kind: knowledge
+    type: multi
+    prompt: "Những điều kiện nào cần để rolling update của API trên Kubernetes không làm rớt request? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Readiness probe chỉ báo sẵn sàng khi pod phục vụ được thật" }
+      - { id: b, text: "App dừng êm khi nhận SIGTERM, hoàn tất request đang xử lý" }
+      - { id: c, text: "Schema cơ sở dữ liệu dùng được cho cả bản cũ lẫn bản mới" }
+      - { id: d, text: "Manifest dùng tag latest để node luôn kéo bản mới nhất" }
+      - { id: e, text: "maxUnavailable 100% để thay pod nhanh nhất có thể" }
