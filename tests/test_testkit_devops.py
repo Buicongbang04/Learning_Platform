@@ -3193,6 +3193,23 @@ def test_ansible_lab_run_env_cannot_override_lab(env):
 
 
 @ANSIBLE_REQUIRED
+def test_ansible_lab_stage_skips_docs_and_checks_the_rest(tmp_path):
+    root = ansible_tree(tmp_path, {
+        "site.yml": "- hosts: all\n  tasks: []\n",
+        "SOLUTION.md": "Ở production dùng `delegate_to: localhost` để gọi API.\n",
+        "roles/r/README.md": "connection: local chỉ để thử\n",
+        "roles/r/tasks/main.yml": "- ansible.builtin.ping:\n",
+    })
+    with testkit.AnsibleLab() as lab:
+        staged = lab.stage(root)
+        assert sorted(p.relative_to(staged).as_posix() for p in staged.rglob("*") if p.is_file()) == [
+            "roles/r/tasks/main.yml", "site.yml"]
+        (root / "notes.txt").write_text("delegate_to: localhost\n", encoding="utf-8")
+        with pytest.raises(pytest.fail.Exception, match="delegate_to"):
+            lab.stage(root, "again")
+
+
+@ANSIBLE_REQUIRED
 def test_ansible_lab_run_passes_extra_env():
     with testkit.AnsibleLab() as lab:
         script = lab.write("inv/inventory.py", "#!/usr/bin/env python3\nimport json, os\n"

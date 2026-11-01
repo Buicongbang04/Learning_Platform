@@ -2218,6 +2218,7 @@ ANSIBLE_TIMEOUT = 600
 ANSIBLE_READY_TIMEOUT = 60
 _ANSIBLE_STATS = ("ok", "changed", "unreachable", "failures", "skipped", "rescued", "ignored")
 _ANSIBLE_ASSETS = ("templates", "files")
+_ANSIBLE_DOCS = ("README.md", "SOLUTION.md")
 _ANSIBLE_KEYS = (
     r"ansible_(?:connection|host|port|user_known_hosts_file|private_key_file|password|ssh_\w+|sftp_\w+|scp_\w+|"
     r"\w*host_key_checking|ssh_pass|become_exe)|connection|delegate_to|delegate_facts|local_action|add_host|"
@@ -2531,11 +2532,13 @@ class AnsibleLab:
         return path
 
     def stage(self, source: Path, name: str = "project") -> Path:
-        """Chép thư mục bài của người học vào thư mục tạm của lab (bỏ `__pycache__`, `.git`) rồi kiểm `ansible_problems`;
-        trả đường dẫn bản chép để truyền làm `cwd`."""
+        """Chép thư mục bài của người học vào thư mục tạm của lab (bỏ `__pycache__`, `.git` và tài liệu `README.md`,
+        `SOLUTION.md`: Ansible không cần chúng, và không chép thì không playbook nào nạp được chúng) rồi kiểm
+        `ansible_problems`; trả đường dẫn bản chép để truyền làm `cwd`."""
         self._require_entered()
         target = self.root / name
-        shutil.copytree(Path(source).resolve(), target, symlinks=False, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+        shutil.copytree(Path(source).resolve(), target, symlinks=False,
+                        ignore=shutil.ignore_patterns(*_COPY_IGNORE, *_ANSIBLE_DOCS))
         problems = ansible_problems(target)
         if problems:
             pytest.fail("Tệp Ansible bị từ chối trước khi chạy:\n- " + "\n- ".join(problems))
