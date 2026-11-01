@@ -352,8 +352,8 @@ flowchart TD
 - **Chia theo nhóm.** Bản gần trùng rơi vào cả train và validation làm loss validation lạc quan; chia theo nguồn hoặc theo
   cụm gần trùng (hash của mã nhóm, không random từng mẫu) chặn chuyện đó.
 - **Nhiễm bẩn (contamination).** Tập đánh giá lọt vào dữ liệu train thì mọi con số đều vô nghĩa. Cách phổ biến: tỉ lệ
-  n-gram (GPT-3 dùng 13-gram) của mẫu đánh giá có mặt trong train. Bộ instruction sinh từ khuôn (FLAN) có rất nhiều n-gram
-  dùng chung không mang nội dung, nên phải đọc **cái gì** trùng chứ không chỉ đếm.
+  n-gram (GPT-3 dùng 13-gram) của mẫu đánh giá có mặt trong train. Con số tỉ lệ một mình chưa nói được trùng thật hay
+  không: phải đọc **cái gì** trùng chứ không chỉ đếm.
 - **Chất lượng hơn số lượng.** LIMA (Zhou và cộng sự, 2023) fine-tune với 1 000 mẫu chọn kỹ cho kết quả cạnh tranh với
   bộ lớn hơn nhiều lần. Một nghìn mẫu đúng phân phối thật của sản phẩm thường giá trị hơn một trăm nghìn mẫu tổng quát.
 
