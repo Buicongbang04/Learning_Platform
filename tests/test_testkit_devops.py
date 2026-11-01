@@ -3232,37 +3232,53 @@ def test_ansible_lab_run_passes_extra_env():
 
 
 def test_ansible_files_pin_ssh(tmp_path):
-    files = testkit._ansible_files(tmp_path, {"w1": 41001, "w2": 41002}, {"w1": "ssh-ed25519 AAAA1", "w2": "ssh-ed25519 AAAA2"})
+    control, work = tmp_path / "ctl", tmp_path / "work"
+    files = testkit._ansible_files(control, work, {"w1": 41001, "w2": 41002}, {"w1": "ssh-ed25519 AAAA1", "w2": "ssh-ed25519 AAAA2"})
     ssh = files["ssh_config"]
     for line in ("StrictHostKeyChecking yes", "IdentitiesOnly yes", "IdentityAgent none", "GlobalKnownHostsFile /dev/null",
-                 "UpdateHostKeys no", "BatchMode yes", f"UserKnownHostsFile {tmp_path / 'known_hosts'}"):
+                 "UpdateHostKeys no", "BatchMode yes", f'UserKnownHostsFile "{control / "known_hosts"}"',
+                 f'IdentityFile "{control / "id_ed25519"}"'):
         assert line in ssh
     assert files["known_hosts"].splitlines() == ["[127.0.0.1]:41001 ssh-ed25519 AAAA1", "[127.0.0.1]:41002 ssh-ed25519 AAAA2"]
     assert files["lab.ini"].splitlines() == ["w1", "w2"]
     assert files["allowed"].splitlines() == ["127.0.0.1 41001", "127.0.0.1 41002"]
-    assert f"ProxyCommand {Path(sys.executable).resolve()} {tmp_path / 'devops_ex_proxy.py'} %h %p {tmp_path / 'allowed'}" in ssh
+    assert (f'ProxyCommand "{Path(sys.executable).resolve()}" "{control / "devops_ex_proxy.py"}" %h %p "{control / "allowed"}"'
+            in ssh)
+    assert files["devops_ex_proxy.py"] == testkit._ANSIBLE_PROXY
+    assert files["callbacks/devops_ex_events.py"] == testkit._ANSIBLE_CALLBACK
+    assert set(files) == set(testkit._ANSIBLE_CONTROL) - {"id_ed25519", "id_ed25519.pub"}
     pinned = json.loads(files["lab-conn.yml"])
     assert set(testkit.ANSIBLE_PINNED_VARS) <= set(pinned)
-    assert pinned["ansible_connection"] == "ssh" and pinned["ansible_user"] == "root"
+    assert pinned["ansible_connection"] == "ssh" and pinned["ansible_user"] == pinned["ansible_ssh_user"] == "root"
     assert pinned["devops_ex_lab_port"] == {"w1": 41001, "w2": 41002}
     assert pinned["devops_ex_lab_addr"] == {"w1": "127.0.0.1", "w2": "127.0.0.1"}
-    assert "default('0.0.0.0')" in pinned["ansible_host"] and "default(1)" in pinned["ansible_port"]
-    assert pinned["ansible_ssh_common_args"] == pinned["ansible_ssh_extra_args"] == ""
+    assert pinned["ansible_host"] == pinned["ansible_ssh_host"] and "default('0.0.0.0')" in pinned["ansible_host"]
+    assert pinned["ansible_port"] == pinned["ansible_ssh_port"] and "default(1)" in pinned["ansible_port"]
+    assert pinned["ansible_ssh_common_args"] == pinned["ansible_ssh_extra_args"] == pinned["ansible_ssh_pkcs11_provider"] == ""
+    assert pinned["ansible_private_key"] is None and pinned["ansible_ssh_private_key"] is None
+    assert pinned["ansible_ssh_private_key_file"] == pinned["ansible_private_key_file"] == str(control / "id_ed25519")
+    assert pinned["ansible_control_path_dir"] == str(work / "cp") and pinned["ansible_control_path"] == "%(directory)s/%%C"
     assert pinned["ansible_host_key_checking"] is True and pinned["ansible_ssh_executable"] == "ssh"
-    assert pinned["ansible_ssh_args"].startswith(f"-F {tmp_path / 'ssh_config'}")
+    assert pinned["ansible_sftp_executable"] == "sftp" and pinned["ansible_scp_executable"] == "scp"
+    assert pinned["ansible_ssh_pipelining"] is True and pinned["ansible_ssh_transfer_method"] == "smart"
+    assert pinned["ansible_ssh_args"].startswith(f"-F {control / 'ssh_config'}")
     config = files["ansible.cfg"]
-    assert f"-F {tmp_path / 'ssh_config'}" in config and "host_key_checking = True" in config
-    assert f"collections_path = {tmp_path / 'collections'}" in config and f"roles_path = {tmp_path / 'roles'}" in config
+    assert f"-F {control / 'ssh_config'}" in config and "host_key_checking = True" in config
+    assert f"collections_path = {control / 'collections'}" in config and f"roles_path = {control / 'roles'}" in config
+    assert f"callback_plugins = {control / 'callbacks'}" in config and f"control_path_dir = {work / 'cp'}" in config
+    assert f"local_tmp = {work / 'home' / '.ansible' / 'tmp'}" in config
 
 
 def test_ansible_env_from_scratch(tmp_path, monkeypatch):
     monkeypatch.setenv("ANSIBLE_CONFIG", "/home/x/.ansible.cfg")
     monkeypatch.setenv("ANSIBLE_VAULT_PASSWORD_FILE", "/home/x/.vault")
-    env = testkit._ansible_env(tmp_path, tmp_path / "events.jsonl")
-    assert env["ANSIBLE_CONFIG"] == str(tmp_path / "ansible.cfg")
-    assert env["HOME"] == str(tmp_path / "home")
+    env = testkit._ansible_env(tmp_path / "ctl", tmp_path / "work", tmp_path / "work" / "events.jsonl")
+    assert env["ANSIBLE_CONFIG"] == str(tmp_path / "ctl" / "ansible.cfg")
+    assert env["HOME"] == str(tmp_path / "work" / "home")
     assert "ANSIBLE_VAULT_PASSWORD_FILE" not in env and "SSH_AUTH_SOCK" not in env
-    assert env["DEVOPS_EX_EVENTS"] == str(tmp_path / "events.jsonl")
+    assert env["DEVOPS_EX_EVENTS"] == str(tmp_path / "work" / "events.jsonl")
+    assert not {"ansible_user", "ansible_ssh_user"} & set(json.loads(env["DEVOPS_EX_PINNED"]))
+    assert {"ansible_ssh_host", "ansible_ssh_port", "ansible_control_path"} <= set(json.loads(env["DEVOPS_EX_PINNED"]))
 
 
 def test_ansible_target_wheels_match_sample_app():
@@ -3309,8 +3325,8 @@ def test_ansible_lab_runs_playbook_twice(ansible_lab):
 def test_ansible_lab_ignores_user_config(ansible_lab):
     result = ansible_lab.run("ansible-config", "dump", "--only-changed", cwd=ansible_lab.root)
     assert result.returncode == 0, result.stderr
-    assert str(ansible_lab.root / "ansible.cfg") in result.stdout
-    assert str(Path.home()) not in result.stdout.replace(str(ansible_lab.root), "")
+    assert str(ansible_lab.control / "ansible.cfg") in result.stdout
+    assert str(Path.home()) not in result.stdout.replace(str(ansible_lab.root), "").replace(str(ansible_lab.control), "")
 
 
 @ANSIBLE_REQUIRED
@@ -3332,12 +3348,13 @@ def test_ansible_lab_host_key_pinning_blocks_allowed_port(ansible_lab):
     ansible_lab.docker.start("rogue2", ansible_lab.image, ports=[22], env={"DEVOPS_EX_AUTHORIZED_KEY": ansible_lab.public_key})
     ansible_lab.docker.wait_log("rogue2", "Server listening")
     port = ansible_lab.docker.port("rogue2", 22)
-    allowed = ansible_lab.root / "allowed"
+    allowed = ansible_lab.control / "allowed"
     original = allowed.read_text(encoding="utf-8")
     allowed.write_text(original + f"127.0.0.1 {port}\n", encoding="utf-8")
     try:
-        result = testkit.run_sandboxed(["ssh", "-F", str(ansible_lab.root / "ssh_config"), "-p", str(port), "127.0.0.1", "true"],
-                                       writable=[ansible_lab.root], cwd=ansible_lab.root, env={}, timeout=60)
+        result = testkit.run_sandboxed(["ssh", "-F", str(ansible_lab.control / "ssh_config"), "-p", str(port), "127.0.0.1",
+                                        "true"], writable=[ansible_lab.root], readonly=[ansible_lab.control],
+                                       cwd=ansible_lab.root, env={}, timeout=60)
     finally:
         allowed.write_text(original, encoding="utf-8")
     assert result.returncode != 0 and "Host key verification failed" in result.stderr, result.stderr
@@ -3418,6 +3435,85 @@ def test_ansible_bypass_templated_localhost(ansible_lab):
     )})
     assert_bypass_blocked(ansible_lab, project, ("host ngoài lab: localhost", "ssh tới 0.0.0.0:1 bị chặn",
                                                  "play connection đặt `local`"))
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_bypass_legacy_ssh_aliases(ansible_lab):
+    other = ansible_lab.ports["node-b"]
+    project = bypass_project(ansible_lab, "bypass-alias", {"site.yml": (
+        "- hosts: node-a\n  gather_facts: false\n  tasks:\n"
+        "    - ansible.builtin.set_fact:\n        \"{{ 'ansible_ssh_' ~ 'host' }}\": 127.0.0.1\n"
+        f"        \"{{{{ 'ansible_ssh_' ~ 'port' }}}}\": {other}\n"
+        "        \"{{ 'ansible_' ~ 'control_path' }}\": /tmp/x\n"
+        "    " + LOCAL_MARKER.format(marker="MARKER")
+    )})
+    assert_bypass_blocked(ansible_lab, project, ("ansible_facts trên node-a đặt `ansible_ssh_host`", "`ansible_ssh_port`",
+                                                 "`ansible_control_path`"), on_lab_host="node-a")
+    assert ansible_lab.read("node-b", str(ansible_lab.root / "bypass-alias-pwned")) is None, "Kết nối bị chuyển sang node-b"
+
+
+CONTROL_ATTACK = """#!/usr/bin/env python3
+import errno
+import json
+import os
+import sys
+
+control = os.environ["DEVOPS_EX_CONTROL"]
+results = {}
+for name in ("lab-conn.yml", "callbacks/devops_ex_events.py", "devops_ex_proxy.py", "known_hosts", "allowed", "ssh_config",
+             "ansible.cfg", "callbacks/evil.py"):
+    path = os.path.join(control, name)
+    try:
+        with open(path, "w") as handle:
+            handle.write("{}\\n")
+        results[name] = "written"
+    except OSError as error:
+        results[name] = errno.errorcode.get(error.errno, str(error.errno))
+with open(os.environ["DEVOPS_EX_REPORT"], "w") as handle:
+    json.dump(results, handle)
+print(json.dumps({"all": {"hosts": ["node-a"]}, "_meta": {"hostvars": {}}}))
+"""
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_control_files_read_only_in_sandbox(ansible_lab):
+    before = {name: (ansible_lab.control / name).read_bytes() for name in testkit._ANSIBLE_CONTROL}
+    project = bypass_project(ansible_lab, "control-attack", {
+        "inventory.py": CONTROL_ATTACK,
+        "site.yml": "- hosts: node-a\n  gather_facts: false\n  tasks:\n    " + LOCAL_MARKER.format(marker="MARKER"),
+    })
+    marker = ansible_lab.root / "control-attack-pwned"
+    (project / "site.yml").write_text((project / "site.yml").read_text(encoding="utf-8").replace("MARKER", str(marker)),
+                                      encoding="utf-8")
+    assert ansible_lab.exec("node-a", "mkdir", "-p", str(ansible_lab.root)).returncode == 0
+    report = ansible_lab.root / "control-attack.json"
+    env = {"DEVOPS_EX_CONTROL": str(ansible_lab.control), "DEVOPS_EX_REPORT": str(report)}
+    runs = [ansible_lab.playbook("site.yml", inventory=[str(project / "inventory.py")], cwd=project, env=env) for _ in range(2)]
+    assert json.loads(report.read_text(encoding="utf-8")) == {
+        name: "EROFS" for name in ("lab-conn.yml", "callbacks/devops_ex_events.py", "devops_ex_proxy.py", "known_hosts",
+                                   "allowed", "ssh_config", "ansible.cfg", "callbacks/evil.py")}
+    assert {name: (ansible_lab.control / name).read_bytes() for name in testkit._ANSIBLE_CONTROL} == before
+    second = runs[1]
+    assert second.returncode == 0, second.tail()
+    events = second.tasks("Ghi dấu")
+    assert [(e["host"], e["connection"], e["address"], e["port"]) for e in events] == [
+        ("node-a", "ssh", "127.0.0.1", str(ansible_lab.ports["node-a"]))]
+    assert any(c["allowed"] and c["port"] == str(ansible_lab.ports["node-a"]) for c in second.connections) or second.connections == []
+    assert not marker.exists() and ansible_lab.read("node-a", str(marker)) == "chạy ở đây"
+
+
+def test_ansible_lab_restores_control_files(tmp_path):
+    if not (shutil.which("ansible-playbook") and shutil.which("bwrap")):
+        pytest.skip("Cần ansible-playbook và bwrap")
+    with testkit.AnsibleLab() as lab:
+        original = (lab.control / "lab-conn.yml").read_bytes()
+        (lab.control / "lab-conn.yml").write_text("{}\n", encoding="utf-8")
+        (lab.control / "callbacks" / "evil.py").write_text("X = 1\n", encoding="utf-8")
+        result = lab.run("ansible", "--version")
+        assert result.returncode == 0, result.stderr
+        assert (lab.control / "lab-conn.yml").read_bytes() == original
+        assert not (lab.control / "callbacks" / "evil.py").exists()
+    assert not lab.control.exists() and not lab.root.exists()
 
 
 @ANSIBLE_REQUIRED

@@ -2231,10 +2231,16 @@ _ANSIBLE_LOCAL_ADDRESS = re.compile(
 _ANSIBLE_ESCAPE = re.compile(r"\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})")
 _ANSIBLE_LAB_VARS = ("devops_ex_lab_addr", "devops_ex_lab_port")
 ANSIBLE_PINNED_VARS = (
-    "ansible_connection", "ansible_host", "ansible_port", "ansible_user", "ansible_ssh_args", "ansible_ssh_common_args",
-    "ansible_ssh_extra_args", "ansible_scp_extra_args", "ansible_sftp_extra_args", "ansible_ssh_executable",
-    "ansible_host_key_checking", "ansible_ssh_host_key_checking", "ansible_ssh_private_key_file", "ansible_private_key_file",
+    "ansible_connection", "ansible_host", "ansible_ssh_host", "ansible_port", "ansible_ssh_port", "ansible_user",
+    "ansible_ssh_user", "ansible_ssh_args", "ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_scp_extra_args",
+    "ansible_sftp_extra_args", "ansible_ssh_executable", "ansible_sftp_executable", "ansible_scp_executable",
+    "ansible_ssh_transfer_method", "ansible_host_key_checking", "ansible_ssh_host_key_checking", "ansible_ssh_private_key_file",
+    "ansible_private_key_file", "ansible_private_key", "ansible_ssh_private_key", "ansible_ssh_pkcs11_provider",
+    "ansible_control_path", "ansible_control_path_dir", "ansible_pipelining", "ansible_ssh_pipelining",
 )
+_ANSIBLE_UNREPORTED = ("ansible_user", "ansible_ssh_user")
+_ANSIBLE_CONTROL = ("id_ed25519", "id_ed25519.pub", "ssh_config", "known_hosts", "allowed", "devops_ex_proxy.py",
+                    "callbacks/devops_ex_events.py", "ansible.cfg", "lab-conn.yml", "lab.ini")
 _ANSIBLE_CONTROLLER_LOOKUP = re.compile(
     r"\b(?:lookup|query|q)\s*\(\s*[\"'](?:ansible\.builtin\.)?(pipe|lines)[\"']")
 _ANSIBLE_CALLBACK = '''
@@ -2293,7 +2299,12 @@ class CallbackModule(CallbackBase):
         try:
             variables = manager.get_vars(play=play, host=result._host, task=result._task)
             templar = Templar(loader=manager._loader, variables=variables)
-            values = [templar.template(variables.get(key)) for key in ("ansible_connection", "ansible_host", "ansible_port")]
+            def resolve(*names):
+                defined = [name for name in names if variables.get(name) is not None]
+                return templar.template(variables[defined[-1]]) if defined else None
+
+            values = [resolve("ansible_connection"), resolve("ansible_host", "ansible_ssh_host"),
+                      resolve("ansible_port", "ansible_ssh_port")]
         except Exception as error:
             return result._host.get_name(), f"unknown: {error}", None, None
         return (result._host.get_name(), *values)
@@ -2386,8 +2397,9 @@ def ansible_problems(root: Path) -> list[str]:
     `local_action`, `add_host`, nhắc `localhost`, địa chỉ trong 127.0.0.0/8 (kể cả dạng rút gọn `127.1`), `0.0.0.0`, `::1`,
     dùng escape `\\xNN`/`\\uNNNN`/`\\UNNNNNNNN` (giải mã ra tên khoá mà phép quét không thấy), lookup `pipe`/`lines`, hay thư
     mục plugin chạy trên máy điều khiển (`*_plugins`, `collections`). Quét văn bản thô như `tofu_config_problems`, kể cả chú
-    thích và chuỗi. Địa chỉ local và escape được phép trong `templates/` và `files/` (nội dung ghi lên target). Ranh giới
-    thật là biến kết nối ghim bằng extra vars, ProxyCommand chỉ cho cổng của lab, khoá host ghim và sandbox (`AnsibleLab`)."""
+    thích và chuỗi. Địa chỉ local và escape được phép trong `templates/` và `files/` (nội dung ghi lên target). Ranh giới cho
+    code của bài chạy trên máy điều khiển là sandbox bwrap; thứ giữ kết nối trong lab là biến kết nối ghim bằng extra vars,
+    tệp điều khiển chỉ đọc, khoá host ghim và ProxyCommand (`AnsibleLab`)."""
     root = Path(root)
     found = []
     for path in sorted(root.rglob("*")):
@@ -2424,21 +2436,22 @@ def ansible_problems(root: Path) -> list[str]:
     return found
 
 
-def _ansible_files(root: Path, ports: dict[str, int], host_keys: dict[str, str]) -> dict[str, str]:
-    """Nội dung các tệp cấu hình lab sinh trong `root`: ssh_config (khoá riêng, ghim khoá host, không agent, ProxyCommand chỉ
-    cho `127.0.0.1:<cổng của lab>`), `allowed` (danh sách cổng đó), known_hosts chỉ có target của lab, inventory kết nối
-    `lab.ini`, `lab-conn.yml` (extra vars ghim biến kết nối, `ANSIBLE_PINNED_VARS`), ansible.cfg (callback ghi sự kiện,
-    roles/collections rỗng)."""
-    ssh_args = f"-F {root / 'ssh_config'} -o ControlMaster=auto -o ControlPersist=60s"
+def _ansible_files(control: Path, work: Path, ports: dict[str, int], host_keys: dict[str, str]) -> dict[str, str]:
+    """Tệp điều khiển lab sinh trong `control` (sandbox chỉ thấy chỉ đọc): ssh_config (khoá riêng, ghim khoá host, không agent,
+    ProxyCommand chỉ cho `127.0.0.1:<cổng của lab>`), `allowed`, known_hosts chỉ có target của lab, `lab.ini` (chỉ tên máy),
+    `lab-conn.yml` (extra vars ghim `ANSIBLE_PINNED_VARS`), ansible.cfg (callback ghi sự kiện, roles/collections rỗng). Thứ
+    Ansible cần ghi (`HOME`, tmp, control path) nằm trong `work`."""
+    ssh_args = f"-F {control / 'ssh_config'} -o ControlMaster=auto -o ControlPersist=60s"
+    proxy = f'"{Path(sys.executable).resolve()}" "{control / "devops_ex_proxy.py"}" %h %p "{control / "allowed"}"'
     ssh = "\n".join([
         "Host *",
-        f"  ProxyCommand {Path(sys.executable).resolve()} {root / 'devops_ex_proxy.py'} %h %p {root / 'allowed'}",
+        f"  ProxyCommand {proxy}",
         "  User root",
-        f"  IdentityFile {root / 'id_ed25519'}",
+        f'  IdentityFile "{control / "id_ed25519"}"',
         "  IdentitiesOnly yes",
         "  IdentityAgent none",
         "  ForwardAgent no",
-        f"  UserKnownHostsFile {root / 'known_hosts'}",
+        f'  UserKnownHostsFile "{control / "known_hosts"}"',
         "  GlobalKnownHostsFile /dev/null",
         "  StrictHostKeyChecking yes",
         "  UpdateHostKeys no",
@@ -2452,10 +2465,10 @@ def _ansible_files(root: Path, ports: dict[str, int], host_keys: dict[str, str])
     inventory = "".join(f"{host}\n" for host in ports)
     config = "\n".join([
         "[defaults]",
-        f"roles_path = {root / 'roles'}",
-        f"collections_path = {root / 'collections'}",
-        f"local_tmp = {root / 'home' / '.ansible' / 'tmp'}",
-        f"callback_plugins = {root / 'callbacks'}",
+        f"roles_path = {control / 'roles'}",
+        f"collections_path = {control / 'collections'}",
+        f"local_tmp = {work / 'home' / '.ansible' / 'tmp'}",
+        f"callback_plugins = {control / 'callbacks'}",
         "callbacks_enabled = devops_ex_events",
         "stdout_callback = ansible.builtin.default",
         f"interpreter_python = {ANSIBLE_TARGET_PYTHON}",
@@ -2467,45 +2480,62 @@ def _ansible_files(root: Path, ports: dict[str, int], host_keys: dict[str, str])
         "",
         "[ssh_connection]",
         f"ssh_args = {ssh_args}",
-        f"control_path_dir = {root / 'cp'}",
+        f"control_path_dir = {work / 'cp'}",
         "pipelining = True",
         "",
     ])
+    key = str(control / "id_ed25519")
+    address = f"{{{{ {_ANSIBLE_LAB_VARS[0]}[inventory_hostname] | default('0.0.0.0') }}}}"
+    port = f"{{{{ {_ANSIBLE_LAB_VARS[1]}[inventory_hostname] | default(1) }}}}"
     pinned = {
         _ANSIBLE_LAB_VARS[0]: {host: "127.0.0.1" for host in ports},
         _ANSIBLE_LAB_VARS[1]: dict(ports),
         "ansible_connection": "ssh",
-        "ansible_host": f"{{{{ {_ANSIBLE_LAB_VARS[0]}[inventory_hostname] | default('0.0.0.0') }}}}",
-        "ansible_port": f"{{{{ {_ANSIBLE_LAB_VARS[1]}[inventory_hostname] | default(1) }}}}",
+        "ansible_host": address,
+        "ansible_ssh_host": address,
+        "ansible_port": port,
+        "ansible_ssh_port": port,
         "ansible_user": "root",
+        "ansible_ssh_user": "root",
         "ansible_ssh_args": ssh_args,
         "ansible_ssh_common_args": "",
         "ansible_ssh_extra_args": "",
         "ansible_scp_extra_args": "",
         "ansible_sftp_extra_args": "",
         "ansible_ssh_executable": "ssh",
+        "ansible_sftp_executable": "sftp",
+        "ansible_scp_executable": "scp",
+        "ansible_ssh_transfer_method": "smart",
         "ansible_host_key_checking": True,
         "ansible_ssh_host_key_checking": True,
-        "ansible_ssh_private_key_file": str(root / "id_ed25519"),
-        "ansible_private_key_file": str(root / "id_ed25519"),
+        "ansible_ssh_private_key_file": key,
+        "ansible_private_key_file": key,
+        "ansible_private_key": None,
+        "ansible_ssh_private_key": None,
+        "ansible_ssh_pkcs11_provider": "",
+        "ansible_control_path": "%(directory)s/%%C",
+        "ansible_control_path_dir": str(work / "cp"),
+        "ansible_pipelining": True,
+        "ansible_ssh_pipelining": True,
     }
     allowed = "".join(f"127.0.0.1 {port}\n" for port in ports.values())
     return {"ssh_config": ssh, "known_hosts": known, "lab.ini": inventory, "ansible.cfg": config, "allowed": allowed,
-            "lab-conn.yml": json.dumps(pinned, indent=2) + "\n"}
+            "lab-conn.yml": json.dumps(pinned, indent=2) + "\n", "devops_ex_proxy.py": _ANSIBLE_PROXY,
+            "callbacks/devops_ex_events.py": _ANSIBLE_CALLBACK}
 
 
-def _ansible_env(root: Path, events: Path) -> dict[str, str]:
+def _ansible_env(control: Path, work: Path, events: Path) -> dict[str, str]:
     """Env dựng từ đầu cho lệnh `ansible-*` trong sandbox: `ANSIBLE_CONFIG` là tệp do lab sinh (không đọc `ansible.cfg` ở
     thư mục hiện tại, `~/.ansible.cfg` hay `/etc/ansible`), `HOME` tạm, không mang `ANSIBLE_*` hay `SSH_AUTH_SOCK` của bạn."""
     return {
-        "HOME": str(root / "home"),
-        "ANSIBLE_CONFIG": str(root / "ansible.cfg"),
-        "ANSIBLE_HOME": str(root / "home" / ".ansible"),
+        "HOME": str(work / "home"),
+        "ANSIBLE_CONFIG": str(control / "ansible.cfg"),
+        "ANSIBLE_HOME": str(work / "home" / ".ansible"),
         "ANSIBLE_NOCOLOR": "1",
         "ANSIBLE_FORCE_COLOR": "0",
         "PYTHONDONTWRITEBYTECODE": "1",
         "DEVOPS_EX_EVENTS": str(events),
-        "DEVOPS_EX_PINNED": json.dumps(sorted({*ANSIBLE_PINNED_VARS, *_ANSIBLE_LAB_VARS} - {"ansible_user"})),
+        "DEVOPS_EX_PINNED": json.dumps(sorted({*ANSIBLE_PINNED_VARS, *_ANSIBLE_LAB_VARS} - set(_ANSIBLE_UNREPORTED))),
     }
 
 
@@ -2565,13 +2595,15 @@ class AnsibleLab:
     skip. Mỗi host là một container (`no-new-privileges`, RAM `ANSIBLE_MEMORY`, cổng 22 chỉ trên 127.0.0.1 ở cổng trống),
     sshd chạy bằng root làm PID 1, không có systemd chạy thật.
 
-    Các lớp giữ bài khỏi máy người học: sandbox (che `~/.ssh`, chỉ thư mục tạm ghi được); biến kết nối ghim bằng extra vars
-    `-e @lab-conn.yml` luôn ở cuối (`ANSIBLE_PINNED_VARS`: ssh, `127.0.0.1:<cổng của host>` hay `0.0.0.0:1` cho máy ngoài lab,
-    root, khoá và đối số ssh của lab), thắng `set_fact`, inventory, `vars:`, `connection:`; ProxyCommand chỉ mở kết nối tới
-    cổng của lab và ghi sự kiện `connect`; `known_hosts` riêng chỉ có khoá host của các container (`StrictHostKeyChecking yes`,
-    `IdentityAgent none`); `playbook()` đánh dấu lần chạy lỗi theo `guard_problems`. `stage()` chép tệp của bài vào thư mục
-    tạm và từ chối tệp bị `ansible_problems` bắt (tín hiệu sớm, không phải ranh giới). Env dựng từ đầu (`ANSIBLE_CONFIG` do
-    lab sinh, `HOME` tạm). `close()` xoá container, image, network (qua `DockerLab.close`) và thư mục tạm.
+    Thư mục điều khiển `control` (khoá, ssh_config, known_hosts, `allowed`, script proxy, callback, ansible.cfg, `lab-conn.yml`,
+    `lab.ini`) chỉ được mount chỉ đọc vào sandbox và được ghi lại từ bộ nhớ trước mỗi lệnh; thư mục làm việc `root` ghi được
+    (`HOME`, tmp, control path, bài đã chép, tệp sự kiện). Ranh giới cho code của bài chạy trên máy điều khiển là sandbox
+    (che `~/.ssh`, chỉ `root` ghi được). Kết nối được giữ trong lab bởi biến kết nối ghim bằng extra vars `-e
+    @<control>/lab-conn.yml` luôn ở cuối (`ANSIBLE_PINNED_VARS`, kể cả tên cũ `ansible_ssh_host/port/user`), tệp điều khiển
+    chỉ đọc, `known_hosts` chỉ có khoá host của các container và ProxyCommand chỉ cho `127.0.0.1:<cổng của lab>`.
+    `guard_problems` (callback, sự kiện `connect`) là lớp phát hiện: tệp sự kiện phải ghi được nên không phải ranh giới.
+    `stage()` chép tệp của bài vào `root` và từ chối tệp bị `ansible_problems` bắt (tín hiệu sớm). Env dựng từ đầu.
+    `close()` xoá container, image, network (qua `DockerLab.close`) và hai thư mục tạm.
     """
 
     def __init__(self, hosts=(), *, memory: str = ANSIBLE_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT,
@@ -2585,6 +2617,8 @@ class AnsibleLab:
         self.timeout = timeout
         self.docker = DockerLab()
         self.root: Path | None = None
+        self.control: Path | None = None
+        self._control_files: dict[str, bytes] = {}
         self.image: str | None = None
         self.public_key = ""
         self.ports: dict[str, int] = {}
@@ -2594,6 +2628,7 @@ class AnsibleLab:
     def __enter__(self) -> "AnsibleLab":
         self._entered = True
         self.root = Path(tempfile.mkdtemp(prefix="devops-ex-ansible-"))
+        self.control = Path(tempfile.mkdtemp(prefix="devops-ex-ansible-ctl-"))
         try:
             self._open()
         except BaseException:
@@ -2613,16 +2648,16 @@ class AnsibleLab:
         reason = sandbox_ready()
         if reason:
             pytest.skip(SANDBOX_SKIP.format(reason=reason))
-        for name in ("home", "roles", "collections", "callbacks", "cp"):
+        for name in ("home", "cp"):
             (self.root / name).mkdir(parents=True, exist_ok=True)
-        (self.root / "callbacks" / "devops_ex_events.py").write_text(_ANSIBLE_CALLBACK, encoding="utf-8")
-        (self.root / "devops_ex_proxy.py").write_text(_ANSIBLE_PROXY, encoding="utf-8")
+        for name in ("roles", "collections", "callbacks"):
+            (self.control / name).mkdir(parents=True, exist_ok=True)
         host_keys: dict[str, str] = {}
         if self.hosts:
             Exercise.require_tool("docker")
             Exercise.require_tool("ssh-keygen")
             self.docker.__enter__()
-            key = self.root / "id_ed25519"
+            key = self.control / "id_ed25519"
             subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"devops-ex-{self.docker.id}", "-f", str(key)],
                            check=True, capture_output=True, timeout=30)
             self.public_key = key.with_suffix(".pub").read_text(encoding="utf-8").strip()
@@ -2639,8 +2674,25 @@ class AnsibleLab:
             for host in self.hosts:
                 host_keys[host] = self._wait_ssh(host)
                 self.ports[host] = self.docker.port(host, 22)
-        for name, text in _ansible_files(self.root, self.ports, host_keys).items():
-            (self.root / name).write_text(text, encoding="utf-8")
+        self._control_files = {name: text.encode() for name, text in
+                               _ansible_files(self.control, self.root, self.ports, host_keys).items()}
+        for name in ("id_ed25519", "id_ed25519.pub"):
+            if (self.control / name).exists():
+                self._control_files[name] = (self.control / name).read_bytes()
+        self._write_control()
+
+    def _write_control(self) -> None:
+        """Ghi lại mọi tệp điều khiển từ bản trong bộ nhớ trước mỗi lệnh, xoá tệp lạ trong thư mục điều khiển. Sandbox chỉ
+        thấy thư mục này ở chế độ chỉ đọc; bước này là lớp thứ hai nếu có gì ngoài sandbox đã sửa nó."""
+        expected = {self.control / name for name in self._control_files}
+        for path in sorted(self.control.rglob("*"), reverse=True):
+            if path.is_file() and path not in expected:
+                path.unlink()
+        for name, data in self._control_files.items():
+            path = self.control / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            path.chmod(0o600 if name == "id_ed25519" else 0o644)
 
     def _wait_ssh(self, host: str) -> str:
         self.docker.wait_log(host, "Server listening", timeout=ANSIBLE_READY_TIMEOUT)
@@ -2664,7 +2716,7 @@ class AnsibleLab:
 
     @property
     def inventory(self) -> Path:
-        return self.root / "lab.ini"
+        return self.control / "lab.ini"
 
     def write(self, rel: str, text: str) -> Path:
         path = (self.root / rel).resolve()
@@ -2694,12 +2746,14 @@ class AnsibleLab:
         self._require_entered()
         if not args or not str(args[0]).startswith("ansible"):
             raise ValueError("AnsibleLab.run chỉ chạy lệnh ansible-*")
-        base = _ansible_env(self.root, events or self.root / "events-unused.jsonl")
+        base = _ansible_env(self.control, self.root, events or self.root / "events-unused.jsonl")
         clash = sorted(set(env or {}) & {*base, "PATH", "LANG", "LC_ALL"} | {k for k in env or {} if k.startswith("ANSIBLE_")})
         if clash:
             raise ValueError(f"env không được đặt {clash}: lab tự quản các biến này")
         try:
-            return run_sandboxed(list(args), writable=[self.root], cwd=Path(cwd or self.root), env={**(env or {}), **base},
+            self._write_control()
+            return run_sandboxed(list(args), writable=[self.root], readonly=[self.control], cwd=Path(cwd or self.root),
+                                 env={**(env or {}), **base},
                                  timeout=timeout or self.timeout, input=input)
         except subprocess.TimeoutExpired:
             pytest.fail(f"{args[0]} chạy quá {timeout or self.timeout} giây")
@@ -2712,7 +2766,7 @@ class AnsibleLab:
         self._runs += 1
         events = self.root / f"events-{self._runs}.jsonl"
         sources = [arg for item in inventory for arg in ("-i", str(item))]
-        argv = ["ansible-playbook", *sources, "-i", str(self.inventory), playbook, *args, "-e", f"@{self.root / 'lab-conn.yml'}"]
+        argv = ["ansible-playbook", *sources, "-i", str(self.inventory), playbook, *args, "-e", f"@{self.control / 'lab-conn.yml'}"]
         result = self.run(*argv, cwd=cwd, timeout=timeout, env=env, events=events)
         records = []
         if events.exists():
@@ -2720,8 +2774,8 @@ class AnsibleLab:
         run = AnsibleRun(argv, result.returncode, result.stdout, result.stderr, records)
         problems = self.guard_problems(run)
         if problems:
-            pytest.fail("Lần chạy bị lab đánh dấu lỗi vì cố đi ra ngoài các target của lab (lab đã ghim biến kết nối, chặn kết "
-                        "nối khác và chạy Ansible trong sandbox, nên các thao tác này không tới được máy của bạn):\n- "
+            pytest.fail("Lần chạy bị lab đánh dấu lỗi vì cố đi ra ngoài các target của lab (biến kết nối đã bị ghim, kết nối "
+                        "khác bị chặn, phần chạy trên máy điều khiển nằm trong sandbox):\n- "
                         + "\n- ".join(problems) + f"\n{run.tail()}")
         return run
 
@@ -2765,8 +2819,9 @@ class AnsibleLab:
         try:
             self.docker.close()
         finally:
-            if self.root is not None:
-                shutil.rmtree(self.root, ignore_errors=True)
+            for path in (self.root, self.control):
+                if path is not None:
+                    shutil.rmtree(path, ignore_errors=True)
 
 
 def _unique_name(path: Path) -> str:
