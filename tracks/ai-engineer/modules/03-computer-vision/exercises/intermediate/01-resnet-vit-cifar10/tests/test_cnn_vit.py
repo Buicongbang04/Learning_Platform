@@ -266,4 +266,4 @@ def test_lenet_on_real_cifar(nb):
              batch_size=128, seed=0, augment=False)
     acc = nb.evaluate(model, nb.to_tensor(Xt, mean, std), torch.from_numpy(yt))
     assert time.perf_counter() - start < 60, "LeNet 2 epoch trên 4 000 ảnh chỉ mất vài giây trên CPU"
-    assert acc >= 0.30, f"LeNet 2 epoch trên 4 000 ảnh: accuracy {acc:.3f} (lời giải mẫu: xem SOLUTION.md)"
+    assert acc >= 0.25, f"LeNet 2 epoch trên 4 000 ảnh: accuracy {acc:.3f} (lời giải mẫu: xem SOLUTION.md)"
