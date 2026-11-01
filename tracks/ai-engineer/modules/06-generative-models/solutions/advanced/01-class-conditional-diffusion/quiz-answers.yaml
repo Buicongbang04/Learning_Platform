@@ -1,0 +1,8 @@
+ref-best-fid: [b]
+ref-acc-w0: [b]
+ref-early-ckpt: [c]
+ref-best-kid: [c]
+null-label: [a]
+cfg-cost: [b]
+compare-paper: [b]
+steps-kid: [a]

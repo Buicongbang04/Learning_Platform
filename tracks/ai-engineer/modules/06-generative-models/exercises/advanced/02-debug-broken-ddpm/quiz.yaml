@@ -1,0 +1,92 @@
+questions:
+- id: low-loss
+  kind: knowledge
+  type: single
+  prompt: Sửa một bug làm loss cuối TĂNG nhẹ (từ khoảng 0.018 lên 0.027) trong khi giám khảo tốt lên nhiều. Kết luận nào đúng?
+  options:
+  - id: a
+    text: Bản sửa sai, vì loss tăng nghĩa là model học kém đi; nên hoàn tác ngay
+  - id: b
+    text: Loss đo bài toán model đang giải, không đo bài toán bạn cần; thấp hơn chưa chắc đúng hơn
+  - id: c
+    text: Loss của diffusion luôn tăng khi model tốt lên, nên đây là dấu hiệu sửa đúng
+  - id: d
+    text: Cần train lâu gấp đôi rồi so lại
+- id: negative-brightness
+  kind: knowledge
+  type: single
+  prompt: Giám khảo báo độ sáng trung bình của ảnh sinh là một số âm. Nghi điều gì trước tiên?
+  options:
+  - id: a
+    text: Model đã collapse về một lớp nên mọi ảnh sinh ra đều đen hoặc gần đen
+  - id: b
+    text: Ảnh đưa vào giám khảo không ở thang [0, 1]; kiểm đường đánh giá bằng ảnh thật
+  - id: c
+    text: Classifier giám khảo bị overfit
+  - id: d
+    text: Sampler cộng quá nhiều nhiễu ở bước cuối nên giá trị pixel bị kéo xuống dưới 0
+- id: same-numbers
+  kind: knowledge
+  type: single
+  prompt: Giám khảo trên trọng số EMA và trên trọng số thô cho đúng cùng một bộ số tới 3 chữ số. Nghi điều gì?
+  options:
+  - id: a
+    text: EMA decay quá nhỏ nên hai bên trùng nhau là bình thường
+  - id: b
+    text: EMA không phải một bản sao riêng của trọng số
+  - id: c
+    text: Giám khảo không đủ nhạy để phân biệt hai model
+  - id: d
+    text: Hai lần sinh dùng hai seed khác nhau
+- id: oracle
+  kind: knowledge
+  type: single
+  prompt: Phép thử "oracle một điểm" cho sampler là gì?
+  options:
+  - id: a
+    text: Train model trên một ảnh tới khi loss bằng 0 rồi sinh thử vài ảnh
+  - id: b
+    text: So ảnh sinh với ảnh train gần nhất theo pixel
+  - id: c
+    text: Chạy sampler với T = 1 bước cho nhanh rồi so với ảnh thật
+  - id: d
+    text: Nhiễu đúng cho dữ liệu một ảnh; sampler phải trả lại ảnh đó
+- id: determinism
+  kind: knowledge
+  type: single
+  prompt: Sinh hai lần bằng DDIM eta = 0 với cùng generator mà ra hai ảnh khác nhau. Nghi đầu tiên điều gì?
+  options:
+  - id: a
+    text: GPU có lỗi phần cứng khi tính toán song song nhiều luồng
+  - id: b
+    text: Ngẫu nhiên ngoài generator (dropout ở train())
+  - id: c
+    text: Schedule bị sai căn bậc hai
+  - id: d
+    text: DDIM vốn không tất định
+- id: shared-memory
+  kind: knowledge
+  type: single
+  prompt: Vì sao một bản "sao lưu" trọng số lấy trực tiếp từ các tensor của state_dict() mà không chép vẫn đổi theo model?
+  options:
+  - id: a
+    text: state_dict chỉ chứa buffer, không chứa tham số
+  - id: b
+    text: Các tensor đó dùng chung bộ nhớ với tham số
+  - id: c
+    text: state_dict tự làm tròn về float16
+  - id: d
+    text: optimizer.step() xoá state_dict mỗi bước
+- id: first-check
+  kind: knowledge
+  type: single
+  prompt: Vì sao nên kiểm đường đánh giá (đưa ảnh thật qua postprocess rồi giám khảo) trước mọi bug khác?
+  options:
+  - id: a
+    text: Thước đo sai thì mọi số đo khác sai theo
+  - id: b
+    text: Vì đó là bug duy nhất trong notebook làm loss tăng lên rõ rệt
+  - id: c
+    text: Vì giám khảo train lâu nhất
+  - id: d
+    text: Vì postprocess chạy trên GPU
