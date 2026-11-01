@@ -110,16 +110,18 @@ Helper `AnsibleLab` của testkit:
    `GlobalKnownHostsFile /dev/null`, một `ProxyCommand` chỉ mở kết nối tới `127.0.0.1:<cổng của lab>`), `ansible.cfg`, inventory
    `lab.ini` chỉ liệt kê tên máy (truyền **sau** inventory của bài), và tệp extra vars `lab-conn.yml` luôn truyền cuối cùng bằng
    `-e @lab-conn.yml`. Sandbox chỉ thấy thư mục này ở chế độ chỉ đọc, và lab ghi lại nó trước mỗi lệnh.
-3. Chép thư mục bài vào thư mục làm việc tạm, chạy `ansible-playbook` trong sandbox bwrap: `HOME` tạm, `ANSIBLE_CONFIG` trỏ tệp của
-   lab (nên `ansible.cfg` trong thư mục bài, `~/.ansible.cfg`, `/etc/ansible` không được đọc), `~/.ssh` bị che, env dựng từ đầu.
+3. Chép thư mục bài vào thư mục tạm, chạy `ansible-playbook` trong sandbox bwrap: `HOME` tạm nằm trong một thư mục tạm khác (không
+   cạnh bài đã chép), `ANSIBLE_CONFIG` trỏ tệp của lab (nên `ansible.cfg` trong thư mục bài, `~/.ansible.cfg`, `/etc/ansible` không
+   được đọc), `~/.ssh` bị che, env dựng từ đầu (có `PYTHONNOUSERSITE=1`).
 4. Đọc kết quả từng task qua một callback của lab (máy nào, task nào, module gì, `changed`, handler hay không, kết nối qua đâu),
    không parse output.
 
 Cách lab giữ bài Ansible khỏi máy bạn, chia theo vai trò:
 
 - **Ranh giới cho code chạy trên máy điều khiển: sandbox.** `ansible-playbook` và mọi thứ nó chạy trên máy bạn (script inventory
-  động, lookup, một task lỡ chạy local) nằm trong bwrap: `/` chỉ đọc, `~/.ssh` và thông tin đăng nhập khác bị che, không SSH agent,
-  chỉ thư mục làm việc tạm của lab ghi được.
+  động, lookup, một task lỡ chạy local, plugin lọt vào được) nằm trong bwrap: `/` chỉ đọc, `~/.ssh` và thông tin đăng nhập khác bị
+  che, không SSH agent, chỉ `HOME`, control path và tệp sự kiện của lab ghi được. Code của bài chạy trên máy điều khiển, nếu có, vẫn
+  ở trong sandbox.
 - **Thứ giữ kết nối trong lab: biến ghim, tệp điều khiển chỉ đọc, khoá host ghim, ProxyCommand.**
   - Extra vars đứng cao nhất trong precedence (mục 4), thắng `set_fact`, inventory (kể cả inventory động), `vars:` và cả từ khoá
     `connection:`. `lab-conn.yml` đặt `ansible_connection: ansible.builtin.ssh` (tên đầy đủ, không đi qua plugin cùng tên của
@@ -129,14 +131,21 @@ Cách lab giữ bài Ansible khỏi máy bạn, chia theo vai trò:
     Đặt các biến này ở chỗ khác không có tác dụng; `become` và `become_user` vẫn dùng bình thường.
   - Các tệp đó (cùng `ssh_config`, `known_hosts`, callback, script proxy, `ANSIBLE_HOME` và thư mục rỗng cho mọi đường dẫn plugin,
     `library`, `module_utils`) nằm trong thư mục mà sandbox chỉ thấy ở chế độ chỉ đọc: script inventory của bài thử ghi đè chúng nhận
-    lỗi `EROFS`, và lab còn ghi lại chúng trước mỗi lệnh. Bài đã chép cũng chỉ đọc trong sandbox (chỉ `HOME`, control path và tệp
-    sự kiện ghi được), nên không ai thêm được plugin cạnh playbook lúc chạy; thư mục `*_plugins/`, `library/`, `module_utils/` có sẵn
-    trong bài thì bị phép quét từ chối, vì Ansible luôn nạp chúng và chúng thay được plugin builtin cùng tên.
-  - ssh chỉ mở được kết nối tới `127.0.0.1:<cổng của từng container>` (ProxyCommand) và chỉ tin khoá host của các container đó.
+    lỗi `EROFS`, và lab còn ghi lại chúng trước mỗi lệnh. Bài đã chép cũng chỉ đọc trong sandbox, nên script của bài không thêm được
+    plugin vào thư mục bài lúc chạy; thư mục `*_plugins/`, `library/`, `module_utils/` có sẵn trong bài thì bị phép quét từ chối, vì
+    Ansible luôn nạp chúng và chúng thay được plugin builtin cùng tên.
+  - Ansible cũng nạp plugin cạnh **mọi** role nó tải. Script của bài ghi được vào `HOME` (một role kèm `vars_plugins/` chẳng hạn),
+    nên phép quét từ chối mọi tham chiếu role, playbook, task hay tệp biến có thể trỏ ra ngoài bài: `..`, đường dẫn tuyệt đối, `~`,
+    `$`, alias YAML hay giá trị template trong `roles:`, `dependencies:`, `include_role`/`import_role`, `include_tasks`,
+    `import_tasks`, `import_playbook`, `vars_files`, `include_vars`. `HOME` lại nằm trong thư mục tạm khác, nên `../home` từ bài
+    không tới đâu. Phần này của phép quét là chặn thật, không chỉ để dạy.
+  - ssh dùng khoá ghim của lab, chỉ tin khoá host đã ghim của các container và chỉ mở được kết nối tới `127.0.0.1:<cổng của từng
+    container>` qua ProxyCommand. ProxyCommand chạy bằng python gốc theo đường dẫn tuyệt đối với `-I`, nên `usercustomize.py` hay
+    tệp `.pth` mà script của bài cài vào `HOME` không chạy được trong nó.
 - **Phát hiện: callback của lab.** Lần chạy bị đánh dấu lỗi khi có task trên host ngoài lab, task không đi bằng ssh tới đúng cổng của
   máy đó, kết nối bị ProxyCommand chặn, hay khi bài cố đặt một biến kết nối bị ghim (qua `set_fact`, biến inventory, `vars:`,
   `connection:`). Đây là phát hiện, không phải ranh giới: tệp sự kiện phải ghi được để callback ghi vào.
-- **Tín hiệu dạy học: phép quét tĩnh trước khi chạy.** Test từ chối tệp nào trong thư mục bài có `connection:`, `ansible_connection`,
+- **Tín hiệu dạy học: phần còn lại của phép quét tĩnh.** Test từ chối tệp nào trong thư mục bài có `connection:`, `ansible_connection`,
   `ansible_host`, `ansible_port`, `ansible_ssh_*`, `host_key_checking`, `delegate_to`, `local_action`, `add_host`, lookup
   `pipe`/`lines`, escape `\xNN`/`\uNNNN`, `localhost`, địa chỉ 127.0.0.0/8 (kể cả `127.1`), `0.0.0.0`, `::1` (ngoài `templates/` và
   `files/`), hay thư mục `*_plugins`, `collections`. Quét văn bản thô, kể cả chú thích. Nó giúp bạn bỏ thói quen sớm; tên khoá dựng
