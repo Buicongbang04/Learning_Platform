@@ -21,6 +21,9 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | actionlint | 07 CI/CD & artifacts (kiểm tĩnh workflow; thiếu thì riêng test actionlint skip) | 1.7 | [Cài đặt](../tracks/devops/modules/07-cicd-artifacts/README.md#0-cài-đặt) |
 | tofu (OpenTofu) | 08 IaC & provisioning (bản đã kiểm 1.13.2; test chạy `tofu` trong sandbox với LocalStack riêng `localstack-devops`, provider `hashicorp/aws` 6.12.0 tải một lần vào `~/.cache/devops-track/tofu-plugins` rồi dùng offline; trivy của module 06 quét chính sách ở Intermediate 04) | 1.10 (Basic 02 cần 1.11 cho biến `ephemeral`) | [Cài đặt](../tracks/devops/modules/08-iac-provisioning/README.md#0-cài-đặt) |
 | ansible-core (`ansible`, `ansible-playbook`, `ansible-inventory`, `ansible-vault`...) | 09 Configuration management (bản đã kiểm 2.21.5, cài vào venv riêng `~/.cache/devops-track/ansible` bằng `uv pip install --require-hashes -r setup/ansible/requirements.txt`, symlink vào `~/.local/bin`; không thêm vào `pyproject.toml` gốc; test chạy Ansible trong sandbox tới target là container SSH build từ `setup/ansible-target/` trên `python:3.12.16-slim-trixie`) | 2.21 | [Cài đặt](../tracks/devops/modules/09-config-management/README.md#0-cài-đặt) |
+| kind | 10 Kubernetes core (chưa viết; tạm thời xem [Cluster kind devops-lab](#cluster-kind-devops-lab)) | 0.30.0 (node image ghim `kindest/node:v1.34.0` theo digest) | [Cluster kind devops-lab](#cluster-kind-devops-lab) |
+| kubectl | 10 Kubernetes core (chưa viết; bản đã kiểm 1.34.13, khớp minor của node image) | 1.33 (lệch tối đa một minor với API server 1.34) | [Cluster kind devops-lab](#cluster-kind-devops-lab) |
+| helm | 11 Kubernetes production (chưa viết; bản đã kiểm 3.22.1) | 3.18 | [Cluster kind devops-lab](#cluster-kind-devops-lab) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
@@ -60,6 +63,58 @@ docker volume rm devops-track-localstack-data
 ```
 
 Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM và Secrets Manager. Lần chạy test đầu tiên (cần mạng) tự tải đúng provider `hashicorp/aws` 6.12.0 (khoảng 150 MB, giải nén khoảng 780 MB) vào `~/.cache/devops-track/tofu-plugins`; từ đó test chạy offline. Provider mới hơn 6.12 chưa chạy được với LocalStack 4.4.0 (bảng DynamoDB, tag bucket S3), nên test chỉ cài bản này: ràng buộc như `~> 6.0` vẫn ra 6.12.0, ràng buộc loại trừ 6.12.0 thì test báo lỗi kèm lý do.
+
+## Cluster kind devops-lab
+
+Module 10, 11 và capstone m06 chạy trên một cluster kind tên `devops-lab`, cấu hình ở `setup/kind/devops-lab.yaml`: một control plane và hai worker, node image `kindest/node:v1.34.0` ghim theo digest (mặc định của kind 0.30.0), API server và cổng 80/443 của ingress (`18080`, `18443`) chỉ mở trên `127.0.0.1`, control plane có nhãn `ingress-ready=true`. CNI là kindnet mặc định của kind, bản này thực thi NetworkPolicy (đã kiểm: policy deny-all chặn kết nối giữa hai pod), nên không cần Calico.
+
+Cài kind, kubectl, helm vào `~/.local/bin` (kiểm checksum trước khi cài; module 10 và 11 sẽ dạy lại phần này):
+
+```bash
+mkdir -p ~/.cache/devops-track/dl && cd ~/.cache/devops-track/dl \
+  && curl -fsSLO https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64 \
+  && curl -fsSLO https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64.sha256sum \
+  && sha256sum --check kind-linux-amd64.sha256sum \
+  && install -m 0755 kind-linux-amd64 ~/.local/bin/kind \
+  && curl -fsSLO https://dl.k8s.io/release/v1.34.13/bin/linux/amd64/kubectl \
+  && curl -fsSLO https://dl.k8s.io/release/v1.34.13/bin/linux/amd64/kubectl.sha256 \
+  && echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check \
+  && install -m 0755 kubectl ~/.local/bin/kubectl \
+  && curl -fsSLO https://get.helm.sh/helm-v3.22.1-linux-amd64.tar.gz \
+  && curl -fsSLO https://get.helm.sh/helm-v3.22.1-linux-amd64.tar.gz.sha256sum \
+  && sha256sum --check helm-v3.22.1-linux-amd64.tar.gz.sha256sum \
+  && tar -xzf helm-v3.22.1-linux-amd64.tar.gz linux-amd64/helm \
+  && install -m 0755 linux-amd64/helm ~/.local/bin/helm
+kind version && kubectl version --client && helm version --short
+```
+
+Tạo cluster, luôn kèm `--kubeconfig` để kind không ghi vào `~/.kube/config` và không đổi current-context của bạn, rồi ghim CPU cho từng node khi `DEVOPS_CPUSET` có giá trị (không ghim thì bỏ `taskset -c "$DEVOPS_CPUSET"`):
+
+```bash
+mkdir -p ~/.cache/devops-track/kube
+nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --config setup/kind/devops-lab.yaml --kubeconfig ~/.cache/devops-track/kube/devops-lab.yaml
+if [ -n "$DEVOPS_CPUSET" ]; then for node in $(kind get nodes --name devops-lab); do docker update --cpuset-cpus "$DEVOPS_CPUSET" "$node"; done; fi
+KUBECONFIG=~/.cache/devops-track/kube/devops-lab.yaml kubectl get nodes
+```
+
+Tắt khi không dùng (giải phóng RAM, giữ nguyên trạng thái), bật lại (sau khi khởi động lại máy node cũng ở trạng thái dừng), xoá hẳn:
+
+```bash
+docker stop $(kind get nodes --name devops-lab)
+docker start $(kind get nodes --name devops-lab)
+kind delete cluster --name devops-lab --kubeconfig ~/.cache/devops-track/kube/devops-lab.yaml
+```
+
+Test không bao giờ tạo hay xoá cluster. `require_cluster` skip với thông báo riêng khi Docker tắt, khi chưa có cluster, khi node đang dừng (kèm lệnh `docker start`) và khi API server chưa trả `ok` cho `/readyz` trong 5 giây. Mỗi lần chạy, test lấy kubeconfig bằng `kind get kubeconfig --name devops-lab` vào thư mục tạm, không đọc `KUBECONFIG` hay `~/.kube` của bạn, nên cluster thật mà `~/.kube/config` đang trỏ tới không bao giờ bị đụng. Mỗi test làm việc trong namespace riêng `devops-ex-<id>` (nhãn `devops-ex=<id>`, Pod Security `baseline`) bằng token của một ServiceAccount chỉ có quyền trong namespace đó, và xoá namespace khi xong. Test bị ngắt giữa chừng có thể để lại namespace; xem và xoá bằng:
+
+```bash
+KUBECONFIG=~/.cache/devops-track/kube/devops-lab.yaml kubectl get namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
+KUBECONFIG=~/.cache/devops-track/kube/devops-lab.yaml kubectl delete namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
+```
+
+Lệnh xoá trên chỉ chọn object có nhãn `devops-ex`, không đụng gì khác; chỉ chạy khi không có test nào đang chạy. Node kind là container Docker chạy privileged, nên pod privileged, hostPath, hostNetwork trên cluster này chạm được tới máy của bạn: namespace của test chặn chúng bằng Pod Security, và bài thực hành tay cũng nên làm trong namespace có nhãn `pod-security.kubernetes.io/enforce=baseline`.
+
+HPA ở module 11 cần metrics-server, chưa cài sẵn. Kế hoạch: cài từ manifest ghim phiên bản (`components.yaml` của một release metrics-server cố định, lưu trong repo để cài offline) thêm cờ `--kubelet-insecure-tls` vì kubelet của kind dùng chứng chỉ tự ký; module 11 sẽ ghi lệnh cụ thể.
 
 ## Ghim CPU
 

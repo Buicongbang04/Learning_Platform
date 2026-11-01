@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -141,24 +142,6 @@ def test_cpu_args_big_machine(monkeypatch):
     monkeypatch.delenv("DEVOPS_CPUSET", raising=False)
     monkeypatch.setattr(testkit.os, "cpu_count", lambda: 36)
     assert testkit.docker_cpu_args() == ["--cpuset-cpus", "12-35"]
-
-
-def test_require_cluster_absent_skips(monkeypatch):
-    patch_tool(
-        monkeypatch,
-        {"version": (0, "kind v0.24.0 go1.22 linux/amd64", ""), "get clusters": (0, "other\n", "")},
-    )
-    with pytest.raises(pytest.skip.Exception) as info:
-        testkit.Exercise.require_cluster()
-    assert "devops-lab" in str(info.value)
-
-
-def test_require_cluster_present(monkeypatch):
-    patch_tool(
-        monkeypatch,
-        {"version": (0, "kind v0.24.0", ""), "get clusters": (0, "devops-lab\n", "")},
-    )
-    testkit.Exercise.require_cluster()
 
 
 SANDBOX_REQUIRED = pytest.mark.skipif(testkit.sandbox_ready() is not None, reason="Máy này không có bwrap dùng được")
@@ -3758,3 +3741,855 @@ def test_ansible_lab_cleans_up_on_error():
             raise RuntimeError("lỗi giữa chừng")
     assert testkit.docker_leftovers(lab.docker.id) == []
     assert not lab.root.exists()
+
+
+ADMIN_KUBECONFIG = """apiVersion: v1
+kind: Config
+clusters:
+- name: kind-devops-lab
+  cluster:
+    server: https://127.0.0.1:46315
+    certificate-authority-data: Q0EtREFUQQ==
+users:
+- name: kind-devops-lab
+  user:
+    client-certificate-data: Q0VSVA==
+    client-key-data: S0VZ
+contexts:
+- name: kind-devops-lab
+  context:
+    cluster: kind-devops-lab
+    user: kind-devops-lab
+current-context: kind-devops-lab
+"""
+
+API_RESOURCES = (
+    "clusterroles                                   rbac.authorization.k8s.io/v1   false   ClusterRole\n"
+    "nodes                             no           v1                             false   Node\n"
+    "widgets                           wd           example.com/v1                 false   Widget\n"
+)
+
+
+class KubeFake:
+    """Giả lập docker, kind (subprocess.run thật của testkit) và kubectl, helm (run_sandboxed) cho test KubeLab không cần cluster."""
+
+    def __init__(self, monkeypatch, *, docker_ok=True, clusters="devops-lab\n", nodes=None, ready=True, labels=None):
+        self.docker_ok = docker_ok
+        self.clusters = clusters
+        self.nodes = nodes if nodes is not None else {
+            "devops-lab-control-plane": "running", "devops-lab-worker": "running", "devops-lab-worker2": "running"}
+        self.ready = ready
+        self.labels = labels if labels is not None else {name: "devops-lab" for name in self.nodes}
+        self.host_calls: list[tuple[list[str], dict | None]] = []
+        self.sandbox_calls: list[dict] = []
+        monkeypatch.setattr(testkit.shutil, "which", lambda name: f"/usr/bin/{name}")
+        monkeypatch.setattr(testkit.subprocess, "run", self.run)
+        monkeypatch.setattr(testkit, "run_sandboxed", self.run_sandboxed)
+        monkeypatch.setattr(testkit, "sandbox_ready", lambda: None)
+
+    def run(self, cmd, **kwargs):
+        cmd = [str(part) for part in cmd]
+        self.host_calls.append((cmd, kwargs.get("env")))
+        done = lambda code=0, out="", err="": subprocess.CompletedProcess(cmd, code, out, err)
+        if cmd[:2] == ["docker", "info"]:
+            return done(0 if self.docker_ok else 1, err="" if self.docker_ok else "Cannot connect to the Docker daemon")
+        if cmd[:3] == ["kind", "get", "clusters"]:
+            return done(out=self.clusters)
+        if cmd[:3] == ["docker", "ps", "-a"]:
+            return done(out="".join(f"{name}\t{state}\n" for name, state in self.nodes.items()))
+        if cmd[:3] == ["kind", "get", "kubeconfig"]:
+            return done(out=ADMIN_KUBECONFIG)
+        if cmd[:2] == ["docker", "inspect"]:
+            label = self.labels.get(cmd[-1])
+            return done(0 if label is not None else 1, out=f"{label}\n" if label is not None else "", err="" if label else "No such object")
+        if cmd[:2] in (["docker", "exec"], ["docker", "cp"]):
+            return done(out="ok\n")
+        raise AssertionError(f"lệnh không giả lập: {cmd}")
+
+    def run_sandboxed(self, cmd, *, writable, cwd, env, timeout=30, input=None, readonly=()):
+        cmd = [str(part) for part in cmd]
+        self.sandbox_calls.append({"cmd": cmd, "env": dict(env), "writable": list(writable), "readonly": list(readonly),
+                                   "cwd": cwd, "input": input})
+        done = lambda code=0, out="", err="": subprocess.CompletedProcess(cmd, code, out, err)
+        joined = " ".join(cmd)
+        if "/readyz" in joined:
+            return done(0, "ok") if self.ready else done(1, "", "Unable to connect to the server: dial tcp: i/o timeout")
+        if "create token" in joined:
+            return done(out="token-cua-lab\n")
+        if "api-resources" in joined:
+            return done(out=API_RESOURCES)
+        if "--dry-run=server" in cmd:
+            probe = json.loads(input)["metadata"]["name"].removesuffix("-probe")
+            return done(1, "", f"ValidatingAdmissionPolicy '{probe}' with binding '{probe}' denied request")
+        if cmd[1:3] == ["auth", "can-i"]:
+            return done(out="yes\n")
+        return done()
+
+    def calls_with(self, *words):
+        return [c for c in self.sandbox_calls if all(w in c["cmd"] for w in words)]
+
+
+def assert_skip(info, *needles):
+    text = str(info.value)
+    for needle in needles:
+        assert needle in text, text
+
+
+def test_require_cluster_docker_down(monkeypatch):
+    KubeFake(monkeypatch, docker_ok=False)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_cluster()
+    assert_skip(info, "Docker chưa chạy", "devops-lab")
+
+
+def test_require_cluster_missing(monkeypatch):
+    KubeFake(monkeypatch, clusters="other\n")
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_cluster()
+    assert_skip(info, "Chưa có cluster kind devops-lab", "kind create cluster --config setup/kind/devops-lab.yaml")
+
+
+def test_require_cluster_stopped_nodes(monkeypatch):
+    fake = KubeFake(monkeypatch, nodes={"devops-lab-control-plane": "running", "devops-lab-worker": "exited",
+                                        "devops-lab-worker2": "exited"})
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_cluster()
+    assert_skip(info, "node đang dừng", "docker start devops-lab-worker devops-lab-worker2")
+    assert fake.sandbox_calls == []
+
+
+def test_require_cluster_messages_are_distinct(monkeypatch):
+    messages = []
+    for kwargs in ({"docker_ok": False}, {"clusters": "\n"}, {"nodes": {"devops-lab-control-plane": "exited"}}, {"ready": False}):
+        KubeFake(monkeypatch, **kwargs)
+        with pytest.raises(pytest.skip.Exception) as info:
+            testkit.Exercise.require_cluster()
+        messages.append(str(info.value).split(".")[0])
+    assert len(set(messages)) == 4, messages
+
+
+def test_require_cluster_ready_through_temp_kubeconfig(monkeypatch, tmp_path):
+    monkeypatch.setenv("KUBECONFIG", str(tmp_path / "sentinel"))
+    fake = KubeFake(monkeypatch)
+    testkit.Exercise.require_cluster()
+    [call] = fake.sandbox_calls
+    assert call["cmd"][:4] == ["kubectl", "get", "--raw", "/readyz"] and "--request-timeout=5s" in call["cmd"]
+    assert call["env"]["KUBECONFIG"] != str(tmp_path / "sentinel")
+    assert all(env is None or "KUBECONFIG" not in env for _, env in fake.host_calls)
+
+
+def test_require_cluster_not_ready(monkeypatch):
+    KubeFake(monkeypatch, ready=False)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_cluster()
+    assert_skip(info, "chưa sẵn sàng", "/readyz")
+
+
+_AUDIT_OPENED: list[str] = []
+_AUDIT_ON: list[bool] = []
+
+
+def _audit(event, args):
+    if _AUDIT_ON and event in ("open", "os.listdir", "os.scandir") and args and isinstance(args[0], (str, bytes, os.PathLike)):
+        _AUDIT_OPENED.append(os.fsdecode(args[0]))
+
+
+sys.addaudithook(_audit)
+
+
+def test_kube_lab_never_reads_user_kubeconfig(monkeypatch, tmp_path):
+    sentinel = tmp_path / "sentinel-kubeconfig"
+    sentinel.write_text(ADMIN_KUBECONFIG.replace("46315", "1"), encoding="utf-8")
+    home = tmp_path / "home"
+    (home / ".kube").mkdir(parents=True)
+    (home / ".kube" / "config").write_text(ADMIN_KUBECONFIG.replace("46315", "2"), encoding="utf-8")
+    monkeypatch.setenv("KUBECONFIG", str(sentinel))
+    monkeypatch.setenv("HOME", str(home))
+    fake = KubeFake(monkeypatch)
+    _AUDIT_OPENED.clear()
+    _AUDIT_ON.append(True)
+    try:
+        with testkit.KubeLab() as lab:
+            lab.kubectl("get", "pods")
+            lab.helm("list")
+            lab.run(["sh", "-c", "kubectl get pods"])
+            learner = lab.kubeconfig
+            learner_text = learner.read_text(encoding="utf-8")
+    finally:
+        _AUDIT_ON.clear()
+    touched = [p for p in _AUDIT_OPENED if p.startswith(str(sentinel)) or p.startswith(str(home / ".kube"))]
+    assert touched == []
+    assert all(env is None or "KUBECONFIG" not in env for _, env in fake.host_calls)
+    for call in fake.sandbox_calls:
+        assert call["env"]["KUBECONFIG"] != str(sentinel)
+        assert Path(call["env"]["KUBECONFIG"]).is_relative_to(lab.root)
+        assert str(sentinel) not in " ".join(call["cmd"]) and str(home / ".kube") not in " ".join(call["cmd"])
+    learner_calls = [c for c in fake.sandbox_calls if c["env"]["KUBECONFIG"] == str(learner)]
+    assert learner_calls and all(Path(c["env"]["HOME"]).is_relative_to(lab.root) for c in learner_calls)
+    assert all(c["env"].get("KUBERC") == "off" for c in learner_calls)
+    assert all(Path(c["env"][k]).is_relative_to(lab.root) for c in learner_calls
+               for k in ("HELM_CACHE_HOME", "HELM_CONFIG_HOME", "HELM_DATA_HOME"))
+    assert all(learner.parent in [Path(p) for p in c["readonly"]] for c in learner_calls)
+    assert all(not Path(p).is_relative_to(learner.parent) for c in learner_calls for p in c["writable"])
+    assert "token-cua-lab" in learner_text and "client-key-data" not in learner_text
+    assert "127.0.0.1:46315" in learner_text and f"namespace: {lab.namespace}" in learner_text
+    assert not lab.root.exists()
+
+
+def test_kube_lab_admin_kubeconfig_never_mounted_for_learner(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.kubectl("get", "pods")
+        lab.run(["kubectl", "get", "pods"])
+        admin = lab.admin_kubeconfig
+    learner_calls = [c for c in fake.sandbox_calls if c["env"]["KUBECONFIG"] != str(admin)]
+    assert learner_calls
+    for call in learner_calls:
+        assert not any(Path(p) == admin.parent or admin.is_relative_to(p) for p in [*call["readonly"], *call["writable"]])
+
+
+def test_kube_lab_namespace_and_label(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        assert re.fullmatch(r"[0-9a-f]{8}", lab.id)
+        assert lab.namespace == f"devops-ex-{lab.id}"
+        assert lab.label == f"devops-ex={lab.id}"
+    [bootstrap] = [c for c in fake.calls_with("apply") if c["input"] and '"Namespace"' in c["input"]]
+    items = json.loads(bootstrap["input"])["items"]
+    namespace = next(i for i in items if i["kind"] == "Namespace")
+    assert namespace["metadata"]["name"] == lab.namespace
+    labels = namespace["metadata"]["labels"]
+    assert labels["devops-ex"] == lab.id and labels["pod-security.kubernetes.io/enforce"] == "baseline"
+    assert all(i["metadata"]["labels"]["devops-ex"] == lab.id for i in items)
+    assert {"ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "ServiceAccount", "RoleBinding"} <= {i["kind"] for i in items}
+    binding = next(i for i in items if i["kind"] == "RoleBinding")
+    assert binding["roleRef"]["name"] == "admin" and binding["metadata"]["namespace"] == lab.namespace
+    assert not any(i["kind"] == "ClusterRoleBinding" and i["roleRef"]["name"] in ("cluster-admin", "admin", "edit") for i in items)
+
+
+def test_kube_lab_close_only_touches_own_label(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    deletes = fake.calls_with("delete")
+    assert deletes
+    for call in deletes:
+        cmd = call["cmd"]
+        assert ("namespace" in cmd and lab.namespace in cmd) or f"devops-ex={lab.id}" in cmd, cmd
+        assert "--all" not in cmd and "--all-namespaces" not in cmd and "-A" not in cmd
+        assert not any(part.split(",").count("nodes") for part in cmd)
+
+
+def test_kube_lab_refuses_use_outside_with():
+    lab = testkit.KubeLab()
+    with pytest.raises(RuntimeError, match="with KubeLab"):
+        lab.kubectl("get", "pods")
+
+
+@pytest.mark.parametrize("args", [
+    ("--kubeconfig", "/x", "get", "pods"),
+    ("--kubeconfig=/x", "get", "pods"),
+    ("get", "pods", "--context", "kind-prod"),
+    ("get", "pods", "--context=kind-prod"),
+    ("--cluster", "prod", "get", "pods"),
+    ("--user", "admin", "get", "pods"),
+    ("--server", "https://10.0.0.1:6443", "get", "pods"),
+    ("-s", "https://10.0.0.1:6443", "get", "pods"),
+    ("-shttps://10.0.0.1:6443", "get", "pods"),
+    ("-s=https://10.0.0.1:6443", "get", "pods"),
+    ("get", "pods", "-ws", "https://10.0.0.1:6443"),
+    ("--token", "abc", "get", "pods"),
+    ("--token=abc", "get", "pods"),
+    ("--as", "system:admin", "get", "pods"),
+    ("--as=system:admin", "get", "pods"),
+    ("--as-group", "system:masters", "get", "pods"),
+    ("--as-uid", "1", "get", "pods"),
+    ("--username", "a", "get", "pods"),
+    ("--password", "a", "get", "pods"),
+    ("--client-certificate", "/x", "get", "pods"),
+    ("--client-key", "/x", "get", "pods"),
+    ("--certificate-authority", "/x", "get", "pods"),
+    ("--insecure-skip-tls-verify", "get", "pods"),
+    ("--tls-server-name", "x", "get", "pods"),
+])
+def test_kube_lab_refuses_context_switch_flags(monkeypatch, args):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        before = len(fake.sandbox_calls)
+        with pytest.raises(ValueError, match="kubeconfig của lab"):
+            lab.kubectl(*args)
+        assert len(fake.sandbox_calls) == before
+
+
+@pytest.mark.parametrize("args", [
+    ("list", "--kube-context", "prod"),
+    ("list", "--kube-context=prod"),
+    ("list", "--kubeconfig", "/x"),
+    ("list", "--kube-apiserver", "https://10.0.0.1"),
+    ("list", "--kube-token", "abc"),
+    ("list", "--kube-as-user", "admin"),
+    ("list", "--kube-as-group", "system:masters"),
+    ("list", "--kube-ca-file", "/x"),
+    ("list", "--kube-insecure-skip-tls-verify"),
+    ("list", "--kube-tls-server-name", "x"),
+])
+def test_kube_lab_helm_refuses_context_switch_flags(monkeypatch, args):
+    KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        with pytest.raises(ValueError, match="kubeconfig của lab"):
+            lab.helm(*args)
+
+
+@pytest.mark.parametrize("args", [
+    ("get", "pods", "-o", "jsonpath={.items[*].status.phase}"),
+    ("get", "pods", "-ojsonpath={.items[*].status}"),
+    ("logs", "deploy/api", "--since=1m"),
+    ("get", "pods", "-l", "app=api", "-w"),
+    ("exec", "pod/api", "--", "kubectl", "--server", "x", "--context", "y"),
+    ("get", "nodes", "--show-labels"),
+])
+def test_kube_lab_allows_normal_flags(monkeypatch, args):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.kubectl(*args)
+    assert fake.calls_with(*args)
+
+
+@pytest.mark.parametrize("env", [{"KUBECONFIG": "/x"}, {"HOME": "/x"}, {"KUBERC": "on"}, {"HELM_CONFIG_HOME": "/x"}, {"PATH": "/x"},
+                                 {"HELM_KUBECONTEXT": "prod"}, {"KUBECTL_EXTERNAL_DIFF": "x"}])
+def test_kube_lab_run_env_cannot_override_lab(monkeypatch, env):
+    KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        with pytest.raises(ValueError, match="lab tự quản"):
+            lab.run(["kubectl", "get", "pods"], env=env)
+
+
+def test_kube_lab_run_learner_script_same_env(monkeypatch, tmp_path):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.kubectl("get", "pods")
+        lab.run(["bash", "deploy.sh"], cwd=tmp_path, readonly=[tmp_path], env={"APP_VERSION": "1.2"})
+    kubectl_call = fake.calls_with("kubectl", "get", "pods")[0]
+    script_call = fake.calls_with("bash", "deploy.sh")[0]
+    for key in ("KUBECONFIG", "HOME", "KUBERC", "HELM_CACHE_HOME", "HELM_CONFIG_HOME", "HELM_DATA_HOME"):
+        assert script_call["env"][key] == kubectl_call["env"][key]
+    assert script_call["env"]["APP_VERSION"] == "1.2"
+    assert Path(tmp_path) in [Path(p) for p in script_call["readonly"]]
+
+
+def kube_docs(text: str) -> list:
+    import yaml
+
+    return [d for d in yaml.safe_load_all(text) if d is not None]
+
+
+POD = """apiVersion: v1
+kind: Pod
+metadata: {name: api%s}
+spec:
+  containers:
+  - name: api
+    image: nginx:1.30.6-alpine
+%s"""
+
+DEPLOY = """apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api}
+spec:
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+%s      containers:
+      - name: api
+        image: nginx:1.30.6-alpine
+"""
+
+KUBE_BAD = {
+    "foreign-namespace": ("apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c, namespace: kube-system}\n", "kube-system"),
+    "default-namespace": ("apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c, namespace: default}\n", "default"),
+    "unlabelled-cluster-role": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata: {name: r}\nrules: []\n",
+                                "devops-ex="),
+    "cluster-role-not-allowed": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: r\n  labels: "
+                                 "{devops-ex: 'LABID'}\nrules: []\n", "allow"),
+    "cluster-admin-binding": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: b\n  labels: "
+                              "{devops-ex: 'LABID'}\nroleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "
+                              "cluster-admin}\nsubjects:\n- {kind: ServiceAccount, name: default, namespace: LABNS}\n",
+                              "cluster-admin"),
+    "rolebinding-cluster-admin": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata: {name: b}\nroleRef: "
+                                  "{apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: cluster-admin}\nsubjects:\n- "
+                                  "{kind: ServiceAccount, name: default}\n", "cluster-admin"),
+    "binding-system-group": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata: {name: b}\nroleRef: "
+                             "{apiGroup: rbac.authorization.k8s.io, kind: Role, name: r}\nsubjects:\n- {kind: Group, name: "
+                             "system:authenticated, apiGroup: rbac.authorization.k8s.io}\n", "system:authenticated"),
+    "binding-foreign-sa": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata: {name: b}\nroleRef: "
+                           "{apiGroup: rbac.authorization.k8s.io, kind: Role, name: r}\nsubjects:\n- {kind: ServiceAccount, name: "
+                           "default, namespace: kube-system}\n", "kube-system"),
+    "role-escalate": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata: {name: r}\nrules:\n- {apiGroups: ['*'], "
+                      "resources: ['*'], verbs: ['*']}\n", "*"),
+    "role-impersonate": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata: {name: r}\nrules:\n- {apiGroups: [''], "
+                         "resources: [users], verbs: [impersonate]}\n", "impersonate"),
+    "privileged-pod": (POD % ("", "    securityContext: {privileged: true}\n"), "privileged"),
+    "privileged-init": (POD % ("", "  initContainers:\n  - name: i\n    image: x\n    securityContext: {privileged: true}\n"),
+                        "privileged"),
+    "host-network": (DEPLOY % "      hostNetwork: true\n", "hostNetwork"),
+    "host-pid": (DEPLOY % "      hostPID: true\n", "hostPID"),
+    "host-ipc": (DEPLOY % "      hostIPC: true\n", "hostIPC"),
+    "host-path": (DEPLOY % "      volumes:\n      - name: root\n        hostPath: {path: /}\n", "hostPath"),
+    "host-port": (POD % ("", "    ports:\n    - {containerPort: 80, hostPort: 80}\n"), "hostPort"),
+    "cap-sys-admin": (POD % ("", "    securityContext: {capabilities: {add: [SYS_ADMIN]}}\n"), "SYS_ADMIN"),
+    "proc-unmasked": (POD % ("", "    securityContext: {procMount: Unmasked}\n"), "procMount"),
+    "seccomp-unconfined": (POD % ("", "    securityContext: {seccompProfile: {type: Unconfined}}\n"), "Unconfined"),
+    "cronjob-host-path": ("apiVersion: batch/v1\nkind: CronJob\nmetadata: {name: c}\nspec:\n  schedule: '* * * * *'\n  jobTemplate:\n"
+                          "    spec:\n      template:\n        spec:\n          restartPolicy: Never\n          volumes:\n          - name: "
+                          "d\n            hostPath: {path: /var/run}\n          containers:\n          - {name: c, image: x}\n",
+                          "hostPath"),
+    "pv-host-path": ("apiVersion: v1\nkind: PersistentVolume\nmetadata:\n  name: pv\n  labels: {devops-ex: 'LABID'}\nspec:\n  "
+                     "capacity: {storage: 1Gi}\n  accessModes: [ReadWriteOnce]\n  hostPath: {path: /}\n", "hostPath"),
+    "namespace": ("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: other\n  labels: {devops-ex: 'LABID'}\n", "Namespace"),
+    "namespace-psa": ("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: kube-system\n  labels: {devops-ex: 'LABID'}\n", "Namespace"),
+    "node": ("apiVersion: v1\nkind: Node\nmetadata:\n  name: devops-lab-worker\n  labels: {devops-ex: 'LABID'}\n", "Node"),
+    "mutating-webhook": ("apiVersion: admissionregistration.k8s.io/v1\nkind: MutatingWebhookConfiguration\nmetadata:\n  name: m\n  "
+                         "labels: {devops-ex: 'LABID'}\nwebhooks: []\n", "MutatingWebhookConfiguration"),
+    "validating-webhook": ("apiVersion: admissionregistration.k8s.io/v1\nkind: ValidatingWebhookConfiguration\nmetadata:\n  name: "
+                           "v\n  labels: {devops-ex: 'LABID'}\nwebhooks: []\n", "ValidatingWebhookConfiguration"),
+    "crd-not-allowed": ("apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nmetadata:\n  name: "
+                        "widgets.example.com\n  labels: {devops-ex: 'LABID'}\nspec: {}\n", "CustomResourceDefinition"),
+    "discovered-cluster-kind": ("apiVersion: example.com/v1\nkind: Widget\nmetadata: {name: w}\n", "devops-ex="),
+    "list-wrapper": ("apiVersion: v1\nkind: List\nitems:\n- apiVersion: v1\n  kind: ConfigMap\n  metadata: {name: c, namespace: "
+                     "default}\n", "default"),
+    "service-external-ips": ("apiVersion: v1\nkind: Service\nmetadata: {name: s}\nspec:\n  ports: [{port: 80}]\n  externalIPs: "
+                             "[10.96.0.1]\n", "externalIPs"),
+    "aggregation-rule": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: r\n  labels: "
+                         "{devops-ex: 'LABID'}\naggregationRule:\n  clusterRoleSelectors:\n  - matchLabels: "
+                         "{rbac.authorization.k8s.io/aggregate-to-admin: 'true'}\n", "aggregationRule"),
+    "not-object": ("- a\n- b\n", "object"),
+    "missing-kind": ("apiVersion: v1\nmetadata: {name: x}\n", "kind"),
+}
+
+
+def lab_text(text: str, lab_id: str, namespace: str) -> str:
+    return text.replace("LABID", lab_id).replace("LABNS", namespace)
+
+
+@pytest.mark.parametrize("name", KUBE_BAD)
+def test_kube_manifest_problems_reject(name):
+    text, needle = KUBE_BAD[name]
+    problems = testkit.kube_manifest_problems(kube_docs(lab_text(text, "abcd1234", "devops-ex-abcd1234")), lab_id="abcd1234",
+                                              namespace="devops-ex-abcd1234", cluster_kinds={"Widget"})
+    assert problems and any(needle in p for p in problems), problems
+
+
+def test_kube_lab_rejects_foreign_namespace(monkeypatch, tmp_path):
+    fake = KubeFake(monkeypatch)
+    manifest = tmp_path / "app.yaml"
+    manifest.write_text("apiVersion: v1\nkind: ConfigMap\nmetadata: {name: ok}\n---\n"
+                        "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c, namespace: kube-system}\n", encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        before = len(fake.calls_with("apply"))
+        with pytest.raises(pytest.fail.Exception, match="kube-system"):
+            lab.apply_learner(manifest)
+        assert len(fake.calls_with("apply")) == before
+
+
+@pytest.mark.parametrize("name", ["privileged-pod", "host-path", "host-network", "cluster-admin-binding", "unlabelled-cluster-role"])
+def test_kube_lab_apply_learner_refuses_before_apply(monkeypatch, tmp_path, name):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab(allow=("ClusterRole", "ClusterRoleBinding")) as lab:
+        manifest = tmp_path / "x.yaml"
+        manifest.write_text(lab_text(KUBE_BAD[name][0], lab.id, lab.namespace), encoding="utf-8")
+        before = len(fake.calls_with("apply"))
+        with pytest.raises(pytest.fail.Exception, match="từ chối"):
+            lab.apply_learner(manifest)
+        assert len(fake.calls_with("apply")) == before
+
+
+KUBE_GOOD = """apiVersion: v1
+kind: ConfigMap
+metadata: {name: plain}
+data: {a: "1"}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: explicit, namespace: LABNS}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: LABNS-reader
+  labels: {devops-ex: 'LABID'}
+rules:
+- {apiGroups: [""], resources: [pods], verbs: [get, list]}
+---
+""" + DEPLOY % "      securityContext: {runAsNonRoot: true}\n"
+
+
+def test_kube_lab_apply_learner_sends_exactly_what_was_checked(monkeypatch, tmp_path):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab(allow=("ClusterRole",)) as lab:
+        manifest = tmp_path / "app.yaml"
+        manifest.write_text(lab_text(KUBE_GOOD, lab.id, lab.namespace), encoding="utf-8")
+        lab.apply_learner(manifest)
+        call = fake.calls_with("apply")[-1]
+    assert call["env"]["KUBECONFIG"] == str(lab.kubeconfig)
+    assert call["cmd"][:2] == ["kubectl", "apply"] and "-f" in call["cmd"] and "-" in call["cmd"]
+    assert ["-n", lab.namespace] == call["cmd"][call["cmd"].index("-n"):call["cmd"].index("-n") + 2]
+    sent = json.loads(call["input"])
+    assert sent["kind"] == "List" and sent["items"] == kube_docs(lab_text(KUBE_GOOD, lab.id, lab.namespace))
+
+
+def test_kube_lab_apply_learner_directory(monkeypatch, tmp_path):
+    fake = KubeFake(monkeypatch)
+    (tmp_path / "a.yaml").write_text("apiVersion: v1\nkind: ConfigMap\nmetadata: {name: a}\n", encoding="utf-8")
+    (tmp_path / "b.yml").write_text("apiVersion: v1\nkind: Secret\nmetadata: {name: b}\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("kind: Namespace\n", encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        lab.apply_learner(tmp_path)
+        sent = json.loads(fake.calls_with("apply")[-1]["input"])
+    assert [i["metadata"]["name"] for i in sent["items"]] == ["a", "b"]
+
+
+def test_kube_lab_apply_learner_kustomize_rendered_then_checked(monkeypatch, tmp_path):
+    fake = KubeFake(monkeypatch)
+    rendered = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c, namespace: kube-system}\n"
+    original = fake.run_sandboxed
+
+    def render(cmd, **kwargs):
+        if list(map(str, cmd[:2])) == ["kubectl", "kustomize"]:
+            fake.sandbox_calls.append({"cmd": list(map(str, cmd)), "env": dict(kwargs["env"]), "writable": kwargs["writable"],
+                                       "readonly": list(kwargs.get("readonly", ())), "cwd": kwargs["cwd"], "input": None})
+            return subprocess.CompletedProcess(cmd, 0, rendered, "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", render)
+    (tmp_path / "kustomization.yaml").write_text("resources: [cm.yaml]\nnamespace: kube-system\n", encoding="utf-8")
+    (tmp_path / "cm.yaml").write_text("apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\n", encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        before = len(fake.calls_with("apply"))
+        with pytest.raises(pytest.fail.Exception, match="kube-system"):
+            lab.apply_learner(tmp_path)
+        assert len(fake.calls_with("apply")) == before
+    [kustomize] = fake.calls_with("kustomize")
+    assert Path(tmp_path) in [Path(p) for p in kustomize["readonly"]]
+
+
+def test_kube_lab_apply_learner_refuses_symlink_and_alias(monkeypatch, tmp_path):
+    fake = KubeFake(monkeypatch)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("khoa-bi-mat: 1\n", encoding="utf-8")
+    project = tmp_path / "k8s"
+    project.mkdir()
+    (project / "a.yaml").symlink_to(secret)
+    bomb = tmp_path / "bomb.yaml"
+    bomb.write_text("apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\ndata:\n  a: &a x\n  b: *a\n", encoding="utf-8")
+    deep = tmp_path / "deep.yaml"
+    deep.write_text("apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\ndata: " + "[" * 5000 + "]" * 5000 + "\n",
+                    encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        with pytest.raises(pytest.fail.Exception, match="symlink"):
+            lab.apply_learner(project)
+        with pytest.raises(pytest.fail.Exception, match="alias"):
+            lab.apply_learner(bomb)
+        with pytest.raises(pytest.fail.Exception, match="sâu|YAML"):
+            lab.apply_learner(deep)
+        assert fake.calls_with("apply", "-n") == []
+
+
+@pytest.mark.parametrize("value", ["", "privileged", "Baseline"])
+def test_kube_lab_rejects_bad_pod_security(value):
+    with pytest.raises(ValueError):
+        testkit.KubeLab(pod_security=value)
+
+
+def test_kube_lab_rejects_unknown_allow():
+    with pytest.raises(ValueError, match="Node"):
+        testkit.KubeLab(allow=("Node",))
+    with pytest.raises(ValueError, match="MutatingWebhookConfiguration"):
+        testkit.KubeLab(allow=("MutatingWebhookConfiguration",))
+
+
+@pytest.mark.parametrize("node", [
+    "devops-lab", "devops-lab-", "devops-lab-worker-x", "devops-lab-workerx", "devops-lab-control-plane2", "devops-lab-worker2 ",
+    " devops-lab-worker", "devops-lab-worker;id", "--privileged", "-u", "other-lab-worker", "de-learning-postgres-1", "portainer",
+    "neo4j-fnb", "fnb-postgres-1", "DEVOPS-LAB-WORKER", "devops-lab-worker\n", "devops-lab-control-plane/../x",
+])
+def test_kind_node_exec_only_devops_lab(monkeypatch, node):
+    fake = KubeFake(monkeypatch)
+    with pytest.raises(ValueError, match="devops-lab"):
+        testkit.kind_node_exec(node, "true")
+    with pytest.raises(ValueError, match="devops-lab"):
+        testkit.kind_node_cp(node, "/etc/hostname", Path("/tmp/x"))
+    assert fake.host_calls == []
+
+
+def test_kind_node_exec_requires_kind_label(monkeypatch):
+    KubeFake(monkeypatch, labels={"devops-lab-worker": ""})
+    with pytest.raises(ValueError, match="không phải node"):
+        testkit.kind_node_exec("devops-lab-worker", "true")
+
+
+@pytest.mark.parametrize("cmd", [(), ("sh", "-c", "id"), ("/bin/bash", "-c", "id"), ("bash", "x.sh"), ("dash",), ("busybox", "sh")])
+def test_kind_node_exec_refuses_shell_and_empty(monkeypatch, cmd):
+    fake = KubeFake(monkeypatch)
+    with pytest.raises(ValueError):
+        testkit.kind_node_exec("devops-lab-control-plane", *cmd)
+    assert not any(c[:2] == ["docker", "exec"] for c, _ in fake.host_calls)
+
+
+def test_kind_node_exec_argv_after_container(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    testkit.kind_node_exec("devops-lab-worker2", "cat", "/etc/hostname; id")
+    [(cmd, env)] = [(c, e) for c, e in fake.host_calls if c[:2] == ["docker", "exec"]]
+    assert cmd[-3:] == ["devops-lab-worker2", "cat", "/etc/hostname; id"]
+    assert env is not None and "KUBECONFIG" not in env
+
+
+@pytest.mark.parametrize("node_path,local", [("etc/hostname", "/tmp/x"), ("/etc/hostname", "-"), ("-", "/tmp/x")])
+def test_kind_node_cp_refuses_bad_paths(monkeypatch, node_path, local):
+    KubeFake(monkeypatch)
+    with pytest.raises(ValueError):
+        testkit.kind_node_cp("devops-lab-control-plane", node_path, local)
+
+
+def test_kind_node_cp_directions(monkeypatch, tmp_path):
+    fake = KubeFake(monkeypatch)
+    testkit.kind_node_cp("devops-lab-control-plane", "/etc/hostname", tmp_path / "h")
+    testkit.kind_node_cp("devops-lab-control-plane", tmp_path / "h", "/tmp/in", to_node=True)
+    cps = [c for c, _ in fake.host_calls if c[:2] == ["docker", "cp"]]
+    assert cps[0][2:] == ["devops-lab-control-plane:/etc/hostname", str(tmp_path / "h")]
+    assert cps[1][2:] == [str(tmp_path / "h"), "devops-lab-control-plane:/tmp/in"]
+
+
+def test_kind_config_pinned_and_local_only():
+    import yaml
+
+    config = yaml.safe_load((testkit.ROOT / "setup" / "kind" / "devops-lab.yaml").read_text(encoding="utf-8"))
+    assert config["name"] == "devops-lab"
+    assert config["networking"]["apiServerAddress"] == "127.0.0.1"
+    roles = [n["role"] for n in config["nodes"]]
+    assert roles == ["control-plane", "worker", "worker"]
+    assert {n["image"] for n in config["nodes"]} == {testkit.KIND_NODE_IMAGE}
+    assert re.fullmatch(r"kindest/node:v1\.34\.\d+@sha256:[0-9a-f]{64}", testkit.KIND_NODE_IMAGE)
+    mappings = [m for n in config["nodes"] for m in n.get("extraPortMappings", [])]
+    assert mappings and all(m["listenAddress"] == "127.0.0.1" for m in mappings)
+
+
+def test_kind_lifecycle_documented():
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    assert testkit.KUBE_CREATE in doc
+    assert 'docker update --cpuset-cpus "$DEVOPS_CPUSET"' in doc
+    for command in ("docker stop $(kind get nodes --name devops-lab)", "docker start $(kind get nodes --name devops-lab)",
+                    "kind delete cluster --name devops-lab"):
+        assert command in doc
+    for version in (testkit.KUBECTL_VERSION, testkit.HELM_VERSION):
+        assert f"v{version}" in doc
+    assert "kind create cluster --config setup/kind/devops-lab.yaml\n" not in doc
+
+
+KUBE_REQUIRED = pytest.mark.skipif(not shutil.which("kind") or not shutil.which("kubectl"), reason="Cần kind và kubectl")
+
+
+def admin_kubectl(*args, input=None):
+    """kubectl thô bằng kubeconfig admin tạm (lấy bằng kind get kubeconfig), không qua kiểm tĩnh hay quyền của KubeLab."""
+    import tempfile
+
+    text = subprocess.run(["kind", "get", "kubeconfig", "--name", "devops-lab"], capture_output=True, text=True, check=True,
+                          env=testkit._docker_env()).stdout
+    with tempfile.TemporaryDirectory(prefix="devops-ex-admin-") as tmp:
+        path = Path(tmp) / "kubeconfig"
+        path.write_text(text, encoding="utf-8")
+        env = {"PATH": os.environ["PATH"], "HOME": tmp, "KUBECONFIG": str(path), "KUBERC": "off"}
+        return subprocess.run(["kubectl", *args], capture_output=True, text=True, env=env, input=input, timeout=60)
+
+
+PRIVILEGED_POD = """apiVersion: v1
+kind: Pod
+metadata: {name: escape}
+spec:
+  containers:
+  - name: c
+    image: registry.k8s.io/e2e-test-images/agnhost:2.53
+    securityContext: {privileged: true}
+"""
+
+HOSTPATH_POD = """apiVersion: v1
+kind: Pod
+metadata: {name: hostroot}
+spec:
+  containers:
+  - name: c
+    image: registry.k8s.io/e2e-test-images/agnhost:2.53
+    volumeMounts: [{name: root, mountPath: /host}]
+  volumes:
+  - name: root
+    hostPath: {path: /}
+"""
+
+
+@KUBE_REQUIRED
+def test_kube_lab_cleans_namespace():
+    with testkit.KubeLab() as lab:
+        lab.kubectl("create", "configmap", "probe", "--from-literal=a=1")
+        assert lab.kubectl("get", "configmap", "probe", "-o", "jsonpath={.data.a}").stdout == "1"
+        labels = json.loads(admin_kubectl("get", "namespace", lab.namespace, "-o", "json").stdout)["metadata"]["labels"]
+        assert labels["devops-ex"] == lab.id and labels["pod-security.kubernetes.io/enforce"] == "baseline"
+    assert testkit.kube_leftovers(lab.id) == []
+    assert admin_kubectl("get", "namespace", lab.namespace).returncode != 0
+    assert not lab.root.exists()
+
+
+@KUBE_REQUIRED
+def test_kube_lab_cleans_namespace_on_error():
+    lab = testkit.KubeLab(allow=("ClusterRole",))
+    with pytest.raises(RuntimeError, match="giữa chừng"):
+        with lab:
+            lab.kubectl("create", "configmap", "probe")
+            lab.kubectl("apply", "-f", "-", input=json.dumps({
+                "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+                "metadata": {"name": f"{lab.namespace}-r", "labels": {"devops-ex": lab.id}}, "rules": []}))
+            raise RuntimeError("lỗi giữa chừng")
+    assert testkit.kube_leftovers(lab.id) == []
+    assert admin_kubectl("get", "clusterrole", f"{lab.namespace}-r").returncode != 0
+
+
+@KUBE_REQUIRED
+@pytest.mark.parametrize("manifest,name", [(PRIVILEGED_POD, "escape"), (HOSTPATH_POD, "hostroot")])
+def test_kube_lab_psa_blocks_host_access_without_static_check(manifest, name):
+    with testkit.KubeLab() as lab:
+        as_learner = lab.kubectl("apply", "-f", "-", input=manifest, check=False)
+        assert as_learner.returncode != 0 and "violates PodSecurity" in as_learner.stderr, as_learner.stderr
+        as_admin = admin_kubectl("-n", lab.namespace, "apply", "-f", "-", input=manifest)
+        assert as_admin.returncode != 0 and "violates PodSecurity" in as_admin.stderr, as_admin.stderr
+        assert admin_kubectl("-n", lab.namespace, "get", "pod", name).returncode != 0
+
+
+@KUBE_REQUIRED
+def test_kube_lab_learner_credentials_stay_in_namespace():
+    with testkit.KubeLab() as lab:
+        other = lab.kubectl("-n", "default", "create", "configmap", f"{lab.namespace}-x", check=False)
+        assert other.returncode != 0 and "forbidden" in other.stderr.lower(), other.stderr
+        label = lab.kubectl("label", "namespace", lab.namespace, "pod-security.kubernetes.io/enforce-", check=False)
+        assert label.returncode != 0 and "forbidden" in label.stderr.lower(), label.stderr
+        role = lab.kubectl("create", "clusterrolebinding", f"{lab.namespace}-x", "--clusterrole=cluster-admin",
+                           f"--serviceaccount={lab.namespace}:default", check=False)
+        assert role.returncode != 0 and "forbidden" in role.stderr.lower(), role.stderr
+        assert lab.kubectl("auth", "can-i", "create", "pods", "--subresource=exec").stdout.strip() == "yes"
+        assert lab.kubectl("auth", "can-i", "create", "pods", "-n", "kube-system", check=False).stdout.strip() == "no"
+        assert lab.kubectl("auth", "can-i", "get", "secrets", "-n", "kube-system", check=False).stdout.strip() == "no"
+        assert lab.kubectl("auth", "can-i", "patch", "nodes", check=False).stdout.strip() == "no"
+        assert lab.kubectl("get", "nodes", "-o", "name").stdout.count("node/") == 3
+
+
+@KUBE_REQUIRED
+def test_kube_lab_cluster_scoped_objects_need_label_in_cluster():
+    with testkit.KubeLab(allow=("ClusterRole",)) as lab:
+        role = {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole", "metadata": {"name": f"{lab.namespace}-r"},
+                "rules": []}
+        unlabelled = lab.kubectl("apply", "-f", "-", input=json.dumps(role), check=False)
+        assert unlabelled.returncode != 0 and "devops-ex" in unlabelled.stderr, unlabelled.stderr
+        role["metadata"]["labels"] = {"devops-ex": lab.id}
+        lab.kubectl("apply", "-f", "-", input=json.dumps(role))
+        foreign = lab.kubectl("delete", "clusterrole", "view", check=False)
+        assert foreign.returncode != 0, foreign.stderr
+        relabel = lab.kubectl("label", "clusterrole", "edit", f"devops-ex={lab.id}", check=False)
+        assert relabel.returncode != 0, relabel.stderr
+    assert admin_kubectl("get", "clusterrole", "view").returncode == 0
+    assert testkit.kube_leftovers(lab.id) == []
+
+
+@KUBE_REQUIRED
+def test_kube_lab_apply_learner_real(tmp_path):
+    manifest = tmp_path / "app.yaml"
+    manifest.write_text(DEPLOY.replace("nginx:1.30.6-alpine", "registry.k8s.io/e2e-test-images/agnhost:2.53") % "", encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        lab.apply_learner(manifest)
+        assert lab.kubectl("get", "deploy", "api", "-o", "jsonpath={.metadata.namespace}").stdout == lab.namespace
+
+
+@KUBE_REQUIRED
+def test_kube_lab_helm_install_checks_rendered_chart(tmp_path):
+    chart = tmp_path / "chart"
+    (chart / "templates").mkdir(parents=True)
+    (chart / "Chart.yaml").write_text("apiVersion: v2\nname: probe\nversion: 0.1.0\n", encoding="utf-8")
+    (chart / "values.yaml").write_text("privileged: false\n", encoding="utf-8")
+    (chart / "templates" / "cm.yaml").write_text(
+        "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: {{ .Release.Name }}-cm}\ndata: {a: '1'}\n", encoding="utf-8")
+    (chart / "templates" / "pod.yaml").write_text(
+        "{{- if .Values.privileged }}\n" + PRIVILEGED_POD + "{{- end }}\n", encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        lab.helm_install("probe", chart)
+        assert lab.kubectl("get", "configmap", "probe-cm", "-o", "jsonpath={.data.a}").stdout == "1"
+        assert "probe" in lab.helm("list", "-q").stdout
+        with pytest.raises(pytest.fail.Exception, match="privileged"):
+            lab.helm_install("probe2", chart, "--set", "privileged=true")
+        assert "probe2" not in lab.helm("list", "-q").stdout
+    assert testkit.kube_leftovers(lab.id) == []
+
+
+@KUBE_REQUIRED
+def test_kube_lab_ignores_user_kubeconfig_real(monkeypatch, tmp_path):
+    sentinel = tmp_path / "sentinel"
+    sentinel.write_text(ADMIN_KUBECONFIG.replace("46315", "1"), encoding="utf-8")
+    home = tmp_path / "home"
+    (home / ".kube").mkdir(parents=True)
+    (home / ".kube" / "config").write_text(ADMIN_KUBECONFIG.replace("46315", "2"), encoding="utf-8")
+    monkeypatch.setenv("KUBECONFIG", str(sentinel))
+    monkeypatch.setenv("HOME", str(home))
+    with testkit.KubeLab() as lab:
+        server = lab.kubectl("config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}").stdout
+        assert server.startswith("https://127.0.0.1:") and not server.endswith((":1", ":2"))
+        assert lab.kubectl("get", "--raw", "/readyz").stdout == "ok"
+        script = lab.run(["sh", "-c", "kubectl config view --minify -o jsonpath='{.contexts[0].context.namespace}'; "
+                                      "ls ~/.kube/config 2>/dev/null; echo; echo $KUBECONFIG"])
+        lines = script.stdout.splitlines()
+        assert lines[0] == lab.namespace and lines[-1] == str(lab.kubeconfig)
+    assert sentinel.read_text(encoding="utf-8").count("127.0.0.1:1") == 1
+
+
+@KUBE_REQUIRED
+def test_kube_lab_kubeconfig_read_only_for_learner():
+    with testkit.KubeLab() as lab:
+        before = lab.kubeconfig.read_text(encoding="utf-8")
+        result = lab.kubectl("config", "set-context", "--current", "--namespace=default", check=False)
+        assert result.returncode != 0
+        script = lab.run(["sh", "-c", f"echo x >> {lab.kubeconfig}"])
+        assert script.returncode != 0
+        assert lab.kubeconfig.read_text(encoding="utf-8") == before
+
+
+@KUBE_REQUIRED
+def test_kind_node_exec_and_cp_real(tmp_path):
+    testkit.Exercise.require_cluster()
+    result = testkit.kind_node_exec("devops-lab-control-plane", "cat", "/etc/kubernetes/manifests/etcd.yaml")
+    assert result.returncode == 0 and "etcd" in result.stdout
+    testkit.kind_node_cp("devops-lab-control-plane", "/etc/kubernetes/manifests/etcd.yaml", tmp_path / "etcd.yaml")
+    assert "etcd" in (tmp_path / "etcd.yaml").read_text(encoding="utf-8")
+    (tmp_path / "in.txt").write_text("devops-ex\n", encoding="utf-8")
+    target = f"/root/devops-ex-{os.getpid()}.txt"
+    testkit.kind_node_cp("devops-lab-worker", tmp_path / "in.txt", target, to_node=True)
+    try:
+        assert testkit.kind_node_exec("devops-lab-worker", "cat", target).stdout == "devops-ex\n"
+    finally:
+        testkit.kind_node_exec("devops-lab-worker", "rm", "-f", target)
+
+
+@KUBE_REQUIRED
+@pytest.mark.skipif(os.environ.get("DEVOPS_KIND_STOP_PROOF") != "1",
+                    reason="Chỉ chạy khi DEVOPS_KIND_STOP_PROOF=1 (dừng rồi bật lại một worker của devops-lab)")
+def test_require_cluster_stopped_node_real():
+    testkit.Exercise.require_cluster()
+    subprocess.run(["docker", "stop", "devops-lab-worker2"], check=True, capture_output=True, timeout=60)
+    try:
+        started = time.monotonic()
+        with pytest.raises(pytest.skip.Exception) as info:
+            testkit.Exercise.require_cluster()
+        assert time.monotonic() - started < 15
+        assert_skip(info, "node đang dừng", "docker start devops-lab-worker2")
+    finally:
+        subprocess.run(["docker", "start", "devops-lab-worker2"], check=True, capture_output=True, timeout=60)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        ready = admin_kubectl("wait", "--for=condition=Ready", "node/devops-lab-worker2", "--timeout=10s")
+        if ready.returncode == 0:
+            break
+    testkit.Exercise.require_cluster()

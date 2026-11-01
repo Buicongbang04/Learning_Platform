@@ -196,6 +196,7 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
 
 TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
+TESTKIT_HELPERS = SANDBOX_HELPERS | {"kind_node_exec", "kind_node_cp"}
 SHELLS = {"sh", "bash", "dash", "zsh"}
 WRAPPERS = {
     "nice": {"-n", "--adjustment"},
@@ -222,7 +223,7 @@ def call_name(node: ast.AST) -> str:
 
 def is_command_sink(node: ast.Call) -> bool:
     name = call_name(node)
-    if name.split(".")[-1] in SANDBOX_HELPERS:
+    if name.split(".")[-1] in TESTKIT_HELPERS:
         return False
     if name.startswith(("subprocess.", "os.exec", "os.spawn", "asyncio.create_subprocess_")) or name in {"os.system", "os.popen"}:
         return True
@@ -340,7 +341,7 @@ def sink_argument(node: ast.Call) -> ast.AST | None:
 
 def check_tool_calls(path: Path) -> list[str]:
     """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu trực tiếp; đi qua helper của testkit
-    (DockerLab, run_sandboxed, sandbox_command, act_run, và sau này TofuLab, KubeLab, kind_node_exec).
+    (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
     `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
@@ -353,7 +354,9 @@ def check_tool_calls(path: Path) -> list[str]:
     Vì vậy tuple/list dữ liệu (`for t in ("docker", "kind")`, `parametrize("tool", ["kind"])`, `("kubectl", "1.34")`),
     dict binary giả, chuỗi, chú thích, `require_tool`, `require_image`, `shutil.which` đứng riêng không bị bắt.
     `run_sandboxed(`/`sandbox_command(` không phải điểm chạy lệnh: lệnh trong đó chạy trong bwrap, socket Docker và
-    thông tin đăng nhập bị che, nên `run_sandboxed(["tofu", "plan"], ...)` hợp lệ.
+    thông tin đăng nhập bị che, nên `run_sandboxed(["tofu", "plan"], ...)` hợp lệ. `kind_node_exec(`/`kind_node_cp(` cũng không
+    phải: testkit chỉ nhận node `devops-lab-*` và argv không qua shell. Phương thức của lab (`lab.kubectl(...)`, `lab.helm(...)`)
+    là lời gọi thuộc tính nên không bao giờ bị xét.
     """
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -741,6 +744,10 @@ TOOL_DENYLIST_BAD = {
     "private-docker-call": 'from testkit import _docker\nresult = _docker("run", "--rm", "nginx")\n',
     "private-docker-attr": 'testkit._docker ("ps")\n',
     "private-docker-alias": 'from testkit import _docker as d\n',
+    "kind-node-via-docker": 'subprocess.run(["docker", "exec", "devops-lab-control-plane", "etcdctl", "version"])\n',
+    "kind-kubeconfig-direct": 'subprocess.run(["kind", "get", "kubeconfig", "--name", "devops-lab"], capture_output=True)\n',
+    "kubectl-learner-kubeconfig": 'subprocess.run(["kubectl", "--kubeconfig", str(lab.kubeconfig), "get", "pods"])\n',
+    "helm-direct": 'run_helm = subprocess.run\nrun_helm(["helm", "upgrade", "--install", "api", "chart"])\n',
 }
 
 TOOL_DENYLIST_GOOD = {
@@ -768,6 +775,13 @@ TOOL_DENYLIST_GOOD = {
     "wrapper-learner-script": 'subprocess.run(["timeout", "30", "bash", "deploy.sh", "docker"])\n',
     "learner-script-string": 'subprocess.run("./deploy.sh docker", shell=True)\n',
     "echo-mentions-tool": 'subprocess.run("echo use kubectl here", shell=True)\n',
+    "kube-lab": 'with KubeLab() as lab:\n    lab.apply_learner(ex.path("k8s"))\n    lab.kubectl("get", "deploy", "api")\n    lab.helm("list")\n',
+    "kube-lab-run-script": 'with KubeLab() as lab:\n    lab.run(["bash", "deploy.sh"], readonly=[ex.target])\n',
+    "kind-node-exec": 'kind_node_exec("devops-lab-control-plane", "etcdctl", "version")\n',
+    "kind-node-exec-kubectl-argv": 'kind_node_exec("devops-lab-control-plane", "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "get", "nodes")\n',
+    "testkit-kind-node-exec": 'testkit.kind_node_exec("devops-lab-worker", "crictl", "ps")\n',
+    "kind-node-cp": 'kind_node_cp("devops-lab-control-plane", "/var/lib/etcd-backup/snap.db", tmp_path / "snap.db")\n',
+    "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
 }
 
 
