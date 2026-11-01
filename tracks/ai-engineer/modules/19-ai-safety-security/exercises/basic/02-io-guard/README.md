@@ -37,7 +37,8 @@ Trong `starter/guard.py`, chỉ dùng thư viện chuẩn:
 4. `host_allowed(url, allowed)`: URL chứa dấu `\`, khoảng trắng, ký tự điều khiển (nhóm `Cc`) hoặc ký tự vô hình (nhóm
    `Cf`) thì `False` ngay. Còn lại lấy **hostname** bằng `urlsplit` (không phải chuỗi giữa `//` và `/`: phần `user@` và
    `:cổng` không phải host), bỏ dấu chấm cuối, chữ thường; đúng khi host bằng một tên miền trong `allowed` hoặc kết thúc
-   bằng `"." + tên miền`. URL không parse được thì `False`.
+   bằng `"." + tên miền`. URL không parse được, hoặc scheme không phải `http`/`https` (ví dụ `javascript:`, `data:`), thì
+   `False`.
 5. `sanitize_links(reply, allowed) -> (reply_mới, removed)`:
    - link markdown `[chữ](url)` tới host lạ: giữ `chữ`, bỏ link;
    - ảnh markdown `![chữ](url)` tới host lạ: bỏ **cả cụm** (trình duyệt tự tải ảnh, URL ảnh là kênh gửi dữ liệu ra
@@ -55,7 +56,7 @@ Trong `starter/guard.py`, chỉ dùng thư viện chuẩn:
 
 - Cụm bị chặn được nhận ra qua chữ hoa, xuống dòng, chữ toàn khổ, zero-width, Cyrillic, chữ cách quãng, gạch nối,
   ký tự đảo chiều, tiếng Việt có dấu, không dấu và NFD; câu bình thường chứa một phần của cụm không bị chặn.
-- `host_allowed` đúng 16 ca, gồm tên miền giả dạng `congty.vn.evil.example`, `evilcongty.vn`, `congty.vn@evil.example`,
+- `host_allowed` đúng 19 ca, gồm scheme lạ (`javascript:`, `data:`), tên miền giả dạng `congty.vn.evil.example`, `evilcongty.vn`, `congty.vn@evil.example`,
   và URL có `\`, tab hay ký tự vô hình.
 - `normalize` bỏ ký tự vô hình, ký tự đảo chiều và tag characters (`U+E0000` tới `U+E007F`).
 - `sanitize_links` xoá ảnh, link, autolink, URL trần, cả link kiểu tham chiếu `[1]: https://...`; giữ nguyên link được

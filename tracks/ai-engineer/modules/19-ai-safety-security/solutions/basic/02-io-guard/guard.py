@@ -57,13 +57,16 @@ def host_allowed(url: str, allowed: set[str]) -> bool:
     if "\\" in url or any(ch.isspace() or unicodedata.category(ch) in ("Cc", "Cf") for ch in url):
         return False
     try:
-        host = (urlsplit(url).hostname or "").rstrip(".").lower()
+        parts = urlsplit(url)
+        host = (parts.hostname or "").rstrip(".").lower()
     except ValueError:
+        return False
+    if parts.scheme.lower() not in ("http", "https"):
         return False
     return any(host == d or host.endswith("." + d) for d in allowed)
 
 
-_MD = re.compile(r"!?\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
+_MD = re.compile(r"!?\[([^\]]*)\]\(\s*(?:<([^>]*)>|([^)\s>]+))(?:\s+\"[^\"]*\")?\s*\)")
 _AUTOLINK = re.compile(r"<(https?://[^>\s]+)>")
 _BARE = re.compile(r"(?i)(?:https?://|www\.)[^\s<>()\"']+")
 
@@ -72,7 +75,7 @@ def sanitize_links(reply: str, allowed: set[str]) -> tuple[str, list[str]]:
     removed: list[str] = []
 
     def md(m):
-        url = m.group(2)
+        url = m.group(2) if m.group(2) is not None else m.group(3)
         if host_allowed(url if "://" in url else "http://" + url, allowed):
             return m.group(0)
         removed.append(url)

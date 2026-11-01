@@ -25,6 +25,8 @@ các phòng thủ có khoảng tin cậy.
 
 **Phần cứng:** CPU · ~90 phút
 
+Làm bài Basic 02 trước: cell lọc link ở cuối notebook dùng `guard.sanitize_links` của bạn.
+
 Thời gian trên là thời gian làm bài. Ma trận là 912 lượt gọi `qwen2.5:3b` với câu trả lời ngắn: bản tham chiếu mất
 khoảng 45 phút trên PC của track (trung vị 1.1 giây mỗi lượt, GPU và Ollama đang dùng chung với việc khác); máy riêng
 không bị chia sẻ sẽ nhanh hơn (chưa đo). Muốn có kết quả sớm, chạy trước hai defence `none` và `spotlight`, phần còn lại

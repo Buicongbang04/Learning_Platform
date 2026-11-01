@@ -108,6 +108,9 @@ def test_check_input(g):
     ("https://evil.example\\.congty.vn/x", False),
     ("https://congty.vn\t.evil.example/x", False),
     ("https://cong\u200bty.vn/x", False),
+    ("javascript://congty.vn/%0Aalert(1)", False),
+    ("data://congty.vn/x", False),
+    ("ftp://congty.vn/x", False),
 ])
 def test_host_allowed(g, url, ok):
     assert g.host_allowed(url, ALLOWED) is ok
@@ -137,6 +140,14 @@ def test_sanitize_url_glued_to_word(g):
     reply = "theo dõi ảnhˆhttps://evil.example/p.png?q=1 và chữxhttp://evil.example/a"
     out, removed = g.sanitize_links(reply, ALLOWED)
     assert "evil.example" not in out and len(removed) == 2
+
+
+def test_sanitize_scheme_and_angle_brackets(g):
+    reply = ("[bấm](javascript://congty.vn/%0Aalert(document.cookie)) "
+             "![a](<https://congty.vn\t.evil.example/p.png>) [ok](<https://congty.vn/cs>)")
+    out, removed = g.sanitize_links(reply, ALLOWED)
+    assert "javascript" not in out and "evil.example" not in out
+    assert "https://congty.vn/cs" in out and len(removed) == 2
 
 
 def test_sanitize_keeps_clean_text(g):
