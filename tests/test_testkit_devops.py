@@ -3820,7 +3820,7 @@ class KubeFake:
             return done(out=API_RESOURCES)
         if "--dry-run=server" in cmd:
             name = json.loads(input)["metadata"]["name"]
-            suffix = next((s for s in ("-pv", "-rbac") if name.endswith(f"-probe{s}")), "")
+            suffix = next((s for s in ("-pv", "-rbac", "-routes") if name.endswith(f"-probe{s}")), "")
             probe = name.removesuffix(f"-probe{suffix}") + suffix
             return done(1, "", f"ValidatingAdmissionPolicy '{probe}' with binding '{probe}' denied request")
         if cmd[1:3] == ["auth", "can-i"]:
@@ -3971,7 +3971,7 @@ def test_kube_lab_namespace_and_label(monkeypatch):
     resources = {r for rule in role["rules"] for r in rule["resources"]}
     assert not verbs & {"impersonate", "escalate", "bind", "*"} and "serviceaccounts/token" not in resources and "*" not in resources
     policies = {i["metadata"]["name"]: i for i in items if i["kind"] == "ValidatingAdmissionPolicy"}
-    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac"}
+    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac", f"{lab.namespace}-routes"}
     rbac = policies[f"{lab.namespace}-rbac"]["spec"]
     assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in rbac["matchConditions"][0]["expression"]
     assert {r["scope"] for r in rbac["matchConstraints"]["resourceRules"]} == {"*"}
@@ -5038,3 +5038,154 @@ def test_etcd_snapshot_argv_real(tmp_path):
         status = testkit.kind_node_exec("devops-lab-control-plane", "crictl", "exec", "-q", "--name", "^etcd$", "--state",
                                         "running", "etcdutl", "version")
         assert status.returncode != 0
+
+
+NS = "devops-ex-abc12345"
+
+
+def ingress(host="devops-ex-abc12345.olist.test", cls="devops-traefik", **extra):
+    spec = {"rules": [{"host": host, "http": {"paths": [{"path": "/", "pathType": "Prefix",
+                                                         "backend": {"service": {"name": "api", "port": {"number": 8000}}}}]}}]}
+    if cls is not None:
+        spec["ingressClassName"] = cls
+    spec.update(extra)
+    return {"apiVersion": "networking.k8s.io/v1", "kind": "Ingress", "metadata": {"name": "web"}, "spec": spec}
+
+
+def httproute(parents=None, hostnames=("devops-ex-abc12345.olist.test",)):
+    spec = {"parentRefs": [{"name": "public", "namespace": "devops-gateway"}] if parents is None else parents,
+            "rules": [{"backendRefs": [{"name": "api", "port": 8000}]}]}
+    if hostnames is not None:
+        spec["hostnames"] = list(hostnames)
+    return {"apiVersion": "gateway.networking.k8s.io/v1", "kind": "HTTPRoute", "metadata": {"name": "web"}, "spec": spec}
+
+
+def route_problems(doc):
+    return testkit.kube_manifest_problems([doc], lab_id="abc12345", namespace=NS)
+
+
+def test_routes_allowed_on_shared_class_and_gateway():
+    assert route_problems(ingress()) == []
+    assert route_problems(ingress(host="legacy.devops-ex-abc12345.olist.test")) == []
+    assert route_problems(httproute()) == []
+    assert route_problems(httproute(parents=[{"name": "public", "namespace": "devops-gateway", "kind": "Gateway",
+                                              "group": "gateway.networking.k8s.io", "sectionName": "web"}])) == []
+
+
+@pytest.mark.parametrize("doc,needle", [
+    (ingress(cls=None), "ingressClassName"),
+    (ingress(cls="nginx"), "ingressClassName"),
+    (ingress(host=None), "host"),
+    (ingress(host="shop.olist.test"), "host"),
+    (ingress(host="devops-ex-other999.olist.test"), "host"),
+    (ingress(host="xdevops-ex-abc12345.olist.test"), "host"),
+    (ingress(defaultBackend={"service": {"name": "api", "port": {"number": 8000}}}), "defaultBackend"),
+    (httproute(parents=[]), "parentRefs"),
+    (httproute(parents=[{"name": "other", "namespace": "devops-gateway"}]), "parentRefs"),
+    (httproute(parents=[{"name": "public"}]), "parentRefs"),
+    (httproute(parents=[{"name": "public", "namespace": "devops-gateway", "kind": "Service"}]), "parentRefs"),
+    (httproute(hostnames=None), "hostnames"),
+    (httproute(hostnames=["*.olist.test"]), "hostnames"),
+    ({"apiVersion": "gateway.networking.k8s.io/v1", "kind": "Gateway", "metadata": {"name": "mine"}, "spec": {}}, "Gateway"),
+    ({"apiVersion": "gateway.networking.k8s.io/v1beta1", "kind": "ReferenceGrant", "metadata": {"name": "g"}, "spec": {}}, "ReferenceGrant"),
+    ({"apiVersion": "gateway.networking.k8s.io/v1", "kind": "GatewayClass", "metadata": {"name": "c", "labels": {"devops-ex": "abc12345"}},
+      "spec": {}}, "GatewayClass"),
+])
+def test_routes_refused_statically(doc, needle):
+    problems = route_problems(doc)
+    assert problems and any(needle in p for p in problems), problems
+
+
+def test_kube_lab_bootstrap_has_routes_policy_and_httproute_rights(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        assert lab.hostname == f"{lab.namespace}.olist.test"
+        [apply] = fake.calls_with("apply", "-f", "-")[:1]
+        items = json.loads(apply["input"])["items"]
+        policy = next(i for i in items if i["kind"] == "ValidatingAdmissionPolicy" and i["metadata"]["name"] == f"{lab.namespace}-routes")
+        text = json.dumps(policy)
+        for needle in ("ingresses", "httproutes", "devops-traefik", "devops-gateway", f"{lab.namespace}.olist.test", "defaultBackend"):
+            assert needle in text, needle
+        role = next(i for i in items if i["kind"] == "Role")
+        assert {"apiGroups": ["gateway.networking.k8s.io"], "resources": ["httproutes"], "verbs": testkit._KUBE_RW} in role["rules"]
+        assert not any("gateways" in r["resources"] or "referencegrants" in r["resources"] for r in role["rules"]
+                       if r["apiGroups"] == ["gateway.networking.k8s.io"])
+        assert fake.calls_with("--dry-run=server") and any(f"{lab.namespace}-probe-routes" in (c["input"] or "")
+                                                             for c in fake.calls_with("--dry-run=server"))
+
+
+def gateway_fake(monkeypatch, **answers):
+    fake = KubeFake(monkeypatch)
+    original = fake.run_sandboxed
+
+    def run(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        for key, (code, out) in answers.items():
+            if key in joined:
+                return subprocess.CompletedProcess(cmd, code, out, "" if code == 0 else "NotFound")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return fake
+
+
+GATEWAY_OK = {"crd": (0, "customresourcedefinition.apiextensions.k8s.io/httproutes.gateway.networking.k8s.io\n"),
+              "ingressclass": (0, "ingressclass.networking.k8s.io/devops-traefik\n"),
+              "deployment": (0, "1"), "gateway public": (0, "True")}
+
+
+def test_require_gateway_ok(monkeypatch):
+    gateway_fake(monkeypatch, **GATEWAY_OK)
+    testkit.Exercise.require_gateway()
+
+
+@pytest.mark.parametrize("broken,needle", [("crd", "CRD"), ("deployment", "traefik"), ("gateway public", "Gateway"),
+                                           ("ingressclass", "IngressClass")])
+def test_require_gateway_skips_with_setup(monkeypatch, broken, needle):
+    answers = dict(GATEWAY_OK)
+    answers[broken] = (1, "")
+    gateway_fake(monkeypatch, **answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_gateway()
+    assert_skip(info, needle, "setup/kind/gateway/00-gateway-api-v1.6.3-standard-install.yaml",
+                "setup/kind/gateway/10-traefik.yaml", "--server-side")
+
+
+def test_gateway_setup_pinned_and_documented():
+    folder = testkit.KUBE_GATEWAY_DIR
+    sums = dict(reversed(line.split()) for line in (folder / "SHA256SUMS").read_text(encoding="utf-8").splitlines())
+    import hashlib
+    for name, digest in sums.items():
+        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest, name
+    assert set(sums) == {"00-gateway-api-v1.6.3-standard-install.yaml", "10-traefik.yaml"}
+    crds = (folder / "00-gateway-api-v1.6.3-standard-install.yaml").read_text(encoding="utf-8")
+    assert "gateway.networking.k8s.io/bundle-version: v1.6.3" in crds and "channel: standard" in crds
+    traefik = (folder / "10-traefik.yaml").read_text(encoding="utf-8")
+    assert f"image: {testkit.KUBE_GATEWAY_IMAGE}" in traefik and "from: Selector" in traefik and "key: devops-ex" in traefik
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    assert testkit.KUBE_GATEWAY_IMAGE_DIGEST in doc and "setup/kind/gateway/10-traefik.yaml" in doc
+
+
+@KUBE_REQUIRED
+def test_kube_lab_routes_policy_real():
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_gateway()
+    with testkit.KubeLab() as lab:
+        good_route = json.dumps(httproute(hostnames=[lab.hostname]))
+        assert lab.kubectl("apply", "-f", "-", input=good_route, check=False).returncode == 0
+        good_ingress = json.dumps(ingress(host=f"legacy.{lab.hostname}"))
+        assert lab.kubectl("apply", "-f", "-", input=good_ingress, check=False).returncode == 0
+        for doc in (httproute(parents=[{"name": "public", "namespace": "kube-system"}], hostnames=[lab.hostname]),
+                    httproute(hostnames=["shop.olist.test"]),
+                    ingress(cls="nginx", host=lab.hostname),
+                    ingress(host="victim.olist.test"),
+                    {**ingress(host=lab.hostname), "metadata": {"name": "catch-all"},
+                     "spec": {"ingressClassName": "devops-traefik",
+                              "defaultBackend": {"service": {"name": "api", "port": {"number": 8000}}}}}):
+            result = lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
+            assert result.returncode != 0 and f"{lab.namespace}-routes" in result.stderr, (doc, result.stderr)
+        gateway = {"apiVersion": "gateway.networking.k8s.io/v1", "kind": "Gateway", "metadata": {"name": "mine"},
+                   "spec": {"gatewayClassName": "devops-traefik", "listeners": [{"name": "w", "protocol": "HTTP", "port": 8000}]}}
+        result = lab.kubectl("apply", "-f", "-", input=json.dumps(gateway), check=False)
+        assert result.returncode != 0 and "forbidden" in result.stderr
+        assert lab.kubectl("auth", "can-i", "create", "referencegrants.gateway.networking.k8s.io", check=False).stdout.strip() == "no"

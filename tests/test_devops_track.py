@@ -855,6 +855,7 @@ TOOL_DENYLIST_GOOD = {
                       '"--cert=/etc/kubernetes/pki/etcd/server.crt", "--key=/etc/kubernetes/pki/etcd/server.key", '
                       '"snapshot", "save", "/var/lib/etcd/devops-ex-snapshot.db", timeout=120)\n'),
     "require-kind-images": 'ex.require_kind_images("devops-track/olist-shop:1.0", "postgres:16.15-alpine")\n',
+    "require-gateway": 'ex.require_gateway()\nwith KubeLab() as lab:\n    host = lab.hostname\n',
     "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
 }
 

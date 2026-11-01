@@ -146,6 +146,48 @@ docker exec devops-lab-worker crictl images | grep -E 'olist-shop|postgres|redis
 Máy ARM (Apple Silicon, Graviton) đổi `linux/amd64` thành `linux/arm64`. Lệnh cuối liệt kê image trong một worker; thiếu dòng nào thì
 xem lỗi của vòng lặp. Xoá cluster là xoá luôn image đã nạp; tạo lại cluster thì nạp lại.
 
+### Gateway dùng chung: Gateway API và Traefik
+
+Bài Ingress và Gateway API (module 10 Intermediate 04, các bài sau) dùng một controller dùng chung do **admin cài một lần** sau khi
+tạo cluster; test không bao giờ cài, thiếu thì `ex.require_gateway()` skip kèm lệnh dưới. Tệp ghim trong `setup/kind/gateway/`:
+
+| Thành phần | Bản | Ghim |
+| --- | --- | --- |
+| CRD Gateway API, kênh standard | v1.6.3 (`standard-install.yaml` của release, chép nguyên) | `SHA256SUMS` trong thư mục |
+| Traefik (Ingress provider cộng Kubernetes Gateway provider) | v3.7.17, hỗ trợ Gateway API standard v1.6.3 theo tài liệu của bản này | Image kéo theo digest `sha256:30ff62491aacdb862ceb8c9edcf2627da638d7deafdd4b6dab32fe34f8aa3e90` rồi gắn tag `traefik:v3.7.17` |
+| Object dùng chung (`10-traefik.yaml`) | Namespace `devops-gateway` (Pod Security `restricted`), Deployment, Service `traefik` (ClusterIP cổng 80), IngressClass `devops-traefik`, GatewayClass `devops-traefik`, Gateway `devops-gateway/public` (listener HTTP 8000, chỉ nhận HTTPRoute từ namespace có nhãn `devops-ex`) | `SHA256SUMS` |
+
+Manifest dùng tag vì `kind load` không giữ repo digest trong containerd của node (pod ghi digest sẽ khiến kubelet kéo lại từ Docker
+Hub); digest được ghim ở bước `docker pull`. Chạy từ thư mục gốc của repo, sau khi đã tạo cluster:
+
+```bash
+docker pull traefik@sha256:30ff62491aacdb862ceb8c9edcf2627da638d7deafdd4b6dab32fe34f8aa3e90 &&
+docker tag traefik@sha256:30ff62491aacdb862ceb8c9edcf2627da638d7deafdd4b6dab32fe34f8aa3e90 traefik:v3.7.17 &&
+(cd setup/kind/gateway && sha256sum --check SHA256SUMS) &&
+mkdir -p ~/.cache/devops-track/kind-images &&
+docker save --platform linux/amd64 -o ~/.cache/devops-track/kind-images/traefik.tar traefik:v3.7.17 &&
+nice -n 15 kind load image-archive ~/.cache/devops-track/kind-images/traefik.tar --name devops-lab --nodes devops-lab-worker,devops-lab-worker2 &&
+rm -f ~/.cache/devops-track/kind-images/traefik.tar &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -f setup/kind/gateway/00-gateway-api-v1.6.3-standard-install.yaml &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd --all --timeout=60s &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml apply -f setup/kind/gateway/10-traefik.yaml &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n devops-gateway rollout status deployment/traefik --timeout=120s &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n devops-gateway get gateway public
+```
+
+```text
+NAME     CLASS            ADDRESS   PROGRAMMED   AGE
+public   devops-traefik             True         6s
+```
+
+`--server-side` cần cho CRD vì annotation `last-applied-configuration` của chúng vượt giới hạn 256 KiB. Ranh giới cho bài: token của lab
+chỉ ghi được `httproutes` và `ingresses` trong namespace của lab (không Gateway, GatewayClass, ReferenceGrant), và một
+ValidatingAdmissionPolicy của lab buộc Ingress dùng `ingressClassName: devops-traefik`, không `defaultBackend`, và HTTPRoute chỉ gắn vào
+`devops-gateway/public`; mọi host phải là `<namespace của lab>.olist.test` hay tên con, nên một lab không chiếm được host của lab khác.
+Traffic vào Traefik chỉ qua Service ClusterIP trong cluster; test gọi từ một pod, không dùng cổng của máy. Gỡ:
+`kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -f setup/kind/gateway/10-traefik.yaml` rồi `delete -f` tệp CRD (xoá CRD là xoá
+mọi HTTPRoute).
+
 Test không bao giờ tạo hay xoá cluster. `require_cluster` skip với thông báo riêng khi Docker tắt, khi chưa có cluster, khi node đang dừng (kèm lệnh `docker start`) và khi API server chưa trả `ok` cho `/readyz` trong 5 giây. Mỗi lần chạy, test lấy kubeconfig bằng `kind get kubeconfig --name devops-lab` vào thư mục tạm, không đọc `KUBECONFIG` hay `~/.kube` của bạn, nên cluster thật mà `~/.kube/config` đang trỏ tới không bao giờ bị đụng. Mỗi test làm việc trong namespace riêng `devops-ex-<id>` (nhãn `devops-ex=<id>`, Pod Security `baseline`) bằng token của một ServiceAccount chỉ có quyền trong namespace đó (không impersonate, không xin token cho ServiceAccount khác), và xoá namespace khi xong. Trong lúc có test chạy, cluster từ chối PersistentVolume hostPath của mọi user không phải thành phần hệ thống, kể cả admin; PV `local` chỉ testkit tạo, trong thư mục `/srv/devops-lab-pv` của worker. Test bị ngắt giữa chừng có thể để lại namespace; xem và xoá bằng:
 
 ```bash

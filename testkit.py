@@ -3002,6 +3002,23 @@ KUBE_OLIST_DOCKERFILE = ROOT / "setup" / "kind" / "olist-shop.Dockerfile"
 KUBE_OLIST_BUILD = ("docker build --pull=false -f setup/kind/olist-shop.Dockerfile -t devops-track/olist-shop:1.0 "
                     "tracks/devops/sample-app")
 KUBE_WORKERS = "devops-lab-worker,devops-lab-worker2"
+KUBE_GATEWAY_DIR = ROOT / "setup" / "kind" / "gateway"
+KUBE_GATEWAY_NAMESPACE = "devops-gateway"
+KUBE_GATEWAY_NAME = "public"
+KUBE_INGRESS_CLASS = "devops-traefik"
+KUBE_GATEWAY_SERVICE = "traefik.devops-gateway.svc.cluster.local"
+KUBE_LAB_DOMAIN = "olist.test"
+KUBE_GATEWAY_IMAGE = "traefik:v3.7.17"
+KUBE_GATEWAY_IMAGE_DIGEST = "sha256:30ff62491aacdb862ceb8c9edcf2627da638d7deafdd4b6dab32fe34f8aa3e90"
+KUBE_GATEWAY_SETUP = (
+    "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -f setup/kind/gateway/00-gateway-api-v1.6.3-standard-install.yaml "
+    "&& kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd --all --timeout=60s "
+    "&& kubectl --kubeconfig ~/.kube/devops-lab.yaml apply -f setup/kind/gateway/10-traefik.yaml"
+)
+KUBE_SKIP_GATEWAY = (
+    "Cluster kind {name} chưa có Gateway dùng chung ({detail}). Cài một lần (nạp image traefik:v3.7.17 trước, xem module 10 mục 0 "
+    "và setup/DEVOPS-TOOLS.md): {setup}"
+)
 KUBE_LOAD = "kind load docker-image {images} --name {name} --nodes " + KUBE_WORKERS
 KUBE_SKIP_IMAGES = (
     "Image chưa nạp vào worker của cluster kind {name} ({detail}); test không bao giờ kéo image từ Internet. Nạp bằng: {load}{build}. "
@@ -3045,6 +3062,9 @@ _KUBE_REFUSED = {
     "PriorityLevelConfiguration": "đổi thứ tự ưu tiên request của cả cluster",
     "PersistentVolume": "PV do bài tạo trỏ được ra ngoài cluster (nfs tới máy host) hay giữ sẵn PVC của lab khác; PV tĩnh dùng "
                         "KubeLab.admin_local_pv, PV động dùng StorageClass standard",
+    "Gateway": "bài gắn route vào Gateway dùng chung devops-gateway/public; Gateway chiếm listener của controller dùng chung",
+    "GatewayClass": "GatewayClass chọn controller cho cả cluster; dùng GatewayClass devops-traefik có sẵn",
+    "ReferenceGrant": "ReferenceGrant mở quyền tham chiếu chéo namespace; route của bài chỉ trỏ Service trong namespace của lab",
     "StorageClass": "provisioner chạy bằng quyền của node; tham số như pathPattern của local-path tạo được volume trỏ ra ngoài thư "
                     "mục dữ liệu, tới socket containerd của node; dùng StorageClass standard có sẵn hoặc KubeLab.admin_local_pv",
 }
@@ -3071,6 +3091,7 @@ _KUBE_LEARNER_RULES = [
     {"apiGroups": ["autoscaling"], "resources": ["horizontalpodautoscalers"], "verbs": _KUBE_RW},
     {"apiGroups": ["policy"], "resources": ["poddisruptionbudgets"], "verbs": _KUBE_RW},
     {"apiGroups": ["networking.k8s.io"], "resources": ["networkpolicies", "ingresses"], "verbs": _KUBE_RW},
+    {"apiGroups": ["gateway.networking.k8s.io"], "resources": ["httproutes"], "verbs": _KUBE_RW},
     {"apiGroups": ["discovery.k8s.io"], "resources": ["endpointslices"], "verbs": _KUBE_READ},
     {"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": _KUBE_RW},
     {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"], "verbs": _KUBE_RW},
@@ -3094,6 +3115,7 @@ _KUBE_READ_CLUSTER = [
     {"apiGroups": [""], "resources": ["nodes", "namespaces", "persistentvolumes"], "verbs": ["get", "list", "watch"]},
     {"apiGroups": ["storage.k8s.io"], "resources": ["storageclasses", "csidrivers", "csinodes"], "verbs": ["get", "list", "watch"]},
     {"apiGroups": ["networking.k8s.io"], "resources": ["ingressclasses"], "verbs": ["get", "list", "watch"]},
+    {"apiGroups": ["gateway.networking.k8s.io"], "resources": ["gatewayclasses", "gateways"], "verbs": ["get", "list", "watch"]},
     {"apiGroups": ["scheduling.k8s.io"], "resources": ["priorityclasses"], "verbs": ["get", "list", "watch"]},
     {"apiGroups": ["node.k8s.io"], "resources": ["runtimeclasses"], "verbs": ["get", "list", "watch"]},
     {"apiGroups": ["apiextensions.k8s.io"], "resources": ["customresourcedefinitions"], "verbs": ["get", "list", "watch"]},
@@ -3366,6 +3388,37 @@ def _kube_rbac_problems(where: str, kind: str, doc: dict, namespace: str) -> lis
     return found
 
 
+def _kube_host_ok(host, domain: str) -> bool:
+    return isinstance(host, str) and (host == domain or host.endswith(f".{domain}"))
+
+
+def _kube_route_problems(where: str, kind: str, doc: dict, namespace: str) -> list[str]:
+    spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+    domain = f"{namespace}.{KUBE_LAB_DOMAIN}"
+    found = []
+    if kind == "Ingress":
+        if spec.get("ingressClassName") != KUBE_INGRESS_CLASS:
+            found.append(f"{where}: ingressClassName phải là {KUBE_INGRESS_CLASS} (controller dùng chung của cluster)")
+        if "defaultBackend" in spec:
+            found.append(f"{where}: defaultBackend bắt mọi host của controller dùng chung, kể cả host của lab khác")
+        rules = spec.get("rules") if isinstance(spec.get("rules"), list) else []
+        hosts = [r.get("host") if isinstance(r, dict) else None for r in rules]
+        hosts += [h for t in spec.get("tls") or [] if isinstance(t, dict) for h in t.get("hosts") or []]
+        if not rules or not all(_kube_host_ok(h, domain) for h in hosts):
+            found.append(f"{where}: mọi rule cần host là {domain} hay tên con của nó")
+    if kind == "HTTPRoute" and str(doc.get("apiVersion", "")).startswith("gateway.networking.k8s.io/"):
+        parents = spec.get("parentRefs") if isinstance(spec.get("parentRefs"), list) else []
+        good = [p for p in parents if isinstance(p, dict) and p.get("name") == KUBE_GATEWAY_NAME
+                and p.get("namespace") == KUBE_GATEWAY_NAMESPACE and p.get("kind", "Gateway") == "Gateway"
+                and p.get("group", "gateway.networking.k8s.io") == "gateway.networking.k8s.io"]
+        if not parents or len(good) != len(parents):
+            found.append(f"{where}: parentRefs chỉ được trỏ Gateway {KUBE_GATEWAY_NAMESPACE}/{KUBE_GATEWAY_NAME}")
+        hostnames = spec.get("hostnames") if isinstance(spec.get("hostnames"), list) else []
+        if not hostnames or not all(_kube_host_ok(h, domain) for h in hostnames):
+            found.append(f"{where}: hostnames cần có và chỉ gồm {domain} hay tên con của nó")
+    return found
+
+
 def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), cluster_kinds=()) -> list[str]:
     """Kiểm tĩnh object Kubernetes của bài trước khi apply (tín hiệu sớm, ranh giới thật là quyền RBAC, policy và Pod Security
     trong cluster, xem `KubeLab`). Object namespaced chỉ ở namespace của lab (không ghi namespace thì lab đặt). Object
@@ -3398,6 +3451,7 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
         elif meta.get("namespace") not in (None, "", namespace):
             found.append(f"{where}: namespace {meta.get('namespace')} nằm ngoài namespace của lab ({namespace})")
         found += _kube_rbac_problems(where, kind, doc, namespace)
+        found += _kube_route_problems(where, kind, doc, namespace)
         for spec in _kube_pod_specs(doc):
             found += _kube_pod_problems(where, spec)
         if kind == "PriorityClass" and doc.get("globalDefault") is True:
@@ -3646,6 +3700,25 @@ class KubeLab:
              "message": f"Binding của bài chỉ cấp quyền cho user, nhóm không phải system:* hay ServiceAccount của {self.namespace}"},
         ]
         volumes = [{"apiGroups": [""], "apiVersions": ["v1"], "resources": ["persistentvolumes"], "operations": ["CREATE", "UPDATE"]}]
+        domain = self.hostname
+        host_ok = f"(h == '{domain}' || h.endsWith('.{domain}'))"
+        routes = [{"apiGroups": ["networking.k8s.io"], "apiVersions": ["*"], "resources": ["ingresses"], "operations": ["CREATE", "UPDATE"]},
+                  {"apiGroups": ["gateway.networking.k8s.io"], "apiVersions": ["*"], "resources": ["httproutes"],
+                   "operations": ["CREATE", "UPDATE"]}]
+        route_rules = [
+            {"expression": "request.resource.resource != 'ingresses' || (has(object.spec.ingressClassName) && "
+                           f"object.spec.ingressClassName == '{KUBE_INGRESS_CLASS}' && !has(object.spec.defaultBackend) && "
+                           "has(object.spec.rules) && size(object.spec.rules) > 0 && "
+                           f"object.spec.rules.all(r, has(r.host) && [r.host].all(h, {host_ok})) && "
+                           f"(!has(object.spec.tls) || object.spec.tls.all(t, !has(t.hosts) || t.hosts.all(h, {host_ok}))))",
+             "message": f"Ingress của bài: ingressClassName {KUBE_INGRESS_CLASS}, không defaultBackend, host là {domain} hay tên con"},
+            {"expression": "request.resource.resource != 'httproutes' || (has(object.spec.parentRefs) && size(object.spec.parentRefs) > 0 && "
+                           f"object.spec.parentRefs.all(p, p.name == '{KUBE_GATEWAY_NAME}' && has(p.namespace) && "
+                           f"p.namespace == '{KUBE_GATEWAY_NAMESPACE}' && (!has(p.kind) || p.kind == 'Gateway') && "
+                           "(!has(p.group) || p.group == 'gateway.networking.k8s.io')) && has(object.spec.hostnames) && "
+                           f"size(object.spec.hostnames) > 0 && object.spec.hostnames.all(h, {host_ok}))",
+             "message": f"HTTPRoute của bài chỉ gắn vào {KUBE_GATEWAY_NAMESPACE}/{KUBE_GATEWAY_NAME}, hostnames là {domain} hay tên con"},
+        ]
         items = [
             *policy(self.namespace, everything,
                     f"{lab_identity} || (request.operation == 'CREATE' && request.dryRun == true && "
@@ -3653,6 +3726,8 @@ class KubeLab:
             *policy(f"{self.namespace}-rbac", rbac,
                     f"{lab_identity} || (request.operation == 'CREATE' && request.dryRun == true && "
                     f"object.metadata.name == '{self._probe}-rbac')", rbac_rules),
+            *policy(f"{self.namespace}-routes", routes,
+                    f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-routes')", route_rules),
             *policy(f"{self.namespace}-pv", volumes,
                     f"!{_KUBE_SYSTEM_USER} && !(request.dryRun == true && object.metadata.name.endsWith('-probe-pv') && "
                     f"object.metadata.name != '{self._probe}-pv')", no_host_pv),
@@ -3676,6 +3751,11 @@ class KubeLab:
         return items
 
     @property
+    def hostname(self) -> str:
+        """Tên miền riêng của lab cho Ingress và HTTPRoute: `<namespace>.olist.test` (cộng tên con)."""
+        return f"{self.namespace}.{KUBE_LAB_DOMAIN}"
+
+    @property
     def _probe(self) -> str:
         return f"{self.namespace}-probe"
 
@@ -3687,6 +3767,11 @@ class KubeLab:
             self.namespace: {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
                              "metadata": {"name": self._probe}, "rules": []},
             f"{self.namespace}-pv": json.loads(_kube_hostpath_pv(f"{self._probe}-pv", "/")),
+            f"{self.namespace}-routes": {"apiVersion": "networking.k8s.io/v1", "kind": "Ingress",
+                                         "metadata": {"name": f"{self._probe}-routes", "namespace": self.namespace},
+                                         "spec": {"rules": [{"host": "probe.invalid", "http": {"paths": [
+                                             {"path": "/", "pathType": "Prefix",
+                                              "backend": {"service": {"name": "probe", "port": {"number": 80}}}}]}}]}},
             f"{self.namespace}-rbac": {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
                                        "metadata": {"name": f"{self._probe}-rbac", "labels": {f"{_KUBE_AGGREGATE}view": "true"}},
                                        "rules": []},
@@ -4252,6 +4337,31 @@ class Exercise:
         _require_cluster_up(name)
         with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}ready-") as tmp:
             _kube_ready(_KubeAdmin(Path(tmp), name), name)
+
+    @staticmethod
+    def require_gateway(name: str = KIND_CLUSTER) -> None:
+        """Skip kèm lệnh cài khi cluster chưa có Gateway dùng chung: CRD của Gateway API, IngressClass `devops-traefik`,
+        Deployment traefik có pod available trong `devops-gateway`, Gateway `devops-gateway/public` Programmed. Admin cài một lần
+        từ `setup/kind/gateway/`; test không bao giờ cài."""
+        _require_cluster_up(name)
+        with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}gateway-") as tmp:
+            admin = _KubeAdmin(Path(tmp), name)
+            checks = (
+                ("CRD httproutes.gateway.networking.k8s.io", ("get", "crd", "httproutes.gateway.networking.k8s.io", "-o", "name"),
+                 lambda out: "httproutes" in out),
+                (f"IngressClass {KUBE_INGRESS_CLASS}", ("get", "ingressclass", KUBE_INGRESS_CLASS, "-o", "name"),
+                 lambda out: KUBE_INGRESS_CLASS in out),
+                ("Deployment traefik chưa có pod available", ("-n", KUBE_GATEWAY_NAMESPACE, "get", "deployment", "traefik", "-o",
+                                                              "jsonpath={.status.availableReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+                (f"Gateway {KUBE_GATEWAY_NAMESPACE}/{KUBE_GATEWAY_NAME} chưa Programmed",
+                 ("-n", KUBE_GATEWAY_NAMESPACE, "get", "gateway", KUBE_GATEWAY_NAME, "-o",
+                  "jsonpath={.status.conditions[?(@.type=='Programmed')].status}"), lambda out: out.strip() == "True"),
+            )
+            for what, args, ok in checks:
+                result = admin.run(*args)
+                if result.returncode != 0 or not ok(result.stdout):
+                    pytest.skip(KUBE_SKIP_GATEWAY.format(name=name, detail=f"thiếu {what}", setup=KUBE_GATEWAY_SETUP))
 
     @staticmethod
     def require_kind_images(*images: str, name: str = KIND_CLUSTER) -> None:

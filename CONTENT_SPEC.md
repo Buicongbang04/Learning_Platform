@@ -362,8 +362,8 @@ lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, khô
   bằng `1.27.0`), không đọc được phiên bản (thông báo riêng, chỉ lệnh để tự kiểm), hay (với `docker`) daemon tắt hoặc
   user không có quyền socket thì skip.
 - `ex.require_image(image)`, `ex.require_service(name)`, `ex.require_registry()`, `ex.require_cluster(name="devops-lab")`,
-  `ex.require_kind_images(*images)`: skip khi chưa có image, service compose, registry local, cluster kind hay image trong
-  worker của cluster (`require_cluster` có bốn thông báo riêng: Docker tắt, chưa có cluster, node đang dừng kèm lệnh
+  `ex.require_kind_images(*images)`, `ex.require_gateway()`: skip khi chưa có image, service compose, registry local, cluster kind,
+  image trong worker của cluster hay Gateway dùng chung (`require_cluster` có bốn thông báo riêng: Docker tắt, chưa có cluster, node đang dừng kèm lệnh
   `docker start`, `/readyz` không trả `ok` trong 5 giây).
 - Thông báo skip chỉ chỗ sửa: `setup/DEVOPS-TOOLS.md`, lệnh `docker pull` hay `docker compose ... up -d`. Skip không
   tính là đạt; `SOLUTION=1` phải pass không skip khi đã cài đủ công cụ.
@@ -422,4 +422,11 @@ lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, khô
   `ex.require_kind_images(...)` trước khi apply để skip kèm lệnh `kind load` thay vì để pod kéo image từ Internet hay kẹt
   `ImagePullBackOff`. Manifest của bài dùng đúng tag này (không `latest`). CustomResourceDefinition trong `allow` chỉ cho tạo CRD; custom resource của nó cần
   quyền thêm, thêm vào `KubeLab` (kèm test) khi bài cần.
+- Ingress và Gateway API: admin cài một lần từ `setup/kind/gateway/` (CRD Gateway API standard v1.6.3, Traefik v3.7.17 ghim digest ở
+  bước pull, IngressClass và GatewayClass `devops-traefik`, Gateway `devops-gateway/public` chỉ nhận HTTPRoute từ namespace có nhãn
+  `devops-ex`); test không cài, `ex.require_gateway()` skip kèm lệnh. Token của lab ghi được `httproutes`, `ingresses` (không
+  Gateway, GatewayClass, ReferenceGrant); policy `devops-ex-<id>-routes` của lab và `kube_manifest_problems` buộc Ingress dùng
+  `ingressClassName: devops-traefik`, không `defaultBackend`, HTTPRoute chỉ gắn `devops-gateway/public`, mọi host là
+  `lab.hostname` (`<namespace>.olist.test`) hay tên con. Test gọi Service `traefik.devops-gateway.svc.cluster.local` từ một pod
+  kèm header `Host`, không dùng cổng của máy.
 - metrics-server (HPA ở module 11) chưa cài sẵn; module 11 cài từ manifest ghim lưu trong repo, cờ `--kubelet-insecure-tls`.
