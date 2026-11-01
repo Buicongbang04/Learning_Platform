@@ -5,7 +5,7 @@
 # Bật theo nhóm:
 #   docker compose -f setup/docker-compose.yml --profile nosql up -d
 # Nhóm: sql (postgres), nosql (mongo, redis, cassandra, neo4j), lake (minio),
-#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), devops (mailpit), all (các nhóm trên, không gồm devops)
+#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), devops (mailpit, registry), all (các nhóm trên, không gồm devops)
 # Tắt (giữ dữ liệu):     docker compose -f setup/docker-compose.yml --profile all down
 # Tắt và xoá dữ liệu:    docker compose -f setup/docker-compose.yml --profile all down -v
 #
@@ -236,6 +236,20 @@ services:
       - "127.0.0.1:${MAILPIT_HTTP_PORT:-18025}:8025"
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  registry:
+    image: registry:2.8.3
+    profiles: [devops]
+    cpuset: "${DEVOPS_CPUSET:-}"
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${DEVOPS_REGISTRY_PORT:-15000}:5000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5000/v2/"]
       interval: 5s
       timeout: 3s
       retries: 10

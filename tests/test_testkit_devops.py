@@ -1394,3 +1394,424 @@ def test_build_failed_on_network_ignores_other_steps():
         "#6 ERROR: process \"/bin/sh -c python -c 'import nope'\" did not complete successfully: exit code: 1\n"
     )
     assert testkit.build_failed_on_network(text) is False
+
+
+def write_project(root: Path, workflow: str, files: dict[str, str] | None = None) -> Path:
+    project = root / "project"
+    (project / ".github" / "workflows").mkdir(parents=True)
+    (project / ".github" / "workflows" / "ci.yml").write_text(workflow, encoding="utf-8")
+    for name, text in (files or {}).items():
+        (project / name).write_text(text, encoding="utf-8")
+    return project
+
+
+SIMPLE_WORKFLOW = """
+name: ci
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "chay-xong"
+"""
+
+
+class FakeActProcess:
+    def __init__(self, argv, output="", returncode=0, raise_on_wait=None, kwargs=None):
+        self.args = list(argv)
+        self.kwargs = kwargs or {}
+        self.pid = 4242
+        self.returncode = returncode
+        self._stdout = output
+        self._raise = raise_on_wait
+
+    def communicate(self, timeout=None):
+        if self._raise is not None:
+            error, self._raise = self._raise, None
+            raise error
+        return self._stdout, ""
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+
+class FakeActWorld:
+    def __init__(self, monkeypatch, stdout="[build] 🏁  Job succeeded\n", returncode=0, raise_on_wait=None, toolcache=False):
+        self.docker_calls: list[list[str]] = []
+        self.processes: list[FakeActProcess] = []
+        self.required: list[tuple] = []
+        self.killed: list[tuple[int, int]] = []
+        self.toolcache = toolcache
+        monkeypatch.setattr(testkit.Exercise, "require_tool", staticmethod(lambda name, v=None: self.required.append(("tool", name, v))))
+        monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda image: self.required.append(("image", image))))
+        monkeypatch.setattr(testkit, "_docker", self.docker)
+        monkeypatch.setattr(testkit.os, "killpg", lambda pid, sig: self.killed.append((pid, sig)))
+
+        real_popen = subprocess.Popen
+
+        def popen(argv, **kwargs):
+            if argv[0] != "act":
+                return real_popen(argv, **kwargs)
+            process = FakeActProcess(argv, stdout, returncode, raise_on_wait, kwargs)
+            process.repo_files = sorted(str(p.relative_to(kwargs["cwd"])) for p in Path(kwargs["cwd"]).rglob("*") if ".git" not in p.parts)
+            self.processes.append(process)
+            return process
+
+        monkeypatch.setattr(testkit.subprocess, "Popen", popen)
+
+    def docker(self, *args, timeout=60):
+        self.docker_calls.append(list(args))
+        if args[:2] == ("context", "inspect"):
+            return subprocess.CompletedProcess(args, 0, "unix:///run/user/1000/docker.sock\n", "")
+        if args[:2] == ("volume", "inspect"):
+            return subprocess.CompletedProcess(args, 0 if self.toolcache else 1, "", "")
+        if args[:1] == ("ps",):
+            return subprocess.CompletedProcess(args, 0, "c0ffee\n", "")
+        if args[:1] == ("inspect",):
+            return subprocess.CompletedProcess(args, 0, "act-ci-build-abc act-ci-build-abc-env act-toolcache\n", "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+
+def flag(argv: list[str], name: str) -> str:
+    return argv[argv.index(name) + 1]
+
+
+def test_act_run_pins_image_and_limits(monkeypatch, tmp_path):
+    monkeypatch.setenv("DEVOPS_CPUSET", "2-3")
+    world = FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, SIMPLE_WORKFLOW)
+    result = testkit.act_run(project, job="build", env={"APP_ENV": "ci"})
+    argv = world.processes[0].args
+    assert ("image", testkit.ACT_IMAGE) in world.required
+    assert ("tool", "act", testkit.ACT_MIN_VERSION) in world.required
+    assert argv[:2] == ["act", "push"]
+    assert flag(argv, "-P") == f"ubuntu-latest={testkit.ACT_IMAGE}"
+    assert "--pull=false" in argv
+    assert flag(argv, "--container-daemon-socket") == "-"
+    assert flag(argv, "--container-options-policy") == "restrict"
+    options = flag(argv, "--container-options").split()
+    pairs = [options[i : i + 2] for i in range(len(options))]
+    run_id = next(o.split("=", 1)[1] for o in options if o.startswith(f"{testkit.ACT_RUN_LABEL}="))
+    for expected in (["--cpuset-cpus", "2-3"], ["--memory", "1g"], ["--pids-limit", "512"],
+                     ["--security-opt", "no-new-privileges"], ["--label", "devops-ex=1"], ["--label", f"{testkit.ACT_RUN_LABEL}={run_id}"]):
+        assert expected in pairs, expected
+    assert flag(argv, "--network") == f"devops-ex-{run_id}"
+    assert ["network", "create", "--label", "devops-ex=1", "--label", f"{testkit.ACT_RUN_LABEL}={run_id}", f"devops-ex-{run_id}"] in world.docker_calls
+    assert flag(argv, "--action-cache-path") == str(testkit.act_cache_dir())
+    for name in ("--action-offline-mode", "--no-cache-server", "--rm", "--log-prefix-job-id"):
+        assert name in argv, name
+    for name in ("--env-file", "--secret-file", "--var-file", "--input-file"):
+        assert flag(argv, name) == "/dev/null", name
+    assert flag(argv, "-j") == "build"
+    assert flag(argv, "--env") == "APP_ENV=ci"
+    repo = Path(flag(argv, "-C"))
+    assert repo != project and not repo.is_relative_to(project)
+    assert world.processes[0].kwargs["cwd"] == repo
+    assert world.processes[0].kwargs["start_new_session"] is True
+    assert world.processes[0].kwargs["stdin"] is subprocess.DEVNULL
+    assert result.returncode == 0 and testkit.act_job_results(result) == {"build": True}
+    assert not repo.exists(), "Bản chép tạm của repo phải bị xoá sau khi chạy"
+
+
+def test_act_run_clean_env_unit(monkeypatch, tmp_path):
+    for key, value in {"GITHUB_TOKEN": "gh-ro-ri", "ACTIONS_RUNTIME_TOKEN": "x", "AWS_SECRET_ACCESS_KEY": "y", "DOCKER_CONFIG": "/z",
+                       "XDG_CONFIG_HOME": "/cfg", "ACT_LOG": "debug"}.items():
+        monkeypatch.setenv(key, value)
+    world = FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, SIMPLE_WORKFLOW, {".actrc": "-P ubuntu-latest=evil:latest\n", "app.py": "print(1)\n"})
+    testkit.act_run(project, secrets={"DEPLOY_TOKEN": "sieu-bi-mat"})
+    process = world.processes[0]
+    env = process.kwargs["env"]
+    assert set(env) == {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST", "DEPLOY_TOKEN"}
+    assert env["DOCKER_HOST"] == "unix:///run/user/1000/docker.sock"
+    assert env["DEPLOY_TOKEN"] == "sieu-bi-mat"
+    home = Path(env["HOME"])
+    assert home != Path.home() and home.name == "home"
+    assert flag(process.args, "-s") == "DEPLOY_TOKEN", "Giá trị secret đi qua env của act, không nằm trên argv"
+    assert "sieu-bi-mat" not in " ".join(process.args)
+    assert ".actrc" not in process.repo_files and "app.py" in process.repo_files
+
+
+def test_act_run_rejects_bad_secret_names(monkeypatch, tmp_path):
+    FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, SIMPLE_WORKFLOW)
+    for name in ("PATH", "GITHUB_X", "co dau cach"):
+        with pytest.raises(pytest.fail.Exception):
+            testkit.act_run(project, secrets={name: "x"})
+
+
+def test_act_run_scrubs_secret_values_from_output(monkeypatch, tmp_path):
+    FakeActWorld(monkeypatch, stdout="[build]   | lo ra sieu-bi-mat\n[build] 🏁  Job succeeded\n")
+    project = write_project(tmp_path, SIMPLE_WORKFLOW)
+    result = testkit.act_run(project, secrets={"DEPLOY_TOKEN": "sieu-bi-mat"})
+    assert "sieu-bi-mat" not in result.stdout and "***" in result.stdout
+
+
+@pytest.mark.parametrize("workflow,expected", [
+    (SIMPLE_WORKFLOW.replace("ubuntu-latest", "windows-latest"), "runs-on"),
+    (SIMPLE_WORKFLOW.replace("actions/checkout@v4", "docker://alpine:3.20"), "docker://alpine:3.20"),
+    (SIMPLE_WORKFLOW.replace("actions/checkout@v4", "someone/build-image@v1"), "someone/build-image@v1"),
+    (SIMPLE_WORKFLOW.replace("    steps:", "    services:\n      db:\n        image: postgres:16.9\n    steps:"), "services"),
+    (SIMPLE_WORKFLOW.replace("    steps:", "    container: alpine:3.20\n    steps:"), "container"),
+    ("name: ci\non: push\njobs:\n  call:\n    uses: org/repo/.github/workflows/x.yml@main\n", "org/repo"),
+])
+def test_act_run_refuses_unsupported_workflows(monkeypatch, tmp_path, workflow, expected):
+    world = FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, workflow)
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(project)
+    assert expected in str(info.value)
+    assert world.processes == []
+
+
+def test_act_run_skips_when_action_missing_offline(monkeypatch, tmp_path):
+    output = (
+        "[build]   ☁  git clone 'https://github.com/actions/setup-node' # ref=v4\n"
+        "[build] Unable to clone https://github.com/actions/setup-node refs/heads/v4: Get \"https://github.com/actions/setup-node/info/refs"
+        "?service=git-upload-pack\": dial tcp: lookup github.com on 127.0.0.53:53: dial udp 127.0.0.53:53: connect: network is unreachable\n"
+        "[build] 🏁  Job failed\n"
+    )
+    FakeActWorld(monkeypatch, stdout=output, returncode=1)
+    project = write_project(tmp_path, SIMPLE_WORKFLOW)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.act_run(project)
+    assert "actions/setup-node" in str(info.value) and str(testkit.act_cache_dir()) in str(info.value)
+
+
+def test_act_run_cleanup_on_interrupt(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch, raise_on_wait=KeyboardInterrupt())
+    project = write_project(tmp_path, SIMPLE_WORKFLOW)
+    with pytest.raises(KeyboardInterrupt):
+        testkit.act_run(project)
+    argv = world.processes[0].args
+    run_id = next(o.split("=", 1)[1] for o in flag(argv, "--container-options").split() if o.startswith(f"{testkit.ACT_RUN_LABEL}="))
+    assert world.killed and world.killed[0][0] == 4242
+    assert ["rm", "-f", "c0ffee"] in world.docker_calls
+    assert ["volume", "rm", "act-ci-build-abc", "act-ci-build-abc-env"] in world.docker_calls
+    assert ["volume", "rm", testkit.ACT_TOOLCACHE] in world.docker_calls, "act-toolcache do lần chạy này tạo thì xoá"
+    assert ["network", "rm", f"devops-ex-{run_id}"] in world.docker_calls
+    label_filters = [c for c in world.docker_calls if c[:1] == ["ps"]]
+    assert label_filters and all(f"label={testkit.ACT_RUN_LABEL}={run_id}" in c for c in label_filters)
+    assert not Path(flag(argv, "-C")).exists()
+
+
+def test_act_run_keeps_existing_toolcache(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch, toolcache=True)
+    testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW))
+    assert all(c[:2] != ["volume", "rm"] or testkit.ACT_TOOLCACHE not in c for c in world.docker_calls)
+
+
+def test_act_run_timeout_fails_with_output(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch, stdout="[build]   | bat-dau\n", raise_on_wait=subprocess.TimeoutExpired(["act"], 5))
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW), timeout=5)
+    assert "bat-dau" in str(info.value) and "5" in str(info.value)
+    assert world.killed
+
+
+def test_act_job_results_parses_job_ids():
+    output = "[lint] 🏁  Job succeeded\n[test-1] 🏁  Job failed\n[x]   | 🏁  Job succeeded in log\n"
+    assert testkit.act_job_results(subprocess.CompletedProcess([], 1, output, "")) == {"lint": True, "test-1": False}
+
+
+def require_real_act():
+    if shutil.which("act") is None:
+        pytest.skip("Chưa cài act")
+    if not testkit.docker_ready():
+        pytest.skip("Cần Docker daemon")
+    if testkit._docker("image", "inspect", testkit.ACT_IMAGE).returncode != 0:
+        pytest.skip(f"Chưa có image {testkit.ACT_IMAGE}")
+
+
+def act_volumes() -> set[str]:
+    return set(testkit._docker("volume", "ls", "--filter", "name=act-", "--format", "{{.Name}}").stdout.split())
+
+
+def act_containers() -> set[str]:
+    return set(testkit._docker("ps", "-a", "--filter", "name=act-", "--format", "{{.Names}}").stdout.split())
+
+
+def devops_networks() -> set[str]:
+    return set(testkit._docker("network", "ls", "--filter", "name=devops-ex-", "--format", "{{.Name}}").stdout.split())
+
+
+def test_act_run_clean_env(monkeypatch, tmp_path):
+    require_real_act()
+    leaks = {"GITHUB_TOKEN": "gh-ro-ri-111", "ACTIONS_RUNTIME_TOKEN": "act-ro-ri-222", "AWS_SECRET_ACCESS_KEY": "aws-ro-ri-333",
+             "DOCKER_CONFIG": str(tmp_path / "docker-ro-ri-444")}
+    for key, value in leaks.items():
+        monkeypatch.setenv(key, value)
+    fake_home = tmp_path / "fake-home"
+    (fake_home / ".config" / "act").mkdir(parents=True)
+    (fake_home / ".actrc").write_text("--env FROM_HOME_ACTRC=home-ro-ri-555\n", encoding="utf-8")
+    (fake_home / ".config" / "act" / "actrc").write_text("--env FROM_XDG_ACTRC=xdg-ro-ri-666\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(fake_home))
+    workflow = """
+name: ci
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "token=[$(printf '%s' "$TOK" | rev)]"
+          env | rev
+          echo "workspace=$(ls | tr '\\n' ' ')"
+          echo "da-kiem-env"
+        env:
+          TOK: ${{ secrets.GITHUB_TOKEN }}
+"""
+    project = write_project(tmp_path, workflow, {
+        ".actrc": "--env FROM_PROJECT_ACTRC=proj-ro-ri-777\n",
+        ".env": "FROM_DOTENV=dotenv-ro-ri-888\n",
+        ".secrets": "GITHUB_TOKEN=secrets-ro-ri-999\n",
+        "app.py": "print('xin chao')\n",
+    })
+    result = testkit.act_run(project, timeout=300)
+    output = result.stdout + result.stderr
+    assert testkit.act_job_results(result) == {"check": True}, output[-3000:]
+    assert "da-kiem-env" in output and "token=[]" in output
+    assert "app.py" in output
+    for value in [*leaks.values(), "home-ro-ri-555", "xdg-ro-ri-666", "proj-ro-ri-777", "dotenv-ro-ri-888", "secrets-ro-ri-999"]:
+        assert value not in output and value[::-1] not in output, value
+
+
+def test_act_run_job_container_limits_and_secret_masking(monkeypatch, tmp_path):
+    require_real_act()
+    monkeypatch.setenv("DEVOPS_CPUSET", "12-13")
+    workflow = """
+name: ci
+on: push
+jobs:
+  ok:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "cpuset=$(cat /sys/fs/cgroup/cpuset.cpus.effective)"
+          echo "memory=$(cat /sys/fs/cgroup/memory.max)"
+          echo "pids=$(cat /sys/fs/cgroup/pids.max)"
+          grep NoNewPrivs /proc/self/status
+          test -e /var/run/docker.sock && echo "co-docker-sock" || echo "khong-docker-sock"
+          echo "secret=${{ secrets.DEPLOY_TOKEN }}"
+          echo "secret-env=$DEPLOY"
+          echo "app-env=$APP_ENV"
+        env:
+          DEPLOY: ${{ secrets.DEPLOY_TOKEN }}
+  broken:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "sap-loi"; exit 3
+"""
+    project = write_project(tmp_path, workflow)
+    before = act_volumes()
+    result = testkit.act_run(project, env={"APP_ENV": "ci-local"}, secrets={"DEPLOY_TOKEN": "tok-sieu-bi-mat-42"}, timeout=300)
+    output = result.stdout + result.stderr
+    assert testkit.act_job_results(result) == {"ok": True, "broken": False}, output[-3000:]
+    assert result.returncode != 0
+    assert "cpuset=12-13" in output and "memory=1073741824" in output and "pids=512" in output
+    assert "NoNewPrivs:\t1" in output and "khong-docker-sock" in output
+    assert "app-env=ci-local" in output
+    assert "tok-sieu-bi-mat-42" not in output and "secret=***" in output and "secret-env=***" in output
+    assert act_volumes() <= before
+
+
+def test_act_run_cleans_containers(tmp_path):
+    require_real_act()
+    marker = testkit.uuid.uuid4().hex[:8]
+    foreign_volume = f"act-foreign-{marker}"
+    foreign_container = f"act-foreign-{marker}"
+    workflow = f"""
+name: cleanup-{marker}
+on: push
+jobs:
+  slow:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "bat-dau"; sleep 300
+"""
+    project = write_project(tmp_path, workflow)
+    assert testkit._docker("volume", "create", foreign_volume).returncode == 0
+    created = testkit._docker("create", "--name", foreign_container, "--label", "devops-ex=1", "--label", f"{testkit.ACT_RUN_LABEL}=khac",
+                              testkit.ACT_IMAGE, "true")
+    assert created.returncode == 0, created.stderr
+    try:
+        volumes, containers, networks = act_volumes(), act_containers(), devops_networks()
+        with pytest.raises(pytest.fail.Exception) as info:
+            testkit.act_run(project, timeout=20)
+        assert "bat-dau" in str(info.value), "Container của job phải đã chạy trước khi bị ngắt"
+        assert not [v for v in act_volumes() if f"cleanup-{marker}" in v]
+        assert not [c for c in act_containers() if f"cleanup-{marker}" in c]
+        assert act_volumes() == volumes and act_containers() == containers and devops_networks() == networks
+    finally:
+        testkit._docker("rm", "-f", foreign_container)
+        testkit._docker("volume", "rm", foreign_volume)
+
+
+def test_require_registry_down_skips(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: False)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_registry()
+    assert "docker compose -f setup/docker-compose.yml --profile devops up -d registry" in str(info.value)
+
+
+def test_require_registry_other_server_skips(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: True)
+    monkeypatch.setattr(testkit, "_registry_request", lambda method, path, headers=None: (200, {}))
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_registry()
+    assert "15000" in str(info.value) and "DEVOPS_REGISTRY_PORT" in str(info.value)
+
+
+def test_require_registry_returns_address(monkeypatch):
+    monkeypatch.setenv("DEVOPS_REGISTRY_PORT", "15123")
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: True)
+    monkeypatch.setattr(testkit, "_registry_request",
+                        lambda method, path, headers=None: (200, {"docker-distribution-api-version": "registry/2.0"}))
+    assert testkit.Exercise.require_registry() == "localhost:15123"
+
+
+def test_docker_lab_push_tags_per_lab_and_deletes(monkeypatch):
+    fake = FakeDocker()
+    requests = []
+    monkeypatch.setattr(testkit.Exercise, "require_registry", staticmethod(lambda: "localhost:15000"))
+
+    def run(cmd, **kwargs):
+        result = fake(cmd, **kwargs)
+        if cmd[1] == "push":
+            return subprocess.CompletedProcess(cmd, 0, "test: digest: sha256:" + "a" * 64 + " size: 528\n", "")
+        return result
+
+    monkeypatch.setattr(testkit.subprocess, "run", run)
+    monkeypatch.setattr(testkit, "_registry_request", lambda method, path, headers=None: (requests.append((method, path)), (202, {}))[1])
+    with pytest.raises(RuntimeError):
+        testkit.DockerLab().push("x:1", "web")
+    with testkit.DockerLab() as lab:
+        ref = lab.push("devops-ex-abc/web:test", "web")
+        assert ref == f"localhost:15000/devops-ex-{lab.id}/web:test"
+        with pytest.raises(ValueError):
+            lab.push("x:1", "Sai Ten")
+    assert ["docker", "tag", "devops-ex-abc/web:test", ref] in fake.calls
+    assert ["docker", "push", ref] in fake.calls
+    assert ("DELETE", f"/v2/devops-ex-{lab.id}/web/manifests/sha256:{'a' * 64}") in requests
+    assert ["docker", "rmi", ref] in fake.calls
+
+
+def test_docker_lab_push_real_registry(tmp_path):
+    require_real_docker()
+    address = testkit.Exercise.require_registry()
+    context = tmp_path / "ctx"
+    context.mkdir()
+    (context / "Dockerfile").write_text("FROM scratch\nCOPY hello.txt /hello.txt\n", encoding="utf-8")
+    (context / "hello.txt").write_text("xin chao\n", encoding="utf-8")
+    accept = {"Accept": ", ".join(testkit.REGISTRY_MANIFEST_TYPES)}
+    with testkit.DockerLab() as lab:
+        ref = lab.push(lab.build(context, "hello"), "hello")
+        repo = f"devops-ex-{lab.id}/hello"
+        assert ref == f"{address}/{repo}:test"
+        assert testkit._registry_request("HEAD", f"/v2/{repo}/manifests/test", accept)[0] == 200
+    assert testkit._registry_request("HEAD", f"/v2/{repo}/manifests/test", accept)[0] == 404
+    assert testkit._docker("image", "inspect", ref).returncode != 0
+    assert testkit.docker_leftovers(lab.id) == []

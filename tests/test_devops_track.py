@@ -340,7 +340,7 @@ def sink_argument(node: ast.Call) -> ast.AST | None:
 
 def check_tool_calls(path: Path) -> list[str]:
     """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu trực tiếp; đi qua helper của testkit
-    (DockerLab, run_sandboxed, sandbox_command, và sau này act_run, TofuLab, KubeLab, kind_node_exec).
+    (DockerLab, run_sandboxed, sandbox_command, act_run, và sau này TofuLab, KubeLab, kind_node_exec).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
     `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
@@ -697,6 +697,8 @@ TOOL_DENYLIST_BAD = {
     "tuple-docker": "subprocess.run(('docker', 'ps', '-a'))\n",
     "list-kind": 'subprocess.run(["kind", "get", "clusters"], check=True)\n',
     "list-act-via-variable": 'cmd = ["act", "-j", "test"]\nsubprocess.run(cmd)\n',
+    "list-act": 'subprocess.run(["act", "push", "-j", "build", "-P", "ubuntu-latest=node:24"])\n',
+    "local-run-act": 'def run_workflow(c):\n    return subprocess.run(c)\nrun_workflow(["act", "push"])\n',
     "list-kubectl": 'subprocess.check_output(["kubectl", "get", "pods"])\n',
     "list-helm": 'subprocess.call(["helm", "install", "x", "chart"])\n',
     "list-tofu": 'subprocess.check_call(["tofu", "apply", "-auto-approve"])\n',
@@ -757,6 +759,8 @@ TOOL_DENYLIST_GOOD = {
     "run-sandboxed-keyword": 'testkit.run_sandboxed(cmd=["kubectl", "version"], writable=[t], cwd=t, env={})\n',
     "run-sandboxed-variable": 'cmd = ["tofu", "plan"]\nrun_sandboxed(cmd, writable=[t], cwd=t, env={})\n',
     "sandbox-command-docker": 'argv = sandbox_command(["docker", "version"], writable=[t], cwd=t, env={})\n',
+    "act-run-helper": 'result = act_run(tmp_path / "project", job="build")\nassert act_job_results(result) == {"build": True}\n',
+    "testkit-act-run": 'testkit.act_run(project, event="push", secrets={"DEPLOY_TOKEN": "x"}, timeout=300)\n',
     "run-sandboxed-shell-c": 'run_sandboxed(["bash", "-c", "tofu init && tofu plan"], writable=[t], cwd=t, env={})\n',
     "other-argv": 'subprocess.run(["git", "status"])\nsubprocess.run(["bash", "-c", "echo docker"])\n',
     "nice-python": 'subprocess.run(["nice", "-n", "15", "python3", "x.py"])\n',

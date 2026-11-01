@@ -217,3 +217,27 @@ def test_cpuset_none_detection():
     assert cpuset_none_lines("ghim (`DEVOPS_CPUSET` rỗng hoặc `none`)")
     assert cpuset_none_lines("unset DEVOPS_CPUSET") == []
     assert cpuset_none_lines("export DEVOPS_CPUSET=2-7") == []
+
+
+def test_registry_service_loopback():
+    registry = _services()["registry"]
+    assert re.fullmatch(r"registry:2\.\d+\.\d+", registry["image"]), registry["image"]
+    assert registry["profiles"] == ["devops"]
+    assert [str(m) for m in registry["ports"]] == ["127.0.0.1:${DEVOPS_REGISTRY_PORT:-15000}:5000"]
+    assert registry["cpuset"] == "${DEVOPS_CPUSET:-}"
+    assert str(registry["environment"]["REGISTRY_STORAGE_DELETE_ENABLED"]).lower() == "true"
+    assert 15000 not in RESERVED_PORTS
+
+
+def test_registry_registered_in_testkit():
+    assert testkit.SERVICES["registry"] == ("REGISTRY_HOST", "localhost", "DEVOPS_REGISTRY_PORT", 15000)
+
+
+def test_env_example_lists_registry_port():
+    assert "# DEVOPS_REGISTRY_PORT=15000" in (ROOT / "setup" / ".env.example").read_text(encoding="utf-8").splitlines()
+
+
+def test_devops_tools_documents_act_and_registry():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    assert "| act |" in text and testkit.ACT_MIN_VERSION in text and testkit.ACT_IMAGE in text
+    assert "up -d registry" in text and "DEVOPS_REGISTRY_PORT" in text
