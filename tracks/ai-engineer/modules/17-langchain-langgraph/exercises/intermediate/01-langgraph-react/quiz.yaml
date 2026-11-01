@@ -2,21 +2,19 @@ questions:
   - id: crash-count
     kind: data
     type: single
-    prompt: "Trên 24 task, `create_react_agent` với `ToolNode` mặc định kết thúc bằng exception (không có câu trả lời) ở bao nhiêu task trong lần chạy của bạn?"
+    prompt: "Trên 24 task, `create_react_agent` với `ToolNode` mặc định có task nào kết thúc bằng exception (không có câu trả lời) không?"
     options:
-      - { id: a, text: "0 task" }
-      - { id: b, text: "1 đến 3 task" }
-      - { id: c, text: "4 đến 10 task" }
-      - { id: d, text: "Hơn 10 task, gần một nửa bộ" }
+      - { id: a, text: "Không task nào: lỗi tool luôn thành observation" }
+      - { id: b, text: "Có, từ 1 đến 12 task, đều do tool ném lỗi khi chạy" }
+      - { id: c, text: "Có, hơn 12 task, đa số do model gọi tool sai tên" }
   - id: pair-diff
     kind: data
     type: single
-    prompt: "So theo cặp agent dựng tay và `create_react_agent` có `handle_tool_errors`: có bao nhiêu task chỉ một trong hai làm đúng?"
+    prompt: "Tổng số task đúng của agent dựng tay và của `create_react_agent` có `handle_tool_errors` chênh nhau bao nhiêu?"
     options:
-      - { id: a, text: "0 task: hai bên đúng y hệt nhau" }
-      - { id: b, text: "1 đến 4 task" }
-      - { id: c, text: "5 đến 10 task" }
-      - { id: d, text: "Hơn 10 task" }
+      - { id: a, text: "0 đến 3 task" }
+      - { id: b, text: "4 đến 8 task" }
+      - { id: c, text: "Hơn 8 task" }
   - id: calc-group
     kind: data
     type: single

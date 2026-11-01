@@ -5,7 +5,7 @@ questions:
     prompt: "Trong CRAG, bước trả lời chỉ nhận các nguồn bộ chấm giữ lại. Điều gì giới hạn trên tỉ lệ trích trúng điều đúng?"
     options:
       - { id: a, text: "Recall@5 của retriever nhân với tỉ lệ bộ chấm giữ được điều đúng khi nó có mặt" }
-      - { id: b, text: "Chỉ recall@5 của retriever, vì bộ chấm không bao giờ bỏ một nguồn liên quan" }
+      - { id: b, text: "Chỉ recall@5 của retriever, vì một bộ chấm LLM không bao giờ bỏ một nguồn liên quan thật" }
       - { id: c, text: "Chỉ số lần viết lại truy vấn tối đa, vì mỗi lần viết lại đều tăng recall" }
       - { id: d, text: "Độ dài câu trả lời mà model sinh ra ở bước answer cuối cùng của đồ thị" }
   - id: grade-fail-policy
@@ -26,3 +26,21 @@ questions:
       - { id: b, text: "Từ chối dù điều đúng có trong nguồn nhưng bộ chấm bỏ nó (từ chối oan)" }
       - { id: c, text: "Từ chối do model trả lời quá dài" }
       - { id: d, text: "Từ chối ở bước answer dù có nguồn được giữ (model tự từ chối)" }
+  - id: excerpt-grading
+    kind: knowledge
+    type: single
+    prompt: "Vì sao chấm mỗi điều luật trên 700 ký tự đầu có thể làm bộ chấm bỏ oan điều đúng?"
+    options:
+      - { id: a, text: "Với điều dài, phần trả lời câu hỏi thường nằm sau đoạn mở đầu" }
+      - { id: b, text: "Vì 700 ký tự vượt context mặc định của Ollama nên phần cuối bị cắt mất" }
+      - { id: c, text: "Vì bge-m3 chỉ embed được 700 ký tự đầu của mỗi điều" }
+      - { id: d, text: "Vì structured output không nhận nguồn dài quá 700 ký tự" }
+  - id: rewrite-trigger
+    kind: knowledge
+    type: single
+    prompt: "Với `decide_next` của bài, vòng viết lại truy vấn chỉ chạy khi nào?"
+    options:
+      - { id: a, text: "Khi bộ chấm bỏ hết mọi nguồn và còn lượt viết lại" }
+      - { id: b, text: "Khi điểm cosine cao nhất của top-5 dưới một ngưỡng cố định" }
+      - { id: c, text: "Khi bộ chấm giữ ít hơn ba nguồn trong năm nguồn được chấm" }
+      - { id: d, text: "Sau mỗi câu trả lời có trích dẫn ngoài khoảng 1..k của nguồn" }

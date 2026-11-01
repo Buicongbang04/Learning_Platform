@@ -38,7 +38,13 @@ module 16 để so cùng điều kiện (log `.superpowers/scratch/logs/i01_eval
 | Module 16, ReAct văn bản tự viết | 18 | [0.55, 0.88] | 3.08 | 7.1 | 6.4 | 24 trả lời |
 | Module 16, native tự viết | 10 | [0.24, 0.61] | 2.04 | 3.4 | 8.5 | 24 trả lời |
 
-So theo cặp: dựng tay và prebuilt có xử lý lỗi lệch nhau ở 2 task (t01, t11, đều chỉ dựng tay đúng); dựng tay và native
+**Lần chạy thứ hai** (chính notebook lời giải qua `nbconvert`, cùng ngày, log
+`.superpowers/scratch/logs/nb_i01_executed.ipynb`): dựng tay 10/24, prebuilt mặc định 9/24 (4 task kết thúc bằng
+`ValueError`), prebuilt có xử lý lỗi 10/24, hai cách sau cùng giống hệt nhau theo từng task; thời gian framework 3.7 và 5.3
+ms mỗi lượt. `temperature` 0 với `seed` cố định vẫn không cho kết quả y hệt giữa hai lần chạy trên GPU dùng chung (số
+task đổi 1 tới 3, số task sập đổi từ 7 xuống 4): đọc các chênh lệch nhỏ như nhiễu.
+
+Lần chạy tham chiếu, so theo cặp: dựng tay và prebuilt có xử lý lỗi lệch nhau ở 2 task (t01, t11, đều chỉ dựng tay đúng); dựng tay và native
 tự viết lệch nhau ở 1 task (t11). Native tự viết và ReAct văn bản lệch nhau ở 8 task, cả 8 đều chỉ ReAct đúng.
 
 Theo nhóm (dựng tay / ReAct văn bản): tra một lần 3/6 so với 6/6, tính toán 1/6 so với 3/6, đơn hàng 1/4 so với 2/4.
@@ -53,7 +59,7 @@ Theo nhóm (dựng tay / ReAct văn bản): tra một lần 3/6 so với 6/6, t�
 - **Kiểu hỏng giống module 16.** Với `classify_failure` của module 16, 13 task sai của agent dựng tay gồm 5 "số bịa",
   5 "sai khác", 2 "không gọi tool", 1 "lỗi tool"; 5 câu trả lời sai quay ra hỏi lại người dùng ("Bạn có thể cung cấp mã
   sách không?") thay vì gọi tool tiếp, như native của module 16.
-- **Prebuilt mặc định sập 7/24 task**: 6 `ValueError` từ `get_book` khi model đoán mã sách ("DTNT", "S01") và 1
+- **Prebuilt mặc định sập 7/24 task** ở lần chạy tham chiếu (4/24 ở lần chạy notebook): 6 `ValueError` từ `get_book` khi model đoán mã sách ("DTNT", "S01") và 1
   `SyntaxError` từ `calculator`. `ToolNode` mặc định (`langgraph-prebuilt` 1.1.1) ném lại exception lúc tool chạy thay vì
   trả observation; module 16 coi "lỗi là observation" là nguyên tắc đầu tiên của tool registry. Truyền một `ToolNode` có
   `handle_tool_errors` cho `create_react_agent` là sửa được; đọc mặc định của prebuilt trước khi dùng.
@@ -65,7 +71,8 @@ Theo nhóm (dựng tay / ReAct văn bản): tra một lần 3/6 so với 6/6, t�
   từ chữ ký hàm, kiểm tham số, 114 dòng) cộng vòng native (24 dòng). Cái LangGraph cho thêm mà không tốn dòng nào:
   streaming theo node và theo token, chỗ cắm checkpointer và `interrupt`, callback cho trace. Cái nó lấy đi: bạn phải
   biết mặc định của từng lớp (lỗi của `ToolNode`, `recursion_limit`, deprecation của prebuilt).
-- **Streaming.** Cell cuối in từng bước của đồ thị (`updates`) và từng token (`messages`): người dùng thấy chữ đầu tiên
-  sau một phần nhỏ thời gian của cả câu, vì phần lớn thời gian là sinh token.
+- **Streaming.** Cell cuối in từng bước của đồ thị (`updates`) và từng token (`messages`). Ở lần chạy notebook, với câu
+  t02 token đầu tiên đến sau 1.43 s, cả câu 1.92 s: câu trả lời ngắn, nên phần lớn thời gian là lượt gọi tool và prefill,
+  không phải sinh token; với câu trả lời dài, streaming mới đổi trải nghiệm rõ rệt.
 - 24 task là ít: chênh 2 task giữa dựng tay và prebuilt (cùng giao thức, prompt hệ thống được chèn theo hai cách khác
   nhau) nằm trong nhiễu. Chạy lại với seed khác trước khi kết luận cách nào hơn.

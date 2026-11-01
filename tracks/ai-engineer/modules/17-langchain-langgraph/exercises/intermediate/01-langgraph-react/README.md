@@ -26,7 +26,7 @@ framework đổi được gì (số dòng code, streaming, chỗ cắm checkpoin
 
 **Phần cứng:** CPU · ~75 phút
 
-Thời gian trên là thời gian làm bài. Các cell `explore` gọi model khoảng 140 lượt, chạy khoảng 8 phút trên PC của track
+Thời gian trên là thời gian làm bài. Các cell `explore` gọi model khoảng 140 lượt, chạy khoảng 4 đến 8 phút trên PC của track
 (`qwen2.5:3b` trên GPU dùng chung); laptop GPU 4GB chậm hơn, CPU thuần chậm hơn nhiều.
 
 Trong `starter/react_graph.ipynb`:

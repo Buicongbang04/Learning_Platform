@@ -30,8 +30,9 @@ một bước "tự sửa" chỉ tốt bằng bộ chấm của nó.
 
 **Phần cứng:** CPU · ~240 phút
 
-Thời gian trên là thời gian làm bài. Một lần chạy 100 câu với `qwen2.5:3b` mất khoảng 10 đến 15 phút trên PC của track
-(GPU dùng chung) cho mỗi biến thể; laptop GPU 4GB chậm hơn, nên chạy thử 20 câu trước.
+Thời gian trên là thời gian làm bài. Một lần chạy 100 câu với `qwen2.5:3b` mất khoảng 7 phút trên PC của track (GPU
+dùng chung) cho mỗi biến thể CRAG, cộng khoảng 5 phút cho RAG một lượt nếu chưa có từ bài Intermediate 03; laptop GPU
+4GB chậm hơn, nên chạy thử 20 câu trước.
 
 1. **`starter/crag.py`**: `decide_next(relevant, rewrites, max_rewrites)` và `grader_agreement(rounds)` theo docstring
    (có test).
