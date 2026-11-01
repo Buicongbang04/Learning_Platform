@@ -1,0 +1,15 @@
+*   Trying 198.51.100.20:443...
+* Connected to shop.olist-shop.com.br (198.51.100.20) port 443
+* ALPN: server accepted h2
+> GET / HTTP/2
+> Host: shop.olist-shop.com.br
+> User-Agent: curl/8.5.0
+>
+< HTTP/2 200
+< content-type: text/html; charset=utf-8
+< cache-control: no-cache
+< etag: W/"a81-1730451600"
+< last-modified: Sun, 01 Nov 2026 08:00:00 GMT
+<
+{ [2689 bytes data]
+* Connection #0 to host shop.olist-shop.com.br left intact

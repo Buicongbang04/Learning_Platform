@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+mapfile -t allow < <(git show :.secrets-allowlist 2>/dev/null)
+found=0
+while IFS= read -r -d '' path; do
+  content=$(git show ":$path")
+  [[ $content == *"pragma: allowlist secret"* ]] && continue
+  case ${path##*/} in
+    .env | .env.*)
+      echo "secret: dotenv-file: $path" >&2
+      found=1
+      continue
+      ;;
+  esac
+  while IFS= read -r line; do
+    skip=0
+    for entry in "${allow[@]}"; do
+      [[ $line == *"$entry"* ]] && skip=1
+    done
+    ((skip)) && continue
+    if [[ $line =~ (AKIA|ASIA)[A-Z0-9]{16} ]]; then
+      echo "secret: aws-access-key-id: $path" >&2
+      found=1
+    fi
+  done <<<"$content"
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+exit "$found"

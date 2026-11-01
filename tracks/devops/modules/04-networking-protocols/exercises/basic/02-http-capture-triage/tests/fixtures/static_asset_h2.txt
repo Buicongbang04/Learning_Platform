@@ -1,0 +1,23 @@
+*   Trying 198.51.100.20:443...
+* Connected to shop.olist-shop.com.br (198.51.100.20) port 443
+* ALPN: curl offers h2,http/1.1
+* SSL connection using TLSv1.3 / TLS_AES_128_GCM_SHA256 / X25519 / id-ecdsa-with-SHA256
+* ALPN: server accepted h2
+* [HTTP/2] [1] OPENED stream for https://shop.olist-shop.com.br/static/app.3f9a1c.js
+* [HTTP/2] [1] [:method: GET]
+* [HTTP/2] [1] [:path: /static/app.3f9a1c.js]
+> GET /static/app.3f9a1c.js HTTP/2
+> Host: shop.olist-shop.com.br
+> User-Agent: curl/8.5.0
+> Accept: */*
+>
+< HTTP/2 200
+< content-type: application/javascript
+< content-length: 183442
+< cache-control: public, max-age=31536000, immutable
+< etag: "3f9a1c"
+< age: 1200
+< x-cache: HIT
+<
+{ [16384 bytes data]
+* Connection #0 to host shop.olist-shop.com.br left intact

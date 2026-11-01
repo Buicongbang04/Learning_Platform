@@ -1,0 +1,7 @@
+2026/10/28 17:02:41 [error] 31#31: *88213 connect() failed (111: Connection refused) while connecting to upstream, client: 10.0.1.17, server: shop.olist-shop.com.br, request: "GET /api/cart HTTP/1.1", upstream: "http://10.0.20.11:8080/api/cart", host: "shop.olist-shop.com.br"
+2026/10/28 17:02:41 [warn] 31#31: *88213 upstream server temporarily disabled while connecting to upstream, client: 10.0.1.17, server: shop.olist-shop.com.br, request: "GET /api/cart HTTP/1.1", upstream: "http://10.0.20.11:8080/api/cart", host: "shop.olist-shop.com.br"
+2026/10/28 17:02:41 [error] 31#31: *88213 connect() failed (111: Connection refused) while connecting to upstream, client: 10.0.1.17, server: shop.olist-shop.com.br, request: "GET /api/cart HTTP/1.1", upstream: "http://10.0.20.12:8080/api/cart", host: "shop.olist-shop.com.br"
+2026/10/28 17:02:42 [error] 31#31: *88219 no live upstreams while connecting to upstream, client: 10.0.1.17, server: shop.olist-shop.com.br, request: "GET /api/orders/e481f51cbdc5 HTTP/1.1", upstream: "http://olist_api/api/orders/e481f51cbdc5", host: "shop.olist-shop.com.br"
+2026/10/28 17:02:42 [error] 31#31: *88221 no live upstreams while connecting to upstream, client: 10.0.2.9, server: shop.olist-shop.com.br, request: "POST /api/webhooks/payment HTTP/1.1", upstream: "http://olist_api/api/webhooks/payment", host: "shop.olist-shop.com.br"
+2026/10/28 17:31:12 [notice] 1#1: signal 1 (SIGHUP) received from 412, reconfiguring
+2026/10/28 17:31:12 [notice] 1#1: reconfiguring

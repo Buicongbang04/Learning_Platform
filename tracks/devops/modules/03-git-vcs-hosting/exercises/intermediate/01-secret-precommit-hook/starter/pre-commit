@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# TODO 1: liệt kê tệp được thêm/sửa/đổi tên trong index (không tính tệp bị xoá), an toàn với tên có dấu cách
+# TODO 2: tệp tên .env hoặc .env.* (trừ .env.example, .env.sample, .env.template) -> phát hiện dotenv-file
+# TODO 3: đọc nội dung BẢN STAGED (git show ":<path>"), không đọc working tree; tìm
+#         aws-access-key-id, private-key, postgres-password-url theo đúng quy tắc trong đề
+# TODO 4: bỏ qua dòng có "pragma: allowlist secret" và dòng chứa một chuỗi trong .secrets-allowlist
+# TODO 5: mỗi phát hiện in "secret: <rule>: <path>" ra stderr; có phát hiện -> exit 1, không -> exit 0
+
+exit 0

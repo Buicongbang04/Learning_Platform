@@ -1,0 +1,6 @@
+$ORIGIN olistmarket.com.br.
+$TTL 3600
+@                    IN TXT    "v=spf1 include:_spf.google.com -all"
+@                    IN TXT    "v=spf1 include:amazonses.com include:sendgrid.net include:mail.zendesk.com include:_spf.brevo.com include:spf.protection.outlook.com include:servers.mcsv.net " "include:_spf.salesforce.com include:mktomail.com include:spf.mandrillapp.com include:_spf.hubspot.com a mx ~all"
+google._domainkey    IN TXT    "v=DKIM1; k=rsa; p="
+_dmarc               IN TXT    "v=DMARC1; p=reject"

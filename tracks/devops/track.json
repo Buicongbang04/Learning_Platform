@@ -2,6 +2,127 @@
   "id": "devops",
   "name": "DevOps",
   "icon": "container",
-  "status": "soon",
-  "order": 5
+  "status": "active",
+  "order": 5,
+  "description": "17 module (từ module 00 giới thiệu DevOps & SRE) tới mức DevOps engineer senior: Linux, scripting, mạng, Nginx, container, CI/CD, IaC bằng OpenTofu, Ansible, Kubernetes gần mức CKA, GitOps, observability, cloud và SRE; bài sự cố cố ý và capstone vận hành Olist Shop như production trên máy local.",
+  "source": "https://roadmap.sh/devops",
+  "modules": [
+    {
+      "id": "00-introduction",
+      "title": "Giới thiệu DevOps & SRE",
+      "summary": "DevOps là gì và không là gì; văn hoá CALMS, DORA metrics, DevOps vs SRE vs Platform Engineering, vai trò trong team và bản đồ công cụ của cả lộ trình.",
+      "topics": ["CALMS", "DORA metrics", "DevOps vs SRE", "Platform Engineering", "Bản đồ công cụ"]
+    },
+    {
+      "id": "01-linux-terminal",
+      "title": "Linux & terminal",
+      "summary": "Chọn distro, process và performance monitoring, công cụ mạng, xử lý text, editor, systemd, quyền, package và cách cài binary đúng cách có kiểm checksum.",
+      "topics": ["Ubuntu / RHEL", "Process monitoring", "Performance", "Text manipulation", "systemd", "Permissions", "Cài binary an toàn"]
+    },
+    {
+      "id": "02-scripting",
+      "title": "Scripting & lập trình",
+      "summary": "Bash cho vận hành (strict mode, trap, idempotent, có test), Python cho automation; so sánh Go, Node, Ruby, Rust, PowerShell.",
+      "topics": ["Bash", "Strict mode", "Idempotency", "ShellCheck", "Python automation", "So sánh ngôn ngữ"]
+    },
+    {
+      "id": "03-git-vcs-hosting",
+      "title": "Git & VCS hosting",
+      "summary": "Branching strategy, trunk-based, PR flow, hooks và monorepo; so sánh GitHub, GitLab, Bitbucket.",
+      "topics": ["Branching strategy", "Trunk-based", "Pull request", "Git hooks", "Monorepo", "GitHub / GitLab"]
+    },
+    {
+      "id": "04-networking-protocols",
+      "title": "Networking & protocols",
+      "summary": "OSI, DNS, HTTP/HTTPS, TLS, SSH, SFTP và email (SMTP, IMAP, SPF, DKIM, DMARC) qua lab Mailpit và phân tích bản ghi offline.",
+      "topics": ["OSI", "DNS", "HTTP / HTTPS", "TLS", "SSH", "SMTP", "SPF / DKIM / DMARC"]
+    },
+    {
+      "id": "05-web-server-proxy",
+      "title": "Web server & proxy",
+      "summary": "Nginx làm reverse proxy, caching, load balancer và TLS; forward proxy, firewall; so sánh Caddy, Apache, Tomcat, IIS; bài sự cố cấu hình hỏng.",
+      "topics": ["Nginx", "Reverse proxy", "Caching", "Load balancing", "Rate limit", "Firewall", "Caddy / Apache"]
+    },
+    {
+      "id": "06-containers",
+      "title": "Containers",
+      "summary": "Docker chuyên sâu: layer, multi-stage, hardening, rootless, registry, quét lỗ hổng; LXC/LXD.",
+      "topics": ["Docker", "Multi-stage build", "Hardening", "Rootless", "Registry", "Trivy", "LXC / LXD"]
+    },
+    {
+      "id": "07-cicd-artifacts",
+      "title": "CI/CD & artifact",
+      "summary": "GitHub Actions chạy local bằng act, thiết kế pipeline, chiến lược deploy, quản lý artifact trên registry local; so sánh Jenkins, GitLab CI và các artifact repository.",
+      "topics": ["GitHub Actions", "act", "Pipeline design", "Blue-green / Canary", "Artifact management", "Jenkins / GitLab CI"]
+    },
+    {
+      "id": "08-iac-provisioning",
+      "title": "Provisioning (IaC)",
+      "summary": "OpenTofu trên LocalStack tới mức Terraform Associate: HCL, provider, meta-argument, state, import, drift, module, workspace, test và policy; so sánh CDK, CloudFormation, Pulumi.",
+      "topics": ["OpenTofu", "HCL", "State", "Modules", "Import / moved", "Drift", "tofu test", "Pulumi / CDK"]
+    },
+    {
+      "id": "09-config-management",
+      "title": "Configuration management",
+      "summary": "Ansible: inventory, playbook, role, idempotency, vault và molecule; so sánh Chef, Puppet.",
+      "topics": ["Ansible", "Inventory", "Roles", "Idempotency", "Ansible Vault", "Molecule", "Chef / Puppet"]
+    },
+    {
+      "id": "10-kubernetes-core",
+      "title": "Kubernetes core",
+      "summary": "Kiến trúc control plane, workload, Service, Ingress, Gateway API, ConfigMap/Secret, probe, storage, etcd backup/restore trên kind; lab kubeadm tuỳ chọn.",
+      "topics": ["Kiến trúc", "Pod / Deployment", "StatefulSet / Job", "Service / Ingress", "Gateway API", "PV / PVC", "etcd backup"]
+    },
+    {
+      "id": "11-kubernetes-production",
+      "title": "Kubernetes production",
+      "summary": "RBAC, SecurityContext, NetworkPolicy, scheduling, quota, autoscaling, PDB, Helm chart tự viết, Kustomize, CRD/Operator, troubleshooting và upgrade; so sánh EKS/GKE/AKS, ECS.",
+      "topics": ["RBAC", "NetworkPolicy", "Scheduling", "HPA / PDB", "Helm", "Kustomize", "Troubleshooting", "Upgrade"]
+    },
+    {
+      "id": "12-gitops-secrets",
+      "title": "GitOps & secrets",
+      "summary": "ArgoCD (so sánh FluxCD), quản lý secret bằng SOPS, Vault dev, Sealed Secrets và secret manager của cloud.",
+      "topics": ["GitOps", "ArgoCD", "FluxCD", "SOPS", "Vault", "Sealed Secrets"]
+    },
+    {
+      "id": "13-observability",
+      "title": "Observability",
+      "summary": "Metrics, logs, traces với Prometheus, Grafana, Loki, OpenTelemetry, Jaeger; alerting; so sánh ELK, Datadog, New Relic, Zabbix.",
+      "topics": ["Prometheus", "Grafana", "Loki", "OpenTelemetry", "Jaeger", "Alerting", "ELK / Datadog"]
+    },
+    {
+      "id": "14-cloud-serverless",
+      "title": "Cloud & serverless",
+      "summary": "AWS core (IAM, VPC, EC2, S3, RDS) qua LocalStack và lab AWS free tier có hướng dẫn; Lambda và các nền tảng serverless; so sánh nhà cung cấp cloud.",
+      "topics": ["AWS", "IAM", "VPC", "Lambda", "LocalStack", "Azure / GCP", "So sánh nhà cung cấp"]
+    },
+    {
+      "id": "15-service-mesh-patterns",
+      "title": "Service mesh & cloud design patterns",
+      "summary": "Linkerd lab nhẹ, so sánh Istio, Consul, Envoy; các pattern availability, data management, design & implementation, management & monitoring.",
+      "topics": ["Service mesh", "Linkerd", "Istio / Envoy", "Circuit breaker", "Retry / Timeout", "Cloud design patterns"]
+    },
+    {
+      "id": "16-sre-operations",
+      "title": "SRE & vận hành",
+      "summary": "SLO/SLI, error budget, on-call, incident và postmortem, chaos, capacity planning, FinOps, bảo mật pipeline cơ bản và chuẩn bị phỏng vấn.",
+      "topics": ["SLO / SLI", "Error budget", "On-call", "Incident / Postmortem", "Chaos engineering", "Capacity planning", "FinOps"]
+    }
+  ],
+  "capstone": {
+    "title": "Olist Shop lên production local",
+    "readme": "capstone/README.md",
+    "milestones": [
+      { "id": "m01", "title": "Script vận hành: bootstrap, healthcheck, backup", "after": "02-scripting", "doc": "capstone/milestones/m01-ops-scripts.md" },
+      { "id": "m02", "title": "Nginx phía trước: reverse proxy, TLS, rate limit", "after": "05-web-server-proxy", "doc": "capstone/milestones/m02-nginx-front.md" },
+      { "id": "m03", "title": "Container hoá, image tối ưu và đã quét lỗ hổng", "after": "06-containers", "doc": "capstone/milestones/m03-containers.md" },
+      { "id": "m04", "title": "Pipeline CI/CD tới registry local và staging", "after": "07-cicd-artifacts", "doc": "capstone/milestones/m04-cicd-pipeline.md" },
+      { "id": "m05", "title": "Hạ tầng bằng OpenTofu, cấu hình bằng Ansible", "after": "09-config-management", "doc": "capstone/milestones/m05-iac-config.md" },
+      { "id": "m06", "title": "Lên kind bằng Helm chart, HPA, NetworkPolicy, RBAC", "after": "11-kubernetes-production", "doc": "capstone/milestones/m06-kubernetes-helm.md" },
+      { "id": "m07", "title": "GitOps bằng ArgoCD, secret bằng SOPS", "after": "12-gitops-secrets", "doc": "capstone/milestones/m07-gitops-secrets.md" },
+      { "id": "m08", "title": "Observability: metrics, logs, traces, dashboard và alert", "after": "13-observability", "doc": "capstone/milestones/m08-observability.md" },
+      { "id": "m09", "title": "Đánh giá độc lập: SLO, game day, khôi phục và postmortem", "after": "16-sre-operations", "doc": "capstone/milestones/m09-game-day.md" }
+    ]
+  }
 }

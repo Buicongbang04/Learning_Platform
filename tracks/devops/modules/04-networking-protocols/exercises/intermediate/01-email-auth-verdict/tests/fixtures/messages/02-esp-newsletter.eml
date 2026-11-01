@@ -1,0 +1,18 @@
+Return-Path: <bounce-8812@bounces.olist-shop.com.br>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=bounces.olist-shop.com.br;
+	dkim=pass header.d=esp-mail.example header.s=esp1
+Received: from o44.esp-mail.example (o44.esp-mail.example [198.51.100.44])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ2b7Lm1z3;
+	Sun, 01 Nov 2026 10:00:02 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=esp-mail.example; s=esp1;
+	h=from:to:subject:date; bh=frcCV1k9oG9oKj3dpUqdJg1PxRT2RSN/XKdLCPjaYaY=; b=QmVsdA
+From: Olist Shop <ofertas@olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Ofertas da semana
+Date: Sun, 01 Nov 2026 09:59:58 +0000
+Message-ID: <nl-2026-44.8812@esp-mail.example>
+List-Unsubscribe: <https://esp-mail.example/u/8812>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+
+Ofertas.

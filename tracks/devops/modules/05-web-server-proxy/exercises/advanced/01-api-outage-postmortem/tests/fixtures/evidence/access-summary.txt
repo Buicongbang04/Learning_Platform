@@ -1,0 +1,13 @@
+# Đếm theo phút từ access log edge-1 + edge-2 (giờ São Paulo). Cột: phút, tổng request, 2xx, 404, 502, request /api/*
+13:55  9120  9033   41    0  6210
+14:00  9310  9196   52    0  6340
+14:03  9050  2840   38 6160  6160
+14:10  8700  2610   33 6040  6040
+14:20  8410  2520   30 5860  5860
+14:30  8620  4210 4390    0  4380
+14:35  8900  2950 5930    0  5920
+14:40  9020  5640 3360    0  3350
+14:45  9180  9081   47    0  6250
+# Tổng 14:02-14:44: 371.200 request, trong đó 252.400 request /api/* lỗi (502 hoặc 404).
+# GET /healthz không ghi access log (access_log off).
+# Đơn hàng hoàn tất: trung bình thứ Tư 14:00-15:00 bốn tuần trước là 1.180 đơn, hôm nay 412 đơn. Giá trị đơn trung bình 160 BRL.

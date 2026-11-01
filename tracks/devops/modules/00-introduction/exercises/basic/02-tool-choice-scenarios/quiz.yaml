@@ -1,0 +1,109 @@
+questions:
+  - id: ci-small-team
+    kind: knowledge
+    type: single
+    prompt: "Team 6 người, code trên GitHub, cần CI chạy test cho mỗi pull request. Không ai muốn trực một server CI. Chọn gì?"
+    options:
+      - { id: a, text: "Jenkins tự host trên một VM, cài plugin GitHub" }
+      - { id: b, text: "GitHub Actions với runner do GitHub quản lý" }
+      - { id: c, text: "TeamCity on-prem, mỗi PR một build configuration" }
+      - { id: d, text: "Octopus Deploy chạy test trước mỗi release" }
+  - id: config-agentless
+    kind: knowledge
+    type: single
+    prompt: "40 VM Ubuntu cũ cần cấu hình đồng nhất (user, sysctl, Nginx, logrotate). Bộ phận an ninh không cho cài agent thường trú lên máy. Chọn gì?"
+    options:
+      - { id: a, text: "Puppet với puppet agent chạy mỗi 30 phút" }
+      - { id: b, text: "Chef client kéo cookbook từ Chef Server" }
+      - { id: c, text: "Ansible chạy qua SSH, playbook nằm trong Git" }
+      - { id: d, text: "CloudFormation template cho từng VM" }
+  - id: iac-multi-provider
+    kind: knowledge
+    type: single
+    prompt: "Hạ tầng nằm trên AWS, DNS ở Cloudflare. Team muốn khai báo cả hai bằng code, xem plan trước khi apply, công cụ mã nguồn mở. Chọn gì?"
+    options:
+      - { id: a, text: "OpenTofu với provider AWS và Cloudflare" }
+      - { id: b, text: "CloudFormation cho AWS, Cloudflare làm tay" }
+      - { id: c, text: "Ansible module gọi API của từng nhà cung cấp" }
+      - { id: d, text: "AWS CDK bằng TypeScript cho toàn bộ" }
+  - id: secrets-in-git
+    kind: knowledge
+    type: single
+    prompt: "Team làm GitOps. Secret (mật khẩu DB của Olist Shop) phải nằm trong Git cạnh manifest, mã hoá, và review được diff theo từng key. Chọn gì?"
+    options:
+      - { id: a, text: "Kubernetes Secret base64 commit thẳng vào repo" }
+      - { id: b, text: "Tệp .env commit vào repo private" }
+      - { id: c, text: "Vault server, manifest chỉ chứa đường dẫn" }
+      - { id: d, text: "SOPS mã hoá giá trị, giữ nguyên tên key" }
+  - id: logs-low-budget
+    kind: knowledge
+    type: single
+    prompt: "Startup 10 người, log khoảng 5 GB/ngày, đã chạy Prometheus và Grafana, ngân sách gần như bằng 0, chủ yếu tìm log theo service và request_id. Chọn gì?"
+    options:
+      - { id: a, text: "Splunk Enterprise bản trả phí theo GB" }
+      - { id: b, text: "Loki, truy vấn ngay trong Grafana" }
+      - { id: c, text: "Elastic Stack tự host ba node" }
+      - { id: d, text: "Datadog Logs giữ 30 ngày" }
+  - id: orchestration-small
+    kind: knowledge
+    type: single
+    prompt: "Ba service, một team 4 người, hai VM, traffic ổn định, chưa ai vận hành Kubernetes. Sếp hỏi có nên lên Kubernetes ngay. Chọn gì cho năm nay?"
+    options:
+      - { id: a, text: "Tự dựng Kubernetes bằng kubeadm trên hai VM" }
+      - { id: b, text: "Docker Swarm 5 manager cho chắc quorum" }
+      - { id: c, text: "Compose trên VM, healthcheck và restart policy" }
+      - { id: d, text: "Thêm Istio để có mTLS trước khi lên K8s" }
+  - id: serverless-bursty
+    kind: knowledge
+    type: single
+    prompt: "Webhook thu nhỏ ảnh sản phẩm: phần lớn thời gian không có request, thỉnh thoảng nhận 5 000 ảnh trong 10 phút, mỗi ảnh xử lý dưới 2 giây. Chọn gì?"
+    options:
+      - { id: a, text: "AWS Lambda kích hoạt theo sự kiện S3" }
+      - { id: b, text: "EC2 reserved instance chạy 24/7" }
+      - { id: c, text: "Cụm Kubernetes riêng cho tác vụ ảnh" }
+      - { id: d, text: "Heroku dyno chạy liên tục chờ request" }
+  - id: web-server-auto-tls
+    kind: knowledge
+    type: single
+    prompt: "Một trang nội bộ nhỏ cần HTTPS tự cấp và tự gia hạn chứng chỉ, cấu hình càng ít càng tốt, không có yêu cầu tinh chỉnh đặc biệt. Chọn gì?"
+    options:
+      - { id: a, text: "Nginx + certbot qua cron" }
+      - { id: b, text: "Apache Tomcat bật connector TLS" }
+      - { id: c, text: "IIS trên Windows Server" }
+      - { id: d, text: "Caddy với HTTPS tự động" }
+  - id: artifact-repository
+    kind: knowledge
+    type: single
+    prompt: "Công ty cần một nơi on-prem chứa artifact Maven, npm, PyPI proxy và Docker image, có phân quyền và giữ bản phát hành bất biến. Chọn gì?"
+    options:
+      - { id: a, text: "GitHub Releases của từng repo" }
+      - { id: b, text: "Nexus hoặc Artifactory tự host" }
+      - { id: c, text: "Một bucket S3 chia thư mục" }
+      - { id: d, text: "Docker Hub public cho mọi thứ" }
+  - id: gitops-ui
+    kind: knowledge
+    type: single
+    prompt: "Ba cluster Kubernetes. Team muốn trạng thái mong muốn nằm trong Git, có giao diện xem drift và bấm sync khi cần. Chọn gì?"
+    options:
+      - { id: a, text: "ArgoCD, mỗi cluster là một destination" }
+      - { id: b, text: "Jenkins job chạy kubectl apply mỗi giờ" }
+      - { id: c, text: "Helm install tay từ laptop của lead" }
+      - { id: d, text: "FluxCD dùng CLI, không cài thêm UI" }
+  - id: mesh-light
+    kind: knowledge
+    type: single
+    prompt: "Cần mTLS giữa các service và golden metrics theo từng route. Team nhỏ, sợ độ phức tạp, không cần định tuyến nâng cao. Chọn gì?"
+    options:
+      - { id: a, text: "Istio bản đầy đủ với mọi addon" }
+      - { id: b, text: "Tự viết sidecar Envoy cho từng pod" }
+      - { id: c, text: "Linkerd với proxy nhẹ và mTLS sẵn" }
+      - { id: d, text: "Consul Connect kèm cluster Consul riêng" }
+  - id: tracing-slow-request
+    kind: knowledge
+    type: single
+    prompt: "Request chậm đi qua Nginx → API → Redis → worker. Cần biết đoạn nào chậm, instrument một lần dùng được với nhiều backend. Chọn gì?"
+    options:
+      - { id: a, text: "Zabbix đo CPU từng máy" }
+      - { id: b, text: "Papertrail gom log text" }
+      - { id: c, text: "Chỉ Prometheus counter" }
+      - { id: d, text: "OpenTelemetry + Jaeger" }

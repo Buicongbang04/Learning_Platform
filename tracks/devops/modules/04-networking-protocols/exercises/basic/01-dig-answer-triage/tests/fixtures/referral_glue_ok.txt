@@ -1,0 +1,26 @@
+
+; <<>> DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu <<>> +norecurse @a.dns.br olist-shop.com.br NS
+; (2 servers found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 1290
+;; flags: qr; QUERY: 1, ANSWER: 0, AUTHORITY: 2, ADDITIONAL: 3
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; QUESTION SECTION:
+;olist-shop.com.br.		IN	NS
+
+;; AUTHORITY SECTION:
+olist-shop.com.br.	3600	IN	NS	ns1.olist-shop.com.br.
+olist-shop.com.br.	3600	IN	NS	ns2.olist-shop.com.br.
+
+;; ADDITIONAL SECTION:
+ns1.olist-shop.com.br.	3600	IN	A	203.0.113.53
+ns2.olist-shop.com.br.	3600	IN	A	198.51.100.53
+
+;; Query time: 140 msec
+;; SERVER: 200.160.0.10#53(a.dns.br) (UDP)
+;; WHEN: Sun Nov 01 09:17:30 UTC 2026
+;; MSG SIZE  rcvd: 115
+

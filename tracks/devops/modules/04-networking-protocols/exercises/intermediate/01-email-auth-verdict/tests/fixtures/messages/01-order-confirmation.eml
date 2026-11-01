@@ -1,0 +1,17 @@
+Return-Path: <pedidos@olist-shop.com.br>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=olist-shop.com.br;
+	dkim=pass header.d=olist-shop.com.br header.s=s2026 header.b=Hk3vQx1a
+Received: from mail.olist-shop.com.br (mail.olist-shop.com.br [203.0.113.5])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ1q0Kd2z9;
+	Sun, 01 Nov 2026 09:20:11 +0000
+DKIM-Signature: v=1; a=ed25519-sha256; c=relaxed/relaxed; d=olist-shop.com.br; s=s2026;
+	h=from:to:subject:date:message-id; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=;
+	b=Hk3vQx1aT0dZr9vVNc0b
+From: Olist Shop <pedidos@olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Pedido 81d3 confirmado
+Date: Sun, 01 Nov 2026 09:20:09 +0000
+Message-ID: <81d3.order@olist-shop.com.br>
+
+Seu pedido foi confirmado.

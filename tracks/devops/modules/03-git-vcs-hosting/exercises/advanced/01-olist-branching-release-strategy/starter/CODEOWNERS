@@ -1,0 +1,10 @@
+# CODEOWNERS của Olist Shop, đặt ở .github/CODEOWNERS trong repo thật.
+# Mỗi dòng: <pattern> <owner> [<owner>...]. Dòng khớp SAU CÙNG thắng, owner của các dòng trước bị bỏ.
+# Owner chỉ dùng team: @olist-shop/backend, @olist-shop/payments, @olist-shop/platform, @olist-shop/security, @olist-shop/data
+
+# TODO: owner mặc định cho mọi tệp
+# TODO: code thanh toán
+# TODO: migration của database
+# TODO: dbt
+# TODO: hạ tầng (OpenTofu ở mọi nơi, Helm), Dockerfile ở mọi thư mục
+# TODO: workflow CI và chính tệp CODEOWNERS

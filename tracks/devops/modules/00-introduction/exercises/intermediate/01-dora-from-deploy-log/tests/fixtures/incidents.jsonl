@@ -1,0 +1,4 @@
+{"id": "i01", "caused_by_deploy": "d05", "started_at": "2026-10-03T14:05:00+07:00", "resolved_at": "2026-10-03T14:30:00+07:00", "summary": "worker crash loop sau deploy, job recompute kẹt"}
+{"id": "i02", "caused_by_deploy": "d08", "started_at": "2026-10-05T23:40:00+07:00", "resolved_at": "2026-10-06T01:20:00+07:00", "summary": "/orders trả 500 với đơn không có item, sửa bằng hotfix d09"}
+{"id": "i03", "caused_by_deploy": null, "started_at": "2026-10-04T02:00:00Z", "resolved_at": "2026-10-04T03:00:00Z", "summary": "Redis host hết đĩa, không liên quan deploy"}
+{"id": "i04", "caused_by_deploy": "d05", "started_at": "2026-10-03T14:10:00+07:00", "resolved_at": "2026-10-03T14:20:00+07:00", "summary": "alert trùng: jobs_failed_total tăng"}

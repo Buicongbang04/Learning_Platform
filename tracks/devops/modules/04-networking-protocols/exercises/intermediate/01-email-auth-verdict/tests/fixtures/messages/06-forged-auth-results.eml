@@ -1,0 +1,17 @@
+Return-Path: <>
+Authentication-Results: mx.cliente-mail.example;
+	spf=none smtp.helo=mail.cheap-deals.example;
+	dkim=none
+Received: from mail.cheap-deals.example (mail.cheap-deals.example [192.0.2.66])
+	by mx.cliente-mail.example (Postfix) with ESMTP id 4XyZ6f4Vw3z5;
+	Sun, 01 Nov 2026 11:30:00 +0000
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=olist-shop.com.br;
+	dkim=pass header.d=olist-shop.com.br header.s=s2026
+From: Financeiro Olist Shop <financeiro@olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Nota fiscal em anexo
+Date: Sun, 01 Nov 2026 11:29:58 +0000
+Message-ID: <nf-55@mail.cheap-deals.example>
+
+Veja o anexo.

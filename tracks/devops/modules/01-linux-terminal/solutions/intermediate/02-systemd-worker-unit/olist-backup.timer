@@ -1,0 +1,12 @@
+[Unit]
+Description=Olist Shop: lịch backup Postgres
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=15min
+AccuracySec=1min
+Unit=olist-backup.service
+
+[Install]
+WantedBy=timers.target

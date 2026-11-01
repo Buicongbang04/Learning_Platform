@@ -1,0 +1,5 @@
+# Cấu hình health check của load balancer cloud trước edge-1, edge-2
+path: /healthz   interval: 5s   healthy_threshold: 2   unhealthy_threshold: 2   matcher: 200
+# Trạng thái 13:50-15:20: edge-1 healthy, edge-2 healthy (không đổi suốt thời gian)
+# Alert "edge-tg UnHealthyHostCount > 0" không kích hoạt.
+# Alert "5xx rate > 5% trong 5 phút" chỉ có cho ALB-level 5xx (lỗi của chính LB), không cho target 5xx.

@@ -15,6 +15,11 @@ Trong test:
     sql = ex.read("query.sql")              # đọc tệp văn bản
     ex.require_service("postgres")          # skip nếu dịch vụ Docker chưa chạy
     wb = ex.workbook("report.xlsx")         # bài Excel: wb.formula("Sheet", "B2"), wb.value("Sheet", "B2")
+    ex.require_tool("shellcheck", "0.10")   # bài DevOps: skip nếu thiếu công cụ hoặc phiên bản cũ
+    ex.require_cluster()                    # bài DevOps: skip nếu chưa có cluster kind devops-lab
+    ex.require_image("nginx:1.30.6-alpine") # bài DevOps: skip nếu image Docker chưa pull
+    with DockerLab() as lab: lab.start("web", "nginx:1.30.6-alpine", ports=[80])  # dựng mọi thứ trong `with`
+    run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})  # bài DevOps: chạy script trong bwrap
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from __future__ import annotations
 import importlib.util
 import linecache
 import os
+import pwd
 import re
 import shutil
 import signal
@@ -29,6 +35,8 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
+import uuid
 import zipfile
 from pathlib import Path
 from types import ModuleType
@@ -66,6 +74,7 @@ SERVICES = {
     "superset": ("SUPERSET_HOST", "localhost", "SUPERSET_PORT", 8088),
     "airflow": ("AIRFLOW_HOST", "localhost", "AIRFLOW_PORT", 8080),
     "localstack": ("LOCALSTACK_HOST", "localhost", "LOCALSTACK_PORT", 4566),
+    "mailpit": ("MAILPIT_HOST", "localhost", "MAILPIT_SMTP_PORT", 11025),
 }
 
 def _port(name: str) -> int:
@@ -96,6 +105,326 @@ def service_up(name: str, timeout: float = 0.5) -> bool:
             return True
     except OSError:
         return False
+
+
+TOOL_VERSION_ARGS = {
+    "docker": ["--version"],
+    "nginx": ["-v"],
+    "shellcheck": ["--version"],
+    "kubectl": ["version", "--client"],
+    "kind": ["version"],
+    "helm": ["version", "--short"],
+    "tofu": ["version"],
+    "openssl": ["version"],
+    "dig": ["-v"],
+    "ssh": ["-V"],
+}
+
+_VERSION = re.compile(r"\d+(?:\.\d+)+")
+
+
+def parse_version(text: str) -> tuple[int, ...] | None:
+    match = _VERSION.search(text)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group().split("."))
+
+
+def _run_tool(args: list[str]) -> subprocess.CompletedProcess | None:
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def tool_version(name: str) -> tuple[int, ...] | None:
+    if not shutil.which(name):
+        return None
+    result = _run_tool([name, *TOOL_VERSION_ARGS.get(name, ["--version"])])
+    if result is None:
+        return None
+    return parse_version(f"{result.stdout}\n{result.stderr}")
+
+
+def docker_ready() -> bool:
+    result = _run_tool(["docker", "info"])
+    return result is not None and result.returncode == 0
+
+
+def docker_cpu_args() -> list[str]:
+    cpuset = os.environ.get("DEVOPS_CPUSET", "")
+    if cpuset == "none":
+        return []
+    if cpuset:
+        return ["--cpuset-cpus", cpuset]
+    if (os.cpu_count() or 0) >= 36:
+        return ["--cpuset-cpus", "12-35"]
+    return []
+
+
+DOCKER_PREFIX = "devops-ex-"
+DOCKER_LABEL = "devops-ex=1"
+DOCKER_MEMORY = "256m"
+DOCKER_PIDS_LIMIT = 256
+_PORT_TAKEN = ("port is already allocated", "address already in use")
+
+
+def free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _docker(*args: str, timeout: float = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+
+
+def docker_leftovers(lab_id: str) -> list[str]:
+    """Container và network còn sót của một DockerLab (theo tiền tố `devops-ex-<id>`); rỗng nghĩa là đã dọn sạch."""
+    prefix = f"{DOCKER_PREFIX}{lab_id}"
+    containers = _docker("ps", "-a", "--filter", f"name={prefix}", "--format", "{{.Names}}").stdout.split()
+    networks = _docker("network", "ls", "--filter", f"name={prefix}", "--format", "{{.Name}}").stdout.split()
+    return containers + networks
+
+
+class DockerLab:
+    """Network và container riêng của một test. Chỉ dùng bằng `with DockerLab() as lab:` và dựng mọi container BÊN TRONG
+    khối `with` (kể cả trong fixture: `with DockerLab() as lab: ...; yield lab`): lỗi hay Ctrl-C ở bất kỳ bước nào cũng
+    chạy `close()`. `start()` ngoài `with` bị từ chối.
+
+    Mọi container: tên `devops-ex-<uuid8>-<alias>`, nhãn `devops-ex=1`, `--rm`, ghim CPU theo `docker_cpu_args()`, giới hạn
+    RAM và số tiến trình, cổng chỉ mở trên 127.0.0.1 ở cổng trống do test chọn, mount chỉ đọc. Không đụng container hay
+    network nào khác.
+    """
+
+    def __init__(self) -> None:
+        self.id = uuid.uuid4().hex[:8]
+        self.network = f"{DOCKER_PREFIX}{self.id}"
+        self.names: list[str] = []
+        self.ports: dict[str, dict[int, int]] = {}
+        self._network_created = False
+        self._entered = False
+
+    def __enter__(self) -> "DockerLab":
+        self._entered = True
+        try:
+            self._open()
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def _open(self) -> None:
+        self._network_created = True
+        result = _docker("network", "create", "--label", DOCKER_LABEL, self.network)
+        if result.returncode != 0:
+            pytest.fail(f"Không tạo được docker network {self.network}: {result.stderr.strip()}")
+
+    def _require_entered(self) -> None:
+        if not self._entered:
+            raise RuntimeError("Dùng DockerLab bằng `with DockerLab() as lab:` để container luôn được dọn")
+
+    def name(self, alias: str) -> str:
+        return f"{self.network}-{alias}"
+
+    def run_args(self, alias: str, image: str, *command: str, detach: bool = True, mounts=(), publish=(),
+                 env: dict[str, str] | None = None, entrypoint: str | None = None, memory: str = DOCKER_MEMORY,
+                 pids_limit: int = DOCKER_PIDS_LIMIT) -> list[str]:
+        args = ["docker", "run", "--rm", *(["-d"] if detach else [])]
+        args += ["--name", self.name(alias), "--label", DOCKER_LABEL, "--network", self.network, "--network-alias", alias]
+        args += ["--memory", memory, "--pids-limit", str(pids_limit), *docker_cpu_args()]
+        for source, target in mounts:
+            args += ["-v", f"{Path(source).resolve()}:{target}:ro"]
+        for container_port, host_port in publish:
+            args += ["-p", f"127.0.0.1:{host_port}:{container_port}"]
+        for key, value in (env or {}).items():
+            args += ["-e", f"{key}={value}"]
+        if entrypoint:
+            args += ["--entrypoint", entrypoint]
+        return [*args, image, *command]
+
+    def _track(self, alias: str) -> str:
+        name = self.name(alias)
+        if name not in self.names:
+            self.names.append(name)
+        return name
+
+    def start(self, alias: str, image: str, *command: str, ports=(), mounts=(), env=None, entrypoint=None,
+              memory: str = DOCKER_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT) -> str:
+        """Chạy container nền; `ports` là cổng trong container, cổng host lấy bằng `lab.port(alias, cổng)`."""
+        self._require_entered()
+        name = self._track(alias)
+        result = None
+        for _ in range(3):
+            publish = [(port, free_port()) for port in ports]
+            args = self.run_args(alias, image, *command, mounts=mounts, publish=publish, env=env, entrypoint=entrypoint,
+                                 memory=memory, pids_limit=pids_limit)
+            result = subprocess.run(args, capture_output=True, text=True, timeout=120)
+            if result.returncode == 0:
+                self.ports[alias] = dict(publish)
+                return name
+            _docker("rm", "-f", name)
+            if not any(text in result.stderr for text in _PORT_TAKEN):
+                break
+        pytest.fail(f"docker run {alias} ({image}) lỗi: {result.stderr.strip()}")
+
+    def run_once(self, alias: str, image: str, *command: str, mounts=(), entrypoint=None,
+                 timeout: float = 60) -> subprocess.CompletedProcess:
+        """Chạy container tới khi xong (vd. `nginx -t`) và trả kết quả; container vẫn được dọn nếu quá giờ."""
+        self._require_entered()
+        self._track(alias)
+        args = self.run_args(alias, image, *command, detach=False, mounts=mounts, entrypoint=entrypoint)
+        try:
+            return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"Container {alias} chạy quá {timeout} giây")
+
+    def port(self, alias: str, container_port: int) -> int:
+        return self.ports[alias][container_port]
+
+    def logs(self, alias: str) -> str:
+        result = _docker("logs", self.name(alias))
+        return result.stdout + result.stderr
+
+    def exec(self, alias: str, *command: str, timeout: float = 30) -> subprocess.CompletedProcess:
+        return _docker("exec", self.name(alias), *command, timeout=timeout)
+
+    def running(self, alias: str) -> bool:
+        result = _docker("inspect", "-f", "{{.State.Running}}", self.name(alias))
+        return result.returncode == 0 and result.stdout.strip() == "true"
+
+    def wait_log(self, alias: str, text: str, timeout: float = 60) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if text in self.logs(alias):
+                return
+            if not self.running(alias):
+                pytest.fail(f"Container {alias} đã dừng trước khi in '{text}'")
+            time.sleep(0.2)
+        pytest.fail(f"Container {alias} không in '{text}' sau {timeout} giây. Log:\n{self.logs(alias)[-2000:]}")
+
+    def ip(self, alias: str) -> str:
+        result = _docker("inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", self.name(alias))
+        return result.stdout.strip()
+
+    def wait_http(self, alias: str, url: str, headers: dict[str, str] | None = None, timeout: float = 60) -> None:
+        """Chờ tới khi `url` trả một response HTTP bất kỳ (kể cả 4xx/5xx); fail sớm nếu container đã dừng."""
+        import httpx
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                httpx.get(url, headers=headers or {}, timeout=2, verify=False)
+                return
+            except httpx.HTTPError:
+                pass
+            if not self.running(alias):
+                pytest.fail(f"Container {alias} đã dừng ngay sau khi khởi động")
+            time.sleep(0.2)
+        pytest.fail(f"{url} không trả lời sau {timeout} giây. Log của {alias}:\n{self.logs(alias)[-2000:]}")
+
+    def close(self) -> None:
+        for name in self.names:
+            try:
+                _docker("rm", "-f", name)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if self._network_created:
+            try:
+                _docker("network", "rm", self.network)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+
+_BWRAP_ISOLATION = ["--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--new-session"]
+_UNSAFE_ENV = re.compile(r"^(?:BASH_ENV|ENV|BASH_FUNC_.*|LD_PRELOAD|LD_LIBRARY_PATH|SHELLOPTS|BASHOPTS|PROMPT_COMMAND|PS4)$")
+SANDBOX_SKIP = (
+    "Bài này chạy script của bạn trong sandbox bubblewrap (bwrap) để một script viết sai không xoá hay sửa được tệp "
+    "nào ngoài thư mục tạm của test; test từ chối chạy khi không có sandbox. {reason} Cài: sudo apt install bubblewrap "
+    "(Fedora: sudo dnf install bubblewrap). Xem setup/DEVOPS-TOOLS.md"
+)
+
+
+def _real_homes() -> list[Path]:
+    homes = {Path(pwd.getpwuid(os.getuid()).pw_dir), Path(os.path.expanduser("~"))}
+    return sorted(h.resolve() for h in homes if h.is_dir())
+
+
+def _base_flags(bwrap: str) -> list[str]:
+    """Cờ chung cho lần thử và lần chạy thật: / chỉ đọc, /tmp và /run là tmpfs rỗng (che socket docker, D-Bus)."""
+    args = [bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run"]
+    for home in _real_homes():
+        docker_dir = home / ".docker"
+        if docker_dir.is_dir() and not docker_dir.is_relative_to("/tmp"):
+            args += ["--tmpfs", str(docker_dir)]
+    return args
+
+
+def sandbox_ready() -> str | None:
+    """Trả None khi bwrap tạo được sandbox với đúng bộ cờ của lần chạy thật, ngược lại trả lý do."""
+    bwrap = shutil.which("bwrap")
+    if not bwrap:
+        return "Chưa cài bwrap."
+    probe = _run_tool([*_base_flags(bwrap), *_BWRAP_ISOLATION, "--clearenv", "--", "true"])
+    if probe is None or probe.returncode != 0:
+        detail = (probe.stderr.strip() if probe is not None else "") or "không rõ lỗi"
+        return f"bwrap có nhưng không tạo được sandbox ({detail}); có thể kernel chặn user namespace không đặc quyền."
+    return None
+
+
+def _clean_env(env: dict[str, str], home: Path) -> dict[str, str]:
+    base = {"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": str(home), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
+    base.update({k: v for k, v in env.items() if not _UNSAFE_ENV.match(k)})
+    return base
+
+
+def _hidden_by_tmpfs() -> list[Path]:
+    hidden = (Path("/tmp"), Path("/run"))
+    candidates = {ROOT, Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), Path(sys.executable).resolve().parent}
+    return sorted(p for p in candidates if any(p.is_relative_to(h) and p != h for h in hidden))
+
+
+def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str, str]) -> list[str]:
+    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp và /run là tmpfs rỗng, ~/.docker bị che, chỉ `writable` ghi được,
+    môi trường dựng lại từ đầu.
+
+    Mạng KHÔNG bị tách (không --unshare-net): test healthcheck cần gọi server giả trên loopback của máy. Chấp nhận được vì
+    mô hình đe doạ là script viết sai vô tình phá dữ liệu, không phải mã độc; socket của docker và D-Bus vẫn bị che.
+    """
+    reason = sandbox_ready()
+    if reason:
+        pytest.skip(SANDBOX_SKIP.format(reason=reason))
+    args = _base_flags(shutil.which("bwrap"))
+    for path in _hidden_by_tmpfs():
+        args += ["--ro-bind", str(path), str(path)]
+    for path in writable:
+        real = str(Path(path).resolve())
+        args += ["--bind", real, real]
+    home = Path(cwd).resolve()
+    args += ["--chdir", str(home), *_BWRAP_ISOLATION, "--clearenv"]
+    for key, value in _clean_env(env, home).items():
+        args += ["--setenv", key, value]
+    return [*args, "--", *map(str, cmd)]
+
+
+def run_sandboxed(
+    cmd: list,
+    *,
+    writable: list[Path],
+    cwd: Path,
+    env: dict[str, str],
+    timeout: float = 30,
+    input: str | None = None,
+) -> subprocess.CompletedProcess:
+    """Chạy lệnh của người học trong sandbox bwrap; skip (không bao giờ chạy trần) khi không có sandbox.
+
+    Không tách mạng (xem `sandbox_command`): đủ cho mục tiêu chặn script lỗi xoá hay sửa tệp thật.
+    """
+    argv = sandbox_command(cmd, writable=writable, cwd=cwd, env=env)
+    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, input=input, env={})
 
 
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
@@ -295,3 +624,29 @@ class Exercise:
             pytest.skip(
                 f"Dịch vụ {name} chưa chạy. Bật bằng: docker compose -f setup/docker-compose.yml up -d {name}"
             )
+
+    @staticmethod
+    def require_tool(name: str, min_version: str | None = None) -> None:
+        if not shutil.which(name):
+            pytest.skip(f"Chưa cài {name}. Xem setup/DEVOPS-TOOLS.md")
+        if min_version:
+            have = tool_version(name)
+            need = parse_version(min_version)
+            if have is None or (need is not None and have < need):
+                shown = ".".join(map(str, have)) if have else "không rõ phiên bản"
+                pytest.skip(f"{name} {shown} cũ hơn {min_version} cần cho bài này. Xem setup/DEVOPS-TOOLS.md")
+        if name == "docker" and not docker_ready():
+            pytest.skip("Docker daemon chưa chạy hoặc user chưa có quyền dùng docker")
+
+    @staticmethod
+    def require_image(image: str) -> None:
+        Exercise.require_tool("docker")
+        if _docker("image", "inspect", image).returncode != 0:
+            pytest.skip(f"Chưa có image {image}. Tải bằng: docker pull {image}")
+
+    @staticmethod
+    def require_cluster(name: str = "devops-lab") -> None:
+        Exercise.require_tool("kind")
+        result = _run_tool(["kind", "get", "clusters"])
+        if result is None or name not in result.stdout.split():
+            pytest.skip(f"Chưa có cluster kind {name}. Xem setup/DEVOPS-TOOLS.md")

@@ -1,0 +1,23 @@
+
+; <<>> DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu <<>> promo.olist-shop.com.br A
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 63120
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 1, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 65494
+;; QUESTION SECTION:
+;promo.olist-shop.com.br.	IN	A
+
+;; ANSWER SECTION:
+promo.olist-shop.com.br. 3600	IN	CNAME	black-friday-2025.pages.example.org.
+
+;; AUTHORITY SECTION:
+pages.example.org.	1800	IN	SOA	ns-1.pages.example.org. dns-admin.example.org. 1730419200 7200 900 1209600 600
+
+;; Query time: 66 msec
+;; SERVER: 127.0.0.53#53(127.0.0.53) (UDP)
+;; WHEN: Sun Nov 01 09:14:05 UTC 2026
+;; MSG SIZE  rcvd: 164
+

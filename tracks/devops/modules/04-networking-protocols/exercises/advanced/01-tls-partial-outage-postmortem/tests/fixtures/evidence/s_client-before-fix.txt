@@ -1,0 +1,37 @@
+$ openssl s_client -connect api.olist-shop.com.br:443 -servername api.olist-shop.com.br -showcerts </dev/null
+CONNECTED(00000003)
+depth=0 CN = api.olist-shop.com.br
+verify error:num=20:unable to get local issuer certificate
+verify return:1
+depth=0 CN = api.olist-shop.com.br
+verify error:num=21:unable to verify the first certificate
+verify return:1
+depth=0 CN = api.olist-shop.com.br
+verify return:1
+---
+Certificate chain
+ 0 s:CN = api.olist-shop.com.br
+   i:C = US, O = Let's Encrypt, CN = R11
+   a:PKEY: id-ecPublicKey, 256 (bit); sigalg: RSA-SHA256
+   v:NotBefore: Oct 30 20:31:07 2026 GMT; NotAfter: Jan 28 20:31:06 2027 GMT
+-----BEGIN CERTIFICATE-----
+(lược bớt)
+-----END CERTIFICATE-----
+---
+Server certificate
+subject=CN = api.olist-shop.com.br
+issuer=C = US, O = Let's Encrypt, CN = R11
+---
+No client certificate CA names sent
+Peer signing digest: SHA256
+Peer signature type: ECDSA
+Server Temp Key: X25519, 253 bits
+---
+SSL handshake has read 1514 bytes and written 403 bytes
+Verification error: unable to verify the first certificate
+---
+New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
+Server public key is 256 bit
+Verify return code: 21 (unable to verify the first certificate)
+---
+DONE

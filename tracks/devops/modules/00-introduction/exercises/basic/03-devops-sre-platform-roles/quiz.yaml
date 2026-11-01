@@ -1,0 +1,91 @@
+questions:
+  - id: calms-missing-pillar
+    kind: knowledge
+    type: single
+    prompt: "Công ty mua công cụ CI/CD đắt tiền, pipeline chạy xanh, nhưng dev vẫn ném bản build cho ops qua ticket và ops không được dự sprint planning. Trụ cột CALMS nào hỏng trước tiên?"
+    options:
+      - { id: a, text: "Automation: pipeline còn thiếu bước deploy tự động" }
+      - { id: b, text: "Culture: hai nhóm vẫn ngăn bằng ticket" }
+      - { id: c, text: "Measurement: chưa có dashboard đo thời gian build" }
+      - { id: d, text: "Lean: build quá nhỏ, nên gom lại" }
+  - id: error-budget-exhausted
+    kind: knowledge
+    type: single
+    prompt: "SLO availability 99,9% theo tháng. Mới ngày 14 mà error budget đã tiêu hết. Theo cách làm SRE, việc hợp lý nhất là gì?"
+    options:
+      - { id: a, text: "Hạ SLO xuống 99,5% ngay trong tháng để vẫn đạt" }
+      - { id: b, text: "Giữ lịch release, thêm người trực đêm cho chắc" }
+      - { id: c, text: "Dừng release tính năng, ưu tiên reliability" }
+      - { id: d, text: "Tắt alert tới hết tháng cho đỡ ồn" }
+  - id: platform-golden-path
+    kind: knowledge
+    type: single
+    prompt: "8 team sản phẩm, mỗi team tự viết pipeline, Dockerfile và module OpenTofu riêng; lỗi bảo mật sửa một chỗ thì 7 chỗ còn lại vẫn sai. Hướng nào đúng tinh thần Platform Engineering?"
+    options:
+      - { id: a, text: "Lập team DevOps nhận mọi ticket deploy" }
+      - { id: b, text: "Cấm team tự viết, mọi thay đổi phải qua CAB" }
+      - { id: c, text: "Gửi checklist bảo mật, mỗi team tự sửa" }
+      - { id: d, text: "Platform team làm golden path tự phục vụ" }
+  - id: devops-team-silo
+    kind: knowledge
+    type: single
+    prompt: "Công ty đổi tên team Ops thành “DevOps team”, mọi deploy và hạ tầng vẫn qua họ, dev không được đụng production. Nhận định nào đúng?"
+    options:
+      - { id: a, text: "Đây là silo mới, vẫn chuyền tay dev → ops" }
+      - { id: b, text: "Đây là mô hình SRE chuẩn của Google" }
+      - { id: c, text: "Đây chính là Platform Engineering đúng nghĩa" }
+      - { id: d, text: "Ổn, miễn team đó dùng Kubernetes" }
+  - id: metric-as-target
+    kind: knowledge
+    type: single
+    prompt: "CTO đặt KPI “mọi team deploy ít nhất 10 lần/ngày” và xếp hạng team theo số deploy. Rủi ro lớn nhất là gì?"
+    options:
+      - { id: a, text: "Pipeline CI quá tải vì số build tăng gấp nhiều lần" }
+      - { id: b, text: "Goodhart: team chia nhỏ deploy giả để đạt số" }
+      - { id: c, text: "Team sẽ deploy ít hơn vì sợ lỗi" }
+      - { id: d, text: "Không đo được lead time nữa" }
+  - id: postmortem-blameless
+    kind: knowledge
+    type: single
+    prompt: "Một kỹ sư chạy nhầm migration xoá bảng trên production. Postmortem nên tập trung vào điều gì?"
+    options:
+      - { id: a, text: "Tên người làm sai, ghi vào đánh giá hiệu suất cuối năm" }
+      - { id: b, text: "Nhắc cả team cẩn thận hơn khi gõ lệnh" }
+      - { id: c, text: "Vì sao hệ thống cho lệnh đó chạy, kèm action item" }
+      - { id: d, text: "Thu quyền production của mọi kỹ sư" }
+  - id: lean-batch-size
+    kind: knowledge
+    type: single
+    prompt: "Release 2 tuần/lần, mỗi lần khoảng 80 thay đổi; release lỗi thì mất cả ngày tìm thay đổi gây lỗi. Nguyên lý Lean nào giải quyết gốc rễ?"
+    options:
+      - { id: a, text: "Giảm batch size: thay đổi nhỏ, deploy thường xuyên" }
+      - { id: b, text: "Kéo dài chu kỳ lên 4 tuần để có thời gian test kỹ hơn" }
+      - { id: c, text: "Thêm một vòng QA thủ công trước release" }
+      - { id: d, text: "Thêm người duyệt cho mỗi release" }
+  - id: toil-example
+    kind: knowledge
+    type: single
+    prompt: "Theo định nghĩa toil của Google SRE (thủ công, lặp lại, tự động hoá được, không để lại giá trị lâu dài, tăng theo quy mô), việc nào là toil?"
+    options:
+      - { id: a, text: "Viết postmortem cho một sự cố mới" }
+      - { id: b, text: "Thiết kế lại cách scale worker" }
+      - { id: c, text: "Họp review kiến trúc hằng quý với các team sản phẩm" }
+      - { id: d, text: "Mỗi sáng restart worker khi hàng đợi kẹt" }
+  - id: failed-change-definition
+    kind: knowledge
+    type: single
+    prompt: "Theo DORA, trường hợp nào KHÔNG tính là một failed change khi tính change failure rate?"
+    options:
+      - { id: a, text: "Deploy xong phải rollback sau 20 phút" }
+      - { id: b, text: "Deploy xong phải hotfix vì lỗi 500" }
+      - { id: c, text: "Pipeline chặn bản build vì test đỏ" }
+      - { id: d, text: "Deploy xong phải fix forward ngay trong đêm" }
+  - id: fake-devops-signals
+    kind: knowledge
+    type: multi
+    prompt: "Dấu hiệu nào cho thấy một tổ chức chỉ “làm DevOps” trên danh nghĩa? Chọn mọi đáp án đúng."
+    options:
+      - { id: a, text: "Có chức danh DevOps Engineer nhưng dev không bao giờ xem log production" }
+      - { id: b, text: "Mọi thay đổi chờ CAB họp mỗi tuần, kể cả đổi một dòng cấu hình" }
+      - { id: c, text: "Team sản phẩm tự deploy qua pipeline chung và tự trực on-call cho service của mình" }
+      - { id: d, text: "Postmortem kết luận “lỗi do con người” rồi đóng" }

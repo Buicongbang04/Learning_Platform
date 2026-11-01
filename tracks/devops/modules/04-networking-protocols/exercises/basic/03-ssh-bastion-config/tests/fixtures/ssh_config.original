@@ -1,0 +1,18 @@
+# TODO: cấu hình cũ của team, đang gây sự cố. Sửa theo README.md, kiểm bằng: ssh -G -F starter/ssh_config app-1
+
+Host *
+    User root
+    ForwardAgent yes
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    IdentityFile ~/.ssh/id_rsa
+
+Host bastion
+    HostName bastion.olist-shop.com.br
+    Port 2222
+    User ops
+
+Host app-* db-*
+    HostName %h.internal.olist-shop.com.br
+    User deploy
+    ProxyCommand ssh -A -W %h:%p bastion

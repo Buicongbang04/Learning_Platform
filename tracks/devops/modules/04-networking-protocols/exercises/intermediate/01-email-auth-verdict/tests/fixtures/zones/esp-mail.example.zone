@@ -1,0 +1,8 @@
+$ORIGIN esp-mail.example.
+$TTL 3600
+@               IN SOA  ns1 ops 2026100101 3600 600 1209600 300
+@               IN NS   ns1
+ns1             IN A    198.51.100.2
+@               IN TXT  "v=spf1 include:_spf.esp-mail.example -all"
+_spf            IN TXT  "v=spf1 ip4:198.51.100.0/24 ip4:192.0.2.128/25 ~all"
+_dmarc          IN TXT  "v=DMARC1; p=none"

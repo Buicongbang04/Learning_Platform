@@ -1,0 +1,16 @@
+*   Trying 203.0.113.80:80...
+* Connected to legacy-catalog.olist-shop.com.br (203.0.113.80) port 80
+> GET /feed/products.xml HTTP/1.1
+> Host: legacy-catalog.olist-shop.com.br
+> User-Agent: curl/8.5.0
+> Accept: */*
+>
+* HTTP 1.0, assume close after body
+< HTTP/1.0 200 OK
+< Date: Sun, 01 Nov 2026 09:00:00 GMT
+< Expires: Sun, 01 Nov 2026 09:05:00 GMT
+< Content-Type: application/xml
+< Content-Length: 50211
+<
+{ [50211 bytes data]
+* Closing connection

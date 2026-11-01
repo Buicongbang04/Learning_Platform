@@ -1,0 +1,14 @@
+Return-Path: <bounce-77@bounces.olist-shop.com.br>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=bounces.olist-shop.com.br;
+	dkim=pass header.d=olist-shop.com.br header.s=s2026
+Received: from o10.esp-mail.example (o10.esp-mail.example [198.51.100.10])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ0k8Cd7z9;
+	Sun, 01 Nov 2026 15:00:00 +0000
+From: Olist Pay <cobranca@pay.olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Boleto disponivel
+Date: Sun, 01 Nov 2026 14:59:58 +0000
+Message-ID: <boleto-9@pay.olist-shop.com.br>
+
+Boleto.

@@ -1,0 +1,33 @@
+Host bastion
+    HostName bastion.olist-shop.com.br
+    Port 2222
+    User ops
+
+Host db-*
+    User dba
+
+Host app-* db-*
+    HostName %h.internal.olist-shop.com.br
+    User deploy
+    ProxyJump bastion
+
+Host bastion app-* db-*
+    IdentityFile ~/.ssh/olist_ops_ed25519
+    IdentitiesOnly yes
+
+Host github.com
+    User git
+    IdentityFile ~/.ssh/github_ed25519
+    IdentitiesOnly yes
+
+Host *
+    ForwardAgent no
+    ForwardX11 no
+    PasswordAuthentication no
+    StrictHostKeyChecking accept-new
+    HashKnownHosts yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%C
+    ControlPersist 10m

@@ -1,0 +1,14 @@
+Return-Path: <x9@cheap-deals.example>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=cheap-deals.example;
+	dkim=none
+Received: from mail.cheap-deals.example (mail.cheap-deals.example [192.0.2.66])
+	by mx.cliente-mail.example (Postfix) with ESMTP id 4XyZ4q2Lm1z4;
+	Sun, 01 Nov 2026 19:00:00 +0000
+From: Olist Shop Marketing <ofertas@mkt.olist-shop.com.br>
+To: maria@cliente-mail.example
+Subject: Cupom exclusivo
+Date: Sun, 01 Nov 2026 18:59:58 +0000
+Message-ID: <c1@cheap-deals.example>
+
+Cupom.

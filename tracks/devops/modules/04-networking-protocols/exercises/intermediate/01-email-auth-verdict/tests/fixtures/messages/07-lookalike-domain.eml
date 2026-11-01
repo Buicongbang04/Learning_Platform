@@ -1,0 +1,16 @@
+Return-Path: <bounce@olist-shop-br.com>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=olist-shop-br.com;
+	dkim=pass header.d=olist-shop-br.com header.s=k1
+Received: from mta.olist-shop-br.com (mta.olist-shop-br.com [192.0.2.99])
+	by mx.cliente-mail.example (Postfix) with ESMTPS id 4XyZ7g5Xy4z6;
+	Sun, 01 Nov 2026 12:00:00 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=olist-shop-br.com; s=k1;
+	h=from:to:subject:date; bh=c2VjdXJpdHk=; b=bG9va2FsaWtl
+From: "Olist Shop Seguranca" <seguranca@olist-shop-br.com>
+To: maria@cliente-mail.example
+Subject: Confirme sua conta em 24h
+Date: Sun, 01 Nov 2026 11:59:59 +0000
+Message-ID: <k1-0001@olist-shop-br.com>
+
+Confirme aqui.

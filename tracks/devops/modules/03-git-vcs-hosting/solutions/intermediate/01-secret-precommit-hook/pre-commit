@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+set -f
+
+PRIVATE_KEY_RE='-----BEGIN ((RSA|DSA|EC|OPENSSH|ENCRYPTED|PGP) )?PRIVATE KEY( BLOCK)?-----'
+POSTGRES_RE='postgres(ql)?://[^:/@[:space:]]+:([^@/[:space:]]+)@'
+AWS_RE='^(AKIA|ASIA)[A-Z0-9]{16}$'
+
+declare -A findings=()
+order=()
+
+report() {
+  local key="secret: $1: $2"
+  if [[ -z ${findings[$key]:-} ]]; then
+    findings[$key]=1
+    order+=("$key")
+  fi
+}
+
+allowlist=()
+load_allowlist() {
+  local source entry
+  if source=$(git show :.secrets-allowlist 2>/dev/null); then
+    :
+  elif [[ -f .secrets-allowlist ]]; then
+    source=$(<.secrets-allowlist)
+  else
+    return 0
+  fi
+  while IFS= read -r entry; do
+    [[ -z ${entry//[[:space:]]/} || $entry == \#* ]] && continue
+    allowlist+=("$entry")
+  done <<<"$source"
+}
+
+allowed() {
+  local line=$1 entry
+  [[ $line == *"pragma: allowlist secret"* ]] && return 0
+  for entry in "${allowlist[@]}"; do
+    [[ $line == *"$entry"* ]] && return 0
+  done
+  return 1
+}
+
+scan_line() {
+  local path=$1 line=$2 token rest password
+  for token in ${line//[^A-Z0-9]/ }; do
+    if [[ $token =~ $AWS_RE && $token != *EXAMPLE ]]; then
+      report aws-access-key-id "$path"
+    fi
+  done
+  if [[ $line =~ $PRIVATE_KEY_RE ]]; then
+    report private-key "$path"
+  fi
+  rest=$line
+  while [[ $rest =~ $POSTGRES_RE ]]; do
+    password=${BASH_REMATCH[2]}
+    if [[ $password != \$* && $password != \<* ]]; then
+      report postgres-password-url "$path"
+    fi
+    rest=${rest#*"${BASH_REMATCH[0]}"}
+  done
+}
+
+cd "$(git rev-parse --show-toplevel)"
+
+if against=$(git rev-parse --verify --quiet HEAD); then
+  :
+else
+  against=$(git hash-object -t tree /dev/null)
+fi
+
+files=()
+while IFS= read -r -d '' path; do
+  files+=("$path")
+done < <(git diff --cached --name-only -z --diff-filter=ACMR "$against" --)
+
+[[ ${#files[@]} -eq 0 ]] && exit 0
+
+for path in "${files[@]}"; do
+  name=${path##*/}
+  case $name in
+    .env.example | .env.sample | .env.template) ;;
+    .env | .env.*) report dotenv-file "$path" ;;
+  esac
+done
+
+load_allowlist
+
+pathspecs=()
+for path in "${files[@]}"; do
+  pathspecs+=(":(literal)$path")
+done
+
+while IFS= read -r -d '' path && IFS= read -r line; do
+  allowed "$line" || scan_line "$path" "$line"
+done < <(git grep --cached -I -z --no-color -F -e AKIA -e ASIA -e 'PRIVATE KEY' -e postgres -- "${pathspecs[@]}" || true)
+
+[[ ${#order[@]} -eq 0 ]] && exit 0
+
+printf '%s\n' "${order[@]}" >&2
+cat >&2 <<'MSG'
+Commit bị chặn vì có thể chứa secret. Nếu đây là secret thật: đừng commit, xoay (rotate) nó ngay nếu đã lộ ở đâu khác.
+Nếu là dữ liệu giả: thêm "pragma: allowlist secret" vào dòng đó hoặc thêm chuỗi vào .secrets-allowlist.
+MSG
+exit 1

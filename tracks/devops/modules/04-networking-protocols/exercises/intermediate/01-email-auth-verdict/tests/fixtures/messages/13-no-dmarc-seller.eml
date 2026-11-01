@@ -1,0 +1,14 @@
+Return-Path: <contato@small-seller.com.br>
+Authentication-Results: mx.cliente-mail.example;
+	spf=pass smtp.mailfrom=small-seller.com.br;
+	dkim=none
+Received: from small-seller.com.br (small-seller.com.br [203.0.113.200])
+	by mx.cliente-mail.example (Postfix) with ESMTP id 4XyZ3p1Jk0z3;
+	Sun, 01 Nov 2026 18:00:00 +0000
+From: Small Seller <contato@small-seller.com.br>
+To: maria@cliente-mail.example
+Subject: Seu pedido foi enviado
+Date: Sun, 01 Nov 2026 17:59:58 +0000
+Message-ID: <ship-1@small-seller.com.br>
+
+Enviado.

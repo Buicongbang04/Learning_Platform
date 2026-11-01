@@ -1,0 +1,19 @@
+
+; <<>> DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu <<>> @10.20.0.53 www.example.com A
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: REFUSED, id: 33917
+;; flags: qr rd; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; QUESTION SECTION:
+;www.example.com.		IN	A
+
+;; Query time: 1 msec
+;; SERVER: 10.20.0.53#53(10.20.0.53) (UDP)
+;; WHEN: Sun Nov 01 09:16:03 UTC 2026
+;; MSG SIZE  rcvd: 44
+
