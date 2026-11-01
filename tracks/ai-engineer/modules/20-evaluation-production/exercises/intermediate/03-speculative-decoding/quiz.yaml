@@ -1,0 +1,64 @@
+questions:
+  - id: copy-speedup
+    kind: data
+    type: single
+    prompt: Ở tác vụ chép nguyên văn khoản 2, prompt lookup với k = 8 nhanh hơn greedy bao nhiêu lần trên 4 điều luật?
+    options:
+      - { id: a, text: "Không nhanh hơn, khoảng 0.9 tới 1.1 lần" }
+      - { id: b, text: "Khoảng 1.2 tới 1.6 lần ở mọi điều luật" }
+      - { id: c, text: "Khoảng 2.4 tới 3.5 lần tuỳ điều luật" }
+      - { id: d, text: "Khoảng 8 tới 10 lần ở mọi điều luật" }
+  - id: free-k
+    kind: data
+    type: single
+    prompt: Ở tác vụ giải thích tự do, tăng k từ 4 lên 8 đổi tỉ lệ nhận và tăng tốc thế nào?
+    options:
+      - { id: a, text: "Tỉ lệ nhận tăng lên ở mọi điều luật, và tăng tốc gần như gấp đôi" }
+      - { id: b, text: "Tỉ lệ nhận giảm ở mọi điều luật, tăng tốc gần như đứng yên" }
+      - { id: c, text: "Tỉ lệ nhận giữ nguyên, tăng tốc giảm xuống dưới 1" }
+      - { id: d, text: "Tỉ lệ nhận về 0, output không còn trùng greedy" }
+  - id: target-calls
+    kind: data
+    type: single
+    prompt: Ở tác vụ chép với k = 8, model chính được gọi bao nhiêu lần để sinh 128 token (greedy cần 128 lần)?
+    options:
+      - { id: a, text: "Khoảng 16 tới 28 lần" }
+      - { id: b, text: "Khoảng 60 tới 85 lần" }
+      - { id: c, text: "Đúng 128 lần, chỉ có điều mỗi lần nhanh hơn" }
+      - { id: d, text: "Khoảng 2 tới 4 lần" }
+  - id: same-output
+    kind: data
+    type: single
+    prompt: Trong 16 lần chạy speculative (8 tác vụ, k = 4 và 8) trên CPU float32, output trùng greedy bao nhiêu lần?
+    options:
+      - { id: a, text: "16 / 16" }
+      - { id: b, text: "8 / 16, chỉ tác vụ chép" }
+      - { id: c, text: "0 / 16, luôn lệch vài token" }
+      - { id: d, text: "12 / 16, lệch ở k = 8" }
+  - id: why-free-not-slower
+    kind: knowledge
+    type: single
+    prompt: Tác vụ tự do chỉ nhận 10% tới 42% token đoán mà vẫn không chậm hơn greedy trên Qwen 0.5B CPU. Lý do chính?
+    options:
+      - { id: a, text: "Prompt lookup chạy trên GPU nên không tốn chút thời gian nào của CPU khi đoán" }
+      - { id: b, text: "Forward vài token chỉ đắt hơn chút so với forward một token, và đoán gần như miễn phí" }
+      - { id: c, text: "Token đoán sai vẫn được giữ lại trong output nên model đỡ phải tự sinh lại chúng ở các bước sau" }
+      - { id: d, text: "Greedy trong notebook không dùng KV cache nên vốn đã chậm sẵn từ đầu" }
+  - id: sampling-rule
+    kind: knowledge
+    type: single
+    prompt: Với sampling (không phải greedy), quy tắc nào giữ đúng phân phối của model chính?
+    options:
+      - { id: a, text: "Nhận token đoán khi nó nằm trong top-k của model chính, còn lại bỏ qua hết" }
+      - { id: b, text: "Nhận với xác suất min(1, p/q), từ chối thì lấy mẫu lại từ phần dư max(0, p - q)" }
+      - { id: c, text: "Luôn nhận token đoán, rồi chuẩn hoá lại xác suất của cả câu ở bước cuối cùng" }
+      - { id: d, text: "Nhận khi p lớn hơn q, từ chối thì lấy argmax của model nháp tại đúng vị trí đó" }
+  - id: when-help
+    kind: knowledge
+    type: multi
+    prompt: Những điều kiện nào làm speculative decoding có lợi hơn?
+    options:
+      - { id: a, text: "Output chép nhiều từ input, như trích dẫn hay sửa code" }
+      - { id: b, text: "Forward k+1 token tốn gần bằng forward 1 token (decode bị chặn bởi băng thông)" }
+      - { id: c, text: "Model nháp tốn gần bằng model chính" }
+      - { id: d, text: "GPU đã bận tính với batch rất lớn" }

@@ -50,8 +50,10 @@ Trong `starter/tracing.py` (`redact` đã có sẵn):
   số điện thoại thô.
 - Lỗi được ghi vào span và vẫn ném ra; span bước chạy xong không bị đánh lỗi.
 - Với `sample_ratio=0.3` trên 400 request: mỗi trace giữ đủ cả ba span hoặc không span nào, tỉ lệ trace giữ lại trong
-  [0.22, 0.38]; ratio 0 không ghi gì.
-- Tệp JSON Lines đúng khoá, id hex đúng độ dài, `parent_span_id` khớp span gốc cùng trace.
+  [0.22, 0.38]; ratio 0 không ghi gì. Span có cha đến từ tiến trình khác (header `traceparent`) đi theo quyết định giữ hay
+  bỏ của cha đó, bất kể `sample_ratio`.
+- Tệp JSON Lines đúng khoá, id hex đúng độ dài (giữ số 0 đứng đầu), `parent_span_id` khớp span gốc cùng trace, mỗi lần
+  `export` nối thêm vào tệp.
 
 ## Gợi ý
 

@@ -189,8 +189,11 @@ def test_overlong_draft_is_clipped_and_eos_inside_draft_stops(nb):
     def chatty(context, m):
         return reference_greedy(ToyLM(5), context, m + 5)
 
-    out, st = nb.speculative_generate(ToyLM(5), chatty, PROMPT, 4, 30, eos_id=eos)
+    target = ToyLM(5)
+    out, st = nb.speculative_generate(target, chatty, PROMPT, 4, 30, eos_id=eos)
     assert out == full[:stop], "dừng ngay khi nhận eos, kể cả eos nằm trong khối đoán"
+    assert max(target.extend_sizes) <= 5, "mỗi lượt kiểm tối đa 1 + k token, dù hàm đoán trả dài hơn"
+    assert st["proposed"] == st["accepted"], "chỉ đếm token đoán thực sự gửi kiểm"
     out, _ = nb.speculative_generate(ToyLM(5), chatty, PROMPT, 4, 7)
     assert out == full[:7], "không vượt max_new_tokens dù hàm đoán trả dài hơn"
 

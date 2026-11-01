@@ -1,0 +1,73 @@
+questions:
+  - id: default-interrupt
+    kind: data
+    type: single
+    prompt: Với cấu hình mặc định của llama_cpp.server, ở 2 request đồng thời, kết quả của 16 request ra sao?
+    options:
+      - { id: a, text: "Cả 16 thành công, TTFT gấp đôi so với 1 request" }
+      - { id: b, text: "Server trả HTTP 503 cho mọi request thứ hai" }
+      - { id: c, text: "Phần lớn kết thúc với HTTP 200 nhưng không có token nào" }
+      - { id: d, text: "Server treo hẳn, mọi request đều hết thời gian chờ phía client" }
+  - id: ollama-throughput
+    kind: data
+    type: single
+    prompt: Thông lượng (request/giây) của Ollama đổi thế nào khi tăng số request đồng thời 1, 2, 4, 8?
+    options:
+      - { id: a, text: "Tăng gần tuyến tính, mức 8 gấp khoảng 8 lần mức 1" }
+      - { id: b, text: "Tăng rõ từ 1 lên 2, sau đó gần như phẳng" }
+      - { id: c, text: "Giảm dần ngay từ mức 2 vì GPU quá tải" }
+      - { id: d, text: "Không đổi ở mọi mức, đúng bằng mức 1" }
+  - id: ollama-ttft
+    kind: data
+    type: single
+    prompt: Với Ollama, từ 1 lên 8 request đồng thời, TTFT p50 và inter-token p50 đổi thế nào?
+    options:
+      - { id: a, text: "TTFT tăng nhiều lần, inter-token không tăng" }
+      - { id: b, text: "Cả hai tăng khoảng 8 lần, đúng như nhau ở mọi mức" }
+      - { id: c, text: "TTFT không đổi, inter-token tăng nhiều lần" }
+      - { id: d, text: "Cả hai giảm vì GPU chạy nhanh hơn khi bận" }
+  - id: open-loop-queue
+    kind: data
+    type: single
+    prompt: Open loop trên llama.cpp ở tốc độ đến 0.3, 0.6, 0.8 request/giây. Thời gian phục vụ và hàng đợi p50 đổi thế nào?
+    options:
+      - { id: a, text: "Phục vụ tăng gấp ba theo tải, còn hàng đợi gần như bằng 0 ở mọi mức tải" }
+      - { id: b, text: "Phục vụ gần như đứng yên, hàng đợi tăng từ gần 0 lên cỡ 1 tới 2 giây" }
+      - { id: c, text: "Cả hai giảm khi tải tăng vì cache ấm hơn" }
+      - { id: d, text: "Phục vụ đứng yên, hàng đợi đứng yên, chỉ có lỗi tăng" }
+  - id: prefix-hit
+    kind: data
+    type: single
+    prompt: Không bật --cache, lời gọi thứ hai cùng prefix khoảng 1 740 token (câu hỏi khác) nhanh hơn lời gọi đầu bao nhiêu lần?
+    options:
+      - { id: a, text: "Khoảng 1.5 lần" }
+      - { id: b, text: "Khoảng 5 lần" }
+      - { id: c, text: "Hơn 50 lần" }
+      - { id: d, text: "Không nhanh hơn" }
+  - id: prefix-alternate
+    kind: data
+    type: single
+    prompt: Xen kẽ hai tài liệu A, B, A với cùng server. Bật --cache ram đổi thời gian mỗi lời gọi thế nào so với không bật?
+    options:
+      - { id: a, text: "Không bật: lần nào cũng như lần đầu; bật: dưới 1 giây, chậm hơn trúng cùng slot" }
+      - { id: b, text: "Không bật: đã trúng cache; bật: chậm đi vì phải ghi trạng thái ra RAM mỗi lần" }
+      - { id: c, text: "Cả hai đều như lần đầu, vì đổi tài liệu xoá mọi cache của server" }
+      - { id: d, text: "Cả hai đều dưới 0.2 giây, cache của server không phụ thuộc thứ tự" }
+  - id: closed-loop
+    kind: knowledge
+    type: single
+    prompt: Vì sao closed loop không đủ để báo độ trễ người dùng thật gặp khi tải cao?
+    options:
+      - { id: a, text: "Vì closed loop không đo được TTFT, chỉ đo được E2E" }
+      - { id: b, text: "Khi server chậm, nó tự gửi chậm lại nên hàng đợi bị che" }
+      - { id: c, text: "Vì closed loop luôn gửi nhiều request hơn open loop" }
+      - { id: d, text: "Vì closed loop không dùng được với stream SSE" }
+  - id: success-column
+    kind: knowledge
+    type: multi
+    prompt: Những kiểm tra nào nên làm trước khi tin bảng thông lượng của một load test?
+    options:
+      - { id: a, text: "Số request thành công thật sự có token ở mỗi mức tải" }
+      - { id: b, text: "Server đã được làm nóng, model đã nạp trước lượt đo" }
+      - { id: c, text: "Phân phối độ dài prompt và output giống lưu lượng thật" }
+      - { id: d, text: "Chỉ cần HTTP status 200 cho mọi request là đủ" }

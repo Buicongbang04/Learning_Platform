@@ -521,7 +521,8 @@ Module 21 mục 4 định nghĩa TTFT, TPOT, E2E. Thêm vào đó:
 - **Phân vị cao cần nhiều mẫu.** p99 trên 40 request là gần như request chậm nhất: một mẫu quyết định cả con số. Đặt
   khoảng tin cậy bằng bootstrap: lấy mẫu lại có hoàn lại, tính phân vị mỗi lần, lấy phân vị 2.5 và 97.5 của các giá trị đó.
 
-Ví dụ trên 40 request open loop của llama.cpp server (rate 0.8 request/giây, dữ liệu bài Intermediate 02), E2E: p50
+Ví dụ trên một lượt đo thử 40 request open loop của llama.cpp server (rate 0.8 request/giây, cùng thiết lập bài
+Intermediate 02, notebook dùng 30 request mỗi mức), E2E: p50
 **4.08** s [2.91, 6.45], p95 **9.44** s [7.71, 9.97], p99 **9.78** s [8.94, 9.97]. Cận trên của p95 và p99 bằng nhau và bằng
 request chậm nhất: 40 mẫu không đủ để nói gì về p99. Bootstrap phân vị cũng chệch ở đuôi với mẫu nhỏ; muốn biết p99 thì
 cần cỡ vài nghìn request.
@@ -529,8 +530,8 @@ cần cỡ vài nghìn request.
 ### Phân vị từ histogram
 
 Hệ thống metric (Prometheus, OpenTelemetry metrics) không lưu từng request mà lưu **histogram** với các bucket cố định, rồi
-ước lượng phân vị bằng nội suy tuyến tính trong bucket chứa nó (`histogram_quantile`). Trên 120 request của bài
-Intermediate 02 với bucket 0.25, 0.5, 1, 2.5, 5, 10 giây: p50 ước lượng 2.24 s (thật 2.17), p95 8.42 s (thật **7.71**), p99
+ước lượng phân vị bằng nội suy tuyến tính trong bucket chứa nó (`histogram_quantile`). Trên 120 request của lượt đo thử
+đó (ba mức tải) với bucket 0.25, 0.5, 1, 2.5, 5, 10 giây: p50 ước lượng 2.24 s (thật 2.17), p95 8.42 s (thật **7.71**), p99
 9.68 s (thật 9.47). Sai số do bucket rộng ở đuôi: chọn ranh giới bucket **quanh ngưỡng SLO** (nếu SLO là 2 s thì cần
 bucket 1.5, 2, 2.5), không chia đều.
 

@@ -140,3 +140,41 @@ def test_jsonl_exporter(tr, tmp_path):
     assert llm["attributes"]["gen_ai.usage.output_tokens"] == 80
     ret = next(r for r in rows if r["name"] == "rag.retrieve")
     assert ret["attributes"]["rag.doc_ids"] == ["100/2019/nđ-cp+21", "100/2019/nđ-cp+74"]
+
+
+def test_sampling_follows_remote_parent(tr):
+    from opentelemetry import trace
+    from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
+
+    def child_recorded(ratio, sampled):
+        exporter = InMemorySpanExporter()
+        tracer = tr.make_provider(exporter, sample_ratio=ratio).get_tracer("test")
+        parent = SpanContext(trace_id=0xF0F0F0F0F0F0F0F0FFFFFFFFFFFFFFFF, span_id=0x1234, is_remote=True,
+                             trace_flags=TraceFlags(TraceFlags.SAMPLED if sampled else TraceFlags.DEFAULT))
+        ctx = trace.set_span_in_context(NonRecordingSpan(parent))
+        with tracer.start_as_current_span("rag.request", context=ctx):
+            pass
+        return len(exporter.get_finished_spans()) == 1
+
+    assert child_recorded(0.0, sampled=True), "cha ở tiến trình khác (traceparent) đã chọn giữ thì giữ"
+    assert not child_recorded(1.0, sampled=False), "cha ở tiến trình khác đã chọn bỏ thì bỏ"
+
+
+def test_jsonl_ids_keep_leading_zeros(tr, tmp_path):
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import ReadableSpan
+    from opentelemetry.trace import SpanContext, TraceFlags
+
+    ctx = SpanContext(trace_id=0x1, span_id=0x2, is_remote=False, trace_flags=TraceFlags(TraceFlags.SAMPLED))
+    parent = SpanContext(trace_id=0x1, span_id=0x3, is_remote=False)
+    span = ReadableSpan(name="llm.chat", context=ctx, parent=parent, resource=Resource.create({"service.name": "s"}),
+                        attributes={"gen_ai.usage.input_tokens": 5}, start_time=1_000, end_time=3_001_000)
+    path = tmp_path / "one.jsonl"
+    exporter = tr.JsonlSpanExporter(path)
+    exporter.export([span])
+    exporter.export([span])
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 2, "mỗi lần export nối thêm, không ghi đè"
+    r = rows[0]
+    assert r["trace_id"] == "0" * 31 + "1" and r["span_id"] == "0" * 15 + "2" and r["parent_span_id"] == "0" * 15 + "3"
+    assert r["duration_ms"] == pytest.approx(3.0) and r["service"] == "s"

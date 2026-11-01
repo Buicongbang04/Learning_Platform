@@ -76,8 +76,8 @@ def test_p_yes(nb):
 
 def test_ece_hand_example(nb):
     probs = [0.95, 0.95, 0.95, 0.95, 0.15, 0.15, 1.0, None]  # 1.0 thuộc khoảng cuối
-    truth = [True, True, True, False, False, True, True, True]
-    expected = (5 / 7) * abs(0.96 - 0.8) + (2 / 7) * abs(0.15 - 0.5)
+    truth = [True, True, True, False, False, True, False, True]
+    expected = (5 / 7) * abs(0.96 - 0.6) + (2 / 7) * abs(0.15 - 0.5)
     assert nb.expected_calibration_error(probs, truth) == pytest.approx(expected)
     assert nb.expected_calibration_error([0.25, 0.25, 0.75, 0.75], [False, True, True, True], n_bins=2) \
         == pytest.approx(0.5 * 0.25 + 0.5 * 0.25)

@@ -216,14 +216,16 @@ def test_summarize(nb):
         rec(nb, 1.0, 1.5, [2.0, 2.1]),
         rec(nb, 2.0, 2.0, [], ok=False),
         rec(nb, 3.0, 4.0, [5.0, 5.2, 5.3, 5.7]),
+        rec(nb, 3.5, 3.5, [3.6, 5.6], ok=False),
     ]
     s = nb.summarize(records)
-    assert (s["n"], s["ok"], s["errors"]) == (4, 3, 1)
+    assert (s["n"], s["ok"], s["errors"]) == (5, 3, 2), "stream đứt giữa chừng là lỗi dù đã có token"
     assert s["duration_s"] == pytest.approx(5.7)
     assert s["rps"] == pytest.approx(3 / 5.7) and s["tok_s"] == pytest.approx(9 / 5.7)
     assert s["ttft_p50"] == pytest.approx(1.0) and s["ttft_p95"] == pytest.approx(np.percentile([0.5, 1.0, 2.0], 95))
     assert s["e2e_p50"] == pytest.approx(1.1)
     assert s["itl_p50"] == pytest.approx(np.percentile([0.1, 0.2, 0.1, 0.2, 0.1, 0.4], 50))
+    assert s["itl_p95"] == pytest.approx(np.percentile([0.1, 0.2, 0.1, 0.2, 0.1, 0.4], 95)), "gộp mọi khoảng giữa hai token"
     assert s["queue_p95"] == pytest.approx(np.percentile([0.0, 0.5, 1.0], 95))
     assert s["service_p50"] == pytest.approx(np.percentile([0.8, 0.6, 1.7], 50))
     assert nb.summarize(records, duration_s=10.0)["rps"] == pytest.approx(0.3)
