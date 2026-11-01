@@ -1066,7 +1066,8 @@ def sandbox_ready() -> str | None:
 
 
 def _clean_env(env: dict[str, str], home: Path) -> dict[str, str]:
-    base = {"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": str(home), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
+    base = {"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": str(home), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
+            "PYTHONNOUSERSITE": "1"}
     base.update({k: v for k, v in env.items() if not _UNSAFE_ENV.match(k)})
     return base
 
@@ -2252,6 +2253,18 @@ _ANSIBLE_CONTROL = ("id_ed25519", "id_ed25519.pub", "ssh_config", "known_hosts",
                     "callbacks/devops_ex_events.py", "ansible.cfg", "lab-conn.yml", "lab.ini")
 _ANSIBLE_CONTROLLER_LOOKUP = re.compile(
     r"\b(?:lookup|query|q)\s*\(\s*[\"'](?:ansible\.builtin\.)?(pipe|lines)[\"']")
+_ANSIBLE_CODE_REFS = ("roles", "dependencies", "include_role", "import_role", "include_tasks", "import_tasks", "import_playbook")
+_ANSIBLE_VARS_REFS = ("vars_files", "include_vars")
+_ANSIBLE_REF_FIELDS = ("role", "name", "file", "dir", "tasks_from", "vars_from", "defaults_from", "handlers_from", "_raw_params")
+_ANSIBLE_DATA_DIRS = ("group_vars", "host_vars", "vars", "defaults", "files", "templates")
+_ANSIBLE_REF_LINE = re.compile(
+    r"(?<![\w.-])(?:ansible\.(?:builtin|legacy)\.)?"
+    rf"({'|'.join((*_ANSIBLE_CODE_REFS, *_ANSIBLE_VARS_REFS))}|role|tasks_from|vars_from|defaults_from|handlers_from)"
+    r"\b\s*[\"']?\s*[:=](.*)$", re.M)
+_ANSIBLE_ROLES_PATH = re.compile(r"(?<![\w.-])roles_path\b\s*[\"']?\s*[:=]", re.I)
+_ANSIBLE_PARENT = re.compile(r"(?<![^\s\"'\[{(,=:/\\])\.\.(?=[\s\"'\]}),/\\]|$)", re.M)
+_ANSIBLE_UNSAFE_REF = re.compile(r"\{\{|\{%|\{#|\$|\\|\.\.|(?:^|[\s\[{,=:\"'])[/~*&!]")
+_ANSIBLE_VAULT_HEADER = "$ANSIBLE_VAULT"
 _ANSIBLE_CALLBACK = '''
 import json
 import os
@@ -2400,15 +2413,111 @@ while True:
         view = view[os.write(1, view):]
 '''
 
+class _AnsibleTagged:
+    def __init__(self, tag: str, value: str) -> None:
+        self.tag, self.value = tag, value
+
+    def __repr__(self) -> str:
+        return f"{self.tag} {self.value[:40]!r}"
+
+
+def _ansible_yaml_documents(text: str) -> list:
+    import yaml
+
+    class Loader(yaml.SafeLoader):
+        pass
+
+    def tagged(loader, suffix, node):
+        if isinstance(node, yaml.MappingNode):
+            return loader.construct_mapping(node, deep=True)
+        if isinstance(node, yaml.SequenceNode):
+            return loader.construct_sequence(node, deep=True)
+        return _AnsibleTagged(f"!{suffix}", str(loader.construct_scalar(node)))
+
+    Loader.add_multi_constructor("!", tagged)
+    try:
+        return list(yaml.load_all(text, Loader=Loader))
+    except (yaml.YAMLError, RecursionError, TypeError, ValueError):
+        return []
+
+
+def _ansible_ref_values(value) -> list:
+    if isinstance(value, dict):
+        return [item for field in _ANSIBLE_REF_FIELDS if field in value for item in _ansible_ref_values(value[field])]
+    if isinstance(value, list):
+        return [item for entry in value for item in _ansible_ref_values(entry)]
+    return [value] if isinstance(value, (str, _AnsibleTagged)) else []
+
+
+def _ansible_yaml_refs(documents: list) -> list[tuple[str, object]]:
+    found, seen, stack = [], set(), list(reversed(documents))
+    while stack:
+        node = stack.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if isinstance(node, dict):
+            for key, value in node.items():
+                name = re.sub(r"^ansible\.(?:builtin|legacy)\.", "", key) if isinstance(key, str) else None
+                if name in (*_ANSIBLE_CODE_REFS, *_ANSIBLE_VARS_REFS):
+                    found += [(name, item) for item in _ansible_ref_values(value)]
+                stack.append(value)
+        elif isinstance(node, list):
+            stack.extend(reversed(node))
+    return found
+
+
+def _ansible_ref_problem(key: str, value) -> str | None:
+    if isinstance(value, _AnsibleTagged):
+        return f"giá trị có tag `{value.tag}` (Ansible giải mã hay giữ nguyên nó lúc chạy, phép quét không thấy đường dẫn thật)"
+    if _ANSIBLE_UNSAFE_REF.search(value):
+        return "có `..`, đường dẫn tuyệt đối, `~`, `$`, `\\`, alias YAML hay giá trị template (`{{`, `{%`)"
+    if key in _ANSIBLE_CODE_REFS and set(re.split(r"[/\s=]+", value)) & set(_ANSIBLE_DATA_DIRS):
+        return f"trỏ vào thư mục dữ liệu ({', '.join(_ANSIBLE_DATA_DIRS)}), nơi tệp mã hoá vault được phép nằm"
+    return None
+
+
+def _ansible_reference_problems(rel: Path, text: str, where) -> list[str]:
+    outside = ("chỉ được trỏ tới role, playbook, task hay tệp biến nằm trong bài bằng đường dẫn tương đối viết thẳng (không "
+               "`..`, không đường dẫn tuyệt đối, `~`, `$`, alias YAML hay template): Ansible nạp plugin cạnh role và playbook "
+               "mà nó tải, nên tham chiếu ra ngoài bài là đường để code lạ chạy trong tiến trình ansible-playbook")
+    found = []
+    for match in _ANSIBLE_PARENT.finditer(text):
+        found.append(f"{where(match)}: `..` bị từ chối: tham chiếu {outside}")
+    for match in _ANSIBLE_ROLES_PATH.finditer(text):
+        found.append(f"{where(match)}: `roles_path` bị từ chối: lab tự đặt nơi tìm role. Để role trong `roles/` cạnh playbook")
+    if set(rel.parts[:-1]) & set(_ANSIBLE_ASSETS):
+        return found
+    for match in _ANSIBLE_REF_LINE.finditer(text):
+        if _ANSIBLE_UNSAFE_REF.search(match.group(2)):
+            found.append(f"{where(match)}: `{match.group(1)}:{match.group(2)}` bị từ chối: `{match.group(1)}` {outside}")
+    for key, value in _ansible_yaml_refs(_ansible_yaml_documents(text)):
+        reason = _ansible_ref_problem(key, value)
+        if reason:
+            found.append(f"{rel}: `{key}` trỏ tới {value!r} bị từ chối, {reason}: `{key}` {outside}")
+    if text.lstrip().startswith(_ANSIBLE_VAULT_HEADER) and not set(rel.parts[:-1]) & set(_ANSIBLE_DATA_DIRS):
+        found.append(f"{rel}: tệp mã hoá cả tệp bằng vault ({_ANSIBLE_VAULT_HEADER}) chỉ được nằm trong "
+                     f"{', '.join(_ANSIBLE_DATA_DIRS)}: phép quét không đọc được nội dung đã mã hoá, nên playbook hay task "
+                     "mã hoá có thể giấu tham chiếu ra ngoài bài. Chỉ mã hoá tệp biến")
+    return found
+
+
 def ansible_problems(root: Path) -> list[str]:
-    """Tín hiệu sớm cho người học, không phải ranh giới an toàn: tệp dưới `root` đặt cách kết nối (`connection`,
+    """Phần lớn là tín hiệu sớm cho người học, không phải ranh giới: tệp dưới `root` đặt cách kết nối (`connection`,
     `ansible_connection`, `ansible_host`, `ansible_port`, `ansible_ssh_*`, khoá `host_key_checking`...), `delegate_to`,
     `local_action`, `add_host`, nhắc `localhost`, địa chỉ trong 127.0.0.0/8 (kể cả dạng rút gọn `127.1`), `0.0.0.0`, `::1`,
     dùng escape `\\xNN`/`\\uNNNN`/`\\UNNNNNNNN` (giải mã ra tên khoá mà phép quét không thấy), lookup `pipe`/`lines`, hay thư
-    mục plugin chạy trên máy điều khiển (`*_plugins`, `collections`). Quét văn bản thô như `tofu_config_problems`, kể cả chú
-    thích và chuỗi. Địa chỉ local và escape được phép trong `templates/` và `files/` (nội dung ghi lên target). Ranh giới cho
-    code của bài chạy trên máy điều khiển là sandbox bwrap; thứ giữ kết nối trong lab là biến kết nối ghim bằng extra vars,
-    tệp điều khiển chỉ đọc, khoá host ghim và ProxyCommand (`AnsibleLab`)."""
+    mục plugin chạy trên máy điều khiển (`*_plugins`, `collections`, `library`, `module_utils`). Quét văn bản thô như
+    `tofu_config_problems`, kể cả chú thích và chuỗi. Địa chỉ local và escape được phép trong `templates/` và `files/` (nội
+    dung ghi lên target).
+
+    Riêng tham chiếu ra ngoài bài là lớp chặn chính, không chỉ tín hiệu: Ansible nạp plugin cạnh mọi role nó tải, và code của
+    bài ghi được vào `HOME` trong sandbox. Từ chối `..` dạng thành phần đường dẫn ở mọi tệp, `roles_path`, và tham chiếu
+    (`roles`, `dependencies`, `include_role`/`import_role`, `include_tasks`, `import_tasks`, `import_playbook`, `vars_files`,
+    `include_vars`) có đường dẫn tuyệt đối, `~`, `$`, `\\`, alias, anchor, tag hay template, xét cả trên phần còn lại của dòng
+    lẫn trên YAML đã giải mã; tham chiếu code vào thư mục dữ liệu; tệp vault cả tệp ngoài thư mục dữ liệu. Ranh giới cho code
+    của bài chạy trên máy điều khiển là sandbox bwrap; thứ giữ kết nối trong lab là biến kết nối ghim bằng extra vars, tệp
+    điều khiển chỉ đọc, khoá ghim, khoá host ghim và ProxyCommand (`AnsibleLab`)."""
     root = Path(root)
     found = []
     for path in sorted(root.rglob("*")):
@@ -2434,6 +2543,7 @@ def ansible_problems(root: Path) -> list[str]:
         for match in _ANSIBLE_CONTROLLER_LOOKUP.finditer(text):
             found.append(f"{where(match)}: lookup `{match.group(1)}` bị từ chối: nó chạy lệnh hay đọc tệp trên máy điều khiển. "
                          "Lấy dữ liệu trên target bằng task (`ansible.builtin.command` kèm `register`, `slurp`)")
+        found += _ansible_reference_problems(rel, text, where)
         if not set(rel.parts[:-1]) & set(_ANSIBLE_ASSETS):
             for match in _ANSIBLE_ESCAPE.finditer(text):
                 found.append(f"{where(match)}: escape `\\{match.group(1)}` bị từ chối ngoài `templates/` và `files/`: YAML "
@@ -2450,9 +2560,10 @@ def _ansible_files(control: Path, work: Path, ports: dict[str, int], host_keys: 
     """Tệp điều khiển lab sinh trong `control` (sandbox chỉ thấy chỉ đọc): ssh_config (khoá riêng, ghim khoá host, không agent,
     ProxyCommand chỉ cho `127.0.0.1:<cổng của lab>`), `allowed`, known_hosts chỉ có target của lab, `lab.ini` (chỉ tên máy),
     `lab-conn.yml` (extra vars ghim `ANSIBLE_PINNED_VARS`), ansible.cfg (callback ghi sự kiện, roles/collections rỗng). Thứ
-    Ansible cần ghi (`HOME`, tmp, control path) nằm trong `work`."""
+    Ansible cần ghi (`HOME`, tmp, control path) nằm trong `work`. ProxyCommand chạy python gốc bằng đường dẫn tuyệt đối với
+    `-I`, nên user site và biến `PYTHON*` trong `HOME` ghi được không chạm tới nó."""
     ssh_args = f"-F {control / 'ssh_config'} -o ControlMaster=auto -o ControlPersist=60s"
-    proxy = f'"{Path(sys.executable).resolve()}" "{control / "devops_ex_proxy.py"}" %h %p "{control / "allowed"}"'
+    proxy = f'"{Path(sys.executable).resolve()}" -I "{control / "devops_ex_proxy.py"}" %h %p "{control / "allowed"}"'
     ssh = "\n".join([
         "Host *",
         f"  ProxyCommand {proxy}",
@@ -2538,7 +2649,8 @@ def _ansible_files(control: Path, work: Path, ports: dict[str, int], host_keys: 
 
 def _ansible_env(control: Path, work: Path, events: Path) -> dict[str, str]:
     """Env dựng từ đầu cho lệnh `ansible-*` trong sandbox: `ANSIBLE_CONFIG` là tệp do lab sinh (không đọc `ansible.cfg` ở
-    thư mục hiện tại, `~/.ansible.cfg` hay `/etc/ansible`), `HOME` tạm, không mang `ANSIBLE_*` hay `SSH_AUTH_SOCK` của bạn."""
+    thư mục hiện tại, `~/.ansible.cfg` hay `/etc/ansible`), `HOME` tạm, `PYTHONNOUSERSITE=1`, không mang `ANSIBLE_*` hay
+    `SSH_AUTH_SOCK` của bạn."""
     return {
         "HOME": str(work / "home"),
         "ANSIBLE_CONFIG": str(control / "ansible.cfg"),
@@ -2546,6 +2658,7 @@ def _ansible_env(control: Path, work: Path, events: Path) -> dict[str, str]:
         "ANSIBLE_NOCOLOR": "1",
         "ANSIBLE_FORCE_COLOR": "0",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
         "DEVOPS_EX_EVENTS": str(events),
         "DEVOPS_EX_PINNED": json.dumps(sorted({*ANSIBLE_PINNED_VARS, *_ANSIBLE_LAB_VARS} - set(_ANSIBLE_UNREPORTED))),
     }
@@ -2610,15 +2723,17 @@ class AnsibleLab:
     Thư mục điều khiển `control` (khoá, ssh_config, known_hosts, `allowed`, script proxy, callback, ansible.cfg, `lab-conn.yml`,
     `lab.ini`, `ANSIBLE_HOME` và thư mục rỗng cho MỌI đường dẫn plugin, library, module_utils, roles, collections) chỉ được
     mount chỉ đọc vào sandbox và được ghi lại từ bộ nhớ trước mỗi lệnh. `root` (bài đã chép, tệp test ghi) cũng chỉ đọc trong
-    sandbox; chỉ `root/home` (`HOME`, local tmp), `root/cp` (control path) và `root/events` ghi được. Ranh giới cho code của bài
-    chạy trên máy điều khiển là sandbox (che `~/.ssh`, chỉ ba thư mục đó ghi được). Plugin cạnh playbook hay trong role
-    (`*_plugins/`, `library/`, `module_utils/`) không tắt được bằng cấu hình và (đã thấy với 2.21.5) che được cả
-    `ansible.builtin.ssh`, nên `stage()` từ chối chúng và bài không tạo được chúng lúc chạy vì `root` chỉ đọc. Kết nối được giữ trong lab bởi biến kết nối ghim bằng extra vars `-e
+    sandbox; chỉ `work/home` (`HOME`, local tmp), `work/cp` (control path) và `work/events` ghi được, với `work` là thư mục tạm
+    riêng, không nằm trong hay cạnh bài. Ranh giới cho code của bài chạy trên máy điều khiển là sandbox (che `~/.ssh`, chỉ ba
+    thư mục đó ghi được). Plugin cạnh playbook hay trong role (`*_plugins/`, `library/`, `module_utils/`) không tắt được bằng
+    cấu hình và (đã thấy với 2.21.5) che được cả `ansible.builtin.ssh`, nên `stage()` từ chối chúng và bài không tạo được chúng
+    trong `root` lúc chạy. Role có plugin mà code của bài ghi vào `HOME` thì không tới được: `stage()` từ chối tham chiếu có thể
+    trỏ ra ngoài bài và `../home` từ bài không tồn tại. Kết nối được giữ trong lab bởi biến kết nối ghim bằng extra vars `-e
     @<control>/lab-conn.yml` luôn ở cuối (`ANSIBLE_PINNED_VARS`, kể cả tên cũ `ansible_ssh_host/port/user`), tệp điều khiển
     chỉ đọc, `known_hosts` chỉ có khoá host của các container và ProxyCommand chỉ cho `127.0.0.1:<cổng của lab>`.
     `guard_problems` (callback, sự kiện `connect`) là lớp phát hiện: tệp sự kiện phải ghi được nên không phải ranh giới.
     `stage()` chép tệp của bài vào `root` và từ chối tệp bị `ansible_problems` bắt (tín hiệu sớm). Env dựng từ đầu.
-    `close()` xoá container, image, network (qua `DockerLab.close`) và hai thư mục tạm.
+    `close()` xoá container, image, network (qua `DockerLab.close`) và ba thư mục tạm.
     """
 
     def __init__(self, hosts=(), *, memory: str = ANSIBLE_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT,
@@ -2632,6 +2747,7 @@ class AnsibleLab:
         self.timeout = timeout
         self.docker = DockerLab()
         self.root: Path | None = None
+        self.work: Path | None = None
         self.control: Path | None = None
         self._control_files: dict[str, bytes] = {}
         self.image: str | None = None
@@ -2643,6 +2759,7 @@ class AnsibleLab:
     def __enter__(self) -> "AnsibleLab":
         self._entered = True
         self.root = Path(tempfile.mkdtemp(prefix="devops-ex-ansible-"))
+        self.work = Path(tempfile.mkdtemp(prefix="devops-ex-ansible-w-"))
         self.control = Path(tempfile.mkdtemp(prefix="devops-ex-ansible-ctl-"))
         try:
             self._open()
@@ -2664,7 +2781,7 @@ class AnsibleLab:
         if reason:
             pytest.skip(SANDBOX_SKIP.format(reason=reason))
         for name in _ANSIBLE_WORK_DIRS:
-            (self.root / name).mkdir(parents=True, exist_ok=True)
+            (self.work / name).mkdir(parents=True, exist_ok=True)
         host_keys: dict[str, str] = {}
         if self.hosts:
             Exercise.require_tool("docker")
@@ -2688,7 +2805,7 @@ class AnsibleLab:
                 host_keys[host] = self._wait_ssh(host)
                 self.ports[host] = self.docker.port(host, 22)
         self._control_files = {name: text.encode() for name, text in
-                               _ansible_files(self.control, self.root, self.ports, host_keys).items()}
+                               _ansible_files(self.control, self.work, self.ports, host_keys).items()}
         for name in ("id_ed25519", "id_ed25519.pub"):
             if (self.control / name).exists():
                 self._control_files[name] = (self.control / name).read_bytes()
@@ -2767,13 +2884,13 @@ class AnsibleLab:
         self._require_entered()
         if not args or not str(args[0]).startswith("ansible"):
             raise ValueError("AnsibleLab.run chỉ chạy lệnh ansible-*")
-        base = _ansible_env(self.control, self.root, events or self.root / "events" / "unused.jsonl")
+        base = _ansible_env(self.control, self.work, events or self.work / "events" / "unused.jsonl")
         clash = sorted(set(env or {}) & {*base, "PATH", "LANG", "LC_ALL"} | {k for k in env or {} if k.startswith("ANSIBLE_")})
         if clash:
             raise ValueError(f"env không được đặt {clash}: lab tự quản các biến này")
         try:
             self._write_control()
-            return run_sandboxed(list(args), writable=[self.root / name for name in _ANSIBLE_WORK_DIRS],
+            return run_sandboxed(list(args), writable=[self.work / name for name in _ANSIBLE_WORK_DIRS],
                                  readonly=[self.control, self.root], cwd=Path(cwd or self.root),
                                  env={**(env or {}), **base},
                                  timeout=timeout or self.timeout, input=input)
@@ -2786,7 +2903,7 @@ class AnsibleLab:
         chạy trên host không thuộc lab."""
         self._require_entered()
         self._runs += 1
-        events = self.root / "events" / f"run-{self._runs}.jsonl"
+        events = self.work / "events" / f"run-{self._runs}.jsonl"
         sources = [arg for item in inventory for arg in ("-i", str(item))]
         argv = ["ansible-playbook", *sources, "-i", str(self.inventory), playbook, *args, "-e", f"@{self.control / 'lab-conn.yml'}"]
         result = self.run(*argv, cwd=cwd, timeout=timeout, env=env, events=events)
@@ -2841,7 +2958,7 @@ class AnsibleLab:
         try:
             self.docker.close()
         finally:
-            for path in (self.root, self.control):
+            for path in (self.root, self.work, self.control):
                 if path is not None:
                     shutil.rmtree(path, ignore_errors=True)
 

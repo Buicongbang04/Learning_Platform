@@ -304,7 +304,7 @@ def test_sandbox_drops_dangerous_env(tmp_path):
 def test_unsafe_env_filter_unit():
     cleaned = testkit._clean_env({**UNSAFE_VARS, "KEEP_ME": "1"}, Path("/x"))
     assert not set(cleaned) & set(UNSAFE_VARS)
-    assert cleaned["KEEP_ME"] == "1"
+    assert cleaned["KEEP_ME"] == "1" and cleaned["PYTHONNOUSERSITE"] == "1"
 
 
 def test_probe_uses_same_flags_as_run(monkeypatch, tmp_path):
@@ -3135,6 +3135,38 @@ def test_ansible_problems_reject(tmp_path, rel, text, needle):
     assert problems and any(needle in p and rel in p for p in problems), problems
 
 
+@pytest.mark.parametrize(
+    "rel,text,needle",
+    [
+        ("site.yml", "- hosts: all\n  roles: [../home/rl/r]\n", "`..`"),
+        ("site.yml", "- hosts: all\n  roles:\n    - \"..\\/home/rl/r\"\n", "`..`"),
+        ("site.yml", "- hosts: all\n  roles:\n    - \".\\\n      ./home/rl/r\"\n", "'../home/rl/r'"),
+        ("site.yml", "- hosts: all\n  roles:\n    - \"{{ lookup('env', 'HOME') }}/rl/r\"\n", "`roles`"),
+        ("site.yml", "- {hosts: all, roles: [{role: '{{ r }}'}]}\n", "`roles`"),
+        ("site.yml", "- hosts: all\n  roles:\n    - role: /tmp/x/r\n", "/tmp/x/r"),
+        ("site.yml", "- hosts: all\n  roles:\n    - name: ~/rl/r\n", "~/rl/r"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - ansible.builtin.include_role:\n        name: $HOME/rl/r\n", "$HOME/rl/r"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - import_role:\n        name: r\n        tasks_from: /tmp/x\n", "/tmp/x"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - include_tasks: \"{{ x }}.yml\"\n", "`include_tasks`"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - ansible.legacy.import_tasks: ../x.yml\n", "`..`"),
+        ("site.yml", "- import_playbook: /tmp/p.yml\n", "/tmp/p.yml"),
+        ("site.yml", "- hosts: all\n  vars_files:\n    - /etc/x.yml\n", "/etc/x.yml"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - ansible.builtin.include_vars:\n        dir: \"{{ playbook_dir }}\"\n",
+         "`include_vars`"),
+        ("roles/r/meta/main.yml", "dependencies:\n  - role: \"{{ d }}\"\n", "`dependencies`"),
+        ("site.yml", "- hosts: all\n  vars:\n    r: &a \"{{ lookup('env', 'HOME') }}/rl/r\"\n  roles:\n    - *a\n", "`roles` trỏ tới"),
+        ("site.yml", "- hosts: all\n  roles:\n    - !vault |\n      $ANSIBLE_VAULT;1.1;AES256\n      3132\n", "!vault"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - include_tasks: group_vars/all/vault.yml\n", "thư mục dữ liệu"),
+        ("tasks/x.yml", "$ANSIBLE_VAULT;1.1;AES256\n6162\n", "$ANSIBLE_VAULT"),
+        ("site.yml", "# roles_path: /tmp\n- hosts: all\n", "roles_path"),
+    ],
+)
+def test_ansible_problems_reject_outside_references(tmp_path, rel, text, needle):
+    root = ansible_tree(tmp_path, {rel: text})
+    problems = testkit.ansible_problems(root)
+    assert problems and any(needle in p and rel in p for p in problems), problems
+
+
 @pytest.mark.parametrize("folder", ["callback_plugins", "roles/r/filter_plugins", "connection_plugins", "collections", "library",
                                     "roles/r/library", "module_utils", "roles/r/module_utils", "shell_plugins"])
 def test_ansible_problems_reject_plugin_dirs(tmp_path, folder):
@@ -3155,6 +3187,16 @@ def test_ansible_problems_accept_normal_project(tmp_path):
         "roles/r/templates/worker.env.j2": "REDIS_URL=redis://localhost:6379/0\nBIND=127.0.0.1\n",
         "roles/r/files/hosts": "127.0.0.1 localhost\n",
         "README.md": "Không dùng delegate_to hay connection local trong lab.\n",
+        "play.yml": (
+            "- import_playbook: site.yml\n- hosts: workers\n  vars_files:\n    - vars/common.yml\n  roles:\n"
+            "    - r\n    - role: r\n      vars:\n        dest: /opt/olist\n        level: \"{{ olist_level }}\"\n"
+            "  tasks:\n    - ansible.builtin.include_tasks: tasks/extra.yml\n"
+            "    - ansible.builtin.include_role:\n        name: r\n        tasks_from: config\n"
+            "    - ansible.builtin.include_vars:\n        file: vars/common.yml\n...\n"
+        ),
+        "roles/r/meta/main.yml": "dependencies: []\n",
+        "roles/r/templates/notes.j2": "role: {{ olist_role }}\n",
+        "inventory/group_vars/workers/vault.yml": "$ANSIBLE_VAULT;1.2;AES256;prod\n6162\n",
     })
     assert testkit.ansible_problems(root) == []
 
@@ -3242,7 +3284,7 @@ def test_ansible_files_pin_ssh(tmp_path):
     assert files["known_hosts"].splitlines() == ["[127.0.0.1]:41001 ssh-ed25519 AAAA1", "[127.0.0.1]:41002 ssh-ed25519 AAAA2"]
     assert files["lab.ini"].splitlines() == ["w1", "w2"]
     assert files["allowed"].splitlines() == ["127.0.0.1 41001", "127.0.0.1 41002"]
-    assert (f'ProxyCommand "{Path(sys.executable).resolve()}" "{control / "devops_ex_proxy.py"}" %h %p "{control / "allowed"}"'
+    assert (f'ProxyCommand "{Path(sys.executable).resolve()}" -I "{control / "devops_ex_proxy.py"}" %h %p "{control / "allowed"}"'
             in ssh)
     assert files["devops_ex_proxy.py"] == testkit._ANSIBLE_PROXY
     assert files["callbacks/devops_ex_events.py"] == testkit._ANSIBLE_CALLBACK
@@ -3280,6 +3322,7 @@ def test_ansible_env_from_scratch(tmp_path, monkeypatch):
     assert env["ANSIBLE_HOME"] == str(tmp_path / "ctl" / "ansible-home")
     assert "ANSIBLE_VAULT_PASSWORD_FILE" not in env and "SSH_AUTH_SOCK" not in env
     assert env["DEVOPS_EX_EVENTS"] == str(tmp_path / "work" / "events.jsonl")
+    assert env["PYTHONNOUSERSITE"] == "1"
     assert not {"ansible_user", "ansible_ssh_user"} & set(json.loads(env["DEVOPS_EX_PINNED"]))
     assert {"ansible_ssh_host", "ansible_ssh_port", "ansible_control_path"} <= set(json.loads(env["DEVOPS_EX_PINNED"]))
 
@@ -3296,7 +3339,7 @@ def ansible_lab():
     with testkit.AnsibleLab(["node-a", "node-b"]) as lab:
         yield lab
     assert testkit.docker_leftovers(lab.docker.id) == []
-    assert not lab.root.exists()
+    assert not lab.root.exists() and not lab.work.exists()
 
 
 @ANSIBLE_REQUIRED
@@ -3329,7 +3372,7 @@ def test_ansible_lab_ignores_user_config(ansible_lab):
     result = ansible_lab.run("ansible-config", "dump", "--only-changed", cwd=ansible_lab.root)
     assert result.returncode == 0, result.stderr
     assert str(ansible_lab.control / "ansible.cfg") in result.stdout
-    assert str(Path.home()) not in result.stdout.replace(str(ansible_lab.root), "").replace(str(ansible_lab.control), "")
+    assert str(Path.home()) not in result.stdout.replace(str(ansible_lab.work), "").replace(str(ansible_lab.control), "")
 
 
 @ANSIBLE_REQUIRED
@@ -3489,7 +3532,7 @@ def test_ansible_control_files_read_only_in_sandbox(ansible_lab):
     (project / "site.yml").write_text((project / "site.yml").read_text(encoding="utf-8").replace("MARKER", str(marker)),
                                       encoding="utf-8")
     assert ansible_lab.exec("node-a", "mkdir", "-p", str(ansible_lab.root)).returncode == 0
-    report = ansible_lab.root / "home" / "control-attack.json"
+    report = ansible_lab.work / "home" / "control-attack.json"
     env = {"DEVOPS_EX_CONTROL": str(ansible_lab.control), "DEVOPS_EX_REPORT": str(report)}
     runs = [ansible_lab.playbook("site.yml", inventory=[str(project / "inventory.py")], cwd=project, env=env) for _ in range(2)]
     assert json.loads(report.read_text(encoding="utf-8")) == {
@@ -3522,7 +3565,7 @@ def test_ansible_lab_restores_control_files(tmp_path):
         assert not any((lab.control / "plugins" / "connection_plugins").iterdir())
         assert not (lab.control / "plugins" / "extra").exists() and (lab.control / "ansible.cfg").is_file()
         assert not [p for p in lab.control.rglob(".write-*")]
-    assert not lab.control.exists() and not lab.root.exists()
+    assert not lab.control.exists() and not lab.root.exists() and not lab.work.exists()
 
 
 SHADOW_SSH = """from ansible.plugins.connection.local import Connection as Local
@@ -3565,8 +3608,8 @@ def test_ansible_plugin_shadowing_does_not_change_connection(ansible_lab):
     assert ansible_lab.exec("node-a", "mkdir", "-p", str(ansible_lab.root)).returncode == 0
     env = {"DEVOPS_EX_PROJECT": str(project), "DEVOPS_EX_SHADOW": SHADOW_SSH}
     runs = [ansible_lab.playbook("site.yml", inventory=[str(project / "inventory.py")], cwd=project, env=env) for _ in range(2)]
-    attempts = [json.loads(line) for line in (ansible_lab.root / "home" / "shadow.json").read_text(encoding="utf-8").splitlines()]
-    home_plugin = str(ansible_lab.root / "home" / ".ansible" / "plugins" / "connection" / "ssh.py")
+    attempts = [json.loads(line) for line in (ansible_lab.work / "home" / "shadow.json").read_text(encoding="utf-8").splitlines()]
+    home_plugin = str(ansible_lab.work / "home" / ".ansible" / "plugins" / "connection" / "ssh.py")
     assert attempts and all(a[home_plugin] == "written" for a in attempts), attempts
     assert all(v.startswith("OSError:30") or v.startswith("PermissionError") or v == "OSError:30"
                for a in attempts for k, v in a.items() if k != home_plugin), attempts
@@ -3578,6 +3621,116 @@ def test_ansible_plugin_shadowing_does_not_change_connection(ansible_lab):
         assert run.connections and all(c["allowed"] for c in run.connections)
     assert not marker.exists() and ansible_lab.read("node-a", str(marker)) == "chạy ở đây"
 
+
+
+HOME_ROLE_PLANT = """#!/usr/bin/env python3
+import json
+import os
+
+home = os.environ["HOME"]
+loads = os.path.join(home, "plugin-loads")
+files = {
+    "rl/r/tasks/main.yml": "- name: Lọc\\n  ansible.builtin.debug:\\n    msg: \\"{{ 'x' | devops_ex_f }}\\"\\n",
+    "rl/r/vars_plugins/v.py": (
+        f"with open({loads!r}, 'a') as handle:\\n    handle.write('vars\\\\n')\\n"
+        "from ansible.plugins.vars import BaseVarsPlugin\\n\\n\\nclass VarsModule(BaseVarsPlugin):\\n"
+        "    REQUIRES_ENABLED = False\\n\\n    def get_vars(self, loader, path, entities, cache=True):\\n        return {}\\n"
+    ),
+    "rl/r/filter_plugins/f.py": (
+        f"with open({loads!r}, 'a') as handle:\\n    handle.write('filter\\\\n')\\n\\n\\nclass FilterModule:\\n"
+        "    def filters(self):\\n        return {'devops_ex_f': lambda value: value}\\n"
+    ),
+}
+for rel, text in files.items():
+    path = os.path.join(home, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as handle:
+        handle.write(text)
+print(json.dumps({"all": {"hosts": ["node-a"]}, "_meta": {"hostvars": {}}}))
+"""
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_role_in_home_is_refused_and_never_loaded(ansible_lab, tmp_path):
+    home = ansible_lab.work / "home"
+    loads = home / "plugin-loads"
+    project = bypass_project(ansible_lab, "home-role", {
+        "inventory.py": HOME_ROLE_PLANT,
+        "site.yml": "- hosts: node-a\n  gather_facts: false\n  roles:\n    - demo2\n",
+        "roles/demo2/tasks/main.yml": "- name: Trong bài\n  ansible.builtin.debug:\n    msg: \"{{ inventory_hostname }}\"\n",
+    })
+    runs = [ansible_lab.playbook("site.yml", inventory=[str(project / "inventory.py")], cwd=project) for _ in range(2)]
+    assert (home / "rl" / "r" / "vars_plugins" / "v.py").is_file() and (home / "rl" / "r" / "filter_plugins" / "f.py").is_file()
+    for run in runs:
+        assert run.returncode == 0 and [e["host"] for e in run.tasks("Trong bài")] == ["node-a"], run.tail()
+    assert not loads.exists(), "Plugin trong HOME đã được nạp khi bài chỉ dùng role trong bài"
+    assert not (ansible_lab.root / "home").exists() and not home.is_relative_to(ansible_lab.root)
+
+    for name, roles in (("ref-parent", "[../home/rl/r]"), ("ref-template", "[\"{{ lookup('env', 'HOME') }}/rl/r\"]"),
+                        ("ref-absolute", f"[{home / 'rl' / 'r'}]")):
+        source = ansible_tree(tmp_path / name, {"site.yml": f"- hosts: node-a\n  gather_facts: false\n  roles: {roles}\n"})
+        with pytest.raises(pytest.fail.Exception, match="bị từ chối trước khi chạy") as info:
+            ansible_lab.stage(source, name)
+        assert "`roles`" in str(info.value) or "`..`" in str(info.value), str(info.value)
+    assert not loads.exists()
+
+    unscanned = bypass_project(ansible_lab, "home-role-parent", {
+        "site.yml": "- hosts: node-a\n  gather_facts: false\n  roles: [../home/rl/r]\n"})
+    parent = ansible_lab.playbook("site.yml", cwd=unscanned)
+    assert parent.returncode != 0 and "../home/rl/r" in parent.output and "not found" in parent.output, parent.tail()
+    assert not loads.exists(), "HOME phải không với tới được bằng đường dẫn tương đối từ bài"
+
+    control = bypass_project(ansible_lab, "home-role-absolute", {
+        "site.yml": f"- hosts: node-a\n  gather_facts: false\n  roles: [{home / 'rl' / 'r'}]\n"})
+    loaded = ansible_lab.playbook("site.yml", cwd=control)
+    assert loaded.returncode == 0, loaded.tail()
+    assert {"vars", "filter"} <= set(loads.read_text(encoding="utf-8").split()), "Đối chứng: không qua phép quét thì plugin nạp"
+
+
+USER_SITE_PLANT = """#!/usr/bin/env python3
+import json
+import os
+
+site = os.environ["DEVOPS_EX_SITE"]
+os.makedirs(site, exist_ok=True)
+probe = "import json, os, sys; open(os.path.join(os.environ.get('HOME', '/nonexistent'), 'site-loads'), 'a').write(json.dumps([{who!r}, sys.argv]) + chr(10))"
+with open(os.path.join(site, "usercustomize.py"), "w") as handle:
+    handle.write(probe.format(who="usercustomize") + "\\n")
+with open(os.path.join(site, "devops_ex.pth"), "w") as handle:
+    handle.write(probe.format(who="pth") + "\\n")
+print(json.dumps({"all": {"hosts": ["node-a"]}, "_meta": {"hostvars": {}}}))
+"""
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_proxy_ignores_user_site(ansible_lab):
+    home = ansible_lab.work / "home"
+    loads = home / "site-loads"
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    site = home / ".local" / "lib" / version / "site-packages"
+    project = bypass_project(ansible_lab, "user-site", {
+        "inventory.py": USER_SITE_PLANT,
+        "site.yml": "- hosts: node-a\n  gather_facts: false\n  tasks:\n    - ansible.builtin.ping:\n",
+    })
+    runs = [ansible_lab.playbook("site.yml", inventory=[str(project / "inventory.py")], cwd=project,
+                                 env={"DEVOPS_EX_SITE": str(site)}) for _ in range(2)]
+    assert (site / "usercustomize.py").is_file() and (site / "devops_ex.pth").is_file()
+    for run in runs:
+        assert run.returncode == 0, run.tail()
+        assert run.connections and all(c["allowed"] for c in run.connections), run.connections
+    seen = [json.loads(line) for line in loads.read_text(encoding="utf-8").splitlines()] if loads.exists() else []
+    assert not [entry for entry in seen if any("devops_ex_proxy" in arg or "ansible" in arg for arg in entry[1])], seen
+    assert "-I" in (ansible_lab.control / "ssh_config").read_text(encoding="utf-8").split("ProxyCommand", 1)[1].split()[:2]
+
+    base = str(Path(sys.executable).resolve())
+    bare = testkit.run_sandboxed([base, "-c", "pass"], writable=[home], cwd=home, env={"PYTHONNOUSERSITE": ""})
+    assert bare.returncode == 0, bare.stderr
+    assert {"usercustomize", "pth"} <= {entry[0] for entry in map(json.loads, loads.read_text(encoding="utf-8").splitlines())}, (
+        "Đối chứng: python gốc không -I phải nạp user site đã cài")
+    loads.unlink()
+    for argv in ([base, "-I", "-c", "pass"], [base, "-c", "pass"]):
+        result = testkit.run_sandboxed(argv, writable=[home], cwd=home, env={})
+        assert result.returncode == 0 and not loads.exists(), (argv, result.stderr)
 
 @ANSIBLE_REQUIRED
 def test_ansible_lab_fails_on_host_outside_lab(ansible_lab):
