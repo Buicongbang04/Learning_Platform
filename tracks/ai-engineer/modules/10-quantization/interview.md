@@ -89,8 +89,8 @@ khác. Đọc kiểu thật bằng `gguf.GGUFReader` trước khi tin vào tên 
 
 NF4 (NormalFloat 4 bit, Dettmers và cộng sự, QLoRA 2023) là 16 mức không đều, đặt tại các phân vị của phân phối chuẩn và chuẩn
 hoá về $$[-1, 1]$$, có đúng một mức bằng 0. Trọng số đã train gần phân phối chuẩn, nên mỗi mức được dùng gần như đều nhau: ít lãng
-phí hơn int4 đều. Scale absmax theo khối 64; **double quantization** lượng tử luôn các scale đó (fp32 sang 8 bit theo khối 256),
-tiết kiệm thêm khoảng 0.37 bit/trọng số. QLoRA giữ model gốc ở NF4 đông cứng và chỉ train adapter LoRA ở bf16 (module 14): bộ nhớ
+phí hơn int4 đều. Scale absmax theo khối 64; **double quantization** lượng tử luôn các scale đó (fp32 sang 8 bit theo khối 256)
+để bớt thêm phần bộ nhớ của scale. QLoRA giữ model gốc ở NF4 đông cứng và chỉ train adapter LoRA ở bf16 (module 14): bộ nhớ
 của trọng số giảm khoảng 4 lần so với bf16 mà chất lượng fine-tune gần như giữ nguyên. NF4 là định dạng **lưu trữ**: khi nhân,
 bitsandbytes giải lượng tử về `bnb_4bit_compute_dtype` (bf16), nên nó tiết kiệm bộ nhớ nhiều hơn là tăng tốc.
 

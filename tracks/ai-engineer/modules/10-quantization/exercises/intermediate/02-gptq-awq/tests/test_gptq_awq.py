@@ -150,3 +150,56 @@ def test_apply_layerwise(nb, gpt_mini):
     assert q.lm_head.weight is q.tok_emb.weight
     for k, v in model.state_dict().items():
         assert torch.equal(v, before[k])
+
+
+def naive_obs(nb, W, H, bits, group_size):
+    """Tham chiếu chậm: ở mỗi bước nghịch đảo lại Hessian của các cột còn tự do (Optimal Brain Surgeon trực tiếp)."""
+    W = W.double().clone()
+    Q = torch.zeros_like(W)
+    scale = zero = None
+    for j in range(W.shape[1]):
+        if j % group_size == 0:
+            scale, zero = nb.quant_params(W[:, j:j + group_size], bits, True)
+        Q[:, j] = nb.quant_column(W[:, j], scale, zero, bits)
+        Hinv = torch.linalg.inv(H[j:, j:])
+        err = (W[:, j] - Q[:, j]) / Hinv[0, 0]
+        W[:, j:] -= err[:, None] * Hinv[0, :][None, :]
+    return Q.float()
+
+
+def test_dense_hessian_matches_naive_obs(nb):
+    g = torch.Generator().manual_seed(5)
+    for n, gs in [(4, 2), (6, 3), (6, 6)]:
+        A = torch.randn(n, n, generator=g, dtype=torch.float64)
+        H = A @ A.T + torch.eye(n, dtype=torch.float64)
+        W = torch.randn(5, n, generator=g)
+        torch.testing.assert_close(nb.gptq_quantize(W, H, 3, gs), naive_obs(nb, W, H, 3, gs), atol=1e-5, rtol=0)
+
+
+def test_awq_uses_mean_abs_activation(nb):
+    torch.manual_seed(6)
+    W = torch.randn(8, 16)
+    X = torch.randn(300, 16) * torch.linspace(0.1, 3, 16)
+    X[0, 0] = 400.0
+    q, alpha = nb.awq_quantize(W, X, 3, 16, n_grid=4)
+    m = X.abs().mean(dim=0)
+    ref = X @ W.T
+    best = None
+    for i in range(4):
+        s = nb.awq_scales(m, i / 4)
+        Wq = nb.rtn_quantize(W * s, 3, 16) / s
+        err = ((X @ Wq.T - ref) ** 2).mean().item()
+        if best is None or err < best[0]:
+            best = (err, i / 4, Wq)
+    assert alpha == best[1], "scale theo trung bình |x| của từng kênh, không theo max"
+    torch.testing.assert_close(q, best[2], atol=1e-5, rtol=0)
+
+
+def test_awq_tie_keeps_smallest_alpha(nb):
+    torch.manual_seed(7)
+    X = torch.where(torch.rand(200, 8) < 0.5, -1.0, 1.0)
+    X[::2, 0] = 0.0
+    X[1::2, 0] = 2.0
+    W = torch.randn(4, 8)
+    _, alpha = nb.awq_quantize(W, X, 4, 8, n_grid=5)
+    assert alpha == 0.0, "mọi kênh cùng trung bình |x| nên mọi alpha cho cùng sai số: hoà thì giữ alpha nhỏ nhất"

@@ -43,8 +43,10 @@ làm phần trắc nghiệm của bài trong app.
 - `capture_inputs` trả đúng input (đưa lại vào lớp cho ra đúng output đã ghi), nối các batch, gỡ hook.
 - `hessian` đúng công thức và dampening tương đối, kiểu `float64`.
 - `gptq_quantize`: với $$H = I$$ trùng RTN; trên ví dụ 3 cột tính tay, bù sai số đúng chiều, đúng thứ tự; tham số của nhóm
-  tính từ trọng số **đã được cập nhật**; không sửa `W` đầu vào; trên dữ liệu có tương quan, sai số đầu ra nhỏ hơn RTN rõ rệt.
-- `awq_scales` đúng công thức chuẩn hoá; `awq_quantize` với lưới một điểm trùng RTN, chọn $$\alpha > 0$$ và giảm sai số đầu ra
+  tính từ trọng số **đã được cập nhật**; trên Hessian dày 4-6 cột khớp phép Optimal Brain Surgeon trực tiếp (nghịch đảo lại
+  Hessian của các cột còn tự do ở mỗi bước); không sửa `W` đầu vào; trên dữ liệu có tương quan, sai số đầu ra nhỏ hơn RTN rõ rệt.
+- `awq_scales` đúng công thức chuẩn hoá; `awq_quantize` dùng trung bình $$\lvert x\rvert$$ theo kênh, hoà thì giữ $$\alpha$$ nhỏ
+  nhất, với lưới một điểm trùng RTN, chọn $$\alpha > 0$$ và giảm sai số đầu ra
   hơn một nửa khi có vài kênh activation lớn gấp trăm lần.
 - `apply_layerwise` gọi đúng hàm cho đúng lớp, không sửa model gốc, giữ weight tying.
 

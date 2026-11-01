@@ -40,7 +40,11 @@ giây cho mỗi checkpoint; mỗi lần đánh giá bpc trên đủ validation b
    của bài Intermediate ở cùng số bit.
 5. Viết `starter/REPORT.md`, rồi làm phần trắc nghiệm của bài trong app.
 
-Không có checkpoint của module 05: dùng checkpoint dự phòng mà bài Intermediate 01 tự train; ghi rõ trong báo cáo.
+Checkpoint: biến môi trường `GPT_MINI_CKPT` như bài Intermediate 01. Không có checkpoint của module 05: dùng checkpoint dự phòng mà
+bài Intermediate 01 tự train (`GPT_MINI_FALLBACK`), ghi rõ trong báo cáo. Kiểu tensor và dung lượng tệp GGUF chỉ phụ thuộc kích
+thước model, không phụ thuộc việc train: nếu checkpoint của bạn không phải cấu hình PC, xuất thêm một GPT mini **khởi tạo ngẫu
+nhiên** `GPTConfig(vocab_size=8000, block_size=256, n_layer=6, n_head=6, n_embd=384)` (cùng tokenizer) và quantize nó để xem kiểu
+tensor và dung lượng của cấu hình đó.
 
 ## Tiêu chí đạt
 

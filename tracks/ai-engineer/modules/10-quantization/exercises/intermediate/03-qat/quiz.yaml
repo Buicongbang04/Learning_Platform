@@ -2,16 +2,16 @@ questions:
 - id: qat-recovery
   kind: data
   type: single
-  prompt: Với checkpoint GPT mini của module 05, int2 nhóm 32, QAT lấy lại khoảng bao nhiêu phần khoảng cách bpc giữa PTQ và float32 gốc?
+  prompt: Với int2 nhóm 32, QAT lấy lại khoảng bao nhiêu phần khoảng cách bpc giữa PTQ và model fine-tune float32 cùng ngân sách, tức (PTQ − QAT) / (PTQ − fine-tune float32)?
   options:
   - id: a
     text: Dưới 20%
   - id: b
-    text: Khoảng 50% tới 90%
+    text: Khoảng 60% tới 95%
   - id: c
-    text: Toàn bộ, QAT tốt hơn cả float32
+    text: Hơn 100%, QAT tốt hơn cả fine-tune float32
   - id: d
-    text: QAT tệ hơn PTQ
+    text: Âm, QAT còn tệ hơn PTQ
 - id: control
   kind: data
   type: single
@@ -26,18 +26,18 @@ questions:
   - id: d
     text: Tốt hơn float32 gốc
 - id: loss-start
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Ở những bước đầu, loss train của model QAT int2 so với loss của fine-tune float32 thế nào?
+  prompt: Ở những bước đầu, vì sao loss train của model QAT int2 cao hơn loss của lần fine-tune float32 đối chứng?
   options:
   - id: a
-    text: Gần bằng nhau ngay từ đầu
+    text: Forward dùng trọng số đã lượng tử, model chưa kịp thích nghi với lưới đó
   - id: b
-    text: Cao hơn rõ, khoảng 1 tới 3 nat
+    text: STE làm gradient sai dấu ở những bước đầu nên loss tăng lên
   - id: c
-    text: Thấp hơn vì lượng tử hoá có tác dụng regularize
+    text: Optimizer của QAT dùng learning rate lớn hơn bản đối chứng
   - id: d
-    text: Là NaN cho tới khi scale ổn định
+    text: Dữ liệu train của QAT khác dữ liệu train của bản đối chứng
 - id: ste-why
   kind: knowledge
   type: single

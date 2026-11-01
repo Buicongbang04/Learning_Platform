@@ -67,7 +67,7 @@ questions:
 - id: speed-flat
   kind: knowledge
   type: single
-  prompt: Với GPT mini, tốc độ sinh token gần như không tăng khi đi từ Q5_K_M xuống Q2_K. Lý do hợp lý nhất?
+  prompt: Với GPT mini, tốc độ sinh token không tăng tương xứng với dung lượng khi đi từ Q5_K_M xuống Q2_K. Lý do hợp lý nhất?
   options:
   - id: a
     text: Q2_K giải lượng tử đắt hơn nhiều nên bù hết phần đọc bộ nhớ tiết kiệm

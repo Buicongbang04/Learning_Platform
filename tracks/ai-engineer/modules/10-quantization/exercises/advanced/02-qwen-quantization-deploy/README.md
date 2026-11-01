@@ -29,7 +29,7 @@ không bằng cảm giác "4 bit thì nhẹ và nhanh".
 
 Thời gian trên là thời gian làm bài. Bản tham chiếu đo trên **PC RTX 3060 12GB dùng chung** với tiến trình khác (dùng dưới 4 GB
 VRAM, nên chạy được như laptop 4 GB): mỗi cấu hình GPU mất khoảng 1-2 phút (nạp, đánh giá đủ validation, sinh 128 token); GPTQ
-tự cài cho cả model khoảng __GPTQ_TIME__. Không có GPU: bỏ các dòng bitsandbytes (chỉ chạy trên CUDA), làm phần GGUF bằng CPU,
+tự cài cho cả model khoảng 20 phút (CPU 4 luồng, float64). Không có GPU: bỏ các dòng bitsandbytes (chỉ chạy trên CUDA), làm phần GGUF bằng CPU,
 ghi rõ trong báo cáo.
 
 1. Trong `starter/qwen_deploy.ipynb`, viết 4 hàm được chấm: `gguf_to_hf_name`, `load_gguf_state_dict`, `pareto_front`,

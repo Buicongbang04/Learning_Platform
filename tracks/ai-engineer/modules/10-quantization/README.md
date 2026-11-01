@@ -68,8 +68,9 @@ $$
 \text{token/giây} \lesssim \frac{\text{băng thông bộ nhớ}}{\text{byte trọng số phải đọc mỗi token}}
 $$
 
-RTX 3060 có băng thông khoảng 360 GB/s; Qwen2.5-0.5B ở bf16 là 0.99 GB, nên trần lý thuyết khoảng 360 token/giây, ở 4 bit trần
-lên khoảng gấp ba. **Prefill** (xử lý prompt) thì khác: cả nghìn token nhân cùng một ma trận, mỗi trọng số đọc một lần dùng cho
+RTX 3060 có băng thông khoảng 360 GB/s; Qwen2.5-0.5B ở bf16 là 0.99 GB, nên trần lý thuyết khoảng 360 token/giây. Ở 4 bit, theo
+dung lượng tệp (`Q4_K_M` 398 MB so với `F16` 994 MB) trần lên khoảng 2.5 lần; đo thật bằng Ollama trên GPU chỉ tăng 1.7 lần
+(226 lên 392 token/giây, mục 7). **Prefill** (xử lý prompt) thì khác: cả nghìn token nhân cùng một ma trận, mỗi trọng số đọc một lần dùng cho
 nghìn phép tính, nút thắt là tính toán. Vì vậy:
 
 - **Weight-only** (trọng số 4/8 bit, activation bf16) tăng tốc phần **decode** batch nhỏ, nhờ đọc ít byte hơn, nếu kernel giải
@@ -286,7 +287,7 @@ Hệ quả cho thiết kế:
   GGUF, bitsandbytes 4 bit, và là chế độ hợp với sinh token batch nhỏ (nút thắt là đọc trọng số).
 - **Weight + activation** (W8A8 int8, fp8): nhân ma trận bằng tensor core int8/fp8, nhanh hơn khi tính toán là nút thắt (prefill,
   serving batch lớn). Phải xử lý ngoại lai activation: **LLM.int8()** tách các kênh vượt ngưỡng (mặc định 6.0) ra nhân bằng fp16;
-  **SmoothQuant** nhân kênh $$j$$ của activation với $$1/s_j$$ và hàng tương ứng của trọng số với $$s_j$$,
+  **SmoothQuant** nhân kênh $$j$$ của activation với $$1/s_j$$ và **cột** $$j$$ tương ứng của trọng số (cùng kênh input, $$W$$ shape `(out, in)`) với $$s_j$$,
   $$s_j = \max\lvert X_j\rvert^{\alpha} / \max\lvert W_j\rvert^{1-\alpha}$$, chuyển một phần độ khó sang trọng số (dễ quantize hơn);
   **fp8** có dải động đủ rộng để thường chỉ cần scale per-tensor.
 
@@ -355,8 +356,9 @@ AutoAWQ chèn một phép chia riêng.
 
 ### So sánh trên Qwen2.5-0.5B
 
-Cài đặt tự viết của bài Intermediate 02 (GPTQ không act-order, hiệu chỉnh tuần tự từng khối, 32 đoạn 512 token Wikipedia tiếng Việt
-từ tập train; AWQ lưới 20 giá trị, không tìm clip), mọi lớp tuyến tính trong khối Transformer, đối xứng, nhóm 128:
+Cùng thuật toán với bài Intermediate 02 (GPTQ không act-order, AWQ lưới 20 giá trị, không tìm clip), nhưng bản tham chiếu cho Qwen
+hiệu chỉnh **tuần tự** từng khối Transformer (input của khối sau lấy từ model đã lượng tử một phần); bài tập ghi input mọi lớp một lần
+từ model float, đơn giản hơn. 32 đoạn 512 token Wikipedia tiếng Việt từ tập train, mọi lớp tuyến tính trong khối, đối xứng, nhóm 128:
 
 | Phương pháp | int4 nhóm 128: bpc (Δ) | int3 nhóm 128: bpc (Δ) | Thời gian lượng tử hoá |
 | --- | --- | --- | --- |
@@ -365,7 +367,9 @@ từ tập train; AWQ lưới 20 giá trị, không tìm clip), mọi lớp tuy�
 | AWQ (tự cài) | 1.3032 (+0.1186) | 2.4177 (+1.2331) | 33-48 giây (GPU dùng chung) |
 | GPTQ (tự cài) | 1.2457 (+0.0611) | 1.6910 (+0.5064) | khoảng 20 phút |
 
-GPTQ tự cài chậm vì vòng lặp Python từng cột, float64 trên CPU 4 luồng; bản thật cập nhật theo khối trên GPU, quantize model 0.5B
+Dòng RTN ở đây đến từ cùng lần chạy với GPTQ/AWQ (lượng tử hoá trên CPU); bảng mục 2 dùng một đường code khác (lượng tử hoá trên GPU)
+và cho 1.3878 và 3.1787. Chênh 0.001 và 0.013 bpc chưa được tách nguyên nhân (nghi do làm tròn số thực khác nhau ở các điểm hoà); nó
+nhỏ so với khoảng cách giữa các phương pháp. GPTQ tự cài chậm vì vòng lặp Python từng cột, float64 trên CPU 4 luồng; bản thật cập nhật theo khối trên GPU, quantize model 0.5B
 trong vài phút. Độ lệch do chọn đoạn hiệu chỉnh khác (seed khác) nhỏ hơn nhiều so với khoảng cách giữa các phương pháp: trên GPT
 mini, đổi seed hiệu chỉnh làm bpc của GPTQ lệch dưới 0.002.
 

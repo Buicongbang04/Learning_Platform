@@ -1,6 +1,6 @@
 qat-recovery: [b]
 control: [a]
-loss-start: [b]
+loss-start: [a]
 ste-why: [a]
 master-weights: [b]
 control-purpose: [b]

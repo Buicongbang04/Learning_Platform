@@ -83,7 +83,7 @@ lượng lạc quan, đủ để **xếp hạng** chứ không đủ để dự 
 Bản dự phòng (4 tầng, `n_embd` 128, 600 bước trên CPU, bpc float32 2.3438) gần như **không** mất gì khi lượng tử hoá: int4
 per-tensor +0.0039, int3 nhóm 32 zero-point +0.0028, int2 nhóm 32 đối xứng +0.0652. Model train quá ngắn có trọng số gần với khởi
 tạo ngẫu nhiên, ít ngoại lai và ít thông tin trên mỗi tham số; model train kỹ (checkpoint module 05, và hơn nữa Qwen2.5 ở phần lý
-thuyết) mới cho thấy cái giá thật. Trắc nghiệm của bài giả định checkpoint của module 05.
+thuyết) mới cho thấy cái giá thật.
 
 ## Bẫy thường gặp
 

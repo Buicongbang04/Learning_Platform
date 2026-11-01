@@ -33,13 +33,17 @@ batch 16 × 256 token từ 1 000 bài train của module 04/05, weight decay 0, 
 (Nguồn: notebook lời giải chạy bằng kernel GPU, `logs/nb_qat_gpu_*.log`; script tham chiếu cho cùng số với seed 0 và gần như
 cùng số với seed 1: QAT 1.5691 / 1.7268, đối chứng 2.5138 / 2.3929, `logs/qat_gpu.log`.)
 
-__CPU__
+Notebook chạy trên CPU (4 luồng, 120 bước, 20 bài validation, checkpoint PC, khoảng 8 phút): float32 gốc 1.3043, PTQ 2.3914, QAT
+1.5817, fine-tune float32 1.3285, fine-tune float32 rồi PTQ 2.3901 (`logs/nb_qat_cpu_pc.log`). Cùng thứ tự với bản GPU.
+
+Tỉ lệ QAT lấy lại so với đối chứng, $$(\text{PTQ} - \text{QAT})/(\text{PTQ} - \text{fine-tune float32})$$: 82% (PC, GPU), 79% (laptop),
+76% (PC, CPU), 89% (checkpoint dự phòng).
 
 Đọc bảng:
 
 - QAT lấy lại khoảng 80% khoảng cách giữa PTQ và float32 (PC: từ +1.13 về +0.22; laptop: từ +0.82 về +0.19). Ở 2 bit đối xứng mỗi
   trọng số chỉ còn $$\{-s, 0, s\}$$ của nhóm; model vẫn dùng được nhờ học lại cách phân bố trọng số trên lưới ternary.
-- **Đối chứng tệ hơn cả PTQ trên checkpoint gốc.** Fine-tune float32 trên 1 000 bài (ít hơn nhiều so với dữ liệu train gốc của
+- **Đối chứng gần bằng hoặc tệ hơn PTQ trên checkpoint gốc.** Fine-tune float32 trên 1 000 bài (ít hơn nhiều so với dữ liệu train gốc của
   checkpoint PC) làm model trôi khỏi phân phối gốc (bpc float32 xấu đi 0.026) mà không làm nó dễ lượng tử hơn. Vậy toàn bộ cải thiện
   của QAT đến từ việc "thấy" lượng tử trong forward, không phải từ việc được train thêm.
 - Loss train ở 10 bước đầu: QAT khoảng 5.4-5.5 nat, float32 khoảng 3.0 (PC) và 3.7 (laptop): model ternary bắt đầu tệ hơn 1.7-2.5
