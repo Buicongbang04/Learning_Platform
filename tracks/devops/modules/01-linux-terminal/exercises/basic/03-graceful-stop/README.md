@@ -44,6 +44,9 @@ Test tạo các tiến trình Python thật: một tiến trình dọn dẹp m�
 một tiến trình con của chính pytest (thành zombie khi chết), và tìm một tiến trình của user khác (thường là root) để
 thử trường hợp không có quyền; máy không có tiến trình nào như vậy thì test đó skip. Bài cần Linux vì test đọc
 `/proc`.
+Khác các bài còn lại của track, test chạy script **ngoài** sandbox bubblewrap vì script phải gửi signal tới PID thật
+của máy mà sandbox (tách PID namespace) che mất; bù lại test chạy script trong session riêng (một `kill 0` viết nhầm
+không chạm tới pytest) với môi trường dựng lại từ đầu.
 
 ## Tiêu chí đạt
 

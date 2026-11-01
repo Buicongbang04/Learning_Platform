@@ -1,22 +1,19 @@
-import os
 import shutil
 import stat
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from testkit import Exercise
+from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
 BASH = shutil.which("bash")
 pytestmark = pytest.mark.skipif(BASH is None, reason="Cần bash")
 
 
-def run(*args):
-    env = {**os.environ, "LC_ALL": "C"}
-    return subprocess.run(
-        [BASH, str(ex.path("perm_audit.sh")), *map(str, args)], capture_output=True, text=True, timeout=30, env=env
+def run(tmp: Path, *args, cwd: Path | None = None):
+    return run_sandboxed(
+        [BASH, ex.path("perm_audit.sh"), *map(str, args)], writable=[tmp], cwd=cwd or tmp, env={"LC_ALL": "C"}
     )
 
 
@@ -57,22 +54,22 @@ def release(tmp_path):
     return root
 
 
-def test_usage_without_args():
-    result = run()
+def test_usage_without_args(tmp_path):
+    result = run(tmp_path)
     assert result.returncode == 2
     assert result.stderr.startswith("Usage:")
     assert result.stdout == ""
 
 
 def test_missing_dir(tmp_path):
-    result = run(tmp_path / "khong-co")
+    result = run(tmp_path, tmp_path / "khong-co")
     assert result.returncode == 2
     assert result.stderr.strip()
     assert result.stdout == ""
 
 
-def test_findings_on_release_tree(release):
-    result = run(release)
+def test_findings_on_release_tree(tmp_path, release):
+    result = run(tmp_path, release)
     assert result.returncode == 1, result.stderr
     assert result.stdout.splitlines() == [
         "env-readable config/.env",
@@ -91,26 +88,19 @@ def test_clean_tree_exits_zero(tmp_path):
     make(root, "secrets/.env", 0o600)
     make(root, "secrets/db.key", 0o600)
     make_dir(root, "tmp", 0o1777)
-    result = run(root)
+    result = run(tmp_path, root)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == ""
 
 
-def test_tree_is_not_modified(release):
+def test_tree_is_not_modified(tmp_path, release):
     before = {p: stat.S_IMODE(p.lstat().st_mode) for p in release.rglob("*")}
-    run(release)
+    run(tmp_path, release)
     assert {p: stat.S_IMODE(p.lstat().st_mode) for p in release.rglob("*")} == before
 
 
-def test_relative_dir_argument(release):
-    result = subprocess.run(
-        [BASH, str(ex.path("perm_audit.sh")), "."],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        env={**os.environ, "LC_ALL": "C"},
-        cwd=release,
-    )
+def test_relative_dir_argument(tmp_path, release):
+    result = run(tmp_path, ".", cwd=release)
     assert result.returncode == 1, result.stderr
     assert "setuid bin/olist-admin" in result.stdout.splitlines()
     assert not any(line.split(" ", 1)[1].startswith(("./", "/")) for line in result.stdout.splitlines())
@@ -121,6 +111,6 @@ def test_symlink_to_open_file_not_followed(tmp_path):
     outside = make(tmp_path / "outside", "shared.txt", 0o666)
     root.mkdir()
     (root / "link.txt").symlink_to(outside)
-    result = run(root)
+    result = run(tmp_path, root)
     assert result.returncode == 0, result.stdout
     assert result.stdout == ""

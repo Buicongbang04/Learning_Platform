@@ -22,7 +22,7 @@ Sau module này bạn sẽ:
 
 ## 0. Cài đặt
 
-Module này cần hai công cụ ngoài những gì distro thường có sẵn. `systemd-analyze` (đi kèm systemd), `ps`, `vmstat`
+Module này cần ba công cụ ngoài những gì distro thường có sẵn. `systemd-analyze` (đi kèm systemd), `ps`, `vmstat`
 (procps), `lsof` có sẵn trên Ubuntu và Fedora; `iostat` nằm trong gói `sysstat` nhưng bài tập chỉ đọc output đã chụp,
 không cần cài.
 
@@ -31,6 +31,16 @@ không cần cài.
 | shellcheck | 0.11.0 (cài theo hướng dẫn dưới, Linux x86_64) | 0.9.0 | Basic 01 (chính là bài cài), kiểm script ở mọi bài Bash và module 02 |
 | jq | 1.8.2 (tải và kiểm theo hướng dẫn dưới), 1.7.1 (gói apt của Ubuntu 24.04, `jq --version` in `jq-1.7`) | 1.6 | Intermediate 01, `curl ... \| jq` ở mọi module sau |
 | systemd-analyze | 255 (Ubuntu 24.04) | 250 cho `security --offline` | Intermediate 02; thiếu thì test liên quan skip |
+| bubblewrap (`bwrap`) | 0.11.0 (Pop!_OS 24.04), 0.9.0 là bản của Ubuntu 24.04 | 0.5.0 | Basic 02, Intermediate 01: test chạy script của bạn trong sandbox; thiếu thì các test đó skip |
+
+### bubblewrap
+
+Test của Basic 02 và Intermediate 01 chạy script của bạn trong sandbox bubblewrap: `/` chỉ đọc, chỉ thư mục tạm của
+test ghi được, môi trường biến dựng lại từ đầu, để một lệnh `rm` hay `chmod` viết nhầm không chạm được tệp thật. Cài
+bằng package manager (`sudo apt install bubblewrap`, Fedora: `sudo dnf install bubblewrap`), xác nhận và gỡ theo
+[module 02, mục Cài đặt](../02-scripting/README.md#0-cài-đặt). Chưa có `bwrap` (hoặc kernel chặn user namespace) thì
+các test đó **skip** kèm lý do, không bao giờ chạy script ngoài sandbox; skip không tính là đạt. Riêng Basic 03 chạy
+ngoài sandbox vì phải gửi signal tới tiến trình thật, lý do ghi trong đề bài.
 
 ### shellcheck
 

@@ -1,5 +1,6 @@
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -74,26 +75,34 @@ def orphans():
             pass
 
 
-def run(*args):
+def run(tmp: Path, *args, script: Path | None = None):
+    """Không dùng sandbox vì script phải gửi signal tới PID thật; bù lại chạy trong session riêng với env dựng từ đầu."""
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(tmp), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
     start = time.monotonic()
     result = subprocess.run(
-        [BASH, str(ex.path("graceful_stop.sh")), *map(str, args)], capture_output=True, text=True, timeout=30
+        [BASH, str(script or ex.path("graceful_stop.sh")), *map(str, args)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=tmp,
+        env=env,
+        start_new_session=True,
     )
     return result, time.monotonic() - start
 
 
 @pytest.mark.parametrize("args", [(), ("abc",), ("1",), ("0",), ("123", "x"), ("123", "-1")])
-def test_bad_arguments(args):
-    result, _ = run(*args)
+def test_bad_arguments(tmp_path, args):
+    result, _ = run(tmp_path, *args)
     assert result.returncode == 2
     assert result.stderr.startswith("Usage:")
 
 
-def test_missing_process():
+def test_missing_process(tmp_path):
     pid = 4194300
     while Path(f"/proc/{pid}").exists():
         pid -= 1
-    result, _ = run(pid, 1)
+    result, _ = run(tmp_path, pid, 1)
     assert result.returncode == 1
     assert result.stderr.strip()
     assert result.stdout == ""
@@ -102,7 +111,7 @@ def test_missing_process():
 def test_graceful_process_gets_time_to_clean_up(tmp_path, orphans):
     pid, marker = spawn_orphan(GRACEFUL.format(delay=1.0), tmp_path)
     orphans.append(pid)
-    result, elapsed = run(pid, 5)
+    result, elapsed = run(tmp_path, pid, 5)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == f"stopped {pid} SIGTERM"
     assert marker.read_text() == "cleaned", "Tiến trình phải được dọn dẹp xong (không bị KILL sớm)"
@@ -113,7 +122,7 @@ def test_graceful_process_gets_time_to_clean_up(tmp_path, orphans):
 def test_stubborn_process_is_killed_after_timeout(tmp_path, orphans):
     pid, marker = spawn_orphan(STUBBORN, tmp_path)
     orphans.append(pid)
-    result, elapsed = run(pid, 1)
+    result, elapsed = run(tmp_path, pid, 1)
     assert result.returncode == 3, result.stderr
     assert result.stdout.strip() == f"killed {pid} SIGKILL"
     assert not alive(pid)
@@ -124,7 +133,7 @@ def test_stubborn_process_is_killed_after_timeout(tmp_path, orphans):
 def test_default_timeout_is_ten_seconds(tmp_path, orphans):
     pid, _ = spawn_orphan(GRACEFUL.format(delay=0.2), tmp_path)
     orphans.append(pid)
-    result, _ = run(pid)
+    result, _ = run(tmp_path, pid)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == f"stopped {pid} SIGTERM"
 
@@ -134,7 +143,7 @@ def test_zombie_counts_as_stopped(tmp_path):
     child = subprocess.Popen([sys.executable, "-c", GRACEFUL.format(delay=0), str(tmp_path / "cleaned"), str(ready)])
     try:
         wait_ready(ready)
-        result, elapsed = run(child.pid, 5)
+        result, elapsed = run(tmp_path, child.pid, 5)
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == f"stopped {child.pid} SIGTERM"
         assert elapsed < 4, "Tiến trình đã thành zombie (chờ cha gọi wait): nó đã chết, đừng chờ tới timeout"
@@ -160,7 +169,7 @@ def signal_denied(pid: int) -> bool:
     return False
 
 
-def test_not_permitted_process():
+def test_not_permitted_process(tmp_path):
     """Chỉ dùng PID mà chính test đã thử và bị kernel từ chối: script (dù viết sai) cũng không gửi được signal nào."""
     if os.getuid() == 0:
         pytest.skip("Chạy bằng root thì không có tiến trình nào từ chối signal")
@@ -172,7 +181,15 @@ def test_not_permitted_process():
     pid = next((c for c in candidates if signal_denied(c)), None)
     if pid is None:
         pytest.skip("Không có tiến trình nào từ chối signal của user này để thử")
-    result, _ = run(pid, 1)
+    result, _ = run(tmp_path, pid, 1)
     assert result.returncode == 4
     assert result.stderr.strip()
     assert signal_denied(pid) or not Path(f"/proc/{pid}").exists()
+
+
+def test_script_signalling_its_own_group_cannot_hit_pytest(tmp_path):
+    script = tmp_path / "kill_group.sh"
+    script.write_text('#!/usr/bin/env bash\necho "$HOME $LC_ALL ${VIRTUAL_ENV:-}"\nkill -TERM 0\necho survived\n')
+    result, _ = run(tmp_path, 123, 1, script=script)
+    assert result.returncode == -signal.SIGTERM
+    assert result.stdout == f"{tmp_path} C.UTF-8 \n"
