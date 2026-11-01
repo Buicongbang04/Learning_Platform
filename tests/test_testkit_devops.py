@@ -1437,12 +1437,11 @@ class FakeActProcess:
 
 
 class FakeActWorld:
-    def __init__(self, monkeypatch, stdout="[build] 🏁  Job succeeded\n", returncode=0, raise_on_wait=None, toolcache=False):
+    def __init__(self, monkeypatch, stdout="[build] 🏁  Job succeeded\n", returncode=0, raise_on_wait=None):
         self.docker_calls: list[list[str]] = []
         self.processes: list[FakeActProcess] = []
         self.required: list[tuple] = []
         self.killed: list[tuple[int, int]] = []
-        self.toolcache = toolcache
         monkeypatch.setattr(testkit.Exercise, "require_tool", staticmethod(lambda name, v=None: self.required.append(("tool", name, v))))
         monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda image: self.required.append(("image", image))))
         monkeypatch.setattr(testkit, "_docker", self.docker)
@@ -1455,6 +1454,7 @@ class FakeActWorld:
                 return real_popen(argv, **kwargs)
             process = FakeActProcess(argv, stdout, returncode, raise_on_wait, kwargs)
             process.repo_files = sorted(str(p.relative_to(kwargs["cwd"])) for p in Path(kwargs["cwd"]).rglob("*") if ".git" not in p.parts)
+            process.workflows = {p.name: p.read_text(encoding="utf-8") for p in Path(kwargs["cwd"]).glob(".github/workflows/*.yml")}
             self.processes.append(process)
             return process
 
@@ -1462,14 +1462,18 @@ class FakeActWorld:
 
     def docker(self, *args, timeout=60):
         self.docker_calls.append(list(args))
+        run_id = next((a.split("=")[-1] for a in args if a.startswith(f"label={testkit.ACT_RUN_LABEL}=")), None)
+        prefix = next((a.split("=", 1)[1] for a in args if a.startswith("name=act-devops-ex-")), None)
         if args[:2] == ("context", "inspect"):
             return subprocess.CompletedProcess(args, 0, "unix:///run/user/1000/docker.sock\n", "")
-        if args[:2] == ("volume", "inspect"):
-            return subprocess.CompletedProcess(args, 0 if self.toolcache else 1, "", "")
-        if args[:1] == ("ps",):
-            return subprocess.CompletedProcess(args, 0, "c0ffee\n", "")
-        if args[:1] == ("inspect",):
-            return subprocess.CompletedProcess(args, 0, "act-ci-build-abc act-ci-build-abc-env act-toolcache\n", "")
+        if args[:1] == ("ps",) and run_id:
+            names = f"act-devops-ex-{run_id}-ci-build-abc\nact-ci-build-abc\n"
+            return subprocess.CompletedProcess(args, 0, names, "")
+        if args[:2] == ("volume", "ls") and prefix:
+            names = f"{prefix}-ci-build-abc\n{prefix}-ci-build-abc-env\nx-{prefix}-la\nact-toolcache\n"
+            return subprocess.CompletedProcess(args, 0, names, "")
+        if args[:2] == ("network", "ls") and run_id:
+            return subprocess.CompletedProcess(args, 0, f"devops-ex-{run_id}\nnguoi-hoc\n", "")
         return subprocess.CompletedProcess(args, 0, "", "")
 
 
@@ -1504,6 +1508,7 @@ def test_act_run_pins_image_and_limits(monkeypatch, tmp_path):
     for name in ("--env-file", "--secret-file", "--var-file", "--input-file"):
         assert flag(argv, name) == "/dev/null", name
     assert flag(argv, "-j") == "build"
+    assert "--no-recurse" in argv and flag(argv, "-W") == f"{Path(flag(argv, '-C')) / '.github' / 'workflows'}/"
     assert flag(argv, "--env") == "APP_ENV=ci"
     repo = Path(flag(argv, "-C"))
     assert repo != project and not repo.is_relative_to(project)
@@ -1587,19 +1592,103 @@ def test_act_run_cleanup_on_interrupt(monkeypatch, tmp_path):
     argv = world.processes[0].args
     run_id = next(o.split("=", 1)[1] for o in flag(argv, "--container-options").split() if o.startswith(f"{testkit.ACT_RUN_LABEL}="))
     assert world.killed and world.killed[0][0] == 4242
-    assert ["rm", "-f", "c0ffee"] in world.docker_calls
-    assert ["volume", "rm", "act-ci-build-abc", "act-ci-build-abc-env"] in world.docker_calls
-    assert ["volume", "rm", testkit.ACT_TOOLCACHE] in world.docker_calls, "act-toolcache do lần chạy này tạo thì xoá"
-    assert ["network", "rm", f"devops-ex-{run_id}"] in world.docker_calls
-    label_filters = [c for c in world.docker_calls if c[:1] == ["ps"]]
-    assert label_filters and all(f"label={testkit.ACT_RUN_LABEL}={run_id}" in c for c in label_filters)
+    prefix = f"act-devops-ex-{run_id}"
+    removals = [c for c in world.docker_calls if c[:2] in (["rm", "-f"], ["volume", "rm"], ["network", "rm"])]
+    assert removals == [
+        ["rm", "-f", f"{prefix}-ci-build-abc"],
+        ["volume", "rm", f"{prefix}-ci-build-abc", f"{prefix}-ci-build-abc-env"],
+        ["network", "rm", f"devops-ex-{run_id}"],
+    ], "Chỉ xoá thứ vừa có nhãn vừa có tên riêng của lần chạy; không bao giờ xoá act-toolcache hay tên của người khác"
     assert not Path(flag(argv, "-C")).exists()
 
 
-def test_act_run_keeps_existing_toolcache(monkeypatch, tmp_path):
-    world = FakeActWorld(monkeypatch, toolcache=True)
+def test_act_run_never_removes_shared_names(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
     testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW))
-    assert all(c[:2] != ["volume", "rm"] or testkit.ACT_TOOLCACHE not in c for c in world.docker_calls)
+    removed = [name for c in world.docker_calls if c[:2] in (["rm", "-f"], ["volume", "rm"], ["network", "rm"]) for name in c[2:]]
+    assert removed and all(n.startswith("act-devops-ex-") or n.startswith("devops-ex-") for n in removed), removed
+    assert "act-toolcache" not in removed and "act-ci-build-abc" not in removed
+
+
+def test_act_run_renames_workflows_in_copy(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    unnamed = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+    project = write_project(tmp_path, SIMPLE_WORKFLOW.replace("name: ci", "name: >-\n  CI chính\n  của shop"))
+    (project / ".github" / "workflows" / "release.yml").write_text(unnamed, encoding="utf-8")
+    testkit.act_run(project)
+    argv = world.processes[0].args
+    run_id = next(o.split("=", 1)[1] for o in flag(argv, "--container-options").split() if o.startswith(f"{testkit.ACT_RUN_LABEL}="))
+    import yaml
+
+    renamed = {name: yaml.safe_load(text) for name, text in world.processes[0].workflows.items()}
+    assert renamed["ci.yml"]["name"] == f"devops-ex-{run_id}-CI chính của shop"
+    assert renamed["release.yml"]["name"] == f"devops-ex-{run_id}-release"
+    assert renamed["ci.yml"]["jobs"] == yaml.safe_load(SIMPLE_WORKFLOW)["jobs"]
+    assert "name: >-" in (project / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"), "Tệp gốc giữ nguyên"
+    assert yaml.safe_load((project / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")).get("name") is None
+
+
+def test_act_run_refuses_nested_workflows(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, SIMPLE_WORKFLOW)
+    nested = project / ".github" / "workflows" / "sub"
+    nested.mkdir()
+    (nested / "evil.yaml").write_text(SIMPLE_WORKFLOW, encoding="utf-8")
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(project)
+    assert "sub/evil.yaml" in str(info.value) and "thư mục con" in str(info.value)
+    assert world.processes == []
+
+
+GUARDED_PUSH = """
+name: ci
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "devops-ex-output tag=sha-$(git rev-parse --short HEAD 2>/dev/null || echo local)"
+      - uses: docker/build-push-action@v6
+        {guard}
+        with:
+          push: true
+"""
+
+
+def test_act_run_allows_actions_only_when_skipped_locally(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    testkit.act_run(write_project(tmp_path / "a", GUARDED_PUSH.format(guard="if: ${{ !env.ACT }}")))
+    testkit.act_run(write_project(tmp_path / "b", GUARDED_PUSH.format(guard="if: github.ref == 'refs/heads/main' && !env.ACT")))
+    assert len(world.processes) == 2
+    stub = flag(world.processes[0].args, "--local-repository")
+    assert stub.startswith("docker/build-push-action@v6=") and "actions/checkout" not in " ".join(world.processes[0].args)
+    for guard in ("", "if: ${{ env.ACT }}", "if: github.ref == 'refs/heads/main'"):
+        with pytest.raises(pytest.fail.Exception) as info:
+            testkit.act_run(write_project(tmp_path / f"c{len(guard)}", GUARDED_PUSH.format(guard=guard)))
+        assert "docker/build-push-action@v6" in str(info.value) and "!env.ACT" in str(info.value)
+
+
+def test_act_run_refuses_short_secrets(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW), secrets={"PIN": "123", "TOKEN": "du-dai-roi"})
+    assert "PIN" in str(info.value) and "TOKEN" not in str(info.value) and str(testkit.ACT_SECRET_MIN_LENGTH) in str(info.value)
+    assert world.processes == []
+
+
+def test_act_outputs_parses_marked_lines():
+    output = (
+        "[build] ⭐ Run Main echo \"devops-ex-output tag=$TAG\"\n"
+        "[build]   | devops-ex-output tag=sha-abc123\n"
+        "[build]   | devops-ex-output image.name=olist-shop/api\n"
+        "[lint]   | devops-ex-output ok=true\r\n"
+        "[lint]   | khong devops-ex-output x=1\n"
+        "[lint]   | devops-ex-output khong hop le\n"
+        "[build]   | devops-ex-output tag=sha-def456\n"
+    )
+    result = subprocess.CompletedProcess([], 0, output, "")
+    assert testkit.act_outputs(result) == {"build": {"tag": "sha-def456", "image.name": "olist-shop/api"}, "lint": {"ok": "true"}}
 
 
 def test_act_run_timeout_fails_with_output(monkeypatch, tmp_path):
@@ -1625,7 +1714,9 @@ def require_real_act():
 
 
 def act_volumes() -> set[str]:
-    return set(testkit._docker("volume", "ls", "--filter", "name=act-", "--format", "{{.Name}}").stdout.split())
+    """Volume `act-*` trên máy, trừ `act-toolcache`: cache dùng chung act tự tạo, testkit cố ý không bao giờ xoá."""
+    names = testkit._docker("volume", "ls", "--filter", "name=act-", "--format", "{{.Name}}").stdout.split()
+    return set(names) - {"act-toolcache"}
 
 
 def act_containers() -> set[str]:
@@ -1789,14 +1880,28 @@ def test_docker_lab_push_tags_per_lab_and_deletes(monkeypatch):
     with pytest.raises(RuntimeError):
         testkit.DockerLab().push("x:1", "web")
     with testkit.DockerLab() as lab:
-        ref = lab.push("devops-ex-abc/web:test", "web")
+        built = f"devops-ex-{lab.id}/web:test"
+        ref = lab.push(built, "web")
         assert ref == f"localhost:15000/devops-ex-{lab.id}/web:test"
         with pytest.raises(ValueError):
-            lab.push("x:1", "Sai Ten")
-    assert ["docker", "tag", "devops-ex-abc/web:test", ref] in fake.calls
+            lab.push(built, "Sai Ten")
+    assert ["docker", "tag", built, ref] in fake.calls
     assert ["docker", "push", ref] in fake.calls
     assert ("DELETE", f"/v2/devops-ex-{lab.id}/web/manifests/sha256:{'a' * 64}") in requests
     assert ["docker", "rmi", ref] in fake.calls
+
+
+def test_docker_lab_push_refuses_foreign_images(monkeypatch):
+    fake = FakeDocker()
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    monkeypatch.setattr(testkit.Exercise, "require_registry", staticmethod(lambda: "localhost:15000"))
+    with testkit.DockerLab() as lab:
+        other = testkit.DockerLab()
+        for image in ("postgres:16.9", f"{other.network}/api:test", "olist-shop:dev", f"x/{lab.network}/api:test"):
+            with pytest.raises(pytest.fail.Exception) as info:
+                lab.push(image, "api")
+            assert image in str(info.value)
+    assert not [c for c in fake.calls if c[1] in ("tag", "push")]
 
 
 def test_docker_lab_push_real_registry(tmp_path):
@@ -1815,3 +1920,78 @@ def test_docker_lab_push_real_registry(tmp_path):
     assert testkit._registry_request("HEAD", f"/v2/{repo}/manifests/test", accept)[0] == 404
     assert testkit._docker("image", "inspect", ref).returncode != 0
     assert testkit.docker_leftovers(lab.id) == []
+
+
+def act_original_name(workflow: str, job: str) -> str:
+    """Tên container act tự đặt khi không đổi `name:` (act 0.2.94, createContainerName): `act-<wf>-<job>-<sha256>`."""
+    import hashlib
+    import re
+
+    name = re.sub(r"[^a-zA-Z0-9]", "-", f"act-{workflow}/{job}").replace("--", "-")
+    return f"{name[:63].strip('-')}-{hashlib.sha256(name.encode()).hexdigest()}"
+
+
+def test_act_original_name_matches_act():
+    assert act_original_name("CI", "build") == "act-CI-build-03727a8f260608c14dbfbecd23630d3cd3cc939c3150870ab3631218246ce38f"
+
+
+def test_act_run_spares_resources_with_act_original_names(tmp_path):
+    require_real_act()
+    workflow_name = f"ci-{testkit.uuid.uuid4().hex[:8]}"
+    original = act_original_name(workflow_name, "build")
+    project = write_project(tmp_path, SIMPLE_WORKFLOW.replace("name: ci", f"name: {workflow_name}"))
+    volumes = [original, f"{original}-env"]
+    try:
+        for volume in volumes:
+            assert testkit._docker("volume", "create", volume).returncode == 0
+        created = testkit._docker("create", "--name", original, "--label", "devops-ex=1", testkit.ACT_IMAGE, "true")
+        assert created.returncode == 0, created.stderr
+        result = testkit.act_run(project, timeout=300)
+        assert testkit.act_job_results(result) == {"build": True}, (result.stdout + result.stderr)[-3000:]
+        assert original in act_containers(), "Container trùng tên gốc của act phải còn nguyên"
+        assert set(volumes) <= act_volumes(), "Volume trùng tên gốc của act phải còn nguyên"
+    finally:
+        testkit._docker("rm", "-f", original)
+        testkit._docker("volume", "rm", *volumes)
+
+
+def test_act_run_concurrent_runs_of_same_workflow(tmp_path):
+    require_real_act()
+    from concurrent.futures import ThreadPoolExecutor
+
+    project = write_project(tmp_path, SIMPLE_WORKFLOW.replace('echo "chay-xong"', 'sleep 4; echo "chay-xong"'))
+    before = act_volumes(), act_containers(), devops_networks()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: testkit.act_run(project, timeout=300), range(2)))
+    for result in results:
+        assert testkit.act_job_results(result) == {"build": True}, (result.stdout + result.stderr)[-3000:]
+        assert "chay-xong" in result.stdout + result.stderr
+    assert (act_volumes(), act_containers(), devops_networks()) == before
+
+
+def test_act_run_outputs_and_guarded_steps(tmp_path):
+    require_real_act()
+    workflow = """
+name: ci
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "devops-ex-output tag=sha-$(cat VERSION)"
+      - name: Build và push (chỉ chạy trên GitHub)
+        if: ${{ !env.ACT }}
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+      - if: ${{ !env.ACT }}
+        run: echo "khong-duoc-chay"
+"""
+    project = write_project(tmp_path, workflow, {"VERSION": "1.4.2\n"})
+    result = testkit.act_run(project, timeout=300)
+    output = result.stdout + result.stderr
+    assert testkit.act_job_results(result) == {"build": True}, output[-3000:]
+    assert testkit.act_outputs(result) == {"build": {"tag": "sha-1.4.2"}}
+    assert "| khong-duoc-chay" not in output
+    assert "git clone 'https://github.com/docker/build-push-action'" not in output, "Bước bị bỏ qua không được tải action"

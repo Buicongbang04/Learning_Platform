@@ -28,7 +28,6 @@ Trong test:
 
 from __future__ import annotations
 
-import contextlib
 import importlib.util
 import linecache
 import os
@@ -745,11 +744,14 @@ class DockerLab:
         return tag
 
     def push(self, image: str, name: str, tag: str = "test") -> str:
-        """Đẩy `image` lên registry local thành `<registry>/devops-ex-<id>/<name>:<tag>` và trả tên đó. `close()` xoá manifest
-        trên registry (registry bật `REGISTRY_STORAGE_DELETE_ENABLED`) và tag local. Registry chưa chạy thì skip."""
+        """Đẩy `image` (chỉ image do chính lab build) lên registry local thành `<registry>/devops-ex-<id>/<name>:<tag>`
+        và trả tên đó. `close()` xoá manifest trên registry (registry bật `REGISTRY_STORAGE_DELETE_ENABLED`) và tag local.
+        Registry chưa chạy thì skip."""
         self._require_entered()
         if not _IMAGE_ALIAS.match(name) or not _IMAGE_ALIAS.match(tag):
             raise ValueError(f"Tên {name!r} hoặc tag {tag!r} không hợp lệ: chữ thường, số, '.', '_', '-'")
+        if image not in self.images and not image.startswith(f"{self.network}/"):
+            pytest.fail(f"lab.push chỉ đẩy image do chính lab này build (lab.build), không đẩy {image}")
         ref = f"{Exercise.require_registry()}/{self.network}/{name}:{tag}"
         tagged = _docker("tag", image, ref)
         if tagged.returncode != 0:
@@ -1123,13 +1125,15 @@ ACT_MEMORY = "1g"
 ACT_PIDS_LIMIT = 512
 ACT_CONCURRENT_JOBS = 2
 ACT_RUN_LABEL = "devops-ex.act"
-ACT_TOOLCACHE = "act-toolcache"
 ACT_ALLOWED_ACTIONS = ("actions/checkout",)
 ACT_REMOTE = "https://github.com/olist-shop/olist-shop.git"
+ACT_SECRET_MIN_LENGTH = 4
 _ACT_ENV_NAMES = {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST"}
 _ACT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _ACT_EVENT = re.compile(r"^[a-z_]+$")
+_ACT_SKIPPED_LOCALLY = re.compile(r"!\s*env\.ACT\b")
 _ACT_JOB_RESULT = re.compile(r"^\[([^\]]+)\]\s+🏁\s+Job (succeeded|failed)\s*$", re.M)
+_ACT_OUTPUT = re.compile(r"^\[([^\]]+)\]\s+\|\s+devops-ex-output ([A-Za-z_][A-Za-z0-9_.-]*)=(.*?)\r?$", re.M)
 _ACT_CLONE_FAILED = re.compile(
     r"Unable to clone https://github\.com/(\S+?)(?:\.git)? \S+: .*?"
     r"(?:dial tcp|lookup |network is unreachable|Could not resolve|no such host|i/o timeout|connection refused)"
@@ -1148,17 +1152,72 @@ def act_job_results(result: subprocess.CompletedProcess) -> dict[str, bool]:
     return {job: status == "succeeded" for job, status in _ACT_JOB_RESULT.findall(text)}
 
 
+def act_outputs(result: subprocess.CompletedProcess) -> dict[str, dict[str, str]]:
+    """Giá trị workflow gửi ra cho harness, theo job id: mỗi dòng `devops-ex-output <key>=<value>` mà một bước in ra stdout
+    (vd. `echo "devops-ex-output tag=$TAG"`). Cần vì workspace của job là bản chép, tệp job ghi ra không về tới test."""
+    found: dict[str, dict[str, str]] = {}
+    for job, key, value in _ACT_OUTPUT.findall(f"{result.stdout or ''}\n{result.stderr or ''}"):
+        found.setdefault(job, {})[key] = value
+    return found
+
+
+def _act_workflow_files(repo: Path) -> list[Path]:
+    folder = repo / ".github" / "workflows"
+    return sorted([*folder.rglob("*.yml"), *folder.rglob("*.yaml")]) if folder.is_dir() else []
+
+
+def _act_step_problem(where: str, step) -> str | None:
+    uses = step.get("uses") if isinstance(step, dict) else None
+    if not uses or str(uses).split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
+        return None
+    if _ACT_SKIPPED_LOCALLY.search(str(step.get("if", ""))):
+        return None
+    allowed = ", ".join(ACT_ALLOWED_ACTIONS)
+    return (f"{where}: action {uses} không chạy được khi chấm; chỉ dùng bước run: và {allowed}, hoặc gắn "
+            "`if: ${{ !env.ACT }}` để bước đó chỉ chạy trên GitHub")
+
+
+_ACT_REMOTE_ACTION = re.compile(r"^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)@([A-Za-z0-9_./-]+)$")
+_ACT_STUB = "name: devops-ex-stub\nruns:\n  using: composite\n  steps: []\n"
+
+
+def _act_guarded_stubs(repo: Path, root: Path) -> list[str]:
+    """Bước `uses:` có `if: !env.ACT` không chạy dưới act, nhưng act vẫn clone action của nó lúc dựng job. Thay mỗi action
+    đó bằng một action composite rỗng cục bộ (`--local-repository`) để không tải gì từ mạng và không có mã lạ nào trên máy."""
+    import yaml
+
+    stubs: dict[str, Path] = {}
+    for path in _act_workflow_files(repo):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        jobs = data.get("jobs") if isinstance(data, dict) else None
+        for job in (jobs or {}).values() if isinstance(jobs, dict) else ():
+            for step in (job.get("steps") or []) if isinstance(job, dict) else []:
+                if not isinstance(step, dict) or not _ACT_SKIPPED_LOCALLY.search(str(step.get("if", ""))):
+                    continue
+                match = _ACT_REMOTE_ACTION.match(str(step.get("uses", "")))
+                if not match or match.group(1) in ACT_ALLOWED_ACTIONS:
+                    continue
+                key = f"{match.group(1)}@{match.group(3)}"
+                stub = stubs.setdefault(key, root / "stubs" / str(len(stubs)))
+                folder = stub / match.group(2).lstrip("/")
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / "action.yml").write_text(_ACT_STUB, encoding="utf-8")
+    return [arg for key, stub in stubs.items() for arg in ("--local-repository", f"{key}={stub}")]
+
+
 def _act_workflow_problems(repo: Path) -> list[str]:
     import yaml
 
     folder = repo / ".github" / "workflows"
-    files = sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]) if folder.is_dir() else []
+    files = _act_workflow_files(repo)
     if not files:
         return ["không có workflow nào trong .github/workflows/"]
     problems = []
-    allowed = ", ".join(ACT_ALLOWED_ACTIONS)
     for path in files:
         rel = path.relative_to(repo)
+        if path.parent != folder:
+            problems.append(f"{rel}: workflow phải nằm ngay trong .github/workflows/, không nằm trong thư mục con")
+            continue
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
         except yaml.YAMLError as error:
@@ -1179,16 +1238,52 @@ def _act_workflow_problems(repo: Path) -> list[str]:
             if (runs_on if isinstance(runs_on, list) else [runs_on]) != ["ubuntu-latest"]:
                 problems.append(f"{where}: runs-on phải là ubuntu-latest (đang là {runs_on!r})")
             for step in job.get("steps") or []:
-                uses = step.get("uses") if isinstance(step, dict) else None
-                if uses and str(uses).split("@", 1)[0] not in ACT_ALLOWED_ACTIONS:
-                    problems.append(f"{where}: action {uses} chưa được phép khi chấm; chỉ dùng bước run: và {allowed}")
+                problem = _act_step_problem(where, step)
+                if problem:
+                    problems.append(problem)
     return problems
 
 
-def _act_repo(workflow_dir: Path, root: Path) -> Path:
+def _act_rename_workflow(path: Path, prefix: str) -> None:
+    """Đổi `name:` cấp trên cùng thành `<prefix>-<tên cũ hoặc tên tệp>`. act đặt tên container và volume là
+    `act-<name>-<job>-<hash>` không phụ thuộc lần chạy; tiền tố riêng giúp không bao giờ trùng (và xoá nhầm) tài nguyên của
+    lần chạy khác hay của người học."""
+    import json
+
+    import yaml
+
+    text = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    original = data.get("name") if isinstance(data, dict) else None
+    wanted = f"{prefix}-{original if isinstance(original, str) and original.strip() else path.stem}"
+    lines = text.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if re.match(r"name\s*:", line)), None)
+    if start is not None:
+        end = start + 1
+        while end < len(lines) and (lines[end][:1] in (" ", "\t") or not lines[end].strip()):
+            end += 1
+        while end > start + 1 and not lines[end - 1].strip():
+            end -= 1
+        lines[start:end] = []
+    lines.insert(0, f"name: {json.dumps(wanted, ensure_ascii=False)}\n")
+    renamed = "".join(lines)
+    check = yaml.safe_load(renamed)
+    if not isinstance(check, dict) or check.get("name") != wanted or {k: v for k, v in check.items() if k != "name"} != {
+        k: v for k, v in (data or {}).items() if k != "name"
+    }:
+        pytest.fail(f"Không đổi được tên workflow {path.name} an toàn; kiểm lại dòng `name:` cấp trên cùng")
+    path.write_text(renamed, encoding="utf-8")
+
+
+def _act_repo(workflow_dir: Path, root: Path, run_id: str) -> Path:
     repo = root / "repo"
     shutil.copytree(workflow_dir, repo, symlinks=True, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
     (repo / ".actrc").unlink(missing_ok=True)
+    problems = _act_workflow_problems(repo)
+    if problems:
+        pytest.fail("Workflow dùng thứ mà bài chấm bằng act không hỗ trợ:\n- " + "\n- ".join(problems))
+    for path in _act_workflow_files(repo):
+        _act_rename_workflow(path, f"{DOCKER_PREFIX}{run_id}")
     git = GitRepo(repo, root / "git-home")
     git.home.mkdir()
     git.out("init", "-q")
@@ -1210,7 +1305,8 @@ def _act_command(repo: Path, run_id: str, *, event: str, job: str | None, env: d
         "--label", DOCKER_LABEL, "--label", f"{ACT_RUN_LABEL}={run_id}",
     ]
     argv = [
-        "act", event, "-C", str(repo), "-P", f"ubuntu-latest={ACT_IMAGE}", "--pull=false",
+        "act", event, "-C", str(repo), "-W", f"{repo / '.github' / 'workflows'}/", "--no-recurse",
+        "-P", f"ubuntu-latest={ACT_IMAGE}", "--pull=false",
         "--container-options", " ".join(options), "--container-daemon-socket", "-", "--container-options-policy", "restrict",
         "--network", f"{DOCKER_PREFIX}{run_id}", "--action-cache-path", str(act_cache_dir()), "--action-offline-mode",
         "--no-cache-server", "--rm", "--log-prefix-job-id", "--concurrent-jobs", str(ACT_CONCURRENT_JOBS),
@@ -1225,39 +1321,30 @@ def _act_command(repo: Path, run_id: str, *, event: str, job: str | None, env: d
     return argv
 
 
-@contextlib.contextmanager
-def _act_lock():
-    """Tên container của act chỉ phụ thuộc tên workflow và job, nên hai lần chạy song song đụng tên: chạy lần lượt."""
-    import fcntl
+def _act_cleanup(run_id: str) -> None:
+    """Dọn tài nguyên của đúng một lần chạy: container vừa có nhãn `devops-ex.act=<id>` vừa có tên bắt đầu bằng
+    `act-devops-ex-<id>`, volume và network do act tạo có tên bắt đầu bằng `act-devops-ex-<id>` (tên riêng của lần chạy nhờ
+    `_act_rename_workflow`), và network `devops-ex-<id>` có nhãn của lần chạy. Volume dùng chung `act-toolcache` không
+    bao giờ bị xoá (act 0.2.94 không cho đổi tên volume này)."""
+    prefix = f"act-{DOCKER_PREFIX}{run_id}"
+    label = f"label={ACT_RUN_LABEL}={run_id}"
 
-    act_cache_dir().mkdir(parents=True, exist_ok=True)
-    with open(act_cache_dir().parent / "act.lock", "w") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
-
-
-def _act_cleanup(run_id: str, toolcache_existed: bool) -> None:
-    """Xoá container có nhãn của đúng lần chạy, volume `act-*` mà chính các container đó mount, `act-toolcache` nếu lần chạy
-    này tạo ra (đang được dùng thì Docker từ chối xoá), và network của lần chạy. Không đụng tài nguyên nào khác."""
-    steps = []
-    try:
-        ids = _docker("ps", "-aq", "--filter", f"label={ACT_RUN_LABEL}={run_id}").stdout.split()
-        if ids:
-            names = _docker("inspect", "--format", '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}} {{end}}{{end}}', *ids)
-            volumes = sorted({v for v in names.stdout.split() if v.startswith("act-") and v != ACT_TOOLCACHE})
-            steps.append(("rm", "-f", *ids))
-            if volumes:
-                steps.append(("volume", "rm", *volumes))
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    if not toolcache_existed:
-        steps.append(("volume", "rm", ACT_TOOLCACHE))
-    steps.append(("network", "rm", f"{DOCKER_PREFIX}{run_id}"))
-    for args in steps:
+    def names(*args: str) -> list[str]:
         try:
-            _docker(*args)
+            return _docker(*args).stdout.split()
         except (OSError, subprocess.TimeoutExpired):
-            pass
+            return []
+
+    containers = [n for n in names("ps", "-a", "--filter", label, "--format", "{{.Names}}") if n.startswith(prefix)]
+    networks = [n for n in names("network", "ls", "--filter", label, "--format", "{{.Name}}") if n == f"{DOCKER_PREFIX}{run_id}"]
+    networks += [n for n in names("network", "ls", "--filter", f"name={prefix}", "--format", "{{.Name}}") if n.startswith(prefix)]
+    if containers:
+        names("rm", "-f", *containers)
+    volumes = [n for n in names("volume", "ls", "--filter", f"name={prefix}", "--format", "{{.Name}}") if n.startswith(prefix)]
+    if volumes:
+        names("volume", "rm", *volumes)
+    for network in networks:
+        names("network", "rm", network)
 
 
 def _act_kill(process: subprocess.Popen) -> None:
@@ -1268,30 +1355,28 @@ def _act_kill(process: subprocess.Popen) -> None:
 
 
 def _act_execute(argv: list[str], repo: Path, env: dict[str, str], run_id: str, timeout: float) -> tuple[str, str, int, bool]:
-    with _act_lock():
-        toolcache_existed = _docker("volume", "inspect", ACT_TOOLCACHE).returncode == 0
+    try:
+        network = f"{DOCKER_PREFIX}{run_id}"
+        created = _docker("network", "create", "--label", DOCKER_LABEL, "--label", f"{ACT_RUN_LABEL}={run_id}", network)
+        if created.returncode != 0:
+            pytest.fail(f"Không tạo được docker network {network}: {created.stderr.strip()}")
+        process = subprocess.Popen(
+            argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", start_new_session=True,
+        )
         try:
-            network = f"{DOCKER_PREFIX}{run_id}"
-            created = _docker("network", "create", "--label", DOCKER_LABEL, "--label", f"{ACT_RUN_LABEL}={run_id}", network)
-            if created.returncode != 0:
-                pytest.fail(f"Không tạo được docker network {network}: {created.stderr.strip()}")
-            process = subprocess.Popen(
-                argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, encoding="utf-8", errors="replace", start_new_session=True,
-            )
-            try:
-                stdout, stderr = process.communicate(timeout=timeout)
-                return stdout, stderr, process.returncode, False
-            except subprocess.TimeoutExpired:
-                _act_kill(process)
-                stdout, stderr = process.communicate()
-                return stdout, stderr, process.returncode, True
-            except BaseException:
-                _act_kill(process)
-                process.wait()
-                raise
-        finally:
-            _act_cleanup(run_id, toolcache_existed)
+            stdout, stderr = process.communicate(timeout=timeout)
+            return stdout, stderr, process.returncode, False
+        except subprocess.TimeoutExpired:
+            _act_kill(process)
+            stdout, stderr = process.communicate()
+            return stdout, stderr, process.returncode, True
+        except BaseException:
+            _act_kill(process)
+            process.wait()
+            raise
+    finally:
+        _act_cleanup(run_id)
 
 
 def act_run(
@@ -1303,31 +1388,39 @@ def act_run(
     secrets: dict | None = None,
     timeout: float = 600,
 ) -> subprocess.CompletedProcess:
-    """Chạy workflow GitHub Actions trong `workflow_dir/.github/workflows/` bằng `act` và trả CompletedProcess (đọc kết quả
-    từng job bằng `act_job_results`). Skip khi thiếu `act`, git hay image runner `ACT_IMAGE`.
+    """Chạy workflow GitHub Actions trong `workflow_dir/.github/workflows/` bằng `act` và trả CompletedProcess (kết quả từng
+    job: `act_job_results`; giá trị gửi ra: `act_outputs`). Skip khi thiếu `act`, git hay image runner `ACT_IMAGE`.
 
-    act chạy trên host (cần socket Docker nên không vào được bwrap) với: bản chép tạm của `workflow_dir` (bỏ `.git`,
-    `.actrc`) thành repo git mới; env dựng từ đầu (`HOME` tạm nên không đọc `~/.actrc`, `~/.config/act`; không mang
+    act chạy trên host (cần socket Docker nên không vào được bwrap) trên bản chép tạm của `workflow_dir` (bỏ `.git`,
+    `.actrc`) thành repo git mới, với `name:` của mọi workflow đổi thành `devops-ex-<id>-<tên cũ>` để container, volume
+    của act mang tên riêng của lần chạy. Env dựng từ đầu (`HOME` tạm nên không đọc `~/.actrc`, `~/.config/act`; không mang
     `GITHUB_TOKEN`, `ACTIONS_*`, `AWS_*`, `DOCKER_*`; `DOCKER_HOST` lấy từ context Docker hiện tại); `.env`, `.secrets`,
-    `.vars`, `.input` của repo không được đọc. Job chạy trong `ACT_IMAGE` (`--pull=false`) trên network riêng
-    `devops-ex-<id>`, ghim CPU theo `docker_cpu_args()`, RAM 1g, 512 tiến trình, `no-new-privileges`, nhãn `devops-ex=1` và
-    `devops-ex.act=<id>`, không có socket Docker (`--container-daemon-socket -`), options của workflow bị chặn
-    (`--container-options-policy restrict`), không cache server. Workflow chỉ được `runs-on: ubuntu-latest`, bước `run:`
-    và action trong `ACT_ALLOWED_ACTIONS`; không `services:`, `container:`, workflow gọi workflow (fail kèm lý do).
+    `.vars`, `.input` của repo không được đọc; chỉ chạy workflow ngay trong `.github/workflows/` (`-W`, `--no-recurse`).
+    Job chạy trong `ACT_IMAGE` (`--pull=false`) trên network riêng `devops-ex-<id>`, ghim CPU theo `docker_cpu_args()`,
+    RAM 1g, 512 tiến trình, `no-new-privileges`, nhãn `devops-ex=1` và `devops-ex.act=<id>`, không có socket Docker
+    (`--container-daemon-socket -`), options của workflow bị chặn (`--container-options-policy restrict`), không cache
+    server.
+
+    Workflow (kể cả tệp trong thư mục con) chỉ được `runs-on: ubuntu-latest`, bước `run:`, action trong
+    `ACT_ALLOWED_ACTIONS`, và action khác chỉ ở bước có `if:` chứa `!env.ACT` (act bỏ qua bước đó, chỉ GitHub chạy);
+    không `services:`, `container:`, workflow gọi workflow (fail kèm lý do).
 
     `actions/checkout` không tải gì: act chép thẳng bản chép tạm vào job. Action khác (khi được thêm vào danh sách) tải về
     `act_cache_dir()` lần đầu rồi dùng lại offline (`--action-offline-mode`); thiếu action mà không có mạng thì skip.
 
     `secrets` đi qua env của tiến trình act (argv chỉ có tên), act che giá trị thành `***` trong log, testkit che thêm
-    lần nữa trong output trả về. Quá `timeout` thì SIGKILL cả nhóm tiến trình và fail kèm output cuối. Mọi đường thoát
-    (xong, lỗi, timeout, Ctrl-C) đều dọn container, volume, network của đúng lần chạy đó. Các lần chạy nối tiếp nhau
-    (khoá tệp) vì act đặt tên container theo tên workflow và job.
+    lần nữa trong output trả về; giá trị ngắn hơn `ACT_SECRET_MIN_LENGTH` bị từ chối (che chuỗi quá ngắn làm hỏng output
+    mà không bảo vệ được gì). Quá `timeout` thì SIGKILL cả nhóm tiến trình và fail kèm output cuối. Mọi đường thoát (xong,
+    lỗi, timeout, Ctrl-C) đều dọn container, volume, network mang tên riêng của lần chạy đó (xem `_act_cleanup`).
     """
     env = {str(k): str(v) for k, v in (env or {}).items()}
     secrets = {str(k): str(v) for k, v in (secrets or {}).items()}
     bad = [n for n in [*env, *secrets] if not _ACT_NAME.match(n) or n in _ACT_ENV_NAMES or n.upper().startswith("GITHUB_")]
     if bad:
         pytest.fail(f"Tên biến hoặc secret không dùng được với act_run: {bad} (chữ, số, '_'; không trùng PATH, HOME..., không bắt đầu bằng GITHUB_)")
+    short = sorted(name for name, value in secrets.items() if len(value) < ACT_SECRET_MIN_LENGTH)
+    if short:
+        pytest.fail(f"Secret {short} ngắn hơn {ACT_SECRET_MIN_LENGTH} ký tự: act_run không che được an toàn, dùng giá trị dài hơn")
     if not _ACT_EVENT.match(event):
         raise ValueError(f"Tên event không hợp lệ: {event!r}")
     Exercise.require_tool("act", ACT_MIN_VERSION)
@@ -1336,21 +1429,17 @@ def act_run(
     run_id = uuid.uuid4().hex[:8]
     root = Path(tempfile.mkdtemp(prefix=f"{DOCKER_PREFIX}{run_id}-act-"))
     try:
-        repo = _act_repo(Path(workflow_dir), root)
-        problems = _act_workflow_problems(repo)
-        if problems:
-            pytest.fail("Workflow dùng thứ mà bài chấm bằng act không hỗ trợ:\n- " + "\n- ".join(problems))
+        repo = _act_repo(Path(workflow_dir), root, run_id)
         home = root / "home"
         home.mkdir()
-        argv = _act_command(repo, run_id, event=event, job=job, env=env, secret_names=list(secrets))
+        argv = _act_command(repo, run_id, event=event, job=job, env=env, secret_names=list(secrets)) + _act_guarded_stubs(repo, root)
         act_env = {"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": str(home), "LANG": "C.UTF-8",
                    "LC_ALL": "C.UTF-8", "DOCKER_HOST": _act_docker_host(), **secrets}
         stdout, stderr, returncode, timed_out = _act_execute(argv, repo, act_env, run_id, timeout)
     finally:
         shutil.rmtree(root, ignore_errors=True)
     for value in secrets.values():
-        if value:
-            stdout, stderr = stdout.replace(value, "***"), stderr.replace(value, "***")
+        stdout, stderr = stdout.replace(value, "***"), stderr.replace(value, "***")
     result = subprocess.CompletedProcess(argv, returncode, stdout, stderr)
     if timed_out:
         pytest.fail(f"Workflow chạy quá {timeout:g} giây nên bị dừng; container của lần chạy đã được dọn. Output cuối:\n{_output_tail(result)}")
