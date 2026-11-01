@@ -2619,6 +2619,9 @@ def test_tofu_lock_version_check(tmp_path):
     'locals { a = { b = 1, http_proxy = "x" } }\n',
     'provider "aws" {\n  no_proxy\t   =   "*"\n}\n',
     'provider "aws" { endpoints { s3 = "http://x" } } /* c */ provider "aws" { alias = "b"; no_proxy = "*" }\n',
+    'provider "aws" {\n region = "/*"\n no_proxy = "*"\n x = "*/"\n}\n',
+    'locals {\n  a = <<-EOT\n    /*\n  EOT\n}\nprovider "aws" {\n  https_proxy = "http://corp:3128"\n}\nlocals {\n  b = <<-EOT\n    */\n  EOT\n}\n',
+    '{\n  "terraform": {\n    "backend": {\n      "s3": {\n        "custom_ca_bundle" :  "/x.pem"\n      }\n    }\n  }\n}\n',
 ])
 def test_tofu_refuses_proxy_overrides(tmp_path, snippet):
     name = "main.tf.json" if snippet.startswith("{") else "main.tf"
@@ -2631,11 +2634,20 @@ def test_tofu_refuses_proxy_overrides(tmp_path, snippet):
 @pytest.mark.parametrize("text", [
     '# no_proxy = "*"\nprovider "aws" {}\n',
     'provider "aws" {} // https_proxy = "x"\n',
-    '/* custom_ca_bundle = "x"\n   http_proxy = "y" */\nprovider "aws" {}\n',
-    'provider "aws" {\n  endpoints {\n    s3 = "http://127.0.0.1:14566" # no_proxy = 1\n  }\n}\n',
-    'variable "no_proxy_note" {}\noutput "x" { value = var.no_proxy_note == "" }\n',
+    '/* custom_ca_bundle = "x" */\nprovider "aws" {}\n',
 ])
-def test_tofu_allows_forbidden_words_in_comments(tmp_path, text):
+def test_tofu_refuses_forbidden_assignment_even_in_comments(tmp_path, text):
+    (tmp_path / "main.tf").write_text(text, encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert len(problems) == 1 and "kể cả khi nằm trong chú thích" in problems[0]
+
+
+@pytest.mark.parametrize("text", [
+    '# đặt no_proxy cho LocalStack là không cần\nprovider "aws" {}\n',
+    '// không dùng https_proxy hay http_proxy trong lab\nprovider "aws" {}\n',
+    'variable "no_proxy_note" {}\noutput "x" { value = var.no_proxy_note }\n',
+])
+def test_tofu_allows_forbidden_words_without_assignment(tmp_path, text):
     (tmp_path / "main.tf").write_text(text, encoding="utf-8")
     assert testkit.tofu_config_problems(tmp_path) == []
 

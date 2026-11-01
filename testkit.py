@@ -1625,10 +1625,7 @@ _TOFU_PREFIX = re.compile(rf"{DOCKER_PREFIX}[0-9a-f]{{8}}")
 TOFU_PROVIDERS = {"hashicorp/aws": TOFU_AWS_PROVIDER}
 TOFU_REGISTRY = "registry.opentofu.org"
 _TOFU_FORBIDDEN_ARGS = ("no_proxy", "http_proxy", "https_proxy", "custom_ca_bundle")
-_TOFU_FORBIDDEN_HCL = re.compile(rf"\b({'|'.join(_TOFU_FORBIDDEN_ARGS)})\s*=(?!=)")
-_HCL_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
-_HCL_LINE_COMMENT = re.compile(r"(?<!:)//.*|#.*")
-_TOFU_FORBIDDEN_JSON = re.compile(rf'"({'|'.join(_TOFU_FORBIDDEN_ARGS)})"\s*:')
+_TOFU_FORBIDDEN = re.compile(rf'\b({'|'.join(_TOFU_FORBIDDEN_ARGS)})\b"?\s*[=:]')
 _TOFU_LOCK_ENTRY = re.compile(r'provider\s+"([^"]+)"\s*\{[^}]*?\bversion\s*=\s*"([^"]+)"', re.S)
 _TOFU_VERSION_MISMATCH = re.compile(r"no available releases match|does not match|locked provider|doesn't match", re.I)
 _TOFU_NETWORK_ERRORS = re.compile(
@@ -1747,28 +1744,23 @@ def _tofu_version_message() -> str:
 
 def tofu_config_problems(root: Path) -> list[str]:
     """Đối số provider hay backend vô hiệu lớp chặn mạng của `tofu_env` (`no_proxy`, `http_proxy`, `https_proxy`,
-    `custom_ca_bundle`) trong `*.tf`, `*.tofu` và bản `.json` của chúng dưới `root` (bỏ `.terraform`)."""
+    `custom_ca_bundle`) trong `*.tf`, `*.tofu` và bản `.json` của chúng dưới `root` (bỏ `.terraform`). Quét văn bản thô,
+    không bỏ chú thích: tên cấm theo sau bởi `=` hay `:` ở bất kỳ đâu đều bị từ chối."""
     root = Path(root)
     found = []
     for path in sorted(root.rglob("*")):
         if ".terraform" in path.relative_to(root).parts or not path.is_file():
             continue
-        if path.name.endswith((".tf.json", ".tofu.json")):
-            pattern = _TOFU_FORBIDDEN_JSON
-        elif path.suffix in (".tf", ".tofu"):
-            pattern = _TOFU_FORBIDDEN_HCL
-        else:
+        if not path.name.endswith((".tf", ".tofu", ".tf.json", ".tofu.json")):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        if pattern is _TOFU_FORBIDDEN_HCL:
-            text = _HCL_BLOCK_COMMENT.sub(lambda m: "\n" * m.group().count("\n"), text)
-            text = _HCL_LINE_COMMENT.sub("", text)
-        for match in pattern.finditer(text):
+        for match in _TOFU_FORBIDDEN.finditer(text):
             line = text.count("\n", 0, match.start()) + 1
             found.append(
-                f"{path.relative_to(root)}:{line}: đối số `{match.group(1)}` bị từ chối: test đặt proxy chặn mọi request "
-                "không tới LocalStack để code không bao giờ gọi AWS thật, đối số này mở đường vòng qua lớp đó. Bỏ đối số "
-                "này; LocalStack của track không cần proxy hay CA riêng")
+                f"{path.relative_to(root)}:{line}: `{match.group(1)}` bị từ chối: test đặt proxy chặn mọi request không tới "
+                "LocalStack để code không bao giờ gọi AWS thật, đối số này mở đường vòng qua lớp đó. Trong lab cấm hẳn "
+                f"`{match.group(1)} =` (và khoá JSON), kể cả khi nằm trong chú thích hay chuỗi, để không mẹo chú thích hay "
+                "heredoc nào lách được phép kiểm. Xoá dòng này; LocalStack của track không cần proxy hay CA riêng")
     return found
 
 
