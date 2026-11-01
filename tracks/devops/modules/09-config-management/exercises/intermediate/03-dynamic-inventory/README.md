@@ -46,7 +46,9 @@ Team hạ tầng xuất danh sách máy từ CMDB mỗi đêm ra JSON (`tests/fi
 **`rollout.yml`**: giữ hai play và tên của chúng; play 1 chỉ nhắm worker prod là canary, play 2 nhắm worker prod **không** phải
 canary. Dùng host pattern (giao `:&`, loại `:!`), không liệt kê tên máy.
 
-Bài này chỉ chạy `ansible-inventory` và `ansible-playbook --list-hosts`, không kết nối máy nào, nên `ansible_host` được phép.
+Bài này chỉ chạy `ansible-inventory` và `ansible-playbook --list-hosts`, không kết nối máy nào, nên `ansible_host` được phép. Vì
+vậy test chép thẳng thư mục bài, không qua phép quét tĩnh của `AnsibleLab.stage()` (phép quét đó cấm `ansible_host`); việc này an
+toàn vì lab không có target nào, `--list-hosts` không mở kết nối, và mọi lệnh (kể cả `cmdb.py`) vẫn chạy trong sandbox.
 
 **Cách test chấm.** Chạy trong sandbox `ansible-inventory -i inventory/cmdb.py --list` (riêng script) và `-i inventory` (script
 cộng constructed) với `OLIST_CMDB_FILE` trỏ tới từng fixture, chạy thẳng `cmdb.py --host` và `cmdb.py --list` khi thiếu biến, rồi

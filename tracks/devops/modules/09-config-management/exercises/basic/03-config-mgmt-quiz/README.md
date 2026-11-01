@@ -33,7 +33,8 @@ Với mỗi câu, tự hỏi:
 ### Gợi ý 1
 
 Bảng precedence ở mục 4: role `defaults` thấp nhất, extra vars (`-e`) cao nhất; role `vars` cao hơn inventory và play vars.
-Handler chạy ở cuối play (hay ở `meta: flush_handlers`), và không chạy trên máy đã fail trừ khi bật `force_handlers`.
+Handler chạy ở điểm flush (sau `pre_tasks`, sau `roles` và `tasks`, sau `post_tasks`, hay ở `meta: flush_handlers`), và không
+chạy trên máy đã fail trừ khi bật `force_handlers`.
 
 ### Gợi ý 2
 

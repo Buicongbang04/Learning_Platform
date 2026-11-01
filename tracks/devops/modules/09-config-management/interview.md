@@ -31,7 +31,8 @@ deploy đọc tệp trên máy.
 
 ## Handler chạy lúc nào? Kể hai cách handler "không chạy" mà bạn từng gặp.
 
-Handler chạy một lần ở cuối play (hay ở `meta: flush_handlers`), theo thứ tự khai báo, chỉ khi được notify bởi task báo `changed`.
+Handler chạy một lần ở điểm flush kế tiếp (sau `pre_tasks`, sau `roles` cộng `tasks`, sau `post_tasks`, hay ở `meta:
+flush_handlers`), theo thứ tự khai báo, chỉ khi được notify bởi task báo `changed`.
 
 Hai cách nó không chạy: (1) task ghi tệp có `changed_when: false` (ai đó thêm để tắt màu vàng trên dashboard): tệp đổi nhưng kết quả
 bị ép "không đổi", không có notify; (2) một task sau đó fail trên máy: máy bị loại khỏi play, handler đang chờ của nó bị bỏ, lần chạy

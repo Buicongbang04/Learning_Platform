@@ -13,8 +13,8 @@ Lời giải là `roles/olist_worker/` (cộng `site.yml`, `inventory/` giữ nh
 - **Wheel nội bộ qua biến môi trường của pip.** `PIP_NO_INDEX=1`, `PIP_FIND_LINKS=/srv/wheels` thay vì `extra_args`: module `pip`
   coi mọi `extra_args` (và `requirements:`) là "không biết", nên `--check` luôn báo `changed`. Với `name:` là danh sách ghim phiên
   bản, check mode so được với `pip freeze` và trung thực.
-- **Một handler, nhiều nguồn notify.** Code, venv, env file, unit đều notify `Restart olist-worker`; handler chạy một lần ở cuối
-  play dù được notify bốn lần. `daemon_reload: true` để unit mới có hiệu lực.
+- **Một handler, nhiều nguồn notify.** Code, venv, env file, unit đều notify `Restart olist-worker`; handler chạy một lần ở điểm
+  flush sau phần `roles` cộng `tasks` dù được notify bốn lần. `daemon_reload: true` để unit mới có hiệu lực.
 - **Quản service có điều kiện.** `when: ansible_facts.service_mgr == "systemd"` giữ role đúng trên VM thật và chạy được trong lab
   container. Đây là điều kiện về **môi trường**, không phải cờ riêng cho lab: role không có biến kiểu `olist_worker_in_lab`.
 - **Tag `config` cho thay đổi nhỏ, thường xuyên.** Đổi log level không cần chép lại code hay kiểm venv. Không gắn tag cho task tạo

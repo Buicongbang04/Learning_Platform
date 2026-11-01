@@ -6,7 +6,7 @@
 | precedence-extra-vars | c | Extra vars luôn thắng, kể cả `set_fact`; vì vậy `-e` hợp cho tham số một lần (bản deploy) và nguy hiểm khi dùng để "sửa nhanh" biến cấu hình |
 | shell-idempotency | a | `shell` không biết trạng thái; `lineinfile` với `regexp` có. Recap `changed` mỗi lần làm mất tín hiệu thay đổi thật |
 | grep-failed-when | d | Mã 1 của grep là "không khớp"; `failed_when` định nghĩa lỗi đúng, `changed_when: false` vì lệnh chỉ đọc. `ignore_errors` nuốt cả lỗi thật |
-| handler-timing | b | Handler chạy cuối play hoặc ở `meta: flush_handlers`; `force_handlers` không đổi thời điểm |
+| handler-timing | b | Handler chạy ở điểm flush: sau `pre_tasks`, sau `roles` cộng `tasks`, sau `post_tasks`, hoặc ở `meta: flush_handlers`; health check nằm cùng phần `tasks` nên cần `flush_handlers` trước nó. `force_handlers` không đổi thời điểm |
 | handler-failure | c | Máy fail bị loại khỏi play, handler đang chờ của nó không chạy; `force_handlers` buộc chạy. Không có nó, lần sau tệp đã đúng nên không ai notify nữa: service chạy cấu hình cũ |
 | check-diff | a | Check mode không đổi gì, nhưng chỉ đúng với module hỗ trợ; `command`/`shell` bị bỏ qua (trừ khi có `creates`/`removes`), task sau phụ thuộc kết quả của chúng có thể sai |
 | vault-practice | b | Tách `vars.yml` (tên biến grep được) và `vault.yml` (mã hoá), vault id theo môi trường, `no_log` cho task dùng bí mật |

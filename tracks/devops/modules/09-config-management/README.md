@@ -106,22 +106,35 @@ Helper `AnsibleLab` của testkit:
 
 1. Build image target, chạy N container, sinh cặp khoá ed25519 trong thư mục tạm, đọc khoá host của từng container rồi **ghim** vào
    một `known_hosts` riêng.
-2. Sinh `ssh_config` riêng (`StrictHostKeyChecking yes`, `IdentityAgent none`, `GlobalKnownHostsFile /dev/null`), `ansible.cfg` riêng
-   và inventory kết nối `lab.ini` (`worker-1 ansible_host=127.0.0.1 ansible_port=<cổng> ansible_user=root`), truyền **sau**
-   inventory của bài.
+2. Sinh `ssh_config` riêng (`StrictHostKeyChecking yes`, `IdentityAgent none`, `GlobalKnownHostsFile /dev/null`, một
+   `ProxyCommand` chỉ mở kết nối tới `127.0.0.1:<cổng của lab>`), `ansible.cfg` riêng, inventory `lab.ini` chỉ liệt kê tên máy
+   (truyền **sau** inventory của bài), và tệp extra vars `lab-conn.yml` luôn truyền cuối cùng bằng `-e @lab-conn.yml`.
 3. Chép thư mục bài vào thư mục tạm, chạy `ansible-playbook` trong sandbox bwrap: `HOME` tạm, `ANSIBLE_CONFIG` trỏ tệp của lab (nên
    `ansible.cfg` trong thư mục bài, `~/.ansible.cfg`, `/etc/ansible` không được đọc), `~/.ssh` bị che, env dựng từ đầu.
-4. Đọc kết quả từng task qua một callback của lab (máy nào, task nào, module gì, `changed`, handler hay không), không parse output.
+4. Đọc kết quả từng task qua một callback của lab (máy nào, task nào, module gì, `changed`, handler hay không, kết nối qua đâu),
+   không parse output.
 
-Bài Ansible **không bao giờ chạy vào máy bạn**, ba lớp:
+Cách lab giữ bài Ansible khỏi máy bạn, theo thứ tự từ chỗ thật sự chặn tới chỗ chỉ báo sớm:
 
-- Trước khi chạy, test từ chối tệp nào trong thư mục bài có `connection:`, `ansible_connection`, `ansible_host`, `ansible_port`,
-  `ansible_ssh_*`, `host_key_checking`, `delegate_to`, `local_action`, `add_host`, lookup `pipe`/`lines`, chữ `localhost`,
-  `127.x.x.x`, `::1` (ngoài `templates/` và `files/`), hay thư mục `*_plugins`, `collections`. Quét văn bản thô, kể cả chú thích.
-  Bài inventory động (Intermediate 03) không kết nối máy nào nên dùng `ansible_host`.
-- Khoá host đã ghim: ssh từ chối mọi sshd khác ngoài các container của lab.
-- Sau khi chạy, test fail nếu có task trên host không thuộc lab (ví dụ `hosts: "{{ 'local' ~ 'host' }}"` lách được phép quét); task
-  đó đã chạy trong sandbox, không ghi được gì ngoài thư mục tạm.
+- **Sandbox.** `ansible-playbook` chạy trong bwrap: `/` chỉ đọc, `~/.ssh` và thông tin đăng nhập khác bị che, không SSH agent,
+  chỉ thư mục tạm của lab ghi được. Kể cả khi một task chạy trên máy điều khiển, nó không sửa được gì của bạn.
+- **Biến kết nối bị ghim bằng extra vars.** Extra vars đứng cao nhất trong precedence (mục 4), thắng `set_fact`, inventory (kể cả
+  inventory động), `vars:` và cả từ khoá `connection:` của play hay task. `lab-conn.yml` đặt `ansible_connection: ssh`,
+  `ansible_host`/`ansible_port` theo bảng cổng của lab (máy không thuộc lab, kể cả `localhost` ngầm định, nhận `0.0.0.0:1`),
+  `ansible_user: root`, `ansible_ssh_args` của lab, `ansible_ssh_common_args`/`ansible_ssh_extra_args`/`ansible_scp_extra_args`/
+  `ansible_sftp_extra_args` rỗng, `ansible_ssh_executable: ssh`, `ansible_host_key_checking: true`, khoá riêng của lab. Đặt các
+  biến này ở chỗ khác không có tác dụng; `become` và `become_user` vẫn dùng bình thường.
+- **ProxyCommand và khoá host đã ghim.** ssh chỉ mở được kết nối tới `127.0.0.1:<cổng của từng container>` và chỉ tin khoá host của
+  các container đó, nên sshd của máy bạn hay container khác đều bị từ chối.
+- **Callback kiểm sau khi chạy.** Lần chạy bị đánh dấu lỗi khi có task trên host ngoài lab, task không đi bằng ssh tới đúng cổng của
+  máy đó, kết nối bị ProxyCommand chặn, hay khi bài cố đặt một biến kết nối bị ghim (qua `set_fact`, biến inventory, `vars:`,
+  `connection:`): giá trị đã bị bỏ qua, nhưng thói quen đó nguy hiểm ở production nên test báo ra.
+- **Phép quét tĩnh trước khi chạy.** Test từ chối tệp nào trong thư mục bài có `connection:`, `ansible_connection`, `ansible_host`,
+  `ansible_port`, `ansible_ssh_*`, `host_key_checking`, `delegate_to`, `local_action`, `add_host`, lookup `pipe`/`lines`, escape
+  `\xNN`/`\uNNNN`, `localhost`, địa chỉ 127.0.0.0/8 (kể cả `127.1`), `0.0.0.0`, `::1` (ngoài `templates/` và `files/`), hay thư mục
+  `*_plugins`, `collections`. Quét văn bản thô, kể cả chú thích. Đây là **tín hiệu sớm** để bạn sửa thói quen, không phải ranh giới
+  an toàn: tên khoá dựng bằng Jinja2 hay script inventory lách được nó, và các lớp trên mới là chỗ chặn. Bài inventory động
+  (Intermediate 03) không kết nối máy nào nên không qua phép quét và được dùng `ansible_host`.
 
 Test chạy `uv run pytest <thư mục bài> -q -rs`. Bài có target mất 15 giây tới 1,5 phút. Máy nhiều core thì ghim như module 06:
 
@@ -423,13 +436,15 @@ trước khi áp prod và để phát hiện drift định kỳ. Giới hạn c�
 
 ### Handler
 
-Handler là task chỉ chạy khi được `notify` bởi một task **báo changed**, và chạy **một lần** ở cuối play dù được notify nhiều lần.
+Handler là task chỉ chạy khi được `notify` bởi một task **báo changed**, và chạy **một lần** ở điểm flush kế tiếp dù được notify
+nhiều lần.
 Dùng cho restart, reload: đổi env file và unit trong cùng một lần chạy vẫn chỉ restart một lần.
 
 - Tên trong `notify:` phải trùng `name:` của handler, hoặc dùng `listen: "restart worker stack"` để nhiều handler cùng nghe một chủ
   đề. Notify một tên không tồn tại là lỗi.
-- Handler chạy ở cuối play, theo **thứ tự khai báo trong `handlers`**, không theo thứ tự notify. Cần chạy sớm hơn (task sau cần service
-  đã restart, ví dụ health check): `- ansible.builtin.meta: flush_handlers`.
+- Điểm flush: sau `pre_tasks`, sau phần `roles` cộng `tasks`, sau `post_tasks`, và ở mỗi `- ansible.builtin.meta: flush_handlers`.
+  Handler chạy theo **thứ tự khai báo trong `handlers`**, không theo thứ tự notify. Task sau cần service đã restart (ví dụ health check
+  trong cùng phần `tasks`) thì đặt `flush_handlers` trước nó.
 - Máy fail giữa play bị loại khỏi play và **handler đang chờ của nó không chạy**. Lần chạy sau tệp đã đúng nên không task nào notify
   nữa: service chạy cấu hình cũ vô thời hạn. `force_handlers: true` (play) hay `--force-handlers` buộc handler chạy dù máy fail.
 - Task có `changed_when: false` không bao giờ notify được, kể cả khi thật sự ghi tệp. Đây là nguyên nhân của một trong ba triệu chứng
@@ -439,7 +454,9 @@ Dùng cho restart, reload: đổi env file và unit trong cùng một lần ch�
 
 `gather_facts: true` (mặc định) chạy module `setup` đầu play, cho `ansible_facts` (distro, IP, RAM, `service_mgr`...). Tắt khi không
 dùng để nhanh hơn, hay bật fact cache (`fact_caching = jsonfile`, Redis) cho inventory lớn. `when:` nhận biểu thức Jinja2 (không cần
-`{{ }}`); từ `ansible-core` 2.19, `when` phải trả bool thật, chuỗi không rỗng không còn được coi là đúng. `loop:` lặp qua danh sách;
+`{{ }}`); từ `ansible-core` 2.19, điều kiện phải cho kết quả bool: `when: some_string` với chuỗi không rỗng không còn được ép thành
+đúng mà là **lỗi** ("Conditionals must have a boolean result"), trừ khi bật tạm `ALLOW_BROKEN_CONDITIONALS`; viết `when: some_string |
+length > 0` hay `when: flag | bool`. `loop:` lặp qua danh sách;
 `register` lưu kết quả; `block`/`rescue`/`always` gom task, bắt lỗi và dọn dẹp (Advanced 01 dùng để rollback).
 
 ## 4. Biến, template Jinja2 và variable precedence
