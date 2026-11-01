@@ -11,7 +11,7 @@ questions:
   - id: c
     text: '0.5'
   - id: d
-    text: '10.7'
+    text: '11.10'
 - id: induction-layers
   kind: data
   type: single

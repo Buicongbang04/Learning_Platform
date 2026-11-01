@@ -1,0 +1,66 @@
+questions:
+- id: ci-unit
+  kind: knowledge
+  type: single
+  prompt: Khi bootstrap khoảng tin cậy cho accuracy của probe theo token, nên mẫu lại theo đơn vị nào?
+  options:
+  - id: a
+    text: Theo từng token, vì mỗi token là một mẫu của probe
+  - id: b
+    text: Theo ngữ cảnh, vì các token cùng ngữ cảnh không độc lập
+  - id: c
+    text: Theo tầng, vì mỗi tầng cho ra một con số accuracy riêng biệt
+  - id: d
+    text: Không cần mẫu lại khi tập test đã có trên một nghìn token
+- id: small-model
+  kind: knowledge
+  type: single
+  prompt: GPT mini của bạn có điểm induction tối đa chỉ 0.3. Báo cáo nên viết thế nào?
+  options:
+  - id: a
+    text: Model không có cơ chế nhìn lại nào, bỏ qua phần này
+  - id: b
+    text: Ghi số đo, so với GPT-2, kiểm bằng ablation trước khi kết luận
+  - id: c
+    text: Tăng half của dãy lặp lại cho tới khi điểm induction vượt 0.8
+  - id: d
+    text: Thay bằng số đo của GPT-2 small vì hai model có kiến trúc giống hệt nhau
+- id: patch-task
+  kind: knowledge
+  type: single
+  prompt: Điều kiện nào cần kiểm trước khi chạy patching trên một nhiệm vụ tự thiết kế?
+  options:
+  - id: a
+    text: Model làm đúng run clean ở hầu hết cặp prompt
+  - id: b
+    text: Run corrupted có logit difference đúng bằng 0
+  - id: c
+    text: Prompt clean dài hơn prompt corrupted một token
+  - id: d
+    text: Nhiệm vụ đã có mạch được công bố trong một paper
+- id: latent-claim
+  kind: knowledge
+  type: single
+  prompt: Mười ví dụ kích hoạt mạnh nhất của một latent đều là tên tỉnh. Kết luận nào là quá đà?
+  options:
+  - id: a
+    text: Latent này bật mạnh ở một số tên tỉnh trong dữ liệu đánh giá
+  - id: b
+    text: Nên xem thêm các mức kích hoạt yếu trước khi đặt tên latent
+  - id: c
+    text: Model dùng latent này để quyết định mọi dự đoán về địa danh
+  - id: d
+    text: Có thể tắt latent rồi đo xem dự đoán tên tỉnh có đổi không
+- id: random-baseline
+  kind: knowledge
+  type: single
+  prompt: Probe trên GPT mini khởi tạo ngẫu nhiên đạt gần bằng model đã train. Điều đó nói gì?
+  options:
+  - id: a
+    text: Thông tin đến từ input và kiến trúc, không chứng minh model học được
+  - id: b
+    text: Model đã train bị hỏng nên cần pretrain lại từ đầu
+  - id: c
+    text: Probe quá yếu, cần đổi sang MLP probe nhiều tầng hơn
+  - id: d
+    text: Kết quả chứng minh thuộc tính này hoàn toàn không tồn tại trong tiếng Việt

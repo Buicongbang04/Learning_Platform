@@ -114,9 +114,9 @@ def test_ablate_restores_model_even_on_error(nb, G):
     idx = torch.randint(30, (1, 5), generator=torch.Generator().manual_seed(4))
     with torch.no_grad():
         before, _ = model(idx)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         with nb.ablate_heads(model, [(0, 0), (1, 2)]):
-            raise RuntimeError("lỗi giữa chừng")
+            raise KeyError("lỗi giữa chừng")
     assert all_hooks(model) == 0, "gỡ hook kể cả khi có exception"
     with torch.no_grad():
         after, _ = model(idx)

@@ -11,7 +11,6 @@ files:
     note: Không sửa
 run:
   - uv run python data/download_dataset.py iwslt15-en-vi
-  - uv sync --project setup/gpu
   - uv run jupyter lab tracks/ai-engineer/modules/08-interpretability/exercises/advanced/01-interpret-gpt-mini/starter/interpret_gpt_mini.ipynb
   - uv run pytest tracks/ai-engineer/modules/08-interpretability/exercises/advanced/01-interpret-gpt-mini -q
 ---
@@ -25,10 +24,11 @@ những cơ chế nào trong số các cơ chế đã biết ở GPT-2, và bạ
 
 ## Đề bài
 
-**Phần cứng:** GPU 4GB · ~480 phút
+**Phần cứng:** CPU · ~480 phút
 
-Thời gian trên là thời gian làm bài. Mọi thí nghiệm trên GPT mini nhỏ hơn GPT-2 hàng chục lần: probe, head, patching chạy trên CPU
-trong vài phút; phần SAE nhanh hơn nhiều trên GPU (bản tham chiếu đo trên PC dùng chung ghi ở `SOLUTION.md`).
+Thời gian trên là thời gian làm bài. GPT mini nhỏ hơn GPT-2 small khoảng 10 lần, nên mọi thí nghiệm chạy được trên CPU; trên bản
+tham chiếu (CPU 4 luồng, PC dùng chung) thu activation cho SAE mất 90 giây và train SAE 143 giây. GPU 4GB giúp nhanh hơn nhưng không
+bắt buộc.
 
 **Checkpoint.** Đặt biến môi trường `GPT_MINI_CKPT` tới tệp `gpt-mini-v1` bạn lưu ở bài Advanced 01 của
 [module 05](../../../../05-transformers-llm-architecture/exercises/advanced/01-gpt-mini-vietnamese/README.md) (định dạng đặc tả ở
