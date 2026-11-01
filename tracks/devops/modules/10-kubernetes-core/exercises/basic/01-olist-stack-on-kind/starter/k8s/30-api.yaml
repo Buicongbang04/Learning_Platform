@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: olist-shop
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: olist-shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/part-of: olist-shop
+    spec:
+      containers:
+        - name: api
+          image: devops-track/olist-shop:1.0
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: olist-config
+          env:
+            # TODO: DATABASE_URL lấy từ Secret olist-db
+            - name: DATABASE_URL
+              value: postgresql+psycopg://olist:olist-k8s-lab@postgres:5432/olist
+          # TODO: startupProbe, readinessProbe, livenessProbe
+          # TODO: resources (requests cpu, memory; limits memory)
