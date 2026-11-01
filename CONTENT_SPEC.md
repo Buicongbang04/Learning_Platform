@@ -279,3 +279,69 @@ Mỗi milestone gồm: `# Tiêu đề`, `## Mục tiêu`, `## Việc cần làm`
 | metabase | 3000 | `admin@example.com` / `DeLearning-Admin1` (tạo bằng `setup/bi/init_bi.py`) |
 | superset | 8088 | `admin` / `admin` |
 | localstack | 4566 (giả lập AWS: s3, iam, sts) | access key `test` / `test` |
+| mailpit (profile `devops`) | 11025 (SMTP), 18025 (web và API), chỉ mở trên `127.0.0.1` | không |
+
+`mailpit` chỉ bật khi gọi kèm `--profile devops`, nên `docker compose up -d` của các track khác không dựng nó.
+
+## Track DevOps
+
+Quy ước riêng của `tracks/devops/`, bổ sung cho phần chung ở trên. Validator `tests/test_devops_track.py` kiểm phần
+lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, không chép lại ở đây.
+
+### Test chạy gì, bằng helper nào
+
+| Test cần | Dùng | Đảm bảo |
+| --- | --- | --- |
+| Chạy script hay chương trình của người học trên máy host | `testkit.run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})` (cần stdin/stdout dạng bytes hay `Popen` thì `sandbox_command`) | bwrap: `/` chỉ đọc, `/tmp` và `/run` là tmpfs rỗng, `~/.docker` bị che, chỉ các thư mục trong `writable` ghi được, `HOME` là `cwd`, env dựng lại từ đầu (`PATH`, `HOME`, `LANG`/`LC_ALL` cộng những gì test truyền). Mạng **không** tách. Không dùng được bwrap thì skip, **không bao giờ** chạy trần |
+| Container do test dựng | `with DockerLab() as lab:` (fixture: dựng container bên trong `with`, rồi `yield lab`) | `--rm`, nhãn `devops-ex=1`, tên `devops-ex-<uuid8>-<alias>`, giới hạn RAM và số tiến trình, cpuset theo `docker_cpu_args()`, cổng chỉ trên `127.0.0.1` ở cổng trống, mount `:ro`, network riêng; lỗi hay Ctrl-C ở bất kỳ bước nào cũng dọn hết |
+| Gọi `docker` thẳng (`subprocess.run(["docker", ...])`, `_docker(`) trong test của module | Cấm | Validator báo lỗi |
+
+- Tệp fixture trong repo nhìn thấy được (chỉ đọc) trong sandbox; tệp test tạo ra đặt trong `tmp_path` để script ghi được.
+- Ngoại lệ phải có lý do ghi trong `README.md` của bài, ví dụ module 01 Basic 03 (graceful-stop) phải gửi signal tới
+  PID thật nên không dùng được `--unshare-pid` của bwrap; bài đó vẫn chạy script với `start_new_session=True` và env
+  dựng từ đầu.
+
+### Gating
+
+- `ex.require_tool(name, min_version)`: thiếu công cụ, phiên bản cũ hơn mức tối thiểu, hay (với `docker`) daemon tắt
+  hoặc user không có quyền socket thì skip.
+- `ex.require_image(image)`, `ex.require_service(name)`, `ex.require_cluster(name="devops-lab")`: skip khi chưa có
+  image, service compose hay cluster kind.
+- Thông báo skip chỉ chỗ sửa: `setup/DEVOPS-TOOLS.md`, lệnh `docker pull` hay `docker compose ... up -d`. Skip không
+  tính là đạt; `SOLUTION=1` phải pass không skip khi đã cài đủ công cụ.
+
+### Ghim CPU
+
+- Một biến duy nhất `DEVOPS_CPUSET`: dải core (`2-7`, `12-35`) hoặc rỗng/chưa đặt nghĩa là không ghim. Không bao giờ
+  dùng giá trị chữ như `none`: compose truyền nguyên giá trị cho Docker và Docker từ chối tạo container.
+- Compose (`cpuset: "${DEVOPS_CPUSET:-}"`) đọc biến từ shell hoặc `.env` cạnh tệp compose. `testkit.docker_cpu_args()`
+  đọc từ môi trường của pytest (cộng `setup/.env`); rỗng thì chỉ tự ghim `12-35` khi máy có từ 36 core.
+- Lệnh nặng trong hướng dẫn chạy với `nice -n 15 taskset -c "$DEVOPS_CPUSET"`; không ghim thì chỉ `nice -n 15`.
+
+### Phần `## 0. Cài đặt` của module
+
+- Có khi module dùng công cụ lần đầu; luôn là phần `## ` đầu tiên và không tính vào 5–8 phần.
+- Bảng phiên bản đã kiểm và mức tối thiểu cho bài tập; lệnh tải qua HTTPS; kiểm checksum **trước** khi giải nén hay
+  cài; cài vào `~/.local/bin` (không `sudo` nếu được); lệnh xác nhận kèm output thật; cách gỡ.
+- Khối cài nối các bước bằng `&&` để checksum sai thì dừng, không cài. Không bao giờ `curl ... | sudo bash`.
+
+### Bài sự cố cố ý
+
+- `README.md` chỉ tả triệu chứng; nguyên nhân chỉ nằm trong `solutions/`.
+- Test chứng minh hành vi đúng sau khi sửa, và có một ca hồi quy chứng minh starter tái hiện đúng triệu chứng.
+
+### Capstone
+
+- Test trong `capstone/project/tests` chấm `capstone/project/`; `SOLUTION=1` chấm `capstone/solutions/project/`.
+- `-k mNN` chọn một milestone; tên test bắt đầu bằng `test_mNN_`.
+- Tên tệp milestone cố định theo trường `doc` trong `track.json`.
+
+### Dự kiến cho Phase 2
+
+Các helper sau **chưa có**; phải thêm vào `testkit.py` (kèm test) trước khi bài nào dùng:
+
+- `KubeLab`: namespace riêng trên cluster `devops-lab`, dọn khi xong.
+- `act_run`: chạy workflow GitHub Actions bằng `act` với container của `DockerLab`.
+- `DockerLab.build` và `DockerLab.compose`: build image và dựng compose với cùng bảo đảm như `start`.
+- `kind_node_exec`: chạy lệnh trong node kind.
+- Helper git cho testkit: repo tạm có commit, branch, remote giả.
