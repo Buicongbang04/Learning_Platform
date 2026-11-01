@@ -266,8 +266,8 @@ polish", "Tell me a joke about a woman") mà bộ deepset gán nhãn injection v
 phát hiện phải được đo theo định nghĩa của **ứng dụng bạn**. Nó cũng tốn một lời gọi LLM mỗi request.
 
 Bài Intermediate 01 cho bạn train TF-IDF và embedding classifier trên cùng dữ liệu và so với mốc này. Hai lưu ý của
-người làm thật: classifier công khai (Meta Prompt Guard, các model deberta trên Hugging Face) train chủ yếu bằng tiếng
-Anh, phải đo lại trên tiếng Việt trước khi tin; và kẻ tấn công **thấy** được classifier của bạn qua việc bị chặn hay
+người làm thật: classifier công khai (Meta Prompt Guard, các model deberta trên Hugging Face) phần lớn train trên tiếng
+Anh và vài ngôn ngữ lớn, phải đo lại trên tiếng Việt và trên lưu lượng của chính bạn trước khi tin; và kẻ tấn công **thấy** được classifier của bạn qua việc bị chặn hay
 không, nên nó là một lớp giảm nhiễu, không phải tường thành.
 
 ## 3. Privacy và dữ liệu cá nhân
