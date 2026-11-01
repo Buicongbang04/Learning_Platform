@@ -1,0 +1,105 @@
+questions:
+- id: int8-cost
+  kind: data
+  type: single
+  prompt: Trên checkpoint GPT mini của module 05, int8 per-channel (chỉ các lớp Linear) làm bpc validation tăng khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Dưới 0.001
+  - id: b
+    text: Từ 0.005 tới 0.02
+  - id: c
+    text: Từ 0.03 tới 0.1
+  - id: d
+    text: Hơn 0.2
+- id: tensor-vs-channel
+  kind: data
+  type: single
+  prompt: Ở int4 đối xứng, Δbpc của per-tensor so với Δbpc của per-channel trên GPT mini thế nào?
+  options:
+  - id: a
+    text: Gần bằng nhau, chênh dưới 20%
+  - id: b
+    text: Per-tensor lớn hơn khoảng 4 tới 12 lần
+  - id: c
+    text: Per-tensor lớn hơn hơn 50 lần
+  - id: d
+    text: Per-tensor nhỏ hơn per-channel
+- id: int2-sym-asym
+  kind: data
+  type: single
+  prompt: Với int2 nhóm 32 trên GPT mini, so bản đối xứng (absmax) với bản zero-point?
+  options:
+  - id: a
+    text: Đối xứng tốt hơn vì không tốn zero-point
+  - id: b
+    text: Hai bản cho bpc gần như bằng nhau
+  - id: c
+    text: Zero-point tốt hơn, Δbpc bản đối xứng gấp 2 tới 5 lần
+  - id: d
+    text: Zero-point tốt hơn, Δbpc bản đối xứng gấp hơn 10 lần
+- id: embedding
+  kind: data
+  type: single
+  prompt: Ở int4 nhóm 128, quantize thêm embedding/lm_head dùng chung (so với chỉ các lớp Linear) đổi dung lượng và bpc ra sao?
+  options:
+  - id: a
+    text: Dung lượng giảm hơn 2 lần, bpc tăng thêm dưới 0.03
+  - id: b
+    text: Dung lượng giảm khoảng 10%, bpc tăng thêm dưới 0.03
+  - id: c
+    text: Dung lượng giảm hơn 2 lần, bpc tăng thêm hơn 0.2
+  - id: d
+    text: Dung lượng gần như không đổi, bpc tăng thêm hơn 0.2
+- id: bits-g32
+  kind: knowledge
+  type: single
+  prompt: int4 nhóm 32, mỗi nhóm một scale fp16, không zero-point, tốn bao nhiêu bit cho mỗi trọng số?
+  options:
+  - id: a
+    text: '4.0'
+  - id: b
+    text: '4.125'
+  - id: c
+    text: '4.5'
+  - id: d
+    text: '5.0'
+- id: why-asym-2bit
+  kind: knowledge
+  type: single
+  prompt: Vì sao ở 2 bit, zero-point hơn absmax đối xứng nhiều hơn hẳn so với ở 8 bit?
+  options:
+  - id: a
+    text: Absmax 2 bit chỉ dùng 3 trên 4 mức, mất một phần tư dải mã
+  - id: b
+    text: Zero-point dùng scale fp32 nên chính xác hơn scale fp16
+  - id: c
+    text: Ở 2 bit trọng số không còn phân phối đối xứng quanh 0
+  - id: d
+    text: Absmax 2 bit làm tròn lên còn zero-point làm tròn xuống
+- id: fake-quant
+  kind: knowledge
+  type: single
+  prompt: Fake quantization trong bài (làm tròn rồi lưu lại dạng float32) đo được điều gì?
+  options:
+  - id: a
+    text: Tốc độ sinh token của model int4 trên CPU
+  - id: b
+    text: Ảnh hưởng của lưới lượng tử lên độ chính xác
+  - id: c
+    text: VRAM thật mà model int4 chiếm khi chạy
+  - id: d
+    text: Cả độ chính xác, tốc độ và bộ nhớ cùng lúc
+- id: tied
+  kind: knowledge
+  type: single
+  prompt: GPT mini dùng chung trọng số giữa lm_head và tok_emb. Quantize lm_head tại chỗ thì điều gì xảy ra?
+  options:
+  - id: a
+    text: Chỉ lớp output đổi, embedding đầu vào giữ nguyên
+  - id: b
+    text: PyTorch báo lỗi vì tensor đang được dùng chung
+  - id: c
+    text: Embedding đầu vào cũng bị quantize theo, cùng một tensor
+  - id: d
+    text: Weight tying tự bị gỡ, model có thêm một ma trận

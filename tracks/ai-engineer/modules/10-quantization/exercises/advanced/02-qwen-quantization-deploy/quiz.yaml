@@ -1,0 +1,92 @@
+questions:
+- id: q4km-real-types
+  kind: data
+  type: single
+  prompt: Trong tệp qwen2.5:0.5b-instruct-q4_K_M của Ollama, các ma trận attn_q, attn_k, ffn_gate, ffn_up có kiểu gì?
+  options:
+  - id: a
+    text: Q4_K
+  - id: b
+    text: Q5_0
+  - id: c
+    text: Q6_K
+  - id: d
+    text: Q8_0
+- id: q3km-real-types
+  kind: data
+  type: single
+  prompt: Còn trong tệp qwen2.5:0.5b-instruct-q3_K_M, các ma trận attn_q, ffn_gate, ffn_up có kiểu gì?
+  options:
+  - id: a
+    text: Q3_K
+  - id: b
+    text: IQ4_NL
+  - id: c
+    text: Q2_K
+  - id: d
+    text: F16
+- id: double-quant
+  kind: data
+  type: single
+  prompt: Bật bnb_4bit_use_double_quant cho NF4 trên Qwen2.5-0.5B thay đổi bộ nhớ sau khi nạp và bpc thế nào?
+  options:
+  - id: a
+    text: Bộ nhớ giảm khoảng một nửa, bpc tăng rõ
+  - id: b
+    text: Bộ nhớ giảm vài phần trăm, bpc gần như không đổi
+  - id: c
+    text: Bộ nhớ tăng vì phải lưu thêm scale, bpc giảm
+  - id: d
+    text: Bộ nhớ không đổi, bpc tăng khoảng 0.05
+- id: fp4-vs-nf4
+  kind: data
+  type: single
+  prompt: Trên Qwen2.5-0.5B, so Δbpc của bitsandbytes FP4 với Δbpc của NF4 (cùng compute dtype bf16)?
+  options:
+  - id: a
+    text: Gần như bằng nhau
+  - id: b
+    text: FP4 tốt hơn khoảng một nửa
+  - id: c
+    text: FP4 tệ hơn, gấp khoảng 2 tới 3 lần
+  - id: d
+    text: FP4 tệ hơn hơn 10 lần
+- id: ollama-ppl
+  kind: knowledge
+  type: single
+  prompt: Vì sao bài đo chất lượng GGUF bằng cách giải lượng tử vào Transformers thay vì gọi Ollama?
+  options:
+  - id: a
+    text: Ollama không trả log-probability của các token trong prompt
+  - id: b
+    text: Ollama tự đổi model sang fp16 trước khi chạy
+  - id: c
+    text: Ollama không đọc được tệp GGUF đã quantize
+  - id: d
+    text: Ollama chỉ chạy được trên CPU, quá chậm để đánh giá
+- id: pareto
+  kind: knowledge
+  type: single
+  prompt: Một cấu hình nằm trên Pareto front (bpc, bộ nhớ, tốc độ) nghĩa là gì?
+  options:
+  - id: a
+    text: Nó có bpc thấp nhất trong mọi cấu hình đã đo
+  - id: b
+    text: Không cấu hình nào khác tốt bằng ở mọi cột và hơn ở một cột
+  - id: c
+    text: Nó nằm giữa cấu hình nhanh nhất và chính xác nhất
+  - id: d
+    text: Nó đạt mọi ngưỡng bộ nhớ và chất lượng đặt ra
+- id: nvidia-smi
+  kind: knowledge
+  type: single
+  prompt: Vì sao số VRAM của nvidia-smi luôn lớn hơn torch.cuda.max_memory_allocated?
+  options:
+  - id: a
+    text: nvidia-smi đếm cả CUDA context và bộ nhớ đệm của allocator
+  - id: b
+    text: max_memory_allocated chỉ đếm trọng số, không đếm activation
+  - id: c
+    text: nvidia-smi đo theo GB còn PyTorch đo theo GiB
+  - id: d
+    text: PyTorch nén tensor trước khi báo cáo bộ nhớ

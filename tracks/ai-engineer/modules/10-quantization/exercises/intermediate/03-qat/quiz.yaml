@@ -1,0 +1,79 @@
+questions:
+- id: qat-recovery
+  kind: data
+  type: single
+  prompt: Với checkpoint GPT mini của module 05, int2 nhóm 32, QAT lấy lại khoảng bao nhiêu phần khoảng cách bpc giữa PTQ và float32 gốc?
+  options:
+  - id: a
+    text: Dưới 20%
+  - id: b
+    text: Khoảng 50% tới 90%
+  - id: c
+    text: Toàn bộ, QAT tốt hơn cả float32
+  - id: d
+    text: QAT tệ hơn PTQ
+- id: control
+  kind: data
+  type: single
+  prompt: Đối chứng "fine-tune float32 cùng ngân sách rồi PTQ int2" cho bpc thế nào so với PTQ trên checkpoint gốc?
+  options:
+  - id: a
+    text: Gần bằng hoặc tệ hơn PTQ trên checkpoint gốc
+  - id: b
+    text: Tốt ngang QAT
+  - id: c
+    text: Tốt hơn QAT khoảng 0.1 bpc
+  - id: d
+    text: Tốt hơn float32 gốc
+- id: loss-start
+  kind: data
+  type: single
+  prompt: Ở những bước đầu, loss train của model QAT int2 so với loss của fine-tune float32 thế nào?
+  options:
+  - id: a
+    text: Gần bằng nhau ngay từ đầu
+  - id: b
+    text: Cao hơn rõ, khoảng 1 tới 3 nat
+  - id: c
+    text: Thấp hơn vì lượng tử hoá có tác dụng regularize
+  - id: d
+    text: Là NaN cho tới khi scale ổn định
+- id: ste-why
+  kind: knowledge
+  type: single
+  prompt: Thiếu STE (để autograd tự lan truyền qua torch.round) thì QAT ra sao?
+  options:
+  - id: a
+    text: Gradient theo trọng số bằng 0, trọng số không đổi
+  - id: b
+    text: Gradient bùng nổ vì round có đạo hàm vô hạn
+  - id: c
+    text: Vẫn train được, chỉ hội tụ chậm hơn một chút
+  - id: d
+    text: PyTorch báo lỗi vì round không khả vi
+- id: master-weights
+  kind: knowledge
+  type: single
+  prompt: Vì sao QAT giữ bản trọng số float32 "chủ" thay vì cập nhật thẳng mã lượng tử?
+  options:
+  - id: a
+    text: Để file checkpoint cuối cùng nhỏ hơn
+  - id: b
+    text: Các bước cập nhật nhỏ hơn một bước lượng tử vẫn được cộng dồn
+  - id: c
+    text: Vì optimizer AdamW không chạy được trên số nguyên
+  - id: d
+    text: Để lúc suy luận vẫn dùng được trọng số float32
+- id: control-purpose
+  kind: knowledge
+  type: single
+  prompt: Thí nghiệm đối chứng (fine-tune float32 rồi PTQ) trả lời câu hỏi nào?
+  options:
+  - id: a
+    text: QAT có nhanh hơn fine-tune thường không
+  - id: b
+    text: Cải thiện đến từ việc thấy lượng tử hay chỉ từ việc train thêm
+  - id: c
+    text: Dữ liệu fine-tune có bị rò rỉ validation không
+  - id: d
+    text: Learning rate của QAT có quá lớn không

@@ -1,0 +1,79 @@
+questions:
+- id: pc-q4km-types
+  kind: data
+  type: single
+  prompt: Xuất checkpoint cấu hình PC của module 05 (n_embd 384) rồi quantize Q4_K_M bằng llama.cpp. Phần lớn ma trận trong tệp có kiểu gì?
+  options:
+  - id: a
+    text: Q4_K
+  - id: b
+    text: Q5_0
+  - id: c
+    text: Q8_0
+  - id: d
+    text: F16
+- id: pc-q4km-size
+  kind: data
+  type: single
+  prompt: Cũng checkpoint cấu hình PC đó, tệp Q4_K_M so với tệp Q4_0 thế nào?
+  options:
+  - id: a
+    text: Nhỏ hơn khoảng 10%
+  - id: b
+    text: Lớn hơn khoảng 15%
+  - id: c
+    text: Bằng nhau từng byte
+  - id: d
+    text: Lớn gần gấp đôi
+- id: f32-match
+  kind: data
+  type: single
+  prompt: bpc của bản GGUF f32 chạy bằng llama.cpp (đưa thẳng token id, cùng cửa sổ trượt) so với bpc PyTorch thế nào?
+  options:
+  - id: a
+    text: Trùng tới 4 chữ số thập phân
+  - id: b
+    text: Lệch khoảng 0.01 do GELU xấp xỉ
+  - id: c
+    text: Lệch khoảng 0.1 do tokenizer khác
+  - id: d
+    text: llama.cpp tốt hơn rõ nhờ fp32
+- id: no-output-tensor
+  kind: knowledge
+  type: single
+  prompt: Vì sao export_gguf không ghi tensor output.weight cho GPT mini?
+  options:
+  - id: a
+    text: llama.cpp không hỗ trợ lớp output có trọng số
+  - id: b
+    text: lm_head dùng chung token_embd, llama.cpp tự dùng lại
+  - id: c
+    text: Lớp output luôn được quantize riêng ở bước sau
+  - id: d
+    text: Tensor output quá lớn so với giới hạn của GGUF
+- id: fallback-reason
+  kind: knowledge
+  type: single
+  prompt: Vì sao llama.cpp báo "falling back" khi quantize k-quant một số tensor?
+  options:
+  - id: a
+    text: Số cột không chia hết cho siêu khối 256 phần tử
+  - id: b
+    text: Tensor có giá trị ngoại lai quá lớn so với fp16
+  - id: c
+    text: Tensor là bias một chiều, không có hàng để chia
+  - id: d
+    text: Model không có imatrix nên phải dùng kiểu cũ
+- id: speed-flat
+  kind: knowledge
+  type: single
+  prompt: Với GPT mini, tốc độ sinh token gần như không tăng khi đi từ Q5_K_M xuống Q2_K. Lý do hợp lý nhất?
+  options:
+  - id: a
+    text: Q2_K giải lượng tử đắt hơn nên bù hết phần tiết kiệm
+  - id: b
+    text: Model quá nhỏ, chi phí cố định mỗi token lấn át việc đọc trọng số
+  - id: c
+    text: llama.cpp luôn giải nén về f32 trước khi chạy
+  - id: d
+    text: CPU không đọc được dữ liệu 2 bit nên phải dùng 8 bit
