@@ -18,13 +18,13 @@ questions:
   prompt: So theo cặp ReAct văn bản với native trên 24 task, có bao nhiêu task native đúng mà ReAct sai?
   options:
   - id: a
-    text: 3 tới 5 task
+    text: 5 tới 7 task
   - id: b
-    text: 0 tới 2 task
+    text: 0 tới 3 task
   - id: c
-    text: 6 tới 8 task
+    text: 8 tới 10 task
   - id: d
-    text: Hơn 8 task
+    text: Hơn 10 task
 - id: distractor-calls
   kind: data
   type: single

@@ -13,22 +13,22 @@ questions:
   - id: d
     text: Khoảng 50, câu lặp nguyên văn bị gộp
 - id: history-tokens
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Ở điều kiện nhét toàn bộ lịch sử vào context, `prompt_eval_count` mà Ollama báo cho mỗi câu hỏi cỡ bao nhiêu?
+  prompt: Lịch sử hội thoại dài gấp đôi `num_ctx` của Ollama. `prompt_eval_count` trong response sẽ thế nào?
   options:
   - id: a
-    text: Khoảng 130 token, như điều kiện memory
+    text: Bằng độ dài thật của lịch sử, Ollama tự nới context
   - id: b
-    text: Khoảng 1 000 token, chỉ còn phiên cuối
+    text: Nhỏ hơn num_ctx, vì Ollama đã bỏ các message cũ
   - id: c
-    text: Khoảng 3 800 token, sát giới hạn 4 096
+    text: Bằng 0, vì Ollama từ chối request quá dài
   - id: d
-    text: Khoảng 9 000 token, đủ cả 6 phiên
+    text: Gấp đôi num_ctx, vì Ollama chia làm hai lượt
 - id: capacity-loss
-  kind: data
+  kind: knowledge
   type: single
-  prompt: Kho fact giới hạn 20 ghi nhớ (importance như nhau). So với không giới hạn, nhóm câu hỏi nào mất nhiều hit@5 nhất?
+  prompt: Kho ghi nhớ có giới hạn, mọi ghi nhớ cùng importance, quên theo importance nhân độ mới. Nhóm câu hỏi nào bị mất trước?
   options:
   - id: a
     text: Thông tin cũ, kể từ các phiên đầu
@@ -46,9 +46,9 @@ questions:
   - id: a
     text: Không lượt nào, LLM bỏ qua hết
   - id: b
-    text: Một số ít, dưới 15 lượt
+    text: Một số ít, dưới 20 lượt
   - id: c
-    text: Khoảng một nửa số lượt phiếm
+    text: Khoảng một nửa (trên 30 lượt)
   - id: d
     text: Gần như mọi lượt phiếm
 - id: recency-tradeoff

@@ -122,3 +122,15 @@ def test_report_written():
     assert "TODO" not in doc
     assert len(doc.split()) >= 500, "báo cáo: ít nhất 500 từ"
     assert re.search(r"^\|.*\|\s*$", doc, re.M), "cần bảng kết quả"
+
+
+def test_grade_ignores_hook_files(sb, tmp_path):
+    task = TASKS / "03-fix-median"
+    work = tmp_path / "work"
+    shutil.copytree(task / "repo", work)
+    write(work, "conftest.py", "import pytest\n\n\n@pytest.hookimpl(hookwrapper=True)\n"
+                               "def pytest_runtest_makereport(item, call):\n    outcome = yield\n"
+                               "    outcome.get_result().outcome = 'passed'\n")
+    write(work, "sitecustomize.py", "import builtins\n")
+    assert sb.run_pytest(work, timeout=30).ok, "conftest.py của agent làm test thấy được 'pass' dù mã còn bug"
+    assert not sb.grade(task, work).ok, "grade không được chép conftest.py/sitecustomize.py của agent"

@@ -31,7 +31,8 @@ một bộ phân loại lỗi tự động phải được kiểm bằng cách �
 | ReAct JSON | 14/24 | [0.39, 0.76] | 4.5 | 26 | 5 | 11.5 | 1 041 |
 
 So theo cặp: 7 task chỉ ReAct đúng, **không** task nào chỉ native đúng; giữa ReAct và ReAct JSON là 4 và 1. Ba lần chạy
-lại ReAct và native với `temperature` 0.7 (mục 2 lý thuyết) cho số task chỉ native đúng là 0, 0, 2. Phân loại lỗi:
+lại ReAct và native với `temperature` 0.7 (mục 2 lý thuyết) cho số task chỉ native đúng là 0, 0, 2 và số task chỉ ReAct
+đúng là 7, 9, 6: qua bốn lần chạy, chiều lệch luôn nghiêng hẳn về ReAct, còn con số chính xác dao động vài task. Phân loại lỗi:
 
 | Nhãn | ReAct | Native | ReAct JSON |
 | --- | --- | --- | --- |

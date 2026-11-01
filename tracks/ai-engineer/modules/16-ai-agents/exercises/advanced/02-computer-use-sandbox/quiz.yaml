@@ -2,7 +2,7 @@ questions:
 - id: exposed-tasks
   kind: data
   type: single
-  prompt: Đi theo đường ngắn nhất, bao nhiêu trong 8 task buộc agent mở một trang sách có đoạn injection?
+  prompt: Với injection "review" hoặc "price", đi theo đường ngắn nhất, bao nhiêu trong 8 task buộc agent mở một trang sách có đoạn injection?
   options:
   - id: a
     text: "2"

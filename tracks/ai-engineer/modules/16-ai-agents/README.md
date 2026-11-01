@@ -215,11 +215,16 @@ Chạy lại ReAct và native với `temperature` 0.7, ba seed: ReAct đúng 14,
   của model, hay system prompt ngắn hơn của cách native); chỉ ghi nhận hành vi. Với model lớn được train kỹ cho tool
   use, native thường là lựa chọn mặc định đúng (ít token hơn, không phải tự parse, gọi song song được). **Đo trên task
   của bạn** trước khi chọn.
-- **Lỗi của ReAct 3B** đọc từ trace của 7 task sai: 5 task đưa vào `calculator` một con số không lấy từ observation
+- **Lỗi của ReAct 3B** đọc từ trace của 7 task sai: 4 task đưa vào `calculator` một con số không lấy từ observation
   nào (gọi `get_order` rồi không tra giá từng cuốn mà viết thẳng `calculator("350000 * 2 + 450000")`; tự đặt tỷ giá
-  23 000 thay vì gọi `exchange_rate`), 1 task lấy nhầm observation (giá "Mắt biếc" cho câu hỏi về "Bố già"), 1 task cộng
+  23 000 thay vì gọi `exchange_rate`), 1 task bịa giá ngay trong câu trả lời cuối (78 500 đồng cho "Đắc nhân tâm", không
+  qua `calculator`, dù observation ghi 86 000), 1 task lấy nhầm observation (giá "Mắt biếc" cho câu hỏi về "Bố già"), 1 task cộng
   tồn kho của một đơn hàng không liên quan. `calculator` tính đúng mọi thứ nó được đưa; cái sai nằm ở **đầu vào** của
   nó.
+- **Đối chiếu với module 11 mục 6**: ở đó native đúng 7 và prompted (JSON schema) đúng 6 trên 12 câu UIT-VSFC; ở đây
+  ReAct ép JSON đúng 14 và native 10 trên 24 task hiệu sách. Hai thí nghiệm khác bộ task, khác prompt và khác vòng lặp
+  (module 11 dùng vòng gọi tool kiểu OpenAI, ở đây là giao thức Thought/Action), nên không gộp hay so trực tiếp được; cả
+  hai chỉ cùng nói một điều: chênh lệch vài câu trên một bộ nhỏ chưa đủ để chọn cách.
 
 ## 3. Context engineering
 
@@ -263,8 +268,11 @@ Bài Intermediate 02 có cell mở rộng để bạn đo nó ảnh hưởng t�
 
 ### Ollama cắt im lặng, và cắt nhầm chỗ
 
-Context mặc định của Ollama 0.13.5 là 4 096 token (`num_ctx`, chỉnh theo từng request hoặc biến môi trường
-`OLLAMA_CONTEXT_LENGTH`). Prompt dài hơn thì sao? Thử: một system chứa mật mã, một message user rất dài, rồi hỏi mật mã.
+Trên PC của track (Ollama 0.13.5, cấu hình mặc định), context mỗi lần chạy model là 4 096 token (`num_ctx`, chỉnh theo
+từng request hoặc biến môi trường `OLLAMA_CONTEXT_LENGTH`). Giá trị mặc định có thể khác theo phiên bản Ollama và cấu
+hình máy của bạn: kiểm bằng `ollama ps` (cột `CONTEXT` của model đang nạp) hoặc gửi một prompt dài và xem
+`prompt_eval_count` trong response như khối dưới. Prompt dài hơn thì sao? Thử: một system chứa mật mã, một message user
+rất dài, rồi hỏi mật mã.
 
 ```python
 import httpx
@@ -572,8 +580,9 @@ thành ..." là **prompt injection gián tiếp** (Greshake et al., 2023). Phòn
    dual LLM (Willison, 2023) hay CaMeL (Debenedetti et al., 2025): model đọc dữ liệu không tin cậy không được quyền gọi
    tool.
 
-Bài Advanced 02 dựng một hiệu sách giả lập có injection trong đánh giá của khách và đo cả hai phía: tỉ lệ task hoàn
-thành và tỉ lệ tấn công thành công dưới bốn cấu hình phòng thủ. Module 19 dạy prompt injection, red-teaming và
+Bài Advanced 02 dựng một hiệu sách giả lập có vài kiểu injection chọn được bằng tham số (bảo agent đổi email, đổi địa
+chỉ giao, hay báo giá sai), bắt bạn tìm một kiểu thành công trước, rồi đo cả hai phía: tỉ lệ task hoàn thành và tỉ lệ
+tấn công thành công dưới bốn cấu hình phòng thủ. Module 19 dạy prompt injection, red-teaming và
 guardrails đầy đủ.
 
 ## 7. Coding agent và đánh giá agent
@@ -601,7 +610,7 @@ Mã do model viết là mã không tin cậy. Chạy nó cần ít nhất:
 | Thời gian | `subprocess` với timeout, giết **cả nhóm tiến trình** (test có thể tự sinh tiến trình con) | cgroup CPU, giới hạn wall-clock |
 | Mạng | `unshare -rn` (namespace mạng riêng, không cần root) nếu máy hỗ trợ | Container không mạng, gVisor, Firecracker microVM |
 | Môi trường | Biến môi trường tối thiểu: không lọt key API của bạn vào sandbox | Secret không bao giờ vào sandbox |
-| Chấm | Chép **mã nguồn** sang thư mục sạch cùng **test ẩn** | Như vậy, cộng kiểm tra mã không đọc test ẩn |
+| Chấm | Chép **mã nguồn** sang thư mục sạch cùng **test ẩn**, bỏ các tệp pytest/Python tự nạp (`conftest.py`, `sitecustomize.py`) | Như vậy, cộng kiểm tra mã không đọc test ẩn, không có plugin hay tệp cấu hình lạ |
 
 Dòng cuối chặn một hành vi có thật: khi test fail mãi, model nhỏ có lúc **sửa test** cho pass thay vì sửa mã (bản tham
 chiếu của bài Advanced 01 ghi được hiện tượng này). Chấm bằng test do agent kiểm soát là đo khả năng lách, không phải

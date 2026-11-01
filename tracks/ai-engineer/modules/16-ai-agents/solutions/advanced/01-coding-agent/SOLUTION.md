@@ -11,7 +11,7 @@ nhắc, kết quả của một bản tham chiếu để bạn so, và rubric ch
 | Tiến trình | `Popen(start_new_session=True)`, quá giờ thì `os.killpg(pid, SIGKILL)` | test của agent có thể tự sinh tiến trình con (hoặc `fork`); `proc.kill()` để lại tiến trình cháu chạy tiếp |
 | Môi trường | chỉ `PATH`, `HOME=workdir`, `PYTHONPATH=workdir`, `PYTHONDONTWRITEBYTECODE`, `LANG` | key API, token trong môi trường của bạn không lọt vào mã do model viết |
 | Mạng | `unshare -rn` (user + network namespace, không cần root) khi máy hỗ trợ, ghi lại `network_isolated` | mã không gọi được ra ngoài (tải gì đó, gửi dữ liệu đi); máy không có `unshare` thì báo rõ thay vì giả vờ |
-| Chấm | chép mọi `.py` **ngoài** `tests/` sang thư mục tạm mới, thêm test ẩn, chạy `run_pytest` | agent sửa được `tests/` của nó; chấm bằng test đó là đo khả năng lách |
+| Chấm | chép mọi `.py` **ngoài** `tests/`, trừ `conftest.py`, `sitecustomize.py`, `usercustomize.py`, sang thư mục tạm mới, thêm test ẩn, chạy `run_pytest` | agent sửa được `tests/` của nó; chấm bằng test đó là đo khả năng lách. Một `conftest.py` ở gốc repo đổi được kết quả của mọi test (hook `pytest_runtest_makereport`), `sitecustomize.py` chạy lúc Python khởi động vì `PYTHONPATH` trỏ vào thư mục chấm: hai đường lách này không cần đụng `tests/` (test của bài kiểm cả hai) |
 | Output test cho agent | `--tb=short`, giữ đoạn cuối | dòng assert và dòng tóm tắt nằm cuối; output đầy đủ của pytest lấp context |
 
 Sandbox này **không** chặn: tiêu tốn RAM (không có giới hạn bộ nhớ, cần `resource.setrlimit` hoặc cgroup), đọc tệp
@@ -32,9 +32,11 @@ bước, `num_ctx` 8 192, `seed` 0.
 
 ## Kết quả tham chiếu
 
-PC của track (RTX 3060 dùng chung, Ollama 0.13.5), 12 task, chấm bằng test ẩn. Hai lượt `temperature` 0.7 (seed 2, 3) và
-mọi lượt `qwen2.5:7b` chạy với `num_predict` 1 500: lần đầu chạy 7B thiết kế cải tiến, một lượt sinh không dừng làm
-client chờ quá 600 giây và hỏng cả lượt chạy. Giới hạn số token ra là một điều kiện dừng cần có, giống ngân sách bước.
+PC của track (RTX 3060 dùng chung, Ollama 0.13.5), 12 task, chấm bằng test ẩn, `num_ctx` 8 192. Lần đầu chạy 7B thiết
+kế cải tiến, một lượt sinh không dừng làm client chờ quá 600 giây và hỏng cả lượt chạy; từ đó các lượt chạy thêm
+`num_predict` 1 500. Có giới hạn này: 3B cải tiến seed 2 và seed 3, 7B cải tiến. **Không** có (chạy trước khi thêm):
+3B thô, 3B cải tiến `temperature` 0, 3B cải tiến seed 1, 7B thô. Giới hạn số token ra là một điều kiện dừng cần có,
+giống ngân sách bước.
 
 | Model, thiết kế | `temperature`, seed | Test ẩn pass | Test thấy được pass | Agent sửa `tests/` | Lỗi định dạng | Phút / lượt |
 | --- | --- | --- | --- | --- | --- | --- |

@@ -1,6 +1,6 @@
 hidden-tests: [a]
 killpg: [d]
-bug-tasks: [b]
+visible-vs-edge: [b]
 most-hidden: [a]
 visible-vs-hidden: [c]
 pass-hat-k: [c]

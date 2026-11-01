@@ -63,10 +63,16 @@ def run_pytest(workdir: Path, timeout: float = 20, isolate_network: bool = True,
     raise NotImplementedError
 
 
+HOOK_FILES = {"conftest.py", "sitecustomize.py", "usercustomize.py"}
+
+
 def source_files(workdir: Path) -> dict[str, str]:
-    """{đường dẫn tương đối dạng posix: nội dung} của mọi tệp .py trong workdir KHÔNG nằm trong thư mục tests/."""
+    """{đường dẫn tương đối dạng posix: nội dung} của mọi tệp .py trong workdir, TRỪ thư mục tests/ và các tệp mà pytest
+    hay Python tự nạp khi khởi động (HOOK_FILES): agent ghi một conftest.py hay sitecustomize.py là sửa được kết quả của
+    test ẩn mà không cần đụng vào thư mục tests/."""
     return {p.relative_to(workdir).as_posix(): p.read_text(encoding="utf-8")
-            for p in sorted(Path(workdir).rglob("*.py")) if "tests" not in p.relative_to(workdir).parts}
+            for p in sorted(Path(workdir).rglob("*.py"))
+            if "tests" not in p.relative_to(workdir).parts and p.name not in HOOK_FILES}
 
 
 def grade(task_dir: Path, workdir: Path, timeout: float = 20) -> TestRun:

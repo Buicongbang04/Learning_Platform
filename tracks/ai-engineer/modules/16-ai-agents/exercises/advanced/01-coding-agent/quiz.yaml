@@ -25,19 +25,19 @@ questions:
     text: killpg nhanh hơn kill khoảng mười lần khi máy bận
   - id: d
     text: Test có thể sinh tiến trình con chạy tiếp sau đó
-- id: bug-tasks
-  kind: data
+- id: visible-vs-edge
+  kind: knowledge
   type: single
-  prompt: Trong 12 task của bộ, bao nhiêu task là sửa bug (mã khởi đầu đã chạy được nhưng cho kết quả sai), còn lại là viết hàm mới?
+  prompt: Mỗi task chỉ cho agent thấy 1 test, còn test ẩn có nhiều trường hợp biên. Thiết kế đó đo được điều gì?
   options:
   - id: a
-    text: "2"
+    text: Tốc độ chạy pytest trong sandbox khi có nhiều test
   - id: b
-    text: "4"
+    text: Agent có làm đúng yêu cầu hay chỉ khớp ví dụ đã thấy
   - id: c
-    text: "6"
+    text: Model có đọc được tiếng Việt trong TASK.md không
   - id: d
-    text: "8"
+    text: Sandbox có chặn được mạng khi chạy test ẩn không
 - id: most-hidden
   kind: data
   type: single
