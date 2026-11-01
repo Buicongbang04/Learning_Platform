@@ -1131,7 +1131,6 @@ ACT_SECRET_MIN_LENGTH = 4
 _ACT_ENV_NAMES = {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST"}
 _ACT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _ACT_EVENT = re.compile(r"^[a-z_]+$")
-_ACT_SKIPPED_LOCALLY = re.compile(r"!\s*env\.ACT\b")
 _ACT_JOB_RESULT = re.compile(r"^\[([^\]]+)\]\s+🏁\s+Job (succeeded|failed)\s*$", re.M)
 _ACT_OUTPUT = re.compile(r"^\[([^\]]+)\]\s+\|\s+devops-ex-output ([A-Za-z_][A-Za-z0-9_.-]*)=(.*?)\r?$", re.M)
 _ACT_CLONE_FAILED = re.compile(
@@ -1166,19 +1165,52 @@ def _act_workflow_files(repo: Path) -> list[Path]:
     return sorted([*folder.rglob("*.yml"), *folder.rglob("*.yaml")]) if folder.is_dir() else []
 
 
+def _act_skipped_locally(condition) -> bool:
+    """True khi `if:` chắc chắn sai dưới act: biểu thức (bỏ `${{ }}` và khoảng trắng) đúng bằng `!env.ACT`, hoặc là chuỗi
+    `&&` ở cấp trên cùng có một vế đúng bằng `!env.ACT`. Chuỗi trong nháy đơn được thay bằng chỗ giữ trước khi xét; có
+    `||`, ngoặc, nháy kép, `!=`, `$`, `{`, `}` thì không công nhận."""
+    text = str(condition or "").strip()
+    if text.startswith("${{") and text.endswith("}}"):
+        text = text[3:-2]
+    text = re.sub(r"'(?:[^']|'')*'", "'S'", text)
+    text = re.sub(r"\s+", "", text)
+    if text == "!env.ACT":
+        return True
+    if any(token in text for token in ("||", "(", ")", '"', "!=", "$", "{", "}")):
+        return False
+    return "!env.ACT" in text.split("&&")
+
+
+_ACT_REMOTE_ACTION = re.compile(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)@([A-Za-z0-9_.-][A-Za-z0-9_./-]*)$")
+_ACT_STUB = "name: devops-ex-stub\nruns:\n  using: composite\n  steps: []\n"
+
+
+def _act_remote_action(uses) -> tuple[str, str] | None:
+    """`owner/repo[/path]@ref` hợp lệ thì trả (`owner/repo@ref`, `path`), ngược lại None. Không nhận đoạn `.`, `..` hay đoạn
+    rỗng, nên `path` không bao giờ thoát ra ngoài thư mục stub."""
+    match = _ACT_REMOTE_ACTION.match(str(uses or ""))
+    if not match:
+        return None
+    owner, repo, path, ref = match.groups()
+    segments = [owner, repo, *path.split("/")[1:]]
+    if any(not s or set(s) == {"."} for s in segments):
+        return None
+    return f"{owner}/{repo}@{ref}", path.lstrip("/")
+
+
 def _act_step_problem(where: str, step) -> str | None:
     uses = step.get("uses") if isinstance(step, dict) else None
     if not uses or str(uses).split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
         return None
-    if _ACT_SKIPPED_LOCALLY.search(str(step.get("if", ""))):
-        return None
     allowed = ", ".join(ACT_ALLOWED_ACTIONS)
-    return (f"{where}: action {uses} không chạy được khi chấm; chỉ dùng bước run: và {allowed}, hoặc gắn "
-            "`if: ${{ !env.ACT }}` để bước đó chỉ chạy trên GitHub")
-
-
-_ACT_REMOTE_ACTION = re.compile(r"^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)@([A-Za-z0-9_./-]+)$")
-_ACT_STUB = "name: devops-ex-stub\nruns:\n  using: composite\n  steps: []\n"
+    if str(uses).startswith(("docker://", "./", "../", "/")):
+        return f"{where}: `uses: {uses}` (image Docker hoặc action cục bộ) không được dùng trong bài chấm bằng act, kể cả có `if:`"
+    if _act_remote_action(uses) is None:
+        return f"{where}: `uses: {uses}` không phải dạng owner/repo[/đường-dẫn]@ref hợp lệ"
+    if _act_skipped_locally(step.get("if")):
+        return None
+    return (f"{where}: action {uses} không chạy được khi chấm; chỉ dùng bước run: và {allowed}, hoặc gắn đúng "
+            "`if: ${{ !env.ACT }}` (có thể nối thêm điều kiện bằng `&&`) để bước đó chỉ chạy trên GitHub")
 
 
 def _act_guarded_stubs(repo: Path, root: Path) -> list[str]:
@@ -1187,19 +1219,24 @@ def _act_guarded_stubs(repo: Path, root: Path) -> list[str]:
     import yaml
 
     stubs: dict[str, Path] = {}
+    base = (root / "stubs").resolve()
     for path in _act_workflow_files(repo):
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         jobs = data.get("jobs") if isinstance(data, dict) else None
         for job in (jobs or {}).values() if isinstance(jobs, dict) else ():
             for step in (job.get("steps") or []) if isinstance(job, dict) else []:
-                if not isinstance(step, dict) or not _ACT_SKIPPED_LOCALLY.search(str(step.get("if", ""))):
+                if not isinstance(step, dict) or not step.get("uses") or not _act_skipped_locally(step.get("if")):
                     continue
-                match = _ACT_REMOTE_ACTION.match(str(step.get("uses", "")))
-                if not match or match.group(1) in ACT_ALLOWED_ACTIONS:
+                if str(step["uses"]).split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
                     continue
-                key = f"{match.group(1)}@{match.group(3)}"
-                stub = stubs.setdefault(key, root / "stubs" / str(len(stubs)))
-                folder = stub / match.group(2).lstrip("/")
+                parsed = _act_remote_action(step["uses"])
+                if parsed is None:
+                    pytest.fail(f"Không tạo được action thay thế cho `uses: {step['uses']}`")
+                key, subpath = parsed
+                stub = stubs.setdefault(key, base / str(len(stubs)))
+                folder = (stub / subpath).resolve()
+                if not folder.is_relative_to(base):
+                    pytest.fail(f"`uses: {step['uses']}` trỏ ra ngoài thư mục action thay thế")
                 folder.mkdir(parents=True, exist_ok=True)
                 (folder / "action.yml").write_text(_ACT_STUB, encoding="utf-8")
     return [arg for key, stub in stubs.items() for arg in ("--local-repository", f"{key}={stub}")]
@@ -1265,7 +1302,11 @@ def _act_rename_workflow(path: Path, prefix: str) -> None:
         while end > start + 1 and not lines[end - 1].strip():
             end -= 1
         lines[start:end] = []
-    lines.insert(0, f"name: {json.dumps(wanted, ensure_ascii=False)}\n")
+    head = 0
+    while head < len(lines) and (not lines[head].strip() or lines[head].startswith(("#", "%"))):
+        head += 1
+    insert_at = head + 1 if head < len(lines) and re.match(r"---(\s|$)", lines[head]) else 0
+    lines.insert(insert_at, f"name: {json.dumps(wanted, ensure_ascii=False)}\n")
     renamed = "".join(lines)
     check = yaml.safe_load(renamed)
     if not isinstance(check, dict) or check.get("name") != wanted or {k: v for k, v in check.items() if k != "name"} != {

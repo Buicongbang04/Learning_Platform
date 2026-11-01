@@ -1995,3 +1995,93 @@ jobs:
     assert testkit.act_outputs(result) == {"build": {"tag": "sha-1.4.2"}}
     assert "| khong-duoc-chay" not in output
     assert "git clone 'https://github.com/docker/build-push-action'" not in output, "Bước bị bỏ qua không được tải action"
+
+
+@pytest.mark.parametrize("condition", [
+    "${{ !env.ACT }}",
+    "!env.ACT",
+    "${{ ! env.ACT }}",
+    "!env.ACT && github.ref == 'refs/heads/main'",
+    "github.ref == 'refs/heads/main' && !env.ACT",
+    "${{ github.event_name == 'push' && !env.ACT && github.ref == 'a || b' }}",
+])
+def test_act_guard_accepts(condition):
+    assert testkit._act_skipped_locally(condition)
+
+
+@pytest.mark.parametrize("condition", [
+    None,
+    "",
+    "${{ env.ACT }}",
+    "true || !env.ACT",
+    "${{ true || !env.ACT }}",
+    "(!env.ACT) == false",
+    "!env.ACT == false",
+    "!env.ACT != true",
+    "github.ref == '!env.ACT'",
+    "github.ref == 'x && !env.ACT'",
+    "contains('!env.ACT', 'x')",
+    '"!env.ACT"',
+    "!!env.ACT",
+    "!env.ACTION",
+    "${{ !env.ACT }} || true",
+    "${{ !env.ACT }} && ${{ true }}",
+    "always() && !env.ACT",
+])
+def test_act_guard_refuses_bypasses(condition):
+    assert not testkit._act_skipped_locally(condition)
+
+
+@pytest.mark.parametrize("uses", [
+    "docker://node:24.22.2-trixie-slim",
+    "./.github/actions/build",
+    "../outside",
+    "o/r/../../../../ESCAPED@v1",
+    "o/r/./x@v1",
+    "../r@v1",
+    "o/..@v1",
+    "o//x@v1",
+    "o/r@",
+])
+def test_act_run_refuses_unsafe_uses_even_when_guarded(monkeypatch, tmp_path, uses):
+    world = FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, GUARDED_PUSH.format(guard="if: ${{ !env.ACT }}").replace("docker/build-push-action@v6", uses))
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(project)
+    assert uses in str(info.value)
+    assert world.processes == []
+    assert not list(Path("/").glob("ESCAPED")) and not [p for p in tmp_path.rglob("ESCAPED")]
+
+
+def test_act_guarded_stubs_never_write_outside(tmp_path):
+    root = tmp_path / "a" / "b" / "c" / "root"
+    repo = root / "repo"
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    steps = "      - if: ${{ !env.ACT }}\n        uses: o/r/../../../../ESCAPED@v1\n"
+    (repo / ".github" / "workflows" / "ci.yml").write_text(
+        f"name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n{steps}", encoding="utf-8")
+    with pytest.raises(pytest.fail.Exception):
+        testkit._act_guarded_stubs(repo, root)
+    assert not list(tmp_path.rglob("ESCAPED")) and not list(tmp_path.rglob("action.yml"))
+    for uses in ("o/r/sub/dir@v1", "o/r@v1"):
+        (repo / ".github" / "workflows" / "ci.yml").write_text(
+            f"name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n"
+            f"      - if: ${{{{ !env.ACT }}}}\n        uses: {uses}\n", encoding="utf-8")
+        args = testkit._act_guarded_stubs(repo, root)
+        assert args[0] == "--local-repository" and args[1].startswith("o/r@v1=")
+    written = sorted(str(p.relative_to(root)) for p in root.rglob("action.yml"))
+    assert written == ["stubs/0/action.yml", "stubs/0/sub/dir/action.yml"]
+
+
+@pytest.mark.parametrize("header", ["---\n", "%YAML 1.2\n---\n", "# chu thich\n---\n", "%YAML 1.2\n--- # bat dau\n"])
+def test_act_rename_after_document_start(tmp_path, header):
+    import yaml
+
+    path = tmp_path / "ci.yml"
+    path.write_text(header + SIMPLE_WORKFLOW.lstrip("\n"), encoding="utf-8")
+    testkit._act_rename_workflow(path, "devops-ex-abcd1234")
+    text = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    assert data["name"] == "devops-ex-abcd1234-ci"
+    assert data["jobs"] == yaml.safe_load(SIMPLE_WORKFLOW)["jobs"]
+    assert text.startswith(header)
