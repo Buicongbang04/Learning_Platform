@@ -1,0 +1,79 @@
+questions:
+- id: noop-baseline
+  kind: data
+  type: single
+  prompt: Policy "không làm gì" (luôn action 0) trên 100 episode đánh giá (seed 10 000..10 099) được trung bình khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng −600
+  - id: b
+    text: Khoảng −130
+  - id: c
+    text: Khoảng 0
+  - id: d
+    text: Khoảng +100
+- id: noop-vs-random
+  kind: data
+  type: single
+  prompt: So với policy ngẫu nhiên trên cùng 100 episode, policy "không làm gì" thế nào?
+  options:
+  - id: a
+    text: Trung bình cao hơn và độ lệch chuẩn nhỏ hơn
+  - id: b
+    text: Trung bình thấp hơn và độ lệch chuẩn lớn hơn
+  - id: c
+    text: Hai policy cho gần như cùng một phân phối
+  - id: d
+    text: Không làm gì thì luôn hạ cánh được trên 200
+- id: eval-seeds
+  kind: knowledge
+  type: single
+  prompt: Vì sao seed dùng để chọn checkpoint phải khác seed dùng để báo cáo điểm cuối?
+  options:
+  - id: a
+    text: Gymnasium không cho phép reset cùng một seed hai lần
+  - id: b
+    text: Chọn trên chính tập báo cáo làm điểm báo cáo lệch lên
+  - id: c
+    text: Seed lớn hơn cho episode khó hơn nên công bằng hơn
+  - id: d
+    text: Để checkpoint tốt nhất không bị ghi đè khi lưu
+- id: gamma-lander
+  kind: knowledge
+  type: single
+  prompt: Vì sao LunarLander dùng γ = 0.999 thay vì 0.99 như CartPole?
+  options:
+  - id: a
+    text: Phần thưởng hạ cánh đến ở cuối episode dài
+  - id: b
+    text: Reward của LunarLander luôn âm nên cần bù
+  - id: c
+    text: γ lớn làm PPO chạy nhanh hơn trên CPU
+  - id: d
+    text: Box2D yêu cầu γ khớp với bước thời gian vật lý
+- id: iqm
+  kind: knowledge
+  type: single
+  prompt: IQM của 100 điểm đánh giá là gì?
+  options:
+  - id: a
+    text: Trung bình của 50 điểm ở giữa sau khi sắp xếp
+  - id: b
+    text: Trung vị của 100 điểm sau khi bỏ mọi giá trị âm
+  - id: c
+    text: Hiệu giữa phân vị 75 và phân vị 25 của điểm
+  - id: d
+    text: Trung bình của 25 điểm cao nhất trong số 100
+- id: hover
+  kind: knowledge
+  type: single
+  prompt: Agent học được cách lơ lửng tới khi hết 1 000 bước. Episode đó kết thúc với cờ nào và critic nên làm gì?
+  options:
+  - id: a
+    text: terminated; giá trị trạng thái cuối bằng 0
+  - id: b
+    text: truncated; vẫn bootstrap từ V của final_obs
+  - id: c
+    text: Cả hai cờ đều True; bỏ cả episode khỏi buffer
+  - id: d
+    text: Không cờ nào; env tự reset không báo gì
