@@ -146,17 +146,26 @@ def version_at_least(have: tuple[int, ...], need: tuple[int, ...]) -> bool:
     return have + (0,) * (width - len(have)) >= need + (0,) * (width - len(need))
 
 
-def _run_tool(args: list[str]) -> subprocess.CompletedProcess | None:
+def _run_tool(args: list[str], env: dict[str, str] | None = None, cwd: str | None = None) -> subprocess.CompletedProcess | None:
     try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=10)
+        return subprocess.run(args, capture_output=True, text=True, timeout=10, env=env, cwd=cwd)
     except (OSError, subprocess.TimeoutExpired):
         return None
 
 
 def tool_version(name: str) -> tuple[int, ...] | None:
+    """Phiên bản của công cụ. Lệnh `ansible-*` chạy với `HOME` và thư mục làm việc tạm, `ANSIBLE_CONFIG=/dev/null`: không đọc
+    `ansible.cfg` của người học, không tạo `~/.ansible`."""
     if not shutil.which(name):
         return None
-    result = _run_tool([name, *TOOL_VERSION_ARGS.get(name, ["--version"])])
+    argv = [name, *TOOL_VERSION_ARGS.get(name, ["--version"])]
+    if name.startswith("ansible"):
+        with tempfile.TemporaryDirectory(prefix="devops-ex-version-") as home:
+            env = {"PATH": os.environ.get("PATH", ""), "HOME": home, "LANG": "C.UTF-8", "ANSIBLE_CONFIG": os.devnull,
+                   "ANSIBLE_HOME": f"{home}/.ansible", "ANSIBLE_LOCAL_TEMP": f"{home}/tmp"}
+            result = _run_tool(argv, env=env, cwd=home)
+    else:
+        result = _run_tool(argv)
     if result is None:
         return None
     return parse_version(f"{result.stdout}\n{result.stderr}")
@@ -2245,7 +2254,7 @@ class CallbackModule(CallbackBase):
         task = result._task
         role = getattr(task, "_role", None)
         self._write({
-            "type": "task", "host": result._host.get_name(), "task": task.get_name(), "action": task.action,
+            "type": "task", "host": result._host.get_name(), "task": task.name or task.action, "action": task.action,
             "status": status, "changed": bool(result._result.get("changed", False)), "handler": isinstance(task, Handler),
             "role": role.get_name() if role else None, "tags": sorted(task.tags or []),
         })
@@ -2369,7 +2378,8 @@ def _ansible_env(root: Path, events: Path) -> dict[str, str]:
 
 class AnsibleRun(subprocess.CompletedProcess):
     """Kết quả một lần `ansible-playbook` của `AnsibleLab`: `returncode`, `stdout`, `stderr` cộng `events` (mỗi task trên
-    mỗi host: `host`, `task`, `action`, `status`, `changed`, `handler`, `role`, `tags`) do callback của lab ghi."""
+    mỗi host: `host`, `task` (đúng `name:` của task, không có tiền tố role), `action`, `status`, `changed`, `handler`, `role`,
+    `tags`) do callback của lab ghi."""
 
     def __init__(self, args, returncode: int, stdout: str, stderr: str, events: list[dict]) -> None:
         super().__init__(args, returncode, stdout, stderr)

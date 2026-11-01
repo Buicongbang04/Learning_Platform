@@ -3070,6 +3070,19 @@ def test_parse_version_ansible_banner():
     assert testkit.parse_version(banner) == (2, 21, 5)
 
 
+@pytest.mark.skipif(not shutil.which("ansible-playbook"), reason="Cần ansible-playbook")
+def test_ansible_version_does_not_touch_user_home(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    (tmp_path / "ansible.cfg").write_text("[defaults\nkhông phải ini\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("ANSIBLE_CONFIG", str(tmp_path / "ansible.cfg"))
+    monkeypatch.chdir(tmp_path)
+    version = testkit.tool_version("ansible-playbook")
+    assert version and version >= (2, 21)
+    assert not (home / ".ansible").exists()
+
+
 def ansible_tree(tmp_path: Path, files: dict[str, str]) -> Path:
     root = tmp_path / "project"
     for rel, text in files.items():
@@ -3233,12 +3246,21 @@ def ansible_lab():
 @ANSIBLE_REQUIRED
 def test_ansible_lab_runs_playbook_twice(ansible_lab):
     project = ansible_lab.write("project/site.yml", (
-        "- hosts: all\n  gather_facts: false\n  tasks:\n"
-        "    - ansible.builtin.copy:\n        dest: /etc/devops-ex.txt\n        content: \"{{ inventory_hostname }}\\n\"\n"
+        "- hosts: all\n  gather_facts: false\n  roles:\n    - demo\n"
     )).parent
+    ansible_lab.write("project/roles/demo/tasks/main.yml", (
+        "- name: Ghi tệp\n  ansible.builtin.copy:\n    dest: /etc/devops-ex.txt\n    content: \"{{ inventory_hostname }}\\n\"\n"
+        "  notify: Báo đổi\n"
+    ))
+    ansible_lab.write("project/roles/demo/handlers/main.yml", (
+        "- name: Báo đổi\n  ansible.builtin.command: \"true\"\n  when: false\n"
+    ))
     first = ansible_lab.playbook("site.yml", cwd=project)
     assert first.returncode == 0, first.tail()
     assert first.changed == {"node-a": 1, "node-b": 1}
+    assert sorted((t["host"], t["role"], t["changed"]) for t in first.tasks("Ghi tệp")) == [("node-a", "demo", True),
+                                                                                            ("node-b", "demo", True)]
+    assert sorted((t["host"], t["status"]) for t in first.tasks("Báo đổi", handler=True)) == [("node-a", "skipped"), ("node-b", "skipped")]
     second = ansible_lab.playbook("site.yml", cwd=project)
     assert second.changed == {"node-a": 0, "node-b": 0}, second.tail()
     assert ansible_lab.read("node-b", "/etc/devops-ex.txt") == "node-b\n"
