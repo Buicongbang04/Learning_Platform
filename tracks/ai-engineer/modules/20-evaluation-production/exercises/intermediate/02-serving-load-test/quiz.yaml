@@ -47,12 +47,12 @@ questions:
   - id: prefix-alternate
     kind: data
     type: single
-    prompt: Xen kẽ hai tài liệu A, B, A với cùng server. Bật --cache ram đổi thời gian mỗi lời gọi thế nào so với không bật?
+    prompt: Xen kẽ hai tài liệu A, B, A. Khi bật --cache ram, mỗi lời gọi xen kẽ mất bao lâu so với lần trúng cùng slot khi không bật cache?
     options:
-      - { id: a, text: "Không bật: lần nào cũng như lần đầu; bật: dưới 1 giây, chậm hơn trúng cùng slot" }
-      - { id: b, text: "Không bật: đã trúng cache; bật: chậm đi vì phải ghi trạng thái ra RAM mỗi lần" }
-      - { id: c, text: "Cả hai đều như lần đầu, vì đổi tài liệu xoá mọi cache của server" }
-      - { id: d, text: "Cả hai đều dưới 0.2 giây, cache của server không phụ thuộc thứ tự" }
+      - { id: a, text: "Nhanh ngang lần trúng cùng slot, dưới 0.2 giây" }
+      - { id: b, text: "Dưới 1 giây, nhưng chậm hơn lần trúng cùng slot vài lần" }
+      - { id: c, text: "Chỉ nhanh hơn lần gọi đầu khoảng 20%" }
+      - { id: d, text: "Chậm hơn cả lần gọi đầu vì phải chép trạng thái" }
   - id: closed-loop
     kind: knowledge
     type: single
