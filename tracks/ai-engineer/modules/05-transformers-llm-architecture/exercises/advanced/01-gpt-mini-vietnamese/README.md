@@ -39,8 +39,8 @@ GPU:** cấu hình của bài Intermediate 01 bản CPU trên 2 000 bài, kết 
    `train-00001` và `train-00002` (khoảng 95.5 triệu ký tự). Tokenizer BPE byte-level 8 000 train trên 1 000 bài
    train của module 04 (để bpc so được với LSTM và với bài Intermediate 01), hoặc tokenizer của bạn nếu ghi rõ lý do.
 3. Train `GPT` của bài Basic 01 với cấu hình hợp phần cứng; đánh giá định kỳ bằng `evaluate_nll` (cửa sổ trượt stride bằng nửa
-   context), lưu checkpoint tốt nhất bằng `save_checkpoint` vào `data/raw/gpt-mini-vi/gpt_mini_vi.pt` (hoặc nơi khác rồi đặt
-   biến môi trường `GPT_MINI_CKPT` trỏ tới tệp đó). Module 08 (interpretability) và module 10 (quantization) dùng lại checkpoint này.
+   context), lưu checkpoint tốt nhất bằng `save_checkpoint` (gợi ý `data/raw/gpt-mini-vi/gpt_mini_vi.pt`) và đặt biến môi trường
+   `GPT_MINI_CKPT` trỏ tới tệp đó: module 08 (interpretability) và module 10 (quantization) đọc checkpoint qua biến này.
 4. Báo cáo bpc so với LSTM module 04 (1.975) và GPT mini bài Intermediate 01; mẫu sinh từ cùng câu mở đầu với vài temperature
    và top-k, `distinct_n`; nạp lại checkpoint bằng `load_checkpoint` và kiểm cho cùng bpc.
 5. Viết `starter/REPORT.md`, rồi làm phần trắc nghiệm của bài trong app.
