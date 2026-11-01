@@ -3027,13 +3027,14 @@ _KUBE_REFUSED = {
     "RuntimeClass": "đổi runtime chạy container của cả cluster",
     "FlowSchema": "đổi thứ tự ưu tiên request của cả cluster",
     "PriorityLevelConfiguration": "đổi thứ tự ưu tiên request của cả cluster",
+    "PersistentVolume": "PV do bài tạo trỏ được ra ngoài cluster (nfs tới máy host) hay giữ sẵn PVC của lab khác; PV tĩnh dùng "
+                        "KubeLab.admin_local_pv, PV động dùng StorageClass standard",
     "StorageClass": "provisioner chạy bằng quyền của node; tham số như pathPattern của local-path tạo được volume trỏ ra ngoài thư "
                     "mục dữ liệu, tới socket containerd của node; dùng StorageClass standard có sẵn hoặc KubeLab.admin_local_pv",
 }
 KUBE_ALLOWABLE = {
     "ClusterRole": ("rbac.authorization.k8s.io", "clusterroles"),
     "ClusterRoleBinding": ("rbac.authorization.k8s.io", "clusterrolebindings"),
-    "PersistentVolume": ("", "persistentvolumes"),
     "IngressClass": ("networking.k8s.io", "ingressclasses"),
     "PriorityClass": ("scheduling.k8s.io", "priorityclasses"),
     "CustomResourceDefinition": ("apiextensions.k8s.io", "customresourcedefinitions"),
@@ -3065,6 +3066,7 @@ _KUBE_SYSTEM_USER = (
     "request.userInfo.username.startsWith('system:serviceaccount:local-path-storage:'))"
 )
 KUBE_LOCAL_PV_ROOT = "/srv/devops-lab-pv"
+_KUBE_AGGREGATE = "rbac.authorization.k8s.io/aggregate-to-"
 _KUBE_ADMIN_GROUPS = ("kubeadm:cluster-admins", "system:masters")
 _KUBE_NAME = re.compile(r"[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?")
 _KUBE_QUANTITY = re.compile(r"[1-9]\d{0,3}(Mi|Gi)")
@@ -3306,6 +3308,9 @@ def _kube_rbac_problems(where: str, kind: str, doc: dict, namespace: str) -> lis
     if kind in ("Role", "ClusterRole"):
         if doc.get("aggregationRule"):
             found.append(f"{where}: aggregationRule gom quyền của role khác vào role này")
+        labels = (doc.get("metadata") or {}).get("labels") or {}
+        for key in sorted(k for k in labels if isinstance(k, str) and k.startswith(_KUBE_AGGREGATE)):
+            found.append(f"{where}: nhãn {key} gộp role này vào view/edit/admin dùng chung của mọi namespace")
         for rule in doc.get("rules") or []:
             if not isinstance(rule, dict):
                 continue
@@ -3415,7 +3420,10 @@ class KubeLab:
     `system:serviceaccounts:<ns>`, kể cả ServiceAccount bài tự tạo rồi lấy token trong pod): object cluster-scoped tạo, sửa,
     xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, ClusterRoleBinding không
     cấp cho `system:*`; policy `devops-ex-<id>-pv` từ chối PV hostPath của mọi user không phải thành phần hệ thống và PV local
-    ngoài `KUBE_LOCAL_PV_ROOT` hay không do admin tạo. Lab chỉ trao kubeconfig khi cả hai policy đã chặn được lần tạo thử.
+    ngoài `KUBE_LOCAL_PV_ROOT` hay không do admin tạo; policy `devops-ex-<id>-rbac` (cũng cho mọi ServiceAccount của namespace,
+    cả Role/RoleBinding trong namespace): không nhãn `rbac.authorization.k8s.io/aggregate-to-*`, không aggregationRule, binding
+    không cấp cho `system:*` hay ServiceAccount của namespace khác. Lab chỉ trao kubeconfig khi cả ba policy đã chặn được lần tạo
+    thử.
 
     `kubectl`, `helm`, `run` (script của bài), `apply_learner`, `helm_install` chạy qua `run_sandboxed` với `KUBECONFIG` là
     kubeconfig của lab (một cluster, một context có namespace của lab, token của `devops-ex-learner`) trong thư mục `control`
@@ -3581,11 +3589,27 @@ class KubeLab:
         ]
         everything = [{"apiGroups": ["*"], "apiVersions": ["*"], "resources": ["*"], "operations": ["CREATE", "UPDATE", "DELETE"],
                        "scope": "Cluster"}]
+        rbac = [{"apiGroups": ["rbac.authorization.k8s.io"], "apiVersions": ["*"],
+                 "resources": ["roles", "rolebindings", "clusterroles", "clusterrolebindings"], "operations": ["CREATE", "UPDATE"],
+                 "scope": "*"}]
+        rbac_rules = [
+            {"expression": f"!has(object.metadata.labels) || !object.metadata.labels.exists(k, k.startsWith('{_KUBE_AGGREGATE}'))",
+             "message": f"Role của bài không được mang nhãn {_KUBE_AGGREGATE}* (gộp quyền vào view/edit/admin của mọi namespace)"},
+            {"expression": "request.resource.resource != 'clusterroles' || !has(object.aggregationRule)",
+             "message": "ClusterRole của bài không được có aggregationRule"},
+            {"expression": "!(request.resource.resource in ['rolebindings', 'clusterrolebindings']) || !has(object.subjects) || "
+                           "object.subjects.all(s, !s.name.startsWith('system:') && (s.kind != 'ServiceAccount' || "
+                           f"(has(s.namespace) && s.namespace == '{self.namespace}')))",
+             "message": f"Binding của bài chỉ cấp quyền cho user, nhóm không phải system:* hay ServiceAccount của {self.namespace}"},
+        ]
         volumes = [{"apiGroups": [""], "apiVersions": ["v1"], "resources": ["persistentvolumes"], "operations": ["CREATE", "UPDATE"]}]
         items = [
             *policy(self.namespace, everything,
                     f"{lab_identity} || (request.operation == 'CREATE' && request.dryRun == true && "
                     f"request.resource.resource == 'clusterroles' && object.metadata.name == '{self._probe}')", lab_rules),
+            *policy(f"{self.namespace}-rbac", rbac,
+                    f"{lab_identity} || (request.operation == 'CREATE' && request.dryRun == true && "
+                    f"object.metadata.name == '{self._probe}-rbac')", rbac_rules),
             *policy(f"{self.namespace}-pv", volumes,
                     f"!{_KUBE_SYSTEM_USER} && !(request.dryRun == true && object.metadata.name.endsWith('-probe-pv') && "
                     f"object.metadata.name != '{self._probe}-pv')", no_host_pv),
@@ -3620,6 +3644,9 @@ class KubeLab:
             self.namespace: {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
                              "metadata": {"name": self._probe}, "rules": []},
             f"{self.namespace}-pv": json.loads(_kube_hostpath_pv(f"{self._probe}-pv", "/")),
+            f"{self.namespace}-rbac": {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+                                       "metadata": {"name": f"{self._probe}-rbac", "labels": {f"{_KUBE_AGGREGATE}view": "true"}},
+                                       "rules": []},
         }
         deadline = time.monotonic() + 30
         for name, probe in probes.items():
@@ -3824,7 +3851,9 @@ class KubeLab:
         """Thao tác node bằng quyền admin từ spec đã kiểm, chỉ trên worker, không bao giờ control plane: `{"action": "cordon" |
         "uncordon" | "drain", "node": ...}` (drain luôn `--ignore-daemonsets --delete-emptydir-data`, có eviction, không bao giờ
         `--disable-eviction`), `{"action": "taint" | "untaint", "node": ..., "taint": {"key", "value", "effect"}}` (key không
-        thuộc `kubernetes.io`, `k8s.io`). `close()` uncordon mọi node lab đã cordon hay drain và gỡ mọi taint lab đã thêm."""
+        thuộc `kubernetes.io`, `k8s.io`). `close()` uncordon mọi node lab đã cordon hay drain và gỡ mọi taint lab đã thêm.
+        Giới hạn: trạng thái cordon và taint là của node, không đếm theo lab; hai lab chạy song song cùng cordon một worker thì
+        lab đóng trước uncordon luôn cho lab kia. Bài dùng `node_action` không chạy song song với nhau (pytest-xdist)."""
         self._require_entered()
         spec = self._spec(spec, {"action", "node"}, {"taint"}, "node_action")
         action = spec["action"]

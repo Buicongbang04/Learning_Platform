@@ -3820,7 +3820,8 @@ class KubeFake:
             return done(out=API_RESOURCES)
         if "--dry-run=server" in cmd:
             name = json.loads(input)["metadata"]["name"]
-            probe = name.removesuffix("-probe-pv") + "-pv" if name.endswith("-probe-pv") else name.removesuffix("-probe")
+            suffix = next((s for s in ("-pv", "-rbac") if name.endswith(f"-probe{s}")), "")
+            probe = name.removesuffix(f"-probe{suffix}") + suffix
             return done(1, "", f"ValidatingAdmissionPolicy '{probe}' with binding '{probe}' denied request")
         if cmd[1:3] == ["auth", "can-i"]:
             return done(out="yes\n")
@@ -3970,7 +3971,11 @@ def test_kube_lab_namespace_and_label(monkeypatch):
     resources = {r for rule in role["rules"] for r in rule["resources"]}
     assert not verbs & {"impersonate", "escalate", "bind", "*"} and "serviceaccounts/token" not in resources and "*" not in resources
     policies = {i["metadata"]["name"]: i for i in items if i["kind"] == "ValidatingAdmissionPolicy"}
-    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv"}
+    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac"}
+    rbac = policies[f"{lab.namespace}-rbac"]["spec"]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in rbac["matchConditions"][0]["expression"]
+    assert {r["scope"] for r in rbac["matchConstraints"]["resourceRules"]} == {"*"}
+    assert "aggregate-to-" in json.dumps(rbac["validations"])
     lab_condition = policies[lab.namespace]["spec"]["matchConditions"][0]["expression"]
     assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in lab_condition
     pv_condition = policies[f"{lab.namespace}-pv"]["spec"]["matchConditions"][0]["expression"]
@@ -4156,7 +4161,7 @@ KUBE_BAD = {
                           "d\n            hostPath: {path: /var/run}\n          containers:\n          - {name: c, image: x}\n",
                           "hostPath"),
     "pv-host-path": ("apiVersion: v1\nkind: PersistentVolume\nmetadata:\n  name: pv\n  labels: {devops-ex: 'LABID'}\nspec:\n  "
-                     "capacity: {storage: 1Gi}\n  accessModes: [ReadWriteOnce]\n  hostPath: {path: /}\n", "hostPath"),
+                     "capacity: {storage: 1Gi}\n  accessModes: [ReadWriteOnce]\n  hostPath: {path: /}\n", "PersistentVolume"),
     "namespace": ("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: other\n  labels: {devops-ex: 'LABID'}\n", "Namespace"),
     "namespace-psa": ("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: kube-system\n  labels: {devops-ex: 'LABID'}\n", "Namespace"),
     "node": ("apiVersion: v1\nkind: Node\nmetadata:\n  name: devops-lab-worker\n  labels: {devops-ex: 'LABID'}\n", "Node"),
@@ -4178,6 +4183,12 @@ KUBE_BAD = {
                       "provisioner: rancher.io/local-path\nparameters: {pathPattern: ../../run/containerd}\n", "StorageClass"),
     "priority-global-default": ("apiVersion: scheduling.k8s.io/v1\nkind: PriorityClass\nmetadata:\n  name: p\n  labels: "
                                 "{devops-ex: 'LABID'}\nvalue: 1000\nglobalDefault: true\n", "globalDefault"),
+    "aggregate-to-view": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: r\n  labels: "
+                          "{devops-ex: 'LABID', rbac.authorization.k8s.io/aggregate-to-view: 'true'}\nrules: []\n", "aggregate-to-view"),
+    "role-aggregate-to-admin": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: r\n  labels: "
+                                "{rbac.authorization.k8s.io/aggregate-to-admin: 'true'}\nrules: []\n", "aggregate-to-admin"),
+    "pv-nfs": ("apiVersion: v1\nkind: PersistentVolume\nmetadata:\n  name: pv\n  labels: {devops-ex: 'LABID'}\nspec:\n  capacity: "
+               "{storage: 1Gi}\n  accessModes: [ReadWriteMany]\n  nfs: {server: 172.17.0.1, path: /}\n", "PersistentVolume"),
     "not-object": ("- a\n- b\n", "object"),
     "missing-kind": ("apiVersion: v1\nmetadata: {name: x}\n", "kind"),
 }
@@ -4634,7 +4645,7 @@ def hostpath_pv(name: str, path: str, labels=None) -> str:
 
 @KUBE_REQUIRED
 def test_kube_lab_second_service_account_cannot_bypass_policy():
-    with testkit.KubeLab(allow=("ClusterRoleBinding", "PersistentVolume")) as lab:
+    with testkit.KubeLab(allow=("ClusterRoleBinding", "ClusterRole")) as lab:
         lab.kubectl("create", "serviceaccount", "foo")
         lab.kubectl("apply", "-f", "-", input=json.dumps({
             "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
@@ -4658,7 +4669,7 @@ def test_kube_lab_second_service_account_cannot_bypass_policy():
         for pv in (hostpath_pv(f"{lab.namespace}-a", "/run/containerd"),
                    hostpath_pv(f"{lab.namespace}-b", "/run/containerd", {"devops-ex": lab.id})):
             created = as_foo("create", "-f", "-", input=pv)
-            assert created.returncode != 0 and "denied" in created.stderr, created.stdout + created.stderr
+            assert created.returncode != 0 and ("denied" in created.stderr or "forbidden" in created.stderr), created.stderr
         unlabelled = as_foo("create", "clusterrolebinding", f"{lab.namespace}-x", f"--clusterrole={lab.namespace}-write",
                             f"--serviceaccount={lab.namespace}:foo")
         assert unlabelled.returncode != 0 and "denied" in unlabelled.stderr, unlabelled.stderr
@@ -4859,3 +4870,57 @@ def test_kube_lab_node_action_real():
         assert node("devops-lab-control-plane").get("unschedulable") is not True
     assert node("devops-lab-worker2").get("unschedulable") is not True
     assert not any(t["key"] == "lab/maint" for t in node("devops-lab-worker").get("taints", []))
+
+
+@KUBE_REQUIRED
+def test_kube_lab_aggregation_and_open_bindings_refused_in_cluster():
+    def view_rules():
+        return json.dumps(json.loads(admin_kubectl("get", "clusterrole", "view", "-o", "json").stdout)["rules"])
+
+    with testkit.KubeLab(allow=("ClusterRole", "ClusterRoleBinding")) as lab:
+        before = view_rules()
+        lab.kubectl("create", "role", "reader", "--verb=get", "--resource=pods")
+        for label in ("view", "edit", "admin"):
+            role = {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+                    "metadata": {"name": f"{lab.namespace}-agg-{label}",
+                                 "labels": {"devops-ex": lab.id, f"rbac.authorization.k8s.io/aggregate-to-{label}": "true"}},
+                    "rules": [{"apiGroups": [""], "resources": ["nodes"], "verbs": ["get"]}]}
+            created = lab.run(["kubectl", "create", "-f", "-"], input=json.dumps(role))
+            assert created.returncode != 0 and "denied" in created.stderr, created.stderr
+        namespaced = lab.run(["kubectl", "label", "role", "reader", "rbac.authorization.k8s.io/aggregate-to-admin=true"])
+        assert namespaced.returncode != 0 and "denied" in namespaced.stderr, namespaced.stderr
+        rule = {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+                "metadata": {"name": f"{lab.namespace}-rule", "labels": {"devops-ex": lab.id}},
+                "aggregationRule": {"clusterRoleSelectors": [{"matchLabels": {"rbac.authorization.k8s.io/aggregate-to-view": "true"}}]}}
+        aggregated = lab.run(["kubectl", "create", "-f", "-"], input=json.dumps(rule))
+        assert aggregated.returncode != 0 and ("denied" in aggregated.stderr or "aggregationRule" in aggregated.stderr), aggregated.stderr
+        for subject in ("--group=system:authenticated", "--group=system:serviceaccounts", "--user=system:anonymous",
+                        "--serviceaccount=kube-system:default"):
+            bound = lab.run(["kubectl", "create", "rolebinding", "open", "--role=reader", subject])
+            assert bound.returncode != 0 and "denied" in bound.stderr, subject + bound.stderr
+        wide = lab.run(["kubectl", "create", "-f", "-"], input=json.dumps({
+            "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
+            "metadata": {"name": f"{lab.namespace}-open", "labels": {"devops-ex": lab.id}},
+            "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": f"{lab.namespace}-read"},
+            "subjects": [{"kind": "Group", "name": "system:authenticated", "apiGroup": "rbac.authorization.k8s.io"}]}))
+        assert wide.returncode != 0 and "denied" in wide.stderr, wide.stderr
+        jane = lab.run(["kubectl", "create", "rolebinding", "jane", "--role=reader", "--user=jane"])
+        assert jane.returncode == 0, jane.stderr
+        lab.kubectl("create", "rolebinding", "own", "--role=reader", f"--serviceaccount={lab.namespace}:default")
+        assert view_rules() == before
+
+
+@KUBE_REQUIRED
+def test_kube_lab_learner_cannot_create_persistent_volume():
+    with pytest.raises(ValueError, match="PersistentVolume"):
+        testkit.KubeLab(allow=("PersistentVolume",))
+    with testkit.KubeLab(allow=tuple(testkit.KUBE_ALLOWABLE)) as lab:
+        assert lab.kubectl("auth", "can-i", "create", "persistentvolumes", check=False).stdout.strip() == "no"
+        for source in ({"nfs": {"server": "172.17.0.1", "path": "/"}}, {"csi": {"driver": "x", "volumeHandle": "y"}}):
+            volume = {"apiVersion": "v1", "kind": "PersistentVolume",
+                      "metadata": {"name": f"{lab.namespace}-pv", "labels": {"devops-ex": lab.id}},
+                      "spec": {"capacity": {"storage": "1Gi"}, "accessModes": ["ReadWriteMany"], **source,
+                               "claimRef": {"namespace": "default", "name": "data"}}}
+            created = lab.run(["kubectl", "create", "-f", "-"], input=json.dumps(volume))
+            assert created.returncode != 0 and "forbidden" in created.stderr.lower(), created.stderr
+    assert admin_kubectl("get", "pv", f"{lab.namespace}-pv").returncode != 0
