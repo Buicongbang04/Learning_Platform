@@ -21,7 +21,8 @@ must=[FieldCondition(key, match=MatchValue(value))]))`; trả `(payload["uid"], 
 ## Kết quả thật
 
 PC của track, 4 luồng, mọi store chạy trên đĩa, 300 câu ghim, k = 10, gọi từng câu
-(`.superpowers/scratch/logs/vectordbs_results.txt`; cả notebook 13 phút):
+(`.superpowers/scratch/logs/vectordbs_results.txt`, lần chạy đầu; cả notebook 13 phút; lần chạy lại Chroma cho 0.994 / 0.905
+và p50 2.7 ms, Qdrant nạp 166 s):
 
 | Store | Nạp 61 425 vector | Đĩa | recall ANN@10 | Recall@10 (nhãn) | p50 | p95 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -46,7 +47,8 @@ LanceDB 0.18 s, Qdrant 7.8 s (local mode nạp lại mọi point vào RAM).
   cột, nhẹ trên đĩa, chậm khi chưa có index và nhanh hẳn khi có. **Qdrant local mode** là chế độ nhúng Python cho thử nghiệm
   (chính `qdrant-client` in cảnh báo "Local mode is not recommended for collections with more than 20,000 points"): không có HNSW, quét bằng numpy, lưu cả payload; con số của nó **không**
   phải con số của Qdrant server (Rust, HNSW, payload index), chạy bằng Docker.
-- **Recall ANN dưới 1 gần như không đổi Recall@10 theo nhãn**: Chroma 0.993 → 0.902 (mất 0.003). Index IVF_HNSW_SQ của LanceDB
+- **Recall ANN dưới 1 gần như không đổi Recall@10 theo nhãn**: Chroma đạt recall ANN 0.993 và 0.994 ở hai lần chạy, Recall@10
+  0.902 và 0.905 (HNSW của Chroma dựng đa luồng nên không tái lập tới từng chữ số). Index IVF_HNSW_SQ của LanceDB
   (lượng tử 8 bit, tham số mặc định) mất nhiều hơn: 0.951 → 0.888. Chênh dense và hybrid ở module 13 cỡ 0.01; một index cấu
   hình tệ có thể ăn hết lợi ích đó, nên luôn đo cả hai thứ recall.
 - **Lọc là tính năng chứ không phải hậu xử lý.** Lọc trong truy vấn trả đủ kết quả, Recall@10 0.978. Post-filter thiếu kết quả
