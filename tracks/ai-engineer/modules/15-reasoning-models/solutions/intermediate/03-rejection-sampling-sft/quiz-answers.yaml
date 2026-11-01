@@ -1,0 +1,8 @@
+pass4: [c]
+format-filter: [b]
+ngram8: [b]
+rft-effect: [b]
+rft-flips: [c]
+ceiling: [d]
+ngram-size: [b]
+shortest: [c]
