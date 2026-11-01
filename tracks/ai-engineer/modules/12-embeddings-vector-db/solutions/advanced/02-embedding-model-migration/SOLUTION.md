@@ -38,10 +38,14 @@ bằng `unpackbits` trong numpy: 48 ms/câu trên 61 425 vector (chậm hơn nh�
   float32 với 128 byte RAM mỗi vector (vector gốc trên đĩa). Nhị phân thuần mất 0.04 Recall@10 và 0.07 MRR.
 - **Cắt chiều** `bge-m3` (không train kiểu Matryoshka): 512 chiều gần như không mất, 256 chiều mất 0.06 MRR. Int8 cùng 1 024
   byte tốt hơn hẳn cắt còn 256 chiều float32: nén độ chính xác ít hại hơn bỏ chiều với model này.
-- **`nomic-embed-text` gần như vô dụng cho tiếng Việt có dấu** (Recall@10 0.087 so với 0.938 của `bge-m3` trên cùng pool),
-  tiền tố chỉ cứu chút ít. Nó nhanh hơn 2.6 lần, nhưng nhanh và sai thì không có giá trị.
-- Chẩn đoán (mục 1 lý thuyết): tokenizer của `nomic-embed-text` không có các âm tiết tiếng Việt có dấu, nên "rất", "không",
-  "hơi" thành cùng một token và các câu chỉ khác nhau ở đó có cosine đúng bằng 1; bỏ dấu thì model phân biệt lại được. Văn bản
+- **`nomic-embed-text` qua Ollama (GGUF) gần như vô dụng cho tiếng Việt có dấu** (Recall@10 0.087 so với 0.938 của
+  `bge-m3` trên cùng pool), tiền tố chỉ cứu chút ít. Nó nhanh hơn 2.6 lần, nhưng nhanh và sai thì không có giá trị. Kết luận
+  này chỉ cho đường chạy Ollama; đường Hugging Face / sentence-transformers của cùng model chưa được đo.
+- Chẩn đoán (mục 1 lý thuyết): qua Ollama, "rất", "không", "hơi" cho cùng một vector (cosine đúng bằng 1, cùng 8 token mỗi
+  câu theo `prompt_eval_count`), nhiều khả năng vì tokenizer WordPiece của bản GGUF biến âm tiết có dấu thành `[UNK]`; bỏ dấu
+  thì model phân biệt lại được. Tokenizer gốc trên Hugging Face (BERT uncased) bỏ dấu và tách ba từ đó thành `rat`,
+  `k ##hong`, `ho ##i` (`.superpowers/scratch/logs/nomic_hf_tokenizer.log`), nên lỗi nằm ở bản port của runtime, không nhất
+  thiết ở model. Văn bản
   luật gần như toàn âm tiết có dấu, nên phần lớn nội dung biến thành cùng một token. Kiểm thêm: đếm `prompt_eval_count` của
   Ollama, hoặc so cosine giữa hai điều luật khác chủ đề (rất cao).
 
@@ -51,8 +55,9 @@ bằng `unpackbits` trong numpy: 48 ms/câu trên 61 425 vector (chậm hơn nh�
    alias (`zalo_current`). Tiêu chí chuyển viết **trước**: trên tập 300 câu ghim, Recall@10 của B không thấp hơn A quá sàn nhiễu
    (300 câu: một câu là 0.0033; đặt ngưỡng tụt tối đa 0.01), MRR@10 không tụt, p95 không vượt ngân sách.
 2. **Ghi kép**: mọi upsert, xoá từ lúc bắt đầu đi vào cả A và B (cùng id ổn định), để B không thiếu dữ liệu mới trong lúc backfill.
-3. **Backfill**: embed toàn bộ nguồn bằng B, idempotent theo id và hash nội dung, có checkpoint. Ước lượng: 61 425 điều ở 26
-   văn bản/giây là khoảng 40 phút; 10 triệu chunk là khoảng 4.5 ngày trên một GPU như của track, nên chia nhiều worker hoặc
+3. **Backfill**: embed toàn bộ nguồn bằng B, idempotent theo id và hash nội dung, có checkpoint. Ước lượng từ lần embed thật cả corpus:
+   61 425 điều mất 2 790 giây (khoảng 47 phút, 22 điều/giây trên GPU dùng chung); 10 triệu chunk cỡ tương tự là khoảng 5 ngày
+   trên một GPU như của track, nên chia nhiều worker hoặc
    GPU lớn hơn, và đặt ưu tiên thấp để không ảnh hưởng lưu lượng thật.
 4. **Kiểm**: chạy tập ghim trên B; **shadow read** một phần lưu lượng (truy vấn cả A và B, chỉ trả kết quả A, ghi lại độ trùng
    top-10 và độ trễ). Query phải embed bằng **model của index đang đọc**: không bao giờ query B bằng vector của A.

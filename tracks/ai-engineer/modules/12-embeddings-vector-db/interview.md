@@ -18,10 +18,11 @@ một cách im lặng.
 
 1. Lọc ứng viên theo **ngôn ngữ** (tokenizer và dữ liệu train), **độ dài tối đa**, **số chiều**, giấy phép, chạy ở đâu,
    chi phí. MTEB là để lọc ứng viên, không phải để quyết định.
-2. Kiểm vài cặp câu tối thiểu trong ngôn ngữ thật. Ví dụ đo trong module: với `nomic-embed-text`, "giảng viên dạy **rất**
-   nhiệt tình", "... **không** nhiệt tình" và "... **hơi** nhiệt tình" cho cosine đúng bằng 1: các âm tiết có dấu không có
-   trong từ vựng tokenizer nên biến thành cùng một token. Bỏ dấu thì model lại phân biệt được. `bge-m3` (đa ngôn ngữ) cho
-   0.766 và 0.950.
+2. Kiểm vài cặp câu tối thiểu trong ngôn ngữ thật. Ví dụ đo trong module: với `nomic-embed-text` **chạy qua Ollama**
+   (GGUF), "giảng viên dạy **rất** nhiệt tình", "... **không** nhiệt tình" và "... **hơi** nhiệt tình" cho cosine đúng bằng 1,
+   nhiều khả năng vì tokenizer của bản port biến các âm tiết có dấu thành cùng một token `[UNK]`; tokenizer gốc trên Hugging
+   Face thì bỏ dấu và tách ba câu khác nhau. Bỏ dấu thì bản Ollama lại phân biệt được. `bge-m3` (đa ngôn ngữ) cho 0.766 và
+   0.950. Bài học: kiểm trên đúng runtime sẽ chạy production, không chỉ trên tên model.
 3. Đo trên **tập đánh giá của chính bạn** (Recall@k, MRR với retrieval; macro-F1 với phân loại), cùng throughput và bộ nhớ.
 4. Kiểm hành vi khi văn bản dài: `bge-m3` qua Ollama cắt im lặng ở 4 096 token; `nomic-embed-text` qua Ollama báo HTTP 400.
    Cả hai đều cần chunking, nhưng lỗi im lặng nguy hiểm hơn.
@@ -113,8 +114,8 @@ trên embedding). Linear probe train vài giây trên CPU, dự đoán dưới m
 
 Thắng prompting khi có vài nghìn nhãn, lưu lượng lớn, cần độ trễ thấp và ổn định (không phụ thuộc chữ LLM sinh ra). Prompting
 thắng khi không có nhãn, nhãn thay đổi thường xuyên, hoặc cần lập luận. Bẫy: embedding bắt **chủ đề** mạnh hơn **cực tính**
-(câu phủ định vẫn rất gần câu gốc), nên zero-shot bằng cosine tới mô tả nhãn thường kém; lớp hiếm (neutral chỉ 5% UIT-VSFC)
-là nơi các phương pháp không train tụt nhiều nhất. Luôn kiểm rò rỉ: câu test có bản sao gần đúng trong train làm đẹp con số.
+(câu phủ định có cosine với câu gốc gần ngang một câu cùng nghĩa), nên zero-shot bằng cosine tới mô tả nhãn thường kém; lớp hiếm (neutral chỉ 5% UIT-VSFC)
+là nơi các phương pháp không train tụt nhiều nhất. Luôn kiểm rò rỉ: tìm câu test có bản sao gần đúng trong train và báo số riêng cho hai nhóm.
 
 ## Đổi embedding model cho một index đang phục vụ: bạn làm thế nào?
 

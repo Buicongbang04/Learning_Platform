@@ -1,6 +1,6 @@
 nomic-vi: [c]
 binary-plain: [b]
-int8-vs-truncate: [b]
+embed-speed: [c]
 mix-spaces: [a]
 binary-rescore: [b]
 switch-criteria: [b]

@@ -2,7 +2,7 @@ questions:
 - id: slowest-load
   kind: data
   type: single
-  prompt: Nạp 61 425 vector lên đĩa, store nào chậm nhất (hàng phút, các store còn lại dưới một phút)?
+  prompt: Nạp 61 425 vector lên đĩa, store nào chậm nhất?
   options:
   - id: a
     text: FaissStore

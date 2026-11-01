@@ -25,7 +25,7 @@ FAISS, theo ba trục recall của ANN, số phép tính khoảng cách và th�
 
 **Phần cứng:** CPU · ~120 phút
 
-Ngoài thời gian làm bài: lần đầu notebook embed cả corpus qua Ollama, khoảng 45 phút trên laptop của track (GPU 4GB),
+Ngoài thời gian làm bài: lần đầu notebook embed cả corpus qua Ollama, khoảng 45 phút trên laptop của track (GPU 4GB, số đo của module 13; 47 phút trên PC của track),
 và cache ở `data/raw/zalo-legal/cache/bge-m3.npy` (cùng `bge-m3.ids.json`, đúng định dạng module 13 dùng, nên module 13 không
 phải embed lại). Khi đã có cache, cả notebook chạy khoảng 6 phút trên PC của track, phần lớn là dựng HNSW bằng Python trên 20 000 vector.
 

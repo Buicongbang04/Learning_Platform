@@ -29,7 +29,8 @@ Dữ liệu: 61 425 vector `bge-m3` (cache của bài Intermediate 01), 300 câu
 
 1. **Hàm** (notebook mô tả chính xác, có test): `pq_train`, `pq_encode`, `pq_decode`, `pq_search` (ADC), `pareto_front`.
 2. **Bảng đo** ít nhất 10 cấu hình, gồm: exact (numpy hoặc `IndexFlatIP`), HNSW (ít nhất 2 `efSearch`), IVF (ít nhất 2
-   `nprobe`), PQ tự viết với ít nhất 2 giá trị `m`, cùng PQ đó có rescoring top-100 bằng vector gốc, và FAISS `IndexIVFPQ`.
+   `nprobe`), PQ tự viết với ít nhất 2 giá trị `m`, cùng PQ đó có rescoring top-100 bằng vector gốc, FAISS `IndexIVFPQ`, và `IndexIVFPQ` bọc trong `faiss.IndexRefineFlat` (xếp lại top `k_factor × k` bằng vector gốc;
+   đọc tài liệu FAISS về thứ tự `train` / `add` của index bọc ngoài).
    Mỗi dòng: recall ANN@10, Recall@10 theo nhãn, ms/câu (ghi rõ đo từng câu hay cả lô, số luồng), byte/vector, thời gian
    dựng. Đo trên CPU, `OMP_NUM_THREADS` và `faiss.omp_set_num_threads` cùng một giá trị.
 3. **Biên Pareto** bằng `pareto_front`; vẽ recall ANN@10 theo ms/câu và theo byte/vector, đánh dấu các điểm trên biên.

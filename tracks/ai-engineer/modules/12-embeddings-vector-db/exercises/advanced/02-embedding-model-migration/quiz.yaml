@@ -2,7 +2,7 @@ questions:
 - id: nomic-vi
   kind: data
   type: single
-  prompt: Trên cùng pool, Recall@10 của `nomic-embed-text` (có tiền tố) so với `bge-m3` thế nào?
+  prompt: Trên cùng pool, Recall@10 của `nomic-embed-text` qua Ollama (có tiền tố) so với `bge-m3` thế nào?
   options:
   - id: a
     text: Hai model cho kết quả gần ngang nhau
@@ -25,19 +25,19 @@ questions:
     text: Tụt còn khoảng 0.3
   - id: d
     text: Tăng khoảng 0.04
-- id: int8-vs-truncate
+- id: embed-speed
   kind: data
   type: single
-  prompt: Cùng 1 024 byte mỗi vector, int8 đủ 1 024 chiều so với float32 cắt còn 256 chiều, cách nào giữ MRR@10 tốt hơn?
+  prompt: Trên cùng 2 000 ký tự đầu mỗi điều, lô 32, cùng máy, `nomic-embed-text` qua Ollama embed nhanh hơn `bge-m3` khoảng bao nhiêu lần?
   options:
   - id: a
-    text: Cắt còn 256 chiều
+    text: Chậm hơn, khoảng 0.5 lần
   - id: b
-    text: Int8 đủ 1 024 chiều
+    text: Gần như bằng nhau
   - id: c
-    text: Hai cách ngang nhau
+    text: Nhanh hơn khoảng 2 tới 3 lần
   - id: d
-    text: Không so được vì khác chiều
+    text: Nhanh hơn khoảng 20 lần
 - id: mix-spaces
   kind: knowledge
   type: single

@@ -5,13 +5,13 @@ questions:
   prompt: Trên toàn bộ tập test UIT-VSFC, embedding bge-m3 + logistic regression đứng ở đâu so với hai mốc của module 04?
   options:
   - id: a
-    text: Thua cả TF-IDF + LogReg (0.716)
+    text: Thua TF-IDF + LogReg (0.716) hơn 0.03
   - id: b
-    text: Hơn TF-IDF nhưng thua BiLSTM (0.755)
+    text: Ngang TF-IDF, chênh chưa tới 0.01
   - id: c
-    text: Hơn cả TF-IDF lẫn BiLSTM
+    text: Hơn TF-IDF rõ, ngang hoặc nhỉnh hơn BiLSTM
   - id: d
-    text: Bằng đúng TF-IDF tới ba chữ số
+    text: Hơn BiLSTM (0.755) trên 0.1 điểm
 - id: neutral-worst
   kind: data
   type: single

@@ -15,7 +15,8 @@ def test_int8_per_dimension(nb):
     x = np.array([[1.0, -0.5, 0.0], [-2.0, 0.25, 0.0], [0.5, 1.0, 0.0]], dtype=np.float32)
     codes, scale = nb.quantize_int8(x)
     assert codes.dtype == np.int8 and scale.dtype == np.float32 and scale.shape == (3,)
-    np.testing.assert_allclose(scale, [2 / 127, 1 / 127, 1.0], rtol=1e-6), "mỗi chiều một scale; chiều toàn 0 dùng 1"
+    np.testing.assert_allclose(scale, [2 / 127, 1 / 127, 1.0], rtol=1e-6,
+                               err_msg="mỗi chiều một scale; chiều toàn 0 dùng 1")
     assert codes[:, 0].tolist() == [64, -127, 32]           # round(1 / (2/127)) = round(63.5) = 64 (làm tròn về số chẵn)
     assert codes[:, 1].tolist() == [-64, 32, 127]
     rec = nb.dequantize_int8(codes, scale)

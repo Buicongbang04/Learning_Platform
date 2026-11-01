@@ -20,7 +20,7 @@ def test_normalize_values_dtype_and_no_mutation(sim):
     out = sim.l2_normalize(x)
     assert out.dtype == np.float32
     np.testing.assert_allclose(out, [[0.6, 0.8], [0.0, -1.0]], rtol=1e-6)
-    np.testing.assert_array_equal(x, before), "không được sửa mảng đầu vào"
+    np.testing.assert_array_equal(x, before, err_msg="không được sửa mảng đầu vào")
 
 
 def test_normalize_zero_row_and_1d(sim):

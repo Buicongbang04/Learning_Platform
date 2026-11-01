@@ -20,7 +20,7 @@ run:
 Dùng cùng một embedding cho bốn việc ngoài semantic search, mỗi việc ra một con số: phân loại cảm xúc UIT-VSFC (so với
 mốc của module 04 và module 11), tìm câu trùng gần đúng và rò rỉ train/test, phát hiện bất thường bằng khoảng cách kNN
 (AUROC), và gợi ý điều luật liên quan. Làm xong bạn biết khi nào "embedding + một lớp tuyến tính" là baseline đáng đánh
-bại trước khi nghĩ tới LLM, và cách một tập test có bản sao trong train làm đẹp con số.
+bại trước khi nghĩ tới LLM, và đo được bản sao giữa train và test ảnh hưởng con số test thế nào.
 
 ## Đề bài
 

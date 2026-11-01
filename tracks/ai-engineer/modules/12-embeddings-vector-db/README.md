@@ -123,26 +123,31 @@ Và trên các cặp **ngẫu nhiên** (400 mẫu mỗi bên, mọi cặp khác 
   không trải đều trên mặt cầu mà dồn vào một "hình nón" hẹp (anisotropy). Cosine 0.5 không có nghĩa là "giống một nửa", và
   ngưỡng chọn cho model này vô nghĩa với model kia: mọi ngưỡng (trùng lặp, từ chối, bất thường) phải chọn lại từ phân phối
   điểm của chính model và dữ liệu đó.
-- Câu phủ định ("không nhiệt tình", cosine 0.766) vẫn gần câu gốc hơn một câu khen khác chữ (0.805 là cùng nghĩa, nhưng
-  0.766 vẫn cao hơn mọi cặp ngẫu nhiên): embedding chủ yếu bắt **chủ đề**, bắt cực tính yếu. Muốn phân loại cảm xúc, dùng
+- Câu phủ định ("không nhiệt tình") có cosine 0.766 với câu gốc, gần ngang câu cùng nghĩa khác chữ (0.805) và nằm trong
+  vùng p5 tới p95 của các cặp phản hồi ngẫu nhiên (0.416 tới 0.787): cosine gần như không thấy phủ định. Embedding chủ yếu
+  bắt **chủ đề**, bắt cực tính yếu. Muốn phân loại cảm xúc, dùng
   embedding làm đặc trưng rồi train một lớp phân loại trên nhãn (mục 4), đừng đo cosine tới câu "tích cực".
 
 ### Model nào cho tiếng Việt: tokenizer quyết định trước tiên
 
-Cùng ba câu trên với `nomic-embed-text` (137M tham số, train chủ yếu tiếng Anh):
+Cùng ba câu trên với `nomic-embed-text` (137M tham số, train chủ yếu tiếng Anh) **chạy qua Ollama** (bản GGUF):
 
-| Cặp câu | `nomic-embed-text` | `bge-m3` |
+| Cặp câu | `nomic-embed-text` (Ollama) | `bge-m3` (Ollama) |
 | --- | --- | --- |
 | "giảng viên dạy rất nhiệt tình" / "... **không** nhiệt tình" | **1.00000** | 0.76563 |
 | "giảng viên dạy rất nhiệt tình" / "... **hơi** nhiệt tình" | **1.00000** | 0.95020 |
 | cùng hai câu, **bỏ dấu**: "giang vien day rat nhiet tinh" / "... khong nhiet tinh" | 0.88250 | 0.87788 |
 | "the lecturer is very enthusiastic" / "the lecturer is not enthusiastic" | 0.86430 | 0.83237 |
 
-Cosine **đúng bằng 1** giữa "rất", "không", "hơi": với `nomic-embed-text`, ba câu cho cùng một vector. Bỏ dấu thì model
-lại phân biệt được. Từ vựng tokenizer của model không có các âm tiết tiếng Việt có dấu này, nên chúng thành cùng một
-token "không biết" và mọi khác biệt biến mất trước khi Transformer kịp nhìn thấy. Câu tiếng Anh tương ứng thì bình thường.
-Bài học: kiểm tokenizer và một vài cặp câu tối thiểu **trong ngôn ngữ của bạn** trước khi đọc bảng xếp hạng chung. Bài
-Advanced 02 đo hậu quả trên retrieval.
+Cosine **đúng bằng 1** giữa "rất", "không", "hơi": qua Ollama, ba câu cho cùng một vector (Ollama đếm 8 token cho mỗi câu).
+Bỏ dấu thì model lại phân biệt được, và câu tiếng Anh tương ứng thì bình thường. Cách giải thích hợp lý nhất là tokenizer
+WordPiece trong bản GGUF không nhận các âm tiết có dấu và biến chúng thành cùng một token `[UNK]`. Tokenizer gốc của model
+trên Hugging Face (`nomic-ai/nomic-embed-text-v1.5`, BERT uncased) thì **bỏ dấu** trước khi tách: đo trực tiếp, nó tách
+"rất" thành `rat`, "không" thành `k ##hong`, "hơi" thành `ho ##i`, tức ba câu khác nhau (mất dấu, nhưng không trùng). Cosine
+của đường chạy Hugging Face / sentence-transformers chưa được đo trong module (cần chạy code tuỳ biến của model). Bài học
+không nằm ở tên model mà ở **đường chạy**: cùng một model, mỗi runtime (Ollama/llama.cpp, sentence-transformers, ONNX...)
+có thể port tokenizer khác nhau; kiểm tokenizer và vài cặp câu tối thiểu **trong ngôn ngữ của bạn, trên đúng runtime sẽ
+chạy production**, trước khi đọc bảng xếp hạng chung. Bài Advanced 02 đo hậu quả trên retrieval của đường Ollama.
 
 Tiêu chí chọn embedding model:
 
@@ -160,7 +165,7 @@ Tiêu chí chọn embedding model:
 Model train theo kiểu **Matryoshka Representation Learning** (Kusupati et al., 2022) cộng loss ở nhiều độ dài tiền tố
 (64, 128, 256... chiều), nên $$k$$ chiều **đầu** của vector tự nó đã là một embedding tốt. Cắt bớt chiều rồi chuẩn hoá lại
 giảm bộ nhớ và thời gian tìm tỉ lệ thuận. Tham số `dimensions` của API `/v1/embeddings` làm đúng việc này phía server. Với
-model **không** train kiểu Matryoshka, cắt chiều vẫn chạy nhưng chất lượng tụt nhanh hơn; phải đo (bài Advanced 02).
+model **không** train kiểu Matryoshka, cắt chiều vẫn chạy được, còn chất lượng mất bao nhiêu thì phải đo (bài Advanced 02).
 
 ## 2. Ba cách lấy embedding: API kiểu OpenAI, Ollama, sentence-transformers
 
@@ -234,9 +239,9 @@ tiền xử lý.
 - **Cache theo nội dung**: khoá là hash của (model, phiên bản tiền xử lý, văn bản). Embed lại chỉ phần đổi.
 - **Lỗi từng phần**: `bge-m3` qua Ollama thỉnh thoảng trả `NaN` cho một văn bản và server báo lỗi cho cả lô (module 13 mục
   2); code phải thử lại từng văn bản, ghi lại văn bản hỏng, không dừng cả lượt chạy dài.
-- Thời gian thật: embed 61 425 điều Zalo Legal (`title + text`, lô 32) mất **khoảng 47 phút** trên PC của track (15 tới 28
-  điều/giây, GPU chia với job khác) và 45 phút trên laptop GPU 4GB của track. Câu ngắn nhanh hơn nhiều: 16 175 câu UIT-VSFC
-  mất khoảng 5 phút (khoảng 50 câu/giây).
+- Thời gian thật: embed 61 425 điều Zalo Legal (`title + text`, lô 32) mất **khoảng 47 phút** (2 790 giây) trên PC của
+  track (15 tới 28 điều/giây, GPU chia với job khác). Câu ngắn nhanh hơn nhiều: 16 175 câu UIT-VSFC
+  mất khoảng 5 phút (khoảng 50 câu/giây). Laptop GPU 4GB của track mất khoảng 45 phút cho cả corpus (số đo của module 13).
 
 ## 3. Độ đo tương đồng và chuẩn hoá
 
@@ -290,7 +295,8 @@ Mỗi công cụ có metric mặc định và quy ước "khoảng cách" riêng
 
 Hai lỗi kinh điển: tạo collection Chroma không khai báo `space` rồi đưa vào vector chưa chuẩn hoá; và tạo index pgvector
 bằng `vector_cosine_ops` nhưng truy vấn bằng `<->`: theo tài liệu pgvector, index chỉ dùng được khi toán tử khớp opclass,
-nên Postgres quét tuần tự (đúng nhưng chậm, 344 ms so với 3 ms trong phép đo ở mục 6).
+nên Postgres quét tuần tự cả bảng: đúng nhưng chậm (trong phép đo ở mục 6, quét tuần tự không index mất 344 ms một câu,
+có index HNSW thì 3 ms).
 
 ### Vài bẫy số học
 
@@ -298,7 +304,8 @@ nên Postgres quét tuần tự (đúng nhưng chậm, 344 ms so với 3 ms tron
   `NaN` xuống cuối mà không báo gì. Giữ vector 0 là 0 và đếm chúng.
 - **Khai triển L2 trong `float32`**: hiệu của hai số lớn gần bằng nhau có thể ra số âm nhỏ hoặc sai số lớn khi vector có
   chuẩn lớn (bài Basic 01 đo). Với vector đơn vị thì không đáng kể.
-- **`float16`** cho vector lưu trữ là đủ (sai số cosine cỡ `1e-3`), nhưng cộng dồn tích vô hướng nên làm ở `float32`.
+- **`float16`** cho vector lưu trữ là đủ: lưu 3 000 điều `bge-m3` ở `float16` rồi tính cosine với 300 câu hỏi ghim, sai số
+  lớn nhất 5.7e-5, trung bình 1.1e-5 (giữa các điều với nhau: lớn nhất 1.3e-4). Cộng dồn tích vô hướng vẫn nên làm ở `float32`.
 
 ## 4. Use case: search, phân loại, gom nhóm, gợi ý, trùng lặp, bất thường
 
@@ -399,8 +406,10 @@ flowchart TB
 - **`efConstruction`**: độ rộng beam lúc chèn nút. Lớn hơn thì đồ thị tốt hơn, dựng chậm hơn.
 - **`efSearch`** (hay `ef`): độ rộng beam lúc tìm ở tầng 0, $$\ge k$$. Đây là núm vặn recall theo độ trễ **lúc chạy**.
 - **Heuristic chọn láng giềng**: không lấy $$M$$ ứng viên gần nhất mà giữ ứng viên chỉ khi nó gần nút gốc hơn gần mọi láng
-  giềng đã chọn. Cách này giữ lại những cạnh "đi xa" nối các cụm với nhau; thiếu nó, dữ liệu có cụm (như embedding thật)
-  làm đồ thị rời thành các đảo mà tăng `ef` cũng không qua được. Bài Intermediate 01 cài và đo cả hai.
+  giềng đã chọn. Cách này giữ lại những cạnh "đi xa" nối các cụm với nhau. Trên dữ liệu sinh có cụm tách mạnh, thiếu nó thì đồ thị rời
+  thành các đảo và recall chững lại dù tăng `ef`. Trên embedding thật (cụm không tách rời như vậy), lợi ích nhỏ hơn nhiều và
+  tăng `ef` vẫn kéo được recall của cách chọn đơn giản lên; heuristic vẫn là mặc định của các thư viện vì nó không tốn thêm
+  gì đáng kể và che được trường hợp xấu. Bài Intermediate 01 cài và đo cả hai.
 
 HNSW cho recall rất cao ở độ trễ thấp và không cần train, nhưng: tốn bộ nhớ hơn IVF (vector gốc cộng đồ thị), dựng chậm,
 và **xoá** khó (nút xoá thường chỉ được đánh dấu, đồ thị xấu dần, cần dựng lại định kỳ).
@@ -535,7 +544,8 @@ flowchart LR
   chiều: 1 024 so với 768), và ngay cả cùng model, đổi tiền xử lý hay tiền tố cũng đổi vector. Không bao giờ trộn.
 - **Đổi model là migrate**: dựng index B song song (ghi kép cho dữ liệu mới, backfill dữ liệu cũ), đánh giá B trên tập ghim
   và trên lưu lượng thật (shadow read), chuyển alias, giữ A để rollback. Thời gian backfill tính từ throughput đo được: 61 425
-  điều mất khoảng 45 phút, 10 triệu chunk ở 25 đoạn/giây là khoảng 4.6 ngày trên một GPU như của track. Bài Advanced 02.
+  điều mất khoảng 47 phút (2 790 giây, khoảng 22 điều/giây) trên PC của track, nên 10 triệu chunk cỡ tương tự là khoảng 5 ngày
+  trên một GPU như vậy. Bài Advanced 02.
 - **Ước lượng bộ nhớ** trước khi chọn index:
 
 $$

@@ -28,7 +28,7 @@ khoá). Gửi theo `batched`, ghi vào `cache`. Lượt hai: đọc mọi vector
   dạng `float` và `base64` cho cùng ma trận, `usage.prompt_tokens` là 20 cho ba câu.
 - Base64 của `float32` dài khoảng $$4 \cdot 4/3$$ byte mỗi số, so với 10 tới 12 ký tự mỗi số khi in thập phân trong JSON:
   response nhỏ hơn khoảng 2 tới 3 lần và không mất chính xác khi parse.
-- Cache có lợi thật: bài Intermediate 01 embed 61 425 điều Zalo Legal mất khoảng 45 phút trên laptop GPU 4GB (47 phút trên PC của
+- Cache có lợi thật: bài Intermediate 01 embed 61 425 điều Zalo Legal mất khoảng 45 phút trên laptop GPU 4GB theo số đo của module 13 (2 790 giây, tức 47 phút trên PC của
   track khi GPU dùng chung); embed lại cùng corpus mỗi lần chạy notebook là lãng phí lớn nhất của một
   pipeline RAG mới viết.
 

@@ -30,9 +30,9 @@ def test_class_centroids(nb):
     y = np.array([0, 1, 0, 1])
     c = nb.class_centroids(x, y, 3)
     assert c.shape == (3, 2) and c.dtype == np.float32
-    np.testing.assert_allclose(c, [[1, 0], [0, 1], [0, 0]], atol=1e-6), "lớp 2 không có mẫu: vector 0"
+    np.testing.assert_allclose(c, [[1, 0], [0, 1], [0, 0]], atol=1e-6, err_msg="lớp 2 không có mẫu: vector 0")
     c = nb.class_centroids(circle([0, 90, 180]), np.array([0, 0, 1]), 2)
-    np.testing.assert_allclose(c[0], [2 ** -0.5, 2 ** -0.5], rtol=1e-5), "trung bình rồi chuẩn hoá L2"
+    np.testing.assert_allclose(c[0], [2 ** -0.5, 2 ** -0.5], rtol=1e-5, err_msg="trung bình rồi chuẩn hoá L2")
 
 
 def test_predict_centroid(nb):
