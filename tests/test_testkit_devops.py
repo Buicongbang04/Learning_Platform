@@ -2085,3 +2085,83 @@ def test_act_rename_after_document_start(tmp_path, header):
     assert data["name"] == "devops-ex-abcd1234-ci"
     assert data["jobs"] == yaml.safe_load(SIMPLE_WORKFLOW)["jobs"]
     assert text.startswith(header)
+
+
+@pytest.mark.parametrize("uses", ["o/r/x@v\n", "o/r@v1\n", "o/r@v1 ", " o/r@v1", "o/r@v 1", "o/r@v1\textra"])
+def test_act_remote_action_rejects_whitespace(uses):
+    assert testkit._act_remote_action(uses) is None
+
+
+@pytest.mark.parametrize("uses_yaml", [
+    '"o/r/x@v\\n"',
+    "|\n          o/r/x@v",
+    '"actions/checkout@v4\\n"',
+    '"docker/build-push-action@v6 "',
+    '""',
+])
+def test_act_run_refuses_uses_with_whitespace(monkeypatch, tmp_path, uses_yaml):
+    world = FakeActWorld(monkeypatch)
+    workflow = GUARDED_PUSH.format(guard="if: ${{ !env.ACT }}").replace("docker/build-push-action@v6", uses_yaml)
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, workflow))
+    assert "khoảng trắng" in str(info.value)
+    assert world.processes == []
+
+
+ENV_OVERRIDE_BASE = """
+name: ci
+on: push
+{workflow_env}jobs:
+  build:
+    runs-on: ubuntu-latest
+{job_env}    steps:
+      - run: echo hi
+{step_env}      - if: ${{{{ !env.ACT }}}}
+        uses: docker/build-push-action@v6
+"""
+
+
+@pytest.mark.parametrize("level,key", [
+    ("workflow", "ACT"), ("job", "ACT"), ("step", "ACT"), ("workflow", "act"), ("job", "Act"), ("step", "aCt"),
+])
+def test_act_run_refuses_act_env_override(monkeypatch, tmp_path, level, key):
+    world = FakeActWorld(monkeypatch)
+    blocks = {
+        "workflow_env": f"env:\n  {key}: ''\n" if level == "workflow" else "",
+        "job_env": f"    env:\n      {key}: ''\n" if level == "job" else "",
+        "step_env": f"        env:\n          {key}: ''\n" if level == "step" else "",
+    }
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, ENV_OVERRIDE_BASE.format(**blocks)))
+    assert "`ACT`" in str(info.value) and "!env.ACT" in str(info.value)
+    assert world.processes == []
+
+
+def test_act_run_refuses_expression_env(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    workflow = ENV_OVERRIDE_BASE.format(workflow_env="", job_env="    env: ${{ fromJSON('{\"ACT\":\"\"}') }}\n", step_env="")
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, workflow))
+    assert "biểu thức" in str(info.value)
+    assert world.processes == []
+
+
+def test_act_run_allows_other_env(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    blocks = {"workflow_env": "env:\n  ACTOR_NAME: x\n", "job_env": "    env:\n      REACT: y\n", "step_env": "        env:\n          ACTION: z\n"}
+    testkit.act_run(write_project(tmp_path, ENV_OVERRIDE_BASE.format(**blocks)))
+    assert len(world.processes) == 1
+
+
+@pytest.mark.parametrize("kind,name", [("env", "ACT"), ("env", "act"), ("secrets", "ACT"), ("secrets", "Act"), ("env", "FOO\n"), ("secrets", "X\n")])
+def test_act_run_refuses_act_and_bad_names_from_caller(monkeypatch, tmp_path, kind, name):
+    world = FakeActWorld(monkeypatch)
+    with pytest.raises(pytest.fail.Exception):
+        testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW), **{kind: {name: "gia-tri-du-dai"}})
+    assert world.processes == []
+
+
+def test_act_run_refuses_event_with_newline(monkeypatch, tmp_path):
+    FakeActWorld(monkeypatch)
+    with pytest.raises(ValueError):
+        testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW), event="push\n")

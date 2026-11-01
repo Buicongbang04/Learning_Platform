@@ -1128,9 +1128,9 @@ ACT_RUN_LABEL = "devops-ex.act"
 ACT_ALLOWED_ACTIONS = ("actions/checkout",)
 ACT_REMOTE = "https://github.com/olist-shop/olist-shop.git"
 ACT_SECRET_MIN_LENGTH = 4
-_ACT_ENV_NAMES = {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST"}
-_ACT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_ACT_EVENT = re.compile(r"^[a-z_]+$")
+_ACT_ENV_NAMES = {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST", "ACT"}
+_ACT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_ACT_EVENT = re.compile(r"[a-z_]+")
 _ACT_JOB_RESULT = re.compile(r"^\[([^\]]+)\]\s+🏁\s+Job (succeeded|failed)\s*$", re.M)
 _ACT_OUTPUT = re.compile(r"^\[([^\]]+)\]\s+\|\s+devops-ex-output ([A-Za-z_][A-Za-z0-9_.-]*)=(.*?)\r?$", re.M)
 _ACT_CLONE_FAILED = re.compile(
@@ -1181,14 +1181,14 @@ def _act_skipped_locally(condition) -> bool:
     return "!env.ACT" in text.split("&&")
 
 
-_ACT_REMOTE_ACTION = re.compile(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)@([A-Za-z0-9_.-][A-Za-z0-9_./-]*)$")
+_ACT_REMOTE_ACTION = re.compile(r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)@([A-Za-z0-9_.-][A-Za-z0-9_./-]*)")
 _ACT_STUB = "name: devops-ex-stub\nruns:\n  using: composite\n  steps: []\n"
 
 
 def _act_remote_action(uses) -> tuple[str, str] | None:
     """`owner/repo[/path]@ref` hợp lệ thì trả (`owner/repo@ref`, `path`), ngược lại None. Không nhận đoạn `.`, `..` hay đoạn
     rỗng, nên `path` không bao giờ thoát ra ngoài thư mục stub."""
-    match = _ACT_REMOTE_ACTION.match(str(uses or ""))
+    match = _ACT_REMOTE_ACTION.fullmatch(str(uses or ""))
     if not match:
         return None
     owner, repo, path, ref = match.groups()
@@ -1200,7 +1200,9 @@ def _act_remote_action(uses) -> tuple[str, str] | None:
 
 def _act_step_problem(where: str, step) -> str | None:
     uses = step.get("uses") if isinstance(step, dict) else None
-    if not uses or str(uses).split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
+    if uses is not None and (not isinstance(uses, str) or re.search(r"\s", uses) or not uses):
+        return f"{where}: `uses: {uses!r}` không hợp lệ: không được rỗng hay chứa khoảng trắng, xuống dòng"
+    if not uses or uses.split("@", 1)[0] in ACT_ALLOWED_ACTIONS:
         return None
     allowed = ", ".join(ACT_ALLOWED_ACTIONS)
     if str(uses).startswith(("docker://", "./", "../", "/")):
@@ -1242,6 +1244,19 @@ def _act_guarded_stubs(repo: Path, root: Path) -> list[str]:
     return [arg for key, stub in stubs.items() for arg in ("--local-repository", f"{key}={stub}")]
 
 
+def _act_env_problem(where: str, env) -> str | None:
+    """`!env.ACT` chỉ đáng tin khi workflow không tự đặt `ACT`: đặt `ACT: ''` ở `env:` sẽ làm bước chỉ dành cho GitHub
+    chạy luôn dưới act."""
+    if env is None:
+        return None
+    if not isinstance(env, dict):
+        return f"{where}: `env:` phải là bảng key: value cố định khi chấm bằng act (không dùng biểu thức)"
+    if any(str(key).upper() == "ACT" for key in env):
+        return (f"{where}: không được đặt biến `ACT` trong `env:`; act dùng biến này để bỏ qua bước `if: ${{{{ !env.ACT }}}}`, "
+                "ghi đè nó sẽ làm bước chỉ dành cho GitHub chạy trên máy chấm")
+    return None
+
+
 def _act_workflow_problems(repo: Path) -> list[str]:
     import yaml
 
@@ -1261,10 +1276,12 @@ def _act_workflow_problems(repo: Path) -> list[str]:
             problems.append(f"{rel}: YAML không hợp lệ: {error}")
             continue
         jobs = data.get("jobs") if isinstance(data, dict) else None
+        problems += filter(None, [_act_env_problem(str(rel), data.get("env") if isinstance(data, dict) else None)])
         for job_id, job in (jobs or {}).items() if isinstance(jobs, dict) else ():
             if not isinstance(job, dict):
                 continue
             where = f"{rel}, job {job_id}"
+            problems += filter(None, [_act_env_problem(where, job.get("env"))])
             if "uses" in job:
                 problems.append(f"{where}: gọi workflow khác ({job['uses']}) chưa được hỗ trợ khi chấm")
                 continue
@@ -1274,10 +1291,11 @@ def _act_workflow_problems(repo: Path) -> list[str]:
             runs_on = job.get("runs-on")
             if (runs_on if isinstance(runs_on, list) else [runs_on]) != ["ubuntu-latest"]:
                 problems.append(f"{where}: runs-on phải là ubuntu-latest (đang là {runs_on!r})")
-            for step in job.get("steps") or []:
-                problem = _act_step_problem(where, step)
-                if problem:
-                    problems.append(problem)
+            for index, step in enumerate(job.get("steps") or [], 1):
+                problems += filter(None, [
+                    _act_step_problem(where, step),
+                    _act_env_problem(f"{where}, bước {index}", step.get("env")) if isinstance(step, dict) else None,
+                ])
     return problems
 
 
@@ -1456,13 +1474,13 @@ def act_run(
     """
     env = {str(k): str(v) for k, v in (env or {}).items()}
     secrets = {str(k): str(v) for k, v in (secrets or {}).items()}
-    bad = [n for n in [*env, *secrets] if not _ACT_NAME.match(n) or n in _ACT_ENV_NAMES or n.upper().startswith("GITHUB_")]
+    bad = [n for n in [*env, *secrets] if not _ACT_NAME.fullmatch(n) or n.upper() in _ACT_ENV_NAMES or n.upper().startswith("GITHUB_")]
     if bad:
-        pytest.fail(f"Tên biến hoặc secret không dùng được với act_run: {bad} (chữ, số, '_'; không trùng PATH, HOME..., không bắt đầu bằng GITHUB_)")
+        pytest.fail(f"Tên biến hoặc secret không dùng được với act_run: {bad} (chữ, số, '_'; không trùng PATH, HOME, ACT..., không bắt đầu bằng GITHUB_)")
     short = sorted(name for name, value in secrets.items() if len(value) < ACT_SECRET_MIN_LENGTH)
     if short:
         pytest.fail(f"Secret {short} ngắn hơn {ACT_SECRET_MIN_LENGTH} ký tự: act_run không che được an toàn, dùng giá trị dài hơn")
-    if not _ACT_EVENT.match(event):
+    if not _ACT_EVENT.fullmatch(event):
         raise ValueError(f"Tên event không hợp lệ: {event!r}")
     Exercise.require_tool("act", ACT_MIN_VERSION)
     Exercise.require_tool("git")
