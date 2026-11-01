@@ -1,17 +1,17 @@
 questions:
-- id: time-split
+- id: zero-std
   kind: data
   type: single
-  prompt: Trong lời giải mẫu (micro-batch 2), phần sinh 64 lời giải chiếm bao nhiêu thời gian một bước GRPO?
+  prompt: Trung bình 30 bước train, tỉ lệ nhóm 8 lời giải có reward bằng nhau (std = 0) khoảng bao nhiêu?
   options:
   - id: a
-    text: Dưới 10%, gần hết là backward
+    text: Bằng 0 ở mọi bước
   - id: b
-    text: Khoảng một nửa thời gian của bước
+    text: Dưới 30%, dao động theo bước
   - id: c
-    text: Trên 95%, cập nhật gần như miễn phí
+    text: Khoảng 60%, ổn định
   - id: d
-    text: Không đáng kể vì sinh có KV cache
+    text: Trên 90% ở mọi bước
 - id: what-moved
   kind: data
   type: single

@@ -299,7 +299,7 @@ Ba khác biệt so với PPO-RLHF:
   $$\mathbb D_{\text{KL}}^{(t)} = \frac{\pi_{\text{ref}}(o_{i,t})}{\pi_\theta(o_{i,t})} - \log\frac{\pi_{\text{ref}}(o_{i,t})}{\pi_\theta(o_{i,t})} - 1 \ \ge 0$$,
   không chệch cho $$\mathrm{KL}(\pi_\theta \| \pi_{\text{ref}})$$ khi token lấy mẫu từ $$\pi_\theta$$ (bài Basic 03 kiểm bằng Monte Carlo).
 - **Reward kiểm được** (RLVR) thay cho reward model: không có mạng nào để model khai thác, nhưng reward vẫn hack được nếu
-  viết lỏng (mục 4 phần "thiết kế reward").
+  viết lỏng (phần "Thiết kế reward" bên dưới).
 
 ### Một ví dụ số
 
@@ -346,6 +346,8 @@ Với khung thẻ, không nhóm nào có tín hiệu: train GRPO chỉ tốn GPU
 module này làm), (2) **cold start** bằng SFT vài trăm lời giải đúng khung trước khi RL (cách R1 làm), (3) reward định dạng
 từng phần (cộng điểm cho từng thẻ đúng chỗ), chấp nhận rủi ro model học "ăn điểm thẻ". Hàng cuối cũng cho thấy: kể cả với
 khung quen, hơn một nửa nhóm 4 lời giải không có tín hiệu vì câu quá dễ hoặc quá khó với model; G = 8 giảm tỉ lệ đó.
+`temperature` cũng là một phần của thiết kế: ở 1.0 (mặc định của `GRPOConfig`) cùng model chỉ 45% lời giải lấy mẫu đúng
+khung và 24% đúng đáp số (so với 77% và 39% ở 0.7), nhiều lời giải thành chuỗi từ vô nghĩa; các bài của module lấy mẫu ở 0.7.
 
 Nguyên tắc viết reward kiểm được:
 
@@ -362,7 +364,10 @@ Nguyên tắc viết reward kiểm được:
 ### Một bước GRPO tiêu thời gian vào đâu
 
 Một bước có ba pha: **sinh** G lời giải cho mỗi câu (tự hồi quy, tuần tự theo token), **chấm** (reward bằng code, gần như
-miễn phí), **cập nhật** (một lượt forward/backward trên chuỗi đã sinh, như SFT). SỐ_THỜI_GIAN
+miễn phí), **cập nhật** (một lượt forward/backward trên chuỗi đã sinh, như SFT). Trên PC của track (RTX 3060), một bước
+`GRPOTrainer` với 64 completion tối đa 384 token của Qwen2.5-0.5B mất khoảng 40 giây (`step_time` trong log). Riêng phần
+sinh, đo độc lập ở bài Intermediate 01: 3 200 lời giải tối đa 512 token mất 1 129 giây với batch 64, tức khoảng 23 giây cho
+một batch 64 lời giải. Phần sinh là khoản lớn nhất, và nó tuần tự theo token: thêm GPU cho phần train không làm nó nhanh hơn.
 
 Vì vậy mọi framework RL cho LLM dồn sức vào phần sinh: TRL hỗ trợ sinh bằng vLLM (`use_vllm=True`, chế độ chung GPU hoặc
 server riêng), OpenRLHF và veRL tách hẳn máy sinh và máy train. Env của repo không có vLLM (xung đột phiên bản, xem module
@@ -390,7 +395,7 @@ config = GRPOConfig(
     gradient_accumulation_steps=16,    # 4 × 16 = 64 completion = 8 prompt × 8 lời giải mỗi bước
     max_completion_length=384,
     temperature=0.7,
-    learning_rate=2e-5,
+    learning_rate=4e-5,
     beta=0.0,                          # mặc định TRL 1.17: không KL, không nạp reference
     loss_type="dapo",                  # mặc định: gộp theo token
     reward_weights=[1.0, 0.2],         # đúng đáp số, đúng khung
