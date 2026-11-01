@@ -3063,3 +3063,233 @@ def test_tofu_lab_plan_json(recorder):
         with pytest.raises(pytest.fail.Exception, match="tofu plan"):
             lab.plan_json()
         assert not list(lab.workdir.glob("*.tfplan"))
+
+
+def test_parse_version_ansible_banner():
+    banner = "ansible-playbook [core 2.21.5]\n  config file = None\n  python version = 3.12.13 (main)"
+    assert testkit.parse_version(banner) == (2, 21, 5)
+
+
+def ansible_tree(tmp_path: Path, files: dict[str, str]) -> Path:
+    root = tmp_path / "project"
+    for rel, text in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize(
+    "rel,text,needle",
+    [
+        ("inventory/hosts.yml", "all:\n  hosts:\n    worker-1:\n      ansible_connection: local\n", "ansible_connection"),
+        ("inventory/hosts.ini", "[workers]\nworker-1 ansible_host=10.0.0.5\n", "ansible_host"),
+        ("inventory/hosts", "[workers]\nworker-1 ansible_port=2222\n", "ansible_port"),
+        ("inventory/hosts.yml", "all:\n  hosts:\n    localhost:\n", "localhost"),
+        ("inventory/hosts.ini", "[workers]\n127.0.0.1\n", "127.0.0.1"),
+        ("inventory/hosts.ini", "[workers]\n::1\n", "::1"),
+        ("site.yml", "- hosts: localhost\n  tasks: []\n", "localhost"),
+        ("site.yml", "- hosts: workers\n  connection: local\n  tasks: []\n", "connection"),
+        ("site.yml", "- {hosts: workers, connection: local}\n", "connection"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - ansible.builtin.ping:\n      delegate_to: worker-2\n", "delegate_to"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - local_action: ansible.builtin.command id\n", "local_action"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - ansible.builtin.add_host:\n        name: x\n", "add_host"),
+        ("group_vars/all.yml", "ansible_ssh_common_args: -o StrictHostKeyChecking=no\n", "ansible_ssh_common_args"),
+        ("group_vars/all.yml", "ansible_host_key_checking: false\n", "host_key_checking"),
+        ("roles/r/vars/main.yml", "ansible_python_interpreter: /usr/bin/python3\nansible_private_key_file: /x\n",
+         "ansible_private_key_file"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - ansible.builtin.debug:\n        msg: \"{{ lookup('pipe', 'id') }}\"\n",
+         "pipe"),
+        ("site.yml", "- hosts: all\n  tasks:\n    - ansible.builtin.debug:\n        msg: \"{{ query('ansible.builtin.lines', 'id') }}\"\n",
+         "lines"),
+        ("site.yml", "- hosts: all\n  vars:\n    x: \"{{ lookup( 'pipe' , 'id') }}\"\n", "pipe"),
+        ("site.yml", "- hosts: all\n  vars:\n    url: http://localhost:8000\n", "localhost"),
+    ],
+)
+def test_ansible_problems_reject(tmp_path, rel, text, needle):
+    root = ansible_tree(tmp_path, {rel: text})
+    problems = testkit.ansible_problems(root)
+    assert problems and any(needle in p and rel in p for p in problems), problems
+
+
+@pytest.mark.parametrize("folder", ["callback_plugins", "roles/r/filter_plugins", "connection_plugins", "collections"])
+def test_ansible_problems_reject_plugin_dirs(tmp_path, folder):
+    root = ansible_tree(tmp_path, {f"{folder}/x.py": "X = 1\n", "site.yml": "- hosts: all\n  tasks: []\n"})
+    problems = testkit.ansible_problems(root)
+    assert problems and folder.split("/")[-1] in problems[0], problems
+
+
+def test_ansible_problems_accept_normal_project(tmp_path):
+    root = ansible_tree(tmp_path, {
+        "inventory/hosts.yml": "workers:\n  hosts:\n    worker-1:\n    worker-2:\n",
+        "site.yml": (
+            "- hosts: workers\n  become: true\n  tasks:\n"
+            "    - name: Chờ connection ổn định\n      ansible.builtin.wait_for_connection:\n        timeout: 30\n"
+            "    - ansible.builtin.debug:\n        msg: \"{{ ansible_hostname }} {{ inventory_hostname }} {{ lookup('ansible.builtin.env', 'X') }}\"\n"
+        ),
+        "roles/r/templates/worker.env.j2": "REDIS_URL=redis://localhost:6379/0\nBIND=127.0.0.1\n",
+        "roles/r/files/hosts": "127.0.0.1 localhost\n",
+        "roles/r/library/my_module.py": "print('chạy trên target')\n",
+        "README.md": "Không dùng delegate_to hay connection local trong lab.\n",
+    })
+    assert testkit.ansible_problems(root) == []
+
+
+def ansible_events() -> list[dict]:
+    return [
+        {"type": "task", "host": "w1", "task": "Tạo user", "action": "ansible.builtin.user", "status": "ok", "changed": True,
+         "handler": False, "role": "olist_worker", "tags": ["setup"]},
+        {"type": "task", "host": "w1", "task": "Restart", "action": "ansible.builtin.systemd_service", "status": "skipped",
+         "changed": False, "handler": True, "role": "olist_worker", "tags": []},
+        {"type": "task", "host": "w2", "task": "Tạo user", "action": "ansible.builtin.user", "status": "ok", "changed": False,
+         "handler": False, "role": "olist_worker", "tags": ["setup"]},
+        {"type": "stats", "host": "w1", "ok": 3, "changed": 1, "unreachable": 0, "failures": 0, "skipped": 1, "rescued": 0,
+         "ignored": 0},
+        {"type": "stats", "host": "w2", "ok": 2, "changed": 0, "unreachable": 0, "failures": 0, "skipped": 0, "rescued": 0,
+         "ignored": 0},
+    ]
+
+
+def test_ansible_run_recap_and_tasks():
+    run = testkit.AnsibleRun(["ansible-playbook"], 0, "out", "", ansible_events())
+    assert run.recap == {"w1": {"ok": 3, "changed": 1, "unreachable": 0, "failures": 0, "skipped": 1, "rescued": 0, "ignored": 0},
+                         "w2": {"ok": 2, "changed": 0, "unreachable": 0, "failures": 0, "skipped": 0, "rescued": 0, "ignored": 0}}
+    assert run.changed == {"w1": 1, "w2": 0}
+    assert [t["task"] for t in run.tasks(changed=True)] == ["Tạo user"]
+    assert [t["host"] for t in run.tasks(handler=True)] == ["w1"]
+    assert [t["host"] for t in run.tasks("Tạo user")] == ["w1", "w2"]
+    assert run.hosts == {"w1", "w2"}
+
+
+ANSIBLE_REQUIRED = pytest.mark.skipif(
+    not (shutil.which("ansible-playbook") and shutil.which("docker") and shutil.which("bwrap")),
+    reason="Cần ansible-playbook, docker và bwrap",
+)
+
+
+def test_ansible_lab_refuses_use_outside_with():
+    with pytest.raises(RuntimeError):
+        testkit.AnsibleLab().run("ansible", "--version")
+
+
+@pytest.mark.parametrize("env", [{"ANSIBLE_CONFIG": "/x"}, {"HOME": "/x"}, {"ANSIBLE_VAULT_PASSWORD_FILE": "/x"}, {"PATH": "/x"}])
+def test_ansible_lab_run_env_cannot_override_lab(env):
+    with testkit.AnsibleLab() as lab:
+        with pytest.raises(ValueError, match="lab tự quản"):
+            lab.run("ansible-inventory", "--list", env=env)
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_run_passes_extra_env():
+    with testkit.AnsibleLab() as lab:
+        script = lab.write("inv/inventory.py", "#!/usr/bin/env python3\nimport json, os\n"
+                           "print(json.dumps({'g': {'hosts': [os.environ['DEMO_HOST']]}, '_meta': {'hostvars': {}}}))\n")
+        script.chmod(0o755)
+        result = lab.run("ansible-inventory", "-i", str(script), "--list", env={"DEMO_HOST": "w9"}, cwd=script.parent)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["g"]["hosts"] == ["w9"]
+
+
+def test_ansible_files_pin_ssh(tmp_path):
+    files = testkit._ansible_files(tmp_path, {"w1": 41001, "w2": 41002}, {"w1": "ssh-ed25519 AAAA1", "w2": "ssh-ed25519 AAAA2"})
+    ssh = files["ssh_config"]
+    for line in ("StrictHostKeyChecking yes", "IdentitiesOnly yes", "IdentityAgent none", "GlobalKnownHostsFile /dev/null",
+                 "UpdateHostKeys no", "BatchMode yes", f"UserKnownHostsFile {tmp_path / 'known_hosts'}"):
+        assert line in ssh
+    assert files["known_hosts"].splitlines() == ["[127.0.0.1]:41001 ssh-ed25519 AAAA1", "[127.0.0.1]:41002 ssh-ed25519 AAAA2"]
+    inventory = files["lab.ini"]
+    assert "w1 ansible_host=127.0.0.1 ansible_port=41001 ansible_user=root" in inventory
+    assert "ansible_connection" not in inventory and "localhost" not in inventory
+    config = files["ansible.cfg"]
+    assert f"-F {tmp_path / 'ssh_config'}" in config and "host_key_checking = True" in config
+    assert f"collections_path = {tmp_path / 'collections'}" in config and f"roles_path = {tmp_path / 'roles'}" in config
+
+
+def test_ansible_env_from_scratch(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANSIBLE_CONFIG", "/home/x/.ansible.cfg")
+    monkeypatch.setenv("ANSIBLE_VAULT_PASSWORD_FILE", "/home/x/.vault")
+    env = testkit._ansible_env(tmp_path, tmp_path / "events.jsonl")
+    assert env["ANSIBLE_CONFIG"] == str(tmp_path / "ansible.cfg")
+    assert env["HOME"] == str(tmp_path / "home")
+    assert "ANSIBLE_VAULT_PASSWORD_FILE" not in env and "SSH_AUTH_SOCK" not in env
+    assert env["DEVOPS_EX_EVENTS"] == str(tmp_path / "events.jsonl")
+
+
+def test_ansible_target_wheels_match_sample_app():
+    sample = (testkit.ROOT / "tracks" / "devops" / "sample-app" / "requirements.txt").read_text(encoding="utf-8").split()
+    worker = (testkit.ANSIBLE_TARGET_DIR / "requirements-worker.txt").read_text(encoding="utf-8").split()
+    assert worker and set(worker) <= set(sample)
+
+
+@pytest.fixture(scope="module")
+def ansible_lab():
+    testkit.Exercise.require_tool("ansible-playbook", testkit.ANSIBLE_MIN_VERSION)
+    with testkit.AnsibleLab(["node-a", "node-b"]) as lab:
+        yield lab
+    assert testkit.docker_leftovers(lab.docker.id) == []
+    assert not lab.root.exists()
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_runs_playbook_twice(ansible_lab):
+    project = ansible_lab.write("project/site.yml", (
+        "- hosts: all\n  gather_facts: false\n  tasks:\n"
+        "    - ansible.builtin.copy:\n        dest: /etc/devops-ex.txt\n        content: \"{{ inventory_hostname }}\\n\"\n"
+    )).parent
+    first = ansible_lab.playbook("site.yml", cwd=project)
+    assert first.returncode == 0, first.tail()
+    assert first.changed == {"node-a": 1, "node-b": 1}
+    second = ansible_lab.playbook("site.yml", cwd=project)
+    assert second.changed == {"node-a": 0, "node-b": 0}, second.tail()
+    assert ansible_lab.read("node-b", "/etc/devops-ex.txt") == "node-b\n"
+    assert ansible_lab.read("node-b", "/khong/co") is None
+    assert ansible_lab.exec("node-a", "cat", "/proc/self/status").stdout.count("NoNewPrivs:\t1") == 1
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_ignores_user_config(ansible_lab):
+    result = ansible_lab.run("ansible-config", "dump", "--only-changed", cwd=ansible_lab.root)
+    assert result.returncode == 0, result.stderr
+    assert str(ansible_lab.root / "ansible.cfg") in result.stdout
+    assert str(Path.home()) not in result.stdout.replace(str(ansible_lab.root), "")
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_rejects_unpinned_host(ansible_lab):
+    ansible_lab.docker.start("rogue", ansible_lab.image, ports=[22], env={"DEVOPS_EX_AUTHORIZED_KEY": ansible_lab.public_key})
+    ansible_lab.docker.wait_log("rogue", "Server listening")
+    port = ansible_lab.docker.port("rogue", 22)
+    rogue = ansible_lab.write("rogue/inventory.ini", f"rogue ansible_host=127.0.0.1 ansible_port={port} ansible_user=root\n")
+    ansible_lab.write("rogue/site.yml", "- hosts: rogue\n  gather_facts: false\n  tasks:\n    - ansible.builtin.ping:\n")
+    with pytest.raises(pytest.fail.Exception) as info:
+        ansible_lab.playbook("site.yml", inventory=[str(rogue)], cwd=rogue.parent)
+    assert "ngoài lab" in str(info.value) and "Host key verification failed" in str(info.value)
+    assert "unreachable=1" in str(info.value)
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_fails_on_host_outside_lab(ansible_lab):
+    play = ansible_lab.write("implicit/site.yml", (
+        "- hosts: \"{{ 'local' ~ 'host' }}\"\n  gather_facts: false\n  tasks:\n    - ansible.builtin.ping:\n"
+    ))
+    with pytest.raises(pytest.fail.Exception, match="ngoài lab"):
+        ansible_lab.playbook("site.yml", cwd=play.parent)
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_stage_refuses_localhost(ansible_lab, tmp_path):
+    root = ansible_tree(tmp_path, {"site.yml": "- hosts: localhost\n  tasks: []\n"})
+    with pytest.raises(pytest.fail.Exception, match="localhost"):
+        ansible_lab.stage(root, "bad")
+
+
+@ANSIBLE_REQUIRED
+def test_ansible_lab_cleans_up_on_error():
+    testkit.Exercise.require_tool("ansible-playbook", testkit.ANSIBLE_MIN_VERSION)
+    lab = testkit.AnsibleLab(["node-x"])
+    with pytest.raises(RuntimeError, match="giữa chừng"):
+        with lab:
+            assert lab.docker.running("node-x")
+            raise RuntimeError("lỗi giữa chừng")
+    assert testkit.docker_leftovers(lab.docker.id) == []
+    assert not lab.root.exists()

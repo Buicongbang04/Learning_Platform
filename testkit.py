@@ -25,6 +25,7 @@ Trong test:
     result = act_run(project_dir, job="build"); act_job_results(result) == {"build": True}  # bài CI: workflow chạy bằng act
     registry = ex.require_registry(); ref = lab.push(tag, "api")  # registry local, close() xoá manifest đã push
     with TofuLab(ex.path("infra")) as lab: lab.init(); lab.apply(); lab.output("bucket")  # bài IaC: tofu trong sandbox, LocalStack riêng, close() destroy
+    with AnsibleLab(["worker-1"]) as lab: run = lab.playbook("site.yml", cwd=lab.stage(ex.target)); run.changed  # bài Ansible: target SSH trong container
 """
 
 from __future__ import annotations
@@ -2197,6 +2198,399 @@ class TofuLab:
 
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
 _MAGIC = re.compile(r"^(\s*)(?:[%!]|[\w, ]+=\s*[%!]).*$")
+
+
+ANSIBLE_VERSION = "2.21.5"
+ANSIBLE_MIN_VERSION = "2.21"
+ANSIBLE_TARGET_DIR = ROOT / "setup" / "ansible-target"
+ANSIBLE_TARGET_PYTHON = "/usr/local/bin/python3"
+ANSIBLE_MEMORY = "512m"
+ANSIBLE_TIMEOUT = 600
+ANSIBLE_READY_TIMEOUT = 60
+_ANSIBLE_STATS = ("ok", "changed", "unreachable", "failures", "skipped", "rescued", "ignored")
+_ANSIBLE_ASSETS = ("templates", "files")
+_ANSIBLE_KEYS = (
+    r"ansible_(?:connection|host|port|user_known_hosts_file|private_key_file|password|ssh_\w+|sftp_\w+|scp_\w+|"
+    r"\w*host_key_checking|ssh_pass|become_exe)|connection|delegate_to|delegate_facts|local_action|add_host|"
+    r"host_key_checking|ssh_args|ssh_common_args|ssh_extra_args|ssh_executable|private_key_file|remote_port"
+)
+_ANSIBLE_FORBIDDEN_KEY = re.compile(rf"(?<![\w.-])(?:ansible\.builtin\.)?({_ANSIBLE_KEYS})\b\s*[\"']?\s*[:=]")
+_ANSIBLE_LOCAL_ADDRESS = re.compile(r"(?<![\w.-])(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1)(?![\w-])")
+_ANSIBLE_CONTROLLER_LOOKUP = re.compile(
+    r"\b(?:lookup|query|q)\s*\(\s*[\"'](?:ansible\.builtin\.)?(pipe|lines)[\"']")
+_ANSIBLE_CALLBACK = '''
+import json
+import os
+
+from ansible.playbook.handler import Handler
+from ansible.plugins.callback import CallbackBase
+
+
+class CallbackModule(CallbackBase):
+    CALLBACK_VERSION = 2.0
+    CALLBACK_TYPE = "notification"
+    CALLBACK_NAME = "devops_ex_events"
+    CALLBACK_NEEDS_ENABLED = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._path = os.environ.get("DEVOPS_EX_EVENTS")
+
+    def _write(self, record):
+        if self._path:
+            with open(self._path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\\n")
+
+    def _task(self, status, result):
+        task = result._task
+        role = getattr(task, "_role", None)
+        self._write({
+            "type": "task", "host": result._host.get_name(), "task": task.get_name(), "action": task.action,
+            "status": status, "changed": bool(result._result.get("changed", False)), "handler": isinstance(task, Handler),
+            "role": role.get_name() if role else None, "tags": sorted(task.tags or []),
+        })
+
+    def v2_runner_on_ok(self, result):
+        self._task("ok", result)
+
+    def v2_runner_on_failed(self, result, ignore_errors=False):
+        self._task("ignored" if ignore_errors else "failed", result)
+
+    def v2_runner_on_skipped(self, result):
+        self._task("skipped", result)
+
+    def v2_runner_on_unreachable(self, result):
+        self._task("unreachable", result)
+
+    def v2_playbook_on_stats(self, stats):
+        for host in sorted(stats.processed):
+            self._write({"type": "stats", "host": host, **stats.summarize(host)})
+'''
+
+
+def ansible_problems(root: Path) -> list[str]:
+    """Tệp của người học (dưới `root`) làm bài Ansible chạy vào máy khác target của lab: đặt cách kết nối (`connection`,
+    `ansible_connection`, `ansible_host`, `ansible_port`, `ansible_ssh_*`, khoá `host_key_checking`...), `delegate_to`,
+    `local_action`, `add_host`, nhắc `localhost`/`127.x.x.x`/`::1`, lookup `pipe`/`lines` (chạy lệnh trên máy điều khiển),
+    hay thư mục plugin chạy trên máy điều khiển (`*_plugins`, `collections`). Quét văn bản thô như `tofu_config_problems`:
+    khoá cấm theo sau bởi `:` hay `=` ở bất kỳ đâu, kể cả trong chú thích hay chuỗi, đều bị từ chối. Riêng địa chỉ local
+    được phép trong `templates/` và `files/` (nội dung ghi lên target, Ansible không dùng để kết nối)."""
+    root = Path(root)
+    found = []
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root)
+        if path.is_dir():
+            if path.name.endswith("_plugins") or path.name == "collections":
+                found.append(f"{rel}/: thư mục `{path.name}` bị từ chối: plugin trong đó chạy trên máy điều khiển (máy của bạn) "
+                             "chứ không trên target. Bài tập chỉ cần module builtin, xoá thư mục này")
+            continue
+        if not path.is_file() or set(_COPY_IGNORE) & set(rel.parts):
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+
+        def where(match: re.Match) -> str:
+            return f"{rel}:{text.count(chr(10), 0, match.start()) + 1}"
+
+        for match in _ANSIBLE_FORBIDDEN_KEY.finditer(text):
+            found.append(f"{where(match)}: `{match.group(1)}` bị từ chối: lab tự quyết định cách kết nối tới target (SSH qua "
+                         "cổng loopback của container, khoá host đã ghim) và không bao giờ chạy task trên máy của bạn. Xoá "
+                         "dòng này (cấm cả khi nằm trong chú thích hay chuỗi để không mẹo nào lách được phép kiểm)")
+        for match in _ANSIBLE_CONTROLLER_LOOKUP.finditer(text):
+            found.append(f"{where(match)}: lookup `{match.group(1)}` bị từ chối: nó chạy lệnh hay đọc tệp trên máy điều khiển. "
+                         "Lấy dữ liệu trên target bằng task (`ansible.builtin.command` kèm `register`, `slurp`)")
+        if not set(rel.parts[:-1]) & set(_ANSIBLE_ASSETS):
+            for match in _ANSIBLE_LOCAL_ADDRESS.finditer(text):
+                found.append(f"{where(match)}: `{match.group(1)}` bị từ chối ngoài `templates/` và `files/`: bài Ansible không "
+                             "bao giờ chạy vào máy của bạn. Đặt tên host như `redis.internal`; giá trị cần ghi lên target "
+                             "để trong template")
+    return found
+
+
+def _ansible_files(root: Path, ports: dict[str, int], host_keys: dict[str, str]) -> dict[str, str]:
+    """Nội dung các tệp cấu hình lab sinh trong `root`: ssh_config (khoá riêng, ghim khoá host, không agent), known_hosts
+    chỉ có target của lab, inventory kết nối `lab.ini`, ansible.cfg (callback ghi sự kiện, roles/collections rỗng)."""
+    ssh = "\n".join([
+        "Host *",
+        "  User root",
+        f"  IdentityFile {root / 'id_ed25519'}",
+        "  IdentitiesOnly yes",
+        "  IdentityAgent none",
+        "  ForwardAgent no",
+        f"  UserKnownHostsFile {root / 'known_hosts'}",
+        "  GlobalKnownHostsFile /dev/null",
+        "  StrictHostKeyChecking yes",
+        "  UpdateHostKeys no",
+        "  BatchMode yes",
+        "  PasswordAuthentication no",
+        "  ConnectTimeout 15",
+        "  ServerAliveInterval 15",
+        "",
+    ])
+    known = "".join(f"[127.0.0.1]:{ports[host]} {host_keys[host]}\n" for host in ports)
+    inventory = "".join(
+        f"{host} ansible_host=127.0.0.1 ansible_port={port} ansible_user=root\n" for host, port in ports.items())
+    config = "\n".join([
+        "[defaults]",
+        f"roles_path = {root / 'roles'}",
+        f"collections_path = {root / 'collections'}",
+        f"local_tmp = {root / 'home' / '.ansible' / 'tmp'}",
+        f"callback_plugins = {root / 'callbacks'}",
+        "callbacks_enabled = devops_ex_events",
+        "stdout_callback = ansible.builtin.default",
+        f"interpreter_python = {ANSIBLE_TARGET_PYTHON}",
+        "host_key_checking = True",
+        "retry_files_enabled = False",
+        "nocolor = True",
+        "forks = 5",
+        "timeout = 30",
+        "",
+        "[ssh_connection]",
+        f"ssh_args = -F {root / 'ssh_config'} -o ControlMaster=auto -o ControlPersist=60s",
+        f"control_path_dir = {root / 'cp'}",
+        "pipelining = True",
+        "",
+    ])
+    return {"ssh_config": ssh, "known_hosts": known, "lab.ini": inventory, "ansible.cfg": config}
+
+
+def _ansible_env(root: Path, events: Path) -> dict[str, str]:
+    """Env dựng từ đầu cho lệnh `ansible-*` trong sandbox: `ANSIBLE_CONFIG` là tệp do lab sinh (không đọc `ansible.cfg` ở
+    thư mục hiện tại, `~/.ansible.cfg` hay `/etc/ansible`), `HOME` tạm, không mang `ANSIBLE_*` hay `SSH_AUTH_SOCK` của bạn."""
+    return {
+        "HOME": str(root / "home"),
+        "ANSIBLE_CONFIG": str(root / "ansible.cfg"),
+        "ANSIBLE_HOME": str(root / "home" / ".ansible"),
+        "ANSIBLE_NOCOLOR": "1",
+        "ANSIBLE_FORCE_COLOR": "0",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "DEVOPS_EX_EVENTS": str(events),
+    }
+
+
+class AnsibleRun(subprocess.CompletedProcess):
+    """Kết quả một lần `ansible-playbook` của `AnsibleLab`: `returncode`, `stdout`, `stderr` cộng `events` (mỗi task trên
+    mỗi host: `host`, `task`, `action`, `status`, `changed`, `handler`, `role`, `tags`) do callback của lab ghi."""
+
+    def __init__(self, args, returncode: int, stdout: str, stderr: str, events: list[dict]) -> None:
+        super().__init__(args, returncode, stdout, stderr)
+        self.events = events
+
+    @property
+    def output(self) -> str:
+        return f"{self.stdout or ''}\n{self.stderr or ''}"
+
+    @property
+    def recap(self) -> dict[str, dict[str, int]]:
+        """PLAY RECAP theo host: `ok`, `changed`, `unreachable`, `failures`, `skipped`, `rescued`, `ignored`."""
+        return {e["host"]: {key: int(e.get(key, 0)) for key in _ANSIBLE_STATS} for e in self.events if e.get("type") == "stats"}
+
+    @property
+    def changed(self) -> dict[str, int]:
+        return {host: stats["changed"] for host, stats in self.recap.items()}
+
+    @property
+    def hosts(self) -> set[str]:
+        return {e["host"] for e in self.events}
+
+    def tasks(self, name: str | None = None, *, host: str | None = None, changed: bool | None = None,
+              handler: bool | None = None) -> list[dict]:
+        return [e for e in self.events if e.get("type") == "task" and (name is None or e["task"] == name)
+                and (host is None or e["host"] == host) and (changed is None or e["changed"] == changed)
+                and (handler is None or e["handler"] == handler)]
+
+    def tail(self, lines: int = 60) -> str:
+        return "\n".join(self.output.strip().splitlines()[-lines:])
+
+
+class AnsibleLab:
+    """Target Ansible là container SSH do `DockerLab` dựng; `ansible-*` chạy trong `run_sandboxed`. Chỉ dùng bằng
+    `with AnsibleLab(["worker-1", "worker-2"]) as lab:` (không host thì không dựng container, đủ cho `ansible-inventory`,
+    `ansible-vault`).
+
+    Image target build bằng `DockerLab.build` từ `setup/ansible-target` (`python:3.12.16-slim-trixie` cộng openssh-server,
+    sudo, systemd chỉ để có `systemd-analyze`, wheel của worker Olist Shop ở `/srv/wheels`); lỗi mạng lúc build lần đầu thì
+    skip. Mỗi host là một container (`no-new-privileges`, RAM `ANSIBLE_MEMORY`, cổng 22 chỉ trên 127.0.0.1 ở cổng trống),
+    sshd chạy bằng root làm PID 1, không có systemd chạy thật. Lab sinh cặp khoá ed25519, đọc khoá host của từng container
+    rồi ghim vào `known_hosts` riêng: ssh dùng `-F` tệp cấu hình riêng (`StrictHostKeyChecking yes`, `IdentityAgent none`,
+    `GlobalKnownHostsFile /dev/null`), nên kết nối tới bất kỳ sshd nào khác (kể cả sshd của máy bạn) bị từ chối. Inventory
+    kết nối `lab.ini` (`ansible_host=127.0.0.1`, cổng, `ansible_user=root`) luôn được truyền sau inventory của bài.
+
+    Mọi lệnh `ansible-*` chạy qua `run_sandboxed` với env `_ansible_env` (`ANSIBLE_CONFIG` do lab sinh, `HOME` tạm, sandbox
+    che `~/.ssh`), chỉ thư mục tạm của lab ghi được. `stage()` chép tệp của bài vào thư mục tạm và từ chối tệp bị
+    `ansible_problems` bắt; `playbook()` fail khi có task chạy trên host ngoài lab (ví dụ `localhost` ngầm định). `close()`
+    xoá container, image, network (qua `DockerLab.close`) và thư mục tạm.
+    """
+
+    def __init__(self, hosts=(), *, memory: str = ANSIBLE_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT,
+                 timeout: float = ANSIBLE_TIMEOUT) -> None:
+        self.hosts = list(hosts)
+        for host in self.hosts:
+            if not _IMAGE_ALIAS.match(host):
+                raise ValueError(f"Tên host {host!r} phải là chữ thường, số, '.', '_', '-'")
+        self.memory = memory
+        self.pids_limit = pids_limit
+        self.timeout = timeout
+        self.docker = DockerLab()
+        self.root: Path | None = None
+        self.image: str | None = None
+        self.public_key = ""
+        self.ports: dict[str, int] = {}
+        self._entered = False
+        self._runs = 0
+
+    def __enter__(self) -> "AnsibleLab":
+        self._entered = True
+        self.root = Path(tempfile.mkdtemp(prefix="devops-ex-ansible-"))
+        try:
+            self._open()
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def _require_entered(self) -> None:
+        if not self._entered:
+            raise RuntimeError("Dùng AnsibleLab bằng `with AnsibleLab(...) as lab:` để container luôn được dọn")
+
+    def _open(self) -> None:
+        Exercise.require_tool("ansible-playbook", ANSIBLE_MIN_VERSION)
+        reason = sandbox_ready()
+        if reason:
+            pytest.skip(SANDBOX_SKIP.format(reason=reason))
+        for name in ("home", "roles", "collections", "callbacks", "cp"):
+            (self.root / name).mkdir(parents=True, exist_ok=True)
+        (self.root / "callbacks" / "devops_ex_events.py").write_text(_ANSIBLE_CALLBACK, encoding="utf-8")
+        host_keys: dict[str, str] = {}
+        if self.hosts:
+            Exercise.require_tool("docker")
+            Exercise.require_tool("ssh-keygen")
+            self.docker.__enter__()
+            key = self.root / "id_ed25519"
+            subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"devops-ex-{self.docker.id}", "-f", str(key)],
+                           check=True, capture_output=True, timeout=30)
+            self.public_key = key.with_suffix(".pub").read_text(encoding="utf-8").strip()
+            try:
+                self.image = self.docker.build(ANSIBLE_TARGET_DIR, "ansible-target")
+            except pytest.fail.Exception as error:
+                if build_failed_on_network(str(error)):
+                    pytest.skip("Build image target của Ansible cần mạng lần đầu (apt, pip download) mà không tải được. "
+                                "Kiểm tra mạng rồi chạy lại; các lần sau dùng cache của BuildKit")
+                raise
+            for host in self.hosts:
+                self.docker.start(host, self.image, ports=[22], env={"DEVOPS_EX_AUTHORIZED_KEY": self.public_key},
+                                  memory=self.memory, pids_limit=self.pids_limit)
+            for host in self.hosts:
+                host_keys[host] = self._wait_ssh(host)
+                self.ports[host] = self.docker.port(host, 22)
+        for name, text in _ansible_files(self.root, self.ports, host_keys).items():
+            (self.root / name).write_text(text, encoding="utf-8")
+
+    def _wait_ssh(self, host: str) -> str:
+        self.docker.wait_log(host, "Server listening", timeout=ANSIBLE_READY_TIMEOUT)
+        result = self.docker.exec(host, "cat", "/etc/ssh/ssh_host_ed25519_key.pub")
+        parts = result.stdout.split()
+        if result.returncode != 0 or len(parts) < 2:
+            pytest.fail(f"Không đọc được khoá host SSH của {host}: {result.stderr.strip()}")
+        port = self.docker.port(host, 22)
+        deadline = time.monotonic() + ANSIBLE_READY_TIMEOUT
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+                    sock.settimeout(5)
+                    if sock.recv(64).startswith(b"SSH-2.0-"):
+                        return f"{parts[0]} {parts[1]}"
+            except OSError:
+                pass
+            time.sleep(0.3)
+        pytest.fail(f"sshd của {host} không trả banner SSH trên 127.0.0.1:{port} sau {ANSIBLE_READY_TIMEOUT} giây. "
+                    f"{self.docker._log_tail(host)}")
+
+    @property
+    def inventory(self) -> Path:
+        return self.root / "lab.ini"
+
+    def write(self, rel: str, text: str) -> Path:
+        path = (self.root / rel).resolve()
+        if not path.is_relative_to(self.root.resolve()):
+            raise ValueError(f"{rel} nằm ngoài thư mục tạm của lab")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def stage(self, source: Path, name: str = "project") -> Path:
+        """Chép thư mục bài của người học vào thư mục tạm của lab (bỏ `__pycache__`, `.git`) rồi kiểm `ansible_problems`;
+        trả đường dẫn bản chép để truyền làm `cwd`."""
+        self._require_entered()
+        target = self.root / name
+        shutil.copytree(Path(source).resolve(), target, symlinks=False, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+        problems = ansible_problems(target)
+        if problems:
+            pytest.fail("Tệp Ansible bị từ chối trước khi chạy:\n- " + "\n- ".join(problems))
+        return target
+
+    def run(self, *args: str, cwd: Path | None = None, timeout: float | None = None, input: str | None = "",
+            env: dict[str, str] | None = None, events: Path | None = None) -> subprocess.CompletedProcess:
+        """Chạy một lệnh `ansible`, `ansible-playbook`, `ansible-inventory`, `ansible-vault`... trong sandbox. `env` thêm biến
+        cho chương trình của bài (ví dụ script inventory động), không ghi đè được biến của lab."""
+        self._require_entered()
+        if not args or not str(args[0]).startswith("ansible"):
+            raise ValueError("AnsibleLab.run chỉ chạy lệnh ansible-*")
+        base = _ansible_env(self.root, events or self.root / "events-unused.jsonl")
+        clash = sorted(set(env or {}) & {*base, "PATH", "LANG", "LC_ALL"} | {k for k in env or {} if k.startswith("ANSIBLE_")})
+        if clash:
+            raise ValueError(f"env không được đặt {clash}: lab tự quản các biến này")
+        try:
+            return run_sandboxed(list(args), writable=[self.root], cwd=Path(cwd or self.root), env={**(env or {}), **base},
+                                 timeout=timeout or self.timeout, input=input)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"{args[0]} chạy quá {timeout or self.timeout} giây")
+
+    def playbook(self, playbook: str, *args: str, inventory=(), cwd: Path | None = None, timeout: float | None = None,
+                 env: dict[str, str] | None = None) -> AnsibleRun:
+        """`ansible-playbook -i <inventory của bài>... -i lab.ini <playbook> <args>`; trả `AnsibleRun`. Fail khi có task
+        chạy trên host không thuộc lab."""
+        self._require_entered()
+        self._runs += 1
+        events = self.root / f"events-{self._runs}.jsonl"
+        sources = [arg for item in inventory for arg in ("-i", str(item))]
+        argv = ["ansible-playbook", *sources, "-i", str(self.inventory), playbook, *args]
+        result = self.run(*argv, cwd=cwd, timeout=timeout, env=env, events=events)
+        records = []
+        if events.exists():
+            records = [json.loads(line) for line in events.read_text(encoding="utf-8").splitlines() if line.strip()]
+        run = AnsibleRun(argv, result.returncode, result.stdout, result.stderr, records)
+        outside = sorted(run.hosts - set(self.hosts))
+        if outside:
+            pytest.fail(f"Playbook chạy trên host ngoài lab: {outside}. Bài Ansible chỉ được nhắm vào {self.hosts}, không bao "
+                        f"giờ vào máy của bạn.\n{run.tail()}")
+        return run
+
+    def exec(self, host: str, *command: str, timeout: float = 30) -> subprocess.CompletedProcess:
+        self._require_entered()
+        return self.docker.exec(host, *command, timeout=timeout)
+
+    def read(self, host: str, path: str) -> str | None:
+        """Nội dung tệp trên target, None khi không có."""
+        result = self.exec(host, "cat", path)
+        return result.stdout if result.returncode == 0 else None
+
+    def stat(self, host: str, path: str) -> tuple[str, str, str] | None:
+        """(quyền dạng bát phân, user, group) của tệp trên target, None khi không có."""
+        result = self.exec(host, "stat", "-c", "%a %U %G", path)
+        if result.returncode != 0:
+            return None
+        mode, user, group = result.stdout.split()
+        return mode, user, group
+
+    def close(self) -> None:
+        try:
+            self.docker.close()
+        finally:
+            if self.root is not None:
+                shutil.rmtree(self.root, ignore_errors=True)
 
 
 def _unique_name(path: Path) -> str:
