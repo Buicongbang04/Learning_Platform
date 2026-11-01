@@ -20,6 +20,9 @@ dependencies = [
     "tiktoken==0.14.0",
     "faster-whisper==1.2.1",
     "gguf==0.19.0",
+    "gymnasium[classic-control,box2d]==1.4.0",
+    "ale-py==0.12.1",
+    "imageio[ffmpeg]==2.38.1",
     "ipykernel>=6.29",
 ]
 
@@ -28,6 +31,7 @@ package = false
 python-preference = "only-managed"
 # Phụ thuộc gián tiếp phát hành < 2 tuần trước 2026-10-30: chặn ở bản cũ hơn (bỏ dòng này khi đã đủ 2 tuần)
 constraint-dependencies = [
+    "imageio-ffmpeg<=0.6.0",
     "av<=19.0.1",
     "certifi<=2026.7.22",
     "ctranslate2<=4.8.3",

@@ -56,12 +56,10 @@ không GPU chạy được nguyên cấu hình này (MLP nhỏ, GPU không giúp
 ### Mở rộng (không chấm): Atari trên GPU
 
 Cùng PPO, đổi MLP thành CNN kiểu Nature DQN (3 conv + 1 Linear 512), observation tiền xử lý như mục 4 lý thuyết
-(`AtariPreprocessing` + `FrameStackObservation` 4 khung), 16 env (bản tham chiếu; ít hơn nếu CPU yếu). Env GPU của repo (`setup/gpu`) chưa có `gymnasium`/`ale-py`; chạy
-bằng lớp phủ tạm của uv, không sửa `pyproject.toml`:
+(`AtariPreprocessing` + `FrameStackObservation` 4 khung), 16 env (bản tham chiếu; ít hơn nếu CPU yếu). Env GPU của repo (`setup/gpu`) đã có `gymnasium`, `ale-py` và `imageio`:
 
 ```bash
-uv run --project setup/gpu --with "gymnasium[box2d]==1.4.0" --with "ale-py==0.12.1" \
-  --with "imageio==2.38.1" --with "imageio-ffmpeg==0.6.0" python <script_atari>.py
+uv run --project setup/gpu python <script_atari>.py
 ```
 
 Train nhanh hơn nhiều với `ale_py.vector_env.AtariVectorEnv` (tiền xử lý bằng C++ đa luồng, cùng kết quả với các wrapper trên sau
