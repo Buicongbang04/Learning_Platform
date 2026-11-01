@@ -37,7 +37,8 @@ VRAM. Cần cài đặt BM25 của bạn ở module 13 bài Basic 02. Đọc m�
    như module 13) và **300 câu train đầu tiên** (đo học thuộc):
    - BM25 top-1 trên toàn bộ 61 425 điều (văn bản là `title + " " + text`).
    - Qwen2.5-0.5B-Instruct gốc, chỉ prompt (system prompt yêu cầu đúng một trích dẫn).
-   - SFT LoRA trên cặp (câu hỏi train, trích dẫn của điều đúng đầu tiên), vài epoch.
+   - SFT LoRA trên cặp (câu hỏi train, trích dẫn của điều đúng đầu tiên), cấu hình ghim để so được với lời giải: LoRA
+     r = 16, `lora_alpha` 32, mọi lớp tuyến tính, lr 2e-4 cosine, batch hiệu dụng 32, 3 epoch, `max_length` 192.
    - SFT LoRA trên các cặp đó **cộng** một mẫu cho mỗi điều của corpus: câu hỏi "Điều luật có tiêu đề ... nằm trong văn bản
      nào?", trả lời là trích dẫn của điều đó (một cách "đọc" cả corpus).
 3. Đọc tận mắt các trích dẫn sai, viết `starter/REPORT.md` theo khung có sẵn, rồi làm phần trắc nghiệm của bài trong app.

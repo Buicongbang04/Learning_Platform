@@ -1,5 +1,5 @@
 ---
-title: Vòng SFT tự viết với LoRA cho Qwen2.5-0.5B trên instruction tiếng Việt
+title: Vòng SFT viết tay với LoRA cho Qwen2.5-0.5B trên instruction tiếng Việt
 level: intermediate
 services: []
 files:
@@ -14,7 +14,8 @@ run:
 
 ## Mục tiêu
 
-Tự viết một vòng SFT hoàn chỉnh (không dùng `Trainer`) để thấy từng mảnh: dữ liệu theo chat template và label của bài Basic
+Chạy một vòng SFT viết tay (không dùng `Trainer`, cho sẵn trong notebook) và tự viết các hàm dữ liệu, đo mà nó dùng, để
+thấy từng mảnh: dữ liệu theo chat template và label của bài Basic
 02, batch theo ngân sách token, LoRA của PEFT với gradient checkpointing, warmup rồi cosine, rồi đo **trước và sau** bằng
 loss trên tập validation chia theo nhóm và exact-match câu trắc nghiệm. Cuối bài so model 0.5B đã fine-tune với model 3B
 không fine-tune để trả lời câu hỏi: thứ model thiếu là hành vi hay năng lực?

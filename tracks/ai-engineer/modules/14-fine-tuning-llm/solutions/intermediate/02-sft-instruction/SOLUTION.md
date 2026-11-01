@@ -43,10 +43,12 @@ lại cả notebook hai lần: loss và perplexity của SFT trùng tới chữ 
 - **Exact-match kể một câu chuyện, "có chứa đáp án" kể câu chuyện khác.** Theo EM, 0.5B sau SFT (0.255) hơn hẳn 3B (0.025),
   vì 3B luôn giải thích dài dòng (105 ký tự trung bình) theo system prompt của OpenOrca. Theo "có chứa đáp án", 3B không
   fine-tune (0.48) ngang 0.5B sau SFT (0.45); 200 câu cho khoảng tin cậy cỡ ±0.07 nên không phân biệt được hai con số này.
-- Vậy SFT ở đây chủ yếu dạy **hành vi** (trả lời gọn, đúng khuôn: EM tăng từ 0.175 lên 0.255, độ dài giảm), và đưa model
-  0.5B lên **ngang** mức "biết đáp án" của model 3B chưa fine-tune, không vượt. Muốn model biết nhiều hơn thì chọn model nền
-  lớn hơn; muốn đúng khuôn thì prompt (few-shot, dặn "chỉ trả lời lựa chọn") hoặc SFT đều làm được, và SFT có lợi khi
-  phải dùng model nhỏ.
+- Vậy SFT ở đây dạy **kỹ năng làm các task kiểu FLAN trong đúng phân phối này cộng với định dạng**: EM tăng từ 0.175 lên
+  0.255 và độ dài giảm (định dạng), nhưng tỉ lệ "có chứa đáp án" cũng tăng từ 0.30 lên 0.45, tức model làm đúng task hơn chứ
+  không chỉ trả lời gọn hơn. Đó không phải kiến thức tổng quát mới: thước đo chỉ gồm câu trắc nghiệm của cùng nguồn với dữ
+  liệu train, và model 0.5B sau SFT chỉ lên **ngang** mức "có chứa đáp án" của model 3B chưa fine-tune, không vượt. Muốn model
+  biết nhiều hơn thì chọn model nền lớn hơn; muốn đúng khuôn thì prompt (few-shot, dặn "chỉ trả lời lựa chọn") hoặc SFT đều
+  làm được, và SFT có lợi khi phải dùng model nhỏ.
 
 ## Bẫy thường gặp
 

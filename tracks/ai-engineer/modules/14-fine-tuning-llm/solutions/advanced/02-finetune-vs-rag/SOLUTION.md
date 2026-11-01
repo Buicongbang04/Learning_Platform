@@ -43,13 +43,14 @@ số hiệu hoặc số điều bịa ra theo đúng khuôn.
   gốc) và vài văn bản phổ biến (đúng văn bản ở 29% câu ghim). Văn bản thì có chung: 269/300 câu ghim có văn bản đúng từng xuất
   hiện ở train, và riêng Nghị định 100/2019/NĐ-CP là văn bản đúng của 83/300 câu ghim, nên đoán văn bản phổ biến đã ăn điểm
   `law`.
-- **Không học thuộc nổi chính câu train**: 1% câu train trích đúng điều sau 3 epoch. Với LoRA r = 16 và loss cuối khoảng 0.64,
-  2 432 cặp (câu hỏi, số hiệu + số điều) gần như ngẫu nhiên với model là quá khó để nhớ; học thuộc bằng fine-tune đắt hơn
-  nhiều người nghĩ.
+- **Với ngân sách train này, không học thuộc nổi chính câu train**: 1% câu train trích đúng điều sau 3 epoch (r = 16, lr
+  2e-4, batch 32), thấp hơn hẳn BM25 trên chính các câu đó (48%). Loss vẫn đang giảm ở cuối lượt train (trung bình cả lượt
+  0.64), nên train lâu hơn, hạng cao hơn hoặc full fine-tune sẽ nhớ được nhiều hơn; bảng chỉ cho thấy học thuộc 2 432 cặp
+  (câu hỏi, số hiệu + số điều) không rẻ, và kể cả nhớ được thì cũng không giúp gì cho câu chưa thấy (dòng trên).
 - **"Đọc" cả corpus giúp ở mức văn bản, không ở mức điều**: thêm 61 425 mẫu tiêu đề nâng `law` lên 0.44 và tỉ lệ trích dẫn có
   thật lên 76%, nhưng `exact` vẫn chỉ 2/300, so với 130/300 của BM25 chạy 10 giây trên CPU. Model biết "điều này thuộc văn bản
   nào" khi được hỏi đúng tiêu đề, nhưng không nối được câu hỏi đời thường với tiêu đề điều.
-- **BM25 thắng ở mọi cột**, và đó là baseline yếu nhất của module 13 (hybrid và rerank còn cao hơn). Hơn nữa nó trích được
+- **BM25 thắng ở mọi cột trừ `format`** (hoà 1.00), và đó là baseline yếu nhất của module 13 (hybrid và rerank còn cao hơn). Hơn nữa nó trích được
   điều mới thêm vào corpus ngay lập tức, còn model fine-tune phải train lại.
 - Nơi fine-tune có ích trong hệ này: embedding model (capstone milestone 5), khuôn trả lời có trích dẫn, và đọc nguồn
   RAG tốt hơn (SFT trên (câu hỏi, các điều đã truy hồi, câu trả lời có trích dẫn)): bảng này chưa đo cấu hình đó.

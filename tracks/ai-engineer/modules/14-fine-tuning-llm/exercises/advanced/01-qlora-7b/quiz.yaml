@@ -57,13 +57,13 @@ questions:
   prompt: "`nvidia-smi` báo bộ nhớ lớn hơn `torch.cuda.max_memory_allocated`. Lý do chính?"
   options:
   - id: a
-    text: nvidia-smi tính cả bộ nhớ allocator giữ lại, CUDA context và tiến trình khác
+    text: nvidia-smi tính cả bộ nhớ allocator giữ lại và CUDA context
   - id: b
-    text: max_memory_allocated chỉ đếm tham số, không đếm activation
+    text: max_memory_allocated chỉ đếm tham số của model, bỏ qua activation
   - id: c
-    text: nvidia-smi đổi đơn vị GiB sang GB nên con số luôn lớn hơn
+    text: nvidia-smi đổi đơn vị từ GiB sang GB nên con số luôn lớn hơn
   - id: d
-    text: max_memory_allocated bỏ qua trọng số đã lượng tử hoá 4 bit
+    text: max_memory_allocated bỏ qua trọng số đã lượng tử hoá ở 4 bit
 - id: paged
   kind: knowledge
   type: single

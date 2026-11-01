@@ -41,16 +41,16 @@ questions:
 - id: sft-seen
   kind: data
   type: single
-  prompt: "Cùng model đó, trên 300 câu train đã thấy trong lúc train, trích đúng điều được bao nhiêu?"
+  prompt: "Với cấu hình train ghim trong đề, trên 300 câu train đầu (model đã thấy lúc train), tỉ lệ trích đúng điều của model SFT so với BM25 top-1 trên chính các câu đó thế nào?"
   options:
   - id: a
-    text: Gần như tuyệt đối, vì đã học thuộc
+    text: Cao hơn BM25 rõ rệt, vì đã thấy câu hỏi
   - id: b
-    text: Khoảng một nửa số câu
+    text: Ngang BM25, chênh nhau trong nhiễu
   - id: c
-    text: Rất ít, dưới 5% số câu
+    text: Thấp hơn BM25 rõ rệt trên chính câu đã thấy
   - id: d
-    text: Đúng bằng BM25 trên câu train
+    text: Không so được, BM25 không đo trên câu train
 - id: why-not-knowledge
   kind: knowledge
   type: single

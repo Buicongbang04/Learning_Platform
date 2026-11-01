@@ -43,7 +43,8 @@ Bộ nhớ: nạp 7B ở NF4 + double quant chiếm **5.17 GiB** (`memory_alloca
 vừa GPU 12GB. Bản ước lượng cho 3B: 5.75 GiB bf16, 1.91 GiB NF4; cho 0.5B: 0.92 và 0.43 GiB.
 
 Một lần chạy thử với `prepare_model_for_kbit_training` hết bộ nhớ ngay ở bước chuẩn bị (cố cấp phát thêm 2.03 GiB: hàm này
-đổi embedding và `lm_head` sang fp32). Bật gradient checkpointing và `enable_input_require_grads()` bằng tay thì train vừa
+đổi embedding và `lm_head` sang fp32), trong lúc các tiến trình khác đang giữ khoảng 3.4 GB của GPU. Trên một GPU 12GB dùng
+riêng có lẽ vẫn vừa, nhưng tốn thêm khoảng 2 GiB không cần thiết. Bật gradient checkpointing và `enable_input_require_grads()` bằng tay thì train vừa
 5.93 GiB; TRL tự đưa tham số LoRA về bf16 khi model đã lượng tử hoá.
 
 Đọc bảng:

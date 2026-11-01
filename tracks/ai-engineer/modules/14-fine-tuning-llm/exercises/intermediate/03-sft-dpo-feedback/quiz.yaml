@@ -67,16 +67,16 @@ questions:
 - id: dpo-low-lr
   kind: data
   type: single
-  prompt: "DPO với learning rate 5e-6 so với model SFT: F1 cảm xúc trên 150 câu ghim (cân bằng) và trên test đầy đủ (lệch lớp) đổi ra sao?"
+  prompt: "DPO với learning rate 5e-6 làm F1 cảm xúc trên 150 câu ghim tăng so với model SFT. Trên tập test đầy đủ (lệch lớp) thì sao?"
   options:
   - id: a
-    text: Tăng ở tập ghim, giảm ở test đầy đủ
+    text: F1 cảm xúc không tăng, F1 chủ đề giảm
   - id: b
-    text: Giảm ở tập ghim, tăng ở test đầy đủ
+    text: Cả F1 cảm xúc lẫn chủ đề tăng mạnh
   - id: c
-    text: Tăng mạnh ở cả hai tập đánh giá
+    text: F1 cảm xúc vượt 0.95, chủ đề giữ nguyên
   - id: d
-    text: Giảm mạnh ở cả hai tập đánh giá
+    text: JSON hỏng hết nên mọi F1 bằng 0
 - id: merge-before-dpo
   kind: knowledge
   type: single

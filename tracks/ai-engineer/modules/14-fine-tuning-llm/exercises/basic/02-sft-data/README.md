@@ -64,4 +64,4 @@ của đoạn cần học. Thử in `apply_chat_template` của vài hội tho�
 
 Model Hugging Face tính loss bằng cách so `logits[:, :-1]` với `labels[:, 1:]`: logits ở vị trí `t - 1` dự đoán token ở
 vị trí `t`. Nếu bạn tự dịch label thêm một lần nữa, model học đoán token **sau** token kế tiếp. Với packing, đọc lại mục 2
-lý thuyết: `position_ids` đếm lại từ 0 chưa đủ để các mẫu trong cùng một khối không nhìn thấy nhau.
+lý thuyết: các mẫu trong cùng một khối có nhìn thấy nhau không còn tuỳ collator đưa vào những gì.

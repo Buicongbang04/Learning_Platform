@@ -31,7 +31,7 @@ Sau module này bạn sẽ:
 | Basic | 02 sft-data | label chỉ cho assistant theo chat template, padding, packing, tỉ lệ token thật |
 | Basic | 03 dpo-loss | log-prob của câu, DPO loss, một bước train với reference đóng băng |
 | Intermediate | 01 instruction-data | OpenOrca-Viet: giấy phép, chuẩn hoá, khử trùng lặp, MinHash + LSH, chia theo nhóm, nhiễm bẩn |
-| Intermediate | 02 sft-instruction | vòng SFT tự viết + LoRA của PEFT trên Qwen2.5-0.5B, loss và exact-match trước/sau, so model 3B |
+| Intermediate | 02 sft-instruction | vòng SFT viết tay (không `Trainer`) + LoRA của PEFT trên Qwen2.5-0.5B; bạn viết hàm dữ liệu và đo; loss và exact-match trước/sau, so model 3B |
 | Intermediate | 03 sft-dpo-feedback | UIT-VSFC ra JSON: SFT bằng TRL rồi DPO trên lỗi của chính model, so prompt của module 11 |
 | Advanced | 01 qlora-7b | QLoRA Qwen2.5-7B (NF4, double quant, optimizer phân trang): VRAM, thời gian, có đáng không |
 | Advanced | 02 finetune-vs-rag | fine-tune để "nhớ" luật Zalo Legal so với BM25 của module 13, bước đệm cho capstone |
@@ -145,7 +145,7 @@ flowchart LR
     K --> L["labels: -100 ngoài lượt assistant,<br/>giữ token kết thúc lượt"]
     L --> B{"Gom batch"}
     B -->|padding| PD["pad phải, attention_mask,<br/>label -100 ở chỗ pad"]
-    B -->|packing| PK["nối nhiều mẫu một khối,<br/>position_ids đếm lại, cần mask khối"]
+    B -->|packing| PK["nối nhiều mẫu một khối,<br/>position_ids đếm lại, kiểm mask khối"]
     PD --> TR["Vòng train"]
     PK --> TR
 ```
@@ -158,23 +158,28 @@ nhất thì phần lớn phép tính là trên token pad. Ba cách giảm:
 | Cách | Làm gì | Giá |
 | --- | --- | --- |
 | Batch theo độ dài (ngân sách token) | xếp mẫu theo độ dài, gom tới khi `số mẫu × dài nhất` chạm ngân sách, trộn thứ tự batch | batch có kích thước thay đổi; mẫu cùng độ dài đi cùng nhau |
-| Packing | nối nhiều mẫu vào một khối dài cố định | mẫu sau **nhìn thấy** mẫu trước nếu không có mask khối |
-| Padding-free (varlen) | nối mọi mẫu thành một chuỗi, kernel attention biết ranh giới | cần FlashAttention hoặc kernel tương đương |
+| Packing | nối nhiều mẫu vào một khối dài cố định | mẫu sau có thể **nhìn thấy** mẫu trước, tuỳ cách collator và thư viện dựng mask |
+| Padding-free | nối mọi mẫu thành một chuỗi, ranh giới đi qua `position_ids` | phụ thuộc thư viện: kernel varlen (FlashAttention) hoặc mask dựng từ `position_ids` |
 
-Bài Intermediate 02 đo batch theo ngân sách token trên dữ liệu thật. Bẫy của packing đáng nói kỹ: đặt `position_ids` đếm lại
-từ 0 ở đầu mỗi mẫu **không** chặn attention giữa các mẫu với attention `sdpa` hay `eager` của Transformers. Đo trên
-`Qwen2.5-0.5B-Instruct` (fp32), loss trên phần trả lời của một hội thoại ngắn:
+Bài Intermediate 02 đo batch theo ngân sách token trên dữ liệu thật. Bẫy của packing đáng nói kỹ: mẫu sau trong cùng khối
+có "nhìn thấy" mẫu trước không phụ thuộc vào **đúng những gì collator đưa vào model** và vào phiên bản thư viện. Với
+Transformers 5.22, khi **không** có `attention_mask` 2D và **không** dùng cache, hàm dựng mask tự suy ra ranh giới mẫu từ
+`position_ids` (chỗ nó quay về 0) và dựng mask khối chéo. Đo trên `Qwen2.5-0.5B-Instruct` (fp32, CPU, attention `sdpa`), loss
+trên phần trả lời của một hội thoại ngắn khi nối sau một hội thoại khác:
 
 | Cách đưa vào model | Loss phần trả lời của mẫu sau |
 | --- | --- |
 | Đứng một mình | 2.079 |
-| Nối sau một mẫu khác, `position_ids` đếm lại | 2.659 |
-| Nối sau một mẫu khác, không `position_ids` | 1.898 |
-| Nối, `position_ids` đếm lại, mask khối chéo | 2.079 |
+| Nối, `position_ids` đếm lại, `use_cache=False` (hoặc train có gradient checkpointing) | 2.079 |
+| Nối, `position_ids` đếm lại, cache để mặc định (`use_cache=True`, kể cả ở `model.train()`) | 2.659 |
+| Nối, `position_ids` đếm lại, `use_cache=False`, kèm `attention_mask` 2D toàn số 1 | 2.659 |
+| Nối, không `position_ids` | 1.898 |
 
-Chỉ mask khối chéo (hoặc kernel varlen như `padding_free` của TRL với FlashAttention) mới cho đúng số của mẫu đứng một
-mình. Với dữ liệu ngắn, khác biệt nhỏ và nhiều đội chấp nhận; với dữ liệu mà mẫu trước có thể "mách bài" cho mẫu sau
-(cùng câu hỏi, khác đáp án), đó là rò rỉ.
+Rò rỉ xảy ra khi truyền `attention_mask` 2D (collator padding thông thường luôn tạo nó) hoặc khi đang có cache: lúc đó mask
+chỉ là causal trên cả khối, mẫu sau đọc được mẫu trước. Bài học thực tế không phải "luôn rò" hay "không bao giờ rò", mà là:
+**kiểm collator đưa vào những gì và phiên bản thư viện dựng mask thế nào**, bằng đúng phép đo trên (một mẫu đứng một mình so
+với khi bị nối). Với dữ liệu ngắn, rò nhỏ và nhiều đội chấp nhận; với dữ liệu mà mẫu trước có thể "mách bài" cho mẫu sau
+(cùng câu hỏi, khác đáp án), đó là lỗi thật.
 
 ## 3. LoRA: cập nhật hạng thấp
 
@@ -287,7 +292,7 @@ PC RTX 3060 12GB (một tiến trình khác giữ khoảng 1 GB VRAM lúc đo):
 | Full fine-tune, AdamW | có | 494 032 768 | 6.37 GiB | 0.57 | 3 568 |
 | LoRA bf16 | không | 8 798 208 | 8.29 GiB | 0.48 | 4 256 |
 | LoRA bf16 | có | 8 798 208 | 4.61 GiB | 0.65 | 3 164 |
-| QLoRA (NF4, double quant, `paged_adamw_8bit`) | có | 8 798 208 | 4.40 GiB | 0.97 | 2 107 |
+| QLoRA (NF4, double quant, `paged_adamw_8bit`), qua `prepare_model_for_kbit_training` | có | 8 798 208 | 4.40 GiB | 0.97 | 2 107 |
 
 Qwen2.5-7B bằng QLoRA trên bài thật của Advanced 01 (chuỗi ngắn, batch 4): xem lời giải bài đó.
 
@@ -300,6 +305,9 @@ Qwen2.5-7B bằng QLoRA trên bài thật của Advanced 01 (chuỗi ngắn, bat
 - **QLoRA gần như không tiết kiệm gì ở 0.5B** (4.40 so với 4.61 GiB) mà chậm hơn khoảng 50%: trọng số tuyến tính chỉ
   khoảng 0.7 GiB ở bf16, và embedding 136 triệu tham số không bị lượng tử hoá. QLoRA đáng giá khi **trọng số** là khoản lớn
   nhất, tức với model 7B trở lên.
+  Dòng QLoRA ở đây đi qua `prepare_model_for_kbit_training` của PEFT, hàm này đổi các tham số không lượng tử hoá (với 0.5B
+  chủ yếu là embedding 136 triệu tham số) sang fp32, thêm khoảng 0.25 GiB; bỏ bước đó thì đỉnh thấp hơn tương ứng (chưa đo
+  lại). Với 7B, chính bước này thêm khoảng 2 GiB (bài Advanced 01).
 - Full fine-tune 0.5B vẫn vừa GPU 12GB nhờ checkpointing; trên GPU 4GB của laptop chỉ LoRA (hoặc QLoRA) với chuỗi ngắn hơn,
   batch nhỏ hơn mới vừa: các bài Intermediate giới hạn số token mỗi batch để đỉnh nằm dưới 4 GiB. Lưu ý `SFTConfig` và
   `DPOConfig` của TRL 1.17 bật gradient checkpointing **mặc định**; vòng train tự viết thì phải tự bật.
@@ -337,8 +345,8 @@ flowchart TD
   (system prompt). **Khử gần trùng** bằng MinHash: chữ ký $$k$$ thành phần, mỗi thành phần là giá trị nhỏ nhất của một hàm
   hash trên tập shingle, và $$\Pr[\text{hai chữ ký trùng ở một thành phần}] = J$$ (Jaccard của hai tập). LSH chia chữ ký thành
   $$b$$ band, mỗi band $$r$$ hàng; hai văn bản Jaccard $$s$$ thành ứng viên với xác suất $$1 - (1 - s^r)^b$$, một đường cong chữ S
-  quanh ngưỡng $$(1/b)^{1/r}$$. Luôn kiểm lại ước lượng Jaccard của ứng viên trước khi gộp: văn bản ngắn cùng khuôn chạm nhau
-  rất dễ, và gộp bắc cầu không kiểm sẽ nuốt cả bộ dữ liệu vào một nhóm (bài Intermediate 01 cho bạn thấy).
+  quanh ngưỡng $$(1/b)^{1/r}$$. Luôn kiểm lại ước lượng Jaccard của ứng viên trước khi gộp, và đọc tận mắt vài nhóm lớn nhất: gộp
+  bắc cầu không kiểm có thể tạo nhóm khổng lồ (bài Intermediate 01 cho bạn tự đo).
 - **Lọc độ dài theo token** của đúng tokenizer và template sẽ dùng. Bỏ mẫu quá dài thay vì cắt cụt: cắt mất đuôi câu trả
   lời và token kết thúc lượt.
 - **Chia theo nhóm.** Bản gần trùng rơi vào cả train và validation làm loss validation lạc quan; chia theo nguồn hoặc theo

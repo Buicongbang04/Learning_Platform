@@ -75,4 +75,4 @@ thuyết và mục 3, 7 module 10. Làm bài Intermediate 03 trước.
 Notebook bật gradient checkpointing và `enable_input_require_grads()` bằng tay. Hàm tiện ích
 `prepare_model_for_kbit_training` của PEFT cũng làm việc đó và hơn thế: đọc mã nguồn của nó xem nó làm gì với các tham số
 **không** lượng tử hoá, rồi đo VRAM ngay sau khi gọi nó trên model 7B trước khi quyết định dùng. Đo VRAM bằng `torch.cuda.max_memory_allocated` sau
-`reset_peak_memory_stats` ở đầu mỗi pha; `nvidia-smi` cho số lớn hơn vì gồm bộ nhớ allocator giữ lại và CUDA context.
+`reset_peak_memory_stats` ở đầu mỗi pha, và so với con số `nvidia-smi` báo cùng lúc.

@@ -42,8 +42,10 @@ Chạy lại cả notebook ba lần (kernel GPU không tất định tuyệt đ�
   danh sách (`"teacher"`, `"lưu ý"`), F1 chủ đề 0.26. SFT sửa cả hai: định dạng 100%, F1 chủ đề lên 0.80. Đây là đúng việc
   fine-tune giỏi: hành vi hẹp, nhãn có sẵn.
 - **So với prompt của model 3B, SFT không thắng ở F1 cảm xúc**: 0.805 trên 150 câu ghim, ngang zero-shot của `qwen2.5:3b`
-  (0.804) và thấp hơn JSON Schema (0.852). Với 150 câu, chênh 0.05 còn nằm trong vùng nhiễu (module 11 đo khoảng tin cậy
-  ±0.07), nhưng không có dấu hiệu nào cho thấy fine-tune hơn. Cái được là model nhỏ hơn 6 lần, định dạng tuyệt đối, và F1
+  (0.804) và thấp hơn JSON Schema (0.852). Chênh 0.05 với JSON Schema chưa chắc là nhiễu: module 11 đo hiệu cùng cỡ giữa
+  JSON Schema và zero-shot bằng bootstrap theo cặp được +0.049 [+0.001, +0.103], khoảng tin cậy vừa chạm 0 (và biến mất khi
+  chạy trên CPU). Ở đây chưa chạy bootstrap theo cặp giữa model SFT và model 3B, nên kết luận thận trọng: fine-tune **không
+  hơn**, và có thể kém JSON Schema của model 3B một chút. Cái được là model nhỏ hơn 6 lần, định dạng tuyệt đối, và F1
   chủ đề mà prompt của module 11 chỉ đạt 0.676 khi trích 5 trường một lượt.
 - **Vì sao tập ghim và tập test cho hai câu chuyện khác nhau**: tập ghim cân bằng (một phần ba neutral), tập test thật chỉ
   5% neutral, train cũng khoảng 4%. Model SFT học tỉ lệ của train nên ít khi đoán neutral: tốt trên test, kém trên ghim.
@@ -54,10 +56,11 @@ Chạy lại cả notebook ba lần (kernel GPU không tất định tuyệt đ�
   thiện mà là đổi trade-off; nếu sản phẩm cần bắt câu neutral thì có thể đáng, nếu cần F1 trên lưu lượng thật thì không.
 - **DPO lr 5e-5 phá hỏng model**: `rewards/margins` vẫn tăng (0.008 lên 0.346), `rewards/accuracies` 0.80, nhưng
   `logps/chosen` rơi từ -2.1 xuống -11.0: model hạ xác suất của **cả** câu đúng, chỉ là hạ câu sai nhanh hơn. Kết quả: mọi câu
-  thành `{"sentiment": "neutral", "topic": "others"}`. Lần chạy đầu với cấu hình này còn làm hỏng cả định dạng (output chỉ
-  còn chữ `neutral`). Bài học: reward ngầm là thước đo **tương đối**, không thay được thước đo tác vụ; theo dõi
-  `logps/chosen`; learning rate của DPO nhỏ hơn SFT nhiều lần (giá trị mặc định của `DPOConfig` trong TRL 1.17 là 1e-6). Thêm một số hạng SFT vào loss (`loss_type=["sigmoid", "sft"]`
-  của TRL, kiểu RPO) giữ được xác suất của câu đúng.
+  thành `{"sentiment": "neutral", "topic": "others"}`. Bài học: reward ngầm là thước đo **tương đối**, không thay được thước đo tác vụ; theo dõi
+  `logps/chosen`; learning rate của DPO nhỏ hơn SFT nhiều lần (giá trị mặc định của `DPOConfig` trong TRL 1.17 là 1e-6).
+  Thêm một số hạng SFT vào loss (`loss_type=["sigmoid", "sft"]` của TRL, kiểu RPO) ở cùng lr 5e-5 giữ được xác suất của câu
+  đúng và F1 cảm xúc (0.788 trên ghim, 0.811 trên test, một lần chạy thử ngoài notebook), nhưng F1 chủ đề vẫn rơi xuống 0.600
+  trên ghim và 0.619 trên test: chữa được sụp đổ, không biến DPO thành cải thiện.
 - **Đối chứng công bằng**: SFT thêm trên đúng pool đó (nhãn vàng của cả 3 426 câu) không thêm gì (0.809 trên test). Với bài
   phân loại có nhãn, SFT đã khai thác gần hết tín hiệu; DPO chỉ đáng khi có thứ "câu A tốt hơn câu B" mà nhãn đúng/sai không
   tả được.

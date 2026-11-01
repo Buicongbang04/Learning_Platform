@@ -59,8 +59,8 @@ Tính theo khoản (7.6 tỉ tham số):
 - LoRA bf16: trọng số 15 GB (đóng băng), tham số LoRA r = 16 khoảng 40 triệu × (4 + 4 + 8) byte (adapter fp32 như mặc định của PEFT, gradient, hai trạng thái AdamW), khoảng 0.65 GB, cộng
   activation. Vừa 24 GB với batch nhỏ, gradient checkpointing, chuỗi không quá dài.
 - QLoRA: lớp tuyến tính ở khoảng 4.127 bit mỗi tham số, nhưng embedding và `lm_head` vẫn bf16 (7B không dùng chung hai ma
-  trận này, mỗi cái 152 nghìn × 3 584), cộng adapter và activation: vừa cả GPU 12 GB. Đừng quên phần không lượng tử hoá khi
-  ước lượng: với từ vựng lớn nó không hề nhỏ.
+  trận này, mỗi cái 152 nghìn × 3 584), cộng adapter và activation: vừa cả GPU 12 GB. Tính riêng hai phần (lượng tử hoá và không)
+  khi ước lượng.
 
 Activation là khoản khó đoán nhất (tỉ lệ batch × độ dài × số tầng, logits cỡ batch × độ dài × 152 nghìn từ vựng ở fp32).
 Câu trả lời tốt kết thúc bằng "đo một bước train với cấu hình thật" thay vì tin hoàn toàn vào ước lượng.
@@ -85,14 +85,15 @@ Cách bắt: in chuỗi đã decode của các token có label cho vài mẫu, v
 
 - **Padding**: mỗi batch pad tới mẫu dài nhất; đơn giản, lãng phí khi độ dài lệch. Batch theo độ dài (xếp mẫu theo độ dài,
   gom theo ngân sách token) giảm lãng phí mà không đổi ngữ nghĩa.
-- **Packing**: nối nhiều mẫu vào một khối dài cố định, không còn pad. Nhưng với attention thông thường, mẫu sau nhìn thấy
-  mẫu trước: `position_ids` đếm lại từ 0 không chặn attention. Đo trên Qwen2.5-0.5B ở mục 2 lý thuyết: loss của mẫu sau
-  khi đứng một mình và khi nối sau mẫu khác khác nhau, chỉ mask khối chéo mới khớp.
-- **Padding-free / varlen**: nối mọi mẫu thành một chuỗi và đưa ranh giới cho kernel (FlashAttention varlen); không pad,
-  không rò. TRL gọi là `padding_free`.
+- **Packing**: nối nhiều mẫu vào một khối dài cố định, không còn pad. Mẫu sau có nhìn thấy mẫu trước không phụ thuộc vào
+  collator và thư viện: với Transformers 5.22, chỉ `position_ids` đếm lại (không `attention_mask` 2D, không cache) thì thư
+  viện tự dựng mask khối chéo; thêm `attention_mask` 2D toàn số 1 hoặc để cache bật thì mask chỉ còn causal trên cả khối và
+  mẫu sau đọc được mẫu trước (đo ở mục 2 lý thuyết).
+- **Padding-free**: nối mọi mẫu thành một chuỗi, ranh giới đi qua `position_ids` hoặc kernel varlen (FlashAttention); không
+  pad. TRL gọi là `padding_free`.
 
-Chọn: padding + batch theo độ dài khi dữ liệu vừa phải; packing khi chấp nhận rò nhỏ hoặc có mask khối; padding-free khi
-có kernel hỗ trợ.
+Chọn: padding + batch theo độ dài khi dữ liệu vừa phải; packing hoặc padding-free khi muốn bỏ pad, nhưng **đo** một mẫu đứng
+một mình so với khi bị nối để chắc mask đúng với collator và phiên bản thư viện bạn đang dùng.
 
 ## Bạn chuẩn bị một bộ instruction tải từ Hugging Face thế nào trước khi train?
 

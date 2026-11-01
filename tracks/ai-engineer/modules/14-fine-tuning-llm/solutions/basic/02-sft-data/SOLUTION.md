@@ -26,9 +26,10 @@ là `-100`, không phải `pad_token_id`: với Qwen2.5, `pad_token` là `<|endo
 dạy model sinh hàng loạt `<|endoftext|>`.
 
 **`pack_examples`.** Nối tham lam theo thứ tự, mở khối mới khi mẫu kế tiếp không vừa. `position_ids` đếm lại từ 0 cho
-mỗi mẫu để RoPE thấy đúng vị trí. Nhưng như mục 2 lý thuyết đo: với attention `sdpa` hay `eager`, `position_ids` **không**
-chặn mẫu sau nhìn thấy mẫu trước trong cùng khối; chỉ kernel varlen (FlashAttention, `padding_free` của TRL) hoặc mask
-khối chéo mới chặn. Token đầu tiên của mẫu sau được dự đoán từ token cuối của mẫu trước, nhưng token đó thuộc system
+mỗi mẫu để RoPE thấy đúng vị trí. Mẫu sau có nhìn thấy mẫu trước không thì tuỳ collator: với Transformers 5.22, đưa vào chỉ
+`input_ids` + `position_ids` (không `attention_mask` 2D, không cache) thì thư viện tự dựng mask khối chéo từ chỗ
+`position_ids` quay về 0; thêm `attention_mask` 2D hoặc để cache bật thì mask chỉ là causal trên cả khối và mẫu sau đọc được
+mẫu trước (mục 2 lý thuyết đo cả hai). Vì vậy hàm trả `position_ids` và **không** trả `attention_mask`. Token đầu tiên của mẫu sau được dự đoán từ token cuối của mẫu trước, nhưng token đó thuộc system
 hoặc user nên đã là `-100`.
 
 **`real_token_fraction`.** Cộng token thật và `max × số mẫu` của từng batch theo thứ tự. Bài Intermediate 02 dùng nó để
