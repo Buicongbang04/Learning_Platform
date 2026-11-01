@@ -1,0 +1,8 @@
+dist-per-query: [b]
+ivf-cost: [c]
+own-vs-faiss: [b]
+build-ratio: [c]
+heuristic-real: [c]
+why-heuristic: [a]
+ef-knob: [c]
+fair-cost: [a]
