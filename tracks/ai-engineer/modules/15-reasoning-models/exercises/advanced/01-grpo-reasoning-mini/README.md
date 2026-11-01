@@ -28,7 +28,7 @@ phần tăng do **định dạng** khỏi phần tăng do **giải đúng hơn**
 
 Thời gian trên là thời gian làm bài (code, chạy, đọc mẫu, viết báo cáo). Máy chạy riêng: bản tham chiếu với cấu hình `PC`
 mất khoảng thời gian ghi ở `SOLUTION.md` cho mỗi seed (train + đo), RTX 3060 12GB. **Laptop GPU 4GB:** cấu hình `LAPTOP`
-trong notebook (batch nhỏ hơn, completion ngắn hơn, ít bước hơn) vừa 4GB; mức tăng nhỏ hơn và nhiễu hơn, báo cáo phải ghi
+trong notebook (micro-batch nhỏ hơn, completion ngắn hơn) vừa 4GB; mức tăng nhỏ hơn và nhiễu hơn, báo cáo phải ghi
 rõ cấu hình. Không đủ thời gian cho hai seed trên laptop thì một seed kèm khoảng tin cậy bootstrap và nói rõ giới hạn đó.
 Đọc mục 4, 5, 7 lý thuyết; làm Intermediate 02 trước.
 

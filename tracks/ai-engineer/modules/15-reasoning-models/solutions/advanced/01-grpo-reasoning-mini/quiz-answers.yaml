@@ -1,0 +1,8 @@
+gain: [c]
+format: [b]
+length-seeds: [c]
+coverage: [d]
+hacking: [c]
+two-metrics: [b]
+clip-zero: [b]
+reward-curve: [d]
