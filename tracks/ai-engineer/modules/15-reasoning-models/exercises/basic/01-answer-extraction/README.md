@@ -28,7 +28,7 @@ cách lách reward thay vì học giải toán. Bài này viết bộ trích đ�
    `str(Fraction(...))` của số đó, để hai cách viết của cùng một giá trị (`2.50`, `5/2`, `$2.50`) có cùng một dạng.
    Chấp nhận: dấu `$` (cả `\$` của LaTeX) và `%`, dấu phẩy ngăn hàng nghìn (`1,234`, `1,000,000`; nhưng `1,2` và
    `1,0000` không phải số), dấu chấm cuối câu (`18.`), dấu `+` đầu, dấu trừ unicode `−`, số thập phân, phân số
-   `a/b` (mẫu 0 thì `None`). Mọi thứ khác cho `None`.
+   `a/b` với `a`, `b` nguyên (mẫu 0 thì `None`). Mọi thứ khác cho `None`.
 2. `gold_answer(answer_field) -> str`: đáp số chuẩn hoá ở phần sau `####` của cột `answer` GSM8K.
 3. `extract_answer(completion) -> str | None`: đáp số của một câu trả lời tự do, theo thứ tự ưu tiên:
    1. thẻ `<answer>...</answer>` **cuối cùng**, nếu trong thẻ có số: số **cuối cùng** trong thẻ;
@@ -51,8 +51,8 @@ Chỉ dùng thư viện chuẩn. Test cuối đọc GSM8K thật (tự skip nế
 
 ## Tiêu chí đạt
 
-- `normalize_number` cho cùng một dạng với `2.5`, `2.50`, `5/2`, `$2.50`, `10/4`; từ chối `1,2`, `1,0000`, `12 eggs`, `10/0`.
-- `extract_answer` đúng thứ tự ưu tiên trên 14 câu trả lời mẫu (thẻ answer, `\boxed`, `####`, "answer is", số cuối;
+- `normalize_number` cho cùng một dạng với `2.5`, `2.50`, `5/2`, `$2.50`, `10/4`; từ chối `1,2`, `1,0000`, `12 eggs`, `10/0`, `36.7/100`.
+- `extract_answer` đúng thứ tự ưu tiên trên 15 câu trả lời mẫu (thẻ answer, `\boxed`, `####`, "answer is", số cuối;
   số âm, khoảng `3-4`, phân số, tiền có phẩy).
 - `format_reward` đúng trên 12 trường hợp: chữ hoặc số thừa sau hộp, không có lập luận, hai hộp, đáp số bằng chữ hoặc nhiều số.
 - `correctness_reward` không cho điểm `\boxed{17 or 18}` khi đáp án là 18, và chấm theo hộp **cuối cùng**.

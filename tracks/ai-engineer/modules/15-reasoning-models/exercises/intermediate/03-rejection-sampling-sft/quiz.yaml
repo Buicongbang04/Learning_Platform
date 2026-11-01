@@ -1,0 +1,105 @@
+questions:
+- id: pass4
+  kind: data
+  type: single
+  prompt: Trong 800 câu train, bao nhiêu câu có ít nhất một lời giải đúng đáp số trong 4 lần thử?
+  options:
+  - id: a
+    text: Khoảng một phần tư
+  - id: b
+    text: Khoảng một nửa
+  - id: c
+    text: Khoảng ba phần tư
+  - id: d
+    text: Gần như mọi câu
+- id: format-filter
+  kind: data
+  type: single
+  prompt: Trong các lời giải đúng đáp số, bộ lọc đúng cả khung giữ lại khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Gần như tất cả
+  - id: b
+    text: Khoảng hai phần ba
+  - id: c
+    text: Khoảng một phần ba
+  - id: d
+    text: Dưới một phần mười
+- id: ngram8
+  kind: data
+  type: single
+  prompt: Kiểm bằng 8-gram, có bao nhiêu câu trong toàn bộ tập train trùng n-gram với 500 câu test ghim?
+  options:
+  - id: a
+    text: Không câu nào
+  - id: b
+    text: Vài chục câu
+  - id: c
+    text: Vài trăm câu
+  - id: d
+    text: Hơn 2 000 câu
+- id: rft-effect
+  kind: data
+  type: single
+  prompt: Sau SFT trên lời giải tự sinh, trên 500 câu test ghim, cột nào đổi rõ nhất?
+  options:
+  - id: a
+    text: Accuracy tăng hơn 10 điểm, đúng khung đứng yên
+  - id: b
+    text: Đúng khung tăng mạnh, accuracy tăng vài điểm trong nhiễu
+  - id: c
+    text: Độ dài lời giải giảm còn một nửa, accuracy giữ nguyên
+  - id: d
+    text: Accuracy giảm hơn 10 điểm vì model học thuộc
+- id: rft-flips
+  kind: data
+  type: single
+  prompt: Đếm câu đổi kết quả trước và sau SFT trên 500 câu, bạn thấy gì?
+  options:
+  - id: a
+    text: Dưới 5 câu đổi chiều, model gần như không đổi
+  - id: b
+    text: Chỉ chiều sai thành đúng, chiều kia bằng 0
+  - id: c
+    text: Hàng chục câu mỗi chiều, chênh lệch ròng nhỏ
+  - id: d
+    text: Hơn 200 câu mỗi chiều, model đổi hẳn tính cách
+- id: ceiling
+  kind: knowledge
+  type: single
+  prompt: Vì sao tự học từ lời giải đúng của chính mình có trần?
+  options:
+  - id: a
+    text: Verifier đáp số loại mọi lời giải dài hơn 512 token
+  - id: b
+    text: LoRA không học được từ dữ liệu do chính model sinh
+  - id: c
+    text: SFT chỉ dạy định dạng, không bao giờ dạy được nội dung
+  - id: d
+    text: Câu model chưa từng giải đúng không vào dữ liệu train
+- id: ngram-size
+  kind: knowledge
+  type: single
+  prompt: Vì sao kiểm nhiễm bẩn ở 13-gram thay vì 8-gram với đề toán GSM8K?
+  options:
+  - id: a
+    text: 13-gram nhanh hơn vì ít n-gram hơn trong mỗi câu
+  - id: b
+    text: 8-gram bắt cả cụm từ chung của đề toán, báo động giả
+  - id: c
+    text: Tokenizer của Qwen gộp 8 từ thành một token
+  - id: d
+    text: 8-gram bỏ sót mọi câu bị đổi số trong đề bài
+- id: shortest
+  kind: knowledge
+  type: single
+  prompt: '`select_traces` ưu tiên lời giải ngắn. Lựa chọn đó có thể dạy model điều gì ngoài ý muốn?'
+  options:
+  - id: a
+    text: Viết đáp số ngoài hộp để tiết kiệm token
+  - id: b
+    text: Luôn trả đáp số âm cho bài có phép trừ
+  - id: c
+    text: Bỏ bớt bước kiểm lại để lời giải gọn hơn
+  - id: d
+    text: Lặp lại đề bài hai lần trước khi giải

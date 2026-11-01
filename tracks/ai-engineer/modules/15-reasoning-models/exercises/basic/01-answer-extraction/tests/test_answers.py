@@ -19,7 +19,7 @@ def test_normalize_accepts_one_number(ans, text, expected):
     assert ans.normalize_number(text) == expected
 
 
-@pytest.mark.parametrize("text", ["", "two", "12 eggs", "1,2", "1,0000", "3 4", "10/0", "1.2.3", "-", "$"])
+@pytest.mark.parametrize("text", ["", "two", "12 eggs", "1,2", "1,0000", "3 4", "10/0", "1.2.3", "-", "$", "36.7/100"])
 def test_normalize_rejects_non_numbers(ans, text):
     assert ans.normalize_number(text) is None
 
@@ -50,6 +50,7 @@ def test_gold_answer(ans):
     ("He reads pages 3-4 today.", "4"),
     ("Each slice is 3/4 of a pizza.", "3/4"),
     ("It costs 2.5.", "5/2"),
+    ("The rate is 36.7/100 per unit, so 9 units.", "9"),
     ("I am not sure.", None),
 ])
 def test_extract_answer_priority_and_edge_cases(ans, completion, expected):

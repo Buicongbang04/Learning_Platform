@@ -9,8 +9,8 @@ import re
 from fractions import Fraction
 
 _THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
-_PLAIN = re.compile(r"[+-]?\d+(?:\.\d+)?(?:/\d+)?")
-NUMBER = re.compile(r"(?<![\w.])[-−]?\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?!\d)|(?<![\w.])[-−]?\$?\d+(?:\.\d+)?(?:/\d+)?")
+_PLAIN = re.compile(r"[+-]?(?:\d+/\d+|\d+(?:\.\d+)?)")
+NUMBER = re.compile(r"(?<![\w.])[-−]?\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?!\d)|(?<![\w.])[-−]?\$?(?:\d+/\d+|\d+(?:\.\d+)?)")
 _ANSWER_TAG = re.compile(r"<answer>(.*?)</answer>", re.S)
 _BOXED = re.compile(r"\\boxed\{((?:[^{}]|\{[^{}]*\})*)\}")
 _HASHES = re.compile(r"####(.*)")
