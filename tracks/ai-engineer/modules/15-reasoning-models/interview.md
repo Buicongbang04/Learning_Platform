@@ -34,8 +34,8 @@ sự (2021) tính từ n ≥ k mẫu, không phải $$1 - (1-p)^k$$.
 
 Một phần. Snell và cộng sự (2024) thấy với câu hỏi dễ và trung bình, tiêu compute lúc inference một cách tối ưu (chọn
 giữa sửa tuần tự và lấy mẫu song song theo độ khó) cho model nhỏ đuổi kịp model lớn gấp nhiều lần cùng FLOPs; với câu
-khó, model lớn vẫn thắng. Ở quy mô của module: Qwen2.5-0.5B bỏ phiếu 16 lời giải tăng được độ chính xác so với greedy,
-nhưng vẫn kém xa `qwen2.5:3b` greedy, và tốn token gấp nhiều lần. Kết luận vận hành: test-time compute là một núm vặn
+khó, model lớn vẫn thắng. Bài Intermediate 01 cho bạn đo đúng câu hỏi này ở quy mô nhỏ: 16 lời giải của Qwen2.5-0.5B so
+với một lời giải của `qwen2.5:3b`, cái nào đúng hơn và tốn bao nhiêu token. Kết luận vận hành: test-time compute là một núm vặn
 **theo từng request** (dễ thì ít, khó thì nhiều), còn chọn model là núm vặn cố định. Phải tính cả độ trễ: 16 mẫu song song
 tăng chi phí gấp 16 nhưng độ trễ chỉ tăng ít nếu batch được; suy nghĩ tuần tự dài thì độ trễ tăng tuyến tính.
 

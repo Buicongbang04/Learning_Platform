@@ -1,0 +1,105 @@
+questions:
+- id: time-split
+  kind: data
+  type: single
+  prompt: Trong lời giải mẫu (micro-batch 2), phần sinh 64 lời giải chiếm bao nhiêu thời gian một bước GRPO?
+  options:
+  - id: a
+    text: Dưới 10%, gần hết là backward
+  - id: b
+    text: Khoảng một nửa thời gian của bước
+  - id: c
+    text: Trên 95%, cập nhật gần như miễn phí
+  - id: d
+    text: Không đáng kể vì sinh có KV cache
+- id: what-moved
+  kind: data
+  type: single
+  prompt: Sau 30 bước, trên 200 câu đo greedy, cột nào đổi rõ nhất?
+  options:
+  - id: a
+    text: Cả accuracy lẫn đúng khung đều giảm rõ sau train
+  - id: b
+    text: Accuracy tăng hơn 15 điểm, đúng khung gần như đứng yên
+  - id: c
+    text: Đúng khung tăng mạnh, accuracy tăng ít, trong nhiễu
+  - id: d
+    text: Đúng khung giảm mạnh, accuracy tăng hơn 10 điểm
+- id: flips
+  kind: data
+  type: single
+  prompt: Đếm câu đổi kết quả giữa trước và sau GRPO trên 200 câu đo, bạn thấy gì?
+  options:
+  - id: a
+    text: Chỉ có câu sai thành đúng, không câu nào tệ đi
+  - id: b
+    text: Không câu nào đổi, model gần như giữ nguyên
+  - id: c
+    text: Câu đúng thành sai nhiều gấp đôi chiều ngược lại
+  - id: d
+    text: Cả hai chiều vài chục câu, chênh lệch ròng nhỏ
+- id: length
+  kind: data
+  type: single
+  prompt: Độ dài lời giải greedy trên tập đo thay đổi thế nào sau GRPO?
+  options:
+  - id: a
+    text: Dài gấp rưỡi, model nghĩ lâu hơn
+  - id: b
+    text: Ngắn đi khoảng một phần mười
+  - id: c
+    text: Giữ nguyên tới từng token
+  - id: d
+    text: Ngắn đi còn một nửa
+- id: kl-clip
+  kind: data
+  type: single
+  prompt: KL k3 tới reference và clip fraction trong lúc train ở mức nào?
+  options:
+  - id: a
+    text: KL giảm dần về 0, clip fraction tăng tới 50%
+  - id: b
+    text: KL vượt 1 ngay từ bước đầu, clip fraction trên 30%
+  - id: c
+    text: KL luôn bằng 0 vì adapter khởi tạo B bằng 0
+  - id: d
+    text: KL tăng dần nhưng dưới 0.05, clip fraction dưới 1%
+- id: reference-free
+  kind: knowledge
+  type: single
+  prompt: Vì sao tắt adapter LoRA là đủ để có reference policy, không cần nạp model thứ hai?
+  options:
+  - id: a
+    text: Reference trong GRPO là policy ở bước ngay trước
+  - id: b
+    text: PEFT tự lưu một bản sao model gốc trên GPU khi train
+  - id: c
+    text: Trọng số gốc bị đóng băng, tắt adapter là model gốc
+  - id: d
+    text: KL k3 không cần log-prob của reference để tính
+- id: second-iter
+  kind: knowledge
+  type: single
+  prompt: Vì sao phép cắt của clipped objective chỉ có tác dụng từ lượt gradient thứ hai trên cùng batch?
+  options:
+  - id: a
+    text: Lượt đầu advantage bằng 0 vì chưa chuẩn hoá theo nhóm
+  - id: b
+    text: Lượt đầu policy trùng lúc sinh nên ratio bằng 1
+  - id: c
+    text: Optimizer AdamW bỏ qua gradient ở lượt đầu tiên
+  - id: d
+    text: Lượt đầu log-prob tính ở temperature 1 thay vì 0.7
+- id: logits-keep
+  kind: knowledge
+  type: single
+  prompt: Vì sao `completion_logprobs` chỉ xin logits của C + 1 vị trí cuối?
+  options:
+  - id: a
+    text: Gradient của prompt làm LoRA học thuộc câu hỏi
+  - id: b
+    text: Model Qwen2 không tính được logits cho phần prompt
+  - id: c
+    text: Logits của prompt làm sai ratio của clipped objective
+  - id: d
+    text: Logits 151 936 cột của cả chuỗi tốn quá nhiều VRAM

@@ -25,10 +25,11 @@ thì đáng.
 
 **Phần cứng:** GPU 4GB · ~90 phút
 
-Thời gian trên là thời gian làm bài. Máy chạy riêng khoảng 30 tới 45 phút: phần Ollama khoảng 400 lượt gọi
-`qwen2.5:3b`, phần Transformers khoảng 3 400 lời giải của `Qwen2.5-0.5B-Instruct` (số đo trên PC ở `SOLUTION.md`).
-Phần 2 chạy bằng kernel `ai-gpu`; chỉ có CPU thì kernel gốc chạy bản thu nhỏ (8 câu, 4 lời giải mỗi câu) để kiểm code,
-và bạn đọc kết quả 200 câu trong lời giải. Đọc mục 1, 2 lý thuyết.
+Thời gian trên là thời gian làm bài. Máy chạy riêng khoảng 40 phút trên PC của track (RTX 3060, dùng chung): phần Ollama
+khoảng 400 lượt gọi `qwen2.5:3b` (khoảng 19 phút), phần Transformers 3 400 lời giải của `Qwen2.5-0.5B-Instruct` (khoảng
+22 phút). Trên GPU 4GB của laptop phần Transformers chậm hơn (chưa đo). Phần 2 chạy bằng kernel `ai-gpu`; chỉ có CPU thì
+kernel gốc chạy bản thu nhỏ (8 câu, 4 lời giải mỗi câu) để kiểm code, và bạn đọc kết quả 200 câu trong lời giải. Đọc mục
+1, 2 lý thuyết.
 
 Mở `starter/ttc.ipynb`. Trong cell chấm điểm:
 
