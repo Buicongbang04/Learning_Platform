@@ -438,7 +438,7 @@ print(f"policy ngẫu nhiên, 1 ván Pong: điểm {total:.0f}, {steps} bước 
 Observation là 4 khung 84x84 `uint8` (28 224 byte), 6 action. Policy ngẫu nhiên thua trắng −21 sau 838 bước agent (3 352 khung). Một
 env đơn qua các wrapper Python chạy khoảng 1 500 bước agent mỗi giây trên CPU (máy dùng chung); ngân sách chuẩn của PPO trên Atari
 trong CleanRL là 10 triệu bước, tức gần 2 giờ chỉ riêng cho env. Vì vậy Atari luôn chạy song song: `ale_py.vector_env.AtariVectorEnv`
-làm tiền xử lý y hệt bằng C++ đa luồng, 8 env với 4 luồng đo được 6 200 tới 7 300 bước mỗi giây (hai lần đo, máy dùng chung) với action ngẫu nhiên, và mạng CNN đưa lên
+làm tiền xử lý y hệt bằng C++ đa luồng, 8 env với 4 luồng đo được khoảng 7 300 bước mỗi giây (máy dùng chung) với action ngẫu nhiên, và mạng CNN đưa lên
 GPU.
 
 ### Lỗi hay gặp với DQN

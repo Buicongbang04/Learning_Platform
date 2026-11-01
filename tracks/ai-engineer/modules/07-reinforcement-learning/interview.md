@@ -99,7 +99,7 @@ bias-variance của **ước lượng**.
 Điểm senior: hai mặt nạ khác nhau. Trong $$\delta_t$$, chỉ `terminated` bỏ $$V(s_{t+1})$$; trong đệ quy, mọi kết thúc episode (cả `truncated`)
 đều cắt. Và `returns = advantages + values` là target của critic, không phải advantage.
 
-## Giải thích clipped objective của PPO. Nếu đổi `min` thành `max` thì sao?
+## Giải thích clipped objective của PPO. Vì sao lấy `min` của hai số hạng thay vì dùng thẳng số hạng đã clip?
 
 $$L = \mathbb E[\min(\rho A, \mathrm{clip}(\rho, 1-\epsilon, 1+\epsilon)A)]$$ với $$\rho = \pi_\theta/\pi_{\text{old}}$$. Muốn dùng một batch cho nhiều bước gradient
 thì phải sửa bằng importance ratio, và chỉ tin ước lượng khi policy mới còn gần policy cũ. Lấy `min` cho một **cận dưới bi quan**:
@@ -107,9 +107,9 @@ thì phải sửa bằng importance ratio, và chỉ tin ước lượng khi pol
 - $$A > 0$$: khi $$\rho > 1 + \epsilon$$ objective thành hằng, gradient 0 (đã tăng đủ); khi $$\rho < 1 - \epsilon$$ vẫn còn gradient kéo lên.
 - $$A < 0$$: đối xứng, chỉ tắt gradient khi đã giảm đủ ($$\rho < 1 - \epsilon$$).
 
-Phép cắt chỉ chặn việc đi xa hơn theo hướng có lợi, không bao giờ chặn việc sửa sai. Đổi thành `max` đảo ngược logic: action tốt bị
-đẩy lên **không giới hạn** (mất trust region), còn action tốt đã bị giảm quá tay thì gradient bị tắt, không kéo lại được. Code vẫn
-chạy, loss vẫn giảm, nên chỉ phát hiện được bằng approx KL và clip fraction tăng vọt hoặc test so với cài đặt tham chiếu.
+Phép cắt chỉ chặn việc đi xa hơn theo hướng có lợi, không bao giờ chặn việc sửa sai. Nếu chỉ dùng số hạng đã clip, gradient bị tắt
+cả khi policy đã lỡ đi sai hướng quá $$\epsilon$$ (ví dụ action tốt đã bị giảm quá tay), nên không kéo lại được; `min` giữ lại
+gradient của số hạng chưa clip đúng trong những trường hợp đó.
 
 ## Reward của agent PPO tăng rồi sụp giữa chừng. Bạn chẩn đoán thế nào?
 

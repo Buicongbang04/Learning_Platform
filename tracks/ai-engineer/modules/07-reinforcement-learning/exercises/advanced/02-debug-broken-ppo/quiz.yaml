@@ -7,7 +7,7 @@ questions:
   - id: a
     text: Dưới 100
   - id: b
-    text: Từ 400 tới 480
+    text: Từ 300 tới dưới 500, không phải seed nào cũng 500
   - id: c
     text: Đúng 500 ở cả 3 seed
   - id: d
