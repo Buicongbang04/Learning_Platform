@@ -79,19 +79,19 @@ Theo cách cập nhật trọng số: **full fine-tune** (mọi tham số, cần
 (parameter-efficient: chỉ train một phần nhỏ, LoRA là phổ biến nhất). Trong sản phẩm, gần như mọi dự án fine-tune LLM mở
 cỡ vài tỉ tham số trên một GPU dùng LoRA hoặc QLoRA.
 
-### Fine-tune thắng ở đâu, thua ở đâu: số đo của module
+### Fine-tune thắng ở đâu, thua ở đâu: ba thí nghiệm của module
 
-Ba thí nghiệm của module đặt fine-tune cạnh phương án khác trên cùng thước đo kiểm được bằng code (bạn tự đo trong bài
-tập, số chi tiết ở lời giải):
+Ba bài đặt fine-tune cạnh phương án khác trên cùng thước đo kiểm được bằng code; bạn tự đo, kết quả chi tiết ở lời giải:
 
-| Bài | Bài toán | Fine-tune đấu với | Kết quả (định tính) |
+| Bài | Bài toán | Fine-tune đấu với | Câu hỏi bạn trả lời bằng số |
 | --- | --- | --- | --- |
-| Intermediate 03 | phân loại phản hồi UIT-VSFC thành JSON | `qwen2.5:3b` chỉ prompt (module 11) | 0.5B sau SFT trả JSON đúng định dạng ở mọi câu và vượt xa chính nó khi chỉ dùng prompt, nhất là ở trường chủ đề; nhưng ở F1 cảm xúc trên tập ghim cân bằng nó chỉ ngang model 3B dùng prompt, không hơn. DPO sau SFT đổi được trade-off giữa lớp hiếm và lớp phổ biến, hoặc phá hỏng model nếu learning rate quá lớn |
-| Intermediate 02 | trả lời instruction chung, đo bằng exact-match trắc nghiệm | Qwen2.5-3B không fine-tune | SFT làm loss validation giảm và câu trả lời ngắn gọn đúng kiểu dữ liệu, nhưng **không** đuổi kịp model lớn hơn: thứ thiếu là năng lực, không phải hành vi |
-| Advanced 02 | trích dẫn điều luật cho câu hỏi chưa thấy | BM25 (module 13) | model fine-tune thuộc lòng câu đã train nhưng gần như không trích đúng điều cho câu mới; BM25 thắng xa: kiến thức không nạp được bằng SFT |
+| Intermediate 03 | phân loại phản hồi UIT-VSFC thành JSON | `qwen2.5:3b` chỉ prompt (module 11), chính model 0.5B chỉ prompt | tác vụ hẹp, nhãn nhiều: fine-tune model nhỏ hơn 6 lần có đuổi kịp model lớn dùng prompt không, ở trường nào? DPO trên lỗi của model sau SFT thêm được gì? |
+| Intermediate 02 | trả lời instruction chung, đo bằng exact-match trắc nghiệm | Qwen2.5-3B không fine-tune | loss validation giảm có nghĩa là model trả lời đúng hơn không? |
+| Advanced 02 | trích dẫn điều luật cho câu hỏi chưa thấy | BM25 (module 13) | fine-tune có "nạp" được kiến thức luật để trả lời câu mới không? |
 
-Bài học chung: fine-tune là công cụ cho **hành vi trên phân phối hẹp**. Trước mỗi dự án, đặt câu hỏi "baseline nào phải
-đánh bại" và đo baseline đó trước.
+Bài học chung (module 13 đã lập luận, ở đây bạn đo): fine-tune là công cụ cho **hành vi trên phân phối hẹp**, không phải
+cho kiến thức hay năng lực mà model nền chưa có. Trước mỗi dự án, đặt câu hỏi "baseline nào phải đánh bại" và đo baseline đó
+trước.
 
 ## 2. SFT: mục tiêu, chat template, chỉ học phần trả lời
 
@@ -167,10 +167,10 @@ từ 0 ở đầu mỗi mẫu **không** chặn attention giữa các mẫu vớ
 
 | Cách đưa vào model | Loss phần trả lời của mẫu sau |
 | --- | --- |
-| Đứng một mình | <<PACK_ALONE>> |
-| Nối sau một mẫu khác, `position_ids` đếm lại | <<PACK_POS>> |
-| Nối sau một mẫu khác, không `position_ids` | <<PACK_PLAIN>> |
-| Nối, `position_ids` đếm lại, mask khối chéo | <<PACK_BLOCK>> |
+| Đứng một mình | 2.079 |
+| Nối sau một mẫu khác, `position_ids` đếm lại | 2.659 |
+| Nối sau một mẫu khác, không `position_ids` | 1.898 |
+| Nối, `position_ids` đếm lại, mask khối chéo | 2.079 |
 
 Chỉ mask khối chéo (hoặc kernel varlen như `padding_free` của TRL với FlashAttention) mới cho đúng số của mẫu đứng một
 mình. Với dữ liệu ngắn, khác biệt nhỏ và nhiều đội chấp nhận; với dữ liệu mà mẫu trước có thể "mách bài" cho mẫu sau
@@ -278,18 +278,30 @@ merge adapter vào trọng số 4 bit làm mất chính xác, nên thường mer
 
 ### Đo trên PC
 
-Một bước train (forward, backward, AdamW) với batch 8 × 512 token ngẫu nhiên, LoRA r = 16 trên mọi lớp tuyến tính, PC RTX
-3060 12GB (GPU không chạy việc khác lúc đo):
+Một bước train (forward, backward, AdamW) với batch 4 × 512 token ngẫu nhiên, LoRA r = 16 trên mọi lớp tuyến tính,
+PC RTX 3060 12GB (một tiến trình khác giữ khoảng 1 GB VRAM lúc đo):
 
-| Qwen2.5-0.5B | Gradient checkpointing | VRAM đỉnh (cấp phát) | Giây / bước | Token / giây |
-| --- | --- | --- | --- | --- |
-<<BENCH_SMALL>>
+| Qwen2.5-0.5B | Gradient checkpointing | Tham số train | VRAM đỉnh (cấp phát) | Giây / bước | Token / giây |
+| --- | --- | --- | --- | --- | --- |
+| Full fine-tune, AdamW | không | 494 032 768 | không vừa phần VRAM còn trống (khoảng 10 GiB) | | |
+| Full fine-tune, AdamW | có | 494 032 768 | 6.37 GiB | 0.57 | 3 568 |
+| LoRA bf16 | không | 8 798 208 | 8.29 GiB | 0.48 | 4 256 |
+| LoRA bf16 | có | 8 798 208 | 4.61 GiB | 0.65 | 3 164 |
+| QLoRA (NF4, double quant, `paged_adamw_8bit`) | có | 8 798 208 | 4.40 GiB | 0.97 | 2 107 |
 
-Và Qwen2.5-7B bằng QLoRA (NF4, double quant, `paged_adamw_8bit`, gradient checkpointing), batch 4 × 512: <<BENCH_BIG>>.
+Qwen2.5-7B bằng QLoRA trên bài thật của Advanced 01 (chuỗi ngắn, batch 4): xem lời giải bài đó.
 
 Đọc bảng:
 
-<<BENCH_READ>>
+- **Với model nhỏ, activation chứ không phải trọng số quyết định VRAM.** LoRA không checkpointing (8.29 GiB) còn tốn hơn
+  full fine-tune có checkpointing (6.37 GiB): 4 × 512 token qua 24 tầng, cộng logits fp32 cỡ 4 × 512 × 151 936 × 4 byte
+  (khoảng 1.2 GB, và gradient của nó), lớn hơn hẳn 0.9 GiB trọng số bf16. Gradient checkpointing gần như chia đôi VRAM, đổi
+  lại chậm hơn khoảng 35%.
+- **QLoRA gần như không tiết kiệm gì ở 0.5B** (4.40 so với 4.61 GiB) mà chậm hơn khoảng 50%: trọng số tuyến tính chỉ
+  khoảng 0.7 GiB ở bf16, và embedding 136 triệu tham số không bị lượng tử hoá. QLoRA đáng giá khi **trọng số** là khoản lớn
+  nhất, tức với model 7B trở lên.
+- Full fine-tune 0.5B vẫn vừa GPU 12GB nhờ checkpointing; trên GPU 4GB của laptop chỉ LoRA (hoặc QLoRA) với chuỗi ngắn hơn,
+  batch nhỏ hơn mới vừa: các bài Intermediate giới hạn số token mỗi batch để đỉnh nằm dưới 4 GiB.
 
 Ước lượng cho máy của bạn: dùng công thức của module 09 mục 7 cho trọng số, cộng tham số LoRA × (2 + 2 + 8) byte, cộng
 activation (đo một bước như trên là cách nhanh nhất). Bài Advanced 01 cho bạn viết bộ ước lượng và so với số đo.

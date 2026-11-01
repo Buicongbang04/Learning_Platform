@@ -1,0 +1,105 @@
+questions:
+- id: base-format
+  kind: data
+  type: single
+  prompt: "Qwen2.5-0.5B-Instruct gốc, chỉ dùng prompt, trả output đọc được ở chế độ strict cho khoảng bao nhiêu câu của tập test đầy đủ?"
+  options:
+  - id: a
+    text: Khoảng 10%
+  - id: b
+    text: Khoảng 50%
+  - id: c
+    text: Khoảng 90%
+  - id: d
+    text: Đúng 100%
+- id: topic-gain
+  kind: data
+  type: single
+  prompt: "Trên tập test đầy đủ, SFT LoRA đổi macro-F1 chủ đề so với model gốc chỉ dùng prompt thế nào?"
+  options:
+  - id: a
+    text: Gần như không đổi, chênh dưới 0.02
+  - id: b
+    text: Giảm, vì SFT làm model quên kiến thức cũ
+  - id: c
+    text: Tăng từ dưới 0.3 lên khoảng 0.8
+  - id: d
+    text: Tăng từ khoảng 0.6 lên khoảng 0.65
+- id: vs-module11
+  kind: data
+  type: single
+  prompt: "Trên 150 câu ghim, F1 cảm xúc của 0.5B sau SFT so với `qwen2.5:3b` chỉ prompt ở module 11 (zero-shot 0.804, JSON Schema 0.852)?"
+  options:
+  - id: a
+    text: Vượt cả hai, trên 0.95
+  - id: b
+    text: Cùng vùng zero-shot, không vượt JSON Schema
+  - id: c
+    text: Thấp hơn cả hai prompt của module 11, dưới 0.5
+  - id: d
+    text: Bằng 0 vì JSON hỏng
+- id: pair-count
+  kind: data
+  type: single
+  prompt: "Chạy model SFT trên 3 426 câu của pool, khoảng bao nhiêu câu sai (đọc strict) và thành cặp ưu tiên?"
+  options:
+  - id: a
+    text: Khoảng 50 câu
+  - id: b
+    text: Khoảng 550 câu
+  - id: c
+    text: Khoảng 1 700 câu
+  - id: d
+    text: Gần đủ 3 426 câu
+- id: dpo-high-lr
+  kind: data
+  type: single
+  prompt: "DPO với learning rate 5e-5 (beta 0.1, 2 epoch) cho kết quả gì trên tập test?"
+  options:
+  - id: a
+    text: F1 tăng nhẹ so với SFT ở cả hai trường
+  - id: b
+    text: Không đổi gì so với SFT, từng câu y hệt
+  - id: c
+    text: F1 sụp xuống gần 0, model hỏng
+  - id: d
+    text: F1 cảm xúc tăng vượt 0.95
+- id: dpo-low-lr
+  kind: data
+  type: single
+  prompt: "DPO với learning rate 5e-6 so với model SFT: F1 cảm xúc trên 150 câu ghim (cân bằng) và trên test đầy đủ (lệch lớp) đổi ra sao?"
+  options:
+  - id: a
+    text: Tăng ở tập ghim, giảm ở test đầy đủ
+  - id: b
+    text: Giảm ở tập ghim, tăng ở test đầy đủ
+  - id: c
+    text: Tăng mạnh ở cả hai tập đánh giá
+  - id: d
+    text: Giảm mạnh ở cả hai tập đánh giá
+- id: merge-before-dpo
+  kind: knowledge
+  type: single
+  prompt: "Vì sao notebook merge adapter SFT vào trọng số trước khi gọi `DPOTrainer` với `peft_config`?"
+  options:
+  - id: a
+    text: Để model khi tắt adapter mới (reference) chính là model SFT
+  - id: b
+    text: Vì DPOTrainer không nhận model đã nạp trọng số ở dạng bf16 trên GPU
+  - id: c
+    text: Để DPO train lại toàn bộ tham số của model
+  - id: d
+    text: Vì merge làm loss DPO bắt đầu ở 0 thay vì log 2
+- id: margin-not-quality
+  kind: knowledge
+  type: single
+  prompt: "Ở lượt DPO learning rate 5e-5, `rewards/margins` vẫn dương và tăng. Điều đó nói gì?"
+  options:
+  - id: a
+    text: Model chắc chắn tốt hơn model SFT trên mọi câu của tập test đầy đủ
+  - id: b
+    text: Reward ngầm chỉ là tương đối, phải đo bằng thước đo độc lập
+  - id: c
+    text: Learning rate còn quá nhỏ, nên tăng thêm
+  - id: d
+    text: Reference model đã bị cập nhật nhầm trong lúc train

@@ -23,8 +23,8 @@ của chính model, chạy DPO, và so DPO với một đối chứng công bằ
 
 **Phần cứng:** GPU 4GB · ~120 phút
 
-Chạy notebook bằng kernel `ai-gpu`. Thời gian trên là thời gian làm bài; notebook lời giải chạy <<I03_TIME>> trên PC của
-track (RTX 3060 12GB, GPU có lúc dùng chung với tiến trình khác), VRAM đỉnh khi train <<I03_VRAM>>, vừa GPU 4GB của
+Chạy notebook bằng kernel `ai-gpu`. Thời gian trên là thời gian làm bài; notebook lời giải chạy khoảng 16 phút trên PC của
+track (RTX 3060 12GB, GPU có lúc dùng chung với tiến trình khác), VRAM đỉnh khi train dưới 3 GiB (cấp phát bởi PyTorch), vừa GPU 4GB của
 laptop. Lần đầu tải Qwen2.5-0.5B-Instruct khoảng 1 GB. Kernel CPU (môi trường gốc) chỉ chạy bản thu nhỏ để kiểm code chạy
 hết. Đọc mục 2, 5, 6 lý thuyết và mục 5, 7 module 11 (structured output, tập ghim 150 câu).
 
@@ -37,7 +37,7 @@ Mở `starter/sft_dpo.ipynb`. Trong các cell chấm điểm:
 3. `preference_pairs`: cặp (JSON vàng, output sai của model) theo định dạng hội thoại của TRL.
 
 Rồi chạy các cell `explore`: model gốc chỉ bằng prompt; SFT LoRA trên 8 000 câu train; dựng cặp từ lỗi của model SFT trên
-3 426 câu train còn lại; DPO với hai giá trị $$\beta$$; đối chứng "SFT thêm trên cùng 3 426 câu"; bảng tổng hợp. Sau đó
+3 426 câu train còn lại; DPO với hai learning rate; đối chứng "SFT thêm trên cùng 3 426 câu"; bảng tổng hợp. Sau đó
 làm phần trắc nghiệm của bài trong app.
 
 ## Tiêu chí đạt

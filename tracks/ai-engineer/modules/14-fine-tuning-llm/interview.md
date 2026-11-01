@@ -188,8 +188,8 @@ Khung trả lời:
 ## Thiết kế hệ thống: trợ lý pháp luật cho người dân. Fine-tune ở đâu trong hệ thống, ở đâu không?
 
 - **Không** fine-tune để nạp văn bản luật: hàng chục nghìn điều luật, thay đổi hằng tuần, cần trích dẫn chính xác và hiệu
-  lực. Đó là việc của RAG có metadata hiệu lực (module 13). Bài Advanced 02 của module đo điều này: model fine-tune thuộc
-  câu đã thấy nhưng không trích đúng điều cho câu mới.
+  lực. Đó là việc của RAG có metadata hiệu lực (module 13). Bài Advanced 02 của module cho bạn đo điều này trên
+  Zalo Legal.
 - **Fine-tune embedding model** trên cặp (câu hỏi, điều luật) của split train, chia theo câu hỏi, kiểm không lọt điều của
   tập đánh giá: thường là cải thiện lớn nhất cho retrieval tiếng Việt chuyên ngành (capstone milestone 5).
 - **Fine-tune generator** (LoRA) cho hành vi: luôn trả lời theo khuôn "Căn cứ ... thì ...", trích `[i]` đúng định dạng, từ
