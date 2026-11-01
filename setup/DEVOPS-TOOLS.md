@@ -58,7 +58,7 @@ docker compose -f setup/docker-compose.yml --profile devops rm -fsv localstack-d
 docker volume rm devops-track-localstack-data
 ```
 
-Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM và Secrets Manager. Lần chạy test đầu tiên tải provider `hashicorp/aws` 6.12.0 (khoảng 150 MB, giải nén khoảng 780 MB) vào `~/.cache/devops-track/tofu-plugins`; từ đó test chạy offline. Provider mới hơn 6.12 chưa chạy được với LocalStack 4.4.0 (bảng DynamoDB, tag bucket S3), nên bài tập ghim đúng bản này.
+Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM và Secrets Manager. Lần chạy test đầu tiên (cần mạng) tự tải đúng provider `hashicorp/aws` 6.12.0 (khoảng 150 MB, giải nén khoảng 780 MB) vào `~/.cache/devops-track/tofu-plugins`; từ đó test chạy offline. Provider mới hơn 6.12 chưa chạy được với LocalStack 4.4.0 (bảng DynamoDB, tag bucket S3), nên test chỉ cài bản này: ràng buộc như `~> 6.0` vẫn ra 6.12.0, ràng buộc loại trừ 6.12.0 thì test báo lỗi kèm lý do.
 
 ## Ghim CPU
 

@@ -2435,7 +2435,8 @@ def test_localstack_sweep_refuses_de_port(monkeypatch):
         testkit.localstack_sweep("devops-ex-abc12345")
 
 
-@pytest.mark.parametrize("prefix", ["", "devops-ex-", "devops-ex", "prod-", "devops-ex-ab"])
+@pytest.mark.parametrize("prefix", ["", "devops-ex-", "devops-ex", "prod-", "devops-ex-ab", "devops-ex-abc1234567",
+                                    "devops-ex-ABC12345", "devops-ex-zzzzzzzz", "devops-ex-abc12345-x"])
 def test_localstack_sweep_refuses_broad_prefix(prefix):
     with pytest.raises(ValueError):
         testkit.localstack_sweep(prefix)
@@ -2550,7 +2551,7 @@ def test_tofu_init_offline_after_first_fetch(monkeypatch, recorder):
     with testkit.TofuLab(endpoint=endpoint) as first:
         first.write("main.tf", config)
         first.init()
-    monkeypatch.setattr(testkit.TofuLab, "_fetch", lambda self: pytest.fail("provider đã có trong mirror, không được tải lại"))
+    monkeypatch.setattr(testkit, "tofu_fetch_providers", lambda: pytest.fail("provider đã có trong mirror, không được tải lại"))
     with testkit.TofuLab(endpoint=endpoint) as second:
         second.write("main.tf", config)
         result = second.init()
@@ -2563,19 +2564,177 @@ def test_tofu_init_offline_after_first_fetch(monkeypatch, recorder):
 def test_tofu_init_skips_when_provider_missing_and_offline(monkeypatch, tmp_path, recorder):
     endpoint, _ = recorder
     monkeypatch.setattr(testkit, "tofu_plugin_dir", lambda: tmp_path / "empty-plugins")
-    original = testkit.TofuLab._fetch_env
+    original = testkit._tofu_fetch_env
 
-    def offline(self):
-        env = original(self)
-        proxy = testkit.tofu_env(self.home, prefix=self.prefix, endpoint=self.endpoint)["HTTPS_PROXY"]
+    def offline(home):
+        env = original(home)
+        proxy = testkit.tofu_env(home, prefix="devops-ex-00000000", endpoint=endpoint)["HTTPS_PROXY"]
         return {**env, "HTTPS_PROXY": proxy, "https_proxy": proxy, "HTTP_PROXY": proxy, "http_proxy": proxy}
 
-    monkeypatch.setattr(testkit.TofuLab, "_fetch_env", offline)
+    monkeypatch.setattr(testkit, "_tofu_fetch_env", offline)
     with testkit.TofuLab(endpoint=endpoint) as lab:
         lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {}\n')
         with pytest.raises(pytest.skip.Exception, match="cần mạng"):
             lab.init()
     assert not any((tmp_path / "empty-plugins").rglob("terraform-provider-aws*"))
+
+
+@TOFU_REQUIRED
+def test_tofu_loose_constraint_resolves_to_pinned_provider(recorder):
+    endpoint, _ = recorder
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER.replace(f'version = "{testkit.TOFU_AWS_PROVIDER}"', 'version = "~> 6.0"')
+                  + 'provider "aws" {}\n')
+        lab.init()
+        assert f'version     = "{testkit.TOFU_AWS_PROVIDER}"' in (lab.workdir / ".terraform.lock.hcl").read_text(encoding="utf-8")
+
+
+@TOFU_REQUIRED
+def test_tofu_other_provider_version_fails_clearly_without_download(monkeypatch, recorder):
+    endpoint, _ = recorder
+    monkeypatch.setattr(testkit, "tofu_fetch_providers", lambda: pytest.fail("không được tải provider khác"))
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER.replace(f'version = "{testkit.TOFU_AWS_PROVIDER}"', 'version = "= 6.20.0"')
+                  + 'provider "aws" {}\n')
+        with pytest.raises(pytest.fail.Exception, match=rf"{re.escape(testkit.TOFU_AWS_PROVIDER)}.*LocalStack 4\.4\.0"):
+            lab.init()
+    assert not (testkit.tofu_plugin_dir() / "registry.opentofu.org" / "hashicorp" / "aws" / "6.20.0").exists()
+
+
+def test_tofu_lock_version_check(tmp_path):
+    lock = tmp_path / ".terraform.lock.hcl"
+    lock.write_text('provider "registry.opentofu.org/hashicorp/aws" {\n  version     = "6.20.0"\n  constraints = ">= 6.0"\n}\n')
+    assert testkit._tofu_locked_versions(lock) == {"registry.opentofu.org/hashicorp/aws": "6.20.0"}
+
+
+@pytest.mark.parametrize("snippet", [
+    'provider "aws" {\n  http_proxy = "http://corp:3128"\n}\n',
+    'provider "aws" {\n  https_proxy = "http://corp:3128"\n}\n',
+    'provider "aws" {\n  no_proxy = "*"\n}\n',
+    'terraform {\n  backend "s3" {\n    custom_ca_bundle = "/x.pem"\n  }\n}\n',
+    '{"provider": {"aws": {"no_proxy": "*"}}}',
+])
+def test_tofu_refuses_proxy_overrides(tmp_path, snippet):
+    name = "main.tf.json" if snippet.startswith("{") else "main.tf"
+    (tmp_path / "modules" / "x").mkdir(parents=True)
+    (tmp_path / "modules" / "x" / name).write_text(snippet, encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert problems and "modules/x/" in problems[0] and "proxy" in problems[0].lower() + "proxy"
+
+
+def test_tofu_allows_normal_config(tmp_path):
+    (tmp_path / "main.tf").write_text('# http_proxy chỉ là chữ\nprovider "aws" {\n  region = "us-east-1"\n}\nvariable "no_proxy_note" {}\n')
+    assert testkit.tofu_config_problems(tmp_path) == []
+
+
+@TOFU_REQUIRED
+def test_tofu_lab_refuses_proxy_override_before_running(recorder):
+    endpoint, seen = recorder
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {\n  no_proxy = "*"\n}\n')
+        with pytest.raises(pytest.fail.Exception, match="no_proxy"):
+            lab.init()
+    assert seen == []
+
+
+@TOFU_REQUIRED
+def test_tofu_lab_destroy_failure_fails_passing_test(monkeypatch, recorder):
+    endpoint, _ = recorder
+    original = testkit.TofuLab._execute
+
+    def broken_destroy(self, args, env, writable, timeout):
+        if args[0] == "destroy":
+            return subprocess.CompletedProcess(["tofu", *args], 1, "", "Error: destroy hỏng")
+        return original(self, args, env, writable, timeout)
+
+    monkeypatch.setattr(testkit.TofuLab, "_execute", broken_destroy)
+    with pytest.raises(pytest.fail.Exception, match="destroy hỏng"):
+        with pytest.warns(UserWarning, match="destroy"):
+            with testkit.TofuLab(endpoint=endpoint) as lab:
+                lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {}\n')
+                lab.init()
+    with pytest.raises(RuntimeError, match="lỗi gốc"):
+        with pytest.warns(UserWarning, match="destroy hỏng"):
+            with testkit.TofuLab(endpoint=endpoint) as lab:
+                lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {}\n')
+                lab.init()
+                raise RuntimeError("lỗi gốc")
+
+
+@SANDBOX_REQUIRED
+def test_sandbox_resolves_dns(tmp_path):
+    import socket
+
+    try:
+        socket.getaddrinfo("registry.opentofu.org", 443)
+    except OSError:
+        pytest.skip("Máy không có mạng hay DNS")
+    code = "import socket; print(socket.getaddrinfo('registry.opentofu.org', 443)[0][4][0])"
+    result = testkit.run_sandboxed([sys.executable, "-c", code], writable=[tmp_path], cwd=tmp_path, env={})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip()
+
+
+def test_sandbox_binds_only_resolv_conf_file(monkeypatch, tmp_path):
+    flags = testkit._base_flags("/usr/bin/bwrap")
+    target = Path("/etc/resolv.conf").resolve()
+    if target.is_relative_to("/run"):
+        index = flags.index("--tmpfs", flags.index("/proc"))
+        assert flags[index:index + 4] == ["--tmpfs", "/tmp", "--tmpfs", "/run"]
+        assert ["--ro-bind", str(target), str(target)] == flags[flags.index(str(target)) - 1:flags.index(str(target)) + 2]
+        assert flags.index(str(target)) > flags.index("/run")
+    assert not any(f == "/run/systemd/resolve" for f in flags)
+
+
+@pytest.mark.skipif(os.environ.get("DEVOPS_TOFU_FETCH_PROOF") != "1", reason="Chỉ chạy khi DEVOPS_TOFU_FETCH_PROOF=1 (tải ~150 MB)")
+@TOFU_REQUIRED
+def test_tofu_fetch_into_empty_mirror_then_offline(monkeypatch, tmp_path, recorder):
+    endpoint, _ = recorder
+    mirror = tmp_path / "mirror"
+    monkeypatch.setattr(testkit, "tofu_plugin_dir", lambda: mirror)
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER.replace(f'version = "{testkit.TOFU_AWS_PROVIDER}"', 'version = "~> 6.0"')
+                  + 'provider "aws" {}\n')
+        result = lab.init()
+        assert f"Installed hashicorp/aws v{testkit.TOFU_AWS_PROVIDER}" in result.stdout
+    versions = sorted(p.name for p in (mirror / "registry.opentofu.org" / "hashicorp" / "aws").iterdir())
+    assert versions == [testkit.TOFU_AWS_PROVIDER]
+    monkeypatch.setattr(testkit, "tofu_fetch_providers", lambda: pytest.fail("không được tải lại"))
+    with testkit.TofuLab(endpoint=endpoint) as lab:
+        lab.write("main.tf", TOFU_PROVIDER + 'provider "aws" {}\n')
+        assert f"Installed hashicorp/aws v{testkit.TOFU_AWS_PROVIDER}" in lab.init().stdout
+
+
+def test_localstack_sweep_never_matches_longer_prefix(monkeypatch):
+    import boto3
+
+    deleted = []
+
+    class Fake:
+        def get_paginator(self, name):
+            return self
+
+        def paginate(self, **kwargs):
+            return []
+
+        def list_buckets(self, **kwargs):
+            return {"Buckets": [{"Name": n} for n in ("devops-ex-abc123456-x", "devops-ex-abc12345x", "devops-ex-abc12345-data",
+                                                      "devops-ex-abc12345")]}
+
+        def delete_bucket(self, Bucket):
+            deleted.append(Bucket)
+
+    monkeypatch.setattr(boto3, "client", lambda service, **kwargs: Fake())
+    assert testkit.localstack_sweep("devops-ex-abc12345") == ["s3:devops-ex-abc12345-data", "s3:devops-ex-abc12345"]
+    assert deleted == ["devops-ex-abc12345-data", "devops-ex-abc12345"]
+
+
+@pytest.mark.parametrize("name,owned", [
+    ("devops-ex-abc12345", True), ("devops-ex-abc12345-x", True), ("/devops-ex-abc12345/p", True), ("devops-ex-abc12345/p", True),
+    ("alias/devops-ex-abc12345-k", True), ("devops-ex-abc123456", False), ("devops-ex-abc12345x", False), ("/other/devops-ex-abc12345", False),
+])
+def test_localstack_owned_names(name, owned):
+    assert testkit._owned_by(name, "devops-ex-abc12345") is owned
 
 
 @TOFU_REQUIRED
@@ -2642,8 +2801,10 @@ def test_tofu_lab_destroys_on_error():
 
 @LOCALSTACK_REQUIRED
 def test_tofu_lab_sweep_removes_orphans_with_its_prefix_only():
+    testkit.Exercise.require_localstack_devops()
     keep = f"devops-ex-keep{os.getpid()}"
     s3, dynamodb, iam = localstack_client("s3"), localstack_client("dynamodb"), localstack_client("iam")
+    ssm, secrets, kms = localstack_client("ssm"), localstack_client("secretsmanager"), localstack_client("kms")
     s3.create_bucket(Bucket=keep)
     try:
         with testkit.TofuLab() as lab:
@@ -2655,10 +2816,24 @@ def test_tofu_lab_sweep_removes_orphans_with_its_prefix_only():
             iam.create_role(RoleName=f"{lab.prefix}-role", AssumeRolePolicyDocument='{"Version":"2012-10-17","Statement":[]}')
             iam.put_role_policy(RoleName=f"{lab.prefix}-role", PolicyName="inline", PolicyDocument=(
                 '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListBucket","Resource":"*"}]}'))
-        assert sorted(lab.swept) == sorted([f"s3:{lab.prefix}-orphan", f"dynamodb:{lab.prefix}-lock", f"iam-role:{lab.prefix}-role"])
+            ssm.put_parameter(Name=f"/{lab.prefix}/db/password", Value="x", Type="SecureString")
+            ssm.put_parameter(Name=f"{lab.prefix}-flag", Value="x", Type="String")
+            secrets.create_secret(Name=f"{lab.prefix}-token", SecretString="x")
+            key = kms.create_key()["KeyMetadata"]["KeyId"]
+            kms.create_alias(AliasName=f"alias/{lab.prefix}-state", TargetKeyId=key)
+            ssm.put_parameter(Name=f"/{keep}/p", Value="x", Type="String")
+        assert sorted(lab.swept) == sorted([
+            f"s3:{lab.prefix}-orphan", f"dynamodb:{lab.prefix}-lock", f"iam-role:{lab.prefix}-role",
+            f"ssm:/{lab.prefix}/db/password", f"ssm:{lab.prefix}-flag", f"secretsmanager:{lab.prefix}-token",
+            f"kms-alias:alias/{lab.prefix}-state"])
+        assert kms.describe_key(KeyId=key)["KeyMetadata"]["KeyState"] == "PendingDeletion"
+        assert not [a for a in kms.list_aliases()["Aliases"] if a["AliasName"].startswith(f"alias/{lab.prefix}")]
+        assert not [s for s in secrets.list_secrets()["SecretList"] if s["Name"].startswith(lab.prefix)]
+        assert [p["Name"] for p in ssm.describe_parameters()["Parameters"] if keep in p["Name"]] == [f"/{keep}/p"]
         assert buckets_with(lab.prefix) == []
         assert not [t for t in dynamodb.list_tables()["TableNames"] if t.startswith(lab.prefix)]
         assert not [r for r in iam.list_roles()["Roles"] if r["RoleName"].startswith(lab.prefix)]
         assert keep in buckets_with(keep)
     finally:
         s3.delete_bucket(Bucket=keep)
+        ssm.delete_parameter(Name=f"/{keep}/p")
