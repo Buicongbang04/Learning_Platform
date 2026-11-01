@@ -30,7 +30,7 @@ là bài portfolio: một bảng trung thực kèm phân tích lỗi đáng giá
 
 **Phần cứng:** CPU · ~300 phút
 
-Thời gian trên là thời gian làm bài. Chạy cả ba kiến trúc trên 52 task với `qwen2.5:3b` mất khoảng 25 phút trên PC của
+Thời gian trên là thời gian làm bài. Chạy cả ba kiến trúc trên 52 task với `qwen2.5:3b` mất khoảng 15 tới 25 phút trên PC của
 track (GPU dùng chung); laptop GPU 4GB chậm hơn, nên chạy thử trên 10 task trước. `qwen2.5:7b` chỉ chạy trên PC 12GB,
 không bắt buộc.
 

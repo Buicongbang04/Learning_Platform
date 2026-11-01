@@ -41,7 +41,38 @@ và điều đúng nằm trong các uid đó.
 - **Ai trả lời cuối cùng.** Supervisor tổng hợp (thêm một lượt, có thể làm méo số liệu của agent con) hay trả nguyên văn
   câu trả lời của agent con.
 
-PLACEHOLDER_A01_RESULTS
+## Kết quả của bản tham chiếu
+
+PC của track, 2026-11-01, `qwen2.5:3b`, `temperature` 0, `seed` 0, GPU dùng chung; ba kiến trúc chạy tổng cộng khoảng 16
+phút. Log `.superpowers/scratch/logs/a01_{single,supervisor,swarm}.json`, `a01_run.log`, tổng hợp `a01_summary.log`.
+
+| Kiến trúc | Đúng / 52 | Wilson 95% | Nhà sách / 24 | Pháp luật / 20 | Câu ghép / 8 | Lượt LLM TB | Token prompt TB | Giây trung vị |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Một agent (6 tool) | 27 | [0.39, 0.65] | 9 | 15 | 3 | 2.04 | 1 903 | 6.1 |
+| Supervisor (agent làm tool) | 26 | [0.37, 0.63] | 8 | 15 | 3 | 4.75 | 2 588 | 6.9 |
+| Swarm (handoff) | 8 | [0.08, 0.28] | 8 | 0 | 0 | 1.77 | 1 278 | 2.4 |
+
+So theo cặp: một agent và supervisor lệch nhau 7 task (4 chỉ một agent đúng, 3 chỉ supervisor đúng); swarm thua một agent ở
+19 task và không thắng task nào.
+
+## Đọc kết quả
+
+- **Supervisor không hơn một agent, và tốn gấp 2.3 lần lượt LLM** (token prompt nhiều hơn 36%). Với chỉ 6 tool và hai miền
+  tách bạch, một agent đã chọn đúng tool; tầng điều phối chỉ thêm một chỗ hỏng: ở các task nhà sách sai, agent con trả lời
+  "không tìm thấy" hoặc điều phối viên tóm câu trả lời của agent con sai đi (một câu trả lời bắt đầu "Ccâu hỏi của bạn vượt
+  quá khả năng..."). Ở phần pháp luật hai cách bằng nhau (15/20).
+- **Swarm sập ở mọi câu có phần pháp luật** vì handoff không xảy ra: trong 28 task có phần pháp luật, agent nhà sách (nơi
+  mọi lượt bắt đầu) chỉ gọi handoff thật 2 lần. 11 lần nó **viết** lời gọi ra thành chữ (`" transfer_to_legal()"`,
+  `".transfer_to_legal{}"`) thay vì phát một tool call, 5 lần trả về chuỗi rỗng, 2 lần nói "tôi sẽ chuyển" rồi dừng. Tool
+  không tham số là trường hợp model 3B này phát tool call kém nhất. Cơ chế handoff đúng (test của `make_handoff_tool` xanh,
+  và 2 lần chuyển thật chạy đúng); thứ hỏng là model không dùng được nó.
+- **Câu ghép là chỗ khó nhất cho cả ba**: 3/8 là tốt nhất; một agent làm đúng phần sách ở 6 câu nhưng chỉ tra trúng phần
+  luật ở 4.
+- **Kết luận cho capstone với model nhỏ**: một agent có ít tool, mô tả tool rõ, là lựa chọn mặc định. Nếu cần tách
+  (nhiều miền, nhiều tool), dùng router bằng structured output hẹp hoặc code (như bước `plan` của bài Intermediate 03) thay
+  cho handoff do model tự quyết; nếu dùng handoff, cho tool handoff một tham số bắt buộc (ví dụ `reason: str`) và đo lại,
+  vì model nhỏ phát tool call có tham số tốt hơn. Chạy lại cùng bảng với `qwen2.5:7b` trên PC để biết phần nào là do
+  model.
 
 ## Rubric (100 điểm)
 

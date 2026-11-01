@@ -62,7 +62,9 @@ luật.
 ## Kết quả thật
 
 PC của track, 2026-11-01, `qwen2.5:3b` + `bge-m3` (cache module 13), checkpointer SQLite, GPU dùng chung. Log
-`i03_run.log`, `i03_s{1,2,3}.json`, tổng hợp `i03_summary.log`. Cả notebook gọi model khoảng 510 lượt, chạy khoảng 40 phút.
+`i03_run.log`, `i03_s{1,2,3}.json`, tổng hợp `i03_summary.log`. Cả notebook gọi model khoảng 510 lượt, chạy khoảng 25 đến 40 phút tuỳ mức GPU bị chiếm. Chạy lại chính notebook lời
+giải qua `nbconvert` (log `nb_i03_executed.ipynb`) cho **đúng** các số đếm ở ba bảng dưới; chỉ thời gian khác (trung vị S1
+2.1 s và 4.3 s, S2 2.5 s và 6.0 s, lúc GPU ít bị chiếm hơn).
 
 **S3, 10 câu thiếu loại xe** (người dùng giả trả lời "xe máy" hoặc "ô tô"):
 

@@ -1,12 +1,12 @@
 questions:
-  - id: crash-count
+  - id: lookup-group
     kind: data
     type: single
-    prompt: "Trên 24 task, `create_react_agent` với `ToolNode` mặc định có task nào kết thúc bằng exception (không có câu trả lời) không?"
+    prompt: "Agent dựng tay đúng bao nhiêu trong 6 task nhóm `tra-1` (chỉ cần tra một lần)?"
     options:
-      - { id: a, text: "Không task nào: lỗi tool luôn thành observation" }
-      - { id: b, text: "Có, từ 1 đến 12 task, đều do tool ném lỗi khi chạy" }
-      - { id: c, text: "Có, hơn 12 task, đa số do model gọi tool sai tên" }
+      - { id: a, text: "0 hoặc 1 task" }
+      - { id: b, text: "2 đến 4 task" }
+      - { id: c, text: "5 hoặc 6 task" }
   - id: pair-diff
     kind: data
     type: single

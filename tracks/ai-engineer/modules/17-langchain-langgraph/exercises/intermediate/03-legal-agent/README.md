@@ -30,7 +30,7 @@ bộ chấm không dùng LLM trên ba bộ câu hỏi, để biết agent đáng
 
 Thời gian trên là thời gian làm bài. Cần Zalo Legal và cache vector `bge-m3` của bài Intermediate 01 module 13
 (`data/raw/zalo-legal/cache/bge-m3.npy`; chưa có thì chạy notebook bài đó trước, khoảng 45 phút trên laptop GPU 4GB). Các
-cell `explore` gọi model khoảng 510 lượt, chạy khoảng 40 phút trên PC của track (GPU dùng chung); laptop GPU
+cell `explore` gọi model khoảng 510 lượt, chạy khoảng 25 đến 40 phút trên PC của track (GPU dùng chung); laptop GPU
 4GB chậm hơn, nên chạy thử S3 và 20 câu S1 trước.
 
 Trong `starter/legal_agent.ipynb` (`Plan`, các prompt, `LegalState` đã có; mỗi hàm có đặc tả ở mục tương ứng):
