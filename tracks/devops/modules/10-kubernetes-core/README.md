@@ -777,6 +777,8 @@ mới vào đúng `/var/lib/etcd`, trả manifest về:
 
 ```bash
 export KUBECONFIG=~/.kube/devops-lab.yaml LAB=~/.cache/devops-track/etcd-lab N=devops-lab-control-plane &&
+docker exec "$N" test ! -e /var/lib/etcd-truoc-restore &&
+test ! -e "$LAB/restored" &&
 kubectl -n etcd-lab delete configmap quan-trong &&
 ETCD_NAME="$(docker exec $N sed -n 's/^ *- --name=//p' /etc/kubernetes/manifests/etcd.yaml)" &&
 ETCD_PEER="$(docker exec $N sed -n 's/^ *- --initial-advertise-peer-urls=//p' /etc/kubernetes/manifests/etcd.yaml)" &&
@@ -802,7 +804,9 @@ truoc-su-co
 ```
 
 Lệnh `timeout ... until` đầu chờ kubelet dừng hẳn hai container (không chờ là đổi thư mục khi etcd còn ghi); lệnh sau chờ API server trả
-`ok`. Cả khối mất khoảng 40 giây trên máy viết bài.
+`ok`. Cả khối mất khoảng 40 giây trên máy viết bài. `test ! -e /var/lib/etcd-truoc-restore` và `test ! -e "$LAB/restored"` dừng chuỗi
+ngay từ đầu, trước khi xoá ConfigMap hay đụng manifest, nếu thứ của lần chạy trước còn đó (nếu không, `mv` sẽ lồng thư mục và khối
+quay lui sẽ trả về dữ liệu của lần trước). Muốn làm lại lab thì chạy xong khối dọn ở cuối mục trước.
 
 **Nếu chuỗi lệnh dừng giữa chừng** sau khi manifest đã bị chuyển đi, etcd và API server vẫn tắt: `kubectl` báo `connection refused`. Quay
 về data dir trước restore (khối này đã kiểm: chạy ngay sau một lần restore thành công, cluster về đúng trạng thái trước restore):
@@ -831,9 +835,17 @@ cài Gateway dùng chung theo `setup/DEVOPS-TOOLS.md`):
 kind delete cluster --name devops-lab --kubeconfig ~/.kube/devops-lab.yaml
 ```
 
-Dọn sau lab: `KUBECONFIG=~/.kube/devops-lab.yaml kubectl delete namespace etcd-lab`, `docker exec devops-lab-control-plane rm -rf
-/var/lib/etcd-truoc-restore /var/lib/etcd/lab-snapshot.db` (cùng các thư mục `/var/lib/etcd-restore-loi-*` nếu có) và `rm -rf
-~/.cache/devops-track/etcd-lab`. Data dir vẫn ở `/var/lib/etcd` như kubeadm đặt, nên Intermediate 02 vẫn chạy được sau lab. Tài liệu
+Dọn sau lab (glob `etcd-restore-loi-*` phải mở rộng **trong** node nên đi qua `sh -c`):
+
+```bash
+export KUBECONFIG=~/.kube/devops-lab.yaml N=devops-lab-control-plane &&
+kubectl delete namespace etcd-lab --ignore-not-found &&
+docker exec "$N" rm -rf /var/lib/etcd-truoc-restore /var/lib/etcd/lab-snapshot.db &&
+docker exec "$N" sh -c 'rm -rf /var/lib/etcd-restore-loi-*' &&
+rm -rf ~/.cache/devops-track/etcd-lab/restored ~/.cache/devops-track/etcd-lab/lab-snapshot.db
+```
+
+Thư mục `~/.cache/devops-track/etcd-lab` còn `etcdutl` để dùng lại; xoá hẳn bằng `rm -rf ~/.cache/devops-track/etcd-lab`. Data dir vẫn ở `/var/lib/etcd` như kubeadm đặt, nên Intermediate 02 vẫn chạy được sau lab. Tài liệu
 kubeadm còn cách khác là restore ra thư mục mới rồi sửa `hostPath` của volume `etcd-data` trong manifest; đừng dùng cách đó trên
 `devops-lab`: test snapshot của Intermediate 02 đọc tệp ở `/var/lib/etcd` của node và sẽ fail kèm lời nhắc làm lại bước này.
 
