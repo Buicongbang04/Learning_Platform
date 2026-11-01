@@ -49,7 +49,7 @@ hình, tổng cỡ 15 tới 25 phút máy chạy.
 **Một `REPORT.md` tốt**:
 
 - Bảng 4 cấu hình: hoàn thành / 8, số task thấy injection, ASR tính trên số task **đã thấy** injection, số lần guard
-  chặn (và có chặn nhầm task hợp lệ w08 không), số bước trung bình.
+  chặn (và có chặn nhầm task hợp lệ nào không), số bước trung bình.
 - Đọc trace của ít nhất 3 lượt bị tấn công (hoặc suýt bị): agent làm theo injection ở bước nào, nó có "nghi ngờ" trong
   Thought không.
 - Phòng thủ bằng prompt bảo đảm gì, phòng thủ bằng code bảo đảm gì và **không** bảo vệ được gì (thông tin lộ qua câu

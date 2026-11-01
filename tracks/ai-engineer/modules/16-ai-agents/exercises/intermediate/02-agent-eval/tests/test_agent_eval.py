@@ -66,9 +66,9 @@ def test_discordant(nb):
         nb.discordant(a, {"t1": True})
 
 
-def step(kind, observation=None, ok=None):
-    return {"index": 0, "kind": kind, "reply": "", "tool": "x", "args": {}, "observation": observation, "ok": ok,
-            "seconds": 0.1}
+def step(kind, observation=None, ok=None, args=None):
+    return {"index": 0, "kind": kind, "reply": "", "tool": "x", "args": args if args is not None else {},
+            "observation": observation, "ok": ok, "seconds": 0.1}
 
 
 def row(ok=False, stopped="answer", answer="", question="Câu hỏi?", steps=()):
@@ -111,3 +111,23 @@ def test_every_task_has_a_passing_answer(nb):
         assert nb.check_answer(answer, expected), (task_id, answer)
         assert not nb.check_answer("Tôi không biết.", expected) or expected == ["không"], task_id
     assert math.isclose(bookstore.calculator("2 * 110000 + 79000"), 299000)
+
+
+def test_classify_hallucination_in_tool_arguments(nb):
+    order = '{"id": "DH01", "items": [{"book_id": "B05", "quantity": 2}, {"book_id": "B13", "quantity": 1}]}'
+    laundered = [step("action", order, True, {"order_id": "DH01"}),
+                 step("action", "1150000", True, {"expression": "350000 * 2 + 450000"}), step("final")]
+    r = row(answer="Tổng tiền đơn DH01 là 1.150.000 đồng.", question="Tổng tiền đơn hàng DH01?", steps=laundered)
+    assert nb.classify_failure(r) == "hallucinated_number", "giá bịa đi qua calculator vẫn là số bịa"
+    honest = [step("action", order, True, {"order_id": "DH01"}),
+              step("action", '{"price": 110000}', True, {"book_id": "B05"}),
+              step("action", "220000", True, {"expression": "2 * 110000"}), step("final")]
+    r = row(answer="Tổng là 220.000 đồng.", question="Tổng tiền đơn hàng DH01?", steps=honest)
+    assert nb.classify_failure(r) == "wrong_other", "mọi số trong tham số đều đã thấy ở observation trước đó"
+    guessed = [step("action", "ERROR: không có sách", False, {"book_id": "B07"}), step("final")]
+    r = row(answer="Không rõ.", question="Giá cuốn Số đỏ?", steps=guessed)
+    assert nb.classify_failure(r) == "hallucinated_number", "đoán mã sách trước khi tra là dùng số không có nguồn"
+    late = [step("action", '{"price": 72000}', True, {"query": "Số đỏ"}),
+            step("action", "72000", True, {"expression": "72000"}), step("final")]
+    assert nb.classify_failure(row(answer="Giá 72.000 đồng.", question="Giá Số đỏ?", steps=late)) == "wrong_other"
+

@@ -25,7 +25,7 @@ tool trên `qwen2.5:3b`: vòng ReAct văn bản của bạn, native tool calling
 
 **Phần cứng:** CPU · ~90 phút
 
-Thời gian trên là thời gian làm bài. Các cell `explore` gọi model khoảng 250 lượt: chạy khoảng 10 tới 15 phút trên PC
+Thời gian trên là thời gian làm bài. Các cell `explore` gọi model khoảng 320 lượt: chạy khoảng 10 phút trên PC
 của track (`qwen2.5:3b` trên GPU dùng chung); laptop GPU 4GB chậm hơn, CPU thuần chậm hơn nhiều.
 
 `starter/bookstore.py` là một hiệu sách tự tạo: 24 cuốn sách, 4 đơn hàng, tỷ giá ghim, 5 tool (`search_books`,
@@ -54,7 +54,8 @@ số liệu lấy từ lần chạy của lời giải mẫu và hỏi theo kho�
   một câu trả lời mẫu được chấm đúng.
 - `wilson_interval(17, 24)` khoảng `[0.508, 0.851]`; trường hợp `k = 0`, `k = n`, `n = 0` đúng.
 - `discordant` đúng hai chiều, báo lỗi khi hai bên khác bộ task.
-- `classify_failure` đúng thứ tự ưu tiên, so số trong câu trả lời với số của **mọi** observation và câu hỏi.
+- `classify_failure` đúng thứ tự ưu tiên; bắt được số bịa cả trong câu trả lời lẫn trong **tham số** của tool (giá bịa
+  đưa vào `calculator`, mã sách đoán trước khi tra), chỉ so với số đã thấy **trước** bước đó.
 - Các cell `explore` chạy hết với `qwen2.5:3b`.
 
 ## Gợi ý
@@ -68,5 +69,6 @@ mẫu trong test trước khi chạy cả bộ.
 ### Gợi ý 2
 
 Công thức Wilson nằm trong notebook; kẹp kết quả vào `[0, 1]` (sai số làm tròn có thể cho `-1e-17`). Với
-`classify_failure`, gom mọi số trong câu hỏi và mọi observation vào một danh sách rồi kiểm từng số của câu trả lời;
-nhớ áp quy ước của `numbers_in` cho cả observation.
+`classify_failure`, duyệt các bước theo thứ tự với một danh sách số đã thấy; ở mỗi bước action, kiểm tham số **trước**
+khi thêm observation của chính bước đó vào danh sách: kết quả của `calculator` không được "hợp thức hoá" số bịa đã
+đưa vào nó. Nhớ áp quy ước của `numbers_in` cho cả observation.

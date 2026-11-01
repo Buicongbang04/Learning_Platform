@@ -165,7 +165,7 @@ stateDiagram-v2
     GoiLLM --> DungLoiLLM: LLMError
     GoiLLM --> Parse
     Parse --> LoiDinhDang: ReActParseError
-    LoiDinhDang --> GoiLLM: lỗi liên tiếp <= max_format_retries
+    LoiDinhDang --> GoiLLM: lỗi liên tiếp ≤ max_format_retries
     LoiDinhDang --> DungDinhDang: vượt ngưỡng
     Parse --> TraLoi: Final Answer
     Parse --> KiemLap: Action
@@ -259,7 +259,7 @@ riêng, chỉ nhận lại kết quả gọn).
 
 Ngân sách đo được ở hiệu sách: system prompt ReAct, mô tả 5 tool và một câu hỏi ngắn khoảng 650 token (câu không cần
 tool có prompt 651 token); lượt dài nhất của một task trung bình 861 token. Thêm 20 tool không liên quan làm lượt dài nhất lên khoảng 2 100 token cho **mỗi** lượt của **mọi** task.
-Bài Intermediate 02 có cell mở rộng để bạn đo nó ảnh hưởng tới độ chính xác thế nào.
+Bài Intermediate 02 có cell mở rộng để bạn đo nó ảnh hưởng tới việc chọn tool thế nào.
 
 ### Ollama cắt im lặng, và cắt nhầm chỗ
 
@@ -305,7 +305,8 @@ Không có lỗi nào được ném ra; chỉ có trace mới cho thấy chuyệ
 | Sub-agent | Việc con dài (đọc 20 tệp) chạy ở context riêng, trả về bản tóm tắt | module 17 |
 
 Cùng thí nghiệm observation dài, ba cách xử lý cho số task đúng: không làm gì (context 4 096) 15/24, cắt mỗi observation
-còn 300 token 15/24, tăng `num_ctx` lên 16 384 16/24; thêm 20 tool gây nhiễu (observation ngắn) 19/24. Mọi con số nằm
+còn 300 token 15/24, tăng `num_ctx` lên 16 384 16/24; thêm 20 tool gây nhiễu (observation ngắn) 19/24 ở một lần chạy và
+15/24 ở lần chạy của notebook lời giải bài Intermediate 02 (mô tả tool nhiễu viết hơi khác). Mọi con số nằm
 trong khoảng 14 tới 20 mà cùng một cấu hình dao động giữa các seed (mục 2), nên trên các task ngắn này **không** cấu
 hình nào hơn hẳn. Bài học trung thực: quản lý context ở đây chủ yếu đổi **chi phí** (token mỗi lượt) và **chế độ hỏng**
 (agent mất task, như trên), chưa đổi được tỉ lệ đúng đo được với 24 task. Chỗ nó đổi kết quả rõ là khi lịch sử thật sự

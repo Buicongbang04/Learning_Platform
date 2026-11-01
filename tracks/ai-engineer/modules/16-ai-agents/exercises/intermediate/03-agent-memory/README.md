@@ -28,7 +28,7 @@ trả lời đúng bao nhiêu so với không có memory và so với nhét cả
 **Phần cứng:** CPU · ~80 phút
 
 Thời gian trên là thời gian làm bài. Các cell `explore` gọi `qwen2.5:3b` khoảng 190 lượt và `bge-m3` vài trăm lượt:
-chạy khoảng 15 phút trên PC của track, phần lớn là điều kiện "toàn bộ lịch sử" (mỗi câu vài chục giây vì prompt vượt
+chạy khoảng 12 phút trên PC của track, phần lớn là điều kiện "toàn bộ lịch sử" (mỗi câu vài chục giây vì prompt vượt
 context mặc định của Ollama).
 
 `starter/dialogue.py` dựng 108 lượt hội thoại trong 6 phiên (24 lượt chứa thông tin về người dùng, có thông tin được

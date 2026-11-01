@@ -1,0 +1,92 @@
+questions:
+- id: slowest
+  kind: data
+  type: single
+  prompt: Với `qwen2.5:3b`, cách nào có thời gian trung vị mỗi task lớn nhất, và lớn cỡ bao nhiêu lần ReAct văn bản?
+  options:
+  - id: a
+    text: Native, chậm hơn ReAct văn bản khoảng 2 lần
+  - id: b
+    text: ReAct văn bản, chậm hơn ReAct JSON khoảng 2 lần
+  - id: c
+    text: ReAct JSON, chậm hơn ReAct văn bản 2 tới 4 lần
+  - id: d
+    text: Ba cách gần bằng nhau, chênh dưới 20 phần trăm
+- id: native-only
+  kind: data
+  type: single
+  prompt: So theo cặp ReAct văn bản với native trên 24 task, có bao nhiêu task native đúng mà ReAct sai?
+  options:
+  - id: a
+    text: 3 tới 5 task
+  - id: b
+    text: 0 tới 2 task
+  - id: c
+    text: 6 tới 8 task
+  - id: d
+    text: Hơn 8 task
+- id: distractor-calls
+  kind: data
+  type: single
+  prompt: Ở cell mở rộng (25 tool, 20 tool gây nhiễu), agent ReAct gọi nhầm tool nhiễu bao nhiêu lần trên cả 24 task?
+  options:
+  - id: a
+    text: Không lần nào, model luôn bỏ qua tool nhiễu
+  - id: b
+    text: Vài lần, khoảng 1 tới 10 lần trên cả bộ
+  - id: c
+    text: Khoảng 20 tới 40 lần, gần như mỗi task một lần
+  - id: d
+    text: Hơn 100 lần, agent hầu như chỉ gọi tool nhiễu
+- id: wilson-quarter
+  kind: knowledge
+  type: single
+  prompt: Khoảng tin cậy Wilson của tỉ lệ thành công trên 24 task quá rộng. Muốn nó hẹp còn khoảng một nửa, cần bao nhiêu task?
+  options:
+  - id: a
+    text: Khoảng 48 task, gấp đôi
+  - id: b
+    text: Khoảng 576 task, bình phương
+  - id: c
+    text: Khoảng 36 task, gấp rưỡi
+  - id: d
+    text: Khoảng 96 task, gấp bốn
+- id: discordant-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao so hai cách agent theo cặp (task chỉ một bên đúng) mạnh hơn so hai tỉ lệ đúng riêng lẻ?
+  options:
+  - id: a
+    text: Task cả hai cùng đúng hay cùng sai không nói gì về chênh lệch
+  - id: b
+    text: So theo cặp không cần chạy cả hai cách trên cùng bộ task
+  - id: c
+    text: Tỉ lệ đúng riêng lẻ luôn bị chệch khi dùng temperature 0
+  - id: d
+    text: Khoảng tin cậy Wilson chỉ dùng được cho dữ liệu theo cặp
+- id: laundering
+  kind: knowledge
+  type: single
+  prompt: Agent gọi `calculator("350000 * 2 + 450000")` với giá tự nghĩ ra, rồi trả lời bằng đúng kết quả của calculator. Vì sao chỉ kiểm số trong câu trả lời không bắt được lỗi này?
+  options:
+  - id: a
+    text: Vì số bịa trở thành một observation hợp lệ
+  - id: b
+    text: Vì calculator làm tròn kết quả nên số không khớp
+  - id: c
+    text: Vì numbers_in không đọc được dấu chấm hàng nghìn
+  - id: d
+    text: Vì câu trả lời luôn có số trong câu hỏi
+- id: thousands
+  kind: knowledge
+  type: single
+  prompt: Theo quy ước của `numbers_in`, chuỗi "5.315" được đọc là gì, và hệ quả với câu hỏi đổi tiền sang đô la?
+  options:
+  - id: a
+    text: 5.315, nên đáp án 5,31 USD vẫn khớp với sai lệch 0.005
+  - id: b
+    text: 5315, nên "5.315 USD" không khớp đáp án 5,31 USD
+  - id: c
+    text: Không đọc được, numbers_in bỏ qua chuỗi có dấu chấm
+  - id: d
+    text: Hai số 5 và 315, và câu trả lời bị chấm đúng hai lần

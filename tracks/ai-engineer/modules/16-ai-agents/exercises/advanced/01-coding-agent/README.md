@@ -35,8 +35,8 @@ Thời gian trên là thời gian làm bài (sandbox, agent, chạy, đọc trac
 `qwen2.5:7b` (tuỳ chọn, PC 12GB) mỗi bước chậm hơn nhưng cần ít bước hơn, một lượt cũng cỡ 4 tới 8 phút trên PC; trên
 laptop 4GB nó chạy được nhưng chậm (model không vừa hết VRAM), bỏ qua cũng được.
 
-`starter/tasks/` có 12 task tự tạo: 8 task viết hàm theo mô tả (định dạng tiền đồng, slug tiếng Việt, số La Mã, run-length
-encoding, số căn cước, số điện thoại...) và 4 task sửa bug. Mỗi task có `TASK.md`, `repo/` (mã khởi đầu và
+`starter/tasks/` có 12 task tự tạo, gồm task viết hàm theo mô tả (định dạng tiền đồng, slug tiếng Việt, số La Mã,
+run-length encoding, số căn cước, số điện thoại...) và task sửa bug trong mã có sẵn. Mỗi task có `TASK.md`, `repo/` (mã khởi đầu và
 `tests/test_visible.py` với 1 test) và `hidden/test_hidden.py` (3 tới 10 test, gồm cả trường hợp biên). Agent chỉ thấy
 `repo/`.
 

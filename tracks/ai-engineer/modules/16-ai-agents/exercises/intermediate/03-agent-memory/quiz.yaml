@@ -1,0 +1,92 @@
+questions:
+- id: raw-size
+  kind: data
+  type: single
+  prompt: Kho `raw` (mỗi lượt người dùng một ghi nhớ, gộp khi cosine từ 0.95) còn khoảng bao nhiêu ghi nhớ sau 108 lượt?
+  options:
+  - id: a
+    text: Khoảng 108, không lượt nào bị gộp
+  - id: b
+    text: Khoảng 10, gần như mọi lượt bị gộp vào nhau
+  - id: c
+    text: Khoảng 24, chỉ còn các lượt có thông tin
+  - id: d
+    text: Khoảng 50, câu lặp nguyên văn bị gộp
+- id: history-tokens
+  kind: data
+  type: single
+  prompt: Ở điều kiện nhét toàn bộ lịch sử vào context, `prompt_eval_count` mà Ollama báo cho mỗi câu hỏi cỡ bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 130 token, như điều kiện memory
+  - id: b
+    text: Khoảng 1 000 token, chỉ còn phiên cuối
+  - id: c
+    text: Khoảng 3 800 token, sát giới hạn 4 096
+  - id: d
+    text: Khoảng 9 000 token, đủ cả 6 phiên
+- id: capacity-loss
+  kind: data
+  type: single
+  prompt: Kho fact giới hạn 20 ghi nhớ (importance như nhau). So với không giới hạn, nhóm câu hỏi nào mất nhiều hit@5 nhất?
+  options:
+  - id: a
+    text: Thông tin cũ, kể từ các phiên đầu
+  - id: b
+    text: Thông tin đã được cập nhật ở phiên sau
+  - id: c
+    text: Thông tin mới, kể ở các phiên gần đây
+  - id: d
+    text: Không nhóm nào đổi, hit@5 giữ nguyên
+- id: extraction-fp
+  kind: data
+  type: single
+  prompt: Trong 84 lượt chuyện phiếm, `extract_facts` với `qwen2.5:3b` vẫn trích ra "thông tin" ở khoảng bao nhiêu lượt?
+  options:
+  - id: a
+    text: Không lượt nào, LLM bỏ qua hết
+  - id: b
+    text: Một số ít, dưới 15 lượt
+  - id: c
+    text: Khoảng một nửa số lượt phiếm
+  - id: d
+    text: Gần như mọi lượt phiếm
+- id: recency-tradeoff
+  kind: knowledge
+  type: single
+  prompt: Thêm trọng số độ mới vào điểm đọc memory thường có tác dụng gì với hai nhóm câu hỏi?
+  options:
+  - id: a
+    text: Giúp mọi nhóm vì ghi nhớ mới luôn chính xác hơn
+  - id: b
+    text: Hại thông tin đã cập nhật, giúp thông tin cũ không đổi
+  - id: c
+    text: Giúp thông tin đã cập nhật, hại thông tin cũ không đổi
+  - id: d
+    text: Không ảnh hưởng vì cosine luôn lớn hơn độ mới
+- id: lost-referent
+  kind: knowledge
+  type: single
+  prompt: Câu "Mực vừa được 3 tuổi hôm qua." bị trích thành thông tin về tuổi của người dùng. Nguyên nhân chính là gì?
+  options:
+  - id: a
+    text: Trích từng lượt, thiếu các lượt trước làm ngữ cảnh
+  - id: b
+    text: JSON schema buộc mọi câu phải bắt đầu bằng "Người dùng"
+  - id: c
+    text: Embedding bge-m3 không hiểu được tên riêng tiếng Việt
+  - id: d
+    text: Temperature 0 làm model luôn chọn câu trả lời ngắn nhất
+- id: keyword-negative
+  kind: knowledge
+  type: single
+  prompt: Câu "Mình có nuôi mèo không?" được chấm đúng nếu câu trả lời chứa "không". Điểm yếu của cách chấm này là gì?
+  options:
+  - id: a
+    text: Tiếng Việt có nhiều cách viết chữ "không" khác nhau
+  - id: b
+    text: Model luôn trả lời bằng tiếng Anh nên không chứa từ đó
+  - id: c
+    text: Câu trả lời sai hoặc lạc đề cũng dễ chứa chữ "không"
+  - id: d
+    text: Chữ "không" làm embedding của câu trả lời bị lệch
