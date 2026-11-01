@@ -16,7 +16,7 @@
 
 ## Vì sao như vậy
 
-- **Khoảng tin cậy cho phân vị đuôi** là thứ hay bị bỏ nhất. Trên 40 request open loop của một lượt đo thử theo thiết lập bài Intermediate 02 (rate 0.8),
+- **Khoảng tin cậy cho phân vị đuôi** là thứ hay bị bỏ nhất. Trên 40 request open loop của một lượt đo thử theo thiết lập bài Intermediate 02 với mức cố định (rate 0.8),
   bootstrap cho E2E p95 9.44 s [7.71, 9.97] và p99 9.78 s [8.94, 9.97]: cận trên của cả hai là request chậm nhất. Với
   $$n$$ mẫu, p99 chỉ có nghĩa khi $$n$$ cỡ vài nghìn; báo p99 trên vài chục request là báo một mẫu.
 - Bootstrap phân vị hơi **hẹp** ở đuôi với mẫu nhỏ (nó không thể tạo giá trị lớn hơn max). Test kiểm độ phủ trên phân phối

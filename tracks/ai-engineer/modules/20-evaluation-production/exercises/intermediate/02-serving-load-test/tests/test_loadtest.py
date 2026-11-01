@@ -155,7 +155,7 @@ def fake_server(nb, service_s, slots=1):
 
 
 def test_open_loop_follows_schedule(nb):
-    send, state = fake_server(nb, 0.01, slots=10)
+    send, state = fake_server(nb, 0.3, slots=10)
     arrivals = [0.0, 0.15, 0.30, 0.45]
     t0 = time.perf_counter()
     recs = run(nb.run_open_loop(send, arrivals))
@@ -164,6 +164,7 @@ def test_open_loop_follows_schedule(nb):
     assert starts == pytest.approx(arrivals, abs=0.06), "t_arrival là thời điểm theo lịch"
     assert all(r.t_send - r.t_arrival < 0.06 for r in recs), "không giới hạn đồng thời thì gửi đúng lúc đến"
     assert all(r.t_send >= r.t_arrival - 1e-6 for r in recs), "không gửi trước lịch"
+    assert state["max_inflight"] >= 2, "open loop phải cho nhiều request cùng bay khi server chậm hơn nhịp đến"
 
 
 def test_open_loop_client_queue(nb):

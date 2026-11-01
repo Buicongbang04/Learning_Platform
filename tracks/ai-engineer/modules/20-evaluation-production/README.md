@@ -459,9 +459,8 @@ S = \frac{1 - \alpha^{k+1}}{(1 - \alpha)\,(k c + v_k)}
 $$
 
 Lý thuyết gốc giả định $$v_k \approx 1$$ (GPU, model lớn, decode bị chặn bởi băng thông). Trên CPU thì không: đo trên PC
-của track (hai lần đo, mỗi lần một forward sau khi làm nóng), Qwen2.5-3B float32 trên CPU 4 luồng forward 8 token mất 0.72
-tới 0.74 s so với 0.32 tới 0.36 s cho 1 token ($$v \approx 2$$); với Qwen2.5-0.5B là 0.098 tới 0.106 s so với 0.068 tới 0.072 s
-($$v \approx 1.5$$).
+của track (một lần đo có log, mỗi cấu hình một forward sau khi làm nóng), Qwen2.5-3B float32 trên CPU 4 luồng forward 8 token
+mất 0.72 s so với 0.32 s cho 1 token ($$v \approx 2$$); với Qwen2.5-0.5B là 0.098 s so với 0.068 s ($$v \approx 1.5$$).
 
 ```python
 def speedup(alpha, k, c, v):
@@ -527,7 +526,7 @@ Module 21 mục 4 định nghĩa TTFT, TPOT, E2E. Thêm vào đó:
 - **Phân vị cao cần nhiều mẫu.** p99 trên 40 request là gần như request chậm nhất: một mẫu quyết định cả con số. Đặt
   khoảng tin cậy bằng bootstrap: lấy mẫu lại có hoàn lại, tính phân vị mỗi lần, lấy phân vị 2.5 và 97.5 của các giá trị đó.
 
-Ví dụ trên một lượt đo thử 40 request open loop của llama.cpp server (rate 0.8 request/giây, cùng thiết lập bài
+Ví dụ trên một lượt đo thử 40 request open loop của llama.cpp server (mức cố định 0.8 request/giây, cùng thiết lập bài
 Intermediate 02, notebook dùng 30 request mỗi mức), E2E: p50
 **4.08** s [2.91, 6.45], p95 **9.44** s [7.71, 9.97], p99 **9.78** s [8.94, 9.97]. Cận trên của p95 và p99 bằng nhau và bằng
 request chậm nhất: 40 mẫu không đủ để nói gì về p99. Bootstrap phân vị cũng chệch ở đuôi với mẫu nhỏ; muốn biết p99 thì

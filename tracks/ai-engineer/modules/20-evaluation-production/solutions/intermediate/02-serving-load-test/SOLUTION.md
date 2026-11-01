@@ -85,7 +85,7 @@ hình dạng):
   0.009 s) khi tải liên tục, có thể do GPU dùng chung giữ xung nhịp cao hơn khi bận (chưa kiểm). TTFT vẫn tăng nhiều lần từ 1
   lên 8.
 - **Open loop**: thời gian phục vụ đứng yên khoảng 1.4 giây ở mọi mức, còn hàng đợi p50 tăng từ gần 0 lên hơn 2.5 giây. Công
-  suất ước từ closed loop (1.0 s mỗi request) **lạc quan**: trong open loop, thời gian phục vụ thật là 1.4 s (thứ tự câu hỏi khác,
+  suất ước từ closed loop (1.0 s mỗi request) **lạc quan**: trong open loop, thời gian phục vụ thật là 1.4 s (có thể do thứ tự câu hỏi khác,
   request đến lúc server vừa xong request trước), nên mức "0.75" thật ra đã ở cỡ 1.0 lần công suất và mức "1.0" vượt công suất;
   với nhiều request hơn, hàng đợi ở hai mức đó sẽ tăng không giới hạn. Ước công suất từ chính open loop ở tải thấp an toàn hơn.
   Phân vị 95 trên 30 mẫu nhiễu hơn p50 nhiều: lần chạy đầu, p95 hàng đợi ở hai mức trên đảo thứ tự (4.66 so với 4.40). Bootstrap
@@ -101,6 +101,6 @@ hình dạng):
 - Đọc cả body rồi mới tách dòng: mọi token có cùng thời điểm, TTFT bằng E2E.
 - Tin HTTP 200 là thành công.
 - Ngủ theo khoảng cách giữa hai request: sai số cộng dồn làm tải thật thấp hơn tải định chạy.
-- Đặt semaphore trước khi ngủ tới lịch: request chờ chỗ trước cả khi "đến", hàng đợi đo được sai.
+- Đặt semaphore trước khi ngủ tới lịch: request chờ chỗ trước cả khi "đến". Với lịch đến đã sắp xếp và semaphore FIFO của asyncio thì kết quả trùng bản đúng, nhưng lịch không sắp xếp hoặc khoá không FIFO sẽ đo sai hàng đợi.
 - Không làm nóng server trước lượt đo đầu tiên: lần nạp model nằm trong p95 của mức tải thấp nhất.
 - Bỏ quên server chạy nền sau khi đo, hoặc bind `0.0.0.0` trên máy dùng chung.
