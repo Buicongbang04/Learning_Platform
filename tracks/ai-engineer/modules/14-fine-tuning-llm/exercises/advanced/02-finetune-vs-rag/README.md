@@ -27,7 +27,9 @@ liệu SFT từ qrels, chia theo câu hỏi, đo trước/sau.
 **Phần cứng:** GPU 4GB · ~180 phút
 
 Chạy bằng kernel `ai-gpu`. Thời gian trên là thời gian làm bài; thời gian máy của bản tham chiếu trên PC của track (RTX 3060
-12GB): <<A02_TIMES>>. Cần cài đặt BM25 của bạn ở module 13 bài Basic 02. Đọc mục 1, 5, 7 lý thuyết và mục 1 module 13.
+12GB): BM25 khoảng 10 giây để dựng index; SFT trên câu hỏi train
+khoảng 8 phút; SFT thêm mẫu tiêu đề của cả corpus khoảng 55 phút (GPU dùng chung với tiến trình khác lúc đo), dưới 2 GiB
+VRAM. Cần cài đặt BM25 của bạn ở module 13 bài Basic 02. Đọc mục 1, 5, 7 lý thuyết và mục 1 module 13.
 
 1. Trong `starter/finetune_vs_rag.ipynb`, viết `citation`, `parse_citation`, `citation_scores` theo đặc tả. Cell `explore`
    đầu đã nạp corpus, câu hỏi, qrels và in một con số quan trọng: bao nhiêu câu ghim có điều đúng từng được hỏi trong train.

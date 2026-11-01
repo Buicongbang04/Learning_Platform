@@ -23,7 +23,36 @@ Những lỗi hay gặp:
 
 ## Kết quả tham chiếu
 
-<<A02_RESULTS>>
+PC của track (RTX 3060 12GB), kernel `ai-gpu`, LoRA r = 16, batch hiệu dụng 32. GPU dùng chung với tiến trình khác (Ollama
+của một module khác giữ 2.5 tới 7 GB) trong mọi lượt train, nên thời gian chỉ để tham khảo.
+
+| Cấu hình | Train | Câu ghim: exact | Câu ghim: law | Câu train: exact | Câu train: law | Format |
+| --- | --- | --- | --- | --- | --- | --- |
+| BM25 âm tiết top-1, toàn corpus | index 9.8 giây (CPU) | 0.433 | 0.660 | 0.483 | 0.680 | 1.00 |
+| Qwen2.5-0.5B gốc, chỉ prompt | | 0.000 | 0.000 | 0.000 | 0.000 | 0.01 |
+| SFT trên 2 432 câu train, 3 epoch | 228 bước, 465 giây, 1.46 GiB | 0.000 | 0.290 | 0.010 | 0.103 | 1.00 |
+| SFT trên câu train + 61 425 mẫu "tiêu đề → trích dẫn", 1 epoch | 1 992 bước, 3 279 giây, 1.58 GiB | 0.007 | 0.437 | 0.017 | 0.310 | 1.00 |
+
+Trích dẫn trỏ tới một điều **có thật** trong corpus: 54% (SFT câu hỏi) và 76% (thêm tiêu đề) trên câu ghim; phần còn lại là
+số hiệu hoặc số điều bịa ra theo đúng khuôn.
+
+Đọc bảng:
+
+- **Không có gì để nhớ**: 0 trên 300 câu ghim có điều đúng từng được hỏi ở train. Closed-book SFT trên câu hỏi train vì
+  vậy không thể trích đúng điều nào cho câu ghim, và đúng là 0. Nó học được **khuôn** (định dạng 100%, so với 1% của model
+  gốc) và vài văn bản phổ biến (đúng văn bản ở 29% câu ghim). Văn bản thì có chung: 269/300 câu ghim có văn bản đúng từng xuất
+  hiện ở train, và riêng Nghị định 100/2019/NĐ-CP là văn bản đúng của 83/300 câu ghim, nên đoán văn bản phổ biến đã ăn điểm
+  `law`.
+- **Không học thuộc nổi chính câu train**: 1% câu train trích đúng điều sau 3 epoch. Với LoRA r = 16 và loss cuối khoảng 0.64,
+  2 432 cặp (câu hỏi, số hiệu + số điều) gần như ngẫu nhiên với model là quá khó để nhớ; học thuộc bằng fine-tune đắt hơn
+  nhiều người nghĩ.
+- **"Đọc" cả corpus giúp ở mức văn bản, không ở mức điều**: thêm 61 425 mẫu tiêu đề nâng `law` lên 0.44 và tỉ lệ trích dẫn có
+  thật lên 76%, nhưng `exact` vẫn chỉ 2/300, so với 130/300 của BM25 chạy 10 giây trên CPU. Model biết "điều này thuộc văn bản
+  nào" khi được hỏi đúng tiêu đề, nhưng không nối được câu hỏi đời thường với tiêu đề điều.
+- **BM25 thắng ở mọi cột**, và đó là baseline yếu nhất của module 13 (hybrid và rerank còn cao hơn). Hơn nữa nó trích được
+  điều mới thêm vào corpus ngay lập tức, còn model fine-tune phải train lại.
+- Nơi fine-tune có ích trong hệ này: embedding model (capstone milestone 5), khuôn trả lời có trích dẫn, và đọc nguồn
+  RAG tốt hơn (SFT trên (câu hỏi, các điều đã truy hồi, câu trả lời có trích dẫn)): bảng này chưa đo cấu hình đó.
 
 ## Rubric
 
