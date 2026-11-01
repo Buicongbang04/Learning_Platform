@@ -122,12 +122,16 @@ Cách lab giữ bài Ansible khỏi máy bạn, chia theo vai trò:
   chỉ thư mục làm việc tạm của lab ghi được.
 - **Thứ giữ kết nối trong lab: biến ghim, tệp điều khiển chỉ đọc, khoá host ghim, ProxyCommand.**
   - Extra vars đứng cao nhất trong precedence (mục 4), thắng `set_fact`, inventory (kể cả inventory động), `vars:` và cả từ khoá
-    `connection:`. `lab-conn.yml` đặt `ansible_connection: ssh`; `ansible_host`, `ansible_port` và cả tên cũ `ansible_ssh_host`,
+    `connection:`. `lab-conn.yml` đặt `ansible_connection: ansible.builtin.ssh` (tên đầy đủ, không đi qua plugin cùng tên của
+    người dùng); `ansible_host`, `ansible_port` và cả tên cũ `ansible_ssh_host`,
     `ansible_ssh_port` (plugin ssh lấy tên khai báo sau cùng) theo bảng cổng của lab, máy không thuộc lab (kể cả `localhost` ngầm
     định) nhận `0.0.0.0:1`; `ansible_user`/`ansible_ssh_user: root`; đối số, chương trình, khoá, control path và pipelining của ssh.
     Đặt các biến này ở chỗ khác không có tác dụng; `become` và `become_user` vẫn dùng bình thường.
-  - Các tệp đó (cùng `ssh_config`, `known_hosts`, callback, script proxy) nằm trong thư mục mà sandbox chỉ thấy ở chế độ chỉ đọc:
-    script inventory của bài thử ghi đè chúng nhận lỗi `EROFS`, và lab còn ghi lại chúng trước mỗi lệnh.
+  - Các tệp đó (cùng `ssh_config`, `known_hosts`, callback, script proxy, `ANSIBLE_HOME` và thư mục rỗng cho mọi đường dẫn plugin,
+    `library`, `module_utils`) nằm trong thư mục mà sandbox chỉ thấy ở chế độ chỉ đọc: script inventory của bài thử ghi đè chúng nhận
+    lỗi `EROFS`, và lab còn ghi lại chúng trước mỗi lệnh. Bài đã chép cũng chỉ đọc trong sandbox (chỉ `HOME`, control path và tệp
+    sự kiện ghi được), nên không ai thêm được plugin cạnh playbook lúc chạy; thư mục `*_plugins/`, `library/`, `module_utils/` có sẵn
+    trong bài thì bị phép quét từ chối, vì Ansible luôn nạp chúng và chúng thay được plugin builtin cùng tên.
   - ssh chỉ mở được kết nối tới `127.0.0.1:<cổng của từng container>` (ProxyCommand) và chỉ tin khoá host của các container đó.
 - **Phát hiện: callback của lab.** Lần chạy bị đánh dấu lỗi khi có task trên host ngoài lab, task không đi bằng ssh tới đúng cổng của
   máy đó, kết nối bị ProxyCommand chặn, hay khi bài cố đặt một biến kết nối bị ghim (qua `set_fact`, biến inventory, `vars:`,
@@ -174,7 +178,8 @@ worker-1 | SUCCESS => {
 ```
 
 Chạy playbook của một bài lên máy này: trong thư mục `starter/`,
-`ansible-playbook -i inventory -i "$LAB/hosts.ini" site.yml --limit worker-1`. Dọn:
+`ansible-playbook -i inventory -i "$LAB/hosts.ini" site.yml --limit worker-1`. Lab tay chạy ngoài sandbox với `HOME` thật nên Ansible
+tạo `~/.ansible/` trên máy bạn như mọi lần dùng Ansible bình thường (gỡ ở mục Ansible phía trên). Dọn:
 
 ```bash
 docker rm -f devops-ex-manual-target &&
