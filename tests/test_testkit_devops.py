@@ -3819,7 +3819,8 @@ class KubeFake:
         if "api-resources" in joined:
             return done(out=API_RESOURCES)
         if "--dry-run=server" in cmd:
-            probe = json.loads(input)["metadata"]["name"].removesuffix("-probe")
+            name = json.loads(input)["metadata"]["name"]
+            probe = name.removesuffix("-probe-pv") + "-pv" if name.endswith("-probe-pv") else name.removesuffix("-probe")
             return done(1, "", f"ValidatingAdmissionPolicy '{probe}' with binding '{probe}' denied request")
         if cmd[1:3] == ["auth", "can-i"]:
             return done(out="yes\n")
@@ -3963,7 +3964,17 @@ def test_kube_lab_namespace_and_label(monkeypatch):
     assert all(i["metadata"]["labels"]["devops-ex"] == lab.id for i in items)
     assert {"ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "ServiceAccount", "RoleBinding"} <= {i["kind"] for i in items}
     binding = next(i for i in items if i["kind"] == "RoleBinding")
-    assert binding["roleRef"]["name"] == "admin" and binding["metadata"]["namespace"] == lab.namespace
+    assert binding["roleRef"] == {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "devops-ex-learner"}
+    role = next(i for i in items if i["kind"] == "Role")
+    verbs = {v for rule in role["rules"] for v in rule["verbs"]}
+    resources = {r for rule in role["rules"] for r in rule["resources"]}
+    assert not verbs & {"impersonate", "escalate", "bind", "*"} and "serviceaccounts/token" not in resources and "*" not in resources
+    policies = {i["metadata"]["name"]: i for i in items if i["kind"] == "ValidatingAdmissionPolicy"}
+    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv"}
+    lab_condition = policies[lab.namespace]["spec"]["matchConditions"][0]["expression"]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in lab_condition
+    pv_condition = policies[f"{lab.namespace}-pv"]["spec"]["matchConditions"][0]["expression"]
+    assert pv_condition.startswith("!") and "system:serviceaccount:" in pv_condition and "request.dryRun == true" in pv_condition
     assert not any(i["kind"] == "ClusterRoleBinding" and i["roleRef"]["name"] in ("cluster-admin", "admin", "edit") for i in items)
 
 
@@ -4163,6 +4174,10 @@ KUBE_BAD = {
     "aggregation-rule": ("apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: r\n  labels: "
                          "{devops-ex: 'LABID'}\naggregationRule:\n  clusterRoleSelectors:\n  - matchLabels: "
                          "{rbac.authorization.k8s.io/aggregate-to-admin: 'true'}\n", "aggregationRule"),
+    "storage-class": ("apiVersion: storage.k8s.io/v1\nkind: StorageClass\nmetadata:\n  name: s\n  labels: {devops-ex: 'LABID'}\n"
+                      "provisioner: rancher.io/local-path\nparameters: {pathPattern: ../../run/containerd}\n", "StorageClass"),
+    "priority-global-default": ("apiVersion: scheduling.k8s.io/v1\nkind: PriorityClass\nmetadata:\n  name: p\n  labels: "
+                                "{devops-ex: 'LABID'}\nvalue: 1000\nglobalDefault: true\n", "globalDefault"),
     "not-object": ("- a\n- b\n", "object"),
     "missing-kind": ("apiVersion: v1\nmetadata: {name: x}\n", "kind"),
 }
@@ -4593,3 +4608,254 @@ def test_require_cluster_stopped_node_real():
         if ready.returncode == 0:
             break
     testkit.Exercise.require_cluster()
+
+
+AGNHOST = "registry.k8s.io/e2e-test-images/agnhost:2.53"
+
+
+def lab_pod(lab, name: str, *, service_account: str | None = None, volumes=(), node: str | None = None) -> None:
+    spec = {"containers": [{"name": "c", "image": AGNHOST, "args": ["pause"],
+                            "volumeMounts": [{"name": v, "mountPath": f"/mnt/{v}"} for v, _ in volumes]}],
+            "volumes": [{"name": v, "persistentVolumeClaim": {"claimName": claim}} for v, claim in volumes],
+            "terminationGracePeriodSeconds": 0}
+    if service_account:
+        spec["serviceAccountName"] = service_account
+    if node:
+        spec["nodeSelector"] = {"kubernetes.io/hostname": node}
+    lab.kubectl("apply", "-f", "-", input=json.dumps({"apiVersion": "v1", "kind": "Pod", "metadata": {"name": name}, "spec": spec}))
+    lab.kubectl("wait", "--for=condition=Ready", f"pod/{name}", "--timeout=180s", timeout=200)
+
+
+def hostpath_pv(name: str, path: str, labels=None) -> str:
+    return json.dumps({"apiVersion": "v1", "kind": "PersistentVolume", "metadata": {"name": name, "labels": labels or {}},
+                       "spec": {"capacity": {"storage": "1Gi"}, "accessModes": ["ReadWriteOnce"], "hostPath": {"path": path},
+                                "persistentVolumeReclaimPolicy": "Retain"}})
+
+
+@KUBE_REQUIRED
+def test_kube_lab_second_service_account_cannot_bypass_policy():
+    with testkit.KubeLab(allow=("ClusterRoleBinding", "PersistentVolume")) as lab:
+        lab.kubectl("create", "serviceaccount", "foo")
+        lab.kubectl("apply", "-f", "-", input=json.dumps({
+            "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding",
+            "metadata": {"name": f"{lab.namespace}-foo", "labels": {"devops-ex": lab.id}},
+            "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": f"{lab.namespace}-write"},
+            "subjects": [{"kind": "ServiceAccount", "name": "foo", "namespace": lab.namespace}]}))
+        assert lab.kubectl("auth", "can-i", "create", "serviceaccounts", "--subresource=token", check=False).stdout.strip() == "no"
+        assert lab.kubectl("auth", "can-i", "impersonate", "serviceaccounts", check=False).stdout.strip() == "no"
+        token = lab.kubectl("create", "token", "foo", check=False)
+        assert token.returncode != 0 and "forbidden" in token.stderr.lower(), token.stderr
+        impersonated = lab.run(["kubectl", f"--as=system:serviceaccount:{lab.namespace}:foo", "get", "pods"])
+        assert impersonated.returncode != 0 and "forbidden" in impersonated.stderr.lower(), impersonated.stderr
+        lab_pod(lab, "tok", service_account="foo")
+        secret = lab.kubectl("exec", "tok", "--", "cat", "/var/run/secrets/kubernetes.io/serviceaccount/token").stdout.strip()
+
+        def as_foo(*args, input=None):
+            return lab.run(["kubectl", f"--token={secret}", *args], input=input)
+
+        assert as_foo("auth", "whoami", "-o", "jsonpath={.status.userInfo.username}").stdout == \
+            f"system:serviceaccount:{lab.namespace}:foo"
+        for pv in (hostpath_pv(f"{lab.namespace}-a", "/run/containerd"),
+                   hostpath_pv(f"{lab.namespace}-b", "/run/containerd", {"devops-ex": lab.id})):
+            created = as_foo("create", "-f", "-", input=pv)
+            assert created.returncode != 0 and "denied" in created.stderr, created.stdout + created.stderr
+        unlabelled = as_foo("create", "clusterrolebinding", f"{lab.namespace}-x", f"--clusterrole={lab.namespace}-write",
+                            f"--serviceaccount={lab.namespace}:foo")
+        assert unlabelled.returncode != 0 and "denied" in unlabelled.stderr, unlabelled.stderr
+        removed = as_foo("delete", "clusterrolebinding", "cluster-admin", "--dry-run=server")
+        assert removed.returncode != 0 and "denied" in removed.stderr, removed.stderr
+    assert admin_kubectl("get", "clusterrolebinding", "cluster-admin").returncode == 0
+    assert admin_kubectl("get", "pv", f"{lab.namespace}-a").returncode != 0
+
+
+@KUBE_REQUIRED
+def test_kube_lab_storage_class_refused():
+    with pytest.raises(ValueError, match="StorageClass"):
+        testkit.KubeLab(allow=("StorageClass",))
+    traversal = {"apiVersion": "storage.k8s.io/v1", "kind": "StorageClass",
+                 "metadata": {"name": "x", "labels": {"devops-ex": "abcd1234"}}, "provisioner": "rancher.io/local-path",
+                 "parameters": {"pathPattern": "../../run/containerd"}}
+    assert testkit.kube_manifest_problems([traversal], lab_id="abcd1234", namespace="devops-ex-abcd1234",
+                                          allow=tuple(testkit.KUBE_ALLOWABLE))
+    with testkit.KubeLab(allow=tuple(testkit.KUBE_ALLOWABLE)) as lab:
+        traversal["metadata"] = {"name": f"{lab.namespace}-sc", "labels": {"devops-ex": lab.id}}
+        created = lab.kubectl("create", "-f", "-", input=json.dumps(traversal), check=False)
+        assert created.returncode != 0 and "forbidden" in created.stderr.lower(), created.stderr
+    assert admin_kubectl("get", "storageclass", f"{lab.namespace}-sc").returncode != 0
+
+
+def test_sandbox_cannot_read_documented_admin_kubeconfig(tmp_path):
+    assert ".kube" in testkit.CREDENTIAL_PATHS and ".cache/devops-track/kube" in testkit.CREDENTIAL_PATHS
+    assert testkit.KUBE_KUBECONFIG_HINT.startswith("~/.kube/")
+    folder = Path(pwd.getpwuid(os.getuid()).pw_dir) / ".cache" / "devops-track" / "kube"
+    created = not folder.exists()
+    folder.mkdir(parents=True, exist_ok=True)
+    probe = folder / f"probe-{os.getpid()}.yaml"
+    probe.write_text("kind: Config\n", encoding="utf-8")
+    try:
+        result = testkit.run_sandboxed(["cat", str(probe)], writable=[tmp_path], cwd=tmp_path, env={})
+        assert result.returncode != 0 and "kind: Config" not in result.stdout
+    finally:
+        probe.unlink()
+        if created:
+            folder.rmdir()
+
+
+LOCAL_PV = {"name": "data", "capacity": "1Gi", "node": "devops-lab-worker"}
+
+
+@pytest.mark.parametrize("change,needle", [
+    ({"node": "devops-lab-control-plane"}, "control plane"),
+    ({"node": "devops-lab-worker9"}, "worker"),
+    ({"node": "de-learning-postgres-1"}, "worker"),
+    ({"capacity": "1Ti"}, "capacity"),
+    ({"capacity": "-1Gi"}, "capacity"),
+    ({"name": "../x"}, "name"),
+    ({"name": "Data"}, "name"),
+    ({"accessModes": ["ReadWriteMany"]}, "accessModes"),
+    ({"storageClassName": "standard"}, "storageClassName"),
+    ({"claim": "a/b"}, "claim"),
+    ({"path": "/"}, "không nhận"),
+    ({"hostPath": {"path": "/"}}, "không nhận"),
+])
+def test_kube_lab_admin_local_pv_validates_spec(monkeypatch, change, needle):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        before = len(fake.host_calls)
+        with pytest.raises(ValueError, match=needle):
+            lab.admin_local_pv({**LOCAL_PV, **change})
+        assert not any(c[:2] == ["docker", "exec"] for c, _ in fake.host_calls[before:])
+        assert not [c for c in fake.calls_with("apply") if c["input"] and '"kind": "PersistentVolume"' in c["input"]]
+
+
+def test_kube_lab_admin_local_pv_object(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        name = lab.admin_local_pv({**LOCAL_PV, "claim": "db", "storageClassName": "lab-local"})
+        [call] = [c for c in fake.calls_with("apply") if c["input"] and '"kind": "PersistentVolume"' in c["input"]]
+    volume = json.loads(call["input"])
+    assert name == volume["metadata"]["name"] == f"{lab.namespace}-data"
+    assert call["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig)
+    spec = volume["spec"]
+    assert spec["local"] == {"path": f"/srv/devops-lab-pv/{lab.id}/data"} and "hostPath" not in spec
+    assert spec["claimRef"]["namespace"] == lab.namespace and spec["claimRef"]["name"] == "db"
+    assert spec["nodeAffinity"]["required"]["nodeSelectorTerms"][0]["matchExpressions"][0]["values"] == ["devops-lab-worker"]
+    assert volume["metadata"]["labels"] == {"devops-ex": lab.id} and spec["persistentVolumeReclaimPolicy"] == "Retain"
+    execs = [c for c, _ in fake.host_calls if c[:2] == ["docker", "exec"]]
+    assert ["docker", "exec", "devops-lab-worker", "mkdir", "-p", f"/srv/devops-lab-pv/{lab.id}/data"] in execs
+    assert ["docker", "exec", "devops-lab-worker", "rm", "-rf", f"/srv/devops-lab-pv/{lab.id}"] in execs
+
+
+@pytest.mark.parametrize("spec,needle", [
+    ({"action": "cordon", "node": "devops-lab-control-plane"}, "control plane"),
+    ({"action": "drain", "node": "devops-lab-control-plane"}, "control plane"),
+    ({"action": "taint", "node": "devops-lab-control-plane", "taint": {"key": "a", "effect": "NoSchedule"}}, "control plane"),
+    ({"action": "delete", "node": "devops-lab-worker"}, "action"),
+    ({"action": "drain", "node": "devops-lab-worker", "flags": ["--disable-eviction"]}, "không nhận"),
+    ({"action": "taint", "node": "devops-lab-worker"}, "taint"),
+    ({"action": "cordon", "node": "devops-lab-worker", "taint": {"key": "a", "effect": "NoSchedule"}}, "taint"),
+    ({"action": "taint", "node": "devops-lab-worker", "taint": {"key": "node.kubernetes.io/unschedulable", "effect": "NoSchedule"}},
+     "taint"),
+    ({"action": "taint", "node": "devops-lab-worker", "taint": {"key": "a", "effect": "Never"}}, "taint"),
+    ({"action": "taint", "node": "devops-lab-worker", "taint": {"key": "a b", "effect": "NoSchedule"}}, "taint"),
+    ({"action": "taint", "node": "devops-lab-worker", "taint": {"key": "a", "value": "x;y", "effect": "NoSchedule"}}, "taint"),
+])
+def test_kube_lab_node_action_validates_spec(monkeypatch, spec, needle):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        before = len(fake.sandbox_calls)
+        with pytest.raises(ValueError, match=needle):
+            lab.node_action(spec)
+        assert len(fake.sandbox_calls) == before
+
+
+def test_kube_lab_node_action_argv_and_restore(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.node_action({"action": "drain", "node": "devops-lab-worker2"})
+        lab.node_action({"action": "taint", "node": "devops-lab-worker", "taint": {"key": "lab/gpu", "value": "a", "effect": "NoSchedule"}})
+        lab.node_action({"action": "cordon", "node": "devops-lab-worker"})
+        lab.node_action({"action": "uncordon", "node": "devops-lab-worker"})
+        during = len(fake.sandbox_calls)
+    cmds = [c["cmd"] for c in fake.sandbox_calls]
+    assert ["kubectl", "drain", "devops-lab-worker2", "--ignore-daemonsets", "--delete-emptydir-data", "--timeout=120s"] in cmds
+    assert ["kubectl", "taint", "nodes", "devops-lab-worker", "lab/gpu=a:NoSchedule"] in cmds
+    assert not any("--disable-eviction" in c for c in cmds)
+    after = [c["cmd"] for c in fake.sandbox_calls[during:]]
+    assert ["kubectl", "uncordon", "devops-lab-worker2"] in after and ["kubectl", "uncordon", "devops-lab-worker"] not in after
+    assert ["kubectl", "taint", "nodes", "devops-lab-worker", "lab/gpu:NoSchedule-"] in after
+    assert all(c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig) for c in fake.sandbox_calls
+               if c["cmd"][1:2] in (["drain"], ["taint"], ["cordon"], ["uncordon"]))
+
+
+def local_pvc(name: str, volume: str = "", storage_class: str | None = "lab-local") -> str:
+    spec = {"accessModes": ["ReadWriteOnce"], "resources": {"requests": {"storage": "100Mi"}}}
+    if storage_class is not None:
+        spec["storageClassName"] = storage_class
+    if volume:
+        spec["volumeName"] = volume
+    return json.dumps({"apiVersion": "v1", "kind": "PersistentVolumeClaim", "metadata": {"name": name}, "spec": spec})
+
+
+@KUBE_REQUIRED
+def test_kube_lab_admin_local_pv_real():
+    with testkit.KubeLab() as lab:
+        with pytest.raises(ValueError, match="control plane"):
+            lab.admin_local_pv({**LOCAL_PV, "node": "devops-lab-control-plane"})
+        volume = lab.admin_local_pv({**LOCAL_PV, "storageClassName": "lab-local"})
+        lab.kubectl("apply", "-f", "-", input=local_pvc("data"))
+        lab_pod(lab, "writer", volumes=[("data", "data")])
+        lab.kubectl("exec", "writer", "--", "sh", "-c", "echo devops-ex > /mnt/data/probe")
+        assert lab.kubectl("get", "pvc", "data", "-o", "jsonpath={.spec.volumeName}").stdout == volume
+        assert lab.kubectl("get", "pod", "writer", "-o", "jsonpath={.spec.nodeName}").stdout == "devops-lab-worker"
+        stored = testkit.kind_node_exec("devops-lab-worker", "cat", f"/srv/devops-lab-pv/{lab.id}/data/probe")
+        assert stored.stdout == "devops-ex\n"
+    assert testkit.kube_leftovers(lab.id) == []
+    assert admin_kubectl("get", "pv", volume).returncode != 0
+    assert testkit.kind_node_exec("devops-lab-worker", "test", "-e", f"/srv/devops-lab-pv/{lab.id}").returncode != 0
+
+
+@KUBE_REQUIRED
+def test_kube_lab_pvc_volume_name_cannot_take_other_lab_volume():
+    with testkit.KubeLab() as owner, testkit.KubeLab() as other:
+        volume = owner.admin_local_pv({**LOCAL_PV, "storageClassName": "lab-local"})
+        other.kubectl("apply", "-f", "-", input=local_pvc("data", volume))
+        time.sleep(8)
+        assert other.kubectl("get", "pvc", "data", "-o", "jsonpath={.status.phase}").stdout == "Pending"
+        claim = json.loads(admin_kubectl("get", "pv", volume, "-o", "json").stdout)["spec"]["claimRef"]
+        assert claim["namespace"] == owner.namespace
+        local = other.kubectl("apply", "-f", "-", input=json.dumps({
+            "apiVersion": "v1", "kind": "PersistentVolume", "metadata": {"name": f"{other.namespace}-x"},
+            "spec": {"capacity": {"storage": "1Gi"}, "accessModes": ["ReadWriteOnce"],
+                     "local": {"path": f"/srv/devops-lab-pv/{owner.id}/data"},
+                     "nodeAffinity": {"required": {"nodeSelectorTerms": [{"matchExpressions": [
+                         {"key": "kubernetes.io/hostname", "operator": "In", "values": ["devops-lab-worker"]}]}]}}}}), check=False)
+        assert local.returncode != 0 and "forbidden" in local.stderr.lower(), local.stderr
+
+
+@KUBE_REQUIRED
+def test_kube_lab_sweeps_unlabelled_volume_of_its_claims():
+    with testkit.KubeLab() as lab:
+        lab.kubectl("apply", "-f", "-", input=local_pvc("dyn", storage_class="standard"))
+        lab_pod(lab, "user", volumes=[("dyn", "dyn")])
+        volume = lab.kubectl("get", "pvc", "dyn", "-o", "jsonpath={.spec.volumeName}").stdout
+        assert volume and "devops-ex" not in json.loads(admin_kubectl("get", "pv", volume, "-o", "json").stdout)["metadata"].get(
+            "labels", {})
+    assert admin_kubectl("get", "pv", volume).returncode != 0
+
+
+@KUBE_REQUIRED
+def test_kube_lab_node_action_real():
+    def node(name):
+        return json.loads(admin_kubectl("get", "node", name, "-o", "json").stdout)["spec"]
+
+    with testkit.KubeLab() as lab:
+        with pytest.raises(ValueError, match="control plane"):
+            lab.node_action({"action": "cordon", "node": "devops-lab-control-plane"})
+        lab.node_action({"action": "taint", "node": "devops-lab-worker", "taint": {"key": "lab/maint", "effect": "NoSchedule"}})
+        lab.node_action({"action": "drain", "node": "devops-lab-worker2"})
+        assert node("devops-lab-worker2").get("unschedulable") is True
+        assert any(t["key"] == "lab/maint" for t in node("devops-lab-worker").get("taints", []))
+        assert node("devops-lab-control-plane").get("unschedulable") is not True
+    assert node("devops-lab-worker2").get("unschedulable") is not True
+    assert not any(t["key"] == "lab/maint" for t in node("devops-lab-worker").get("taints", []))

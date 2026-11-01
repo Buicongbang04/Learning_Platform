@@ -999,6 +999,7 @@ SANDBOX_SKIP = (
 
 CREDENTIAL_PATHS = (
     ".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".git-credentials", ".netrc", ".terraform.d",
+    ".cache/devops-track/kube",
 )
 
 
@@ -2976,7 +2977,7 @@ KUBE_READY_TIMEOUT = 5
 KUBE_TIMEOUT = 180
 KUBE_CLEANUP_TIMEOUT = 120
 KUBE_TOKEN_SECONDS = 7200
-KUBE_KUBECONFIG_HINT = "~/.cache/devops-track/kube/devops-lab.yaml"
+KUBE_KUBECONFIG_HINT = "~/.kube/devops-lab.yaml"
 KUBE_CREATE = f"kind create cluster --config setup/kind/devops-lab.yaml --kubeconfig {KUBE_KUBECONFIG_HINT}"
 KUBE_SKIP_DOCKER = (
     "Docker chưa chạy hoặc user chưa có quyền dùng docker, nên chưa kiểm được cluster kind {name} (mỗi node của cluster là "
@@ -3026,16 +3027,51 @@ _KUBE_REFUSED = {
     "RuntimeClass": "đổi runtime chạy container của cả cluster",
     "FlowSchema": "đổi thứ tự ưu tiên request của cả cluster",
     "PriorityLevelConfiguration": "đổi thứ tự ưu tiên request của cả cluster",
+    "StorageClass": "provisioner chạy bằng quyền của node; tham số như pathPattern của local-path tạo được volume trỏ ra ngoài thư "
+                    "mục dữ liệu, tới socket containerd của node; dùng StorageClass standard có sẵn hoặc KubeLab.admin_local_pv",
 }
 KUBE_ALLOWABLE = {
     "ClusterRole": ("rbac.authorization.k8s.io", "clusterroles"),
     "ClusterRoleBinding": ("rbac.authorization.k8s.io", "clusterrolebindings"),
     "PersistentVolume": ("", "persistentvolumes"),
-    "StorageClass": ("storage.k8s.io", "storageclasses"),
     "IngressClass": ("networking.k8s.io", "ingressclasses"),
     "PriorityClass": ("scheduling.k8s.io", "priorityclasses"),
     "CustomResourceDefinition": ("apiextensions.k8s.io", "customresourcedefinitions"),
 }
+_KUBE_RW = ["get", "list", "watch", "create", "update", "patch", "delete", "deletecollection"]
+_KUBE_READ = ["get", "list", "watch"]
+_KUBE_LEARNER_RULES = [
+    {"apiGroups": [""], "resources": ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims", "serviceaccounts",
+                                      "replicationcontrollers", "replicationcontrollers/scale"], "verbs": _KUBE_RW},
+    {"apiGroups": [""], "resources": ["pods/exec", "pods/attach", "pods/portforward", "pods/ephemeralcontainers", "pods/eviction",
+                                      "services/proxy"], "verbs": ["get", "create", "update", "patch"]},
+    {"apiGroups": [""], "resources": ["pods/log", "pods/status", "endpoints", "events", "resourcequotas", "limitranges",
+                                      "persistentvolumeclaims/status", "services/status"], "verbs": _KUBE_READ},
+    {"apiGroups": ["apps"], "resources": ["deployments", "statefulsets", "daemonsets", "replicasets", "deployments/scale",
+                                          "statefulsets/scale", "replicasets/scale", "deployments/rollback", "controllerrevisions"],
+     "verbs": _KUBE_RW},
+    {"apiGroups": ["batch"], "resources": ["jobs", "cronjobs"], "verbs": _KUBE_RW},
+    {"apiGroups": ["autoscaling"], "resources": ["horizontalpodautoscalers"], "verbs": _KUBE_RW},
+    {"apiGroups": ["policy"], "resources": ["poddisruptionbudgets"], "verbs": _KUBE_RW},
+    {"apiGroups": ["networking.k8s.io"], "resources": ["networkpolicies", "ingresses"], "verbs": _KUBE_RW},
+    {"apiGroups": ["discovery.k8s.io"], "resources": ["endpointslices"], "verbs": _KUBE_READ},
+    {"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": _KUBE_RW},
+    {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"], "verbs": _KUBE_RW},
+    {"apiGroups": ["metrics.k8s.io"], "resources": ["pods"], "verbs": ["get", "list"]},
+]
+_KUBE_SYSTEM_USER = (
+    "((request.userInfo.username.startsWith('system:') && !request.userInfo.username.startsWith('system:serviceaccount:')) || "
+    "request.userInfo.username.startsWith('system:serviceaccount:kube-system:') || "
+    "request.userInfo.username.startsWith('system:serviceaccount:local-path-storage:'))"
+)
+KUBE_LOCAL_PV_ROOT = "/srv/devops-lab-pv"
+_KUBE_ADMIN_GROUPS = ("kubeadm:cluster-admins", "system:masters")
+_KUBE_NAME = re.compile(r"[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?")
+_KUBE_QUANTITY = re.compile(r"[1-9]\d{0,3}(Mi|Gi)")
+_KUBE_WORKER = re.compile(r"devops-lab-worker\d*")
+_KUBE_TAINT_KEY = re.compile(r"(?:[a-z0-9]([-a-z0-9.]{0,60}[a-z0-9])?/)?[a-zA-Z0-9]([-a-zA-Z0-9_.]{0,61}[a-zA-Z0-9])?")
+_KUBE_TAINT_VALUE = re.compile(r"(?:[a-zA-Z0-9]([-a-zA-Z0-9_.]{0,61}[a-zA-Z0-9])?)?")
+_KUBE_TAINT_EFFECTS = ("NoSchedule", "PreferNoSchedule", "NoExecute")
 _KUBE_READ_CLUSTER = [
     {"apiGroups": [""], "resources": ["nodes", "namespaces", "persistentvolumes"], "verbs": ["get", "list", "watch"]},
     {"apiGroups": ["storage.k8s.io"], "resources": ["storageclasses", "csidrivers", "csinodes"], "verbs": ["get", "list", "watch"]},
@@ -3286,11 +3322,11 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
     """Kiểm tĩnh object Kubernetes của bài trước khi apply (tín hiệu sớm, ranh giới thật là quyền RBAC, policy và Pod Security
     trong cluster, xem `KubeLab`). Object namespaced chỉ ở namespace của lab (không ghi namespace thì lab đặt). Object
     cluster-scoped (danh sách dựng sẵn cộng `cluster_kinds` đọc từ cluster) phải có kind trong `allow` và nhãn
-    `devops-ex=<lab_id>`. Luôn từ chối Namespace, Node, webhook, admission policy, APIService, CSR, RuntimeClass, FlowSchema;
+    `devops-ex=<lab_id>`. Luôn từ chối Namespace, Node, StorageClass, webhook, admission policy, APIService, CSR, RuntimeClass, FlowSchema;
     binding vào cluster-admin hay `system:*`, subject là nhóm hệ thống hay ServiceAccount ở namespace khác; role có
     escalate/bind/impersonate, `*` trên `*` hay aggregationRule; pod (ở bất kỳ độ sâu nào: Deployment, CronJob...) privileged,
     hostPath, hostNetwork/hostPID/hostIPC, hostPort, capability ngoài baseline, procMount, seccomp/AppArmor Unconfined;
-    PersistentVolume hostPath hay local; Service có externalIPs."""
+    PersistentVolume hostPath hay local; StorageClass; PriorityClass globalDefault; Service có externalIPs."""
     found = []
     cluster = _KUBE_CLUSTER_KINDS | set(cluster_kinds)
     for index, doc in enumerate(_kube_flatten(documents), 1):
@@ -3316,6 +3352,8 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
         found += _kube_rbac_problems(where, kind, doc, namespace)
         for spec in _kube_pod_specs(doc):
             found += _kube_pod_problems(where, spec)
+        if kind == "PriorityClass" and doc.get("globalDefault") is True:
+            found.append(f"{where}: globalDefault đổi độ ưu tiên mặc định của mọi pod trong cluster")
         if kind == "Service" and isinstance(doc.get("spec"), dict) and doc["spec"].get("externalIPs"):
             found.append(f"{where}: externalIPs chặn được traffic tới địa chỉ đó của mọi pod trong cluster")
         if kind == "PersistentVolume" and isinstance(doc.get("spec"), dict):
@@ -3349,6 +3387,11 @@ def _kube_owned(lab_id: str, subject: str) -> str:
             f"{subject}.metadata.labels['{_KUBE_LABEL_KEY}'] == '{lab_id}'")
 
 
+def _kube_hostpath_pv(name: str, path: str) -> str:
+    return json.dumps({"apiVersion": "v1", "kind": "PersistentVolume", "metadata": {"name": name},
+                       "spec": {"capacity": {"storage": "1Mi"}, "accessModes": ["ReadWriteOnce"], "hostPath": {"path": path}}})
+
+
 def kube_leftovers(lab_id: str, name: str = KIND_CLUSTER) -> list[str]:
     """Namespace `devops-ex-<id>` và object cluster-scoped có nhãn `devops-ex=<id>` còn trên cluster; rỗng là đã dọn sạch."""
     with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}{lab_id}-check-") as tmp:
@@ -3365,27 +3408,32 @@ class KubeLab:
     Mở lab: `require_cluster` (Docker, cluster, node chạy, `/readyz`), lấy kubeconfig admin bằng `kind get kubeconfig` (mã cố
     định của testkit, không bao giờ đọc `KUBECONFIG` hay `~/.kube` của người học), rồi bằng quyền admin tạo namespace
     `devops-ex-<id>` có nhãn `devops-ex=<id>` và Pod Security `enforce=<pod_security>` (baseline, hoặc restricted), ServiceAccount
-    `devops-ex-learner` với RoleBinding vào ClusterRole `admin` trong namespace đó, ClusterRoleBinding vào `view` (đọc mọi
-    namespace, không có Secret) và quyền đọc object cluster-scoped, quyền ghi đúng các kind trong `allow` (`KUBE_ALLOWABLE`), và
-    một ValidatingAdmissionPolicy chỉ áp cho user đó: object cluster-scoped tạo, sửa, xoá phải mang nhãn `devops-ex=<id>`,
-    PersistentVolume không được hostPath hay local.
+    `devops-ex-learner` với Role riêng `_KUBE_LEARNER_RULES` trong namespace đó (không `impersonate`, không
+    `serviceaccounts/token`, không escalate/bind), ClusterRoleBinding vào `view` (đọc mọi namespace, không có Secret) và quyền đọc
+    object cluster-scoped, quyền ghi đúng các kind trong `allow` (`KUBE_ALLOWABLE`, không có StorageClass), và hai
+    ValidatingAdmissionPolicy: policy `devops-ex-<id>` áp cho mọi ServiceAccount của namespace (nhóm
+    `system:serviceaccounts:<ns>`, kể cả ServiceAccount bài tự tạo rồi lấy token trong pod): object cluster-scoped tạo, sửa,
+    xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, ClusterRoleBinding không
+    cấp cho `system:*`; policy `devops-ex-<id>-pv` từ chối PV hostPath của mọi user không phải thành phần hệ thống và PV local
+    ngoài `KUBE_LOCAL_PV_ROOT` hay không do admin tạo. Lab chỉ trao kubeconfig khi cả hai policy đã chặn được lần tạo thử.
 
     `kubectl`, `helm`, `run` (script của bài), `apply_learner`, `helm_install` chạy qua `run_sandboxed` với `KUBECONFIG` là
     kubeconfig của lab (một cluster, một context có namespace của lab, token của `devops-ex-learner`) trong thư mục `control`
     chỉ đọc, `HOME` và thư mục cache, config, data của helm trong `work` (ghi được), `KUBERC=off`. Kubeconfig admin ở thư mục
     khác, không bao giờ mount vào sandbox của người học. `kubectl`/`helm` từ chối cờ đổi cluster, context, user hay danh tính
     (`--kubeconfig`, `--context`, `--server`/`-s`, `--token`, `--as`..., với helm mọi `--kube*`); script tự gọi kubectl không bị
-    kiểm cờ nhưng chỉ có token của lab, `~/.kube` thật bị sandbox che.
+    kiểm cờ nhưng chỉ có token của lab, `~/.kube` thật bị sandbox che. Việc cần quyền admin chỉ qua `admin_local_pv` và
+    `node_action`, từ spec đã kiểm từng trường.
 
-    Ranh giới: quyền RBAC của token (ghi chỉ trong namespace của lab và các kind trong `allow`, không escalate, bind,
-    impersonate), policy nhãn ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath, hostNetwork, hostPID,
-    hostIPC, hostPort, capability lạ). Node kind là container privileged: pod privileged thấy ổ đĩa của máy host, hostPath vào
-    node chạm `/var` (kubelet, containerd) của node. Vì thế chặn các trường đó là yêu cầu an toàn cho máy host chứ không chỉ cho
-    cluster. `kube_manifest_problems` trong `apply_learner` và `helm_install` (sau `helm template`) là tín hiệu sớm; object được
-    apply là đúng bản đã kiểm (JSON dựng lại từ YAML đã parse).
+    Ranh giới: quyền RBAC của token, hai policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
+    hostNetwork, hostPID, hostIPC, hostPort, capability lạ). Node kind là container privileged: pod privileged thấy ổ đĩa của máy
+    host, hostPath vào node chạm `/var` và `/run/containerd` của node. Vì thế chặn các trường đó là yêu cầu an toàn cho máy host
+    chứ không chỉ cho cluster. `kube_manifest_problems` trong `apply_learner` và `helm_install` (sau `helm template`) là tín hiệu
+    sớm; object được apply là đúng bản đã kiểm (JSON dựng lại từ YAML đã parse).
 
-    `close()` xoá namespace (chờ tối đa `KUBE_CLEANUP_TIMEOUT`) rồi object cluster-scoped có nhãn `devops-ex=<id>` (không bao
-    giờ đụng namespace hay object khác, không xoá node), rồi thư mục tạm. Dọn lỗi thì có `UserWarning`, và test đang đạt sẽ fail.
+    `close()` gỡ cordon và taint lab đã đặt, xoá namespace (chờ tối đa `KUBE_CLEANUP_TIMEOUT`), xoá PV có `claimRef` trỏ namespace
+    của lab, object cluster-scoped có nhãn `devops-ex=<id>` (không bao giờ đụng object khác, không xoá node), thư mục PV local
+    trong worker, rồi thư mục tạm. Dọn lỗi thì có `UserWarning`, và test đang đạt sẽ fail.
     """
 
     def __init__(self, name: str = KIND_CLUSTER, *, allow=(), pod_security: str = "baseline", timeout: float = KUBE_TIMEOUT) -> None:
@@ -3408,6 +3456,9 @@ class KubeLab:
         self._cluster_kinds: set[str] = set()
         self._created = False
         self._entered = False
+        self._cordoned: set[str] = set()
+        self._taints: set[tuple[str, str, str]] = set()
+        self._local_nodes: set[str] = set()
 
     @property
     def control(self) -> Path:
@@ -3494,31 +3545,56 @@ class KubeLab:
             return {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRoleBinding", "metadata": meta(name),
                     "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": role}, "subjects": subject}
 
+        def policy(name: str, rules: list, condition: str, validations: list) -> list[dict]:
+            return [{"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy", "metadata": meta(name),
+                     "spec": {"failurePolicy": "Fail", "matchConstraints": {"resourceRules": rules},
+                              "matchConditions": [{"name": "who", "expression": condition}], "validations": validations}},
+                    {"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicyBinding",
+                     "metadata": meta(name), "spec": {"policyName": name, "validationActions": ["Deny"]}}]
+
         owned_new, owned_old = _kube_owned(self.id, "object"), _kube_owned(self.id, "oldObject")
+        lab_identity = (f"(request.userInfo.username == '{user}' || "
+                        f"'system:serviceaccounts:{self.namespace}' in request.userInfo.groups)")
+        admin = " || ".join(f"'{group}' in request.userInfo.groups" for group in _KUBE_ADMIN_GROUPS)
+        no_host_pv = [
+            {"expression": "request.operation == 'DELETE' || !has(object.spec.hostPath)",
+             "message": "PersistentVolume hostPath trỏ vào node (từ đó tới máy host); cluster devops-lab không nhận PV hostPath"},
+            {"expression": f"request.operation == 'DELETE' || !has(object.spec.local) || (({admin}) && "
+                           f"object.spec.local.path.startsWith('{KUBE_LOCAL_PV_ROOT}/') && !object.spec.local.path.contains('..'))",
+             "message": f"PersistentVolume local chỉ do testkit tạo, dưới {KUBE_LOCAL_PV_ROOT}/"},
+        ]
+        lab_rules = [
+            {"expression": f"request.operation == 'DELETE' || ({owned_new})",
+             "message": f"Object cluster-scoped của bài phải có nhãn {self.label}"},
+            {"expression": f"request.operation == 'CREATE' || ({owned_old})",
+             "message": f"Chỉ sửa, xoá được object cluster-scoped có nhãn {self.label}"},
+            {"expression": "request.operation == 'DELETE' || request.resource.resource != 'persistentvolumes' || "
+                           "(!has(object.spec.hostPath) && !has(object.spec.local))",
+             "message": "PersistentVolume của bài không được dùng hostPath hay local (trỏ vào node, từ đó tới máy host)"},
+            {"expression": "request.operation == 'DELETE' || request.resource.resource != 'priorityclasses' || "
+                           "!has(object.globalDefault) || object.globalDefault == false",
+             "message": "PriorityClass của bài không được globalDefault"},
+            {"expression": "request.operation == 'DELETE' || request.resource.resource != 'clusterrolebindings' || "
+                           "!has(object.subjects) || !object.subjects.exists(s, s.kind != 'ServiceAccount' && "
+                           "s.name.startsWith('system:'))",
+             "message": "ClusterRoleBinding của bài không cấp quyền cho nhóm hay user hệ thống"},
+        ]
+        everything = [{"apiGroups": ["*"], "apiVersions": ["*"], "resources": ["*"], "operations": ["CREATE", "UPDATE", "DELETE"],
+                       "scope": "Cluster"}]
+        volumes = [{"apiGroups": [""], "apiVersions": ["v1"], "resources": ["persistentvolumes"], "operations": ["CREATE", "UPDATE"]}]
         items = [
-            {"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy", "metadata": meta(self.namespace),
-             "spec": {
-                 "failurePolicy": "Fail",
-                 "matchConstraints": {"resourceRules": [{"apiGroups": ["*"], "apiVersions": ["*"], "resources": ["*"],
-                                                         "operations": ["CREATE", "UPDATE", "DELETE"], "scope": "Cluster"}]},
-                 "matchConditions": [{"name": "lab-user", "expression": (
-                     f"request.userInfo.username == '{user}' || (request.operation == 'CREATE' && request.dryRun == true && "
-                     f"object.metadata.name == '{self._probe}')")}],
-                 "validations": [
-                     {"expression": f"request.operation == 'DELETE' || ({owned_new})",
-                      "message": f"Object cluster-scoped của bài phải có nhãn {self.label}"},
-                     {"expression": f"request.operation == 'CREATE' || ({owned_old})",
-                      "message": f"Chỉ sửa, xoá được object cluster-scoped có nhãn {self.label}"},
-                     {"expression": "request.operation == 'DELETE' || request.resource.resource != 'persistentvolumes' || "
-                                    "(!has(object.spec.hostPath) && !has(object.spec.local))",
-                      "message": "PersistentVolume của bài không được dùng hostPath hay local (trỏ vào node, từ đó tới máy host)"},
-                 ]}},
-            {"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicyBinding",
-             "metadata": meta(self.namespace), "spec": {"policyName": self.namespace, "validationActions": ["Deny"]}},
+            *policy(self.namespace, everything,
+                    f"{lab_identity} || (request.operation == 'CREATE' && request.dryRun == true && "
+                    f"request.resource.resource == 'clusterroles' && object.metadata.name == '{self._probe}')", lab_rules),
+            *policy(f"{self.namespace}-pv", volumes,
+                    f"!{_KUBE_SYSTEM_USER} && !(request.dryRun == true && object.metadata.name.endsWith('-probe-pv') && "
+                    f"object.metadata.name != '{self._probe}-pv')", no_host_pv),
             {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": self.namespace, "labels": ns_labels}},
             {"apiVersion": "v1", "kind": "ServiceAccount", "metadata": meta(_KUBE_SA, True), "automountServiceAccountToken": False},
-            {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding", "metadata": meta(f"{_KUBE_SA}-admin", True),
-             "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "admin"}, "subjects": subject},
+            {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role", "metadata": meta(_KUBE_SA, True),
+             "rules": _KUBE_LEARNER_RULES},
+            {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding", "metadata": meta(_KUBE_SA, True),
+             "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": _KUBE_SA}, "subjects": subject},
             {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole", "metadata": meta(f"{self.namespace}-read"),
              "rules": _KUBE_READ_CLUSTER},
             cluster_binding(f"{self.namespace}-read", f"{self.namespace}-read"),
@@ -3537,18 +3613,23 @@ class KubeLab:
         return f"{self.namespace}-probe"
 
     def _wait_ready(self) -> None:
-        """Policy và RBAC mới tạo chỉ có hiệu lực sau khi API server đồng bộ (vài giây). Chờ tới khi một ClusterRole không nhãn
-        tạo thử (dry-run, tên probe riêng của lab) bị policy chặn và token của lab được tạo pod, rồi mới trao kubeconfig."""
-        probe = json.dumps({"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole", "metadata": {"name": self._probe},
-                            "rules": []})
+        """Policy và RBAC mới tạo chỉ có hiệu lực sau khi API server đồng bộ (vài giây). Chờ tới khi hai lần tạo thử bằng admin
+        (dry-run, tên probe riêng của lab) bị đúng hai policy của lab chặn: ClusterRole không nhãn, PV hostPath. Rồi chờ token
+        của lab được tạo pod, mới trao kubeconfig."""
+        probes = {
+            self.namespace: {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
+                             "metadata": {"name": self._probe}, "rules": []},
+            f"{self.namespace}-pv": json.loads(_kube_hostpath_pv(f"{self._probe}-pv", "/")),
+        }
         deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            result = self._admin.run("create", "--dry-run=server", "-f", "-", input=probe)
-            if result.returncode != 0 and self.namespace in result.stderr and "denied" in result.stderr:
-                break
-            time.sleep(0.5)
-        else:
-            pytest.fail(f"ValidatingAdmissionPolicy {self.namespace} chưa có hiệu lực sau 30 giây")
+        for name, probe in probes.items():
+            while True:
+                result = self._admin.run("create", "--dry-run=server", "-f", "-", input=json.dumps(probe))
+                if result.returncode != 0 and f"'{name}'" in result.stderr and "denied" in result.stderr:
+                    break
+                if time.monotonic() > deadline:
+                    pytest.fail(f"ValidatingAdmissionPolicy {name} chưa có hiệu lực sau 30 giây: {_output_tail(result)}")
+                time.sleep(0.5)
         while time.monotonic() < deadline:
             if self.kubectl("auth", "can-i", "create", "pods", check=False).stdout.strip() == "yes":
                 return
@@ -3681,21 +3762,151 @@ class KubeLab:
         return self.helm("upgrade", "--install", release, str(chart), "--namespace", self.namespace, *args, readonly=[chart],
                          check=check)
 
+    def _worker(self, node) -> str:
+        if not isinstance(node, str) or not _KUBE_WORKER.fullmatch(node) or node not in kind_nodes(self.name):
+            raise ValueError(f"Chỉ nhận worker của cluster {self.name} (devops-lab-worker, devops-lab-worker<số>), không bao giờ "
+                             f"control plane; không nhận {node!r}")
+        return node
+
+    @staticmethod
+    def _spec(spec, required: set[str], optional: set[str], what: str) -> dict:
+        if not isinstance(spec, dict) or not all(isinstance(k, str) for k in spec):
+            raise ValueError(f"{what} cần dict")
+        unknown, missing = sorted(set(spec) - required - optional), sorted(required - set(spec))
+        if unknown or missing:
+            raise ValueError(f"{what}: thiếu {missing}, không nhận {unknown}; chỉ có {sorted(required | optional)}")
+        return spec
+
+    def admin_local_pv(self, spec: dict) -> str:
+        """Tạo bằng quyền admin một PersistentVolume `local` cho bài (thay cho PV hostPath mà bài không được tạo), từ spec đã
+        kiểm từng trường: `name`, `capacity` (`1Gi`, `500Mi`), `node` (chỉ worker), tuỳ chọn `accessModes` (ReadWriteOnce,
+        ReadWriteOncePod, ReadOnlyMany), `storageClassName` (không phải `standard`), `claim` (tên PVC trong namespace của lab,
+        mặc định bằng `name`). Thư mục `/srv/devops-lab-pv/<id>/<name>` do testkit tạo trong node (không mount từ máy host),
+        PV `devops-ex-<id>-<name>` có nhãn của lab, nodeAffinity vào đúng worker đó, reclaim Retain và `claimRef` giữ sẵn cho
+        PVC `claim` của lab, nên namespace khác không bind được. `close()` xoá PV và thư mục. Trả tên PV."""
+        self._require_entered()
+        spec = self._spec(spec, {"name", "capacity", "node"}, {"accessModes", "storageClassName", "claim"}, "admin_local_pv")
+        name, capacity = spec["name"], spec["capacity"]
+        if not isinstance(name, str) or not _KUBE_NAME.fullmatch(name):
+            raise ValueError(f"name {name!r} phải là chữ thường, số, '-' (tối đa 42 ký tự)")
+        if not isinstance(capacity, str) or not _KUBE_QUANTITY.fullmatch(capacity):
+            raise ValueError(f"capacity {capacity!r} phải dạng 1Gi hay 500Mi")
+        modes = spec.get("accessModes", ["ReadWriteOnce"])
+        if not isinstance(modes, list) or not modes or not set(modes) <= {"ReadWriteOnce", "ReadWriteOncePod", "ReadOnlyMany"}:
+            raise ValueError(f"accessModes {modes!r} chỉ nhận ReadWriteOnce, ReadWriteOncePod, ReadOnlyMany")
+        storage_class = spec.get("storageClassName", "")
+        if not isinstance(storage_class, str) or storage_class == "standard" or (storage_class and not _KUBE_NAME.fullmatch(storage_class)):
+            raise ValueError(f"storageClassName {storage_class!r} không hợp lệ (không dùng standard của local-path)")
+        claim = spec.get("claim", name)
+        if not isinstance(claim, str) or not _KUBE_NAME.fullmatch(claim):
+            raise ValueError(f"claim {claim!r} phải là tên PVC hợp lệ")
+        node = self._worker(spec["node"])
+        path = f"{KUBE_LOCAL_PV_ROOT}/{self.id}/{name}"
+        self._local_nodes.add(node)
+        for argv in (("mkdir", "-p", path), ("chmod", "0777", path)):
+            made = kind_node_exec(node, *argv)
+            if made.returncode != 0:
+                pytest.fail(f"Không tạo được {path} trong {node}: {made.stderr.strip()}")
+        volume = {"apiVersion": "v1", "kind": "PersistentVolume",
+                  "metadata": {"name": f"{self.namespace}-{name}", "labels": {_KUBE_LABEL_KEY: self.id}},
+                  "spec": {"capacity": {"storage": capacity}, "accessModes": list(modes), "volumeMode": "Filesystem",
+                           "persistentVolumeReclaimPolicy": "Retain", "storageClassName": storage_class, "local": {"path": path},
+                           "claimRef": {"apiVersion": "v1", "kind": "PersistentVolumeClaim", "namespace": self.namespace,
+                                        "name": claim},
+                           "nodeAffinity": {"required": {"nodeSelectorTerms": [{"matchExpressions": [
+                               {"key": "kubernetes.io/hostname", "operator": "In", "values": [node]}]}]}}}}
+        result = self._admin.run("apply", "-f", "-", input=json.dumps(volume))
+        if result.returncode != 0:
+            pytest.fail(f"Không tạo được PV {volume['metadata']['name']}: {_output_tail(result)}")
+        return volume["metadata"]["name"]
+
+    def node_action(self, spec: dict, *, check: bool = True) -> subprocess.CompletedProcess:
+        """Thao tác node bằng quyền admin từ spec đã kiểm, chỉ trên worker, không bao giờ control plane: `{"action": "cordon" |
+        "uncordon" | "drain", "node": ...}` (drain luôn `--ignore-daemonsets --delete-emptydir-data`, có eviction, không bao giờ
+        `--disable-eviction`), `{"action": "taint" | "untaint", "node": ..., "taint": {"key", "value", "effect"}}` (key không
+        thuộc `kubernetes.io`, `k8s.io`). `close()` uncordon mọi node lab đã cordon hay drain và gỡ mọi taint lab đã thêm."""
+        self._require_entered()
+        spec = self._spec(spec, {"action", "node"}, {"taint"}, "node_action")
+        action = spec["action"]
+        if action not in ("cordon", "uncordon", "drain", "taint", "untaint"):
+            raise ValueError(f"action {action!r} chỉ nhận cordon, uncordon, drain, taint, untaint")
+        node = self._worker(spec["node"])
+        if (action in ("taint", "untaint")) != ("taint" in spec):
+            raise ValueError("taint chỉ đi kèm action taint hay untaint, và hai action đó cần taint")
+        if action in ("taint", "untaint"):
+            taint = self._spec(spec["taint"], {"key", "effect"}, {"value"}, "taint")
+            key, value, effect = taint["key"], taint.get("value", ""), taint["effect"]
+            if (not isinstance(key, str) or not _KUBE_TAINT_KEY.fullmatch(key) or "kubernetes.io" in key or "k8s.io" in key
+                    or not isinstance(value, str) or not _KUBE_TAINT_VALUE.fullmatch(value) or effect not in _KUBE_TAINT_EFFECTS):
+                raise ValueError(f"taint {taint!r} không hợp lệ (key riêng của bài, effect {', '.join(_KUBE_TAINT_EFFECTS)})")
+            argv = ["taint", "nodes", node, f"{key}={value}:{effect}" if value else f"{key}:{effect}"]
+            if action == "untaint":
+                argv[-1] = f"{key}:{effect}-"
+            else:
+                self._taints.add((node, key, effect))
+        elif action == "drain":
+            self._cordoned.add(node)
+            argv = ["drain", node, "--ignore-daemonsets", "--delete-emptydir-data", "--timeout=120s"]
+        else:
+            if action == "cordon":
+                self._cordoned.add(node)
+            argv = [action, node]
+        result = self._admin.run(*argv, timeout=180)
+        if result.returncode == 0 and action == "untaint":
+            self._taints.discard((node, key, effect))
+        if result.returncode == 0 and action == "uncordon":
+            self._cordoned.discard(node)
+        return self._checked("kubectl", argv, result, check)
+
+    def _released_volumes(self) -> list[str]:
+        result = self._admin.run("get", "pv", "-o", "json")
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+        return [item["metadata"]["name"] for item in json.loads(result.stdout).get("items", [])
+                if ((item.get("spec") or {}).get("claimRef") or {}).get("namespace") == self.namespace
+                and ((item.get("metadata") or {}).get("labels") or {}).get(_KUBE_LABEL_KEY) != self.id]
+
+    def _restore_nodes(self, errors: list[str]) -> None:
+        for node, key, effect in sorted(self._taints):
+            result = self._admin.run("taint", "nodes", node, f"{key}:{effect}-")
+            if result.returncode != 0 and "not found" not in result.stderr:
+                errors.append(f"gỡ taint {key}:{effect} khỏi {node}: {_output_tail(result)}")
+        for node in sorted(self._cordoned):
+            result = self._admin.run("uncordon", node)
+            if result.returncode != 0:
+                errors.append(f"uncordon {node}: {_output_tail(result)}")
+
     def close(self) -> None:
+        """Gỡ thao tác node của lab, xoá namespace, chờ rồi xoá PV có `claimRef` trỏ namespace của lab (PV do local-path tạo
+        cho PVC của bài không mang nhãn), xoá object cluster-scoped có nhãn của lab, xoá thư mục PV local trong worker."""
         import warnings
 
         errors = []
         try:
             if self._admin is not None and self._created:
+                self._restore_nodes(errors)
                 result = self._admin.run("delete", "namespace", self.namespace, "--ignore-not-found", "--wait=true",
                                          f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
                 if result.returncode != 0:
                     errors.append(f"xoá namespace {self.namespace}: {_output_tail(result)}")
+                deadline = time.monotonic() + 60
+                while self._released_volumes() and time.monotonic() < deadline:
+                    time.sleep(1)
+                left = self._released_volumes()
+                if left:
+                    result = self._admin.run("delete", "pv", *left, "--ignore-not-found", "--wait=true",
+                                             f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
+                    if result.returncode != 0:
+                        errors.append(f"xoá PV của namespace {self.namespace}: {_output_tail(result)}")
                 kinds = ",".join(self._admin.cluster_resources())
                 result = self._admin.run("delete", kinds, "-l", self.label, "--ignore-not-found", "--wait=true",
                                          f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
                 if result.returncode != 0:
                     errors.append(f"xoá object cluster-scoped nhãn {self.label}: {_output_tail(result)}")
+                for node in sorted(self._local_nodes):
+                    removed = kind_node_exec(node, "rm", "-rf", f"{KUBE_LOCAL_PV_ROOT}/{self.id}")
+                    if removed.returncode != 0:
+                        errors.append(f"xoá {KUBE_LOCAL_PV_ROOT}/{self.id} trong {node}: {removed.stderr.strip()}")
         except (Exception, pytest.fail.Exception, pytest.skip.Exception) as error:
             errors.append(str(error))
         finally:

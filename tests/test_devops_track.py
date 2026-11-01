@@ -196,7 +196,8 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
 
 TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
-TESTKIT_HELPERS = SANDBOX_HELPERS | {"kind_node_exec", "kind_node_cp"}
+NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
+TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
 SHELLS = {"sh", "bash", "dash", "zsh"}
 WRAPPERS = {
     "nice": {"-n", "--adjustment"},
@@ -339,6 +340,54 @@ def sink_argument(node: ast.Call) -> ast.AST | None:
     return next((kw.value for kw in node.keywords if kw.arg in {"args", "cmd"}), None)
 
 
+def is_literal(node: ast.AST, kind=str) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, kind)
+
+
+def node_call_problem(call: ast.Call, name: str) -> str | None:
+    """Đối số không phải hằng của `kind_node_exec`/`kind_node_cp`: node và lệnh (với cp: node và đường dẫn trong node) phải
+    là chuỗi viết sẵn, `input` là chuỗi viết sẵn, `to_node` là True/False viết sẵn, không `*args`/`**kwargs`."""
+    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(kw.arg is None for kw in call.keywords):
+        return "không nhận *args hay **kwargs"
+    keywords = {kw.arg: kw.value for kw in call.keywords}
+    allowed = {"timeout", "input"} if name == "kind_node_exec" else {"timeout", "to_node"}
+    if set(keywords) - allowed:
+        return f"không nhận {sorted(set(keywords) - allowed)}"
+    if "input" in keywords and not is_literal(keywords["input"]):
+        return "input phải là chuỗi viết sẵn"
+    if name == "kind_node_exec":
+        fixed = call.args
+    else:
+        if "to_node" in keywords and not is_literal(keywords["to_node"], bool):
+            return "to_node phải là True hay False viết sẵn"
+        inside = 2 if "to_node" in keywords and keywords["to_node"].value else 1
+        fixed = [call.args[0]] + ([call.args[inside]] if len(call.args) > inside else []) if call.args else []
+        if len(call.args) < 3:
+            return "cần node, nguồn, đích"
+    if not fixed or not all(is_literal(arg) for arg in fixed):
+        return "node và lệnh (đường dẫn trong node) phải là chuỗi viết sẵn, không lấy từ biến, f-string hay bài của người học"
+    return None
+
+
+def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
+    found: set[tuple[int, str]] = set()
+    called = {id(node.func): node for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    for node in ast.walk(tree):
+        name = node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else None
+        if isinstance(node, ast.alias) and node.name in NODE_HELPERS and node.asname not in (None, node.name):
+            found.add((node.lineno, f"{node.name} đổi tên khi import"))
+        if name not in NODE_HELPERS:
+            continue
+        call = called.get(id(node))
+        if call is None:
+            found.add((node.lineno, f"{name} chỉ được gọi trực tiếp, không gán hay truyền đi"))
+            continue
+        problem = node_call_problem(call, name)
+        if problem:
+            found.add((node.lineno, f"{name}: {problem}"))
+    return found
+
+
 def check_tool_calls(path: Path) -> list[str]:
     """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu trực tiếp; đi qua helper của testkit
     (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp).
@@ -355,7 +404,8 @@ def check_tool_calls(path: Path) -> list[str]:
     dict binary giả, chuỗi, chú thích, `require_tool`, `require_image`, `shutil.which` đứng riêng không bị bắt.
     `run_sandboxed(`/`sandbox_command(` không phải điểm chạy lệnh: lệnh trong đó chạy trong bwrap, socket Docker và
     thông tin đăng nhập bị che, nên `run_sandboxed(["tofu", "plan"], ...)` hợp lệ. `kind_node_exec(`/`kind_node_cp(` cũng không
-    phải: testkit chỉ nhận node `devops-lab-*` và argv không qua shell. Phương thức của lab (`lab.kubectl(...)`, `lab.helm(...)`)
+    phải: testkit chỉ nhận node `devops-lab-*` và argv không qua shell; thay vào đó node, lệnh (với cp: đường dẫn trong node),
+    `input`, `to_node` phải là hằng viết sẵn và hai hàm chỉ được gọi trực tiếp (`node_helper_problems`). Phương thức của lab (`lab.kubectl(...)`, `lab.helm(...)`)
     là lời gọi thuộc tính nên không bao giờ bị xét.
     """
     try:
@@ -379,6 +429,9 @@ def check_tool_calls(path: Path) -> list[str]:
     return [
         f"{path}:{line}: gọi {tool} trực tiếp; dùng helper của testkit (DockerLab, run_sandboxed, ...)"
         for line, tool in sorted(found)
+    ] + [
+        f"{path}:{line}: {problem} (lệnh chạy bằng root trong node privileged chỉ được là argv cố định của testkit)"
+        for line, problem in sorted(node_helper_problems(tree))
     ]
 
 
@@ -748,6 +801,19 @@ TOOL_DENYLIST_BAD = {
     "kind-kubeconfig-direct": 'subprocess.run(["kind", "get", "kubeconfig", "--name", "devops-lab"], capture_output=True)\n',
     "kubectl-learner-kubeconfig": 'subprocess.run(["kubectl", "--kubeconfig", str(lab.kubeconfig), "get", "pods"])\n',
     "helm-direct": 'run_helm = subprocess.run\nrun_helm(["helm", "upgrade", "--install", "api", "chart"])\n',
+    "node-exec-variable-node": 'kind_node_exec(node, "etcdctl", "version")\n',
+    "node-exec-variable-arg": 'kind_node_exec("devops-lab-control-plane", "cat", path)\n',
+    "node-exec-fstring": 'kind_node_exec("devops-lab-control-plane", "cat", f"/etc/{name}")\n',
+    "node-exec-learner-value": 'kind_node_exec("devops-lab-control-plane", "etcdctl", ex.read("cmd.txt"))\n',
+    "node-exec-starred": 'kind_node_exec("devops-lab-control-plane", *argv)\n',
+    "node-exec-kwargs": 'kind_node_exec("devops-lab-control-plane", "true", **options)\n',
+    "node-exec-input-variable": 'kind_node_exec("devops-lab-control-plane", "tee", "/root/x", input=text)\n',
+    "node-exec-alias-assign": 'run_in_node = kind_node_exec\n',
+    "node-exec-import-as": 'from testkit import kind_node_exec as k\n',
+    "node-exec-passed": 'retry(testkit.kind_node_exec, "devops-lab-worker", "true")\n',
+    "node-cp-variable-path": 'kind_node_cp("devops-lab-control-plane", snapshot, tmp_path / "snap.db")\n',
+    "node-cp-variable-node-dest": 'kind_node_cp("devops-lab-worker", tmp_path / "x", target, to_node=True)\n',
+    "node-cp-to-node-variable": 'kind_node_cp("devops-lab-worker", "/root/x", tmp_path / "x", to_node=flag)\n',
 }
 
 TOOL_DENYLIST_GOOD = {
@@ -781,6 +847,11 @@ TOOL_DENYLIST_GOOD = {
     "kind-node-exec-kubectl-argv": 'kind_node_exec("devops-lab-control-plane", "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "get", "nodes")\n',
     "testkit-kind-node-exec": 'testkit.kind_node_exec("devops-lab-worker", "crictl", "ps")\n',
     "kind-node-cp": 'kind_node_cp("devops-lab-control-plane", "/var/lib/etcd-backup/snap.db", tmp_path / "snap.db")\n',
+    "kind-node-cp-to-node": 'kind_node_cp("devops-lab-worker", tmp_path / "in.txt", "/root/in.txt", to_node=True, timeout=60)\n',
+    "kind-node-exec-input": 'kind_node_exec("devops-lab-worker", "tee", "/root/x", input="devops-ex\\n", timeout=30)\n',
+    "kind-node-import": 'from testkit import kind_node_exec, kind_node_cp\n',
+    "etcd-snapshot": ('kind_node_exec("devops-lab-control-plane", "crictl", "exec", "etcd", "etcdctl", "--endpoints=https://127.0.0.1:2379", '
+                      '"snapshot", "save", "/var/lib/etcd/snap.db")\n'),
     "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
 }
 

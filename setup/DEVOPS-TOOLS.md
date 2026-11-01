@@ -88,13 +88,13 @@ mkdir -p ~/.cache/devops-track/dl && cd ~/.cache/devops-track/dl \
 kind version && kubectl version --client && helm version --short
 ```
 
-Tạo cluster, luôn kèm `--kubeconfig` để kind không ghi vào `~/.kube/config` và không đổi current-context của bạn, rồi ghim CPU cho từng node khi `DEVOPS_CPUSET` có giá trị (không ghim thì bỏ `taskset -c "$DEVOPS_CPUSET"`):
+Tạo cluster, luôn kèm `--kubeconfig ~/.kube/devops-lab.yaml` để kind không ghi vào `~/.kube/config` và không đổi current-context của bạn (tệp này là kubeconfig admin: để trong `~/.kube`, thư mục mà sandbox của test luôn che, nên script của bài không đọc được; đừng chép nó vào thư mục bài hay thư mục khác), rồi ghim CPU cho từng node khi `DEVOPS_CPUSET` có giá trị (không ghim thì bỏ `taskset -c "$DEVOPS_CPUSET"`):
 
 ```bash
-mkdir -p ~/.cache/devops-track/kube
-nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --config setup/kind/devops-lab.yaml --kubeconfig ~/.cache/devops-track/kube/devops-lab.yaml
+mkdir -p ~/.kube
+nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --config setup/kind/devops-lab.yaml --kubeconfig ~/.kube/devops-lab.yaml
 if [ -n "$DEVOPS_CPUSET" ]; then for node in $(kind get nodes --name devops-lab); do docker update --cpuset-cpus "$DEVOPS_CPUSET" "$node"; done; fi
-KUBECONFIG=~/.cache/devops-track/kube/devops-lab.yaml kubectl get nodes
+KUBECONFIG=~/.kube/devops-lab.yaml kubectl get nodes
 ```
 
 Tắt khi không dùng (giải phóng RAM, giữ nguyên trạng thái), bật lại (sau khi khởi động lại máy node cũng ở trạng thái dừng), xoá hẳn:
@@ -102,14 +102,14 @@ Tắt khi không dùng (giải phóng RAM, giữ nguyên trạng thái), bật l
 ```bash
 docker stop $(kind get nodes --name devops-lab)
 docker start $(kind get nodes --name devops-lab)
-kind delete cluster --name devops-lab --kubeconfig ~/.cache/devops-track/kube/devops-lab.yaml
+kind delete cluster --name devops-lab --kubeconfig ~/.kube/devops-lab.yaml
 ```
 
-Test không bao giờ tạo hay xoá cluster. `require_cluster` skip với thông báo riêng khi Docker tắt, khi chưa có cluster, khi node đang dừng (kèm lệnh `docker start`) và khi API server chưa trả `ok` cho `/readyz` trong 5 giây. Mỗi lần chạy, test lấy kubeconfig bằng `kind get kubeconfig --name devops-lab` vào thư mục tạm, không đọc `KUBECONFIG` hay `~/.kube` của bạn, nên cluster thật mà `~/.kube/config` đang trỏ tới không bao giờ bị đụng. Mỗi test làm việc trong namespace riêng `devops-ex-<id>` (nhãn `devops-ex=<id>`, Pod Security `baseline`) bằng token của một ServiceAccount chỉ có quyền trong namespace đó, và xoá namespace khi xong. Test bị ngắt giữa chừng có thể để lại namespace; xem và xoá bằng:
+Test không bao giờ tạo hay xoá cluster. `require_cluster` skip với thông báo riêng khi Docker tắt, khi chưa có cluster, khi node đang dừng (kèm lệnh `docker start`) và khi API server chưa trả `ok` cho `/readyz` trong 5 giây. Mỗi lần chạy, test lấy kubeconfig bằng `kind get kubeconfig --name devops-lab` vào thư mục tạm, không đọc `KUBECONFIG` hay `~/.kube` của bạn, nên cluster thật mà `~/.kube/config` đang trỏ tới không bao giờ bị đụng. Mỗi test làm việc trong namespace riêng `devops-ex-<id>` (nhãn `devops-ex=<id>`, Pod Security `baseline`) bằng token của một ServiceAccount chỉ có quyền trong namespace đó (không impersonate, không xin token cho ServiceAccount khác), và xoá namespace khi xong. Trong lúc có test chạy, cluster từ chối PersistentVolume hostPath của mọi user không phải thành phần hệ thống, kể cả admin; PV `local` chỉ testkit tạo, trong thư mục `/srv/devops-lab-pv` của worker. Test bị ngắt giữa chừng có thể để lại namespace; xem và xoá bằng:
 
 ```bash
-KUBECONFIG=~/.cache/devops-track/kube/devops-lab.yaml kubectl get namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
-KUBECONFIG=~/.cache/devops-track/kube/devops-lab.yaml kubectl delete namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
+KUBECONFIG=~/.kube/devops-lab.yaml kubectl get namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
+KUBECONFIG=~/.kube/devops-lab.yaml kubectl delete namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
 ```
 
 Lệnh xoá trên chỉ chọn object có nhãn `devops-ex`, không đụng gì khác; chỉ chạy khi không có test nào đang chạy. Node kind là container Docker chạy privileged, nên pod privileged, hostPath, hostNetwork trên cluster này chạm được tới máy của bạn: namespace của test chặn chúng bằng Pod Security, và bài thực hành tay cũng nên làm trong namespace có nhãn `pod-security.kubernetes.io/enforce=baseline`.
