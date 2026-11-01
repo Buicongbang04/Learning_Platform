@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import atexit
 import importlib.util
+import json
 import linecache
 import os
 import re
@@ -1626,6 +1627,7 @@ TOFU_PROVIDERS = {"hashicorp/aws": TOFU_AWS_PROVIDER}
 TOFU_REGISTRY = "registry.opentofu.org"
 _TOFU_FORBIDDEN_ARGS = ("no_proxy", "http_proxy", "https_proxy", "custom_ca_bundle")
 _TOFU_FORBIDDEN = re.compile(rf'\b({'|'.join(_TOFU_FORBIDDEN_ARGS)})\b"?\s*[=:]')
+_TOFU_JSON_ESCAPE = re.compile(r"\\u[0-9a-fA-F]{4}")
 _TOFU_LOCK_ENTRY = re.compile(r'provider\s+"([^"]+)"\s*\{[^}]*?\bversion\s*=\s*"([^"]+)"', re.S)
 _TOFU_VERSION_MISMATCH = re.compile(r"no available releases match|does not match|locked provider|doesn't match", re.I)
 _TOFU_NETWORK_ERRORS = re.compile(
@@ -1742,10 +1744,44 @@ def _tofu_version_message() -> str:
     )
 
 
+def _tofu_json_keys(text: str) -> list[str]:
+    keys = []
+
+    def collect(pairs):
+        keys.extend(key for key, _ in pairs)
+        return dict(pairs)
+
+    json.loads(text, object_pairs_hook=collect)
+    return keys
+
+
+def _tofu_json_problems(rel: Path, text: str) -> list[str]:
+    found = []
+    for match in _TOFU_JSON_ESCAPE.finditer(text):
+        line = text.count("\n", 0, match.start()) + 1
+        found.append(
+            f"{rel}:{line}: escape `{match.group(0)}` bị từ chối: cấu hình JSON trong lab không được dùng escape `\\uXXXX` "
+            "(ở khoá hay giá trị), vì OpenTofu giải mã nó và có thể ghép ra tên đối số bị cấm mà phép kiểm không thấy. Viết "
+            "thẳng ký tự đó (tệp là UTF-8)")
+    try:
+        keys = _tofu_json_keys(text)
+    except ValueError as error:
+        return [*found, f"{rel}: JSON không hợp lệ ({error}): sửa cú pháp JSON rồi chạy lại; phép kiểm cấu hình không đọc "
+                        "được tệp này nên từ chối nó"]
+    for key in keys:
+        if key.lower() in _TOFU_FORBIDDEN_ARGS:
+            found.append(
+                f"{rel}: khoá JSON `{key}` bị từ chối: test đặt proxy chặn mọi request không tới LocalStack để code không "
+                f"bao giờ gọi AWS thật, đối số `{key.lower()}` mở đường vòng qua lớp đó. Xoá khoá này; LocalStack của "
+                "track không cần proxy hay CA riêng")
+    return found
+
+
 def tofu_config_problems(root: Path) -> list[str]:
     """Đối số provider hay backend vô hiệu lớp chặn mạng của `tofu_env` (`no_proxy`, `http_proxy`, `https_proxy`,
     `custom_ca_bundle`) trong `*.tf`, `*.tofu` và bản `.json` của chúng dưới `root` (bỏ `.terraform`). Quét văn bản thô,
-    không bỏ chú thích: tên cấm theo sau bởi `=` hay `:` ở bất kỳ đâu đều bị từ chối."""
+    không bỏ chú thích: tên cấm theo sau bởi `=` hay `:` ở bất kỳ đâu đều bị từ chối. Tệp JSON còn bị cấm mọi escape
+    `\\uXXXX`, phải parse được, và mọi khoá đã giải mã ở mọi độ sâu được so (không phân biệt hoa thường) với tên cấm."""
     root = Path(root)
     found = []
     for path in sorted(root.rglob("*")):
@@ -1754,6 +1790,8 @@ def tofu_config_problems(root: Path) -> list[str]:
         if not path.name.endswith((".tf", ".tofu", ".tf.json", ".tofu.json")):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        if path.name.endswith(".json"):
+            found.extend(_tofu_json_problems(path.relative_to(root), text))
         for match in _TOFU_FORBIDDEN.finditer(text):
             line = text.count("\n", 0, match.start()) + 1
             found.append(

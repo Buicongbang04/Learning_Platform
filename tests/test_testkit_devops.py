@@ -1,5 +1,6 @@
 """Test cho helper DevOps của testkit: phiên bản công cụ, docker, cpuset, cluster kind."""
 
+import json
 import os
 import pwd
 import re
@@ -2649,6 +2650,52 @@ def test_tofu_refuses_forbidden_assignment_even_in_comments(tmp_path, text):
 ])
 def test_tofu_allows_forbidden_words_without_assignment(tmp_path, text):
     (tmp_path / "main.tf").write_text(text, encoding="utf-8")
+    assert testkit.tofu_config_problems(tmp_path) == []
+
+
+@pytest.mark.parametrize("name", ["main.tf.json", "main.tofu.json"])
+def test_tofu_refuses_unicode_escaped_json_key(tmp_path, name):
+    (tmp_path / name).write_text('{"provider": {"aws": {"no\\u005fproxy": "*"}}}', encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert problems and all(p.startswith(f"{name}:") for p in problems)
+    assert any("\\u" in p and "escape" in p for p in problems)
+    assert any("khoá JSON" in p and "no_proxy" in p for p in problems)
+
+
+def test_tofu_refuses_unicode_escape_in_json_value_only(tmp_path):
+    (tmp_path / "main.tf.json").write_text('{"provider": {"aws": {"region": "us-east-\\u0031"}}}', encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert len(problems) == 1 and problems[0].startswith("main.tf.json:1:") and "\\u" in problems[0]
+
+
+def test_tofu_allows_escaped_slash_key_that_tofu_itself_rejects(tmp_path):
+    (tmp_path / "main.tf.json").write_text('{"provider": {"aws": {"no_proxy\\/": "*"}}}', encoding="utf-8")
+    assert testkit.tofu_config_problems(tmp_path) == []
+
+
+@pytest.mark.parametrize("text", [
+    '{"terraform": [{"backend": {"s3": [{"bucket": "b", "Custom_CA_Bundle": "/x.pem"}]}}]}',
+    '{"provider": {"aws": [{"region": "x"}, {"alias": "b", "assume_role": {"x": {"y": {"HTTPS_PROXY": 1}}}}]}}',
+])
+def test_tofu_refuses_forbidden_json_key_at_depth(tmp_path, text):
+    (tmp_path / "modules" / "m").mkdir(parents=True)
+    (tmp_path / "modules" / "m" / "main.tf.json").write_text(text, encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert any(p.startswith("modules/m/main.tf.json:") and "khoá JSON" in p for p in problems)
+
+
+def test_tofu_refuses_invalid_json_config(tmp_path):
+    (tmp_path / "main.tf.json").write_text('{"provider": {"aws": {"region": "x",}}}', encoding="utf-8")
+    problems = testkit.tofu_config_problems(tmp_path)
+    assert len(problems) == 1 and "JSON không hợp lệ" in problems[0]
+
+
+def test_tofu_allows_clean_json_config(tmp_path):
+    (tmp_path / "main.tf.json").write_text(json.dumps({
+        "terraform": {"required_providers": {"aws": {"source": "hashicorp/aws", "version": "~> 6.0"}}},
+        "provider": {"aws": {"region": "us-east-1", "endpoints": [{"s3": "http://localhost:4566/"}]}},
+        "variable": {"no_proxy_note": {"default": "không dùng proxy"}},
+    }, ensure_ascii=False), encoding="utf-8")
     assert testkit.tofu_config_problems(tmp_path) == []
 
 
