@@ -11,16 +11,16 @@ questions:
   - id: ollama-throughput
     kind: data
     type: single
-    prompt: Thông lượng (request/giây) của Ollama đổi thế nào khi tăng số request đồng thời 1, 2, 4, 8?
+    prompt: Thông lượng (request/giây) của Ollama trên GPU đổi thế nào khi tăng số request đồng thời 1, 2, 4, 8?
     options:
       - { id: a, text: "Tăng gần tuyến tính, mức 8 gấp khoảng 8 lần mức 1" }
-      - { id: b, text: "Tăng rõ từ 1 lên 2, sau đó gần như phẳng" }
+      - { id: b, text: "Tăng rõ nhất từ 1 lên 2, sau đó tăng chậm dần" }
       - { id: c, text: "Giảm dần ngay từ mức 2 vì GPU quá tải" }
       - { id: d, text: "Không đổi ở mọi mức, đúng bằng mức 1" }
   - id: ollama-ttft
     kind: data
     type: single
-    prompt: Với Ollama, từ 1 lên 8 request đồng thời, TTFT p50 và inter-token p50 đổi thế nào?
+    prompt: Với Ollama chạy trên GPU, từ 1 lên 8 request đồng thời, TTFT p50 và inter-token p50 đổi thế nào?
     options:
       - { id: a, text: "TTFT tăng nhiều lần, inter-token không tăng" }
       - { id: b, text: "Cả hai tăng khoảng 8 lần, đúng như nhau ở mọi mức" }
@@ -29,10 +29,10 @@ questions:
   - id: open-loop-queue
     kind: data
     type: single
-    prompt: Open loop trên llama.cpp ở tốc độ đến 0.3, 0.6, 0.8 request/giây. Thời gian phục vụ và hàng đợi p50 đổi thế nào?
+    prompt: Open loop trên llama.cpp ở 0.4, 0.75 và 1.0 lần công suất. Thời gian phục vụ và hàng đợi p50 đổi thế nào?
     options:
       - { id: a, text: "Phục vụ tăng gấp ba theo tải, còn hàng đợi gần như bằng 0 ở mọi mức tải" }
-      - { id: b, text: "Phục vụ gần như đứng yên, hàng đợi tăng từ gần 0 lên cỡ 1 tới 2 giây" }
+      - { id: b, text: "Phục vụ gần như đứng yên, hàng đợi tăng từ gần 0 lên vài giây" }
       - { id: c, text: "Cả hai giảm khi tải tăng vì cache ấm hơn" }
       - { id: d, text: "Phục vụ đứng yên, hàng đợi đứng yên, chỉ có lỗi tăng" }
   - id: prefix-hit
@@ -50,7 +50,7 @@ questions:
     prompt: Xen kẽ hai tài liệu A, B, A. Khi bật --cache ram, mỗi lời gọi xen kẽ mất bao lâu so với lần trúng cùng slot khi không bật cache?
     options:
       - { id: a, text: "Nhanh ngang lần trúng cùng slot, dưới 0.2 giây" }
-      - { id: b, text: "Dưới 1 giây, nhưng chậm hơn lần trúng cùng slot vài lần" }
+      - { id: b, text: "Chậm hơn lần trúng cùng slot vài lần, nhưng nhanh hơn lần gọi đầu nhiều lần" }
       - { id: c, text: "Chỉ nhanh hơn lần gọi đầu khoảng 20%" }
       - { id: d, text: "Chậm hơn cả lần gọi đầu vì phải chép trạng thái" }
   - id: closed-loop

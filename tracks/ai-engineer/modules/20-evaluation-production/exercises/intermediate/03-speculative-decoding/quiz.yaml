@@ -31,10 +31,10 @@ questions:
     type: single
     prompt: Trong 16 lần chạy speculative (8 tác vụ, k = 4 và 8) trên CPU float32, output trùng greedy bao nhiêu lần?
     options:
-      - { id: a, text: "16 / 16" }
+      - { id: a, text: "16 / 16 hoặc gần như tất cả" }
       - { id: b, text: "8 / 16, chỉ tác vụ chép" }
       - { id: c, text: "0 / 16, luôn lệch vài token" }
-      - { id: d, text: "12 / 16, lệch ở k = 8" }
+      - { id: d, text: "Khoảng một nửa, lệch ở k = 8" }
   - id: why-free-not-slower
     kind: knowledge
     type: single

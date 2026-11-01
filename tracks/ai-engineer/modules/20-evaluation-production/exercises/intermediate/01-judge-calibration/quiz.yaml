@@ -20,12 +20,13 @@ questions:
   - id: false-fail-class
     kind: data
     type: single
-    prompt: False fail của judge 3B (từ chối nhãn đúng) tập trung nhiều nhất ở câu có nhãn gold nào?
+    prompt: False fail của judge 3B (từ chối nhãn đúng) cao nhất ở lớp gold nào, tính theo tỉ lệ trên số câu đúng của lớp đó?
     options:
       - { id: a, text: "negative" }
       - { id: b, text: "positive" }
       - { id: c, text: "Đều nhau ở ba lớp" }
       - { id: d, text: "Không có false fail nào" }
+      - { id: e, text: "neutral" }
   - id: judge-7b
     kind: data
     type: single

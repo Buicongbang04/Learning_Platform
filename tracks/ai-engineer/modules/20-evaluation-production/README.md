@@ -169,7 +169,7 @@ là không drift.
 | Kiểu | Judge thấy | Output | Hợp với |
 | --- | --- | --- | --- |
 | Pointwise | một câu trả lời (và nguồn, câu hỏi) | điểm 1..5, có/không | theo dõi tuyệt đối theo thời gian, faithfulness (module 13) |
-| Pairwise | hai câu trả lời cho cùng câu hỏi | A, B, hoà | so hai prompt/model; ổn định hơn pointwise với judge nhỏ |
+| Pairwise | hai câu trả lời cho cùng câu hỏi | A, B, hoà | so hai prompt/model; tài liệu thấy thường nhất quán hơn chấm điểm tuyệt đối, nhưng chỉ khi judge không thiên vị vị trí (phải chấm hai thứ tự, bài Intermediate 01 đo) |
 | Có đáp án mẫu | câu trả lời và đáp án tham chiếu | đúng/sai, khớp ý | khi có nhãn nhưng câu trả lời tự do, không so chuỗi được |
 
 Thiên vị đã biết (Zheng et al., 2023; Wang et al., 2023): **vị trí** (thích câu đứng trước, hoặc đứng sau), **độ dài**
@@ -281,8 +281,10 @@ sequenceDiagram
 ```
 
 OpenTelemetry có **semantic conventions cho GenAI**: tên thuộc tính chuẩn như `gen_ai.operation.name`,
-`gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`. Bộ quy ước này còn đang thay đổi (xem
-trang chính thức ở mục 8 trước khi dùng); lợi ích của việc theo nó là mọi backend hiểu cùng một trace. Thuộc tính riêng
+`gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` (đối chiếu với gói
+`opentelemetry-semantic-conventions` 0.66b1 của môi trường track, ứng với semantic conventions 1.44.0, kiểm ngày 2026-11-01:
+các thuộc tính GenAI nằm ở nhóm `_incubating`, tức chưa ổn định). Bộ quy ước này còn đang thay đổi (xem trang chính thức ở
+mục 8 trước khi dùng); lợi ích của việc theo nó là mọi backend hiểu cùng một trace. Thuộc tính riêng
 của bạn đặt dưới tiền tố riêng (`app.*`, `rag.*`).
 
 ### Lấy mẫu, chi phí, PII
@@ -457,8 +459,9 @@ S = \frac{1 - \alpha^{k+1}}{(1 - \alpha)\,(k c + v_k)}
 $$
 
 Lý thuyết gốc giả định $$v_k \approx 1$$ (GPU, model lớn, decode bị chặn bởi băng thông). Trên CPU thì không: đo trên PC
-của track, Qwen2.5-3B float32 trên CPU 4 luồng forward 8 token mất 0.74 s so với 0.36 s cho 1 token ($$v \approx 2$$); với
-Qwen2.5-0.5B là 0.106 s so với 0.072 s ($$v \approx 1.5$$).
+của track (hai lần đo, mỗi lần một forward sau khi làm nóng), Qwen2.5-3B float32 trên CPU 4 luồng forward 8 token mất 0.72
+tới 0.74 s so với 0.32 tới 0.36 s cho 1 token ($$v \approx 2$$); với Qwen2.5-0.5B là 0.098 tới 0.106 s so với 0.068 tới 0.072 s
+($$v \approx 1.5$$).
 
 ```python
 def speedup(alpha, k, c, v):
@@ -494,11 +497,13 @@ Trên PC của track, CPU 4 luồng, Qwen2.5-3B Q4_K_M qua `llama-cpp-python` 0.
 | Giải thích tự do | 0.29, 0.36, 0.35 | 0 / 3 |
 
 Ở bản này, prompt lookup làm decode **chậm gấp ba** khi đoán sai nhiều, và gần như không lợi khi đoán đúng nhiều. Hai lý do
-đọc được từ mã nguồn: bật model nháp buộc `logits_all=True` (chép toàn bộ logits 151 936 chiều của mọi vị trí ra numpy, cả
+khả dĩ, đọc từ mã nguồn chứ chưa đo tách riêng: bật model nháp buộc `logits_all=True` (chép toàn bộ logits 151 936 chiều của mọi vị trí ra numpy, cả
 lúc prefill), và mỗi lượt kiểm 11 token trên CPU tốn gấp nhiều lần một token. Cũng phải tự đặt `logits_all=True` khi tạo
 `Llama` có `draft_model`, nếu không prompt dài báo lỗi lệch kích thước mảng (lỗi của bản 0.3.36). Output khác bản không
-đoán ở 4 trên 6 tác vụ: kiểm một khối token đi qua phép nhân ma trận có kích thước khác, thứ tự cộng số thực khác, và chỉ cần
-một argmax đổi hạng là cả đuôi câu khác (cùng hiện tượng ở module 09 mục 6). "Speculative decoding không đổi output" đúng về
+đoán ở 4 trên 6 tác vụ. Nhiều khả năng do kiểm một khối token đi qua phép nhân ma trận có kích thước khác, thứ tự cộng số
+thực khác, và chỉ cần một argmax đổi hạng là cả đuôi câu khác (cùng hiện tượng ở module 09 mục 6); nhưng hai lượt chạy còn
+khác nhau ở một điểm nữa (bản không đoán chạy `logits_all=False`, bản đoán `logits_all=True`), nên thí nghiệm này không tách
+được nguyên nhân. "Speculative decoding không đổi output" đúng về
 toán, không đúng về số học dấu phẩy động.
 
 Model nháp Qwen2.5-0.5B cho target Qwen2.5-3B (cài đặt của bài Intermediate 03, Transformers, float32, CPU, $$k = 4$$, 64

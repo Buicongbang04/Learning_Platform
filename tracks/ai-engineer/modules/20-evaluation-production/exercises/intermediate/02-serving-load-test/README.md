@@ -9,6 +9,7 @@ files:
     note: Không sửa
 run:
   - uv sync --group llama
+  - uv run --with "starlette-context==0.5.1" python -m llama_cpp.server --help
   - uv run python data/download_dataset.py zalo-legal
   - ollama pull qwen2.5:0.5b-instruct-q4_K_M
   - uv run jupyter lab tracks/ai-engineer/modules/20-evaluation-production/exercises/intermediate/02-serving-load-test/starter/loadtest.ipynb
@@ -25,11 +26,14 @@ TTFT tăng vì đâu, hàng đợi phình thế nào khi tải gần công suấ
 
 **Phần cứng:** CPU · ~120 phút
 
-Thời gian trên là thời gian làm bài. Phần chạy khoảng 10 phút trên PC của track: llama.cpp server chạy CPU 4 luồng, Ollama
-dùng GPU nếu có (chỉ CPU thì phần Ollama chậm hơn, chưa đo). Cần `uv sync --group llama` (build `llama-cpp-python` từ
+Thời gian trên là thời gian làm bài. Phần chạy khoảng 10 phút trên PC của track: llama.cpp server chạy CPU 4 luồng. Phần
+Ollama giả định Ollama chạy model trên **GPU** (GPU 4GB là đủ cho model 0.5B); số liệu và các câu trắc nghiệm về Ollama đo
+trên GPU, chỉ CPU thì số khác hẳn (chưa đo). Cần `uv sync --group llama` (build `llama-cpp-python` từ
 source, khoảng 4 phút, cần gcc/g++). Nhóm `llama` của repo chưa có phần phụ thuộc của server, nên notebook khởi động server
 bằng `uv run --with "starlette-context==0.5.1" python -m llama_cpp.server ...` (tải gói nhỏ đó vào một môi trường tạm, không
-sửa `pyproject.toml`). Server chỉ nghe trên `127.0.0.1`, ở một cổng trống, và được tắt trong `finally`.
+sửa `pyproject.toml`; lệnh kiểm ở mục `run` phía trên). Server chỉ nghe trên `127.0.0.1`, ở một cổng trống, và được tắt trong
+`finally`. Nếu kernel chết giữa chừng mà server còn chạy nền: `pgrep -af llama_cpp.server` để kiểm, `pkill -f llama_cpp.server`
+để dọn.
 
 Mở `starter/loadtest.ipynb`, viết các cell chấm điểm theo mô tả trong notebook:
 
@@ -38,7 +42,8 @@ Mở `starter/loadtest.ipynb`, viết các cell chấm điểm theo mô tả tro
 3. `summarize` (thông lượng, TTFT, E2E, inter-token, hàng đợi, thời gian phục vụ theo phân vị).
 
 Rồi chạy các cell `explore` theo thứ tự: server mặc định với 1 và 2 request đồng thời, server với `--interrupt_requests
-false` ở 1, 2, 4, 8, Ollama cùng model, open loop ở ba mức tải, và prefix cache có/không `--cache`. Trả lời các câu ở cuối
+false` ở 1, 2, 4, 8, Ollama cùng model, open loop ở ba mức tải (0.4, 0.75 và 1.0 lần công suất ước từ thời gian phục vụ
+đo được), và prefix cache có/không `--cache`. Trả lời các câu ở cuối
 notebook, rồi làm phần trắc nghiệm của bài trong app.
 
 ## Tiêu chí đạt

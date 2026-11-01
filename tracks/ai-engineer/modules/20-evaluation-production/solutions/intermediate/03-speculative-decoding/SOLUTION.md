@@ -31,14 +31,16 @@ thời gian lệch vài phần trăm.
   tốc 2 tới 3.5 lần. Không cần model nháp nào.
 - **Giải thích tự do** vẫn nhanh hơn một chút dù chỉ 10% tới 42% token đoán được nhận: ở đây Qwen 0.5B diễn giải bằng cách
   nhắc lại nhiều cụm chữ của điều luật, nên n-gram vẫn trúng ở một số chỗ; và trên CPU, forward 5 tới 9 token của model
-  0.5B chỉ tốn cỡ 1.5 lần forward 1 token (mục 5 lý thuyết đo 0.106 s so với 0.072 s), nên đoán sai không đắt.
+  0.5B chỉ tốn cỡ 1.5 lần forward 1 token (mục 5 lý thuyết đo khoảng 0.1 s so với 0.07 s), nên đoán sai không đắt.
 - **Tăng $$k$$ làm tỉ lệ nhận ở tác vụ tự do giảm ở cả 4 điều luật** (khối dài thì phần đuôi khó khớp hơn), nhưng tăng tốc
   gần như không đổi: mỗi lượt kiểm dài hơn nhưng ít lượt hơn. Tỉ lệ nhận cao không phải mục tiêu; số token mỗi forward và thời
   gian mới là mục tiêu.
 - **Model nháp 0.5B cho target 3B** (cell mở rộng, đo ở mục 5 lý thuyết): tác vụ chép tỉ lệ nhận khoảng 0.9 mà chỉ tăng tốc
   khoảng 1.2 lần, tác vụ tự do chậm hơn. Model nháp tốn khoảng 20% target, và forward khối của target 3B trên CPU tốn khoảng 2
   lần forward 1 token: cả hai số hạng ở mẫu của công thức tăng tốc đều xấu.
-- Output trùng greedy ở đây vì mọi thứ chạy float32 trên CPU và các phép nhân ma trận cho cùng kết quả bất kể độ dài khối.
+- Output trùng greedy ở cả 16 lần, nhưng đó **không phải đảm bảo**: float32 trên CPU vẫn cho kết quả khác nhau cỡ 1e-6
+  giữa forward theo khối và forward từng token (thứ tự cộng trong phép nhân ma trận và attention khác nhau), chỉ là đủ nhỏ để
+  argmax không đổi trong 16 lần chạy này; một token có hai logit sát nhau là đủ làm lệch.
   Mục 5 lý thuyết cho thấy với `llama-cpp-python` (kernel lượng tử hoá, khối khác kích thước) output đổi ở 4 trên 6 tác vụ.
 
 ## Lỗi hay gặp
