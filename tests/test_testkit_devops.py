@@ -884,19 +884,21 @@ def test_docker_lab_build_tags_labels_and_removes(monkeypatch, tmp_path):
     monkeypatch.setenv("DEVOPS_CPUSET", cpuset)
     context = write_dockerfile(
         tmp_path / "app",
-        "ARG GREETING\nRUN cat /sys/fs/cgroup/cpuset.cpus.effective > /build-cpuset && cat /sys/fs/cgroup/memory.max > /build-mem "
-        "&& echo \"$GREETING\" > /greeting\nLABEL org.opencontainers.image.title=olist",
+        "ARG GREETING\nARG NONCE\nRUN echo \"$NONCE\" > /nonce && cat /sys/fs/cgroup/cpuset.cpus.effective > /build-cpuset "
+        "&& cat /sys/fs/cgroup/memory.max > /build-mem && echo \"$GREETING\" > /greeting\n"
+        "LABEL org.opencontainers.image.title=olist",
     )
     with testkit.DockerLab() as lab:
-        tag = lab.build(context, "api", build_args={"GREETING": "xin-chao"})
+        tag = lab.build(context, "api", build_args={"GREETING": "xin-chao", "NONCE": lab.id})
         assert tag == f"devops-ex-{lab.id}/api:test"
         labels = lab.image_inspect(tag)["Config"]["Labels"]
         assert labels["devops-ex"] == "1" and labels["devops-ex.lab"] == lab.id
         assert labels["org.opencontainers.image.title"] == "olist"
         history = lab.history(tag)
         assert isinstance(history, list) and any("GREETING" in step.get("CreatedBy", "") for step in history)
-        out = lab.run_once("check", tag, "sh", "-c", "cat /build-cpuset /build-mem /greeting; grep NoNewPrivs /proc/self/status")
-        lines = out.stdout.split("\n")
+        out = lab.run_once("check", tag, "sh", "-c", "cat /nonce /build-cpuset /build-mem /greeting; grep NoNewPrivs /proc/self/status")
+        nonce, *lines = out.stdout.split("\n")
+        assert nonce == lab.id, "Bước RUN phải chạy lại mỗi lần (không lấy từ cache), nếu không giới hạn cũ vẫn lọt qua"
         assert lines[0] == cpuset, f"Bước RUN của build phải bị ghim vào {cpuset}: {out.stdout}"
         assert int(lines[1]) == 1024 ** 3, f"Bước RUN của build phải bị giới hạn {testkit.DOCKER_BUILD_MEMORY}: {out.stdout}"
         assert lines[2] == "xin-chao"
@@ -1054,9 +1056,10 @@ services:
         ("    pid: host\n", "pid: host"),
         ("    volumes: ['/etc:/hostetc:ro']\n", "/etc"),
         ("    volumes: ['/var/run/docker.sock:/var/run/docker.sock']\n", "docker.sock"),
-        ("    cap_add: [SYS_ADMIN]\n", "SYS_ADMIN"),
+        ("    cap_add: [SYS_ADMIN]\n", "cap_add"),
         ("    devices: ['/dev/kmsg:/dev/kmsg']\n", "devices"),
-        ("    security_opt: ['seccomp=unconfined']\n", "unconfined"),
+        ("    security_opt: ['seccomp=unconfined']\n", "security_opt"),
+        ("    device_cgroup_rules: ['b *:* rwm']\n", "device_cgroup_rules"),
         ("    build: ..\n", "build"),
         ("    env_file: [../secret.env]\n", "env_file"),
     ],
@@ -1078,7 +1081,7 @@ def test_docker_lab_compose_refuses_unsafe(tmp_path, service, expected):
 @pytest.mark.parametrize(
     "top,expected",
     [
-        ("networks:\n  default:\n    name: de-learning_default\n    external: true\n", "external"),
+        ("networks:\n  default:\n    name: nguoi-hoc-mang-khac\n    external: true\n", "external"),
         ("volumes:\n  data:\n    external: true\n", "external"),
         ("volumes:\n  data:\n    driver_opts: {type: none, o: bind, device: /etc}\n", "driver_opts"),
     ],
@@ -1095,24 +1098,253 @@ def test_docker_lab_compose_refuses_foreign_resources(tmp_path, top, expected):
     assert testkit.docker_leftovers(lab.id) == []
 
 
-def test_compose_problems_unit(tmp_path):
-    root = tmp_path / "proj"
-    config = {
-        "services": {
-            "ok": {"image": "x", "volumes": [{"type": "bind", "source": str(root / "conf"), "target": "/c"},
-                                              {"type": "volume", "source": "data", "target": "/d"}],
-                   "cap_add": ["NET_BIND_SERVICE"], "network_mode": "service:other", "volumes_from": ["other"]},
-            "bad": {"image": "x", "ipc": "host", "network_mode": "container:portainer", "volumes_from": ["container:portainer"],
-                    "cgroup_parent": "/system.slice"},
-        },
-        "networks": {"default": {"name": "x_default"}},
-        "volumes": {"data": {"name": "x_data"}},
+LAB = "abcd1234"
+
+
+def base_config(root: Path, **service) -> dict:
+    return {
+        "name": f"devops-ex-{LAB}",
+        "services": {"app": {"image": "x", "command": None, "entrypoint": None, "networks": {"default": None}, **service}},
+        "networks": {"default": {"name": f"devops-ex-{LAB}_default", "ipam": {}}},
+        "volumes": {"data": {"name": f"devops-ex-{LAB}_data"}},
     }
-    problems = testkit._compose_problems(config, root)
+
+
+@pytest.mark.parametrize(
+    "service,expected",
+    [
+        ({"device_cgroup_rules": ["b *:* rwm"]}, "device_cgroup_rules"),
+        ({"gpus": [{"driver": "nvidia", "count": -1}]}, "gpus"),
+        ({"runtime": "nvidia"}, "runtime"),
+        ({"devices": [{"source": "/dev/sda", "target": "/dev/sda", "permissions": "rwm"}]}, "devices"),
+        ({"privileged": True}, "privileged"),
+        ({"cap_add": ["NET_ADMIN"]}, "cap_add"),
+        ({"security_opt": ["label=disable"]}, "security_opt"),
+        ({"network_mode": "host"}, "network_mode: host"),
+        ({"network_mode": "container:portainer"}, "network_mode: container:portainer"),
+        ({"pid": "host"}, "pid: host"),
+        ({"ipc": "host"}, "ipc: host"),
+        ({"uts": "host"}, "uts: host"),
+        ({"userns_mode": "host"}, "userns_mode: host"),
+        ({"cgroup": "host"}, "cgroup: host"),
+        ({"cgroup_parent": "/system.slice"}, "cgroup_parent"),
+        ({"volumes_from": ["container:portainer"]}, "volumes_from"),
+        ({"sysctls": {"net.ipv4.ip_forward": "1"}}, "sysctls"),
+        ({"khoa_la": "x"}, "khoa_la"),
+        ({"deploy": {"resources": {"reservations": {"devices": [{"capabilities": ["gpu"]}]}}}}, "reservations"),
+        ({"deploy": {"mode": "global"}}, "mode"),
+        ({"logging": {"driver": "syslog"}}, "syslog"),
+        ({"ulimits": {"memlock": -1}}, "memlock"),
+        ({"volumes": [{"type": "bind", "source": "/var/run/docker.sock", "target": "/var/run/docker.sock"}]}, "docker.sock"),
+        ({"volumes": [{"type": "bind", "source": "/etc", "target": "/hostetc"}]}, "/etc"),
+        ({"volumes": [{"type": "npipe", "source": "x", "target": "/x"}]}, "npipe"),
+        ({"build": {"context": "/", "dockerfile": "Dockerfile"}}, "build context"),
+        ({"build": {"context": "{root}", "dockerfile": "Dockerfile", "network": "host"}}, "network"),
+        ({"env_file": [{"path": "/home/x/.aws/credentials"}]}, "env_file"),
+    ],
+)
+def test_compose_problems_refuses_service_key(tmp_path, service, expected):
+    root = tmp_path / "proj"
+    root.mkdir()
+    if "build" in service and service["build"]["context"] == "{root}":
+        service = {"build": {**service["build"], "context": str(root)}}
+    problems = testkit._compose_problems(base_config(root, **service), root, LAB)
     joined = "\n".join(problems)
-    assert all("ok" not in p.split(":")[0] for p in problems), joined
-    for text in ("ipc: host", "container:portainer", "cgroup_parent"):
-        assert text in joined
+    assert expected in joined and "service app" in joined, joined
+
+
+@pytest.mark.parametrize(
+    "kind,spec,expected",
+    [
+        ("volumes", {"name": "nguoi-hoc-volume-that"}, "name: nguoi-hoc-volume-that"),
+        ("volumes", {"name": "devops-ex-ffffffff_data"}, "devops-ex-ffffffff_data"),
+        ("networks", {"name": "nguoi-hoc-mang-that"}, "name: nguoi-hoc-mang-that"),
+        ("volumes", {"name": "x", "external": True}, "external"),
+        ("networks", {"name": "x", "external": True}, "external"),
+        ("volumes", {"name": f"devops-ex-{LAB}_data", "driver_opts": {"type": "none", "o": "bind", "device": "/etc"}}, "driver_opts"),
+        ("volumes", {"name": f"devops-ex-{LAB}_data", "driver": "nfs"}, "driver nfs"),
+        ("networks", {"name": f"devops-ex-{LAB}_n", "driver": "host"}, "driver host"),
+        ("networks", {"name": f"devops-ex-{LAB}_n", "driver": "macvlan"}, "driver macvlan"),
+        ("networks", {"name": f"devops-ex-{LAB}_n", "ipam": {"config": [{"subnet": "10.0.0.0/8"}]}}, "ipam"),
+    ],
+)
+def test_compose_problems_refuses_foreign_top_level(tmp_path, kind, spec, expected):
+    root = tmp_path / "proj"
+    config = base_config(root)
+    config[kind] = {"thu": spec}
+    joined = "\n".join(testkit._compose_problems(config, root, LAB))
+    assert expected in joined and f"{kind} thu" in joined, joined
+
+
+@pytest.mark.parametrize("key", ["configs", "secrets", "include", "khoa_la"])
+def test_compose_problems_refuses_unknown_top_level(tmp_path, key):
+    config = base_config(tmp_path)
+    config[key] = {"x": {"file": "/etc/shadow"}}
+    assert any(f"`{key}`" in p for p in testkit._compose_problems(config, tmp_path, LAB))
+
+
+OLIST_LIKE = """
+name: olist-shop
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://olist:olist@postgres:5432/olist
+  REDIS_URL: redis://redis:6379/0
+services:
+  postgres:
+    image: postgres:16
+    cpuset: "${DEVOPS_CPUSET:-}"
+    environment: {POSTGRES_USER: olist, POSTGRES_PASSWORD: olist, POSTGRES_DB: olist}
+    ports: ["127.0.0.1:25432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data", "./initdb:/docker-entrypoint-initdb.d:ro"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U olist"], interval: 3s, timeout: 3s, retries: 20}
+    logging: {driver: json-file, options: {max-size: 10m}}
+  redis:
+    image: redis:7
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 3s}
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    read_only: true
+  api:
+    build: {context: ., dockerfile: Dockerfile, args: {APP_VERSION: "1.0"}}
+    image: olist-shop:dev
+    container_name: olist-api
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    environment: *app-env
+    env_file: [.env.app]
+    ports: ["127.0.0.1:28000:8000"]
+    ulimits: {nofile: {soft: 1024, hard: 2048}}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    deploy: {replicas: 1, resources: {limits: {cpus: "1", memory: 512m}}}
+    networks: {default: {aliases: [shop-api]}, backend: {}}
+networks:
+  backend: {internal: true}
+volumes:
+  pgdata: {}
+"""
+
+
+def compose_config(file: Path, lab_id: str) -> dict:
+    import json
+
+    result = subprocess.run(["docker", "compose", "-p", f"devops-ex-{lab_id}", "-f", str(file), "config", "--no-env-resolution",
+                             "--format", "json"], capture_output=True, text=True, timeout=60, env=testkit._docker_env())
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_compose_problems_accepts_olist_like_project(tmp_path):
+    if not shutil.which("docker") or testkit._compose_version_ok():
+        pytest.skip("Cần docker compose v2")
+    root = tmp_path / "proj"
+    file = write_compose(root, OLIST_LIKE)
+    (root / "initdb").mkdir()
+    (root / ".env.app").write_text("LOG_LEVEL=INFO\n", encoding="utf-8")
+    write_dockerfile(root, "RUN true")
+    assert testkit._compose_problems(compose_config(file, LAB), root, LAB) == []
+    sample = testkit.ROOT / "tracks" / "devops" / "sample-app"
+    assert testkit._compose_problems(compose_config(sample / "compose.yaml", LAB), sample, LAB) == []
+
+
+def test_compose_override_reset_restart_readonly_binds_and_labels(tmp_path):
+    lab = testkit.DockerLab()
+    config = base_config(tmp_path, restart="always", volumes=[
+        {"type": "bind", "source": str(tmp_path / "conf"), "target": "/c", "bind": {}},
+        {"type": "volume", "source": "data", "target": "/d", "volume": {}},
+    ])
+    override, _ = lab._compose_override(config, {}, "2-3", "256m", 256)
+    text = testkit._dump_override(override)
+    app = override["services"]["app"]
+    assert isinstance(app["restart"], testkit._Reset) and "restart: !reset" in text
+    binds = [v for v in app["volumes"] if v["type"] == "bind"]
+    assert binds and all(v["read_only"] for v in binds) and "volumes: !override" in text
+    assert [v for v in app["volumes"] if v["type"] == "volume"][0].get("read_only") is None
+    for kind, key in (("volumes", "data"), ("networks", "default")):
+        assert override[kind][key]["labels"] == {"devops-ex": "1", "devops-ex.lab": lab.id}
+
+
+def test_dockerfile_bases():
+    text = """# syntax=docker/dockerfile:1
+ARG PY=3.12.16
+ARG UNSET
+ARG BASE
+FROM --platform=$BUILDPLATFORM python:${PY}-alpine3.24 AS builder
+RUN echo a \\
+  && echo b
+FROM builder AS test
+FROM $UNSET
+FROM scratch
+FROM nginx:${NG:-1.30.6}-alpine
+from ${BASE}
+FROM python:3.12.16-alpine3.24
+"""
+    assert testkit._dockerfile_bases(text) == ["python:3.12.16-alpine3.24", "nginx:1.30.6-alpine"]
+    assert testkit._dockerfile_bases(text, {"PY": "3.13.1", "BASE": "debian:13"})[:3] == [
+        "python:3.13.1-alpine3.24", "nginx:1.30.6-alpine", "debian:13"]
+
+
+def test_docker_lab_build_skips_when_base_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit, "_BUILDER", None)
+    run, calls = build_fake()
+
+    def no_base(cmd, **kw):
+        if cmd[1:3] == ["image", "inspect"]:
+            calls.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 1, "", "No such image")
+        if cmd[1:2] == ["info"]:
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return run(cmd, **kw)
+
+    monkeypatch.setattr(testkit.subprocess, "run", no_base)
+    monkeypatch.setattr(testkit.shutil, "which", lambda name: f"/usr/bin/{name}")
+    context = tmp_path / "app"
+    context.mkdir()
+    (context / "Dockerfile").write_text("FROM ghcr.io/khong-co/base:9 AS b\nFROM b\n", encoding="utf-8")
+    with pytest.raises(pytest.skip.Exception, match="docker pull ghcr.io/khong-co/base:9"):
+        with testkit.DockerLab() as lab:
+            lab.build(context, "api")
+    assert not any(c[1:3] == ["buildx", "build"] for c in calls), "Thiếu image base thì không build (không tự pull)"
+
+
+def test_docker_lab_compose_uses_copy_and_readonly_binds(tmp_path):
+    require_real_docker(BASE)
+    root = tmp_path / "proj"
+    (root / "site").mkdir(parents=True)
+    (root / "site" / "index.html").write_text("ban-goc", encoding="utf-8")
+    file = write_compose(root, f"""
+services:
+  web:
+    image: {BASE}
+    command: ["sleep", "300"]
+    restart: always
+    volumes: ["./site:/srv/site", "data:/data"]
+    tmpfs: [/scratch]
+volumes:
+  data: {{}}
+""")
+    with testkit.DockerLab() as lab:
+        project = lab.compose(file)
+        info = inspect_container(project.container("web"))
+        bind = next(m for m in info["Mounts"] if m["Destination"] == "/srv/site")
+        assert not Path(bind["Source"]).is_relative_to(root.resolve()), "Compose phải chạy từ bản chép, không phải thư mục gốc"
+        assert Path(bind["Source"]).is_relative_to(Path(tempfile_root())) and bind["RW"] is False
+        assert info["HostConfig"]["RestartPolicy"]["Name"] in ("", "no"), "restart bị bỏ để container không tự sống lại"
+        write = project.exec("web", "sh", "-c", "echo hong > /srv/site/index.html")
+        assert write.returncode != 0 and "Read-only" in write.stderr
+        assert project.exec("web", "sh", "-c", "echo ok > /data/x && echo ok > /scratch/x").returncode == 0
+        volume = next(m for m in info["Mounts"] if m["Destination"] == "/data")
+        labels = testkit._docker("volume", "inspect", "-f", "{{json .Labels}}", volume["Name"]).stdout
+        assert '"devops-ex":"1"' in labels and f'"devops-ex.lab":"{lab.id}"' in labels
+    assert (root / "site" / "index.html").read_text(encoding="utf-8") == "ban-goc"
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def tempfile_root() -> str:
+    import tempfile
+
+    return str(Path(tempfile.gettempdir()).resolve())
 
 
 def test_docker_lab_compose_refuses_outside_with(tmp_path):

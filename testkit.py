@@ -181,9 +181,40 @@ COMPOSE_MIN_VERSION = (2, 24, 4)
 _PORT_TAKEN = ("port is already allocated", "address already in use")
 _IMAGE_ALIAS = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,62}$")
 _DOCKER_ENV_KEEP = ("PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY", "XDG_RUNTIME_DIR")
-_SAFE_CAPS = {"CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "SETGID", "SETUID", "SETPCAP", "NET_BIND_SERVICE",
-              "NET_RAW", "SYS_CHROOT", "MKNOD", "AUDIT_WRITE", "SETFCAP"}
+_COMPOSE_TOP_KEYS = {"services", "volumes", "networks", "name"}
+_COMPOSE_SERVICE_KEYS = {
+    "image", "build", "command", "entrypoint", "environment", "env_file", "ports", "expose", "depends_on", "healthcheck",
+    "volumes", "working_dir", "user", "labels", "restart", "stop_signal", "stop_grace_period", "tmpfs", "read_only", "init",
+    "networks", "cap_drop", "profiles", "hostname", "deploy", "logging", "ulimits", "cpuset", "mem_limit", "pids_limit",
+    "memswap_limit", "container_name", "pull_policy",
+}
+_COMPOSE_GENERIC = "không có trong danh sách khoá được phép của bài tập; xem docstring `DockerLab.compose`"
+_HOST_NAMESPACE = "bỏ cách ly namespace hay cgroup với máy host hoặc container khác"
+_HOST_DEVICE = "cho container truy cập thiết bị của máy host, ví dụ đọc ghi thẳng ổ đĩa"
+_COMPOSE_REASONS = {
+    "privileged": "cho container gần như toàn quyền trên máy host",
+    "cap_add": "thêm capability cho container, có thể thành quyền quản trị máy host",
+    "security_opt": "đổi seccomp, AppArmor hay no-new-privileges; testkit tự đặt no-new-privileges",
+    "devices": _HOST_DEVICE,
+    "device_cgroup_rules": _HOST_DEVICE,
+    "gpus": _HOST_DEVICE,
+    "runtime": "đổi runtime của container, có thể bỏ lớp cách ly",
+    "network_mode": _HOST_NAMESPACE,
+    "pid": _HOST_NAMESPACE,
+    "ipc": _HOST_NAMESPACE,
+    "uts": _HOST_NAMESPACE,
+    "userns_mode": _HOST_NAMESPACE,
+    "cgroup": _HOST_NAMESPACE,
+    "cgroup_parent": _HOST_NAMESPACE,
+    "volumes_from": "lấy volume của container khác",
+    "sysctls": "đổi tham số kernel của container",
+    "extra_hosts": "đổi phân giải tên của container",
+    "configs": "đọc tệp hay biến môi trường của máy host",
+    "secrets": "đọc tệp hay biến môi trường của máy host",
+    "include": "kéo thêm tệp compose khác",
+}
 _BUILD_KEYS = {"context", "dockerfile", "args", "target"}
+_COPY_IGNORE = (".git", ".venv", "node_modules", "__pycache__", ".pytest_cache")
 _BUILDER: str | None = None
 
 
@@ -255,32 +286,32 @@ def _inside(path: str | Path, root: Path) -> bool:
     return Path(path).resolve().is_relative_to(root.resolve())
 
 
-def _compose_problems(config: dict, root: Path) -> list[str]:
-    """Lý do từ chối một project compose (cấu hình đã resolve bằng `docker compose config --no-env-resolution`): mọi thứ
-    cho container quyền trên máy host, đọc tệp ngoài `root`, hay gắn vào network/volume không do project tạo."""
+def _compose_problems(config: dict, root: Path, lab_id: str) -> list[str]:
+    """Lý do từ chối một project compose, xét trên output của `docker compose config --no-env-resolution`.
+
+    Danh sách cho phép (allowlist), khoá khác đều bị từ chối kèm lý do:
+    - Service: image, build (context trong `root`; dockerfile; args; target), command, entrypoint, environment, env_file
+      (trong `root`), ports, expose, depends_on, healthcheck, volumes (bind trong `root`, volume có tên của project,
+      tmpfs), working_dir, user, labels, restart, stop_signal, stop_grace_period, tmpfs, read_only, init, networks,
+      cap_drop, profiles, hostname, deploy (chỉ resources.limits cpus/memory/pids và replicas), logging (driver
+      json-file/local), ulimits (chỉ nofile); cộng các khoá testkit ghi đè: cpuset, mem_limit, pids_limit,
+      memswap_limit, container_name, pull_policy.
+    - Cấp trên cùng: services, volumes, networks, name, khoá mở rộng `x-*`.
+    - Volume/network cấp trên cùng: tên phải bắt đầu bằng `devops-ex-<lab id>`, driver mặc định (local/bridge), không
+      external, không driver_opts.
+    """
     problems = []
+    prefix = f"{DOCKER_PREFIX}{lab_id}"
+    for key in config:
+        if key not in _COMPOSE_TOP_KEYS and not key.startswith("x-"):
+            problems.append(f"khoá cấp trên cùng `{key}` không được hỗ trợ ({_COMPOSE_REASONS.get(key, _COMPOSE_GENERIC)})")
     for name, svc in (config.get("services") or {}).items():
         where = f"service {name}"
-        if svc.get("privileged"):
-            problems.append(f"{where}: privileged: true cho container gần như toàn quyền trên máy host")
-        network_mode = str(svc.get("network_mode") or "")
-        if network_mode == "host" or network_mode.startswith("container:"):
-            problems.append(f"{where}: network_mode: {network_mode} dùng chung mạng của máy host hay container khác, "
-                            "cổng không còn bị giới hạn ở 127.0.0.1")
-        for key in ("pid", "ipc", "uts", "userns_mode", "cgroup"):
-            value = str(svc.get(key) or "")
-            if value == "host" or value.startswith("container:"):
-                problems.append(f"{where}: {key}: {value} bỏ cách ly namespace với máy host hay container khác")
-        if svc.get("devices"):
-            problems.append(f"{where}: devices cho container truy cập thiết bị của máy host")
-        if svc.get("cgroup_parent"):
-            problems.append(f"{where}: cgroup_parent đặt container ra ngoài cgroup do Docker quản lý")
-        caps = {str(cap).upper().removeprefix("CAP_") for cap in svc.get("cap_add") or []} - _SAFE_CAPS
-        if caps:
-            problems.append(f"{where}: cap_add {', '.join(sorted(caps))} cho container quyền quản trị máy host")
-        for opt in svc.get("security_opt") or []:
-            if "unconfined" in str(opt) or str(opt).replace("=", ":") == "no-new-privileges:false":
-                problems.append(f"{where}: security_opt {opt} tắt lớp bảo vệ của container")
+        for key, value in svc.items():
+            if key in _COMPOSE_SERVICE_KEYS or value in (None, "", [], {}, False):
+                continue
+            shown = f"`{key}: {value}`" if isinstance(value, (str, bool, int)) else f"`{key}`"
+            problems.append(f"{where}: {shown} bị từ chối ({_COMPOSE_REASONS.get(key, _COMPOSE_GENERIC)})")
         for volume in svc.get("volumes") or []:
             kind, source = volume.get("type"), volume.get("source", "")
             if kind == "bind" and not _inside(source, root):
@@ -288,9 +319,6 @@ def _compose_problems(config: dict, root: Path) -> list[str]:
                 problems.append(f"{where}: bind mount {source}{hint} nằm ngoài thư mục {root}")
             elif kind not in ("bind", "volume", "tmpfs"):
                 problems.append(f"{where}: volume kiểu {kind} không được hỗ trợ")
-        for source in svc.get("volumes_from") or []:
-            if str(source).startswith("container:"):
-                problems.append(f"{where}: volumes_from {source} lấy volume của container ngoài project")
         for env_file in svc.get("env_file") or []:
             path = env_file.get("path") if isinstance(env_file, dict) else env_file
             if path and not _inside(path, root):
@@ -302,26 +330,87 @@ def _compose_problems(config: dict, root: Path) -> list[str]:
                 problems.append(f"{where}: build context {context} nằm ngoài thư mục {root}")
             elif not _inside(context / build.get("dockerfile", "Dockerfile"), context):
                 problems.append(f"{where}: build dockerfile {build.get('dockerfile')} nằm ngoài build context")
-            extra = sorted(set(build) - _BUILD_KEYS)
+            extra = sorted(k for k, v in build.items() if k not in _BUILD_KEYS and v not in (None, "", [], {}))
             if extra:
                 problems.append(f"{where}: build chỉ hỗ trợ {', '.join(sorted(_BUILD_KEYS))}, không hỗ trợ {', '.join(extra)}")
-    for kind in ("networks", "volumes"):
+        deploy = {k: v for k, v in (svc.get("deploy") or {}).items() if v not in (None, {}, [])}
+        resources = {k: v for k, v in (deploy.get("resources") or {}).items() if v not in (None, {}, [])}
+        limits = set((resources.get("limits") or {})) - {"cpus", "memory", "pids"}
+        extra = sorted((set(deploy) - {"resources", "replicas"}) | (set(resources) - {"limits"}) | limits)
+        if extra:
+            problems.append(f"{where}: deploy chỉ hỗ trợ resources.limits (cpus, memory, pids) và replicas, không hỗ trợ "
+                            f"{', '.join(extra)} (reservations.devices cho container dùng thiết bị của máy host)")
+        driver = (svc.get("logging") or {}).get("driver")
+        if driver not in (None, "", "json-file", "local"):
+            problems.append(f"{where}: logging driver {driver} gửi log ra ngoài máy; chỉ hỗ trợ json-file, local")
+        ulimits = sorted(set(svc.get("ulimits") or {}) - {"nofile"})
+        if ulimits:
+            problems.append(f"{where}: ulimits chỉ hỗ trợ nofile, không hỗ trợ {', '.join(ulimits)}")
+    for kind, drivers, keys in (("volumes", ("local",), {"name", "driver", "labels"}),
+                                ("networks", ("bridge",), {"name", "driver", "labels", "ipam", "internal"})):
         for name, spec in (config.get(kind) or {}).items():
             spec = spec or {}
+            where = f"{kind} {name}"
             if spec.get("external"):
-                problems.append(f"{kind} {name}: external: true gắn vào tài nguyên có sẵn không do project tạo")
+                problems.append(f"{where}: external: true gắn vào tài nguyên có sẵn không do bài tập tạo")
             if spec.get("driver_opts"):
-                problems.append(f"{kind} {name}: driver_opts có thể bind thư mục của máy host")
-            if kind == "networks" and spec.get("driver") in ("host", "macvlan", "ipvlan"):
-                problems.append(f"networks {name}: driver {spec['driver']} đưa container ra mạng của máy host")
-    for kind in ("configs", "secrets"):
-        for name, spec in (config.get(kind) or {}).items():
-            path = (spec or {}).get("file")
-            if path and not _inside(path, root):
-                problems.append(f"{kind} {name}: tệp {path} nằm ngoài thư mục {root}")
-            if (spec or {}).get("environment") or (spec or {}).get("external"):
-                problems.append(f"{kind} {name}: chỉ hỗ trợ `file:` trong thư mục {root}")
+                problems.append(f"{where}: driver_opts có thể bind thư mục hay thiết bị của máy host")
+            if spec.get("driver") not in (None, "", *drivers):
+                problems.append(f"{where}: driver {spec['driver']} không được hỗ trợ, chỉ {', '.join(drivers)}")
+            if kind == "networks" and spec.get("ipam") not in (None, {}):
+                problems.append(f"{where}: ipam tự đặt dải địa chỉ có thể đụng mạng khác trên máy")
+            label = spec.get("name") or ""
+            if label and not label.startswith(prefix):
+                problems.append(f"{where}: name: {label} trỏ tới tài nguyên ngoài project (có thể là dữ liệu thật của "
+                                f"bạn); bỏ `name:` hoặc đặt tên bắt đầu bằng {prefix}")
+            extra = sorted(k for k, v in spec.items() if k not in keys and k not in ("external", "driver_opts") and v)
+            if extra:
+                problems.append(f"{where}: không hỗ trợ {', '.join(extra)}")
     return problems
+
+
+def _dockerfile_bases(text: str, build_args: dict | None = None) -> list[str]:
+    """Image base trong các dòng FROM, bỏ tên stage, `scratch` và tham chiếu ARG không resolve được."""
+    build_args = {k: str(v) for k, v in (build_args or {}).items()}
+    args: dict[str, str | None] = {}
+    stages: set[str] = set()
+    bases: list[str] = []
+    seen_from = False
+
+    def resolve(match: re.Match) -> str:
+        name = match.group(1) or match.group(3)
+        value = args.get(name)
+        if value is None and match.group(2) is not None:
+            value = match.group(2)
+        if value is None:
+            raise KeyError(name)
+        return value
+
+    for raw in re.sub(r"\\\r?\n", " ", text).splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        word, _, rest = line.partition(" ")
+        word = word.upper()
+        if word == "ARG" and not seen_from:
+            for item in rest.split():
+                key, eq, value = item.partition("=")
+                args[key] = build_args.get(key, value.strip("\"'") if eq else None)
+        elif word == "FROM":
+            seen_from = True
+            parts = [part for part in rest.split() if not part.startswith("--")]
+            if not parts:
+                continue
+            alias = parts[2].lower() if len(parts) >= 3 and parts[1].lower() == "as" else None
+            try:
+                ref = re.sub(r"\$\{(\w+)(?::?-([^}]*))?\}|\$(\w+)", resolve, parts[0])
+            except KeyError:
+                ref = None
+            if ref and ref.lower() not in stages and ref.lower() != "scratch" and ref not in bases:
+                bases.append(ref)
+            if alias:
+                stages.add(alias)
+    return bases
 
 
 class _Reset:
@@ -550,8 +639,8 @@ class DockerLab:
               target: str | None = None, memory: str = DOCKER_BUILD_MEMORY, timeout: float = 600) -> str:
         """Build image từ `context` (tệp của người học) bằng builder driver docker, trả tag `devops-ex-<id>/<alias>:test`.
 
-        Bước RUN bị ghim CPU theo `docker_cpu_args()` và giới hạn RAM `memory`; `--pull=false` nên build chạy offline khi
-        đã có image base. Không truyền `--network`, `--ssh`, `--secret`, `--allow` nên Dockerfile không lấy được mạng
+        Bước RUN bị ghim CPU theo `docker_cpu_args()` và giới hạn RAM `memory`. Image base trong các dòng FROM phải có sẵn
+        (thiếu thì skip kèm lệnh `docker pull`), cộng `--pull=false` nên build không tự kéo image. Không truyền `--network`, `--ssh`, `--secret`, `--allow` nên Dockerfile không lấy được mạng
         host, SSH agent hay bí mật. Image mang nhãn `devops-ex=1` và `devops-ex.lab=<id>`, bị `rmi -f` khi đóng.
         """
         self._require_entered()
@@ -561,6 +650,8 @@ class DockerLab:
         path = (context / dockerfile).resolve()
         if not path.is_relative_to(context):
             pytest.fail(f"Dockerfile {dockerfile} nằm ngoài build context {context}")
+        for base in _dockerfile_bases(path.read_text(encoding="utf-8", errors="replace"), build_args):
+            Exercise.require_image(base)
         builder = _build_builder()
         tag = f"{self.network}/{alias}:test"
         if tag not in self.images:
@@ -602,12 +693,15 @@ class DockerLab:
                 pids_limit: int = DOCKER_PIDS_LIMIT, wait: bool = True, timeout: float = 180) -> ComposeProject:
         """`docker compose up -d` tệp `file` của người học với project `devops-ex-<id>` và một tệp override sinh ra.
 
-        Từ chối (fail kèm lý do) tệp có `privileged`, `network_mode`/`pid`/`ipc: host`, bind mount, `env_file` hay build
-        context ngoài thư mục chứa `file`, `cap_add` quyền quản trị, `devices`, network/volume `external`. Mọi service bị
-        override: cpuset, `mem_limit`, `pids_limit`, nhãn `devops-ex=1`, `security_opt: [no-new-privileges:true]`, cổng
-        remap về `127.0.0.1:<cổng trống>` (đọc bằng `project.port(service, cổng)`), bỏ `container_name`. Service có
-        `build:` được build bằng `DockerLab.build`; image khác phải có sẵn (`--pull never`). Compose chạy với env dựng từ
-        đầu cộng `env`. `close()` chạy `down -v --remove-orphans`. Mỗi lab một project.
+        Thư mục chứa `file` được chép vào thư mục tạm của lab và compose chạy từ bản chép, nên container không ghi được
+        vào repo của người học. Cấu hình được xét theo allowlist (xem `_compose_problems`); khoá ngoài danh sách, bind
+        mount, `env_file` hay build context ngoài thư mục, volume/network có `name:` không bắt đầu bằng `devops-ex-<id>`
+        đều bị từ chối kèm lý do. Mọi service bị override: cpuset, `mem_limit`, `pids_limit`, nhãn `devops-ex=1`,
+        `security_opt: [no-new-privileges:true]`, cổng remap về `127.0.0.1:<cổng trống>` (đọc bằng
+        `project.port(service, cổng)`), mọi bind mount thành chỉ đọc (cần ghi thì dùng named volume hay tmpfs), bỏ
+        `container_name` và `restart`. Volume và network của project mang nhãn `devops-ex=1`. Service có `build:` được
+        build bằng `DockerLab.build`; image khác phải có sẵn (`--pull never`, thiếu thì skip). Compose chạy với env dựng
+        từ đầu cộng `env`. `close()` chạy `down -v --remove-orphans`. Mỗi lab một project.
         """
         import json
 
@@ -617,12 +711,14 @@ class DockerLab:
         reason = _compose_version_ok()
         if reason:
             pytest.skip(reason)
-        file = Path(file).resolve()
-        root = file.parent
-        cpus = docker_cpu_args()
-        cpuset = cpus[1] if cpus else ""
+        source = Path(file).resolve()
         if self._tmp is None:
             self._tmp = Path(tempfile.mkdtemp(prefix=f"{self.network}-"))
+        root = self._tmp / "project"
+        shutil.copytree(source.parent, root, symlinks=True, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+        file = root / source.name
+        cpus = docker_cpu_args()
+        cpuset = cpus[1] if cpus else ""
         project = ComposeProject(file, self.network, self._tmp / "compose.override.yaml",
                                  {"DEVOPS_CPUSET": cpuset, **{k: str(v) for k, v in (env or {}).items()}})
         self.project = project
@@ -630,9 +726,9 @@ class DockerLab:
         if result.returncode != 0:
             pytest.fail(f"docker compose config lỗi với {file.name}: {result.stderr.strip()}")
         config = json.loads(result.stdout)
-        problems = _compose_problems(config, root)
+        problems = _compose_problems(config, root, self.id)
         if problems:
-            pytest.fail(f"Tệp {file.name} bị từ chối vì phá cách ly của bài tập:\n- " + "\n- ".join(problems))
+            pytest.fail(f"Tệp {source.name} bị từ chối vì phá cách ly của bài tập:\n- " + "\n- ".join(problems))
         services = config.get("services") or {}
         built: dict[tuple, str] = {}
         images: dict[str, str] = {}
@@ -649,7 +745,7 @@ class DockerLab:
                 pytest.skip(f"Chưa có image {svc['image']}. Tải bằng: docker pull {svc['image']}")
         up = ["up", "-d", "--pull", "never", "--no-build"] + (["--wait", "--wait-timeout", str(int(timeout))] if wait else [])
         for _ in range(3):
-            override, ports = self._compose_override(services, images, cpuset, memory, pids_limit)
+            override, ports = self._compose_override(config, images, cpuset, memory, pids_limit)
             project.override.write_text(_dump_override(override), encoding="utf-8")
             try:
                 result = project.run(*up, timeout=timeout + 60)
@@ -665,13 +761,15 @@ class DockerLab:
         logs = project.logs(tail=DOCKER_LOG_LINES).rstrip()[-DOCKER_LOG_CHARS:] or "(không có log)"
         pytest.fail(f"docker compose up lỗi: {result.stderr.strip()[-DOCKER_LOG_CHARS:]}\n{DOCKER_LOG_LINES} dòng log cuối:\n{logs}")
 
-    def _compose_override(self, services: dict, images: dict[str, str], cpuset: str, memory: str,
+    def _compose_override(self, config: dict, images: dict[str, str], cpuset: str, memory: str,
                           pids_limit: int) -> tuple[dict, dict[str, dict[int, int]]]:
+        labels = {"devops-ex": "1", DOCKER_LAB_LABEL: self.id}
         override: dict[str, dict] = {}
         ports: dict[str, dict[int, int]] = {}
-        for name, svc in services.items():
+        for name, svc in (config.get("services") or {}).items():
             item: dict[str, Any] = {
-                "labels": {"devops-ex": "1", DOCKER_LAB_LABEL: self.id},
+                "labels": dict(labels),
+                "restart": _Reset(),
                 "security_opt": _Override(["no-new-privileges:true"]),
                 "cpuset": cpuset if cpuset else _Reset(),
                 "mem_limit": memory,
@@ -683,6 +781,8 @@ class DockerLab:
                 item["memswap_limit"] = _Reset()
             if "container_name" in svc:
                 item["container_name"] = _Reset()
+            if any(v.get("type") == "bind" for v in svc.get("volumes") or []):
+                item["volumes"] = _Override([{**v, "read_only": True} if v.get("type") == "bind" else v for v in svc["volumes"]])
             if name in images:
                 item["build"] = _Reset()
                 item["image"] = images[name]
@@ -692,7 +792,11 @@ class DockerLab:
                                            for p in svc["ports"]])
                 ports[name] = mapping
             override[name] = item
-        return {"services": override}, ports
+        result: dict[str, Any] = {"services": override}
+        for kind in ("volumes", "networks"):
+            if config.get(kind):
+                result[kind] = {key: {"labels": dict(labels)} for key in config[kind]}
+        return result, ports
 
     def close(self) -> None:
         if self.project is not None:
