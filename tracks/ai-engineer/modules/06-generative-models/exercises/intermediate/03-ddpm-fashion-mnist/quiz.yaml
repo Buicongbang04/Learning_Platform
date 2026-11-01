@@ -15,12 +15,12 @@ questions:
 - id: ddim-cost
   kind: data
   type: single
-  prompt: Với model đã train ở cấu hình của bạn, DDIM 50 bước làm tỉ lệ "tự tin > 0.9" của giám khảo thay đổi bao nhiêu so với DDPM 1 000 bước (cấu hình GPU)?
+  prompt: Ở cấu hình GPU, DDIM 50 bước làm tỉ lệ "tự tin > 0.9" của giám khảo thay đổi bao nhiêu so với DDPM 1 000 bước?
   options:
   - id: a
     text: Tăng khoảng 0.3
   - id: b
-    text: Giảm dưới 0.1 (khoảng 0.05)
+    text: Thay đổi nhỏ, dưới 0.1
   - id: c
     text: Giảm về gần 0
   - id: d

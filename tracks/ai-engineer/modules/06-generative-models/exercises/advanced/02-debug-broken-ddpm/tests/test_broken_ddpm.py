@@ -29,7 +29,7 @@ def test_preprocess_postprocess(nb):
     img = torch.tensor([[[0, 255], [128, 64]]], dtype=torch.uint8)
     x = nb.preprocess(img)
     assert x.shape == (1, 1, 2, 2) and x.dtype == torch.float32
-    torch.testing.assert_close(x, (img.float().unsqueeze(1) / 255) * 2 - 1, msg="model train trên ảnh trong [-1, 1]")
+    torch.testing.assert_close(x, (img.float().unsqueeze(1) / 255) * 2 - 1, msg="preprocess không khớp docstring")
     y = nb.postprocess(torch.tensor([-1.5, -1.0, 0.0, 1.0, 2.0]))
     torch.testing.assert_close(y, torch.tensor([0.0, 0.0, 0.5, 1.0, 1.0]))
     torch.testing.assert_close(nb.postprocess(nb.preprocess(img)), img.float().unsqueeze(1) / 255, msg="đi vòng preprocess → postprocess")
@@ -121,7 +121,7 @@ def test_train_runs_and_ema_tracks(nb):
     assert len(losses) == 60 and all(isinstance(v, float) for v in losses)
     assert sum(losses[-15:]) < sum(losses[:15])
     differs = any(not torch.equal(ema.shadow[k], v) for k, v in model.state_dict().items() if v.dtype.is_floating_point)
-    assert differs, "EMA phải là trung bình trượt riêng, không trùng trọng số hiện tại"
+    assert differs, "EMA không khớp docstring"
     moved = any(not torch.equal(ema.shadow[k], v) for k, v in init.items() if v.dtype.is_floating_point)
     assert moved, "EMA phải được cập nhật trong lúc train"
 
