@@ -37,6 +37,9 @@ vẫn còn dữ liệu cũ.
 
 ## Kiểm thêm
 
-Sau ba lượt, bảng `checkpoints` có 9 dòng, mỗi dòng một blob `msgpack` chứa **toàn bộ** state (không phải phần chênh),
-nên dung lượng tăng theo bình phương số lượt với hội thoại dài. Mục 3 lý thuyết đo kích thước và độ trễ thêm của
-SQLite so với bộ nhớ.
+Sau ba lượt, bảng `checkpoints` có 9 dòng (`type` là `msgpack`), và mỗi dòng chứa **toàn bộ** state lúc đó, không phải
+phần chênh; tệp mở ở chế độ WAL nên dữ liệu mới nằm trong tệp `-wal` cho tới khi checkpoint của SQLite gộp lại. Đo
+bằng fake model trên PC của track (log `.superpowers/scratch/logs/theory_bench.log`), mỗi lượt khoảng 1.3 KB chữ: sau
+10 lượt tổng blob checkpoint 0.21 MB, sau 100 lượt 19.4 MB (300 checkpoint, blob cuối 128 KB). Gấp 10 số lượt thì gấp
+khoảng 90 lần dung lượng: tăng theo bình phương. Hội thoại dài cần cắt state (xoá message cũ bằng `RemoveMessage`,
+tóm tắt), xoá checkpoint cũ, hoặc chỉ giữ checkpoint cuối mỗi thread nếu không cần time travel.
