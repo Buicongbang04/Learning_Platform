@@ -48,7 +48,7 @@ questions:
   - id: b
     text: lm_head dùng chung token_embd, llama.cpp tự dùng lại
   - id: c
-    text: Lớp output luôn được quantize riêng ở bước sau
+    text: Lớp output luôn được quantize riêng ở một bước sau đó
   - id: d
     text: Tensor output quá lớn so với giới hạn của GGUF
 - id: fallback-reason
@@ -70,7 +70,7 @@ questions:
   prompt: Với GPT mini, tốc độ sinh token gần như không tăng khi đi từ Q5_K_M xuống Q2_K. Lý do hợp lý nhất?
   options:
   - id: a
-    text: Q2_K giải lượng tử đắt hơn nên bù hết phần tiết kiệm
+    text: Q2_K giải lượng tử đắt hơn nhiều nên bù hết phần đọc bộ nhớ tiết kiệm
   - id: b
     text: Model quá nhỏ, chi phí cố định mỗi token lấn át việc đọc trọng số
   - id: c

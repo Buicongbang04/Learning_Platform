@@ -23,12 +23,13 @@ lấy bao nhiêu MB, và biết lớp nào cần giữ nhiều bit hơn.
 
 **Phần cứng:** CPU · ~90 phút
 
-Thời gian trên là thời gian làm bài. Thời gian máy chạy hết notebook lời giải: __CPU_TIME__ trên CPU (4 luồng, 20 bài
-validation, checkpoint cấu hình PC 13.8 triệu tham số); GPU (kernel `ai-gpu`) dùng đủ 100 bài, khoảng 1 phút.
+Thời gian trên là thời gian làm bài. Thời gian máy chạy hết notebook lời giải: khoảng 18 phút trên CPU (4 luồng, 20 bài
+validation, checkpoint cấu hình PC 13.8 triệu tham số); khoảng 4 phút trên GPU dùng chung (kernel `ai-gpu`, đủ 100 bài).
 
 Checkpoint: tệp `gpt-mini-v1` bạn lưu ở bài Advanced 01 module 05. Chép vào `data/raw/gpt-mini-vi/gpt_mini_vi.pt` (thư mục này
 không vào git) hoặc đặt biến môi trường `GPT_MINI_CKPT=<đường dẫn>`. Chưa có thì notebook tự train một GPT nhỏ dự phòng (4
-tầng, `n_embd` 128, khoảng 4 phút trên CPU) và lưu lại cho các bài sau; kết luận vẫn kiểm được, con số khác.
+tầng, `n_embd` 128, khoảng 4 phút trên CPU) và lưu lại cho các bài sau. Bản này train quá ngắn nên lượng tử hoá gần như không
+làm nó mất gì: so sánh điều đó với checkpoint thật là một bài học, nhưng trắc nghiệm của bài giả định checkpoint của module 05.
 
 Trong `starter/ptq.ipynb`:
 

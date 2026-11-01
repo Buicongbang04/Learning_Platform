@@ -23,8 +23,8 @@ không phải nhờ được train thêm.
 
 **Phần cứng:** CPU · ~90 phút
 
-Thời gian trên là thời gian làm bài. Thời gian máy chạy hết notebook lời giải: __CPU_TIME__ trên CPU (4 luồng, checkpoint cấu
-hình PC, 120 bước); __GPU_TIME__ trên GPU (kernel `ai-gpu`, 300 bước, đủ 100 bài validation).
+Thời gian trên là thời gian làm bài. Thời gian máy chạy hết notebook lời giải: khoảng 8 phút trên CPU (4 luồng, checkpoint cấu
+hình PC, 120 bước); khoảng 2 phút trên GPU dùng chung (kernel `ai-gpu`, 300 bước, đủ 100 bài validation).
 
 Checkpoint như bài Intermediate 01. Trong `starter/qat.ipynb`:
 

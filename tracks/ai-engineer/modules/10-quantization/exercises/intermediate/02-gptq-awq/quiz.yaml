@@ -7,7 +7,7 @@ questions:
   - id: a
     text: Dưới 10%
   - id: b
-    text: Khoảng 25% tới 65%
+    text: Khoảng 25% tới 75%
   - id: c
     text: Khoảng 80% tới 95%
   - id: d
@@ -20,7 +20,7 @@ questions:
   - id: a
     text: Gần bằng RTN, chênh dưới 0.005 bpc
   - id: b
-    text: Tốt hơn RTN khoảng 0.05 bpc
+    text: Tốt hơn RTN khoảng 0.05 bpc ở mọi lớp
   - id: c
     text: Tốt hơn cả GPTQ cùng cấu hình
   - id: d
@@ -41,16 +41,16 @@ questions:
 - id: act-outliers
   kind: data
   type: single
-  prompt: Ở GPT mini, tỉ lệ max/median của trung bình |x| theo kênh input lớn nhất ở loại lớp nào?
+  prompt: Trên mọi lớp của GPT mini, tỉ lệ max/median của trung bình |x| theo kênh input lớn nhất là bao nhiêu?
   options:
   - id: a
-    text: attn.qkv
+    text: Dưới 30
   - id: b
-    text: attn.proj
+    text: Khoảng 100 tới 200
   - id: c
-    text: mlp.fc
+    text: Khoảng 500 tới 1 000
   - id: d
-    text: mlp.proj
+    text: Hơn 5 000
 - id: damp
   kind: knowledge
   type: single
@@ -61,7 +61,7 @@ questions:
   - id: b
     text: Làm GPTQ chạy nhanh hơn nhờ ma trận thưa hơn
   - id: c
-    text: Thay cho dữ liệu hiệu chỉnh khi không có dữ liệu
+    text: Thay cho dữ liệu hiệu chỉnh khi không có sẵn dữ liệu nào để chạy
   - id: d
     text: Phạt trọng số lớn giống weight decay khi train
 - id: awq-fold
@@ -74,7 +74,7 @@ questions:
   - id: b
     text: Bỏ qua vì sai số nhỏ không đáng kể
   - id: c
-    text: Lượng tử hoá luôn activation bằng chính s_k
+    text: Lượng tử hoá luôn activation bằng chính s_k ở mỗi kênh tương ứng
   - id: d
     text: Nhân thêm s_k vào bias của chính lớp đó
 - id: calib-split
@@ -89,4 +89,4 @@ questions:
   - id: c
     text: Tokenizer xử lý validation khác tập train
   - id: d
-    text: Validation không có đủ kênh input để đo ngoại lai
+    text: Validation không có đủ kênh input để đo ngoại lai activation của từng lớp

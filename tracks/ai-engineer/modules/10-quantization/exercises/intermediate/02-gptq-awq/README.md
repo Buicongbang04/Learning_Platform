@@ -23,8 +23,8 @@ tham số `damp_percent`, `group_size`, `desc_act`, `sym` của các công cụ 
 
 **Phần cứng:** CPU · ~150 phút
 
-Thời gian trên là thời gian làm bài. Thời gian máy chạy hết notebook lời giải: __CPU_TIME__ trên CPU (4 luồng, checkpoint cấu
-hình PC, 20 bài validation); GPU nhanh hơn ở phần đánh giá, phần GPTQ/AWQ vẫn chạy trên CPU.
+Thời gian trên là thời gian làm bài. Thời gian máy chạy hết notebook lời giải: khoảng 4 phút trên CPU (4 luồng, checkpoint cấu
+hình PC, 20 bài validation); khoảng 2 phút trên GPU dùng chung (đủ 100 bài; GPTQ/AWQ vẫn chạy trên CPU).
 
 Checkpoint như bài Intermediate 01. Trong `starter/gptq_awq.ipynb` (`rtn_quantize`, `quant_params`, `quant_column` cho sẵn):
 

@@ -46,8 +46,8 @@ $$\min_{\hat W}\lVert XW^\top - X\hat W^\top\rVert^2$$. Hàm mất mát này b�
 nhau cho mọi hàng). Duyệt các cột theo thứ tự: làm tròn cột $$j$$, rồi cập nhật các cột **chưa** làm tròn để bù sai số vừa gây ra,
 theo công thức Optimal Brain Surgeon: $$\delta = -\frac{w_j - q_j}{[H^{-1}]_{jj}}\,[H^{-1}]_{j,:}$$. Mẹo làm nó chạy được trên model
 175B: dùng chung một thứ tự cột cho mọi hàng, lấy các hàng cần thiết của $$H^{-1}$$ từ nhân tử Cholesky (tính một lần, ổn định số
-nhờ dampening $$\lambda I$$), và cập nhật theo khối (lazy batch) để tận dụng GPU. Kết quả: sai số trọng số thường **lớn hơn** RTN
-nhưng sai số đầu ra nhỏ hơn, vì GPTQ tối ưu đúng thứ quan trọng.
+nhờ dampening $$\lambda I$$), và cập nhật theo khối (lazy batch) để tận dụng GPU. Điểm cốt lõi: GPTQ tối ưu sai số **đầu ra**
+trên dữ liệu thật, không tối ưu khoảng cách tới trọng số gốc.
 
 ## AWQ khác GPTQ ở đâu?
 
@@ -55,8 +55,8 @@ AWQ không sửa trọng số theo Hessian. Nó quan sát rằng một phần nh
 lớn, và bảo vệ chúng bằng một phép scale tương đương: nhân cột $$k$$ của $$W$$ với $$s_k$$, chia input kênh $$k$$ cho $$s_k$$ (gộp
 vào LayerNorm hoặc lớp tuyến tính phía trước), rồi mới RTN. Scale $$s = \bar{\lvert x\rvert}^{\alpha}$$, $$\alpha$$ tìm trên lưới để
 sai số đầu ra nhỏ nhất. Ưu điểm: không bị overfit tập hiệu chỉnh như cập nhật bậc hai, quantize nhanh, định dạng đầu ra vẫn là
-int4 theo nhóm bình thường. Hiệu quả của AWQ phụ thuộc vào việc model có kênh activation nổi trội hay không; trên một model nhỏ
-không có hiện tượng đó, AWQ gần như không hơn RTN (bài Intermediate 02 cho bạn đo).
+int4 theo nhóm bình thường. Trên Qwen2.5-0.5B (phần lý thuyết, mục 5), AWQ bớt khoảng 40% phần bpc mà RTN 4 bit làm mất; GPTQ bớt
+khoảng 70%.
 
 ## Straight-through estimator là gì? Vì sao QAT cần nó?
 

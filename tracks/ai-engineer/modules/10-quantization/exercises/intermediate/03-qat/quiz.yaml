@@ -22,7 +22,7 @@ questions:
   - id: b
     text: Tốt ngang QAT
   - id: c
-    text: Tốt hơn QAT khoảng 0.1 bpc
+    text: Tốt hơn QAT khoảng 0.1 bpc ở cả hai cấu hình
   - id: d
     text: Tốt hơn float32 gốc
 - id: loss-start
@@ -61,7 +61,7 @@ questions:
   - id: b
     text: Các bước cập nhật nhỏ hơn một bước lượng tử vẫn được cộng dồn
   - id: c
-    text: Vì optimizer AdamW không chạy được trên số nguyên
+    text: Vì optimizer AdamW không cập nhật được tham số kiểu số nguyên
   - id: d
     text: Để lúc suy luận vẫn dùng được trọng số float32
 - id: control-purpose
@@ -74,6 +74,6 @@ questions:
   - id: b
     text: Cải thiện đến từ việc thấy lượng tử hay chỉ từ việc train thêm
   - id: c
-    text: Dữ liệu fine-tune có bị rò rỉ validation không
+    text: Dữ liệu fine-tune có bị rò rỉ từ tập validation sang hay không
   - id: d
     text: Learning rate của QAT có quá lớn không

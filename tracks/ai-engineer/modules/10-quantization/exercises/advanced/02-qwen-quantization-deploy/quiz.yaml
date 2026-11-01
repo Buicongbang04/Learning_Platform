@@ -18,7 +18,7 @@ questions:
   prompt: Còn trong tệp qwen2.5:0.5b-instruct-q3_K_M, các ma trận attn_q, ffn_gate, ffn_up có kiểu gì?
   options:
   - id: a
-    text: Q3_K
+    text: Q3_K_S
   - id: b
     text: IQ4_NL
   - id: c
@@ -31,7 +31,7 @@ questions:
   prompt: Bật bnb_4bit_use_double_quant cho NF4 trên Qwen2.5-0.5B thay đổi bộ nhớ sau khi nạp và bpc thế nào?
   options:
   - id: a
-    text: Bộ nhớ giảm khoảng một nửa, bpc tăng rõ
+    text: Bộ nhớ giảm khoảng một nửa, bpc tăng rõ rệt so với NF4
   - id: b
     text: Bộ nhớ giảm vài phần trăm, bpc gần như không đổi
   - id: c
@@ -44,7 +44,7 @@ questions:
   prompt: Trên Qwen2.5-0.5B, so Δbpc của bitsandbytes FP4 với Δbpc của NF4 (cùng compute dtype bf16)?
   options:
   - id: a
-    text: Gần như bằng nhau
+    text: Gần như bằng nhau, chênh dưới 0.005 bpc
   - id: b
     text: FP4 tốt hơn khoảng một nửa
   - id: c
@@ -59,7 +59,7 @@ questions:
   - id: a
     text: Ollama không trả log-probability của các token trong prompt
   - id: b
-    text: Ollama tự đổi model sang fp16 trước khi chạy
+    text: Ollama tự đổi model sang fp16 trước khi chạy bất kỳ prompt nào
   - id: c
     text: Ollama không đọc được tệp GGUF đã quantize
   - id: d
@@ -74,7 +74,7 @@ questions:
   - id: b
     text: Không cấu hình nào khác tốt bằng ở mọi cột và hơn ở một cột
   - id: c
-    text: Nó nằm giữa cấu hình nhanh nhất và chính xác nhất
+    text: Nó nằm giữa cấu hình nhanh nhất và cấu hình chính xác nhất
   - id: d
     text: Nó đạt mọi ngưỡng bộ nhớ và chất lượng đặt ra
 - id: nvidia-smi

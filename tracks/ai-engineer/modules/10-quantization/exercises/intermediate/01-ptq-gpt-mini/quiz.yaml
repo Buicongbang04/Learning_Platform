@@ -20,11 +20,11 @@ questions:
   - id: a
     text: Gần bằng nhau, chênh dưới 20%
   - id: b
-    text: Per-tensor lớn hơn khoảng 4 tới 12 lần
+    text: Per-tensor lớn hơn khoảng 2 tới 20 lần
   - id: c
     text: Per-tensor lớn hơn hơn 50 lần
   - id: d
-    text: Per-tensor nhỏ hơn per-channel
+    text: Per-tensor nhỏ hơn per-channel một chút
 - id: int2-sym-asym
   kind: data
   type: single
@@ -35,13 +35,13 @@ questions:
   - id: b
     text: Hai bản cho bpc gần như bằng nhau
   - id: c
-    text: Zero-point tốt hơn, Δbpc bản đối xứng gấp 2 tới 5 lần
+    text: Zero-point tốt hơn, Δbpc bản đối xứng gấp 2 tới 8 lần
   - id: d
-    text: Zero-point tốt hơn, Δbpc bản đối xứng gấp hơn 10 lần
+    text: Zero-point tốt hơn, Δbpc bản đối xứng gấp hơn 20 lần nữa
 - id: embedding
   kind: data
   type: single
-  prompt: Ở int4 nhóm 128, quantize thêm embedding/lm_head dùng chung (so với chỉ các lớp Linear) đổi dung lượng và bpc ra sao?
+  prompt: Ở int4 nhóm 32, quantize thêm embedding/lm_head dùng chung (so với chỉ các lớp Linear) đổi dung lượng và bpc ra sao?
   options:
   - id: a
     text: Dung lượng giảm hơn 2 lần, bpc tăng thêm dưới 0.03
@@ -72,7 +72,7 @@ questions:
   - id: a
     text: Absmax 2 bit chỉ dùng 3 trên 4 mức, mất một phần tư dải mã
   - id: b
-    text: Zero-point dùng scale fp32 nên chính xác hơn scale fp16
+    text: Zero-point dùng scale fp32 nên chính xác hơn hẳn scale fp16
   - id: c
     text: Ở 2 bit trọng số không còn phân phối đối xứng quanh 0
   - id: d
@@ -89,7 +89,7 @@ questions:
   - id: c
     text: VRAM thật mà model int4 chiếm khi chạy
   - id: d
-    text: Cả độ chính xác, tốc độ và bộ nhớ cùng lúc
+    text: Cả độ chính xác, tốc độ và bộ nhớ trong cùng một lần
 - id: tied
   kind: knowledge
   type: single
@@ -98,7 +98,7 @@ questions:
   - id: a
     text: Chỉ lớp output đổi, embedding đầu vào giữ nguyên
   - id: b
-    text: PyTorch báo lỗi vì tensor đang được dùng chung
+    text: PyTorch báo lỗi vì tensor đang được hai module dùng chung
   - id: c
     text: Embedding đầu vào cũng bị quantize theo, cùng một tensor
   - id: d
