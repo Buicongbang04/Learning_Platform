@@ -408,8 +408,8 @@ flowchart TB
 - **Heuristic chọn láng giềng**: không lấy $$M$$ ứng viên gần nhất mà giữ ứng viên chỉ khi nó gần nút gốc hơn gần mọi láng
   giềng đã chọn. Cách này giữ lại những cạnh "đi xa" nối các cụm với nhau. Trên dữ liệu sinh có cụm tách mạnh, thiếu nó thì đồ thị rời
   thành các đảo và recall chững lại dù tăng `ef`. Trên embedding thật (cụm không tách rời như vậy), lợi ích nhỏ hơn nhiều và
-  tăng `ef` vẫn kéo được recall của cách chọn đơn giản lên; heuristic vẫn là mặc định của các thư viện vì nó không tốn thêm
-  gì đáng kể và che được trường hợp xấu. Bài Intermediate 01 cài và đo cả hai.
+  tăng `ef` vẫn kéo được recall của cách chọn đơn giản lên; heuristic vẫn là mặc định của các thư viện vì nó che được trường
+  hợp xấu với chi phí dựng thêm nhỏ. Bài Intermediate 01 cài và đo cả hai.
 
 HNSW cho recall rất cao ở độ trễ thấp và không cần train, nhưng: tốn bộ nhớ hơn IVF (vector gốc cộng đồ thị), dựng chậm,
 và **xoá** khó (nút xoá thường chỉ được đánh dấu, đồ thị xấu dần, cần dựng lại định kỳ).

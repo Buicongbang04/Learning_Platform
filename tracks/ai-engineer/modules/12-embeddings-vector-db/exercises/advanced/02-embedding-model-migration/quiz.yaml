@@ -35,7 +35,7 @@ questions:
   - id: b
     text: Gần như bằng nhau
   - id: c
-    text: Nhanh hơn khoảng 2 tới 3 lần
+    text: Nhanh hơn khoảng 2 tới 4 lần
   - id: d
     text: Nhanh hơn khoảng 20 lần
 - id: mix-spaces
