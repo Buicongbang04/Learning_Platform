@@ -45,7 +45,22 @@ với fake model là thứ bắt được nó.
 
 ## Chạy với model thật
 
-`build_analyzer(ChatOllama(model="qwen2.5:3b", temperature=0, seed=0))` trên 8 câu hỏi tự viết (mục 1 lý thuyết dùng
-cùng bộ, log `.superpowers/scratch/logs/theory_lcel.log`): xem số liệu ở bảng dưới.
+Chuỗi của lời giải (`PROMPT | with_structured_output(QuestionAnalysis, method=...) | _require`) với
+`ChatOllama(model="qwen2.5:3b", temperature=0, seed=0)` trên PC của track, ba nhóm 10 câu: 10 câu đầu của tập ghim Zalo
+(một ý), 10 câu hai vế của bài Intermediate 03, 10 câu mức phạt giao thông không nói loại xe (log
+`.superpowers/scratch/logs/theory_lcel.log`):
 
-PLACEHOLDER_REAL_RUN
+| method | Một ý: số vế trả về | Hai vế: tách đúng 2 | Thiếu loại xe: `missing` khác rỗng | Lỗi | Giây/câu |
+| --- | --- | --- | --- | --- | --- |
+| `function_calling` | 1 vế ở 3/10 câu, có câu 4 vế | 9/10 (1 câu ra `None`) | 0/10 | 1/30 | 1.9 đến 2.7 |
+| `json_schema` (mặc định của `ChatOllama`) | 1 vế ở 5/10 câu, có câu 4 vế | 10/10 | 0/10 | 0/30 | 2.4 đến 3.8 |
+
+Ba điều đọc được:
+
+- `_require` có việc thật: một câu với `function_calling` ra `None` (model trả chữ thay vì gọi tool). Không có nó, `None`
+  đi vào pipeline. `CallCounter` đếm 30 lượt gọi và 0 lỗi model cho mỗi method: lỗi output không phải lỗi của chat model,
+  nên `on_llm_error` không thấy nó; muốn đếm thì đếm ở tầng parse.
+- Model 3B tách **quá tay** câu một ý (một câu "Mức phạt khi quay đầu xe ô tô trên đường cao tốc" thành 2 đến 4 vế) và
+  **không bao giờ** điền `missing` cho câu thiếu loại xe với một trường chữ tự do. Prompt và schema này chưa đủ cho model
+  nhỏ; bài Intermediate 03 đo và sửa đúng chỗ này bằng schema hẹp (`bool`, `Literal`) và để code quyết định.
+- `json_schema` ổn định hơn ở câu hai vế, chậm hơn một chút. Chọn method bằng số đo trên câu của bạn.

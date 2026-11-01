@@ -1,0 +1,71 @@
+questions:
+  - id: s3-asks
+    kind: data
+    type: single
+    prompt: "S3: agent hỏi lại bao nhiêu trong 10 câu mức phạt giao thông không nói loại xe?"
+    options:
+      - { id: a, text: "0 đến 2 câu" }
+      - { id: b, text: "3 đến 5 câu" }
+      - { id: c, text: "6 đến 8 câu" }
+      - { id: d, text: "9 hoặc 10 câu" }
+  - id: s2-both
+    kind: data
+    type: single
+    prompt: "S2 (50 câu hai vế): so số câu có điều đúng của CẢ HAI vế trong nguồn, agent so với RAG một lượt top-6?"
+    options:
+      - { id: a, text: "RAG một lượt nhiều hơn agent" }
+      - { id: b, text: "Hai bên chênh nhau không quá 5 câu" }
+      - { id: c, text: "Agent nhiều hơn từ 6 đến 15 câu" }
+      - { id: d, text: "Agent nhiều hơn trên 15 câu" }
+  - id: s1-source
+    kind: data
+    type: single
+    prompt: "S1 (100 câu thường): so số câu có điều đúng trong nguồn, agent so với RAG một lượt top-5?"
+    options:
+      - { id: a, text: "Agent nhiều hơn từ 10 câu trở lên" }
+      - { id: b, text: "Hai bên chênh nhau dưới 10 câu" }
+      - { id: c, text: "RAG một lượt nhiều hơn từ 10 câu trở lên" }
+  - id: s1-latency
+    kind: data
+    type: single
+    prompt: "S1: giây trung vị mỗi câu của agent gấp khoảng bao nhiêu lần RAG một lượt?"
+    options:
+      - { id: a, text: "Dưới 1.3 lần" }
+      - { id: b, text: "Từ 1.3 đến 3 lần" }
+      - { id: c, text: "Hơn 3 lần (rất chậm)" }
+  - id: s1-refusal
+    kind: data
+    type: single
+    prompt: "S1: tỉ lệ câu RAG một lượt trả lời bằng câu từ chối nằm trong khoảng nào?"
+    options:
+      - { id: a, text: "Dưới 10%" }
+      - { id: b, text: "10% đến 30%" }
+      - { id: c, text: "Trên 30% đến 60%" }
+      - { id: d, text: "Trên 60%, đa số câu" }
+  - id: code-decides
+    kind: knowledge
+    type: single
+    prompt: "Vì sao `Plan` dùng `traffic_fine: bool` và `vehicle: Literal[...]` rồi để code suy ra \"thiếu loại xe\", thay vì một trường `missing` chữ tự do?"
+    options:
+      - { id: a, text: "Vì json_schema của Ollama không nhận kiểu list[str] trong schema đầu ra" }
+      - { id: b, text: "Vì output hẹp dễ cho model nhỏ, quyết định nằm ở code kiểm được" }
+      - { id: c, text: "Vì Literal làm model không bao giờ bịa giá trị" }
+      - { id: d, text: "Vì cạnh có điều kiện của LangGraph chỉ định tuyến được theo một trường bool" }
+  - id: fresh-thread
+    kind: knowledge
+    type: single
+    prompt: "Chạy câu hỏi thứ hai trên cùng thread_id với câu thứ nhất thì chuyện gì xảy ra với khoá `evidence`?"
+    options:
+      - { id: a, text: "Bị xoá hết vì input mới của invoke ghi đè mọi khoá của state cũ" }
+      - { id: b, text: "Evidence cũ được reducer gộp với evidence của câu mới" }
+      - { id: c, text: "LangGraph ném lỗi vì thread đã kết thúc" }
+      - { id: d, text: "Chỉ giữ lại evidence của vế cuối cùng trong câu hỏi cũ, các vế khác bị bỏ" }
+  - id: refuse-with-source
+    kind: knowledge
+    type: single
+    prompt: "Nhiều câu bị từ chối dù điều đúng có trong nguồn. Sửa ở đâu là đúng chỗ nhất?"
+    options:
+      - { id: a, text: "Bỏ hẳn chỉ dẫn từ chối khỏi prompt trả lời để model lúc nào cũng phải trả lời" }
+      - { id: b, text: "Đưa đúng khoản liên quan vào nguồn thay vì cả điều bị cắt ở 1 500 ký tự" }
+      - { id: c, text: "Tăng temperature của bước trả lời để model bớt thận trọng và chịu trả lời nhiều hơn" }
+      - { id: d, text: "Tách mọi câu hỏi thành nhiều vế hơn trước khi tra cứu" }
