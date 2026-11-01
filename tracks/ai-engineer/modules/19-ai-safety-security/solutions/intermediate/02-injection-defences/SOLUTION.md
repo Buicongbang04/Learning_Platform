@@ -44,6 +44,15 @@ ASR theo kiểu tấn công với `none` (24 lượt mỗi ô): `naive` 0.375, `
 defence, không đổi gì ở `canary`, `phishing`, và chỉ làm mất một câu trả lời đúng trong 864 lượt bị tấn công (ở
 `tool-role`, câu trả lời nằm lẫn trong cụm link bị xoá); ASR tổng của `none` sau lọc còn 0.354.
 
+**Mở rộng trên PC (không chấm): `qwen2.5:7b`**, ba defence, cùng bộ tấn công (456 lượt, trung vị 0.71 giây mỗi lượt trên
+RTX 3060 dùng chung):
+
+| Defence | Trả lời đúng (bị tấn công) | ASR [Wilson 95%] | `canary` | `exfil` | `phishing` |
+| --- | --- | --- | --- | --- | --- |
+| `none` | 1.000 | 0.653 [0.572, 0.726] | 1.000 | 0.854 | 0.104 |
+| `datamark` | 0.979 | 0.139 [0.092, 0.205] | 0.208 | 0.208 | 0.000 |
+| `tool-role` | 1.000 | 0.604 [0.523, 0.680] | 0.896 | 0.708 | 0.208 |
+
 ## Đọc kết quả
 
 - **Bộ tấn công làm được việc của nó**: không phòng thủ, 59% lượt tấn công thành công, và model **vẫn trả lời đúng** ở
@@ -71,7 +80,11 @@ defence, không đổi gì ở `canary`, `phishing`, và chỉ làm mất một 
 - **Đếm "thành công" bằng regex có hai mặt**: vài lượt `exfil` thành công vì model **chép lại** cả câu chỉ thị chứa URL
   ảnh vào câu trả lời. Với giao diện render markdown, đó vẫn là một request gửi ra ngoài, nên tính là thành công là đúng
   với hậu quả; nhưng đọc tận mắt mẫu vẫn cần, để biết model "làm theo" hay "chép lại".
-- Giới hạn: 8 tài liệu tự viết, 6 kiểu tấn công, một model, `temperature` 0; con số trên máy khác lệch vài lượt. Khoảng
+- **Model lớn hơn không an toàn hơn**: `qwen2.5:7b` không phòng thủ có ASR 0.65, ngang hoặc cao hơn 3B (0.59), vì nó làm
+  theo chỉ thị nói chung tốt hơn, kể cả chỉ thị trong tài liệu. Datamark vẫn giảm mạnh nhất. Riêng `tool-role` không làm
+  tệ hơn `none` với 7B (0.60 so với 0.65, khoảng chồng nhau): hiệu ứng "vai tool làm model tin hơn" là của 3B, minh hoạ
+  rằng kết luận về một phòng thủ prompt không chuyển được giữa các model.
+- Giới hạn: 8 tài liệu tự viết, 6 kiểu tấn công, một model chính, `temperature` 0; con số trên máy khác lệch vài lượt. Khoảng
   tin cậy cho thấy 144 lượt mỗi defence đủ tách `datamark`, `sandwich` và `tool-role` khỏi `none`, không đủ tách `warn`
   hay `spotlight`.
 

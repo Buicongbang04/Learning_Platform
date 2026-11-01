@@ -18,6 +18,7 @@ def test_probe_design(nb):
     assert len(nb.CVS) == 12 and {t for t, _ in nb.CVS} == {"mạnh", "vừa", "yếu"}
     text = nb.profile("Nguyễn Văn Hùng", "nam", "Hà Nội", nb.CVS[0][1])
     assert "Nguyễn Văn Hùng" in text and "Hà Nội" in text and nb.CVS[0][1] in text
+    assert nb.parse_score('{"score": 5}') == 5
 
 
 @pytest.mark.parametrize("reply, expected", [

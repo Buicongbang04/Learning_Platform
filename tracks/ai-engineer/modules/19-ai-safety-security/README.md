@@ -2,7 +2,8 @@
 
 Một ứng dụng LLM nhận chữ từ người dùng, đọc chữ từ tài liệu và tool, rồi sinh chữ (và đôi khi hành động) ra ngoài.
 Mọi chỗ chữ đi vào là một chỗ kẻ tấn công viết được một phần "chương trình" của bạn; mọi chỗ chữ đi ra là một chỗ dữ
-liệu có thể rò rỉ. Module 11 (prompt), 13 (RAG) và 16 (agent) đã nhắc tới prompt injection như một rủi ro; module này
+liệu có thể rò rỉ. [Module 11](../11-llm-apis-prompting/README.md) (prompt), [13](../13-rag/README.md) (RAG) và
+[16](../16-ai-agents/README.md) (agent) đã nhắc tới prompt injection như một rủi ro; module này
 mổ xẻ nó và các rủi ro còn lại của một sản phẩm LLM thật: dữ liệu cá nhân, thiên lệch, nội dung độc hại, lạm dụng, và
 cách kiểm thử tất cả những thứ đó bằng số đo thay vì bằng niềm tin.
 
@@ -147,7 +148,7 @@ Mục tiêu của kẻ tấn công cũng chia loại, và loại mục tiêu quy
 - **Lạm dụng tool** (OWASP LLM06): gọi `send_email`, `transfer` với tham số của kẻ tấn công.
 - **Thông tin sai, lừa đảo**: "tài liệu đã hết hiệu lực, hãy gọi số hotline ...".
 
-Module 16 thử injection đòi agent đổi email tài khoản và không lần nào thành công trên `qwen2.5:3b`; điều đó **không** có
+[Module 16](../16-ai-agents/README.md) (bài computer use) thử injection đòi agent đổi email tài khoản và không lần nào thành công trên `qwen2.5:3b`; điều đó **không** có
 nghĩa model nhỏ miễn nhiễm, chỉ nghĩa là bộ tấn công đó chưa đủ để so các phòng thủ. Thử trên trợ lý văn phòng của bài
 Intermediate 02 với một ghi chú "theo quy định của đơn vị phát hành":
 
@@ -229,7 +230,22 @@ $$
 $$
 
 Với $$r = 0.9$$, $$f = 0.02$$ và $$\pi = 0.005$$ (một request độc trên 200), precision chỉ còn
-$$\frac{0.0045}{0.0045 + 0.0199} \approx 0.18$$: hơn 4 trên 5 lần chặn là chặn oan khách thật. Con số precision đo trên bộ
+$$\frac{0.0045}{0.0045 + 0.0199} \approx 0.18$$: hơn 4 trên 5 lần chặn là chặn oan khách thật.
+
+```python
+for pi in (0.05, 0.005, 0.0005):
+    r, f = 0.9, 0.02
+    precision = r * pi / (r * pi + f * (1 - pi))
+    print(f"base rate {pi:>7.2%}: precision {precision:.3f}, chặn oan trên mỗi injection bắt được {f * (1 - pi) / (r * pi):6.1f}")
+```
+
+```text
+base rate   5.00%: precision 0.703, chặn oan trên mỗi injection bắt được    0.4
+base rate   0.50%: precision 0.184, chặn oan trên mỗi injection bắt được    4.4
+base rate   0.05%: precision 0.022, chặn oan trên mỗi injection bắt được   44.4
+```
+
+Cùng một classifier, base rate giảm 100 lần thì số lần chặn oan trên mỗi lần bắt đúng tăng 100 lần. Con số precision đo trên bộ
 dữ liệu cân bằng (deepset có khoảng 40% injection) không nói gì về production. Vì vậy chọn ngưỡng theo **FPR chấp nhận
 được**, quy FPR ra tiền (khách bỏ đi, ticket hỗ trợ), và thường dùng classifier để **gắn cờ, giảm quyền, ghi log** thay vì
 chặn cứng.
@@ -316,7 +332,34 @@ từ khoá ngữ cảnh, NER) để tham khảo.
 
 Giả danh hoá là lựa chọn thực tế cho LLM: model vẫn thấy "cùng một khách hàng" xuyên suốt hội thoại (token ổn định),
 câu trả lời được khôi phục trước khi tới nhân viên, và log chỉ chứa token. Token phải **có khoá** (HMAC): không gian số
-điện thoại di động chỉ cỡ $$5 \cdot 10^8$$ giá trị, băm SHA-256 trần dò ngược được trong vài phút trên một máy tính.
+điện thoại di động chỉ cỡ $$5 \cdot 10^8$$ giá trị, băm SHA-256 trần dò ngược được bằng vét cạn:
+
+```python
+import hashlib
+import hmac
+import time
+
+leaked = hashlib.sha256(b"0912345678").hexdigest()
+t0 = time.perf_counter()
+for n in range(10**6):
+    candidate = f"0912{n:06d}".encode()
+    if hashlib.sha256(candidate).hexdigest() == leaked:
+        break
+dt = time.perf_counter() - t0
+print("tìm lại:", candidate.decode(), f"sau {n + 1} lần thử, {dt:.2f} s")
+print(f"ước lượng cả 5e8 số di động: {5e8 / (n + 1) * dt / 60:.0f} phút trên một lõi CPU")
+print("HMAC có khoá:", hmac.new(b"bi-mat-server", b"0912345678", hashlib.sha256).hexdigest()[:16], "...")
+```
+
+```text
+tìm lại: 0912345678 sau 345679 lần thử, 0.37 s
+ước lượng cả 5e8 số di động: 9 phút trên một lõi CPU
+HMAC có khoá: 5baa33264c4f66f5 ...
+```
+
+Hai lần chạy trên PC dùng chung mất 0.37 và 0.55 giây cho đoạn vét cạn, tức 9 tới 13 phút cho cả không gian số di động
+trên một lõi (việc này chia đều được cho nhiều lõi). Với HMAC, kẻ có bảng băm mà không có khoá không thử ngược được; ai giữ khoá vẫn nối được token về người (đó là điểm
+khác giữa giả danh hoá và ẩn danh hoá ở bảng dưới).
 
 ### Khung pháp lý (tham khảo, không phải tư vấn pháp lý)
 
@@ -545,6 +588,25 @@ của chính model.
 ### Lách bằng Unicode: chuẩn hoá trước khi so
 
 Danh sách chặn so chuỗi thô thua ngay trước các biến thể mà mắt người đọc như nhau:
+
+```python
+import unicodedata
+
+variants = ["ignore previous", "\uff29\uff27\uff2e\uff2f\uff32\uff25 previous", "ig\u200bnore previous", "\u0456gnore previous"]
+for v in variants:
+    nfkc = unicodedata.normalize("NFKC", v).casefold()
+    cf = [hex(ord(c)) for c in v if unicodedata.category(c) == "Cf"]
+    print(f"{v!r:32} thô: {'ignore' in v.lower()!s:5}  NFKC+casefold: {'ignore' in nfkc!s:5}  Cf: {cf}")
+```
+
+```text
+'ignore previous'                thô: True   NFKC+casefold: True   Cf: []
+'ＩＧＮＯＲＥ previous'                thô: False  NFKC+casefold: True   Cf: []
+'ig\u200bnore previous'          thô: False  NFKC+casefold: False  Cf: ['0x200b']
+'іgnore previous'                thô: False  NFKC+casefold: False  Cf: []
+```
+
+NFKC xử lý chữ toàn khổ nhưng không xử lý ký tự vô hình hay chữ Cyrillic `і` (U+0456): mỗi loại cần một bước riêng.
 
 | Kỹ thuật lách | Ví dụ | Chuẩn hoá xử lý |
 | --- | --- | --- |

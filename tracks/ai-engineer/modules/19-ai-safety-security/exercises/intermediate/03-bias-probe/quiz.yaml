@@ -1,0 +1,92 @@
+questions:
+- id: score-gender
+  kind: data
+  type: single
+  prompt: Ở nhiệm vụ chấm điểm 1..10, chênh lệch nam trừ nữ (bootstrap theo hồ sơ) cho kết quả thế nào?
+  options:
+  - id: a
+    text: Nam cao hơn khoảng 1 điểm, CI không chứa 0
+  - id: b
+    text: Nữ cao hơn khoảng 2 điểm, CI không chứa 0
+  - id: c
+    text: Bằng 0 hoặc rất gần 0, CI chứa 0
+  - id: d
+    text: Không tính được vì nhiều JSON hỏng
+- id: score-sensitivity
+  kind: data
+  type: single
+  prompt: Kiểm độ nhạy của nhiệm vụ chấm điểm (hồ sơ mạnh trừ hồ sơ yếu cùng vị trí) cho thấy gì?
+  options:
+  - id: a
+    text: Chỉ hồ sơ nam phân biệt được mức, còn hồ sơ nữ thì không
+  - id: b
+    text: Hai mức gần như cùng điểm, probe không phân biệt được gì
+  - id: c
+    text: Hồ sơ yếu được chấm cao hơn hồ sơ mạnh ở đa số các cặp
+  - id: d
+    text: Mạnh hơn yếu nhiều điểm ở mọi cặp, probe đủ nhạy
+- id: salary-sensitivity
+  kind: data
+  type: single
+  prompt: Ở nhiệm vụ đề xuất lương, kiểm độ nhạy (mạnh trừ yếu) cho kết quả nào, và nó có nghĩa gì?
+  options:
+  - id: a
+    text: Mạnh cao hơn yếu rõ rệt, nên tin được mọi chênh lệch theo nhóm đo được
+  - id: b
+    text: Yếu được đề xuất cao hơn mạnh, chênh lệch theo nhóm không đáng tin
+  - id: c
+    text: Hai mức bằng nhau tuyệt đối vì model luôn trả về cùng một con số lương
+  - id: d
+    text: Không đo được vì model từ chối đề xuất lương cho mọi hồ sơ ứng viên
+- id: flip-vs-mean
+  kind: knowledge
+  type: single
+  prompt: Δ trung bình nam trừ nữ gần 0 nhưng 24% cặp có điểm khác nhau. Điều đó nói gì?
+  options:
+  - id: a
+    text: Không có gì đáng lo vì trung bình của mọi cặp bằng 0
+  - id: b
+    text: Với từng người, đổi tên vẫn đổi kết quả theo cả hai chiều
+  - id: c
+    text: Bộ ghép cặp chắc chắn bị lỗi vì trung bình phải khác 0
+  - id: d
+    text: Model thiên vị ứng viên nam ở đúng 24% số hồ sơ
+- id: cluster-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao bootstrap lấy mẫu lại theo hồ sơ thay vì theo từng cặp?
+  options:
+  - id: a
+    text: Số hồ sơ lớn hơn số cặp nên khoảng tin cậy hẹp hơn
+  - id: b
+    text: Lấy mẫu theo cặp chạy chậm hơn nhiều lần trên CPU
+  - id: c
+    text: Các cặp từ cùng một hồ sơ không độc lập với nhau
+  - id: d
+    text: Lấy theo cặp thì không tính được trung vị của Δ
+- id: noise-floor
+  kind: knowledge
+  type: single
+  prompt: Đổi "Nguyễn Văn Hùng" thành "Trần Minh Tuấn" (cùng giới, cùng quê) dùng để làm gì trong probe?
+  options:
+  - id: a
+    text: Tăng số lượt chấm để khoảng tin cậy hẹp hơn
+  - id: b
+    text: "Đo sàn nhiễu, chênh lệch nhóm phải vượt mức này"
+  - id: c
+    text: Kiểm xem model có thiên vị riêng họ Nguyễn không
+  - id: d
+    text: Thay cho kiểm độ nhạy khi không có hồ sơ yếu
+- id: weat-control
+  kind: knowledge
+  type: single
+  prompt: Vì sao chạy kèm WEAT đối chứng (trái cây vs phương tiện) với cùng tên nam, nữ?
+  options:
+  - id: a
+    text: Để chuẩn hoá vector embedding trước khi tính cosine giữa các từ
+  - id: b
+    text: Biết effect size "trông lớn" là bao nhiêu khi không có liên kết
+  - id: c
+    text: Vì WEAT cần ít nhất bốn tập thuộc tính mới tính được effect size
+  - id: d
+    text: Để tính p-value hai phía thay cho p-value một phía như bình thường
