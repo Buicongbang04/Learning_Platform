@@ -1,17 +1,15 @@
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from testkit import Exercise, run_sandboxed
+from testkit import SAFE_GIT_CONFIG, Exercise, GitRepo, git_env, run_sandboxed
 
 ex = Exercise(__file__)
 NAIVE = Path(__file__).parent / "fixtures" / "naive_tidy.sh"
 BASH = shutil.which("bash")
 BRANCH = "feature/pix-payment"
-SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 pytestmark = pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="Cần bash và git")
 
 BASE_PIX = "def pay(order):\n    return 'todo'\n"
@@ -27,41 +25,14 @@ def git_version():
     ex.require_tool("git", min_version="2.30")
 
 
-def git_env(home: Path) -> dict[str, str]:
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(home),
-        "GIT_CONFIG_GLOBAL": "/dev/null",
-        "GIT_CONFIG_SYSTEM": "/dev/null",
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "Minh Tran",
-        "GIT_AUTHOR_EMAIL": "minh@olist-shop.example",
-        "GIT_COMMITTER_NAME": "Minh Tran",
-        "GIT_COMMITTER_EMAIL": "minh@olist-shop.example",
-        "GIT_AUTHOR_DATE": "2026-06-01T10:00:00+00:00",
-        "GIT_COMMITTER_DATE": "2026-06-01T10:00:00+00:00",
-        "GIT_EDITOR": "true",
-        "GIT_TERMINAL_PROMPT": "0",
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-    }
-
 
 class Clone:
     def __init__(self, path: Path, world: "World"):
         self.path = path
-        self.home = world.home
-        self.world = world
+        self.repo = GitRepo(path, world.home, writable=[world.tmp])
 
     def git(self, *args: str, check: bool = True) -> str:
-        cmd = ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args]
-        if self.world.tainted:
-            result = run_sandboxed(cmd, writable=[self.world.tmp], cwd=self.path, env=git_env(self.home))
-        else:
-            result = subprocess.run(cmd, cwd=self.path, env=git_env(self.home), capture_output=True, text=True)
-        if check and result.returncode != 0:
-            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
-        return result.stdout.strip()
+        return self.repo.out(*args, check=check)
 
     def commit(self, name: str, content: str, message: str) -> str:
         target = self.path / name
@@ -79,10 +50,9 @@ class World:
         self.tmp = tmp_path
         self.home = tmp_path / "home"
         self.home.mkdir()
-        self.tainted = False
         self.origin = tmp_path / "origin.git"
         subprocess.run(
-            ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "init", "-q", "--bare", str(self.origin)],
+            ["git", *SAFE_GIT_CONFIG, "init", "-q", "--bare", str(self.origin)],
             env=git_env(self.home), check=True, capture_output=True,
         )
         self.seed = self.clone("seed")
@@ -100,7 +70,7 @@ class World:
 
     def clone(self, name: str) -> Clone:
         path = self.tmp / name
-        subprocess.run(["git", *SAFE_CONFIG, "clone", "-q", str(self.origin), str(path)], env=git_env(self.home), check=True, capture_output=True)
+        subprocess.run(["git", *SAFE_GIT_CONFIG, "clone", "-q", str(self.origin), str(path)], env=git_env(self.home), check=True, capture_output=True)
         return Clone(path, self)
 
     def advance_main(self, name: str = "api/orders.py", content: str = "def orders():\n    return []\n") -> str:
@@ -120,7 +90,8 @@ class World:
         return self.work.git("ls-remote", str(self.origin), f"refs/heads/{ref}").split("\t")[0]
 
     def run(self, script: Path, *args: str):
-        self.tainted = True
+        self.seed.repo.taint()
+        self.work.repo.taint()
         return run_sandboxed([BASH, script, *args], writable=[self.tmp], cwd=self.work.path, env=git_env(self.home), timeout=60)
 
 

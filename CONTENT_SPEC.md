@@ -292,9 +292,10 @@ lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, khô
 
 | Test cần | Dùng | Đảm bảo |
 | --- | --- | --- |
-| Chạy script hay chương trình của người học trên máy host | `testkit.run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})` (cần stdin/stdout dạng bytes hay `Popen` thì `sandbox_command`) | bwrap: `/` chỉ đọc, `/tmp` và `/run` là tmpfs rỗng, `~/.docker` bị che, chỉ các thư mục trong `writable` ghi được, `HOME` là `cwd`, env dựng lại từ đầu (`PATH`, `HOME`, `LANG`/`LC_ALL` cộng những gì test truyền). Mạng **không** tách. Không dùng được bwrap thì skip, **không bao giờ** chạy trần |
-| Container do test dựng | `with DockerLab() as lab:` (fixture: dựng container bên trong `with`, rồi `yield lab`) | `--rm`, nhãn `devops-ex=1`, tên `devops-ex-<uuid8>-<alias>`, giới hạn RAM và số tiến trình, cpuset theo `docker_cpu_args()`, cổng chỉ trên `127.0.0.1` ở cổng trống, mount `:ro`, network riêng; lỗi hay Ctrl-C ở bất kỳ bước nào cũng dọn hết |
-| Gọi `docker` thẳng (`subprocess.run(["docker", ...])`, `_docker(`) trong test của module | Cấm | Validator báo lỗi |
+| Chạy script hay chương trình của người học trên máy host | `testkit.run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})` (cần stdin/stdout dạng bytes hay `Popen` thì `sandbox_command`) | bwrap: `/` chỉ đọc, `/tmp` và `/run` là tmpfs rỗng, `~/.docker`, `~/.kube`, `~/.aws`, `~/.ssh`, `~/.config/gcloud`, `~/.azure` của mọi home thật bị che (khi tồn tại), chỉ các thư mục trong `writable` ghi được, `HOME` là `cwd`, env dựng lại từ đầu (`PATH`, `HOME`, `LANG`/`LC_ALL` cộng những gì test truyền). Mạng **không** tách. Không dùng được bwrap thì skip, **không bao giờ** chạy trần |
+| Repo git tạm (dựng lịch sử, rồi chạy script người học trong repo) | `GitRepo(path, home, writable=[tmp_path])`, `git_env(home)`, `SAFE_GIT_CONFIG`; gọi `repo.taint()` ngay khi code người học đã chạy trong repo | Env dựng từ đầu (`HOME` tạm, `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM=/dev/null`, tác giả và ngày cố định, `GIT_CEILING_DIRECTORIES`); trước `taint()` git chạy trực tiếp kèm `SAFE_GIT_CONFIG` (tắt hook, fsmonitor, ký commit), sau `taint()` mọi lệnh git của test chạy qua `run_sandboxed` vì cấu hình repo có thể đã bị sửa |
+| Container do test dựng | `with DockerLab() as lab:` (fixture: dựng container bên trong `with`, rồi `yield lab`) | Nhãn `devops-ex=1`, tên `devops-ex-<uuid8>-<alias>`, `--security-opt no-new-privileges`, giới hạn RAM và số tiến trình (`run_once` cũng nhận `memory`/`pids_limit`), cpuset theo `docker_cpu_args()`, cổng chỉ trên `127.0.0.1` ở cổng trống, mount `:ro`, network riêng. Container nền không dùng `--rm` để `wait_log`/`wait_http` báo lỗi kèm 40 dòng `docker logs` cuối; `close()` luôn xoá mọi container đã tạo, lỗi hay Ctrl-C ở bất kỳ bước nào cũng dọn hết. `run_once` dùng `--rm` |
+| Gọi `docker`, `kind`, `act`, `kubectl`, `helm`, `tofu` thẳng trong test dưới `modules/` hay `capstone/` (argv literal, chuỗi cho `subprocess`/`os.system`/`Popen`, `bash -c "..."`, biến gán từ `shutil.which`), hoặc dùng `_docker` | Cấm | Validator (`check_tool_calls`) báo lỗi. Không bắt `require_tool(...)`, `require_image(...)`, `shutil.which(...)`, chữ trong chuỗi hay chú thích, dict binary giả. Ngoại lệ: argv viết thẳng làm tham số đầu của `run_sandboxed(`/`sandbox_command(`, vd. `run_sandboxed(["tofu", "plan"], ...)` |
 
 - Tệp fixture trong repo nhìn thấy được (chỉ đọc) trong sandbox; tệp test tạo ra đặt trong `tmp_path` để script ghi được.
 - Ngoại lệ phải có lý do ghi trong `README.md` của bài, ví dụ module 01 Basic 03 (graceful-stop) phải gửi signal tới
@@ -303,8 +304,9 @@ lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, khô
 
 ### Gating
 
-- `ex.require_tool(name, min_version)`: thiếu công cụ, phiên bản cũ hơn mức tối thiểu, hay (với `docker`) daemon tắt
-  hoặc user không có quyền socket thì skip.
+- `ex.require_tool(name, min_version)`: thiếu công cụ, phiên bản cũ hơn mức tối thiểu (so sau khi đệm số 0: `1.27`
+  bằng `1.27.0`), không đọc được phiên bản (thông báo riêng, chỉ lệnh để tự kiểm), hay (với `docker`) daemon tắt hoặc
+  user không có quyền socket thì skip.
 - `ex.require_image(image)`, `ex.require_service(name)`, `ex.require_cluster(name="devops-lab")`: skip khi chưa có
   image, service compose hay cluster kind.
 - Thông báo skip chỉ chỗ sửa: `setup/DEVOPS-TOOLS.md`, lệnh `docker pull` hay `docker compose ... up -d`. Skip không
@@ -344,4 +346,3 @@ Các helper sau **chưa có**; phải thêm vào `testkit.py` (kèm test) trư�
 - `act_run`: chạy workflow GitHub Actions bằng `act` với container của `DockerLab`.
 - `DockerLab.build` và `DockerLab.compose`: build image và dựng compose với cùng bảo đảm như `start`.
 - `kind_node_exec`: chạy lệnh trong node kind.
-- Helper git cho testkit: repo tạm có commit, branch, remote giả.

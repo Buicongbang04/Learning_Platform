@@ -38,7 +38,8 @@ namespace riêng. Test của module dựng sandbox như sau: toàn bộ `/` ch�
 của máy không nhìn thấy), chỉ thư mục tạm của chính test ghi được, môi trường biến dựng lại từ đầu (không mang theo
 `BASH_ENV` hay hàm Bash được export). Script của bạn có đổi `PATH`, gọi `/bin/rm`, `env -i rm` hay Python để xoá thì
 cũng chỉ chạm được vào thư mục tạm đó. `/run` cũng là tmpfs rỗng và `~/.docker` bị che, nên socket của Docker và D-Bus không
-nhìn thấy được: script không thể nhờ `docker run -v /:/h` để thoát ra. Sandbox **không** tách mạng: test healthcheck
+nhìn thấy được: script không thể nhờ `docker run -v /:/h` để thoát ra. `~/.kube`, `~/.aws`, `~/.ssh`,
+`~/.config/gcloud` và `~/.azure` cũng bị che, nên script không đọc được thông tin đăng nhập thật của bạn. Sandbox **không** tách mạng: test healthcheck
 cần gọi server giả trên `127.0.0.1` của máy. Điều đó chấp nhận được vì thứ cần chặn là script viết sai vô tình xoá hay
 sửa tệp thật, không phải mã độc cố ý; đừng dùng sandbox này để chạy mã không tin cậy.
 

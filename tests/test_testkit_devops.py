@@ -1,6 +1,7 @@
 """Test cho helper DevOps của testkit: phiên bản công cụ, docker, cpuset, cluster kind."""
 
 import os
+import pwd
 import shutil
 import subprocess
 import sys
@@ -346,7 +347,8 @@ def test_docker_lab_run_args(monkeypatch, tmp_path):
     lab = testkit.DockerLab()
     args = lab.run_args("nginx", "nginx:1.30.6-alpine", "-g", "daemon off;", mounts=[(tmp_path / "a.conf", "/etc/nginx/nginx.conf")],
                         publish=[(80, 41234)], env={"INSTANCE": "a"}, entrypoint="nginx")
-    assert args[:4] == ["docker", "run", "--rm", "-d"]
+    assert args[:3] == ["docker", "run", "-d"]
+    assert "--rm" not in args, "Container nền không dùng --rm để còn đọc được log khi chết; close() xoá nó"
     assert args[args.index("--name") + 1] == f"devops-ex-{lab.id}-nginx"
     assert args[args.index("--label") + 1] == "devops-ex=1"
     assert args[args.index("--network") + 1] == lab.network and lab.network.startswith("devops-ex-")
@@ -437,3 +439,253 @@ def test_docker_lab_real_cleanup_after_error_inside_with():
             assert testkit.docker_leftovers(lab.id)
             raise RuntimeError("lỗi giữa chừng")
     assert testkit.docker_leftovers(lab.id) == []
+
+
+@pytest.fixture(autouse=True)
+def fresh_sandbox_probe():
+    testkit._probe.cache_clear()
+    yield
+    testkit._probe.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "have,need,expected",
+    [
+        ((1, 27), (1, 27, 0), True),
+        ((1, 27, 0), (1, 27), True),
+        ((1, 27, 1), (1, 27), True),
+        ((1, 26, 9), (1, 27), False),
+        ((1, 27), (1, 27, 1), False),
+        ((2,), (1, 99, 99), True),
+    ],
+)
+def test_version_padding(have, need, expected):
+    assert testkit.version_at_least(have, need) is expected
+
+
+@pytest.mark.parametrize("output,need", [("kubectl v1.27", "1.27.0"), ("Client Version: v1.27.0", "1.27")])
+def test_require_tool_pads_versions(monkeypatch, output, need):
+    patch_tool(monkeypatch, {"--version": (0, output, "")})
+    try:
+        testkit.Exercise.require_tool("shellcheck", need)
+    except pytest.skip.Exception as skipped:
+        pytest.fail(f"{output} phải đạt mức {need}: {skipped}")
+
+
+def test_unreadable_version_message(monkeypatch):
+    patch_tool(monkeypatch, {"--version": (0, "build abc, không có số phiên bản", "")})
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_tool("shellcheck", "0.10")
+    message = str(info.value)
+    assert "Không đọc được phiên bản" in message
+    assert "shellcheck --version" in message
+    assert "cũ hơn" not in message
+
+
+def test_real_homes_without_passwd(monkeypatch, tmp_path):
+    def missing(uid):
+        raise KeyError(f"getpwuid(): uid not found: {uid}")
+
+    monkeypatch.setattr(pwd, "getpwuid", missing)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert testkit._real_homes() == [tmp_path.resolve()]
+    assert "pwd" not in vars(testkit), "import pwd phải nằm trong hàm để testkit import được khi không có module pwd"
+
+
+def test_sandbox_ready_is_cached(monkeypatch):
+    calls = []
+    monkeypatch.setattr(testkit.shutil, "which", lambda name: "/usr/bin/bwrap")
+    monkeypatch.setattr(testkit.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    assert testkit.sandbox_ready() is None
+    assert testkit.sandbox_ready() is None
+    assert len(calls) == 1
+
+
+CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure")
+
+
+@pytest.fixture
+def fake_home():
+    """Home giả ngoài /tmp (dưới gốc repo) có đủ thư mục thông tin đăng nhập, mỗi thư mục một tệp bí mật."""
+    home = testkit.ROOT / f".sandbox-home-{os.getpid()}"
+    for rel in CREDENTIAL_DIRS:
+        (home / rel).mkdir(parents=True)
+        (home / rel / "secret").write_text(f"bí mật {rel}")
+    (home / "visible.txt").write_text("thấy")
+    try:
+        yield home
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def tmpfs_targets(argv):
+    return {argv[i + 1] for i, flag in enumerate(argv) if flag == "--tmpfs"}
+
+
+def test_sandbox_hides_cloud_credentials_flags(monkeypatch, fake_home, tmp_path):
+    under_tmp = tmp_path / "home-in-tmp"
+    (under_tmp / ".kube").mkdir(parents=True)
+    partial = testkit.ROOT / f".sandbox-partial-{os.getpid()}"
+    (partial / ".aws").mkdir(parents=True)
+    try:
+        monkeypatch.setattr(testkit, "_real_homes", lambda: [fake_home, under_tmp, partial])
+        targets = tmpfs_targets(testkit._base_flags("/usr/bin/bwrap"))
+        assert {str(fake_home / rel) for rel in CREDENTIAL_DIRS} <= targets
+        assert str(partial / ".aws") in targets
+        assert not any(t.startswith(str(partial / ".kube")) or t.startswith(str(under_tmp)) for t in targets), targets
+    finally:
+        shutil.rmtree(partial, ignore_errors=True)
+
+
+@SANDBOX_REQUIRED
+def test_sandbox_hides_cloud_credentials(monkeypatch, fake_home, tmp_path):
+    monkeypatch.setattr(testkit, "_real_homes", lambda: [fake_home])
+    script = 'cat "$H/visible.txt"; for d in ' + " ".join(CREDENTIAL_DIRS) + '; do cat "$H/$d/secret" 2>/dev/null && echo " lộ $d"; done; exit 0'
+    result = testkit.run_sandboxed(["bash", "-c", script], writable=[tmp_path], cwd=tmp_path, env={"H": str(fake_home)})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "thấy", result.stdout
+    for rel in CREDENTIAL_DIRS:
+        assert (fake_home / rel / "secret").read_text() == f"bí mật {rel}"
+
+
+def test_docker_lab_no_new_privileges(monkeypatch):
+    lab = testkit.DockerLab()
+    for args in (lab.run_args("web", "x:1"), lab.run_args("check", "x:1", detach=False)):
+        pairs = [args[i : i + 2] for i in range(len(args))]
+        assert ["--security-opt", "no-new-privileges"] in pairs, args
+
+
+def test_docker_lab_run_once_limits(monkeypatch):
+    fake = FakeDocker()
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    with testkit.DockerLab() as lab:
+        lab.run_once("check", "python:3.12.16-alpine3.24", "true", memory="64m", pids_limit=32)
+    run = next(c for c in fake.calls if c[1] == "run")
+    assert run[run.index("--memory") + 1] == "64m"
+    assert run[run.index("--pids-limit") + 1] == "32"
+    assert "--rm" in run and "-d" not in run
+
+
+def test_docker_lab_close_removes_every_container(monkeypatch):
+    fake = FakeDocker()
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    with pytest.raises(KeyboardInterrupt):
+        with testkit.DockerLab() as lab:
+            lab.start("a", "x:1")
+            lab.start("b", "x:1")
+            raise KeyboardInterrupt
+    removed = [c[3] for c in fake.calls if c[1:3] == ["rm", "-f"]]
+    assert removed == [lab.name("a"), lab.name("b")]
+
+
+def require_real_docker(image="python:3.12.16-alpine3.24"):
+    if not shutil.which("docker") or not testkit.docker_ready():
+        pytest.skip("Cần Docker daemon")
+    if testkit._docker("image", "inspect", image).returncode != 0:
+        pytest.skip(f"Chưa có image {image}")
+    return image
+
+
+@pytest.mark.parametrize("wait", ["wait_log", "wait_http"])
+def test_docker_lab_logs_on_failure(wait):
+    image = require_real_docker()
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception) as info:
+        with lab:
+            lab.start("crash", image, "sh", "-c", "for i in $(seq 1 60); do echo dong-$i; done; echo boot-loi-cau-hinh; exit 3")
+            if wait == "wait_log":
+                lab.wait_log("crash", "san-sang", timeout=20)
+            else:
+                lab.wait_http("crash", f"http://127.0.0.1:{testkit.free_port()}/", timeout=20)
+    message = str(info.value)
+    assert "boot-loi-cau-hinh" in message, message
+    assert "dong-60" in message and "dong-20" not in message, "Chỉ kèm 40 dòng log cuối"
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_docker_lab_logs_on_timeout():
+    image = require_real_docker()
+    lab = testkit.DockerLab()
+    with pytest.raises(pytest.fail.Exception) as info:
+        with lab:
+            lab.start("slow", image, "sh", "-c", "echo dang-khoi-dong; sleep 300")
+            lab.wait_log("slow", "san-sang", timeout=2)
+    assert "dang-khoi-dong" in str(info.value)
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_docker_lab_exited_container_kept_until_close():
+    image = require_real_docker()
+    with testkit.DockerLab() as lab:
+        lab.start("done", image, "true")
+        deadline = testkit.time.monotonic() + 20
+        while lab.running("done") and testkit.time.monotonic() < deadline:
+            testkit.time.sleep(0.2)
+        assert lab.name("done") in testkit.docker_leftovers(lab.id), "Container đã thoát vẫn phải còn để đọc log"
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_safe_git_config_value():
+    assert testkit.SAFE_GIT_CONFIG == (
+        "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main",
+    )
+
+
+def test_git_env_is_built_from_scratch(monkeypatch, tmp_path):
+    monkeypatch.setenv("GIT_DIR", "/nonexistent")
+    monkeypatch.setenv("GITHUB_TOKEN", "x")
+    env = testkit.git_env(tmp_path / "home")
+    assert env["HOME"] == str(tmp_path / "home")
+    assert env["GIT_CONFIG_GLOBAL"] == env["GIT_CONFIG_SYSTEM"] == "/dev/null"
+    assert env["GIT_CEILING_DIRECTORIES"] == str(tmp_path.resolve())
+    assert env["GIT_AUTHOR_DATE"] == env["GIT_COMMITTER_DATE"]
+    assert "GIT_DIR" not in env and "GITHUB_TOKEN" not in env
+    dated = testkit.git_env(tmp_path / "home", date="2026-03-02T09:00:00+00:00")
+    assert dated["GIT_AUTHOR_DATE"] == dated["GIT_COMMITTER_DATE"] == "2026-03-02T09:00:00+00:00"
+
+
+def plant_smudge_filter(repo: Path, marker: Path) -> None:
+    """Giả lập script người học cài filter driver: checkout chạy lệnh tuỳ ý, SAFE_GIT_CONFIG không chặn được."""
+    with (repo / ".git" / "config").open("a") as handle:
+        handle.write(f"[filter \"evil\"]\n\tsmudge = \"touch '{marker}'; cat\"\n\tclean = cat\n")
+    (repo / ".git" / "info").mkdir(exist_ok=True)
+    (repo / ".git" / "info" / "attributes").write_text("*.txt filter=evil\n")
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="Cần git")
+def test_git_repo_runs_directly_before_taint(monkeypatch, tmp_path):
+    repo = testkit.GitRepo(tmp_path / "repo", tmp_path / "home")
+    (tmp_path / "repo").mkdir()
+    (tmp_path / "home").mkdir()
+    monkeypatch.setattr(testkit, "run_sandboxed", lambda *a, **kw: pytest.fail("chưa taint thì không qua sandbox"))
+    assert repo.git("init", "-q").returncode == 0
+    assert repo.out("symbolic-ref", "--short", "HEAD") == "main"
+    with pytest.raises(AssertionError, match="git rev-parse"):
+        repo.out("rev-parse", "--verify", "nope")
+
+
+@SANDBOX_REQUIRED
+@pytest.mark.skipif(shutil.which("git") is None, reason="Cần git")
+def test_git_repo_taint_switches_to_sandbox(monkeypatch, tmp_path, tmp_path_factory):
+    path, home = tmp_path / "repo", tmp_path / "home"
+    path.mkdir()
+    home.mkdir()
+    repo = testkit.GitRepo(path, home, writable=[tmp_path])
+    repo.out("init", "-q")
+    (path / "a.txt").write_text("v1\n")
+    repo.out("add", "a.txt")
+    repo.out("commit", "-q", "-m", "one")
+    (path / "a.txt").write_text("v2\n")
+    repo.out("commit", "-q", "-am", "two")
+    marker = tmp_path_factory.mktemp("outside-sandbox") / "pwned"
+    plant_smudge_filter(path, marker)
+    repo.taint()
+    sandboxed = []
+    real = testkit.run_sandboxed
+    monkeypatch.setattr(testkit, "run_sandboxed", lambda cmd, **kw: sandboxed.append(cmd) or real(cmd, **kw))
+    repo.out("checkout", "-q", "HEAD~1")
+    assert sandboxed and sandboxed[0][: 1 + len(testkit.SAFE_GIT_CONFIG)] == ["git", *testkit.SAFE_GIT_CONFIG]
+    assert (path / "a.txt").read_text() == "v1\n"
+    assert not marker.exists(), "Sau taint(), lệnh git của test phải chạy trong sandbox"
+    subprocess.run(["git", *testkit.SAFE_GIT_CONFIG, "checkout", "-q", "main"], cwd=path, env=testkit.git_env(home), capture_output=True)
+    assert marker.exists(), "Kiểm tra vô nghĩa: filter giả không chạy cả khi gọi git trực tiếp"

@@ -20,14 +20,15 @@ Trong test:
     ex.require_image("nginx:1.30.6-alpine") # bài DevOps: skip nếu image Docker chưa pull
     with DockerLab() as lab: lab.start("web", "nginx:1.30.6-alpine", ports=[80])  # dựng mọi thứ trong `with`
     run_sandboxed(cmd, writable=[tmp_path], cwd=tmp_path, env={...})  # bài DevOps: chạy script trong bwrap
+    repo = GitRepo(tmp_path / "repo", tmp_path / "home", writable=[tmp_path]); repo.out("log"); repo.taint()  # bài git
 """
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import linecache
 import os
-import pwd
 import re
 import shutil
 import signal
@@ -130,6 +131,12 @@ def parse_version(text: str) -> tuple[int, ...] | None:
     return tuple(int(part) for part in match.group().split("."))
 
 
+def version_at_least(have: tuple[int, ...], need: tuple[int, ...]) -> bool:
+    """So phiên bản sau khi đệm số 0: (1, 27) bằng (1, 27, 0)."""
+    width = max(len(have), len(need))
+    return have + (0,) * (width - len(have)) >= need + (0,) * (width - len(need))
+
+
 def _run_tool(args: list[str]) -> subprocess.CompletedProcess | None:
     try:
         return subprocess.run(args, capture_output=True, text=True, timeout=10)
@@ -166,6 +173,7 @@ DOCKER_PREFIX = "devops-ex-"
 DOCKER_LABEL = "devops-ex=1"
 DOCKER_MEMORY = "256m"
 DOCKER_PIDS_LIMIT = 256
+DOCKER_LOG_LINES = 40
 _PORT_TAKEN = ("port is already allocated", "address already in use")
 
 
@@ -192,9 +200,10 @@ class DockerLab:
     khối `with` (kể cả trong fixture: `with DockerLab() as lab: ...; yield lab`): lỗi hay Ctrl-C ở bất kỳ bước nào cũng
     chạy `close()`. `start()` ngoài `with` bị từ chối.
 
-    Mọi container: tên `devops-ex-<uuid8>-<alias>`, nhãn `devops-ex=1`, `--rm`, ghim CPU theo `docker_cpu_args()`, giới hạn
-    RAM và số tiến trình, cổng chỉ mở trên 127.0.0.1 ở cổng trống do test chọn, mount chỉ đọc. Không đụng container hay
-    network nào khác.
+    Mọi container: tên `devops-ex-<uuid8>-<alias>`, nhãn `devops-ex=1`, `--security-opt no-new-privileges`, ghim CPU theo
+    `docker_cpu_args()`, giới hạn RAM và số tiến trình, cổng chỉ mở trên 127.0.0.1 ở cổng trống do test chọn, mount chỉ
+    đọc. Container nền (`start`) KHÔNG dùng `--rm` để còn đọc được `docker logs` khi nó chết; `close()` luôn xoá mọi
+    container đã tạo. `run_once` dùng `--rm`. Không đụng container hay network nào khác.
     """
 
     def __init__(self) -> None:
@@ -233,9 +242,9 @@ class DockerLab:
     def run_args(self, alias: str, image: str, *command: str, detach: bool = True, mounts=(), publish=(),
                  env: dict[str, str] | None = None, entrypoint: str | None = None, memory: str = DOCKER_MEMORY,
                  pids_limit: int = DOCKER_PIDS_LIMIT) -> list[str]:
-        args = ["docker", "run", "--rm", *(["-d"] if detach else [])]
+        args = ["docker", "run", "-d" if detach else "--rm"]
         args += ["--name", self.name(alias), "--label", DOCKER_LABEL, "--network", self.network, "--network-alias", alias]
-        args += ["--memory", memory, "--pids-limit", str(pids_limit), *docker_cpu_args()]
+        args += ["--security-opt", "no-new-privileges", "--memory", memory, "--pids-limit", str(pids_limit), *docker_cpu_args()]
         for source, target in mounts:
             args += ["-v", f"{Path(source).resolve()}:{target}:ro"]
         for container_port, host_port in publish:
@@ -271,12 +280,13 @@ class DockerLab:
                 break
         pytest.fail(f"docker run {alias} ({image}) lỗi: {result.stderr.strip()}")
 
-    def run_once(self, alias: str, image: str, *command: str, mounts=(), entrypoint=None,
-                 timeout: float = 60) -> subprocess.CompletedProcess:
+    def run_once(self, alias: str, image: str, *command: str, mounts=(), entrypoint=None, timeout: float = 60,
+                 memory: str = DOCKER_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT) -> subprocess.CompletedProcess:
         """Chạy container tới khi xong (vd. `nginx -t`) và trả kết quả; container vẫn được dọn nếu quá giờ."""
         self._require_entered()
         self._track(alias)
-        args = self.run_args(alias, image, *command, detach=False, mounts=mounts, entrypoint=entrypoint)
+        args = self.run_args(alias, image, *command, detach=False, mounts=mounts, entrypoint=entrypoint, memory=memory,
+                             pids_limit=pids_limit)
         try:
             return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -288,6 +298,11 @@ class DockerLab:
     def logs(self, alias: str) -> str:
         result = _docker("logs", self.name(alias))
         return result.stdout + result.stderr
+
+    def _log_tail(self, alias: str) -> str:
+        result = _docker("logs", "--tail", str(DOCKER_LOG_LINES), self.name(alias))
+        text = (result.stdout + result.stderr).rstrip() or "(không có log)"
+        return f"{DOCKER_LOG_LINES} dòng log cuối của {alias}:\n{text}"
 
     def exec(self, alias: str, *command: str, timeout: float = 30) -> subprocess.CompletedProcess:
         return _docker("exec", self.name(alias), *command, timeout=timeout)
@@ -302,9 +317,9 @@ class DockerLab:
             if text in self.logs(alias):
                 return
             if not self.running(alias):
-                pytest.fail(f"Container {alias} đã dừng trước khi in '{text}'")
+                pytest.fail(f"Container {alias} đã dừng trước khi in '{text}'. {self._log_tail(alias)}")
             time.sleep(0.2)
-        pytest.fail(f"Container {alias} không in '{text}' sau {timeout} giây. Log:\n{self.logs(alias)[-2000:]}")
+        pytest.fail(f"Container {alias} không in '{text}' sau {timeout} giây. {self._log_tail(alias)}")
 
     def ip(self, alias: str) -> str:
         result = _docker("inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", self.name(alias))
@@ -322,9 +337,9 @@ class DockerLab:
             except httpx.HTTPError:
                 pass
             if not self.running(alias):
-                pytest.fail(f"Container {alias} đã dừng ngay sau khi khởi động")
+                pytest.fail(f"Container {alias} đã dừng ngay sau khi khởi động. {self._log_tail(alias)}")
             time.sleep(0.2)
-        pytest.fail(f"{url} không trả lời sau {timeout} giây. Log của {alias}:\n{self.logs(alias)[-2000:]}")
+        pytest.fail(f"{url} không trả lời sau {timeout} giây. {self._log_tail(alias)}")
 
     def close(self) -> None:
         for name in self.names:
@@ -348,27 +363,48 @@ SANDBOX_SKIP = (
 )
 
 
+CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure")
+
+
 def _real_homes() -> list[Path]:
-    homes = {Path(pwd.getpwuid(os.getuid()).pw_dir), Path(os.path.expanduser("~"))}
+    homes = {Path(os.path.expanduser("~"))}
+    try:
+        import pwd
+
+        homes.add(Path(pwd.getpwuid(os.getuid()).pw_dir))
+    except (ImportError, KeyError):
+        pass
     return sorted(h.resolve() for h in homes if h.is_dir())
 
 
 def _base_flags(bwrap: str) -> list[str]:
-    """Cờ chung cho lần thử và lần chạy thật: / chỉ đọc, /tmp và /run là tmpfs rỗng (che socket docker, D-Bus)."""
+    """Cờ chung cho lần thử và lần chạy thật: / chỉ đọc, /tmp và /run là tmpfs rỗng (che socket docker, D-Bus), và
+    `CREDENTIAL_DIRS` của mọi home thật bị che bằng tmpfs khi tồn tại (thư mục dưới /tmp đã bị che sẵn)."""
     args = [bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run"]
     for home in _real_homes():
-        docker_dir = home / ".docker"
-        if docker_dir.is_dir() and not docker_dir.is_relative_to("/tmp"):
-            args += ["--tmpfs", str(docker_dir)]
+        for rel in CREDENTIAL_DIRS:
+            secret = home / rel
+            if secret.is_relative_to("/tmp"):
+                continue
+            if secret.is_dir():
+                args += ["--tmpfs", str(secret)]
+            elif secret.exists():
+                args += ["--ro-bind", "/dev/null", str(secret)]
     return args
 
 
+@functools.cache
+def _probe(argv: tuple[str, ...]) -> subprocess.CompletedProcess | None:
+    return _run_tool(list(argv))
+
+
 def sandbox_ready() -> str | None:
-    """Trả None khi bwrap tạo được sandbox với đúng bộ cờ của lần chạy thật, ngược lại trả lý do."""
+    """Trả None khi bwrap tạo được sandbox với đúng bộ cờ của lần chạy thật, ngược lại trả lý do. Kết quả cache theo
+    bộ cờ (`_probe.cache_clear()` để thử lại)."""
     bwrap = shutil.which("bwrap")
     if not bwrap:
         return "Chưa cài bwrap."
-    probe = _run_tool([*_base_flags(bwrap), *_BWRAP_ISOLATION, "--clearenv", "--", "true"])
+    probe = _probe((*_base_flags(bwrap), *_BWRAP_ISOLATION, "--clearenv", "--", "true"))
     if probe is None or probe.returncode != 0:
         detail = (probe.stderr.strip() if probe is not None else "") or "không rõ lỗi"
         return f"bwrap có nhưng không tạo được sandbox ({detail}); có thể kernel chặn user namespace không đặc quyền."
@@ -388,8 +424,8 @@ def _hidden_by_tmpfs() -> list[Path]:
 
 
 def sandbox_command(cmd: list, *, writable: list[Path], cwd: Path, env: dict[str, str]) -> list[str]:
-    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp và /run là tmpfs rỗng, ~/.docker bị che, chỉ `writable` ghi được,
-    môi trường dựng lại từ đầu.
+    """argv chạy `cmd` trong bwrap: / chỉ đọc, /tmp và /run là tmpfs rỗng, ~/.docker, ~/.kube, ~/.aws, ~/.ssh,
+    ~/.config/gcloud, ~/.azure bị che, chỉ `writable` ghi được, môi trường dựng lại từ đầu.
 
     Mạng KHÔNG bị tách (không --unshare-net): test healthcheck cần gọi server giả trên loopback của máy. Chấp nhận được vì
     mô hình đe doạ là script viết sai vô tình phá dữ liệu, không phải mã độc; socket của docker và D-Bus vẫn bị che.
@@ -425,6 +461,68 @@ def run_sandboxed(
     """
     argv = sandbox_command(cmd, writable=writable, cwd=cwd, env=env)
     return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, input=input, env={})
+
+
+SAFE_GIT_CONFIG = (
+    "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main",
+)
+GIT_DATE = "2026-05-01T10:00:00+00:00"
+
+
+def git_env(home: Path, *, date: str | None = None) -> dict[str, str]:
+    """Env dựng từ đầu cho git của test: HOME tạm, không đọc cấu hình global/system của người học, tác giả và ngày cố
+    định (commit tất định), không hỏi mật khẩu hay mở editor, không dò repo lên quá thư mục chứa `home`."""
+    stamp = date or GIT_DATE
+    return {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(home),
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CEILING_DIRECTORIES": str(Path(home).resolve().parent),
+        "GIT_AUTHOR_NAME": "Olist Dev",
+        "GIT_AUTHOR_EMAIL": "dev@olist-shop.example",
+        "GIT_COMMITTER_NAME": "Olist Dev",
+        "GIT_COMMITTER_EMAIL": "dev@olist-shop.example",
+        "GIT_AUTHOR_DATE": stamp,
+        "GIT_COMMITTER_DATE": stamp,
+        "GIT_EDITOR": "true",
+        "GIT_TERMINAL_PROMPT": "0",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+    }
+
+
+class GitRepo:
+    """Repo git tạm của một test. Trước `taint()`: git chạy trực tiếp kèm `SAFE_GIT_CONFIG` (dựng lịch sử nhanh). Gọi
+    `taint()` ngay khi code người học đã chạy trong repo: cấu hình repo có thể đã bị sửa (filter driver, alias, pager...)
+    mà `SAFE_GIT_CONFIG` không chặn hết, nên từ đó mọi lệnh git chạy qua `run_sandboxed`.
+
+    `writable` mặc định là `path` và `home`; truyền `[tmp_path]` khi git cần ghi chỗ khác (remote bare, clone khác).
+    """
+
+    def __init__(self, path: Path, home: Path, *, writable: list[Path] | None = None) -> None:
+        self.path = Path(path)
+        self.home = Path(home)
+        self.writable = list(writable) if writable is not None else [self.path, self.home]
+        self.tainted = False
+
+    def taint(self) -> None:
+        self.tainted = True
+
+    def git(self, *args: str, timeout: float = 30) -> subprocess.CompletedProcess:
+        cmd = ["git", *SAFE_GIT_CONFIG, *args]
+        env = git_env(self.home)
+        if self.tainted:
+            return run_sandboxed(cmd, writable=self.writable, cwd=self.path, env=env, timeout=timeout)
+        return subprocess.run(cmd, cwd=self.path, env=env, capture_output=True, text=True, timeout=timeout)
+
+    def out(self, *args: str, check: bool = True, timeout: float = 30) -> str:
+        """stdout đã strip; `check` thì lệnh lỗi là AssertionError kèm stderr."""
+        result = self.git(*args, timeout=timeout)
+        if check and result.returncode != 0:
+            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
+        return result.stdout.strip()
 
 
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
@@ -631,9 +729,15 @@ class Exercise:
             pytest.skip(f"Chưa cài {name}. Xem setup/DEVOPS-TOOLS.md")
         if min_version:
             have = tool_version(name)
-            need = parse_version(min_version)
-            if have is None or (need is not None and have < need):
-                shown = ".".join(map(str, have)) if have else "không rõ phiên bản"
+            need = tuple(int(part) for part in min_version.split("."))
+            if have is None:
+                command = " ".join([name, *TOOL_VERSION_ARGS.get(name, ["--version"])])
+                pytest.skip(
+                    f"Không đọc được phiên bản của {name} (bài này cần từ {min_version}). Chạy `{command}` để xem; "
+                    "có thể bản cài bị hỏng hoặc không phải bản chính thức. Xem setup/DEVOPS-TOOLS.md"
+                )
+            if not version_at_least(have, need):
+                shown = ".".join(map(str, have))
                 pytest.skip(f"{name} {shown} cũ hơn {min_version} cần cho bài này. Xem setup/DEVOPS-TOOLS.md")
         if name == "docker" and not docker_ready():
             pytest.skip("Docker daemon chưa chạy hoặc user chưa có quyền dùng docker")

@@ -168,9 +168,9 @@ Quy ước của track:
 - Lệnh nặng chạy trực tiếp trên máy (build, test, `kind create`) chạy với `nice -n 15 taskset -c "$DEVOPS_CPUSET"`;
   không ghim thì chỉ `nice -n 15`.
 - Container không kế thừa `nice` và `taskset` của lệnh gõ, nên phải ghim bằng `--cpuset-cpus "$DEVOPS_CPUSET"`
-  (hoặc `cpuset` trong compose, đọc cùng biến). Test gọi `docker run` lấy cờ từ `testkit.docker_cpu_args()`:
-  có `DEVOPS_CPUSET` thì dùng giá trị đó, rỗng hoặc chưa đặt thì chỉ ghim `12-35` khi máy có từ 36
-  core trở lên. Test luôn có `--rm` và dọn container trong `finally`.
+  (hoặc `cpuset` trong compose, đọc cùng biến). Test dựng container qua `testkit.DockerLab`, lấy cờ từ
+  `testkit.docker_cpu_args()`: có `DEVOPS_CPUSET` thì dùng giá trị đó, rỗng hoặc chưa đặt thì chỉ ghim `12-35` khi
+  máy có từ 36 core trở lên. Test luôn xoá container mình tạo khi kết thúc, kể cả khi lỗi hay bị Ctrl-C.
 - Mỗi lúc chạy một việc nặng, tắt container và cluster sau mỗi đợt kiểm.
 
 Giải thích chi tiết ở mục "Ghim CPU" của [`setup/DEVOPS-TOOLS.md`](../../setup/DEVOPS-TOOLS.md).

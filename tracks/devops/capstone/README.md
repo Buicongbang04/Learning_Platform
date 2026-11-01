@@ -98,8 +98,8 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 Lệnh đầu chấm code của bạn; lệnh sau chạy bản tham chiếu, phải pass khi đã cài đủ công cụ. Thêm `-k m02` để
 chỉ chạy một milestone.
 
-Test của capstone dựng container bằng `docker run --rm` với cờ ghim CPU từ `testkit.docker_cpu_args()`, đặt tên
-ngẫu nhiên có tiền tố `devops-ex-` và dọn trong `finally`, nên ngắt giữa chừng cũng không để lại container. Trên
+Test của capstone dựng container qua `testkit.DockerLab` với cờ ghim CPU từ `testkit.docker_cpu_args()`, đặt tên
+ngẫu nhiên có tiền tố `devops-ex-` và xoá khi kết thúc, nên lỗi hay ngắt giữa chừng cũng không để lại container. Trên
 máy dùng chung, đặt `DEVOPS_CPUSET` theo máy của bạn (xem [Ghim CPU](../README.md#ghim-cpu-trên-máy-dùng-chung)) và chạy lệnh nặng với `nice -n 15 taskset -c "$DEVOPS_CPUSET"`.
 
 ## Trình bày làm portfolio
