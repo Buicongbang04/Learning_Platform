@@ -25,19 +25,19 @@ questions:
     text: Từ 0.1 tới 0.3
   - id: d
     text: Trên 1
-- id: sampled-vs-greedy
+- id: episode-count
   kind: data
   type: single
-  prompt: Với REINFORCE không baseline sau 150 000 bước, return của policy lấy mẫu so với policy greedy thế nào?
+  prompt: Trong cùng 150 000 bước env, số episode PPO kết thúc so với REINFORCE không baseline thế nào?
   options:
   - id: a
-    text: Lấy mẫu cao hơn greedy ở cả ba seed
+    text: PPO ít episode hơn ở cả 3 seed
   - id: b
-    text: Hai cách cho return bằng nhau ở cả ba seed
+    text: PPO nhiều episode hơn ở cả 3 seed
   - id: c
-    text: Lấy mẫu thấp hơn greedy ở cả 3 seed
+    text: Hai thuật toán bằng đúng nhau
   - id: d
-    text: Greedy sập về dưới 100 ở một seed
+    text: Hơn kém tuỳ seed, không theo chiều nào
 - id: wallclock
   kind: data
   type: single
@@ -48,7 +48,7 @@ questions:
   - id: b
     text: Hai thuật toán tốn gần như bằng nhau
   - id: c
-    text: PPO nhanh hơn khoảng 2.5 lần
+    text: PPO nhanh hơn, cỡ 1.5 tới 4 lần
   - id: d
     text: PPO nhanh hơn khoảng 20 lần
 - id: baseline-bias

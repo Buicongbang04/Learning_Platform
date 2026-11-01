@@ -53,6 +53,6 @@ Viết hai hàm cập nhật trước, chúng chỉ khác nhau ở một số h�
 
 ### Gợi ý 2
 
-`rng.choice(np.flatnonzero(q_row == q_row.max()))` cho tie-break ngẫu nhiên. Không có nó, lúc đầu mọi Q bằng 0 và `argmax`
-luôn chọn action 0: trên FrozenLake agent đi mãi vào góc trái. Nếu Q-learning trên CliffWalking học được đường −13 mà return
-lúc train vẫn tệ hơn SARSA, đó là kết quả **đúng**: mục 3 lý thuyết giải thích vì sao.
+Lúc đầu mọi Q bằng 0, nên cách bạn phá thế hoà quyết định agent có khám phá được gì không: nếu luôn chọn action có chỉ số nhỏ nhất,
+trên FrozenLake agent đi mãi vào góc trái. Nếu Q-learning trên CliffWalking học được đường −13 mà return lúc train vẫn tệ hơn SARSA,
+đó là kết quả **đúng**: mục 3 lý thuyết giải thích vì sao.

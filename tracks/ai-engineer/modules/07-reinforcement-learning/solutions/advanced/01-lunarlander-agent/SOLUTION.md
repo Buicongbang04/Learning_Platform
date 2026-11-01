@@ -36,7 +36,8 @@ episode cố định (seed 10 000..10 099):
 | 1 | 239.5 ± 20.8 | 240.3 | 98% | 230.7, 92% | 230.8 | 2 402 | 285 s |
 | 2 | 238.7 ± 21.6 | 238.6 | 97% | 236.6, 94% | 246.9 | 2 914 | 294 s |
 
-Gộp 300 episode: 233.5, IQM 234.1, 92.7% trên 200. Mốc so sánh trên cùng 100 episode: policy ngẫu nhiên −194.3 ± 120.8, policy "không
+Gộp 300 episode của 3 seed: 233.5, IQM tính trên episode 234.1 (không phải IQM theo run kèm khoảng tin cậy bootstrap của
+`rliable`: 3 seed là quá ít cho việc đó), 92.7% trên 200. Mốc so sánh trên cùng 100 episode: policy ngẫu nhiên −194.3 ± 120.8, policy "không
 làm gì" −131.5 ± 44.0.
 
 Return lúc train (trung bình các episode kết thúc trong 50 000 bước trước mốc), seed 0 / 1 / 2:

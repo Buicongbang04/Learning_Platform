@@ -44,8 +44,8 @@ train của notebook chạy 3 seed. Thử giả thuyết trên ít bước hơn 
 ## Tiêu chí đạt
 
 - Siêu tham số mặc định của `train_ppo` và `ppo_update` không đổi.
-- Mỗi hàm làm đúng việc mà tên và docstring của nó nói: test so `ActorCritic`, `gae`, `ppo_policy_loss`, `collect_rollout` và một bước
-  `ppo_update` với cài đặt tham chiếu trên dữ liệu nhỏ (giá trị, shape, gradient), và `train_ppo` học được một bandit theo ngữ cảnh.
+- Mỗi hàm làm đúng việc mà tên và docstring của nó nói: test so mọi hàm của notebook với một cài đặt tham chiếu trên dữ liệu nhỏ
+  (giá trị, shape, gradient) và chạy `train_ppo` trên một env tí hon.
 - `BUGS.md` không còn TODO, ít nhất 5 mục `## Bug N`, ít nhất 300 từ.
 - Nội dung chấm theo rubric trong `SOLUTION.md`; bản đã sửa đạt mức PPO của bảng mục 5 lý thuyết.
 
@@ -59,6 +59,5 @@ loss, cập nhật.
 
 ### Gợi ý 2
 
-Với mỗi hàm, tìm một đầu vào mà bạn tính tay được đầu ra: một env reward 1 mỗi bước bị cắt sau 3 bước cho `collect_rollout` và `gae`,
-vài ratio cố định cho `ppo_policy_loss`, một batch 8 mẫu với `print(shape)` ở từng dòng của `ppo_update`. Một bug có thể che bug khác:
-sửa xong mỗi bug, chạy lại mọi phép thử và ghi kết quả.
+Với mỗi hàm, tìm một đầu vào nhỏ mà bạn tính tay được đầu ra (một env tự viết vài bước, vài số cố định, một batch vài mẫu), rồi so
+từng đại lượng trung gian, kể cả shape. Một bug có thể che bug khác: sửa xong mỗi bug, chạy lại mọi phép thử và ghi kết quả.

@@ -24,7 +24,7 @@ bài Advanced 01.
 **Phần cứng:** CPU · ~150 phút
 
 Thời gian trên là thời gian làm bài. Cell train của notebook lời giải (3 thuật toán × 3 seed × 150 000 bước) chạy khoảng 12 phút trên
-CPU 4 luồng: REINFORCE khoảng 95 giây mỗi seed (một env, một forward mỗi bước), PPO khoảng 37 giây mỗi seed.
+CPU 4 luồng; notebook in thời gian của từng lần train để bạn tự so.
 
 Đọc mục 5 và 6 phần lý thuyết. Trong `starter/pg.ipynb`, điền các cell theo đặc tả ngay trên mỗi cell:
 
@@ -61,7 +61,6 @@ CartPole, chỉ kém hơn: train xong mà thấy "cũng lên 400" chưa chứng 
 
 ### Gợi ý 2
 
-Thứ tự trong `collect_rollout` mỗi bước: tính `dist`, `value` của observation hiện tại (không ghi graph), lấy mẫu action, `envs.step`,
-ghi buffer, dựng observation thật sau bước (thay bằng `info["final_obs"][i]` ở env vừa kết thúc), tính `next_values` từ đó, cộng
-reward vào return dở dang, ghi và reset return của env vừa kết thúc, rồi mới gán observation mới. Trong `ppo_update`, chuẩn hoá
-advantage **sau** khi cắt minibatch.
+Vẽ ra giấy dòng thời gian của một bước env trong vector env chế độ SAME_STEP: observation nào sinh ra action, observation nào là
+trạng thái thật sau action, observation nào là của episode mới. `next_values` và return dở dang phụ thuộc đúng vào sự phân biệt đó.
+Trong `ppo_update`, nghĩ xem advantage nên được chuẩn hoá trên tập mẫu nào.

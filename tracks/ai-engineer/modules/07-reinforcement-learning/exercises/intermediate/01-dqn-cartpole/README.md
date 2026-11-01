@@ -52,12 +52,11 @@ nghiệm của bài trong app.
 
 ### Gợi ý 1
 
-Viết `td_targets` dưới `torch.no_grad()` và dùng `gather(1, actions.unsqueeze(1)).squeeze(1)` để lấy Q của đúng action đã làm. In shape
-của `q_sa` và target trước khi gọi loss: hai tensor phải cùng là `(B,)`. Test `EndlessReward` (một observation, reward 1 mỗi bước, cắt
-sau 10 bước) là phép thử nhanh nhất cho cả `truncated` lẫn target network.
+Target là hằng số với gradient: nghĩ xem phần nào của loss không được ghi graph autograd. In shape của $$Q(s, a)$$ và của target
+trước khi gọi loss: hai tensor phải cùng shape. Test `EndlessReward` (một observation, reward 1 mỗi bước, cắt sau 10 bước) là phép thử
+nhanh nhất cho cả `truncated` lẫn target network.
 
 ### Gợi ý 2
 
-Soft update: `p_target.lerp_(p_online, tau)` trong `torch.no_grad()` cho mọi cặp tham số, ngay sau `opt.step()`. Giữ checkpoint bằng
-`copy.deepcopy(q_net.state_dict())`: `state_dict()` trả **tham chiếu** tới tensor đang train, lưu nó mà không sao chép thì "bản tốt
-nhất" luôn trùng trọng số hiện tại. Đánh giá định kỳ dùng policy greedy (ε = 0) trên seed riêng.
+Soft update cập nhật mọi cặp tham số tại chỗ, ngoài autograd, ngay sau bước optimizer. Đánh giá định kỳ dùng policy greedy
+(ε = 0) trên seed riêng, tách khỏi seed của đánh giá cuối.

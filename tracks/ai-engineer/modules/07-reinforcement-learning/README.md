@@ -146,7 +146,7 @@ run("LunarLander-v3", random_policy)
 | Env | Observation | Action | Time limit | Policy ngẫu nhiên | Ghi chú |
 | --- | --- | --- | --- | --- | --- |
 | FrozenLake-v1 (4x4, trơn) | 16 trạng thái rời rạc | 4 | 100 | 0.01 (tỉ lệ tới đích) | reward 1 duy nhất ở đích |
-| CartPole-v1 | 4 số thực | 2 | 500 | 23.7 ± 12.2 | policy viết tay 2 dòng: **493.1**, 95/100 episode bị `truncated` |
+| CartPole-v1 | 4 số thực | 2 | 500 | 23.7 ± 12.2 | policy viết tay một dòng: **493.1**, 95/100 episode bị `truncated` |
 | LunarLander-v3 | 8 số thực | 4 | 1 000 | −192.0 ± 114.6 | ≥ 200 được coi là "giải được" |
 
 Policy viết tay một dòng đạt 493 trên CartPole mà không học gì. Bài học đầu tiên của RL thực tế: **luôn có baseline** (ngẫu nhiên,
@@ -210,8 +210,8 @@ Policy ngẫu nhiên đều có $$V(0) = 0.0124$$ và tới đích 1.5% số epi
   73.2%, chỉ kém 1.4 điểm. $$\gamma$$ nhỏ làm **giá trị** nhỏ chứ không nhất thiết làm **policy** tệ; policy của $$\gamma = 0.9$$ "sốt ruột"
   hơn (episode trung bình 40.5 bước so với 43.7) và chấp nhận rủi ro cao hơn một chút. $$\gamma$$ 0.99 và 1.0 cho cùng một policy ở đây.
 - Policy iteration cần 2 tới 3 vòng, value iteration cần hàng trăm lần quét; nhưng mỗi vòng policy iteration tự nó là một lần policy
-  evaluation hàng trăm lần quét. Tổng chi phí cùng cỡ; trên MDP lớn có thể giải evaluate bằng hệ tuyến tính, khi đó policy iteration
-  thắng rõ.
+  evaluation hàng trăm lần quét. Tổng chi phí cùng cỡ. Với MDP nhỏ và vừa có thể giải evaluate trực tiếp bằng hệ tuyến tính (tốn
+  $$O(|\mathcal S|^3)$$), khi đó policy iteration thắng rõ; MDP lớn thì giải trực tiếp quá đắt, phải lặp.
 
 ### Giới hạn
 
@@ -277,7 +277,7 @@ bước −1), $$\alpha = 0.2$$, ε = 0.1 cố định, 500 episode, 3 seed:
 | | Return lúc train (200 episode cuối) | Đường greedy cuối cùng |
 | --- | --- | --- |
 | Q-learning | −52.3 / −48.3 / −54.8 | −13: 13 bước sát vực, cả 3 seed |
-| SARSA | −23.5 / −21.7 / −23.8 | −17: 17 bước, cách vực một hàng, cả 3 seed |
+| SARSA | −23.5 / −21.7 / −23.8 | −17: 17 bước, đi ở hàng trên cùng (cách vực hai hàng), cả 3 seed |
 
 Q-learning học đúng đường tối ưu sát vực (13 bước) nhưng lúc train thỉnh thoảng bị ε đẩy xuống vực, nên return lúc train **tệ hơn**.
 SARSA tính cả rủi ro của khám phá vào giá trị, chọn đường vòng an toàn. Khi nào cần mỗi loại: robot thật, xe tự lái đang học, hay
@@ -380,7 +380,8 @@ $$\sum_{k<500} 0.99^k \approx 99.3$$). Đọc bảng:
 - **Không có target network, Q nổ lên cỡ một triệu** trong khi return thật là 9: mạng đuổi theo chính nó, mỗi bước học đẩy target lên
   theo, policy sụp về luôn đẩy một phía. Cùng code, chỉ khác một dòng.
 - **Hard update mỗi 500 bước** học được (có checkpoint chạm 500) nhưng không giữ được: trọng số cuối chỉ còn 108 tới 239. Soft update với
-  $$\tau = 0.005$$ (target trôi chậm, đều) ổn định hơn rõ ở cả 3 seed, và Q dự đoán gần như khớp return thật.
+  $$\tau = 0.005$$ học chậm và không đều (seed 1 chỉ vượt 400 ở mốc eval cuối) nhưng không sụp, trọng số cuối của cả 3 seed gần 500
+  và Q dự đoán gần như khớp return thật. Lợi thế đó là của ảnh chụp cuối với 3 seed ở thiết lập này, không phải định luật.
 - Checkpoint tốt nhất theo eval định kỳ cứu được phần lớn khác biệt của hard update: đánh giá định kỳ là một phần của thuật toán,
   không phải trang trí.
 
@@ -392,8 +393,8 @@ Ba điều thực tế rút ra:
 - Siêu tham số quyết định nhiều hơn thuật toán: trong lúc chuẩn bị bài, cùng code với lr $$10^{-3}$$, học mỗi 4 bước, batch 64, mạng
   rộng 256 và hard update mỗi 500 bước cho return cuối chỉ 169 / 162 / 269 (checkpoint tốt nhất 369 / 500 / 500); bỏ thêm target network
   thì cũng sụp về return 9 như bảng trên. Luôn so cấu hình trên nhiều seed, đổi từng biến một, trước khi kết luận.
-- Đo **wall-clock và số bước env** cùng lúc. Trên CPU, một bước env CartPole tốn vài micro giây, một bước học (forward 3 lần,
-  backward, Adam) tốn khoảng 1.5 ms: DQN chậm vì học, không vì env.
+- Đo **wall-clock và số bước env** cùng lúc. Trên CPU, một bước env CartPole chỉ là vài phép tính số thực, còn một bước học (forward 3 lần,
+  backward, Adam) tốn 1.3 tới 1.6 ms (đo trung bình trên 6 000 bước, 4 hoặc 1 luồng): DQN chậm vì học, không vì env.
 
 ### Atari: tiền xử lý của Nature DQN
 
@@ -437,13 +438,13 @@ print(f"policy ngẫu nhiên, 1 ván Pong: điểm {total:.0f}, {steps} bước 
 Observation là 4 khung 84x84 `uint8` (28 224 byte), 6 action. Policy ngẫu nhiên thua trắng −21 sau 838 bước agent (3 352 khung). Một
 env đơn qua các wrapper Python chạy khoảng 1 500 bước agent mỗi giây trên CPU (máy dùng chung); ngân sách chuẩn của PPO trên Atari
 trong CleanRL là 10 triệu bước, tức gần 2 giờ chỉ riêng cho env. Vì vậy Atari luôn chạy song song: `ale_py.vector_env.AtariVectorEnv`
-làm tiền xử lý y hệt bằng C++ đa luồng, 8 env với 4 luồng đo được khoảng 6 200 bước mỗi giây với action ngẫu nhiên, và mạng CNN đưa lên
+làm tiền xử lý y hệt bằng C++ đa luồng, 8 env với 4 luồng đo được 6 200 tới 7 300 bước mỗi giây (hai lần đo, máy dùng chung) với action ngẫu nhiên, và mạng CNN đưa lên
 GPU.
 
 ### Lỗi hay gặp với DQN
 
-- `Q(s, a)` shape `(B, 1)` trừ target shape `(B,)`: broadcasting ra ma trận `(B, B)`, loss vẫn là một số, mạng học trung bình của mọi
-  target. Không có lỗi nào được báo. Luôn `squeeze` và `assert` shape.
+- Shape lệch nhau trong loss: broadcasting của PyTorch không báo lỗi mà lặng lẽ tạo ra một tensor khác hẳn ý định, loss vẫn là
+  một số. Luôn `assert` shape của hai vế trước khi tính loss.
 - Lưu `terminated or truncated` vào buffer (mục 1).
 - Target tính có gradient (quên `no_grad`/`detach`): khi target net là chính mạng online, gradient đi qua cả $$Q(s')$$.
 - Đánh giá với ε > 0 rồi báo con số đó như hiệu năng của policy, hoặc đánh giá trên đúng những episode đang train.
@@ -531,8 +532,7 @@ $$\lambda = 0.95$$. Return trung bình của các episode kết thúc trong cử
 | REINFORCE + baseline | 270 / 231 / 187 | 387 / 410 / 439 | 417 / 431 / 472 | 495.1 / 500 / 500 |
 | PPO | 288 / 377 / 286 | 416 / 374 / 420 | 463 / 450 / 488 | 500 / 500 / 500 |
 
-Baseline thắng REINFORCE trần ở cả 3 seed từ mốc 100k trở đi; ở 50k chênh lệch còn nằm trong dao động giữa seed. PPO dẫn ở mọi
-mốc: dùng mỗi mẫu 4 lần, advantage từ GAE ít nhiễu hơn reward-to-go, và 4 env song song cho dữ liệu đa dạng hơn. Cột cuối là một cảnh
+Baseline thắng REINFORCE trần ở cả 3 seed từ mốc 100k trở đi; ở 50k chênh lệch còn nằm trong dao động giữa seed. PPO dẫn ở 50k và 150k, ngang baseline ở 100k (trung bình 3 seed 403 so với 412): dùng mỗi mẫu 4 lần, advantage từ GAE ít nhiễu hơn reward-to-go, và 4 env song song cho dữ liệu đa dạng hơn. Cột cuối là một cảnh
 báo: policy **greedy** của cả ba thuật toán đều gần 500, CartPole dễ tới mức lấy argmax che hết khác biệt. Con số phân biệt được thuật
 toán là return lúc train (policy lấy mẫu) và tốc độ đạt tới nó. So với DQN ở mục 4, PPO ổn định hơn hẳn trên cùng bài với ít tinh
 chỉnh hơn; đó là lý do PPO là lựa chọn mặc định cho action rời rạc khi env rẻ.
@@ -637,7 +637,8 @@ giá policy greedy trên 100 episode cố định (seed 10 000..10 099):
 | 1 | 239.5 ± 20.8 | 240.3 | 98% | 230.7 | 230.8 | 4.8 phút |
 | 2 | 238.7 ± 21.6 | 238.6 | 97% | 236.6 | 246.9 | 4.9 phút |
 
-Gộp 300 episode: trung bình 233.5, IQM 234.1, 92.7% episode trên 200; cả 3 seed vượt ngưỡng "giải được". Ba điều đáng giá hơn con số:
+Gộp 300 episode của 3 seed: trung bình 233.5, IQM tính trên episode 234.1 (không phải IQM theo run kèm khoảng tin cậy
+bootstrap như `rliable`, vì chỉ có 3 seed), 92.7% episode trên 200; cả 3 seed vượt ngưỡng "giải được". Ba điều đáng giá hơn con số:
 
 - **Số bước gradient quyết định.** Lần chạy đầu của bản tham chiếu chia batch 8 192 mẫu thành minibatch 256 (128 bước gradient mỗi
   lần cập nhật): sau 1 triệu bước, policy greedy chỉ được −18.3 / 31.8 / 136.5. Chỉ đổi sang minibatch 64 (512 bước gradient) cho

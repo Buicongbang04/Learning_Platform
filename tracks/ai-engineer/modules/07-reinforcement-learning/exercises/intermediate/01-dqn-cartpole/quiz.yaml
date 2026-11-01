@@ -12,32 +12,6 @@ questions:
     text: Khoảng 4 900 episode
   - id: d
     text: Khoảng 50 000 episode
-- id: soft-seed1-late
-  kind: data
-  type: single
-  prompt: DQN soft update seed 1, eval greedy mỗi 5 000 bước lần đầu vượt 400 ở mốc nào?
-  options:
-  - id: a
-    text: Mốc 5 000 bước
-  - id: b
-    text: Mốc 25 000 bước
-  - id: c
-    text: Mốc 40 000 bước
-  - id: d
-    text: Mốc 50 000 bước
-- id: hard-seed1-drop
-  kind: data
-  type: single
-  prompt: Hard update seed 1 chạm eval 500 ở mốc 25 000 bước. Eval ở mốc 30 000 bước là bao nhiêu?
-  options:
-  - id: a
-    text: Vẫn giữ 500
-  - id: b
-    text: Khoảng 450
-  - id: c
-    text: Khoảng 300
-  - id: d
-    text: Khoảng 110
 - id: why-replay
   kind: knowledge
   type: single
@@ -64,19 +38,6 @@ questions:
     text: Replay buffer bị ghi đè nhanh hơn nên thiếu mẫu tốt
   - id: d
     text: Huber loss đổi sang tuyến tính khi sai số còn nhỏ
-- id: deepcopy-best
-  kind: knowledge
-  type: single
-  prompt: Lưu `best_state = q_net.state_dict()` (không deepcopy) thì sao?
-  options:
-  - id: a
-    text: PyTorch báo lỗi vì state_dict chỉ đọc được
-  - id: b
-    text: Best state luôn là trọng số khởi tạo ban đầu của mạng
-  - id: c
-    text: Best state luôn trùng trọng số đang train hiện tại
-  - id: d
-    text: Chạy đúng nhưng tốn gấp đôi bộ nhớ của mạng
 - id: double-dqn
   kind: knowledge
   type: single
@@ -103,3 +64,42 @@ questions:
     text: Gymnasium tự gộp truncated vào reward
   - id: d
     text: Để buffer nhỏ đi một cột bool cho mỗi chuyển lưu
+- id: why-checkpoint
+  kind: knowledge
+  type: single
+  prompt: Vì sao DQN trên CartPole nên đánh giá định kỳ và giữ checkpoint tốt nhất thay vì lấy trọng số cuối?
+  options:
+  - id: a
+    text: Đường cong dao động, trọng số cuối có thể đúng lúc tệ
+  - id: b
+    text: Trọng số cuối luôn overfit vì replay buffer đã đầy ắp
+  - id: c
+    text: PyTorch không lưu được trọng số khi train xong
+  - id: d
+    text: Checkpoint tốt nhất luôn có Q gần return thật hơn
+- id: soft-tau
+  kind: knowledge
+  type: single
+  prompt: Soft update với τ = 0.005 sau mỗi bước học có tác dụng gì so với chép cứng mỗi 500 bước?
+  options:
+  - id: a
+    text: Target network trôi chậm và đều thay vì nhảy bậc
+  - id: b
+    text: Target network luôn trùng khớp mạng online từng bước
+  - id: c
+    text: Bỏ hẳn được replay buffer vì target đã ổn định
+  - id: d
+    text: Gradient đi được qua cả target network khi học
+- id: huber
+  kind: knowledge
+  type: single
+  prompt: Vì sao DQN dùng Huber loss thay vì MSE cho TD error?
+  options:
+  - id: a
+    text: Huber nhanh hơn MSE vài lần trên CPU
+  - id: b
+    text: Target sai lệch lớn không sinh gradient khổng lồ
+  - id: c
+    text: Huber bắt Q-value luôn nằm trong khoảng [−1, 1]
+  - id: d
+    text: MSE không lấy được đạo hàm khi sai số đúng bằng 0

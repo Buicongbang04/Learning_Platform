@@ -1,79 +1,79 @@
 questions:
-- id: logged-max
+- id: broken-greedy
   kind: data
   type: single
-  prompt: Chạy notebook gốc (đủ 5 bug), seed 0, return lớn nhất được log trong 150 000 bước là bao nhiêu?
+  prompt: Chạy nguyên notebook gốc (3 seed), return trung bình qua 3 seed của policy greedy cuối trên 20 episode cố định nằm ở đâu?
   options:
   - id: a
-    text: Đúng 500
+    text: Dưới 100
   - id: b
-    text: Khoảng 200
+    text: Từ 400 tới 480
   - id: c
-    text: Hàng nghìn trở lên
+    text: Đúng 500 ở cả 3 seed
   - id: d
-    text: Không quá 50
-- id: entropy-bug
-  kind: data
-  type: single
-  prompt: Chỉ còn bug dấu entropy (4 bug kia đã sửa), entropy ở lần cập nhật cuối so với bản đã sửa (khoảng 0.53) thế nào?
-  options:
-  - id: a
-    text: Gần như bằng, chênh dưới 0.005
-  - id: b
-    text: Thấp hơn ở cả 3 seed
-  - id: c
-    text: Cao hơn, sát ln 2
-  - id: d
-    text: Sụp về đúng 0
-- id: broadcast
-  kind: knowledge
-  type: single
-  prompt: Trong PyTorch, `v` shape (128, 1) trừ `returns` shape (128,) cho kết quả shape nào?
-  options:
-  - id: a
-    text: (128,)
-  - id: b
-    text: (128, 1)
-  - id: c
-    text: (128, 128)
-  - id: d
-    text: Báo lỗi shape
-- id: truncation-late
-  kind: knowledge
-  type: single
-  prompt: Vì sao bug coi truncated là kết thúc trong GAE gần như vô hại lúc đầu train CartPole?
-  options:
-  - id: a
-    text: Lúc đầu hiếm episode nào sống tới 500 bước
-  - id: b
-    text: Lúc đầu critic chưa học nên V luôn bằng 0
-  - id: c
-    text: GAE chỉ dùng truncated khi λ bằng 1
-  - id: d
-    text: CartPole chỉ bật truncated sau 100 000 bước
+    text: Trên 1 000
 - id: first-check
   kind: knowledge
   type: single
-  prompt: Đường cong log return CartPole vượt 500. Bước đầu tiên nên làm gì?
+  prompt: Bắt đầu gỡ một vòng train RL chạy không lỗi nhưng kết quả lạ, việc nào nên làm trước tiên?
   options:
   - id: a
     text: Giảm learning rate rồi train lại để xem
   - id: b
-    text: Kiểm cách tính và reset return được log
+    text: Đối chiếu số log với giới hạn lý thuyết của chúng
   - id: c
     text: Tăng số seed lên 10 để giảm phương sai
   - id: d
-    text: Đổi sang DQN vì PPO không ổn định
-- id: max-vs-min
+    text: Đổi sang thuật toán khác ổn định hơn
+- id: shape-probe
   kind: knowledge
   type: single
-  prompt: Đổi min thành max trong clipped objective, với A > 0 và ρ = 1.5 (ε = 0.2) thì gradient theo ρ ra sao?
+  prompt: Phép dò nào tách nhanh nhất một lỗi shape làm loss sai mà không báo lỗi?
   options:
   - id: a
-    text: Bằng 0, giống bản đúng
+    text: assert shape hai vế ngay trước khi tính loss
   - id: b
-    text: Bằng A, không còn bị chặn
+    text: Train thêm gấp đôi số bước rồi so đường cong
   - id: c
-    text: Bằng 1.2 lần A
+    text: Đổi optimizer từ Adam sang SGD rồi chạy lại
   - id: d
-    text: Đổi dấu thành −A
+    text: Tăng batch size cho gradient bớt nhiễu
+- id: tiny-env
+  kind: knowledge
+  type: single
+  prompt: Vì sao nên dựng một env tí hon (vài bước, reward cố định) khi gỡ lỗi code RL?
+  options:
+  - id: a
+    text: Env nhỏ thì agent học nhanh nên đỡ tốn thời gian
+  - id: b
+    text: Tính tay được đầu ra từng hàm để so từng ô
+  - id: c
+    text: Env thật của Gymnasium có thể chứa lỗi ngầm
+  - id: d
+    text: Test chỉ chấp nhận env có ít hơn 10 bước
+- id: diagnostics
+  kind: knowledge
+  type: single
+  prompt: Đại lượng nào thường lộ một bước cập nhật policy quá đà, kể cả khi return vẫn đẹp?
+  options:
+  - id: a
+    text: Approx KL và clip fraction theo từng lần cập nhật
+  - id: b
+    text: Số episode kết thúc trong mỗi rollout thu được
+  - id: c
+    text: Thời gian chạy của mỗi lần cập nhật
+  - id: d
+    text: Giá trị reward lớn nhất xuất hiện trong rollout
+- id: masking
+  kind: knowledge
+  type: single
+  prompt: '"Bug A che bug B" nghĩa là gì trong lúc gỡ lỗi?'
+  options:
+  - id: a
+    text: Hai bug nằm cùng một dòng code trong notebook
+  - id: b
+    text: Sửa A thì B tự biến mất
+  - id: c
+    text: Triệu chứng của B chỉ đo được sau khi sửa A
+  - id: d
+    text: B chỉ xuất hiện khi chạy notebook trên GPU

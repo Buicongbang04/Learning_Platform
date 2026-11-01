@@ -31,7 +31,7 @@ CartPole-v1, 150 000 bước env, CPU 4 luồng (Xeon E5-2696 v3, máy dùng chu
 - Ở mốc 100k và 150k, baseline cho return cao hơn REINFORCE trần ở cả 3 seed, và policy lấy mẫu cuối cùng ổn định hơn hẳn (442 tới
   465 so với 316 tới 427). Ở 50k thì chưa rõ: chênh lệch nằm trong dao động giữa seed. Với 3 seed, chỉ kết luận được hướng, không
   kết luận được độ lớn.
-- PPO dẫn ở mọi mốc và nhanh hơn 2.5 lần wall-clock: một forward cho 4 env cùng lúc, và mỗi mẫu được dùng 4 epoch.
+- PPO dẫn ở 50k và 150k, ngang baseline ở 100k (trung bình 403 so với 412), và nhanh hơn khoảng 2 tới 2.5 lần wall-clock (lần chạy lại lúc máy bận hơn: 60 s so với 114 s): một forward cho 4 env cùng lúc, và mỗi mẫu được dùng 4 epoch.
 - Policy greedy của cả ba đều gần 500: CartPole dễ tới mức "lấy argmax" che hết khác biệt. Con số phân biệt được thuật toán là
   return **lúc train** và return của policy **lấy mẫu**.
 - Chẩn đoán PPO (seed 0): approx KL lớn nhất 0.0066, clip fraction lớn nhất 0.086, entropy cuối 0.54 (ban đầu 0.693). Cả hai số đầu
@@ -39,7 +39,6 @@ CartPole-v1, 150 000 bước env, CPU 4 luồng (Xeon E5-2696 v3, máy dùng chu
 
 ## Bẫy thường gặp
 
-- Lỗi nào cũng "vẫn học được CartPole": một bản PPO đổi `min` thành `max`, quên `final_obs`, hay sai dấu entropy vẫn có thể lên vài
-  trăm điểm. Chỉ test so với cài đặt tham chiếu trên dữ liệu nhỏ mới bắt được chắc chắn (bài Advanced 02 xoay quanh đúng điều này).
-- `value` trả `(B, 1)`: `(v - returns) ** 2` broadcasting thành `(B, B)`, critic học trung bình của mọi return.
+- Lỗi nào cũng "vẫn học được CartPole": nhiều cài đặt PPO sai vẫn lên vài trăm điểm. Chỉ test so với cài đặt tham chiếu trên dữ
+  liệu nhỏ mới bắt được chắc chắn.
 - Chuẩn hoá advantage bằng `std` lệch (numpy mặc định) thay vì `torch.std` không lệch: khác 4% với minibatch 12 mẫu của test.

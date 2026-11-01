@@ -27,8 +27,9 @@ dòng "đủ 5 bug"). Clip fraction lớn nhất: bản sửa 0.086 / 0.094 / 0.
 - **Không bug nào làm notebook hỏng hẳn.** Nhiều seed vẫn đạt greedy 500 với một bug; chỉ khi so 3 seed với bản đúng mới thấy độ
   kém. Bug 1 rõ nhất (return lúc train còn 182 tới 260 ở mốc cuối). Bug 2 chỉ hại một seed (seed 0); hai seed kia thậm chí ngang bản
   sửa: tác hại của nó phụ thuộc agent có hay chạm 500 bước không.
-- **Bug 3 lộ ở chẩn đoán trước khi lộ ở return**: approx KL lớn nhất 0.044 và clip fraction 0.375 ở seed 1, gấp 5 lần bản sửa, trong
-  khi return của seed đó vẫn đẹp. Đó là lý do phải log KL và clip fraction.
+- **Bug 3 lộ ở chẩn đoán ở 2 trên 3 seed**: approx KL lớn nhất 0.044 và clip fraction 0.375 ở seed 1 (gấp khoảng 5 lần bản sửa) trong
+  khi return của seed đó vẫn đẹp; seed 2 có 0.017 và 0.250. Seed 0 thì không (KL lớn nhất 0.0037, thấp hơn cả bản sửa): chẩn đoán giúp
+  nhưng không thay được test so với cài đặt tham chiếu.
 - **Bug 4** kéo entropy cuối xuống ở cả 3 seed (0.44 tới 0.50 so với 0.53 tới 0.54); với hệ số 0.01 tác hại nhỏ, ở bài khám phá khó
   (reward thưa) nó đủ để agent không bao giờ tìm thấy reward.
 - **Bug 5 che mọi thứ**: đường cong của notebook gốc tăng đều tới khoảng 37 000, trên một env có return tối đa 500. Không sửa nó trước
@@ -41,8 +42,7 @@ dòng "đủ 5 bug"). Clip fraction lớn nhất: bản sửa 0.086 / 0.094 / 0.
 - **Triệu chứng.** Trong `ppo_update`, `model.value(obs) - returns` là `(128, 1) - (128,)` (minibatch 128 mẫu), broadcasting ra ma trận `(128, 128)`: value loss
   là trung bình bình phương của **mọi cặp** dự đoán và return, critic học về trung bình của return trong minibatch thay vì return của
   từng trạng thái. Không lỗi, value loss vẫn giảm.
-- **Phát hiện.** `print(model.value(obs).shape)` hoặc `assert v.shape == returns.shape` trong `ppo_update`; explained variance của critic
-  quanh 0 dù value loss "giảm".
+- **Phát hiện.** `print(model.value(obs).shape)` hoặc `assert v.shape == returns.shape` trong `ppo_update`.
 - **Sửa.** `return self.critic(obs).squeeze(-1)`.
 
 ### Bug 2: `gae` coi `truncated` là kết thúc

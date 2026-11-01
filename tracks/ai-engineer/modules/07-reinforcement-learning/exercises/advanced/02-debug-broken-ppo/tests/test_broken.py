@@ -115,9 +115,9 @@ def test_ppo_policy_loss_values(nb):
     assert stats["approx_kl"] == pytest.approx(kl, rel=1e-5)
     loss.backward()
     g = new.grad
-    assert g[2] == 0, "ρ = 1.5 > 1 + ε với A > 0: nhánh clip được chọn, không còn gradient"
-    assert g[4] == 0, "ρ = 0.5 < 1 − ε với A < 0: nhánh clip được chọn, không còn gradient"
-    assert g[0] == pytest.approx(-0.5 * 1.0 / 5), "ρ = 0.5 với A > 0: vẫn kéo xác suất lên (nhánh không clip là min)"
+    assert g[2] == 0, "gradient theo new_logp khác cài đặt tham chiếu"
+    assert g[4] == 0, "gradient theo new_logp khác cài đặt tham chiếu"
+    assert g[0] == pytest.approx(-0.5 * 1.0 / 5), "gradient theo new_logp khác cài đặt tham chiếu"
     assert g[1] == pytest.approx(1.0 / 5)
 
 
@@ -131,8 +131,7 @@ def test_collect_rollout_counter(nb, envs_mod):
     assert buf["actions"].shape == (4, 2) and buf["actions"].dtype == np.int64
     np.testing.assert_allclose(buf["obs"][:, 0, 0], [0, 1, 2, 0])
     np.testing.assert_allclose(buf["values"][:, 0], [0, 10, 20, 0])
-    np.testing.assert_allclose(buf["next_values"][:, 0], [10, 20, 30, 10], err_msg=(
-        "bước bị cắt: next_values là V của final_obs (30), không phải của observation sau reset (0)"))
+    np.testing.assert_allclose(buf["next_values"][:, 0], [10, 20, 30, 10], err_msg="next_values khác cài đặt tham chiếu")
     np.testing.assert_array_equal(buf["truncated"][:, 1], [False, False, True, False])
     assert not buf["terminated"].any()
     np.testing.assert_allclose(buf["rewards"], 1.0)
@@ -141,7 +140,7 @@ def test_collect_rollout_counter(nb, envs_mod):
     np.testing.assert_allclose(buf["logp"], expected_logp, rtol=1e-6)
     np.testing.assert_allclose(obs[:, 0], [1, 1])
     buf2, obs = nb.collect_rollout(envs, FixedModel(), obs, 3)
-    assert buf2["episode_returns"] == [3.0, 3.0], "return dở dang phải sống qua hai lần gọi"
+    assert buf2["episode_returns"] == [3.0, 3.0], "episode_returns khác cài đặt tham chiếu"
 
 
 def test_ppo_update_matches_reference(nb):
@@ -167,15 +166,14 @@ def test_ppo_update_matches_reference(nb):
     loss.backward()
     with torch.no_grad():
         for p, q in zip(model.parameters(), ref.parameters()):
-            torch.testing.assert_close(p, q - 0.1 * q.grad, msg="một bước SGD phải khớp loss tham chiếu "
-                                       "(advantage chuẩn hoá trong minibatch, value loss có 1/2, trừ entropy)")
+            torch.testing.assert_close(p, q - 0.1 * q.grad, msg="một bước cập nhật khác cài đặt tham chiếu")
     assert set(stats) >= {"clipfrac", "approx_kl", "entropy", "value_loss"}
     assert stats["value_loss"] == pytest.approx(vl.item(), rel=1e-5)
 
     before = [p.detach().clone() for p in model.parameters()]
     nb.ppo_update(model, opt, batch, np.random.default_rng(0), epochs=1, n_minibatches=1, max_grad_norm=0.01)
     change = torch.sqrt(sum(((p - q) ** 2).sum() for p, q in zip(model.parameters(), before)))
-    assert change.item() <= 0.1 * 0.01 * 1.001, "clip norm gradient theo max_grad_norm trước bước optimizer"
+    assert change.item() <= 0.1 * 0.01 * 1.001, "bước cập nhật vượt giới hạn của max_grad_norm"
 
 
 def test_train_ppo_learns_bandit(nb, envs_mod):

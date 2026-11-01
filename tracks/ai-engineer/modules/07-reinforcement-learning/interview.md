@@ -115,13 +115,14 @@ chạy, loss vẫn giảm, nên chỉ phát hiện được bằng approx KL và
 
 Đi theo thứ tự rẻ tới đắt, mỗi giả thuyết một con số:
 
-1. **Metric có đúng không**: return log có vượt mức tối đa lý thuyết không (CartPole > 500 là bug log), episode return có được reset.
-2. **approx KL và clip fraction** theo từng lần cập nhật: tăng vọt ngay trước khi sụp là bước cập nhật quá lớn: giảm lr, giảm epoch,
-   thêm dừng sớm theo KL, kiểm lr có giảm dần.
-3. **Entropy**: rơi về 0 là policy sụp tất định, mất khám phá: kiểm dấu entropy bonus, hệ số.
-4. **Critic**: explained variance âm hoặc value loss nổ: kiểm shape `(B,)` với `(B, 1)` (broadcasting ra `(B, B)`), reward scale,
-   `terminated`/`truncated`.
-5. **Advantage**: có chuẩn hoá theo minibatch không, có NaN khi advantage hằng không.
+1. **Metric có đúng không**: mọi con số log có nằm trong giới hạn lý thuyết của nó không, và có được tính độc lập với vòng train
+   (một hàm đánh giá riêng, seed cố định) cho cùng kết luận không.
+2. **Độ lớn bước cập nhật** theo từng lần: tăng vọt ngay trước khi sụp thì nghĩ tới lr, số epoch, kích thước batch, lịch giảm lr,
+   dừng sớm theo ngưỡng.
+3. **Khám phá**: policy có trở nên tất định quá sớm không, và hệ số nào điều khiển điều đó.
+4. **Critic** và **advantage**: so từng hàm với một cài đặt tham chiếu trên dữ liệu nhỏ có đáp án biết trước, kiểm shape của mọi
+   tensor trong loss, kiểm thang reward và NaN.
+5. **Dữ liệu**: rollout có ghép đúng trạng thái với action và reward không, ranh giới episode có được xử lý đúng không.
 6. Chỉ khi các thứ trên sạch mới nghĩ tới siêu tham số, và luôn so trên ít nhất 3 seed: một seed sụp có thể chỉ là phương sai.
 
 Ứng viên tốt nói thêm: trước khi train dài, chạy trên một env đồ chơi có đáp án biết trước (bandit theo ngữ cảnh, hành lang 5 ô) và

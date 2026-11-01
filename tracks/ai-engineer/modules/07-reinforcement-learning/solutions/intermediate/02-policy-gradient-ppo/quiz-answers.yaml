@@ -1,6 +1,6 @@
 final-entropy: [b]
 ppo-kl: [a]
-sampled-vs-greedy: [c]
+episode-count: [a]
 wallclock: [c]
 baseline-bias: [a]
 min-clip: [b]
