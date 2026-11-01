@@ -47,7 +47,8 @@ Việc của bạn:
 
 **Cách test chấm.**
 
-- `tofu test` chạy qua `TofuLab` (sandbox, provider từ mirror) trên module của bạn, trên bản gốc trong `tests/fixtures/reference`,
+- `tofu test` chạy qua một `TofuLab` dùng chung (sandbox, provider từ mirror; tệp `.tf` được thay giữa các lần) trên module
+  của bạn, trên bản gốc trong `tests/fixtures/reference`,
   và trên 5 bản đột biến của bản gốc; test của bạn được chép vào `tests/` của từng bản. Với mock provider, `tofu test` không gọi
   LocalStack.
 - trivy (từ module 06) quét bản chép của `starter/modules/` trong sandbox với `--severity HIGH,CRITICAL --skip-check-update`
@@ -57,7 +58,8 @@ Việc của bạn:
 - Test tích hợp: một root (`tests/fixtures/root`) gọi cả hai module của bạn, apply thật trên `localstack-devops`, kiểm mã hoá KMS,
   versioning, public access block và xoay khoá bằng boto3.
 
-Cả bài khoảng 3 phút (mỗi lần `tofu test` dựng một thư mục làm việc riêng).
+Cả bài khoảng 3 phút: mỗi lần `tofu test` khoảng 13 giây (7 lần), và apply tích hợp chờ khoảng 1 phút vì provider
+đợi cấu hình lifecycle của S3 nhất quán.
 
 ## Tiêu chí đạt
 

@@ -30,8 +30,9 @@ Tổng ước tính: 0,05 USD cho một lần thử 8 giờ; quên destroy cả 
 
 ```bash
 tofu destroy -var-file=sandbox.tfvars &&
-aws ec2 describe-instances --filters "Name=tag:Project,Values=olist-shop-sandbox" "Name=instance-state-name,Values=running" \
+aws ec2 describe-instances --filters "Name=tag:Project,Values=olist-shop-sandbox" \
+  "Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped" \
   --query 'Reservations[].Instances[].InstanceId' --output text
 ```
 
-Lệnh thứ hai phải in rỗng. Hôm sau mở Cost Explorer, lọc theo tag `Project=olist-shop-sandbox` để xác nhận không còn phát sinh.
+Lệnh thứ hai phải in rỗng (mọi trạng thái trừ `terminated`). Hôm sau mở Cost Explorer, lọc theo tag `Project=olist-shop-sandbox` để xác nhận không còn phát sinh.

@@ -1,4 +1,5 @@
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -107,6 +108,17 @@ def plant_lock(bucket: str) -> None:
                                        ContentType="application/json")
 
 
+def lock_exists(bucket: str) -> bool:
+    found = localstack_client("s3").list_objects_v2(Bucket=bucket, Prefix=f"{KEY}.tflock").get("Contents", [])
+    return any(o["Key"] == f"{KEY}.tflock" for o in found)
+
+
+def saved_plan(tofu, name: str) -> Path:
+    result = tofu.run("plan", "-input=false", "-no-color", "-lock=false", f"-out={name}", check=False)
+    assert result.returncode == 0, f"tofu plan -out lỗi:\n{tail(result)}"
+    return tofu.workdir / name
+
+
 def test_lock_blocks_second_writer_then_force_unlock(story):
     need(story, "after_migrate")
     tofu = story["lab"]
@@ -114,13 +126,15 @@ def test_lock_blocks_second_writer_then_force_unlock(story):
     plant_lock(story["bucket"])
     try:
         blocked = tofu.plan("-no-color", "-lock-timeout=0s", check=False)
-    finally:
         unlock = tofu.run("force-unlock", "-force", LOCK["ID"], check=False)
+        lock_left = lock_exists(story["bucket"])
+    finally:
         s3.delete_object(Bucket=story["bucket"], Key=f"{KEY}.tflock")
     assert blocked.returncode != 0 and "Error acquiring the state lock" in text(blocked), (
         f"Có tệp khoá {KEY}.tflock của job khác mà plan vẫn chạy: backend chưa bật use_lockfile:\n{tail(blocked)}")
     assert "ci@runner-17" in text(blocked), "Thông báo khoá phải cho biết ai đang giữ khoá"
     assert unlock.returncode == 0, f"tofu force-unlock lỗi:\n{tail(unlock)}"
+    assert not lock_left, f"Sau force-unlock tệp {KEY}.tflock vẫn còn trên bucket"
     again = tofu.plan("-no-color", "-lock-timeout=0s", check=False)
     assert again.returncode == 0, f"Sau force-unlock plan phải chạy được:\n{tail(again)}"
 
@@ -136,6 +150,24 @@ def test_wrong_passphrase_cannot_read_state(story):
     assert result.returncode != 0, "Passphrase sai mà vẫn đọc được state: state chưa thật sự được mã hoá"
 
 
+def test_plan_file_encrypted(story):
+    need(story, "after_migrate")
+    tofu = story["lab"]
+    path = saved_plan(tofu, "ci.tfplan")
+    try:
+        assert not zipfile.is_zipfile(path), "Tệp plan vẫn là zip đọc được: khối encryption chưa có phần plan"
+        readable = tofu.run("show", "-no-color", "ci.tfplan", check=False)
+        assert readable.returncode == 0, f"Có passphrase đúng mà tofu show không đọc được plan:\n{tail(readable)}"
+        tofu.env["TF_VAR_state_passphrase"] = "mat-khau-sai-0000000000"
+        try:
+            locked = tofu.run("show", "-no-color", "ci.tfplan", check=False)
+        finally:
+            tofu.env["TF_VAR_state_passphrase"] = PASSPHRASE
+        assert locked.returncode != 0, "Passphrase sai mà tofu show vẫn đọc được tệp plan"
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def test_checks_catch_backend_without_lockfile_or_encryption():
     with TofuLab(FIXTURES / "no-lockfile") as tofu:
         bucket = f"{tofu.prefix}-tfstate"
@@ -148,3 +180,5 @@ def test_checks_catch_backend_without_lockfile_or_encryption():
         result = tofu.plan("-no-color", "-lock-timeout=0s", check=False)
         assert result.returncode == 0 and "Error acquiring the state lock" not in text(result), (
             "Backend không bật use_lockfile thì tệp .tflock không chặn được ai: phép kiểm khoá phải dựa vào use_lockfile")
+        localstack_client("s3").delete_object(Bucket=bucket, Key=f"{KEY}.tflock")
+        assert zipfile.is_zipfile(saved_plan(tofu, "plain.tfplan")), "Không có encryption thì tệp plan phải là zip đọc được"

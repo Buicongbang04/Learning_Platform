@@ -117,3 +117,21 @@ questions:
       - { id: b, text: "Không có rủi ro, plan chỉ chứa diff" }
       - { id: c, text: "Plan quá lớn nên artifact tốn dung lượng; nén bằng gzip rồi đặt hạn giữ 90 ngày là đủ" }
       - { id: d, text: "Plan hết hạn sau 1 giờ nên không cần bảo vệ" }
+  - id: auto-approve
+    kind: knowledge
+    type: single
+    prompt: "Pipeline của Olist Shop có job plan (lưu `tfplan` đã được duyệt) và job apply. Cách dùng `-auto-approve` nào hợp lý?"
+    options:
+      - { id: a, text: "Job apply chạy `tofu apply -auto-approve` không truyền tệp plan, vì plan mới lúc apply luôn cập nhật hơn bản đã duyệt" }
+      - { id: b, text: "Không bao giờ dùng trong CI; luôn để một người gõ `yes` trên runner qua SSH" }
+      - { id: c, text: "Job apply chạy `tofu apply tfplan`: tệp plan đã duyệt không hỏi lại; `-auto-approve` chỉ hợp cho môi trường tạm" }
+      - { id: d, text: "Dùng `-auto-approve` cùng `-lock=false` để job không bị kẹt khi có người đang plan" }
+  - id: provider-inheritance
+    kind: knowledge
+    type: single
+    prompt: "Root có `provider \"aws\" { region = \"us-east-1\" }` và `provider \"aws\" { alias = \"eu\"; region = \"eu-west-1\" }`. Gọi `module \"storage\"` (không khai báo provider bên trong) không có `providers = {}`. Module dùng provider nào?"
+    options:
+      - { id: a, text: "Lỗi: mọi lời gọi module đều phải truyền `providers = { aws = aws }` tường minh, nếu không init sẽ dừng" }
+      - { id: b, text: "Kế thừa `aws` mặc định (us-east-1); muốn `aws.eu` thì truyền `providers`" }
+      - { id: c, text: "Dùng `aws.eu` vì cấu hình có alias được ưu tiên hơn cấu hình mặc định khi có nhiều cấu hình cùng loại" }
+      - { id: d, text: "Mỗi tài nguyên trong module được tạo ở cả hai region" }

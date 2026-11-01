@@ -39,7 +39,7 @@ Bucket và key dùng biến là **early evaluation** của OpenTofu (từ 1.8); 
 3. Trả `backend.tf` lại, chạy `tofu init -migrate-state -force-copy`, rồi plan và `state list`.
 4. Đặt một tệp `olist/staging/platform.tfstate.tflock` giả như job CI `ci@runner-17` chết giữa chừng để lại, chạy plan với
    `-lock-timeout=0s`, rồi `tofu force-unlock -force <ID>` và plan lại.
-5. Plan với passphrase sai.
+5. Plan với passphrase sai; lưu `plan -out` rồi `tofu show` tệp đó với passphrase đúng và sai.
 
 Một test riêng chạy `tests/fixtures/no-lockfile` (backend không `use_lockfile`, không `encryption`) và đòi các phép kiểm trên bắt
 được nó. Cả bài khoảng 1,5 phút.
@@ -52,6 +52,9 @@ Một test riêng chạy `tests/fixtures/no-lockfile` (backend không `use_lockf
 - Có tệp khoá của job khác thì plan báo `Error acquiring the state lock` và cho biết người giữ (`ci@runner-17`); sau
   `force-unlock` plan chạy được.
 - Passphrase sai thì plan lỗi (không đọc được state).
+- `tofu plan -out` sinh tệp plan đã mã hoá: không phải tệp zip đọc được, `tofu show` đọc được với passphrase đúng và lỗi với
+  passphrase sai. Bản `no-lockfile` (không `encryption`) sinh tệp plan zip thường.
+- Sau `force-unlock`, tệp `.tflock` không còn trên bucket.
 
 ## Gợi ý
 

@@ -200,12 +200,22 @@ flowchart LR
 | `tofu fmt` | Định dạng chuẩn | `-check -recursive` trong CI |
 | `tofu validate` | Kiểm cú pháp, kiểu, tham chiếu; không gọi API, không đọc state | Cần `init` trước (schema của provider) |
 | `tofu plan` | Refresh state, so cấu hình với state, in kế hoạch | `-out=tfplan` để apply đúng thứ đã duyệt; `-detailed-exitcode` trả 2 khi có thay đổi; `-refresh-only` chỉ xem drift |
-| `tofu apply` | Thực thi plan, ghi state | `apply tfplan` không hỏi lại; `-replace=ADDR` buộc tạo lại một tài nguyên (thay cho `taint` cũ) |
+| `tofu apply` | Thực thi plan, ghi state | Không đối số thì plan lại và hỏi `yes`; `apply tfplan` không hỏi lại; `-replace=ADDR` buộc tạo lại một tài nguyên (thay cho `taint` cũ) |
 | `tofu destroy` | Xoá mọi tài nguyên trong state | Bằng `apply -destroy`; `-target`/`-exclude` để giới hạn |
 | `tofu show`, `output`, `graph` | Đọc state hay plan (`show -json tfplan`), đọc output, vẽ đồ thị phụ thuộc dạng DOT | `show -json` là đầu vào cho guard, OPA, Infracost |
 | `tofu console` | REPL thử biểu thức với state hiện tại | Học hàm nhanh nhất |
 
-Hai thứ nữa thuộc đề thi:
+Mấy điểm nữa thuộc đề thi:
+
+- **`-auto-approve`.** `tofu apply` (và `destroy`) không đối số sẽ tính plan mới, in ra và chờ gõ `yes`; `-auto-approve` bỏ bước
+  hỏi đó. Hợp lý trong CI **khi apply một tệp plan đã được duyệt** (`tofu apply tfplan` vốn không hỏi) hay cho môi trường tạm
+  dùng một lần. Nguy hiểm khi dùng kèm plan mới tính lúc apply: thứ được thực thi có thể khác thứ ai đó đã xem (state hay hạ tầng
+  đổi giữa hai lần), và một lỗi gõ biến hay chọn nhầm workspace đi thẳng vào production không có cơ hội dừng. Test của module dùng
+  `-auto-approve` vì chạy trên LocalStack với tiền tố riêng.
+- **`refresh` đã deprecated.** `tofu refresh` (`terraform refresh`) ghi thẳng thực tế vào state mà không cho xem trước; dùng
+  `plan -refresh-only` để xem rồi `apply -refresh-only` để chấp nhận.
+- **Output máy đọc.** `-json` in sự kiện dạng JSON từng dòng; OpenTofu 1.12 thêm `-json-into=tệp` để vừa có output cho người ở
+  terminal vừa ghi bản JSON ra tệp cho automation (đã kiểm có trong `tofu plan -help` của 1.13.2).
 
 - **`-target` và `-exclude`.** `-target=ADDR` chỉ plan tài nguyên đó cộng những gì nó phụ thuộc; OpenTofu 1.9 thêm `-exclude=ADDR`
   (ngược lại) và 1.10 cho đọc danh sách từ tệp (`-target-file`, `-exclude-file`). Cả hai là công cụ cứu hoả, in cảnh báo "Resource
@@ -278,9 +288,13 @@ của `registry.opentofu.org/hashicorp/aws` (với Terraform: `registry.terrafor
   -platform=darwin_arm64` để lock file có checksum của cả hai.
 - **Mirror và cache.** `tofu providers mirror <thư mục>` tải provider về một thư mục; khối `provider_installation { filesystem_mirror
   {...} }` trong CLI config cài từ đó, dùng cho môi trường không có Internet (đúng cách testkit làm). `plugin_cache_dir` chia sẻ
-  provider giữa các thư mục làm việc; OpenTofu 1.10 thêm khoá toàn cục cho cache nên nhiều `init` song song không làm hỏng nó.
+  provider giữa các thư mục làm việc; OpenTofu 1.10 thêm khoá toàn cục cho cache nên nhiều `init` song song không làm hỏng nó, và
+  1.12 tải và cài nhiều provider song song trong một lần `init` (nhanh hơn với root có nhiều provider), đồng thời ghi đủ checksum
+  `zh:`/`h1:` cho mọi nền tảng vào lock file.
 - **Nhiều provider, alias.** Hai cấu hình của cùng provider (hai region, hai tài khoản) phân biệt bằng `alias`; tài nguyên chọn bằng
-  meta-argument `provider = aws.eu`; module nhận bằng `providers = { aws = aws.eu }`.
+  meta-argument `provider = aws.eu`. **Module con kế thừa ngầm** cấu hình provider mặc định (không alias) của module cha, nên phần
+  lớn lời gọi module không cần gì thêm; chỉ khi muốn module dùng một cấu hình có alias mới truyền tường minh
+  `providers = { aws = aws.eu }` (module khai báo `configuration_aliases` nếu chính nó cần nhiều cấu hình).
 
 ```hcl
 provider "aws" {
@@ -316,8 +330,8 @@ viết một khối provider cho mỗi region).
 | --- | --- | --- |
 | `count = N` | Bật/tắt một tài nguyên (`var.enabled ? 1 : 0`), hay N bản giống hệt | Địa chỉ theo vị trí `[0]`, `[1]`: bỏ phần tử giữa làm các phần tử sau bị thay thế |
 | `for_each = map/set` | Nhiều bản khác nhau theo khoá | Khoá phải biết lúc plan (không dùng ID do apply sinh ra làm khoá) |
-| `depends_on = [...]` | Phụ thuộc ẩn mà tham chiếu không thể hiện (policy IAM phải có trước khi Lambda chạy) | Dùng tham chiếu khi có thể; `depends_on` trên data source làm nó luôn hoãn tới apply |
-| `provider = aws.alias` | Chọn cấu hình provider khác mặc định | Module con nhận qua `providers = {...}`, không tự khai báo provider |
+| `depends_on = [...]` | Phụ thuộc ẩn mà tham chiếu không thể hiện (policy IAM phải có trước khi Lambda chạy) | Dùng tham chiếu khi có thể; `depends_on` trên data source làm nó hoãn tới apply mỗi khi một thứ nó phụ thuộc có thay đổi đang chờ (plan đầy "known after apply") |
+| `provider = aws.alias` | Chọn cấu hình provider khác mặc định | Module con tự **kế thừa** provider mặc định (không alias) của module cha; chỉ provider có alias mới phải truyền bằng `providers = {...}` |
 | `lifecycle { ... }` | Đổi hành vi vòng đời | Xem bảng dưới |
 | `lifecycle { enabled = bool }` (OpenTofu 1.11) | Bật/tắt tài nguyên hay module mà không đổi địa chỉ thành `[0]` | Chỉ OpenTofu; Terraform vẫn dùng `count` |
 
@@ -328,6 +342,11 @@ viết một khối provider cho mỗi region).
 | `ignore_changes = [attr]` | Bỏ qua thay đổi bên ngoài của thuộc tính đó (tag do FinOps gắn, `desired_count` do autoscaler chỉnh). Giữ hẹp nhất có thể; `all` gần như luôn sai |
 | `replace_triggered_by = [ref]` | Thay thế tài nguyên này khi tài nguyên/thuộc tính kia thay đổi (instance tạo lại khi launch template đổi) |
 | `precondition`, `postcondition` | Custom condition (mục 3) |
+
+Bên trong khối có `count`, `count.index` là chỉ số (0, 1, ...) của bản đang tính; bên trong khối có `for_each`, `each.key` là
+khoá (với set thì khoá cũng là giá trị) và `each.value` là giá trị của khoá đó trong map. Tham chiếu từ ngoài:
+`aws_s3_bucket.exports[0]` với `count`, `aws_s3_bucket.exports["orders"]` với `for_each`, và `aws_s3_bucket.exports` cả khối là
+list (count) hay map (for_each).
 
 **`terraform_data`** là tài nguyên có sẵn trong lõi (không cần provider): giữ một giá trị trong state và đổi khi `triggers_replace`
 đổi; dùng làm mốc cho `replace_triggered_by` hay chạy provisioner. Nó thay `null_resource` của provider `null`.
@@ -375,6 +394,9 @@ output "public_services" {
 - **`optional(T, mặc định)`** trong object để người gọi chỉ truyền thứ khác mặc định. `nullable = false` để `null` không đè mặc định.
 - **`sensitive = true`** trên biến hay output: CLI in `(sensitive value)` và tính chất này lan sang mọi biểu thức dùng nó. **Không**
   mã hoá, **không** giữ giá trị khỏi state (mục 4). `tofu output -json` vẫn in giá trị thật.
+- **`sensitive()` và `nonsensitive()`**: hàm đánh dấu một giá trị là nhạy cảm (ví dụ chuỗi kết nối ghép từ mật khẩu) hay bỏ
+  đánh dấu khi bạn chắc phần dẫn xuất không lộ gì (`nonsensitive(length(var.db_password))`). Output dùng giá trị nhạy cảm mà không
+  ghi `sensitive = true` thì OpenTofu báo lỗi, buộc bạn quyết định tường minh; dùng `nonsensitive` bừa là tự tắt lớp che đó.
 - **`ephemeral = true`** trên biến (OpenTofu 1.11, Terraform 1.10): giá trị không bao giờ được ghi vào state hay plan, và chỉ được
   dùng ở chỗ cũng không lưu: thuộc tính write-only (`value_wo`, `password_wo`), provider, ephemeral resource, output ephemeral.
 - **`deprecated = "thông báo"`** trên biến và output (OpenTofu 1.10): người gọi module còn dùng thì nhận cảnh báo, để đổi giao diện
@@ -507,6 +529,9 @@ terraform {
 - **`fallback`** trong `state`/`plan`: method cũ để đọc khi chuyển đổi (từ không mã hoá sang mã hoá, xoay khoá). `enforced = true`
   cấm ghi không mã hoá, và không đi cùng `unencrypted`: thêm mã hoá cho state cũ là hai bước (fallback trước, enforced sau).
 - `remote_state_data_sources { default { method = ... } }` cấu hình riêng cho state đọc bằng `terraform_remote_state`.
+- Mỗi key provider ghi metadata (salt, số vòng lặp...) vào state dưới tên `key_provider.<loại>.<tên>`; đổi tên khối thì OpenTofu
+  không tìm thấy metadata cũ. `encrypted_metadata_alias = "..."` đặt một tên ổn định cho metadata đó để đổi tên hay chuyển khối mà
+  vẫn giải mã được state cũ.
 - Cấu hình có thể đặt ngoài code bằng biến môi trường `TF_ENCRYPTION` (HCL hay JSON), hợp khi CI cấp khoá.
 - Mất khoá là mất state. Với `pbkdf2`, passphrase là secret sống còn; với KMS, khoá KMS phải có chính sách chống xoá.
 
@@ -532,7 +557,7 @@ OpenBao là fork mã nguồn mở của Vault, OpenTofu có key provider `openba
 | --- | --- | --- |
 | Đổi địa chỉ (đổi tên, đưa vào module, `count` sang `for_each`) | `moved { from = ...; to = ... }` | `tofu state mv OLD NEW` |
 | Nhận tài nguyên có sẵn | `import { to = ...; id = ... }` (cả `for_each`, OpenTofu 1.7 / Terraform 1.7) | `tofu import ADDR ID` |
-| Bỏ quản lý, giữ tài nguyên | `removed { from = ...; lifecycle { destroy = false } }` (OpenTofu 1.7, Terraform 1.7) | `tofu state rm ADDR` |
+| Bỏ quản lý, giữ tài nguyên | `removed { from = ...; lifecycle { destroy = false } }` (khối `removed`: OpenTofu 1.7, Terraform 1.7; `lifecycle` trong `removed`: OpenTofu 1.10) | `tofu state rm ADDR` |
 | Xem | | `tofu state list`, `tofu state show ADDR`, `tofu show` |
 | Sao lưu, khôi phục | | `tofu state pull > backup.tfstate`, `tofu state push backup.tfstate` (kiểm lineage, serial) |
 | Đổi nguồn provider | | `tofu state replace-provider registry.terraform.io/hashicorp/aws registry.opentofu.org/hashicorp/aws` |
@@ -701,7 +726,8 @@ khi thi, dù bạn dùng hằng ngày.
 | `for_each` trên khối `provider` | Có (1.9) | Không | |
 | Meta-argument `enabled` (trong `lifecycle`) | Có (1.11) | Không (dùng `count`) | |
 | `prevent_destroy` tham chiếu biến | Có (1.12) | Không | |
-| `lifecycle { destroy = false }` | Có (1.12; trong `removed` từ 1.10) | Trong `removed` (1.7) | |
+| `lifecycle { destroy = false }` | Trong `removed` từ 1.10; trên resource từ 1.12 | Trong `removed` (1.7) | |
+| `removed` không có `lifecycle` | Mặc định **forget** (bỏ khỏi state, không xoá) kèm cảnh báo | Mặc định **destroy** | Luôn ghi `destroy` tường minh; đề thi theo hành vi Terraform |
 | Hàm do provider định nghĩa | Có, kể cả hàm động (1.7) | Có (1.8) | Cú pháp `provider::aws::arn_parse(...)` giống nhau |
 | `convert`, `assume...` | Có (1.13) | Không | |
 | `deprecated` cho biến, output | Có (1.10) | Không | |

@@ -27,22 +27,37 @@ def tail(result) -> str:
     return "\n".join(f"{result.stdout}\n{result.stderr}".strip().splitlines()[-40:])
 
 
-def run_module_tests(module: Path, tests: Path, mutate: tuple[str, str] | None = None):
-    with TofuLab(module) as tofu:
-        if mutate:
-            for name in ("main.tf", "variables.tf"):
-                path = tofu.workdir / name
-                text = path.read_text(encoding="utf-8")
-                if mutate[0] in text:
-                    path.write_text(text.replace(mutate[0], mutate[1]), encoding="utf-8")
-                    break
-            else:
-                pytest.fail(f"Đột biến không áp được vào module tham chiếu: {mutate[0]!r}")
-        shutil.rmtree(tofu.workdir / "tests", ignore_errors=True)
-        tofu.write(TEST_FILE, tests.read_text(encoding="utf-8"))
+def load_module(tofu, module: Path, mutate: tuple[str, str] | None = None) -> None:
+    for old in [*tofu.workdir.glob("*.tf"), *tofu.workdir.glob("*.tofu")]:
+        old.unlink()
+    shutil.rmtree(tofu.workdir / "tests", ignore_errors=True)
+    for path in sorted(module.iterdir()):
+        if path.is_file() and path.suffix in (".tf", ".tofu"):
+            tofu.write(path.name, path.read_text(encoding="utf-8"))
+    if mutate:
+        for name in ("main.tf", "variables.tf"):
+            path = tofu.workdir / name
+            text = path.read_text(encoding="utf-8")
+            if mutate[0] in text:
+                path.write_text(text.replace(mutate[0], mutate[1]), encoding="utf-8")
+                break
+        else:
+            pytest.fail(f"Đột biến không áp được vào module tham chiếu: {mutate[0]!r}")
+
+
+def run_module_tests(tofu, module: Path, tests: Path, mutate: tuple[str, str] | None = None):
+    load_module(tofu, module, mutate)
+    tofu.write(TEST_FILE, tests.read_text(encoding="utf-8"))
+    tofu.init("-no-color")
+    return tofu.run("test", "-no-color", check=False)
+
+
+@pytest.fixture(scope="module")
+def module_lab():
+    with TofuLab(FIXTURES / "reference") as tofu:
         tofu.write("ci.auto.tfvars.json", json.dumps({"name": "reports"}))
-        tofu.init("-no-color")
-        return tofu.run("test", "-no-color", check=False)
+        yield tofu
+        load_module(tofu, FIXTURES / "reference")
 
 
 def passed_runs(result) -> int:
@@ -71,21 +86,21 @@ def learner_tests():
     return ex.path(f"modules/artifact-bucket/{TEST_FILE}")
 
 
-def test_tests_pass_on_given_module(learner_tests):
-    result = run_module_tests(ex.path("modules/artifact-bucket"), learner_tests)
+def test_tests_pass_on_given_module(module_lab, learner_tests):
+    result = run_module_tests(module_lab, ex.path("modules/artifact-bucket"), learner_tests)
     assert result.returncode == 0, f"tofu test của bạn phải pass trên module artifact-bucket:\n{tail(result)}"
     assert passed_runs(result) >= 4, f"Cần ít nhất 4 khối run, đang có {passed_runs(result)} run pass"
 
 
-def test_tests_pass_on_reference(learner_tests):
-    result = run_module_tests(FIXTURES / "reference", learner_tests)
+def test_tests_pass_on_reference(module_lab, learner_tests):
+    result = run_module_tests(module_lab, FIXTURES / "reference", learner_tests)
     assert result.returncode == 0, (
         f"tofu test phải pass trên bản gốc của module (tests/fixtures/reference); đừng dựa vào chỗ bạn tự sửa trong module:\n{tail(result)}")
 
 
 @pytest.mark.parametrize("mutant", sorted(MUTANTS))
-def test_tests_catch_mutant(learner_tests, mutant):
-    result = run_module_tests(FIXTURES / "reference", learner_tests, MUTANTS[mutant])
+def test_tests_catch_mutant(module_lab, learner_tests, mutant):
+    result = run_module_tests(module_lab, FIXTURES / "reference", learner_tests, MUTANTS[mutant])
     assert result.returncode != 0, f"Module bị đột biến '{mutant}' mà tofu test của bạn vẫn pass: thiếu assert cho hành vi đó"
 
 

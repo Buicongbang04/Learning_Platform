@@ -9,12 +9,12 @@ run: []
 ## Mục tiêu
 
 Trả lời được các câu hỏi tình huống kiểu Terraform Associate 004 (lock file, `count`/`for_each`, data source, drift, refactor
-state, secret, khoá state, workspace, HCP Terraform) và phân biệt rõ tính năng nào chỉ có ở OpenTofu, để vừa làm việc với `tofu`
+state, secret, khoá state, workspace, HCP Terraform, `-auto-approve`, kế thừa provider) và phân biệt rõ tính năng nào chỉ có ở OpenTofu, để vừa làm việc với `tofu`
 vừa thi được chứng chỉ của HashiCorp.
 
 ## Đề bài
 
-Bài này không có code. Làm 13 câu trắc nghiệm trong app (card **Trắc nghiệm** bên dưới): 12 câu chọn một đáp án, một câu chọn mọi
+Bài này không có code. Làm 15 câu trắc nghiệm trong app (card **Trắc nghiệm** bên dưới): 14 câu chọn một đáp án, một câu chọn mọi
 đáp án đúng. Đọc mục 2 tới 6 của module trước khi làm.
 
 Với mỗi câu, tự hỏi:
@@ -25,7 +25,7 @@ Với mỗi câu, tự hỏi:
 
 ## Tiêu chí đạt
 
-- Đúng ít nhất 10/13 câu.
+- Đúng ít nhất 11/15 câu.
 - Với mỗi câu sai, nói lại được vì sao đáp án đúng đúng và khi nào phương án bạn chọn mới đúng.
 - Nhấn **Đánh dấu hoàn thành** sau khi đã đọc lời giải.
 

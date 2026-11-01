@@ -82,8 +82,9 @@ imported", "will be forgotten"), và tự áp dụng ở **mọi** state khi pla
 Lệnh CLI sửa thẳng một state, không review, phải chạy tay đúng lúc trên từng môi trường; quên một môi trường là lệch.
 
 Chọn khối trong code cho mọi thay đổi định kỳ. Lệnh CLI cho cứu hộ một lần (state hỏng, tách state), luôn kèm `state pull` sao lưu
-trước. `import` block còn hỗ trợ `for_each` và `-generate-config-out` để viết nháp cấu hình; `removed` cần `lifecycle { destroy =
-false }`, thiếu nó là xoá thật.
+trước. `import` block còn hỗ trợ `for_each` và `-generate-config-out` để viết nháp cấu hình; với `removed`, luôn
+ghi rõ `lifecycle { destroy = false }` (bỏ quản lý) hay `destroy = true` (xoá thật): OpenTofu mặc định chỉ bỏ khỏi state (và cảnh
+báo vì thiếu `lifecycle`), còn Terraform mặc định là destroy, nên cùng một khối không `lifecycle` cho hai kết quả ngược nhau.
 
 ## (Vì sao chọn công cụ này) Vì sao bạn chọn OpenTofu thay vì Terraform, hay ngược lại?
 

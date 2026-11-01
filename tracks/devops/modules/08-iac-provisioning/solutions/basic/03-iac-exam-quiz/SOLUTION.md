@@ -15,6 +15,8 @@
 | `hcp-terraform` | c. Policy set | Sentinel/OPA chạy giữa plan và apply |
 | `tool-choice` | b. AWS CDK | Một cloud, TypeScript, construct cấp cao, AWS giữ state |
 | `plan-encryption-ci` | a. Plan chứa giá trị nhạy cảm | Mã hoá plan, hạn giữ ngắn, quyền đọc hẹp |
+| `auto-approve` | c. `apply tfplan` | Apply đúng thứ đã duyệt; `-auto-approve` chỉ bỏ câu hỏi |
+| `provider-inheritance` | b. Kế thừa `aws` mặc định | Chỉ provider có alias mới cần `providers = {}` |
 
 ## Giải thích từng câu
 
@@ -113,3 +115,17 @@ không cần. Ansible (c) là configuration management, không giữ state hạ 
 Tệp plan chứa cấu hình, giá trị biến và một phần state, kể cả giá trị `sensitive`. Artifact CI thường đọc được bởi mọi người có
 quyền đọc repo. OpenTofu mã hoá plan bằng khối `plan` trong `encryption` (dùng cùng hay khác key provider với state); Terraform thì
 không, nên phải hạn chế artifact. Thêm: hạn giữ ngắn (vài giờ), chỉ job apply được tải, apply đúng plan đã duyệt chứ không plan lại.
+
+### `auto-approve`: bỏ câu hỏi không phải bỏ review
+
+`tofu apply` không đối số tính plan mới rồi hỏi `yes`; `-auto-approve` bỏ câu hỏi đó. Trong CI, thứ cần bảo đảm là **thứ được apply
+đúng là thứ đã duyệt**: lưu `tofu plan -out=tfplan`, duyệt, rồi `tofu apply tfplan` (tệp plan không hỏi lại; plan cũ hơn state
+hiện tại thì OpenTofu từ chối "Saved plan is stale"). (a) apply với plan mới tính, thứ chạy có thể khác thứ đã xem. (b) đúng tinh
+thần nhưng không vận hành được. (d) bỏ khoá là mời hỏng state. `-auto-approve` hợp cho môi trường tạm dùng một lần, lab, test.
+
+### `provider-inheritance`: kế thừa ngầm chỉ cho cấu hình mặc định
+
+Module con không khai báo provider sẽ tự nhận cấu hình **mặc định** (không alias) của cùng provider từ module cha. Cấu hình có alias
+không bao giờ được truyền ngầm: muốn module chạy ở `eu-west-1` thì `providers = { aws = aws.eu }`. Module cần nhiều cấu hình cùng
+lúc (ví dụ bucket chính và bản sao) khai báo `configuration_aliases = [aws.replica]` trong `required_providers` và người gọi truyền
+cả hai. (a) là hiểu lầm hay gặp; (c) ngược lại quy tắc.

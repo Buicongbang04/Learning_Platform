@@ -13,7 +13,9 @@ Lời giải: `infra/state.tf` (moved, import, removed), `infra/legacy.tf` (cấ
   `for_each` khi nhập nhiều thứ. `tofu import` CLI ghi thẳng vào state, không qua review. Cấu hình phải **khớp** thực tế (tag
   `Owner = data-team`), nếu không plan sẽ import rồi update ngay. Cách nhanh: `tofu plan -generate-config-out=generated.tf`.
 - **`removed`** với `lifecycle { destroy = false }`: action `forget`, bucket ở lại. Tương đương `tofu state rm`, nhưng có review.
-  Thiếu `destroy = false` thì `removed` nghĩa là "xoá thật".
+  Ghi `lifecycle` tường minh: OpenTofu (1.13.2, đã thử) thiếu `lifecycle` thì mặc định cũng là forget và in cảnh báo "Missing
+  lifecycle from the removed block", còn Terraform thiếu nó thì mặc định destroy. `destroy = true` nghĩa là xoá thật (và chạy
+  provisioner `when = destroy` trong khối, OpenTofu 1.10).
 - **`ignore_changes = [tags["cost-center"]]`**: chỉ bỏ qua đúng một khoá tag do công cụ khác quản. `ignore_changes = [tags]` sẽ
   che luôn drift của tag `Project` mà bạn quản.
 

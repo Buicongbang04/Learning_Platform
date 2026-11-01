@@ -70,6 +70,6 @@ import sao cho khớp? Chạy `tofu plan -generate-config-out=generated.tf` vớ
 
 ### Gợi ý 2
 
-`removed { from = ...; lifecycle { destroy = false } }` bỏ tài nguyên khỏi state mà không gọi API xoá; thiếu `destroy = false` thì
-nó bị destroy. Thay đổi ngoài OpenTofu mà bạn chấp nhận (tag của công cụ khác) thì bỏ qua đúng phần đó bằng
+`removed { from = ...; lifecycle { destroy = false } }` bỏ tài nguyên khỏi state mà không gọi API xoá. Luôn ghi `lifecycle` rõ ràng:
+OpenTofu thiếu `lifecycle` thì mặc định chỉ bỏ khỏi state (kèm cảnh báo), nhưng Terraform thiếu nó thì destroy thật. Thay đổi ngoài OpenTofu mà bạn chấp nhận (tag của công cụ khác) thì bỏ qua đúng phần đó bằng
 `lifecycle { ignore_changes = [tags["cost-center"]] }`, không bỏ qua cả `tags`. Drift của versioning thì để plan sửa.

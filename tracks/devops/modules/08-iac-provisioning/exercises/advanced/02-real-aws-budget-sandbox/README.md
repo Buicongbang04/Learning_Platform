@@ -44,31 +44,97 @@ Viết cấu hình trong `starter/aws/` cho một sandbox để thử Olist Shop
   (`Tài nguyên`, `Đơn giá`, `Thời gian`, `Thành tiền`), một dòng có chữ `Tổng` và số tiền `... USD` không quá 10, phần budget, và
   phần dọn dẹp có lệnh `tofu destroy`.
 
-**Chạy trên AWS thật (tuỳ chọn, không chấm).** Cần một tài khoản sandbox riêng (không dùng chung tài khoản có production), user hay
-role chỉ có quyền EC2, VPC, Budgets trong một region. Từ `starter/aws/`:
+**Chạy trên AWS thật (tuỳ chọn, không chấm).** Cần một tài khoản sandbox riêng trong AWS Organization (không dùng chung tài khoản có
+production) và credential **ngắn hạn**:
+
+- Không bao giờ dùng user root, kể cả để "thử nhanh". Root chỉ để thiết lập ban đầu, có MFA phần cứng, rồi cất đi.
+- Không tạo access key dài hạn cho IAM user (`aws configure` với `AKIA...`). Key dài hạn bị lộ qua shell history, dotfile, ảnh
+  chụp màn hình và không tự hết hạn.
+- Dùng **IAM Identity Center** (SSO): đăng nhập bằng trình duyệt có MFA, CLI nhận credential sống vài giờ. Không có Identity Center
+  thì assume role có điều kiện `aws:MultiFactorAuthPresent` (`aws sts assume-role ... --serial-number ... --token-code ...`).
+- Permission set (hay role) chỉ cấp: EC2 (gồm cả API VPC, subnet, instance), AWS Budgets, `ssm:GetParameter` trên
+  `arn:aws:ssm:*::parameter/aws/service/*` (đọc ID AMI công khai), trong một region (SCP hay điều kiện `aws:RequestedRegion`).
+  `sts:GetCallerIdentity` luôn được phép.
+
+**Tạo profile `olist-sandbox` theo kiểu SSO** (một lần; AWS CLI v2):
 
 ```bash
-export AWS_PROFILE=olist-sandbox AWS_REGION=us-east-1 &&
-unset AWS_ENDPOINT_URL &&
-aws sts get-caller-identity &&
+aws configure sso --profile olist-sandbox
+```
+
+CLI hỏi tên SSO session (ví dụ `olist`), start URL (`https://<tổ-chức>.awsapps.com/start`), SSO region, rồi mở trình duyệt để
+đăng nhập có MFA; chọn tài khoản sandbox và permission set ở trên, region mặc định `us-east-1`. Kết quả trong `~/.aws/config`:
+
+```text
+[profile olist-sandbox]
+sso_session = olist
+sso_account_id = 111122223333
+sso_role_name = OlistSandboxIaC
+region = us-east-1
+
+[sso-session olist]
+sso_start_url = https://olist.awsapps.com/start
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+```
+
+Không có access key nào trong tệp. Mỗi phiên làm việc chạy bốn bước dưới từ `starter/aws/`, **mỗi bước một khối, đọc kết quả rồi
+mới sang bước sau**. Thay `111122223333` bằng ID tài khoản sandbox của bạn.
+
+**(a) Đăng nhập và xác nhận danh tính.** Dừng nếu account không đúng tài khoản sandbox:
+
+```bash
+export AWS_PROFILE=olist-sandbox AWS_REGION=us-east-1 SANDBOX_ACCOUNT_ID=111122223333 &&
+unset AWS_ENDPOINT_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN &&
+aws sso login &&
+aws sts get-caller-identity --query '[Account, Arn]' --output text &&
+test "$(aws sts get-caller-identity --query Account --output text)" = "$SANDBOX_ACCOUNT_ID" &&
+echo "Đúng tài khoản sandbox"
+```
+
+**(b) Plan và lưu ra tệp.** Khối này tự kiểm lại tài khoản, không apply gì:
+
+```bash
+test "$(aws sts get-caller-identity --query Account --output text)" = "$SANDBOX_ACCOUNT_ID" &&
 AMI_ID="$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 --query Parameter.Value --output text)" &&
 printf 'prefix = "olist-sandbox-%s"\nowner = "%s"\nexpires_on = "%s"\nalert_email = "%s"\nami_id = "%s"\n' \
   "$USER" "you@example.com" "$(date -d '+1 day' +%F)" "you@example.com" "$AMI_ID" > sandbox.tfvars &&
 tofu init &&
-tofu plan -var-file=sandbox.tfvars -out=sandbox.tfplan &&
+tofu plan -var-file=sandbox.tfvars -out=sandbox.tfplan
+```
+
+**(c) Review plan.** Đọc toàn bộ `tofu show sandbox.tfplan`, rồi tóm tắt hành động:
+
+```bash
+tofu show -json sandbox.tfplan | jq -r '.resource_changes[] | "\(.change.actions | join(",")) \(.address)"'
+```
+
+Chỉ đi tiếp khi: mọi dòng là `create` và đúng 4 tài nguyên (`aws_budgets_budget.monthly`, `aws_vpc`, `aws_subnet`,
+`aws_instance`); `instance_type` là `t4g.nano` hay `t4g.micro`; không có `aws_internet_gateway`, `aws_nat_gateway`, `aws_eip`;
+`associate_public_ip_address = false`; `limit_amount` đúng budget bạn định; region `us-east-1`; tag `ExpiresOn` là ngày mai. Có gì
+khác thì xoá `sandbox.tfplan`, sửa cấu hình, làm lại (b).
+
+**(d) Apply đúng plan đã review:**
+
+```bash
+test "$(aws sts get-caller-identity --query Account --output text)" = "$SANDBOX_ACCOUNT_ID" &&
 tofu apply sandbox.tfplan
 ```
 
-Kiểm `aws sts get-caller-identity` in đúng tài khoản sandbox **trước** khi apply. Email xác nhận của AWS Budgets tới trong vài phút.
-Dùng xong (cùng ngày):
+`tofu apply sandbox.tfplan` không hỏi lại và chỉ thực thi đúng plan đã lưu; state đổi từ lúc plan thì OpenTofu từ chối (plan cũ),
+phải làm lại (b). Từ 30/9/2026, AWS Budgets gửi **email xác minh** tới mỗi địa chỉ mới; cảnh báo chỉ tới sau khi người nhận bấm
+link trong email đó (trạng thái `Pending` trên console Budgets cho tới lúc đó). Dùng xong (cùng ngày):
 
 ```bash
+test "$(aws sts get-caller-identity --query Account --output text)" = "$SANDBOX_ACCOUNT_ID" &&
 tofu destroy -var-file=sandbox.tfvars &&
-aws ec2 describe-instances --filters "Name=tag:Project,Values=olist-shop-sandbox" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+aws ec2 describe-instances --filters "Name=tag:Project,Values=olist-shop-sandbox" \
+  "Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped" \
   --query 'Reservations[].Instances[].InstanceId' --output text
 ```
 
-Lệnh cuối phải in rỗng. Budget cũng bị destroy; nếu muốn giữ budget cho cả tài khoản, đặt nó ở một stack riêng không bao giờ destroy.
+Lệnh cuối phải in rỗng (mọi trạng thái trừ `terminated`). Budget cũng bị destroy; nếu muốn giữ budget cho cả tài khoản, đặt nó ở
+một stack riêng không bao giờ destroy.
 
 **Cách test chấm (bản local).** Test không bao giờ gọi AWS thật: qua `TofuLab`, `tofu init` và `tofu plan -out` + `show -json` trên
 `localstack-devops` với `ci.auto.tfvars.json` (owner, `expires_on`, `alert_email`, `ami_id` giả). LocalStack community không có
@@ -82,7 +148,7 @@ EC2, VPC hay Budgets, nhưng plan tạo mới không gọi API của các servic
 - Mọi tài nguyên có `tags_all` mang đủ `Project`, `Owner`, `ExpiresOn`.
 - `monthly_budget_usd = 50`, `instance_type = "m5.large"`, `ami_id = "ubuntu-latest"`: lỗi `Invalid value for variable`.
 - `COST.md` đạt các yêu cầu cấu trúc trên; một test đưa khung trống vào phép kiểm và đòi nó bị bắt.
-- (Tự đánh giá) Nếu chạy thật: budget gửi email xác nhận, destroy xong không còn instance, hôm sau Cost Explorer lọc theo tag
+- (Tự đánh giá) Nếu chạy thật: email xác minh của Budgets đã được bấm (subscriber `Active`/đã xác minh), destroy xong không còn instance, hôm sau Cost Explorer lọc theo tag
   không còn phát sinh. Rubric trong `solutions/advanced/02-real-aws-budget-sandbox/SOLUTION.md`.
 
 ## Gợi ý

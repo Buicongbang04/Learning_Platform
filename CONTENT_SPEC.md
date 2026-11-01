@@ -256,6 +256,9 @@ Các bài notebook dữ liệu thật của track DE (module 00, capstone Bướ
   **trùng tên với tệp trong `starter/`**. `SOLUTION=1 uv run pytest <thư mục bài> -q` phải pass.
 - **Advanced**: chỉ `SOLUTION.md` gồm hướng làm, các quyết định thiết kế cần cân nhắc và rubric
   chấm điểm. Bài Advanced không có một đáp án duy nhất.
+  Ngoại lệ: bài Advanced có test kiểm cấu trúc tự động (khung DESIGN.md, plan JSON...) **được** kèm tệp lời giải mẫu trùng tên
+  với tệp trong `starter/` (ví dụ `DESIGN.md`, `aws/*.tf`, `COST.md`) bên cạnh `SOLUTION.md`, để `SOLUTION=1` chạy được thay vì
+  skip; mẫu đó chỉ là một lời giải qua test, rubric trong `SOLUTION.md` vẫn là thứ chấm nội dung.
 
 ## Capstone: `capstone/milestones/<mNN-slug>.md`
 

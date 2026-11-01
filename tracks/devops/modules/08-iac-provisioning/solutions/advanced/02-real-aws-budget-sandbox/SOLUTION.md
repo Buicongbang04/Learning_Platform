@@ -27,8 +27,8 @@ một môi trường thật nhỏ.
 
 | Tiêu chí | Điểm | Đạt khi |
 | --- | --- | --- |
-| Chuẩn bị | 20 | Tài khoản sandbox riêng, MFA, quyền hẹp, kiểm `sts get-caller-identity` trước apply |
-| Ước tính và budget | 20 | COST.md có số, budget tạo trước tài nguyên, email xác nhận đã nhận |
-| Apply có kiểm soát | 20 | `plan -out` rồi apply đúng plan; xem lại plan trước khi gõ yes |
+| Chuẩn bị | 20 | Tài khoản sandbox riêng, IAM Identity Center hay assume role có MFA (không root, không access key dài hạn), quyền hẹp, kiểm `sts get-caller-identity` trước apply |
+| Ước tính và budget | 20 | COST.md có số, budget tạo trước tài nguyên, email xác minh của Budgets đã được bấm |
+| Apply có kiểm soát | 20 | `plan -out`, review theo danh sách ở bước (c), rồi apply đúng tệp plan đó |
 | Dọn | 25 | `tofu destroy` cùng ngày, lệnh kiểm in rỗng, Cost Explorer hôm sau không còn phát sinh theo tag |
 | Ghi chép | 15 | Ghi chi phí thật so với ước tính và một điều học được |
