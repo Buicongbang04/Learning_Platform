@@ -467,7 +467,7 @@ tham số vẫn như cũ: `bits`, `group_size`, `desc_act`, `damp_percent`, `sym
 
 ### Đo trên Qwen2.5-0.5B
 
-GPU (RTX 3060 dùng chung: tiến trình khác chiếm khoảng 7-10 GB VRAM và một phần tính toán trong lúc đo; model của ta dùng dưới
+GPU (RTX 3060 dùng chung: tiến trình khác chiếm khoảng 3.5-10.5 GB VRAM và một phần tính toán trong lúc đo; model của ta dùng dưới
 2.5 GB). Bộ nhớ đo bằng `torch.cuda.max_memory_allocated`: "sau khi nạp" là trọng số, "đỉnh khi sinh" là sinh 128 token batch 1.
 Tốc độ là trung vị 3 lần sinh 128 token, greedy, `generate` của Transformers. Dòng GGUF là trọng số của tệp Ollama giải lượng tử
 bằng `gguf.quants.dequantize`, nạp vào Transformers: đo **chất lượng** của trọng số GGUF, không đo tốc độ của llama.cpp.
