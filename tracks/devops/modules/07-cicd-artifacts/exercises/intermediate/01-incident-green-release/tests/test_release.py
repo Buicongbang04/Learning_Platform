@@ -34,7 +34,7 @@ def assemble(dest: Path, workflow: Path, *, canary: bool) -> Path:
 def run_release(dest: Path):
     result = testkit.act_run(dest, event="push", timeout=600)
     if testkit.act_failed_on_network(result, SETUP_STEPS):
-        pytest.skip("Bước cài uv/Python trong job cần mạng (github.com, pypi.org) và đang lỗi mạng. Kiểm kết nối rồi chạy lại.")
+        pytest.skip(f"Bước cài uv/Python trong job lỗi vì mạng, dù image runner {testkit.ACT_IMAGE} đã có uv, Python và wheel nên không cần tải gì. Thường là workflow tải thêm thứ không có trong image (đổi UV_VERSION, PYTHON_VERSION hay requirements) hoặc image runner không đúng bản; build lại theo mục 0 của module rồi chạy lại.")
     return result
 
 

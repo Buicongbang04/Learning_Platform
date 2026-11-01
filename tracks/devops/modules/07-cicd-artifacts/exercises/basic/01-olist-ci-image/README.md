@@ -14,7 +14,7 @@ files:
   - path: tests/fixtures/ci.starter.yml
     note: Bản gốc của starter, test chứng minh phép kiểm bắt được lỗi của nó
 run:
-  - docker pull node:24.22.2-trixie-slim && docker build --pull=false -t devops-track/act-runner:1.0 setup/act-runner
+  - 'ACT_RUNNER="devops-track/act-runner:1.0-$(cat setup/act-runner/Dockerfile setup/act-runner/requirements-ci.txt | sha256sum | cut -c1-8)" && docker pull node:24.22.2-trixie-slim && docker build --pull=false -t "$ACT_RUNNER" setup/act-runner'
   - docker pull python:3.12.16-slim-trixie
   - docker compose -f setup/docker-compose.yml --profile devops up -d registry
   - uv run pytest tracks/devops/modules/07-cicd-artifacts/exercises/basic/01-olist-ci-image -q
@@ -52,7 +52,7 @@ Workflow cần có:
    là chắc chắn sai dưới act: `${{ !env.ACT }}`, có thể nối thêm điều kiện bằng `&&` (mục 3 của lý thuyết).
 
 **Vì sao chạy được trên máy, và phần nào không chạy.** Test chạy workflow bằng `act` (mục 3 của lý thuyết) qua
-`testkit.act_run`: mỗi job là một container `devops-track/act-runner:1.0` (image runner của track, build một lần theo mục 0 của
+`testkit.act_run`: mỗi job là một container `devops-track/act-runner:1.0-<hash8>` (image runner của track, build một lần theo mục 0 của
 module), ghim CPU, RAM 1 GB, **không có socket Docker**. Image đã có uv 0.10.8, CPython 3.12.13 và cache wheel của Olist Shop, nên
 hai bước có sẵn không tải gì: **Cài uv** thấy đúng phiên bản thì thoát, **Cài Python và dependency** lấy Python và wheel từ image
 (`UV_OFFLINE=1`). Trên runner `ubuntu-latest` của GitHub, cùng hai bước đó tải uv (kiểm SHA-256), Python và wheel từ Internet.
@@ -112,5 +112,6 @@ Bash có cắt chuỗi: `${GITHUB_SHA::12}`. Ghi output của bước bằng `ec
 
 `push: ${{ github.event_name == 'push' }}` cho pull request build để bắt lỗi Dockerfile mà không đẩy image của code chưa review.
 Điều kiện của bước login có thể là `${{ !env.ACT && github.event_name == 'push' }}`. Muốn thử nhanh từng job:
-`act push -j test -P ubuntu-latest=devops-track/act-runner:1.0 --pull=false --container-daemon-socket -` trong thư mục repo
-đã dựng ở trên (`--container-daemon-socket -` để job không nhận socket Docker của máy bạn).
+`act push -j test -P ubuntu-latest="$ACT_RUNNER" --pull=false --container-daemon-socket -` trong thư mục repo
+đã dựng ở trên (`--container-daemon-socket -` để job không nhận socket Docker của máy bạn; `ACT_RUNNER` là tag image runner
+đặt như lệnh build ở mục 0 của module).

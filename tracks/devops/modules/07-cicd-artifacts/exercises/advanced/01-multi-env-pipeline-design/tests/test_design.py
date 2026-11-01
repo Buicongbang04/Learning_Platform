@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from testkit import Exercise
 
 ex = Exercise(__file__)
@@ -36,6 +38,19 @@ def bullets(text: str) -> list[str]:
 
 def prose(text: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.strip().startswith(("|", "```"))).strip()
+
+
+WRITE_ALL = re.compile(r"write-all|permissions:\s*write\b", re.I)
+NEGATION = re.compile(r"\b(?:không|cấm|chặn|tránh|bỏ|thay vì|thay cho|never|no|not|avoid)\b", re.I)
+
+
+def grants_write_all(text: str) -> bool:
+    """Dòng gạch đầu dòng, dòng bảng hay dòng YAML cấp `write-all` (hay `permissions: write`) mà không phủ định nó. "Không bao
+    giờ dùng `write-all`" là câu trả lời tốt, không phải cấp quyền."""
+    for line in text.splitlines():
+        if WRITE_ALL.search(line) and not NEGATION.search(line):
+            return True
+    return False
 
 
 def environment_problems(doc: str) -> list[str]:
@@ -99,7 +114,7 @@ def problems(doc: str) -> list[str]:
     if len(prose(section(doc, 1))) < 300:
         found.append("Phần 1: bối cảnh và mục tiêu cần ít nhất 300 ký tự")
     found += environment_problems(doc) + diagram_problems(doc) + strategy_problems(doc) + gate_problems(doc)
-    if re.search(r"write-all|permissions:\s*write", section(doc, 6), re.I):
+    if grants_write_all(section(doc, 6)):
         found.append("Phần 6: không cấp permissions write-all; mỗi job chỉ nhận quyền nó cần")
     if not re.search(r"\d+\s*phút", section(doc, 5)):
         found.append("Phần 5: cần mục tiêu thời gian rollback tính bằng phút")
@@ -134,3 +149,21 @@ def test_checks_catch_weak_design():
                    "ít nhất 3 gate có ngưỡng bằng số", "theo độ trễ", "mục tiêu thời gian rollback",
                    "chưa nói tới expand", "chưa nói tới OIDC", "không cấp permissions write-all"):
         assert needle in found, f"Không bắt được: {needle}\n{found}"
+
+
+def test_negated_write_all_is_not_a_grant():
+    found = problems((FIXTURES / "DESIGN.good.md").read_text(encoding="utf-8"))
+    assert not found, "\n".join(found)
+
+
+@pytest.mark.parametrize("line,grant", [
+    ("- Đặt permissions write-all cho tiện.", True),
+    ("permissions: write-all", True),
+    ("| deploy | permissions: write | cho nhanh |", True),
+    ("- Không bao giờ dùng `write-all`; mỗi job chỉ nhận quyền nó cần.", False),
+    ("- Cấm `permissions: write-all` ở mọi workflow.", False),
+    ("- Tránh write-all, thay bằng contents: read.", False),
+    ("- Job build có `packages: write`.", False),
+])
+def test_write_all_detection(line, grant):
+    assert grants_write_all(line) is grant

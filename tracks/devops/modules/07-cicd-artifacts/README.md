@@ -23,7 +23,7 @@ Sau module này bạn sẽ:
 | Công cụ / image | Phiên bản đã kiểm | Tối thiểu cho bài tập | Dùng ở |
 | --- | --- | --- | --- |
 | act | 0.2.94 | 0.2.94 | Basic 01, 02; Intermediate 01 |
-| Image runner | `devops-track/act-runner:1.0`, build một lần từ `setup/act-runner/` trên `node:24.22.2-trixie-slim` (ghim digest) | Đúng tag này | Mọi bài chạy act |
+| Image runner | `devops-track/act-runner:1.0-<hash8>`, build một lần từ `setup/act-runner/` trên `node:24.22.2-trixie-slim` (ghim digest) | Đúng tag này | Mọi bài chạy act |
 | actionlint | 1.7.12 | 1.7 (thiếu thì riêng test actionlint skip) | Basic 01, 02; Intermediate 01 |
 | Registry local | `registry:2.8.3` (service `registry`, profile `devops`) | Đúng tag này | Basic 01, Intermediate 02 |
 | Image `python` | `python:3.12.16-slim-trixie`, `python:3.12.16-alpine3.24` (từ module 06) | Đúng tag này | Basic 01, Intermediate 02 |
@@ -84,27 +84,33 @@ wheel từ Internet: chậm, và mất mạng là không chấm được. Track 
 | Cache wheel | `uv pip install -r requirements-ci.txt` (dependency của Olist Shop cộng pytest, fakeredis, httpx, pyyaml đã ghim) vào `UV_CACHE_DIR=/opt/uv/cache` | `uv pip install` trong job lấy từ cache, không tải |
 | Env | `UV_OFFLINE=1`, `UV_PYTHON_DOWNLOADS=never` | Thiếu gì trong cache thì job **lỗi rõ ràng** thay vì lặng lẽ tải |
 
-Build từ gốc repo (cần mạng một lần, khoảng 1 phút, image khoảng 810 MB):
+Tag của image là `1.0-<hash8>`: 8 ký tự đầu SHA-256 của `Dockerfile` nối `requirements-ci.txt`. Đổi phiên bản uv, Python, ARG
+hay một wheel là đổi tag, nên testkit (tính tag y hệt từ hai tệp) không bao giờ dùng nhầm image cũ mà skip kèm lệnh build image
+mới. Build từ gốc repo (cần mạng một lần, khoảng 1 phút, image khoảng 810 MB):
 
 ```bash
+ACT_RUNNER="devops-track/act-runner:1.0-$(cat setup/act-runner/Dockerfile setup/act-runner/requirements-ci.txt | sha256sum | cut -c1-8)" &&
 docker pull node:24.22.2-trixie-slim &&
 docker image inspect --format '{{index .RepoDigests 0}}' node:24.22.2-trixie-slim | grep -qx \
   'node@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446' &&
 nice -n 15 docker build --pull=false ${DEVOPS_CPUSET:+--cpuset-cpus "$DEVOPS_CPUSET"} \
-  -t devops-track/act-runner:1.0 setup/act-runner &&
-docker run --rm --network none devops-track/act-runner:1.0 sh -c 'uv --version && uv python find 3.12.13'
+  -t "$ACT_RUNNER" setup/act-runner &&
+docker run --rm --network none "$ACT_RUNNER" sh -c 'uv --version && uv python find 3.12.13' &&
+echo "$ACT_RUNNER"
 ```
 
 ```text
 uv 0.10.8
 /opt/uv/python/cpython-3.12.13-linux-x86_64-gnu/bin/python3.12
+devops-track/act-runner:1.0-9d5fff50
 ```
 
 Image này **không** mang nhãn `devops-ex=1` và không thuộc lab nào, nên không lệnh dọn nào của test xoá nó; nó ở lại cho các lần
-chạy sau như một image nền. Thiếu image thì test skip kèm đúng lệnh build trên. Khi `requirements-ci.txt` hay phiên bản trong
-Dockerfile đổi, track nâng tag (`1.1`...) và test báo thiếu image mới. Gỡ: `docker image rm devops-track/act-runner:1.0`.
+chạy sau như một image nền. Thiếu image thì test skip kèm đúng lệnh build trên (với tag đã tính sẵn). Sau khi hai tệp đổi và
+bạn build image mới, xoá image cũ bằng tag cũ của nó (`docker image ls devops-track/act-runner`). Gỡ hẳn:
+`docker image ls -q devops-track/act-runner | xargs -r docker image rm`.
 
-| | Runner `ubuntu-latest` của GitHub | `devops-track/act-runner:1.0` dưới act |
+| | Runner `ubuntu-latest` của GitHub | `devops-track/act-runner:1.0-<hash8>` dưới act |
 | --- | --- | --- |
 | Kích thước | Máy ảo đầy đủ | Khoảng 810 MB |
 | Có sẵn | Python, Docker, git, curl, jq, hàng trăm công cụ | Node.js 24, bash, git, chứng chỉ CA, uv, CPython 3.12.13, wheel của Olist Shop; **không** curl, Docker |
@@ -118,10 +124,11 @@ của act để cache gì cả: thứ dùng chung giữa các lần chạy nằm
 
 Test của module không gọi `act` trực tiếp mà qua `testkit.act_run`: env dựng từ đầu (không đọc `~/.actrc`, `GITHUB_TOKEN` của
 bạn), `--pull=false`, job bị ghim CPU theo `DEVOPS_CPUSET`, RAM 1 GB, 512 tiến trình, không socket Docker, network riêng, dọn mọi
-container, volume, network của lần chạy khi xong. Muốn tự chạy act bằng tay với cùng mặc định, tạo `~/.actrc`:
+container, volume, network của lần chạy khi xong. Muốn tự chạy act bằng tay với cùng mặc định, tạo `~/.actrc` (thay tag bằng
+dòng cuối lệnh build ở trên in ra):
 
 ```text
--P ubuntu-latest=devops-track/act-runner:1.0
+-P ubuntu-latest=devops-track/act-runner:1.0-9d5fff50
 --pull=false
 --container-daemon-socket -
 ```
@@ -342,7 +349,7 @@ khác (`!(... && !env.ACT ...)`) thì không, vì khi đó không chắc biểu 
 sequenceDiagram
   participant T as Test (pytest)
   participant A as testkit.act_run
-  participant J as Job trong devops-track/act-runner:1.0
+  participant J as Job trong image runner act-runner
   participant L as DockerLab
   participant R as Registry local
   T->>A: Bản chép repo, sự kiện push

@@ -38,11 +38,11 @@ thực một phần của nó (test, build, push, deploy staging).
 | 3. Sơ đồ pipeline | Một khối mermaid có các chữ `staging`, `production`, `rollback` |
 | 4. Chiến lược deploy theo service | Bảng ít nhất 3 dòng đủ 4 cột (`Service`, `Chiến lược`, `Lý do`, `Tín hiệu rollback`); mỗi chiến lược là một trong rolling, blue/green (hay blue-green), canary, recreate, feature flag, shadow; ít nhất 2 chiến lược khác nhau |
 | 5. Rollback và migration cơ sở dữ liệu | Ít nhất 5 gạch đầu dòng; có `digest`, `expand`, `contract`, `feature flag` (hay `flag`); có một mục tiêu thời gian dạng `<số> phút` |
-| 6. Bí mật và quyền | Ít nhất 4 gạch đầu dòng; có `OIDC`, `environment`, `permissions` (hay `quyền tối thiểu`) |
+| 6. Bí mật và quyền | Ít nhất 4 gạch đầu dòng; có `OIDC`, `environment`, `permissions` (hay `quyền tối thiểu`); không dòng nào cấp `write-all` hay `permissions: write` (dòng phủ định như "không bao giờ dùng `write-all`" thì được) |
 | 7. Gate tự động và quan sát | Bảng ít nhất 4 dòng đủ 3 cột (`Gate`, `Ngưỡng`, `Hành động`); ít nhất 3 ngưỡng có số; có một gate theo tỉ lệ lỗi (lỗi, error, 5xx) và một gate theo độ trễ (p95, p99, latency, độ trễ) |
 | 8. Rủi ro và lộ trình triển khai | Ít nhất 4 gạch đầu dòng |
 
-Test chỉ kiểm khung và các quyết định trên; hai test khác đưa khung trống và một thiết kế yếu (production deploy `latest` không
+Test chỉ kiểm khung và các quyết định trên; một test đưa vào thiết kế tốt có câu phủ định `write-all` và đòi pass; hai test khác đưa khung trống và một thiết kế yếu (production deploy `latest` không
 phê duyệt, sơ đồ không có rollback, mọi service rolling, rollback bằng build lại, gate không có số, `write-all`, không OIDC) vào
 cùng phép kiểm và đòi bị bắt. Nội dung chấm bằng rubric trong `solutions/advanced/01-multi-env-pipeline-design/SOLUTION.md`; đọc
 rubric **sau** khi viết xong.

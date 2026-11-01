@@ -57,6 +57,9 @@ def hardening_problems(doc: dict) -> list[str]:
     if JOB not in jobs:
         found.append(f"Phải giữ job {JOB}")
     top = doc.get("concurrency") if isinstance(doc.get("concurrency"), dict) else {}
+    job = jobs.get(JOB) if isinstance(jobs.get(JOB), dict) else {}
+    if JOB in jobs and not any(str(s.get("uses", "")).split("@")[0] == "actions/upload-artifact" for s in steps(job)):
+        found.append(f"Job {JOB}: phải giữ bước actions/upload-artifact lưu báo cáo test")
     for name, job in jobs.items():
         if not isinstance(job, dict):
             continue
@@ -133,7 +136,7 @@ def test_actionlint(tmp_path):
 def test_hardened_workflow_still_runs_worker_tests(tmp_path):
     result = testkit.act_run(assemble(tmp_path / "repo", ex.path(WORKFLOW)), event="push", timeout=600)
     if testkit.act_failed_on_network(result, SETUP_STEPS):
-        pytest.skip("Bước cài uv/Python trong job cần mạng (github.com, pypi.org) và đang lỗi mạng. Kiểm kết nối rồi chạy lại.")
+        pytest.skip(f"Bước cài uv/Python trong job lỗi vì mạng, dù image runner {testkit.ACT_IMAGE} đã có uv, Python và wheel nên không cần tải gì. Thường là workflow tải thêm thứ không có trong image (đổi UV_VERSION, PYTHON_VERSION hay requirements) hoặc image runner không đúng bản; build lại theo mục 0 của module rồi chạy lại.")
     assert testkit.act_job_results(result).get(JOB) is True, f"Job {JOB} không xanh khi push lên main. {tail(result)}"
     assert re.search(r"\|\s+\d+ passed", f"{result.stdout}\n{result.stderr}"), f"Không thấy pytest chạy test của worker. {tail(result)}"
 
@@ -145,3 +148,9 @@ def test_checks_catch_checkout_ref_and_report_guard():
     report["if"] = "${{ always() || !env.ACT }}"
     found = "\n".join(hardening_problems(doc))
     assert "checkout không đặt ref" in found and "báo cáo test phải được lưu" in found, found
+
+
+def test_checks_catch_deleted_report_step():
+    doc = load(FIXTURES / "worker-ci.starter.yml")
+    doc["jobs"][JOB]["steps"] = [s for s in steps(doc["jobs"][JOB]) if not str(s.get("uses", "")).startswith("actions/upload-artifact")]
+    assert any("phải giữ bước actions/upload-artifact" in p for p in hardening_problems(doc))

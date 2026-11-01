@@ -12,7 +12,7 @@ files:
   - path: tests/fixtures/repo/requirements-dev.txt
     note: Dependency cho test, ghim phiên bản
 run:
-  - docker pull node:24.22.2-trixie-slim && docker build --pull=false -t devops-track/act-runner:1.0 setup/act-runner
+  - 'ACT_RUNNER="devops-track/act-runner:1.0-$(cat setup/act-runner/Dockerfile setup/act-runner/requirements-ci.txt | sha256sum | cut -c1-8)" && docker pull node:24.22.2-trixie-slim && docker build --pull=false -t "$ACT_RUNNER" setup/act-runner'
   - uv run pytest tracks/devops/modules/07-cicd-artifacts/exercises/intermediate/01-incident-green-release -q
 ---
 
@@ -39,7 +39,7 @@ Tìm nguyên nhân và sửa `starter/.github/workflows/release.yml`. Giữ nguy
 của pytest>`.
 
 **Cách test chấm.** Repo là Olist Shop (`tracks/devops/sample-app`) cộng `requirements-dev.txt` và workflow của bạn. Test chạy
-workflow bằng `testkit.act_run` (sự kiện `push` trên `main`, image runner `devops-track/act-runner:1.0`, không socket Docker; hai bước
+workflow bằng `testkit.act_run` (sự kiện `push` trên `main`, image runner `devops-track/act-runner:1.0-<hash8>`, không socket Docker; hai bước
 `docker/*` có `if: ${{ !env.ACT }}` bị bỏ qua và chỉ được kiểm tĩnh). Kết quả từng job đọc bằng `act_job_results`, các dòng
 `devops-ex-output` đọc bằng `act_outputs`. Có ba lần chạy act, mỗi lần khoảng 15 giây, không cần mạng: uv, Python và wheel
 có sẵn trong image runner.
@@ -68,5 +68,6 @@ với một test đỏ rồi `echo $?` để kiểm.
 ### Gợi ý 2
 
 Log của act in đúng lệnh mà runner dùng để chạy mỗi bước (`docker exec cmd=[...]`). Chạy thử workflow lúc sự cố bằng
-`act push -j test -P ubuntu-latest=devops-track/act-runner:1.0 --pull=false --container-daemon-socket -` trong một bản sao repo,
+`act push -j test -P ubuntu-latest="$ACT_RUNNER" --pull=false --container-daemon-socket -` trong một bản sao repo
+(`ACT_RUNNER` đặt như lệnh build ở mục 0 của module),
 xem dòng đó, rồi tra tài liệu GitHub về `jobs.<job_id>.steps[*].shell` để biết runner gọi shell với cờ gì khi bạn không khai báo.

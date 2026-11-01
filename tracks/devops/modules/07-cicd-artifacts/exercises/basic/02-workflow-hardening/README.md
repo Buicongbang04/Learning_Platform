@@ -12,7 +12,7 @@ files:
   - path: tests/fixtures/repo/requirements-dev.txt
     note: Dependency cho test, ghim phiên bản
 run:
-  - docker pull node:24.22.2-trixie-slim && docker build --pull=false -t devops-track/act-runner:1.0 setup/act-runner
+  - 'ACT_RUNNER="devops-track/act-runner:1.0-$(cat setup/act-runner/Dockerfile setup/act-runner/requirements-ci.txt | sha256sum | cut -c1-8)" && docker pull node:24.22.2-trixie-slim && docker build --pull=false -t "$ACT_RUNNER" setup/act-runner'
   - uv run pytest tracks/devops/modules/07-cicd-artifacts/exercises/basic/02-workflow-hardening -q
 ---
 
@@ -45,16 +45,16 @@ Phép kiểm tĩnh (đọc YAML, không cần actionlint):
    của sự kiện; dưới act, checkout không clone từ remote khi không đặt `ref`/`repository` (đặt thì act tải và chạy action thật,
    `act_run` từ chối).
 7. Không bước `run:` nào chứa biểu thức `${{ ... }}` đọc `github.event.*` hay `github.head_ref`; giá trị đó phải đi qua `env:`.
-8. Bước `actions/upload-artifact` lưu báo cáo test có `if: ${{ !cancelled() && !env.ACT }}` (hoặc `always()` thay cho
+8. Job `worker-tests` giữ bước `actions/upload-artifact` lưu báo cáo test (xoá bước không phải cách sửa), và bước đó có `if: ${{ !cancelled() && !env.ACT }}` (hoặc `always()` thay cho
    `!cancelled()`): báo cáo cần nhất đúng lúc test fail, mà mặc định bước sau một bước lỗi không chạy. `!env.ACT` vẫn giữ để act
    bỏ qua bước này; testkit công nhận hàm trạng thái nối bằng `&&` với `!env.ACT` (mục 3 của lý thuyết).
 
-Phép kiểm hành vi: `testkit.act_run` chạy workflow với sự kiện `push` trên `main` trong image runner `devops-track/act-runner:1.0` (không
+Phép kiểm hành vi: `testkit.act_run` chạy workflow với sự kiện `push` trên `main` trong image runner `devops-track/act-runner:1.0-<hash8>` (không
 socket Docker, bước có guard bị bỏ qua); job `worker-tests` phải xanh và pytest phải in dòng `N passed`. Thêm `actionlint` (nếu đã
 cài, chạy với `-shellcheck= -pyflakes=`): không lỗi. actionlint tự bắt điểm 7 với `github.event.pull_request.title`, nên đây là
 lưới thứ hai, không phải lưới duy nhất. Một test đưa `tests/fixtures/worker-ci.starter.yml` vào phép kiểm tĩnh và đòi bắt đủ các
 lỗi của nó; một test khác thêm `ref: ${{ github.sha }}` cho checkout và guard `always() || !env.ACT` cho bước lưu báo
-cáo rồi đòi bị bắt.
+cáo rồi đòi bị bắt, một test xoá bước lưu báo cáo và đòi bị bắt.
 
 Lấy SHA của một tag action (cần mạng):
 
