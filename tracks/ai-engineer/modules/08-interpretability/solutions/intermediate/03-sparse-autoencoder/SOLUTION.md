@@ -55,7 +55,7 @@ và 395 giây ở hai lần chạy, VRAM dưới 2 GB; thu activation 47 giây, 
 | L1 5.0 | 0.860 | 10.4 | 1.3% | 6.372 | 0.556 | 0.195 |
 
 
-**Cấu hình CPU** (200 025 token, 3 072 latent, 195 bước batch 4 096; cả notebook 1 121 giây, khoảng 19 phút, đo khi PC đang tải nặng,
+**Cấu hình CPU** (200 025 token, 3 072 latent, 195 bước batch 4 096; cả notebook 887 và 1 121 giây ở hai lần chạy (15 tới 19 phút), đo khi PC đang tải nặng,
 load average khoảng 15):
 
 | SAE | FVU | L0 | Latent chết | CE ghép SAE | Recovered (zero) | Recovered (mean) |
