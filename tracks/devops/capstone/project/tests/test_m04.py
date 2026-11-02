@@ -26,7 +26,9 @@ SMOKE = "ci/smoke-test.sh"
 SETUP_STEPS = ("Cài uv", "Cài Python và dependency")
 MODULE07_STARTER = (ROOT / "tracks" / "devops" / "modules" / "07-cicd-artifacts" / "exercises" / "basic" / "01-olist-ci-image"
                     / "starter" / ".github" / "workflows" / "ci.yml")
-POLICY_INPUTS = {"severity", "exit-code", "ignore-unfixed", "trivyignores", "vuln-type", "skip-dirs", "skip-files"}
+TRIVY_ACTION_INPUTS = {"image-ref", "trivy-config", "version", "format", "output", "cache", "cache-dir", "hide-progress",
+                       "timeout", "scan-type"}
+TRIVY_ACTION_FORMATS = {"table", "json"}
 SHA_TAG = re.compile(r"^sha-[0-9a-f]{12}$")
 SHA_PIN = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 STEP_OUTPUT = re.compile(r"steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)")
@@ -100,6 +102,20 @@ def output_step(job: dict, key: str) -> tuple[str, str] | None:
     return (match.group(1), match.group(2)) if match else None
 
 
+def trivy_input_problems(target: str, options: dict) -> list[str]:
+    found = []
+    extra = sorted(set(map(str, options)) - TRIVY_ACTION_INPUTS)
+    if extra:
+        found.append(f"trivy-action {target}: input {', '.join(extra)} không được dùng; chỉ được "
+                     f"{', '.join(sorted(TRIVY_ACTION_INPUTS))}, chính sách chỉ đến từ container/trivy.yaml")
+    if "format" in options and str(options["format"]) not in TRIVY_ACTION_FORMATS:
+        found.append(f"trivy-action {target}: format chỉ được {', '.join(sorted(TRIVY_ACTION_FORMATS))} (sarif và SBOM "
+                     f"đổi cách gate quyết định), đang là {options['format']}")
+    if "scan-type" in options and str(options["scan-type"]) != "image":
+        found.append(f"trivy-action {target}: scan-type phải là image")
+    return found
+
+
 def build_problems(job: dict) -> list[str]:
     found = []
     if "test" not in needs(job):
@@ -158,10 +174,7 @@ def build_problems(job: dict) -> list[str]:
                 found.append(f"trivy-action {target}: cần if: ${{{{ !env.ACT }}}}")
             if str(options.get("trivy-config", "")) != "container/trivy.yaml":
                 found.append(f"trivy-action {target}: cần trivy-config: container/trivy.yaml (cùng chính sách M03)")
-            override = sorted(set(map(str, options)) & POLICY_INPUTS)
-            if override:
-                found.append(f"trivy-action {target}: không đặt {', '.join(override)}; chính sách chỉ đến từ "
-                             "container/trivy.yaml")
+            found += trivy_input_problems(target, options)
     for target in TARGETS:
         if target not in built_at:
             found.append(f"Thiếu bước docker/build-push-action target {target}")
@@ -460,6 +473,22 @@ steps:
 """ for t in TARGETS)
 
 
+@pytest.mark.parametrize("options,needle", [
+    ({"scanners": "secret"}, "scanners"),
+    ({"pkg-types": "os"}, "pkg-types"),
+    ({"ignore-policy": "policy.rego"}, "ignore-policy"),
+    ({"severity": "CRITICAL"}, "severity"),
+    ({"format": "sarif"}, "format chỉ được"),
+    ({"format": "cyclonedx"}, "format chỉ được"),
+    ({"scan-type": "fs"}, "scan-type"),
+])
+def test_m04_trivy_action_inputs_allowlist(options, needle):
+    base = {"image-ref": "r/api:t", "trivy-config": "container/trivy.yaml", "version": "v0.76.1"}
+    assert trivy_input_problems("api", base) == []
+    assert trivy_input_problems("api", {**base, "format": "json", "output": "trivy.json"}) == []
+    assert any(needle in p for p in trivy_input_problems("api", {**base, **options}))
+
+
 def test_m04_push_step_per_target_accepted():
     job = yaml.safe_load(PER_TARGET_PUSH)
     assert build_problems(job) == []
@@ -533,8 +562,11 @@ def test_m04_smoke_fails(project_root, tmp_path, smoke_tools, case):
 def test_m04_shellcheck_smoke(project_root):
     script = require_file(project_root / SMOKE)
     Exercise.require_tool("shellcheck", min_version="0.9.0")
-    result = subprocess.run(["shellcheck", "--norc", "-S", "style", str(script)], capture_output=True, text=True,
-                            timeout=60)
+    try:
+        result = subprocess.run(["shellcheck", "--norc", "-S", "style", str(script)], capture_output=True, text=True,
+                                timeout=60)
+    except subprocess.TimeoutExpired:
+        pytest.fail("shellcheck chạy quá 60 giây với smoke-test.sh", pytrace=False)
     assert result.returncode == 0, result.stdout
 
 

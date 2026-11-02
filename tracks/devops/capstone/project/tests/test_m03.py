@@ -48,8 +48,11 @@ import hashlib, json, os, shutil, sys
 want = set(sys.argv[1].split(","))
 tools = [t for t in sys.argv[2].split(",") if shutil.which(t)]
 leaks = []
+sites = set()
 for top, dirs, files in os.walk("/"):
     dirs[:] = [d for d in dirs if os.path.join(top, d) not in ("/proc", "/sys", "/dev")]
+    if any(d.startswith("redis-") and d.endswith(".dist-info") for d in dirs):
+        sites.add(top)
     for name in files:
         if name in (".env", "test_api.py", "test_worker.py"):
             path = os.path.join(top, name)
@@ -60,10 +63,8 @@ for top, dirs, files in os.walk("/"):
                 continue
             if digest in want:
                 leaks.append(path)
-sites = sorted({top for top, dirs, files in os.walk("/") if not top.startswith(("/proc", "/sys", "/dev"))
-                for d in dirs if d.startswith("redis-") and d.endswith(".dist-info")})
 deps = []
-for site in sites:
+for site in sorted(sites):
     h = hashlib.sha256()
     for top, dirs, files in sorted(os.walk(site)):
         for name in sorted(files):
