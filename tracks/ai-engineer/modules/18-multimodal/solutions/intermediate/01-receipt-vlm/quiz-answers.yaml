@@ -1,0 +1,7 @@
+res-512: [b]
+tokens-ratio: [c]
+vlm-vs-goldocr: [a]
+transcribe-pipeline: [c]
+prefill-why: [b]
+gold-ocr-bound: [a]
+silent-float: [b]

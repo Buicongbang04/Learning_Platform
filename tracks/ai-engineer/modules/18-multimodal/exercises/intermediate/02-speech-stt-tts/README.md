@@ -24,7 +24,7 @@ sinh giọng nói tiếng Việt, đánh giá bằng vòng TTS → STT, và sử
 **Phần cứng:** CPU · ~120 phút
 
 Thời gian trên là thời gian làm bài. Mọi cell `explore` chạy trên CPU (4 luồng) trong env gốc của repo; toàn bộ notebook
-lời giải mất ⟦TODO⟧ phút trên PC của track (máy dùng chung), lần đầu tải thêm khoảng 700 MB model Whisper và 139 MB model
+lời giải mất khoảng 20 phút trên PC của track (máy dùng chung), lần đầu tải thêm khoảng 700 MB model Whisper và 139 MB model
 TTS. Cell cuối (không chấm) đo lại trên GPU khi bạn mở notebook bằng kernel `ai-gpu` (`setup/gpu`).
 
 Mở `starter/speech.ipynb`. Trong cell chấm điểm:

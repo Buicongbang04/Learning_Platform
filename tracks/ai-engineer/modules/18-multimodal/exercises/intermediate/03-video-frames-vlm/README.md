@@ -23,8 +23,8 @@ thấy loại câu hỏi nào không cách lấy mẫu thưa nào trả lời đ
 
 **Phần cứng:** GPU 4GB · ~75 phút
 
-Thời gian trên là thời gian làm bài; phần gọi model (30 lượt, mỗi lượt 1 tới 30 ảnh) mất vài phút trên GPU (số đo ở mục 6
-lý thuyết, PC của track). Chỉ có CPU: mỗi lượt có thể mất vài phút (mục 2 lý thuyết đo một ảnh 640×480 mất khoảng 20 giây
+Thời gian trên là thời gian làm bài; phần gọi model (30 lượt, mỗi lượt 1 tới 30 ảnh) mất khoảng 1.5 phút trên GPU của PC
+track (RTX 3060, dùng chung); chưa đo trên laptop GPU 4GB. Chỉ có CPU: mỗi lượt có thể mất vài phút (mục 2 lý thuyết đo một ảnh 640×480 mất khoảng 20 giây
 với 4 luồng); giữ `"đều 4 frame"` và `"lưới 4x4"`, đổi chiều rộng frame xuống 224.
 
 Video thử do notebook tự sinh bằng OpenCV (không có media bản quyền nào trong repo), ghi ra thư mục tạm của hệ điều hành.

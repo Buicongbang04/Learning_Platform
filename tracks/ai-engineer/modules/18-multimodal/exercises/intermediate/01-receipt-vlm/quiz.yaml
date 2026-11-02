@@ -1,0 +1,92 @@
+questions:
+- id: res-512
+  kind: data
+  type: single
+  prompt: Giảm cạnh dài ảnh từ 768 xuống 512 pixel, cột nào của VLM tụt mạnh nhất?
+  options:
+  - id: a
+    text: Tỉ lệ JSON hỏng, tăng lên quá một nửa số hoá đơn
+  - id: b
+    text: F1 dòng hàng, giảm hơn 0.1 so với ở 768 pixel
+  - id: c
+    text: Độ trễ p50, tăng gấp đôi vì model phải đoán nhiều hơn
+  - id: d
+    text: Không cột nào đổi quá 0.02, độ phân giải không quan trọng
+- id: tokens-ratio
+  kind: data
+  type: single
+  prompt: Số token ảnh trung bình ở ảnh gốc so với ở cạnh dài 512 pixel là bao nhiêu lần?
+  options:
+  - id: a
+    text: Gần bằng nhau, Ollama tự thu nhỏ mọi ảnh về một cỡ
+  - id: b
+    text: Khoảng 1.5 lần, vì token tỉ lệ với cạnh dài nhất
+  - id: c
+    text: Khoảng 4 lần, vì token tăng theo diện tích ảnh
+  - id: d
+    text: Trên 20 lần, vì attention tăng theo bình phương
+- id: vlm-vs-goldocr
+  kind: data
+  type: single
+  prompt: So VLM end-to-end ở cạnh dài 1024 với pipeline OCR từ nhãn + qwen2.5:3b, kết quả nào đúng?
+  options:
+  - id: a
+    text: VLM cao hơn rõ ở cả tổng đúng và F1 dòng hàng, lại nhanh hơn
+  - id: b
+    text: Pipeline OCR từ nhãn cao hơn ở mọi cột vì chữ đã đúng tuyệt đối
+  - id: c
+    text: Hai cách bằng nhau trong mức nhiễu của 100 hoá đơn ở mọi cột
+  - id: d
+    text: VLM đúng tổng nhiều hơn nhưng F1 dòng hàng thấp hơn hẳn pipeline
+- id: transcribe-pipeline
+  kind: data
+  type: single
+  prompt: Pipeline "VLM chép chữ rồi qwen2.5:3b trích xuất" đứng ở đâu so với các cấu hình khác?
+  options:
+  - id: a
+    text: Tốt nhất, vì tách thành hai bước giúp mỗi model làm phần việc dễ hơn hẳn
+  - id: b
+    text: Ngang VLM end-to-end ở ảnh gốc, chỉ chậm hơn một chút
+  - id: c
+    text: Thấp nhất ở F1 dòng hàng, và chậm hơn VLM end-to-end nhiều lần
+  - id: d
+    text: Cao hơn OCR từ nhãn vì VLM chép chữ sạch hơn nhãn của CORD
+- id: prefill-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao notebook thêm message assistant có nội dung "{" ở cuối, thay vì gửi JSON schema qua `format`?
+  options:
+  - id: a
+    text: Ollama không cho gửi ảnh cùng lúc với tham số format trong một request
+  - id: b
+    text: Bản thinking viết suy nghĩ trước, ghép với format thì nội dung rỗng
+  - id: c
+    text: Dấu "{" làm model đọc ảnh ở độ phân giải cao hơn bình thường
+  - id: d
+    text: JSON schema chỉ hỗ trợ các khoá tiếng Anh, trong khi prompt lại có tiếng Việt
+- id: gold-ocr-bound
+  kind: knowledge
+  type: single
+  prompt: Pipeline "OCR dựng lại từ nhãn + LLM văn bản" đóng vai trò gì trong so sánh?
+  options:
+  - id: a
+    text: Cận trên của mọi pipeline OCR rồi LLM với cùng LLM và prompt
+  - id: b
+    text: Cận dưới, vì văn bản OCR dựng từ nhãn luôn thiếu nhiều dòng hàng
+  - id: c
+    text: Bản sao của VLM end-to-end, chỉ khác ở cách đếm độ trễ
+  - id: d
+    text: Một baseline ngẫu nhiên để biết mức đoán mò của bộ chấm tất định
+- id: silent-float
+  kind: knowledge
+  type: single
+  prompt: '`float("60.000".replace(",", ""))` trong bộ chấm hoá đơn tiền đồng sai thế nào?'
+  options:
+  - id: a
+    text: Ném ValueError nên pipeline dừng và ta thấy lỗi ngay
+  - id: b
+    text: Ra 60.0, lệch 1 000 lần mà không báo lỗi gì cả
+  - id: c
+    text: Ra 60000.0 đúng, vì Python hiểu dấu chấm nghìn
+  - id: d
+    text: Ra 600.0 vì dấu chấm bị hiểu là hai chữ số thập phân
