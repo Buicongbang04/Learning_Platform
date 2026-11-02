@@ -29,6 +29,11 @@ rollout lỗi thì in log pod. Bí mật đến từ hệ thống khác (module 
 | Nhóm `olist-oncall` (user bất kỳ trong nhóm) | Xem workload, pod, log trong namespace | Đọc Secret, sửa gì, exec |
 | User `lead@olist.example` | get, list `pods`; create `pods/exec` | Secret, xoá pod, sửa Deployment; user khác không được exec |
 
+Exec là quyền mạnh, và đã có một lỗ ở chỗ này: tới Kubernetes 1.34 (bản của `devops-lab`), `kubectl exec` qua WebSocket (mặc định của
+kubectl mới) chỉ bị kiểm verb `get` trên `pods/exec`, nên ai có `get pods/exec` là exec được; từ 1.35 API server đòi `create` cho cả
+WebSocket (feature gate `AuthorizePodWebsocketUpgradeCreatePermission`, bật mặc định). Vì vậy không bao giờ cấp `get` trên `pods/exec`,
+`pods/attach`, `pods/portforward` cho người chỉ được xem, và cấp exec bằng verb `create`.
+
 Ràng buộc thêm: ServiceAccount `ci-deployer` có `automountServiceAccountToken: false` (không pod nào chạy bằng nó; CI lấy token ngắn hạn
 từ bên ngoài); Role nào cũng không có `*` trong `apiGroups`, `resources` hay `verbs`; không ClusterRoleBinding. Nhóm on-call dùng
 ClusterRole `view` có sẵn qua RoleBinding, không tự viết lại.

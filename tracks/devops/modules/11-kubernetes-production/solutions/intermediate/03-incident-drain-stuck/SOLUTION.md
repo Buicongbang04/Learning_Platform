@@ -35,3 +35,32 @@ Lời giải nằm trong `k8s/storefront.yaml`; ba chỗ đổi.
 - **Trước bảo trì**: chạy `kubectl drain --dry-run=server` và kiểm `kubectl get pdb -A` không còn `ALLOWED DISRUPTIONS 0`.
 - **Quy trình đổi pool**: thông báo cho team ứng dụng, có policy (Kyverno, ValidatingAdmissionPolicy) cảnh báo PDB có `minAvailable` bằng
   replicas, kiểm lại spread khi thêm taint.
+
+## Lab tay: gỡ lỗi control plane và node (mục 6 của module, không chấm tự động)
+
+**Sự cố 1, đáp án.** Khối gây sự cố sửa static pod manifest của kube-scheduler thành `--leader-elect=ture`. Kubelet tạo lại pod
+scheduler từ manifest, tiến trình thoát ngay (`Error: invalid argument "ture" for "--leader-elect" flag: strconv.ParseBool`), pod mirror
+`kube-scheduler-devops-ts-control-plane` ở `CrashLoopBackOff`. Pod mới của `web` đứng `Pending`, `NODE <none>`, **không có event nào**:
+`FailedScheduling` là do chính scheduler ghi, scheduler chết thì không ai ghi. Bằng chứng: `kubectl -n kube-system get pods`, `docker exec
+devops-ts-control-plane crictl ps -a --name kube-scheduler` (Exited, ATTEMPT tăng), `crictl logs` của container đó. Sửa: sửa đúng tệp trong
+`/etc/kubernetes/manifests/` (hay chép bản lưu về); `kubectl edit` pod mirror không có tác dụng vì nguồn sự thật của static pod là tệp trên
+node, kubelet ghi đè mirror.
+
+**Sự cố 2, đáp án.** `systemctl stop kubelet`. Sau khoảng 40 giây node `NotReady`, mọi điều kiện `Unknown` với `NodeStatusUnknown: Kubelet
+stopped posting node status`. Pod vẫn hiện `Running` vì không ai cập nhật trạng thái, và container vẫn chạy thật (`crictl ps`): dừng kubelet
+không dừng container, kể cả API server (static pod) nên `kubectl` còn dùng được. Không còn làm được: tạo, xoá, restart container trên node đó,
+probe, cập nhật status. Trên cluster nhiều node, node controller thêm taint `node.kubernetes.io/unreachable`; pod có toleration mặc định 300
+giây nên khoảng 5 phút sau bị đánh dấu xoá và tạo lại ở node khác (pod StatefulSet thì không, vì sợ chạy hai bản). Chẩn đoán: `systemctl
+status kubelet` (inactive), `journalctl -u kubelet` (dòng `Stopped kubelet.service`). Sửa: `systemctl start kubelet`; trong thực tế tìm vì sao
+nó dừng (OOM, đĩa đầy, chứng chỉ, cấu hình lỗi trong `/var/lib/kubelet/config.yaml`).
+
+**Rubric (10 điểm)**
+
+| Điểm | Tiêu chí |
+| --- | --- |
+| 1 | Tạo và xoá cluster `devops-ts` đúng khối, kubeconfig riêng, không đụng `devops-lab` |
+| 2 | Sự cố 1: chỉ ra pod Pending không có event và giải thích vì sao (ai ghi FailedScheduling) |
+| 2 | Sự cố 1: bằng chứng từ `crictl ps -a`, `crictl logs` hay pod mirror, sửa đúng tệp manifest, nói được vì sao `kubectl edit` vô ích |
+| 2 | Sự cố 2: đọc đúng điều kiện node, giải thích vì sao pod vẫn Running và container vẫn chạy |
+| 2 | Sự cố 2: bằng chứng từ `systemctl status`, `journalctl -u kubelet`; nói được hậu quả trên cluster nhiều node (taint unreachable, 300 giây) |
+| 1 | Ghi chép theo thứ tự: triệu chứng, giả thuyết, lệnh, output, kết luận |

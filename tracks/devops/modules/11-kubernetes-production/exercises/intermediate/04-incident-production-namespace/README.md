@@ -10,9 +10,9 @@ files:
   - path: starter/base/pod-reporter.yaml
     note: Job nội bộ đếm pod qua API Kubernetes
   - path: starter/base/postgres.yaml
-    note: Do team DBA giao, đã đạt restricted
+    note: Do team DBA giao, chạy ổn ở các namespace khác
   - path: starter/base/redis.yaml
-    note: Do team DBA giao, đã đạt restricted
+    note: Do team DBA giao, chạy ổn ở các namespace khác
   - path: starter/overlays/production/kustomization.yaml
     note: Overlay production
   - path: starter/overlays/production/api-production.yaml
@@ -60,14 +60,14 @@ Viết postmortem ngắn (không chấm tự động): nguyên nhân gốc theo 
 
 | Lab | Làm | Kiểm |
 | --- | --- | --- |
-| Bài của bạn | `lab.apply_learner(overlays/production)` (Kustomize render trong sandbox), `kubectl wait --for=condition=Available` cả bốn Deployment tối đa 180 giây | Apply thành công; bốn Deployment Available |
+| Bài của bạn | `lab.apply_learner(overlays/production)` (Kustomize render trong sandbox), `kubectl wait --for=condition=Available` cả bốn Deployment tối đa 180 giây (bỏ qua chờ khi output của `kubectl apply` đã báo trước pod sẽ bị từ chối) | Apply thành công; bốn Deployment Available |
 | | Đọc Deployment api | `replicas ≥ 3`, `readyReplicas` bằng `replicas`; requests và `LOG_LEVEL` như bảng; `/readyz` gọi từ pod-reporter trả 200 |
 | | Render overlay, đọc quota | Không có ResourceQuota, LimitRange, Namespace; quota `production` giữ đúng `spec.hard` của fixture; nhãn `enforce=restricted` còn |
 | | Đọc Deployment api | Mọi `secretKeyRef` trỏ Secret tên bắt đầu `olist-db-` |
 | | Log và quyền của pod-reporter | Dòng cuối có `ready ≥ 6`, không có `error`; `lab.can_i`: list pods là yes, get secrets và delete pods là no |
-| Tái hiện | Apply `tests/fixtures/incident/overlays/production` (giống starter), chờ 20 giây | Event `FailedCreate` của api nói về giới hạn bộ nhớ mỗi container, của pod-reporter nói về PodSecurity `restricted`; api không có pod Ready; ServiceAccount `pod-reporter` không list được pod |
+| Tái hiện | Apply `tests/fixtures/incident/overlays/production` (giống starter), chờ 20 giây | Triệu chứng 2 (api không có pod Ready, controller ghi lý do từ chối pod của cả api lẫn pod-reporter) xuất hiện, và ServiceAccount `pod-reporter` không làm được đúng việc mà job của nó cần (triệu chứng 4) |
 
-Khoảng 1 phút khi đã sửa, 4 phút trên starter.
+Khoảng 1 phút khi đã sửa, dưới 1 phút trên starter.
 
 ## Tiêu chí đạt
 
@@ -80,10 +80,9 @@ Khoảng 1 phút khi đã sửa, 4 phút trên starter.
 ### Gợi ý 1
 
 Không có pod thì `describe` cái tạo ra pod: `kubectl describe rs -l app.kubernetes.io/name=api`, hay `kubectl events --for
-deployment/api`. Đọc `kubectl describe quota` và `kubectl describe limitrange` để biết rào của namespace; `kubectl kustomize
+deployment/api`. `kubectl get all,resourcequota,limitrange` cho thấy mọi thứ platform team đặt sẵn trong namespace; `kubectl kustomize
 overlays/production` để xem đúng thứ sẽ được apply.
 
 ### Gợi ý 2
 
-Thông báo 403 của API server nói đủ user, verb, resource và nhóm API. So nó với Role của `pod-reporter`. Muốn biết một ServiceAccount làm
-được gì: `kubectl auth can-i --list --as=system:serviceaccount:<namespace>:pod-reporter` (cần kubeconfig admin).
+Thông báo 403 của API server nói đủ user, verb, resource và nhóm API. Muốn biết một ServiceAccount làm được gì: `kubectl auth can-i --list --as=system:serviceaccount:<namespace>:pod-reporter` (cần kubeconfig admin).

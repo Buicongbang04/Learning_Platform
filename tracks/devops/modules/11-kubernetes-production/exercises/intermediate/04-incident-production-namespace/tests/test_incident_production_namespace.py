@@ -36,7 +36,9 @@ def start(lab, path):
     lab.apply_learner(PLATFORM)
     applied = apply(lab, path)
     waited = None
-    if applied.returncode == 0:
+    if applied.returncode == 0 and "would violate" in applied.stderr:
+        waited = subprocess.CompletedProcess([], 1, "", "Không chờ: kubectl apply đã báo trước pod sẽ bị từ chối (Warning trong output)")
+    elif applied.returncode == 0:
         waited = lab.kubectl("wait", "--for=condition=Available", *(f"deployment/{w}" for w in WORKLOADS), "--timeout=180s",
                              check=False, timeout=210)
     return applied, waited
@@ -85,7 +87,7 @@ def test_overlay_applies(production):
 def test_all_workloads_available(production):
     _, state = production
     assert state["waited"] is not None and state["waited"].returncode == 0, \
-        f"Chưa đủ Deployment Available sau 180 giây. FailedCreate:\n{state['events'][-1500:]}"
+        f"Chưa đủ Deployment Available: {state['waited'].stderr[-300:] if state['waited'] else ''}\nEvent FailedCreate:\n{state['events'][-1500:]}"
 
 
 def test_api_capacity_and_measured_requests_kept(production):
@@ -133,7 +135,9 @@ def test_pod_reporter_reads_pods(production):
 def test_incident_reproduces_symptoms(incident):
     lab = incident
     events = failed_create(lab)
-    assert "api" in events and "maximum memory usage per Container is 512Mi" in events, events[-1000:]
-    assert "pod-reporter" in events and 'violates PodSecurity "restricted:latest"' in events, events[-1000:]
+    assert "api" in events and "maximum memory usage per Container is 512Mi" in events, \
+        "Bản lúc sự cố phải tái hiện triệu chứng 2 cho api với đúng lý do như sáng thứ hai"
+    assert "pod-reporter" in events and 'violates PodSecurity "restricted:latest"' in events, \
+        "Bản lúc sự cố phải tái hiện triệu chứng 2 cho pod-reporter với đúng lý do như sáng thứ hai"
     assert (get_json(lab, "deployment", "api") or {}).get("status", {}).get("readyReplicas") is None
-    assert not lab.can_i("list", "pods", serviceaccount="pod-reporter"), "Bản lúc sự cố: pod-reporter không list được pod"
+    assert not lab.can_i("list", "pods", serviceaccount="pod-reporter"), "Bản lúc sự cố phải tái hiện triệu chứng 4"

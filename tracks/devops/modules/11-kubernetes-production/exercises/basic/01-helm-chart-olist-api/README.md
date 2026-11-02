@@ -58,7 +58,7 @@ từ `tests/fixtures/deps.yaml`); chart chỉ lo API.
 | Values | `--set replicaCount=3 --set image.tag=1.1` ra 3 replica, image `devops-track/olist-shop:1.1`; mặc định image tag `1.0` |
 | Checksum | `--set config.logLevel=DEBUG` đổi `LOG_LEVEL` và đổi annotation `checksum/config` |
 | Bí mật, probe, bảo mật, hook | Như bảng trên |
-| Cài | `lab.helm_install("shop", chart, "--wait", "--timeout", "120s")` vào namespace restricted, Deployment có 2 pod ready |
+| Cài | `lab.helm_install("shop", chart, "--wait", "--timeout", "120s")` vào namespace restricted, Deployment có 2 pod ready; chart chưa render được hay pod chưa đạt mục Bảo mật thì test không cài (khỏi chờ hết giờ) và ba test cài, `helm test`, nâng và lùi fail kèm lý do |
 | `helm test` | `helm test shop` thành công, pod test `Succeeded` |
 | Nâng và lùi | Cài lại với `config.logLevel=DEBUG` đổi checksum; `helm rollback shop 1` cho revision 3, `LOG_LEVEL` về `INFO`, checksum về đúng bản đầu |
 

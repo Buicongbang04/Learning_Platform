@@ -39,13 +39,12 @@ Cluster cần metrics-server dùng chung (mục 0 của module); thiếu thì te
 | Bước | Chờ tối đa | Kiểm |
 | --- | --- | --- |
 | Đọc tĩnh | | Spec HPA như bảng trên; container có `requests.cpu`; tệp không có `spec.replicas` cho Deployment api |
-| HPA có số liệu | 150 giây | `status.currentMetrics` có CPU; lúc rảnh `currentReplicas` là 1 |
+| HPA có số liệu | 150 giây | `status.currentMetrics` có CPU; lúc rảnh `currentReplicas` là 1. HPA không trỏ tới Deployment đang có, hay container thiếu `requests.cpu`, thì không chờ, các bước sau fail ngay kèm lý do |
 | Có tải | 300 giây | Test cài `tests/fixtures/loadgen.yaml`; `currentReplicas` lên ít nhất 2 và không vượt 4; `kubectl top pods` của api có số |
 | Hết tải | 300 giây | Test xoá loadgen; `currentReplicas` về 1 |
 
 Đo trên máy viết bài: số liệu xuất hiện sau khoảng 26 giây, lên 2 replica sau khoảng 30 giây có tải (chạm 4), về 1 sau khoảng 70 giây hết
-tải. Thời gian chờ của test rộng gấp nhiều lần để không fail oan trên máy chậm. Khoảng 3 phút khi đúng; trên starter cũng khoảng 3 phút
-(chờ số liệu tới hết giờ).
+tải. Thời gian chờ của test rộng gấp nhiều lần để không fail oan trên máy chậm. Khoảng 3 phút khi đúng, dưới 1 phút trên starter.
 
 ## Tiêu chí đạt
 

@@ -38,6 +38,19 @@ def wait_hpa(lab, check, timeout: float):
     return None, seen
 
 
+def blockers(lab) -> list[str]:
+    found = []
+    hpa = get_json(lab, "hpa", "api")
+    target = ((hpa or {}).get("spec") or {}).get("scaleTargetRef", {}).get("name")
+    if not hpa or not target or get_json(lab, "deployment", target) is None:
+        found.append(f"HPA api không trỏ tới một Deployment đang có (scaleTargetRef: {target})")
+    deployment = get_json(lab, "deployment", "api")
+    containers = deployment["spec"]["template"]["spec"]["containers"] if deployment else []
+    if not containers or not all(((c.get("resources") or {}).get("requests") or {}).get("cpu") for c in containers):
+        found.append("Deployment api có container thiếu requests.cpu")
+    return found
+
+
 @pytest.fixture(scope="module")
 def scaled():
     ex.require_cluster()
@@ -54,7 +67,9 @@ def scaled():
         state = {"applied": applied, "max": 0}
         if applied.returncode == 0:
             state["rollout"] = lab.kubectl("rollout", "status", "deployment/api", "--timeout=180s", check=False, timeout=200)
-            state["metrics"], state["metrics_seen"] = wait_hpa(lab, lambda h: cpu_utilization(h) is not None, METRICS_WAIT)
+            state["blocked"] = blockers(lab)
+            if not state["blocked"]:
+                state["metrics"], state["metrics_seen"] = wait_hpa(lab, lambda h: cpu_utilization(h) is not None, METRICS_WAIT)
         if state.get("metrics") is not None:
             state["idle"] = (get_json(lab, "hpa", "api") or {}).get("status", {}).get("currentReplicas")
             lab.apply_learner(LOAD)
@@ -118,6 +133,7 @@ def test_manifest_leaves_replicas_to_hpa():
 
 def test_metrics_reach_hpa(scaled):
     _, state = scaled
+    assert not state.get("blocked"), "Không chờ số liệu vì HPA chắc chắn không tính được: " + "; ".join(state["blocked"])
     assert state.get("metrics") is not None, f"HPA chưa đọc được CPU sau {METRICS_WAIT}s: {state.get('metrics_seen', [])[-3:]}"
     assert state["idle"] == 1, f"Khi rảnh api chạy minReplicas (1), đang {state['idle']}"
 

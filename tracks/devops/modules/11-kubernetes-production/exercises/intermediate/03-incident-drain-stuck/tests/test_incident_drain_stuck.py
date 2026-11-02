@@ -47,7 +47,7 @@ def apply(lab, path):
         return subprocess.CompletedProcess([], 1, "", str(error))
 
 
-def drain_watched(lab) -> tuple[subprocess.CompletedProcess, int]:
+def drain_watched(lab, timeout: int) -> tuple[subprocess.CompletedProcess, int]:
     lowest = [99]
     done = threading.Event()
 
@@ -60,7 +60,7 @@ def drain_watched(lab) -> tuple[subprocess.CompletedProcess, int]:
     watcher = threading.Thread(target=watch, daemon=True)
     watcher.start()
     try:
-        result = lab.node_action({"action": "drain", "node": DRAINED}, check=False)
+        result = lab.node_action({"action": "drain", "node": DRAINED}, check=False, timeout=timeout)
     finally:
         done.set()
         watcher.join(10)
@@ -78,17 +78,17 @@ def runs():
         time.sleep(30)
         state["incident_spread"] = placement(lab)
         state["incident_events"] = scheduling_events(lab)
-        state["incident_drain"], _ = drain_watched(lab)
+        state["incident_drain"], _ = drain_watched(lab, 30)
     with KubeLab() as lab:
         lab.node_action({"action": "taint", "node": POOL, "taint": POOL_TAINT})
         state["applied"] = apply(lab, ex.path("k8s"))
-        state["rollout"] = lab.kubectl("rollout", "status", "deployment/storefront", "--timeout=120s", check=False, timeout=150)
+        state["rollout"] = lab.kubectl("rollout", "status", "deployment/storefront", "--timeout=60s", check=False, timeout=90)
         state["spread"] = placement(lab)
         state["deployment"] = get_json(lab, "deployment", "storefront")
         time.sleep(3)
         state["pdb"] = get_json(lab, "pdb")
         if state["rollout"].returncode == 0:
-            state["drain"], state["lowest"] = drain_watched(lab)
+            state["drain"], state["lowest"] = drain_watched(lab, 60)
             state["after_rollout"] = lab.kubectl("rollout", "status", "deployment/storefront", "--timeout=120s", check=False,
                                                  timeout=150)
             state["after_spread"] = placement(lab)
@@ -111,7 +111,7 @@ def test_design_kept(runs):
                and c.get("whenUnsatisfiable") == "DoNotSchedule" for c in constraints), \
         "Giữ ràng buộc trải đều maxSkew 1 theo hostname, DoNotSchedule"
     for toleration in pod.get("tolerations") or []:
-        assert toleration.get("key"), "Không dung thứ mọi taint (toleration không key) vì như vậy bỏ qua cả cordon"
+        assert toleration.get("key"), "Toleration nào cũng phải có key: toleration không key dung thứ mọi thứ, kể cả node đang cordon"
 
 
 def test_pdb_allows_exactly_one_disruption(runs):
@@ -119,7 +119,7 @@ def test_pdb_allows_exactly_one_disruption(runs):
     budgets = [p for p in items if (p["spec"].get("selector") or {}).get("matchLabels") == {"app.kubernetes.io/name": "storefront"}]
     assert budgets, "Cần PodDisruptionBudget chọn app.kubernetes.io/name: storefront"
     status = budgets[0].get("status") or {}
-    assert status.get("disruptionsAllowed") == 1, f"Khi đủ 4 pod, PDB cho phép đúng 1 pod bị evict cùng lúc: {status}"
+    assert status.get("disruptionsAllowed") == 1, f"Khi đủ 4 pod, ngân sách gián đoạn phải đúng bằng 1: {status}"
 
 
 def test_drain_completes_without_losing_capacity(runs):
@@ -131,8 +131,9 @@ def test_drain_completes_without_losing_capacity(runs):
 
 
 def test_incident_reproduces_symptoms(runs):
-    assert runs["incident_spread"].get("Pending", 0) >= 1, f"Bản lúc sự cố phải có pod Pending: {runs['incident_spread']}"
+    assert runs["incident_spread"].get("Pending", 0) >= 1, "Bản lúc sự cố phải tái hiện triệu chứng 1 (pod Pending)"
     events = runs["incident_events"]
-    assert "untolerated taint {olist.io/pool: frontend}" in events and "topology spread" in events, events[-800:]
+    assert "untolerated taint {olist.io/pool: frontend}" in events and "topology spread" in events, \
+        "Bản lúc sự cố phải tái hiện triệu chứng 1 với đúng lý do của scheduler như đêm qua"
     drain = runs["incident_drain"]
-    assert drain.returncode != 0 and "disruption budget" in drain.stderr, drain.stderr[-800:]
+    assert drain.returncode != 0 and "disruption budget" in drain.stderr, "Bản lúc sự cố phải tái hiện triệu chứng 2 (drain thất bại)"

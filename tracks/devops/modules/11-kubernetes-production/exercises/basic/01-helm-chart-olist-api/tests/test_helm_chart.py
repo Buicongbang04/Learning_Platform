@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 
 import pytest
@@ -92,18 +93,30 @@ def test_secret_not_rendered_and_probes(tmp_path):
     assert (container.get("livenessProbe") or {}).get("httpGet", {}).get("path") == "/healthz"
 
 
-def test_restricted_security_context(tmp_path):
-    for doc in render(tmp_path):
+def restricted_gaps(docs) -> list[str]:
+    gaps = []
+    for doc in docs:
         spec = doc["spec"]["template"]["spec"] if doc["kind"] == "Deployment" else doc.get("spec", {})
         if "containers" not in spec:
             continue
         pod = spec.get("securityContext") or {}
-        assert pod.get("runAsNonRoot") is True, f"{doc['kind']} {doc['metadata']['name']}: runAsNonRoot"
-        assert (pod.get("seccompProfile") or {}).get("type") == "RuntimeDefault", f"{doc['metadata']['name']}: seccompProfile"
+        name = f"{doc['kind']} {doc['metadata']['name']}"
+        if pod.get("runAsNonRoot") is not True:
+            gaps.append(f"{name}: runAsNonRoot")
+        if (pod.get("seccompProfile") or {}).get("type") != "RuntimeDefault":
+            gaps.append(f"{name}: seccompProfile")
         for container in spec["containers"]:
             context = container.get("securityContext") or {}
-            assert context.get("allowPrivilegeEscalation") is False, f"{container['name']}: allowPrivilegeEscalation: false"
-            assert (context.get("capabilities") or {}).get("drop") == ["ALL"], f"{container['name']}: capabilities.drop [ALL]"
+            if context.get("allowPrivilegeEscalation") is not False:
+                gaps.append(f"{name}, container {container['name']}: allowPrivilegeEscalation: false")
+            if (context.get("capabilities") or {}).get("drop") != ["ALL"]:
+                gaps.append(f"{name}, container {container['name']}: capabilities.drop [ALL]")
+    return gaps
+
+
+def test_restricted_security_context(tmp_path):
+    gaps = restricted_gaps(render(tmp_path))
+    assert not gaps, "Chưa đạt Pod Security restricted:\n" + "\n".join(gaps)
 
 
 def test_has_helm_test_hook(tmp_path):
@@ -113,7 +126,7 @@ def test_has_helm_test_hook(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def installed():
+def installed(tmp_path_factory):
     ex.require_cluster()
     ex.require_tool("helm", HELM_MIN_VERSION)
     ex.require_kind_images(KUBE_IMAGES["olist"], KUBE_IMAGES["postgres"], KUBE_IMAGES["redis"])
@@ -122,10 +135,16 @@ def installed():
         for target in ("deployment/postgres", "deployment/redis"):
             lab.kubectl("rollout", "status", target, "--timeout=180s")
         chart = ex.path("olist-api")
-        try:
-            state = {"install": lab.helm_install(RELEASE, chart, "--wait", "--timeout", "120s", check=False)}
-        except pytest.fail.Exception as error:
-            state = {"install": subprocess.CompletedProcess([], 1, "", str(error))}
+        rendered = helm_offline(tmp_path_factory.mktemp("render"), "template", RELEASE, str(chart))
+        gaps = restricted_gaps([d for d in yaml.safe_load_all(rendered.stdout) if d]) if rendered.returncode == 0 else ["helm template lỗi"]
+        if gaps:
+            state = {"install": subprocess.CompletedProcess([], 1, "", "Không cài (khỏi chờ hết giờ): chart chưa render được hay pod chưa "
+                                                                       "đạt restricted:\n" + "\n".join(gaps))}
+        else:
+            try:
+                state = {"install": lab.helm_install(RELEASE, chart, "--wait", "--timeout", "120s", check=False)}
+            except pytest.fail.Exception as error:
+                state = {"install": subprocess.CompletedProcess([], 1, "", str(error))}
         state["test"] = lab.helm("test", RELEASE, "--timeout", "120s", check=False) if state["install"].returncode == 0 else None
         yield lab, chart, state
 
@@ -141,7 +160,7 @@ def test_helm_test_passes(installed):
     _, _, state = installed
     assert state["test"] is not None, "Chưa cài được release nên không chạy helm test"
     assert state["test"].returncode == 0, state["test"].stdout[-1000:] + state["test"].stderr[-1000:]
-    assert "Phase:          Succeeded" in state["test"].stdout
+    assert re.search(r"Phase:\s+Succeeded", state["test"].stdout), state["test"].stdout[-1000:]
 
 
 def checksum(lab) -> str:

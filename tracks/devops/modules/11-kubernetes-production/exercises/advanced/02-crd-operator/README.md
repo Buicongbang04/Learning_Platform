@@ -44,7 +44,7 @@ Operator biến mỗi Storefront thành ConfigMap `<tên>-web` (khoá `index.htm
 
 | Phần | Yêu cầu |
 | --- | --- |
-| CRD | `storefronts.lab.olist.test`, nhóm `lab.olist.test`, kind `Storefront`, Namespaced, bản `v1` |
+| CRD | `storefronts.lab.olist.test`, nhóm `lab.olist.test`, kind `Storefront`, Namespaced, bản `v1`; không có `shortNames`, `categories` hay conversion webhook (lab từ chối: tên ngắn và nhóm như `all` dùng chung cho mọi lab, còn conversion webhook làm API server gọi một địa chỉ tuỳ ý từ mạng của control plane) |
 | Schema | `spec` bắt buộc; `spec.replicas` số nguyên 1 tới 5, bắt buộc; `spec.message` chuỗi 1 tới 80 ký tự, bắt buộc; `spec.maintenance` boolean mặc định `false`; luật CEL: `maintenance` là true thì `replicas` phải là 1, thông báo chứa chữ `maintenance` |
 | Status | Subresource `status` với `readyReplicas`, `phase` (`Ready` khi readyReplicas bằng spec.replicas, ngược lại `Progressing`), `observedGeneration` |
 | Cột | `kubectl get storefronts` in `NAME REPLICAS READY PHASE AGE` |
@@ -63,14 +63,14 @@ của nhóm đó.
 | Apply | CRD apply được, `Established`; `operator/` (Kustomize) apply được, operator rollout xong trong 120 giây |
 | Schema từ chối | `kubectl apply --dry-run=server` bị từ chối, lỗi nhắc đúng trường, với: replicas 0, 6, `"two"`; message rỗng, 81 ký tự, thiếu; maintenance true với replicas 2 |
 | Schema nhận | maintenance true với replicas 1 được nhận; không ghi maintenance thì server điền `false` |
-| Reconcile | Tạo Storefront `spring-sale` (2, `Olist Spring Sale`): trong 90 giây Deployment `spring-sale-web` có 2 pod ready, có ownerReference controller trỏ đúng uid; `wget` trong pod trả trang có message |
+| Reconcile | Tạo Storefront `spring-sale` (2, `Olist Spring Sale`): Deployment con xuất hiện trong 45 giây (không thì các test sau fail ngay), rồi trong 90 giây Deployment `spring-sale-web` có 2 pod ready, có ownerReference controller trỏ đúng uid; `wget` trong pod trả trang có message |
 | Status, cột | Trong 90 giây `phase: Ready`, `readyReplicas: 2`, `observedGeneration` bằng `metadata.generation`; tiêu đề `kubectl get storefronts` đúng như trên |
 | Đổi spec | Patch replicas 3, message mới: Deployment lên 3, ConfigMap đổi nội dung, status lên 3, mỗi việc trong 90 giây |
 | Lệch | Xoá tay Deployment con: operator tạo lại trong 90 giây |
 | Xoá | Xoá Storefront: Deployment và ConfigMap con biến mất trong 90 giây (garbage collector) |
 | Quyền | `lab.can_i` cho `storefront-operator`: list storefronts, patch storefronts/status, patch deployments là yes; list storefronts mọi namespace, get secrets, create pods, delete storefronts là no |
 
-Khoảng 40 giây khi đúng, 2 phút trên starter.
+Khoảng 40 giây khi đúng, khoảng 1 phút trên starter.
 
 ## Tiêu chí đạt
 

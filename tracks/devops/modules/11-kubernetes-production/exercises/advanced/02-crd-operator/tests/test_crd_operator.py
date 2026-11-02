@@ -113,6 +113,8 @@ def reconciled(operator):
     created = lab.kubectl("apply", "-f", "-", input=json.dumps(storefront(lab, "spring-sale", 2, "Olist Spring Sale")), check=False)
     if created.returncode != 0:
         return lab, None
+    if not wait_for(lambda: get_json(lab, "deployment", "spring-sale-web") is not None, 45):
+        return lab, None
     found = wait_for(lambda: (get_json(lab, "deployment", "spring-sale-web") or {}).get("status", {}).get("readyReplicas") == 2)
     return lab, found
 

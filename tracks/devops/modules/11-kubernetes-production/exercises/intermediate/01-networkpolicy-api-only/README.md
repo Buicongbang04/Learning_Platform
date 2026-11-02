@@ -39,7 +39,8 @@ Mọi luồng khác, cả vào lẫn ra, bị chặn: `analytics` không chạm 
 namespace, kể cả API server của cluster. Không sửa workload hay nhãn của chúng.
 
 **Cách test chấm.** `KubeLab` cài stack, chờ `/readyz` của api trả 200 và ghi một lần đối chứng (trước khi có policy, `analytics` nối được
-Postgres và API server), apply `k8s/`, chờ 5 giây, **restart** `api` (kết nối cũ trong pool có thể sống qua policy mới; pod mới mới phản
+Postgres và API server), áp thử `tests/fixtures/deny-without-dns.yaml` để tái hiện bẫy (dòng cuối của bảng), xoá mọi NetworkPolicy, rồi
+apply `k8s/`, chờ 5 giây, **restart** `api` (kết nối cũ trong pool có thể sống qua policy mới; pod mới mới phản
 ánh đúng), rồi `kubectl exec` một script Python vào từng pod: mở TCP với timeout 3 giây, phân giải tên, gọi HTTP.
 
 | Kiểm | Từ pod | Mong đợi |
@@ -50,10 +51,9 @@ Postgres và API server), apply `k8s/`, chờ 5 giây, **restart** `api` (kết 
 | analytics | analytics | `http://api:8000/healthz` trả 200; phân giải được `postgres`; ClusterIP của Postgres, Redis bị chặn (timeout hay từ chối) |
 | intruder | intruder | ClusterIP của api, Postgres, Redis đều bị chặn |
 | Egress | api, analytics | ClusterIP của Service `kubernetes` cổng 443 bị chặn |
-| Bẫy DNS | api, lab riêng với `tests/fixtures/deny-without-dns.yaml` | Nối Postgres theo IP được, phân giải `postgres` thì lỗi, `/readyz` không còn 200 |
+| Bẫy DNS | api, khi chỉ có `tests/fixtures/deny-without-dns.yaml` | Nối Postgres theo IP được, phân giải `postgres` thì lỗi, `/readyz` không còn 200 |
 
-Ca cuối không chấm bài của bạn; nó chứng minh cluster thực thi NetworkPolicy và bẫy trong đề là thật. Khoảng 2 phút khi đúng, gần 4 phút
-trên starter.
+Ca cuối không chấm bài của bạn; nó chứng minh cluster thực thi NetworkPolicy và bẫy trong đề là thật. Khoảng 2 phút.
 
 ## Tiêu chí đạt
 

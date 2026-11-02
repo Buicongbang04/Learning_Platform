@@ -189,8 +189,8 @@ namespace, gần như không bao giờ đúng cho người hay pipeline.
   `rbac.authorization.k8s.io/aggregate-to-view: "true"` thì quy tắc của nó tự gộp vào `view` của mọi namespace. Đó là lý do lab chặn
   nhãn này: một ClusterRole của bài mang nhãn đó là mở quyền cho mọi người dùng `view` trên cluster.
 - **Không tự nâng quyền**: API server chỉ cho bạn tạo hay sửa Role chứa quyền mà chính bạn đang có, và chỉ cho bind tới role có quyền
-  bạn đang có, trừ khi bạn có verb `escalate` hay `bind`. Basic 02 và Advanced 02 đụng đúng luật này: Role trỏ `pods` trong nhóm
-  `apps` (không tồn tại) vẫn bị từ chối vì bạn không có quyền đó.
+  bạn đang có, trừ khi bạn có verb `escalate` hay `bind`. Hệ quả hay gặp: Role có verb `*`, hay trỏ `pods` trong nhóm `apps` (không
+  tồn tại), bị từ chối với một người dùng chỉ có danh sách verb cụ thể, vì RBAC so chuỗi chứ không so "ý nghĩa".
 - **Subresource là quyền riêng**: `get pods` không cho đọc log (`pods/log`), không cho exec (`pods/exec` với verb `create`), không cho
   evict (`pods/eviction`). `patch deployments` cho phép đổi replica và image; ai patch được Deployment thì gần như chạy được mọi image
   trong namespace, nên quyền deploy luôn là quyền mạnh.
@@ -268,7 +268,7 @@ kubectl label --dry-run=server --overwrite namespace lab11 pod-security.kubernet
 
 Điểm hay bị bỏ qua: PSA chặn **pod**, không chặn Deployment. `kubectl apply` một Deployment vi phạm vẫn thành công (kèm `Warning: would
 violate PodSecurity`), còn ReplicaSet thì không tạo được pod, chỉ để lại event `FailedCreate` trên ReplicaSet. Deployment đứng `0/3`
-mà không có pod nào để `describe`; Intermediate 04 bắt đầu từ đúng triệu chứng đó.
+mà không có pod nào để `describe`.
 
 ### NetworkPolicy
 
@@ -376,7 +376,7 @@ Topology spread có hai trường hay bị bỏ qua: `nodeAffinityPolicy` (mặc
 độ lệch) và `nodeTaintsPolicy` (mặc định `Ignore`: node có taint mà pod không tolerate **vẫn tính** vào độ lệch). Với `DoNotSchedule`
 và mặc định `Ignore`, cordon một trong hai worker làm node đó thành một miền có 0 pod mãi mãi; mọi pod thay thế bị `Pending` vì đặt
 thêm ở node còn lại sẽ vượt `maxSkew`. Đã thử trên `devops-lab`: drain treo tới hết timeout, pod mới `Pending` với `didn't match pod
-topology spread constraints`. `nodeTaintsPolicy: Honor` sửa đúng chỗ đó mà vẫn giữ ràng buộc. Intermediate 03 là sự cố này.
+topology spread constraints`. `nodeTaintsPolicy: Honor` sửa đúng chỗ đó mà vẫn giữ ràng buộc.
 
 ### Priority và preemption
 
@@ -402,8 +402,7 @@ kubectl describe quota team-shop
 kubectl describe limitrange
 ```
 
-Platform team đặt quota và LimitRange cho mỗi namespace của team; team ứng dụng không được sửa chúng (trong Intermediate 04, testkit đặt
-hai object này, overlay của bạn không được đè).
+Platform team đặt quota và LimitRange cho mỗi namespace của team; team ứng dụng không được sửa chúng.
 
 ### PodDisruptionBudget, cordon, drain, eviction
 
@@ -449,7 +448,8 @@ sequenceDiagram
     participant A as kube-apiserver (metrics.k8s.io)
     participant H as HPA controller
     participant D as Deployment
-    K->>M: /metrics/resource mỗi 15 giây
+    M->>K: GET /metrics/resource mỗi 15 giây
+    K-->>M: CPU, bộ nhớ của từng container
     H->>A: GET pods.metrics.k8s.io (mỗi 15 giây)
     A->>M: chuyển tiếp (APIService aggregation)
     M-->>H: CPU từng pod
@@ -480,7 +480,7 @@ kubectl describe hpa api
 
 **VPA** đo dùng thật và đề xuất `requests`. Chế độ `Off` chỉ đề xuất (đọc trong `status.recommendation`, rất tốt để chọn request ban
 đầu), `Initial` đặt lúc tạo pod, `Recreate` đuổi pod để áp request mới, và các bản VPA mới có chế độ cập nhật tại chỗ dựa trên in-place
-pod resize (beta, bật mặc định từ Kubernetes 1.33). VPA và HPA cùng điều khiển một Deployment **theo CPU** sẽ đánh nhau: VPA tăng request
+pod resize (stable từ Kubernetes 1.35; cluster 1.34 của track có bản beta bật mặc định). VPA và HPA cùng điều khiển một Deployment **theo CPU** sẽ đánh nhau: VPA tăng request
 làm phần trăm sử dụng giảm, HPA thu nhỏ, tải dồn lên ít pod hơn, VPA lại tăng. Kết hợp an toàn: HPA theo CPU, VPA ở `Off` hay chỉ quản
 bộ nhớ; hoặc HPA theo metric tuỳ chỉnh.
 
@@ -686,6 +686,61 @@ kubectl get --raw '/readyz?verbose'
 - Scheduler chết: pod mới `Pending` mà không có event `FailedScheduling` nào. Controller-manager chết: Deployment không tạo ReplicaSet,
   node chết không bị đánh dấu. etcd mất đa số: API server trả lỗi cho mọi thay đổi.
 - `kube-proxy`, CoreDNS là DaemonSet và Deployment trong `kube-system`: `kubectl -n kube-system logs ds/kube-proxy`, `deploy/coredns`.
+
+### Lab tay: gỡ lỗi control plane và node trên cluster dùng một lần
+
+Không bài tự động nào được phá control plane của `devops-lab` dùng chung, nên phần này là lab tay trên một cluster kind **riêng, một
+node**, tên `devops-ts`, kubeconfig riêng trong `~/.cache/devops-track/ts-lab`; xong là xoá. Chấm bằng rubric ở mục "Lab tay" trong
+`solutions/intermediate/03-incident-drain-stuck/SOLUTION.md`. Đã chạy thử trên máy viết bài (kind 0.30.0, node 1.34.0). Không ghim CPU thì
+bỏ `taskset -c "$DEVOPS_CPUSET"`.
+
+Tạo cluster và một workload (dùng image `pause` có sẵn trong node, không cần nạp gì):
+
+```bash
+export TS_DIR=~/.cache/devops-track/ts-lab &&
+mkdir -p "$TS_DIR" &&
+nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --name devops-ts --image kindest/node:v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a --kubeconfig "$TS_DIR/kubeconfig" &&
+if [ -n "$DEVOPS_CPUSET" ]; then docker update --cpuset-cpus "$DEVOPS_CPUSET" devops-ts-control-plane; fi &&
+export KUBECONFIG="$TS_DIR/kubeconfig" &&
+kubectl wait --for=condition=Ready node --all --timeout=120s &&
+kubectl create deployment web --image=registry.k8s.io/pause:3.10 --replicas=2 &&
+kubectl rollout status deployment/web --timeout=120s
+```
+
+Mỗi khối gây sự cố bắt đầu bằng một phép kiểm: kubectl đang trỏ đúng `kind-devops-ts`, không thì dừng, không đụng cluster nào khác.
+Chạy khối, đừng đọc kỹ nó làm gì; rồi chẩn đoán chỉ từ triệu chứng, ghi lại lệnh và output làm bằng chứng.
+
+**Sự cố 1.** Sau khối này, scale `web` lên 4 và giải thích vì sao pod mới đứng yên:
+
+```bash
+test "$(kubectl config current-context)" = kind-devops-ts &&
+docker exec devops-ts-control-plane cp /etc/kubernetes/manifests/kube-scheduler.yaml /root/kube-scheduler.yaml.bak &&
+docker exec devops-ts-control-plane sed -i 's/--leader-elect=true/--leader-elect=ture/' /etc/kubernetes/manifests/kube-scheduler.yaml &&
+sleep 40 && kubectl scale deployment web --replicas=4
+```
+
+Câu hỏi: pod mới ở trạng thái gì, có event nào không, vì sao không có; thành phần nào hỏng, bằng chứng nào (`kubectl -n kube-system get
+pods`, `crictl ps -a`, `crictl logs`); sửa thế nào; vì sao `kubectl edit` không sửa được nó. Đường lui nếu kẹt:
+`docker exec devops-ts-control-plane cp /root/kube-scheduler.yaml.bak /etc/kubernetes/manifests/kube-scheduler.yaml`.
+
+**Sự cố 2.** Sau khi sự cố 1 đã sửa và `web` đủ 4 pod:
+
+```bash
+test "$(kubectl config current-context)" = kind-devops-ts &&
+docker exec devops-ts-control-plane systemctl stop kubelet &&
+sleep 60 && kubectl get nodes && kubectl get pods -o wide
+```
+
+Câu hỏi: node báo gì, điều kiện nào, vì sao pod vẫn `Running`; pod đó còn chạy thật không (`docker exec ... crictl ps`); thứ gì không
+còn làm được; trên cluster nhiều node thì sau bao lâu pod bị dời và vì sao; tìm nguyên nhân bằng `systemctl status`, `journalctl -u
+kubelet`, rồi sửa. Đường lui: `docker exec devops-ts-control-plane systemctl start kubelet`.
+
+Xoá khi xong (không đụng `devops-lab`):
+
+```bash
+kind delete cluster --name devops-ts --kubeconfig ~/.cache/devops-track/ts-lab/kubeconfig &&
+rm -rf ~/.cache/devops-track/ts-lab
+```
 
 Intermediate 03 (drain treo, pod `Pending`) và Intermediate 04 (namespace production không lên pod nào) là hai sự cố có thật theo khuôn
 này; chỉ có triệu chứng, nguyên nhân nằm trong `solutions/`.

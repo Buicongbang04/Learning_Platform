@@ -44,8 +44,7 @@ miền ngoài hay HTTP path cần Cilium policy hay mesh.
 Ready nên ngân sách đã hết, mà pod thay thế lại `Pending`. Pod thay thế `Pending` thì đọc `FailedScheduling`: node còn lại có taint mà pod
 không tolerate, topology spread `DoNotSchedule` vẫn đếm node đang cordon (mặc định `nodeTaintsPolicy: Ignore`), hết tài nguyên theo
 requests, PVC local giữ pod ở đúng node đó. Ngoài PDB: pod kẹt `Terminating` vì preStop dài hay finalizer, pod không có controller
-(drain cần `--force`). Không dùng `--disable-eviction` để "cho xong": đó là tắt đúng cơ chế bảo vệ capacity. Intermediate 03 là sự cố
-gộp ba nguyên nhân đầu.
+(drain cần `--force`). Không dùng `--disable-eviction` để "cho xong": đó là tắt đúng cơ chế bảo vệ capacity.
 
 ## Taint, nodeSelector và nodeAffinity khác nhau thế nào? Thiết kế một pool node dành riêng cho GPU.
 
@@ -99,15 +98,17 @@ plane từng node một: `kubeadm upgrade plan`, `apply` ở node đầu, `upgra
 lúc control plane đi 1.35, 1.36, 1.37, rồi thay node (thêm node 1.37, drain node cũ, xoá) để mỗi worker chỉ bị drain một lần. Tiêu chí
 dừng theo SLO, smoke test sau mỗi bước, thông báo trước. Advanced 01 chấm kế hoạch theo đúng khung này.
 
-## Sự cố: sáng thứ hai, namespace production mới không lên pod nào dù `kubectl apply` báo thành công. Bạn xử lý thế nào?
+## Sự cố: sáng thứ hai mọi `kubectl` của cả team báo lỗi chứng chỉ, nhưng ứng dụng vẫn phục vụ khách. Bạn xử lý thế nào?
 
-Triệu chứng "apply thành công, Deployment 0/N, không có pod để describe" là admission từ chối pod do controller tạo. `kubectl describe rs`
-hay `kubectl events` đọc `FailedCreate`: lần lượt có thể là `violates PodSecurity "restricted:latest"` (thiếu securityContext), `maximum
-memory usage per Container is 512Mi` (LimitRange), `exceeded quota` (ResourceQuota, kể cả khoảng surge của rolling update). Sửa từng lớp
-trong overlay production, không đè quota hay nhãn PSA của platform team. Sau đó lớp thứ hai lộ ra: sidecar hay job gọi API báo 403 vì Role
-thiếu verb `list` hay sai nhóm API; đọc nguyên câu lỗi, kiểm bằng `auth can-i --as`. Postmortem: CI chạy `apply --dry-run=server` vào
-namespace có đúng nhãn và quota như production, cộng kiểm "mọi Deployment đạt số replica" sau deploy; gắn alert cho `FailedCreate`.
-Intermediate 04 là sự cố này.
+Ứng dụng còn chạy vì data plane không cần control plane (pod, kube-proxy, rule mạng giữ nguyên); thứ mất là mọi thay đổi: deploy, scale,
+HPA, thay pod chết. Đọc nguyên lỗi: `x509: certificate has expired or is not yet valid` là chứng chỉ; kiểm giờ của máy mình trước. Trên
+node control plane (SSH, vì `kubectl` không vào được): `kubeadm certs check-expiration`; chứng chỉ kubeadm sống một năm và chỉ được gia
+hạn tự động khi `kubeadm upgrade`, nên cluster không nâng cấp cả năm hết hạn đúng ngày tạo. `crictl ps -a` xem static pod
+kube-apiserver, controller-manager, scheduler; `crictl logs` của chúng và `journalctl -u kubelet` (chứng chỉ client của kubelet tự xoay
+nếu bật rotation, nếu không node cũng NotReady). Sửa: `kubeadm certs renew all` trên từng control plane, restart static pod (dời manifest
+ra rồi vào lại), cập nhật `admin.conf` cho người cần. Postmortem: alert theo ngày hết hạn chứng chỉ (metric
+`apiserver_client_certificate_expiration_seconds`, hay blackbox kiểm TLS của API server), lịch nâng cấp đều đặn, runbook gia hạn đã diễn
+tập.
 
 ## Chọn giữa EKS, GKE Autopilot, ECS trên Fargate và Docker Swarm cho một startup 6 kỹ sư, 12 service HTTP.
 
