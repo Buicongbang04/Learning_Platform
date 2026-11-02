@@ -25,7 +25,7 @@ Sau module này bạn sẽ:
 
 | Công cụ / dịch vụ | Phiên bản đã kiểm | Tối thiểu cho bài tập | Dùng ở |
 | --- | --- | --- | --- |
-| OpenTofu (`tofu`) | 1.13.2 | 1.11 (biến `ephemeral` ở Basic 02); 1.10 cho các bài còn lại (khoá S3 native) | Mọi bài trừ Basic 03, Advanced 01 |
+| OpenTofu (`tofu`) | 1.13.2 | 1.11 (biến `ephemeral`: Basic 02, capstone m05); 1.10 cho các bài còn lại (khoá S3 native) | Mọi bài trừ Basic 03, Advanced 01 |
 | Provider `hashicorp/aws` | 6.12.0 (ghim cứng, xem dưới) | Đúng bản này | Mọi bài có `tofu` |
 | LocalStack riêng `localstack-devops` | `localstack/localstack:4.4.0` (profile `devops`) | Đúng tag này | Mọi bài có `tofu` |
 | trivy | 0.76.1 (cài ở module 06) | 0.76 | Intermediate 04 |

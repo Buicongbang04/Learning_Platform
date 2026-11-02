@@ -6,11 +6,14 @@ import secrets
 import shutil
 import time
 import uuid
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 import pytest
+import yaml
+from botocore.exceptions import BotoCoreError, ClientError
 
 from olist_stack import APP, missing
 from testkit import KUBE_IMAGES, AnsibleLab, Exercise, TofuLab, localstack_client
@@ -22,6 +25,7 @@ TFVARS = {"environment": ENVIRONMENT, "database_host": "postgres", "redis_host":
 PARAMS = {"DB_HOST": "postgres", "DB_NAME": "olist", "DB_USER": "olist", "REDIS_URL": "redis://redis:6379/0", "LOG_LEVEL": "INFO"}
 TAGS = {"Project": "olist-shop", "Environment": ENVIRONMENT, "ManagedBy": "opentofu"}
 HOSTS = ["worker-1", "worker-2"]
+NO_DEFAULT = ("prefix", "environment", "database_host", "redis_host", "db_password", "state_passphrase")
 HANDLER = "Restart olist-worker"
 HOME = "/opt/olist-shop"
 ENV_FILE = "/etc/olist-shop/worker.env"
@@ -79,6 +83,56 @@ print(json.dumps(out))
 """
 
 
+def make_password(core: str, tail_chars: str = "@:/#%x") -> str:
+    return f"Pw{core}{tail_chars}"
+
+
+def leaks(text: str, password: str, core: str) -> list[str]:
+    """Các dạng của mật khẩu xuất hiện trong `text`: nguyên văn, percent-encode (như trong DATABASE_URL), hay phần ngẫu
+    nhiên ở giữa (bắt mọi kiểu mã hoá khác). Chỉ trả tên dạng, không trả giá trị."""
+    forms = {"nguyên văn": password, "percent-encode": quote(password, safe=""), "phần ngẫu nhiên": core}
+    return [name for name, value in forms.items() if value and value in (text or "")]
+
+
+def strip_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        return value[1:-1]
+    return value
+
+
+def key_matches(value, key_arn: str, key_id: str, aliases: set[str]) -> bool:
+    """`value` (KeyId của SSM hay KMSMasterKeyID của S3) trỏ tới đúng khoá: ARN, id, tên alias hay ARN của alias."""
+    if not value or not key_arn:
+        return False
+    value = str(value)
+    if value in (key_arn, key_id) or value in aliases:
+        return True
+    return ":alias/" in value and "alias/" + value.split(":alias/", 1)[1] in aliases
+
+
+def trust_services(trust: dict) -> set[str]:
+    found = set()
+    for statement in (trust or {}).get("Statement", []):
+        if statement.get("Effect") != "Allow":
+            continue
+        principal = statement.get("Principal")
+        if not isinstance(principal, dict) or set(principal) != {"Service"}:
+            found.add(json.dumps(principal, sort_keys=True))
+            continue
+        services = principal["Service"]
+        found |= {services} if isinstance(services, str) else set(services)
+    return found
+
+
+def aws(rule: str, call, *args, **kwargs):
+    """Gọi boto3; tài nguyên thiếu hay sai thì fail với quy tắc của đề thay vì lỗi botocore."""
+    try:
+        return call(*args, **kwargs)
+    except (ClientError, BotoCoreError) as error:
+        pytest.fail(f"{rule} ({type(error).__name__}: {str(error)[:200]})", pytrace=False)
+
+
 def tail(result) -> str:
     return "\n".join(f"{result.stdout}\n{result.stderr}".strip().splitlines()[-40:])
 
@@ -109,6 +163,12 @@ def role_grants(role: str) -> set[tuple[str, str]]:
 
 
 def read_parameters(path: str) -> dict[str, dict]:
+    if not isinstance(path, str) or not path.startswith("/"):
+        pytest.fail(f"Đường dẫn tham số SSM phải bắt đầu bằng '/': {path!r}", pytrace=False)
+    return aws(f"Không đọc được cây tham số SSM {path}", _read_parameters, path)
+
+
+def _read_parameters(path: str) -> dict[str, dict]:
     ssm = localstack_client("ssm")
     found = {}
     for page in ssm.get_paginator("get_parameters_by_path").paginate(Path=path, Recursive=True, WithDecryption=True):
@@ -128,6 +188,7 @@ def read_parameters(path: str) -> dict[str, dict]:
 class Infra:
     lab: TofuLab | None = None
     password: str = ""
+    core: str = ""
     passphrase: str = ""
     outputs: dict = field(default_factory=dict)
     runtime: dict = field(default_factory=dict)
@@ -153,8 +214,10 @@ def infra(project_root):
     if not source.is_dir() or not any(source.glob("*.tf")):
         yield Infra(error=missing(source / "main.tf", DOC))
         return
+    Exercise.require_tool("tofu", "1.11")
     with TofuLab(source) as lab:
-        state = Infra(lab, password=f"Pw{secrets.token_hex(8)}@:/#%x", passphrase=f"olist-capstone-{secrets.token_hex(8)}")
+        core = secrets.token_hex(8)
+        state = Infra(lab, password=make_password(core), core=core, passphrase=f"olist-capstone-{secrets.token_hex(8)}")
         s3 = localstack_client("s3")
         s3.create_bucket(Bucket=state.state_bucket)
         s3.put_bucket_versioning(Bucket=state.state_bucket, VersioningConfiguration={"Status": "Enabled"})
@@ -171,9 +234,14 @@ def infra(project_root):
             else:
                 state.outputs = lab.output()
                 path = state.outputs.get("parameter_path")
-                state.runtime = {k: v["Value"] for k, v in read_parameters(path).items()} if isinstance(path, str) else {}
+                try:
+                    state.runtime = {k: v["Value"] for k, v in read_parameters(path).items()}
+                except pytest.fail.Exception:
+                    state.runtime = {}
         except pytest.fail.Exception as error:
             state.error = str(error)
+        except (ClientError, BotoCoreError) as error:
+            state.error = f"LocalStack từ chối khi chuẩn bị bucket state: {error}"
         yield state
 
 
@@ -200,7 +268,16 @@ def test_m05_state_remote_encrypted(infra):
         data = {}
     assert "encrypted_data" in data and "resources" not in data, (
         "State trên S3 phải được mã hoá phía client bằng khối encryption của OpenTofu (passphrase từ var.state_passphrase)")
-    assert state.password not in raw
+    assert not leaks(raw, state.password, state.core), "Mật khẩu database nằm trong state trên S3"
+    name = f".devops-ex-{uuid.uuid4().hex[:8]}.tfplan"
+    result = state.lab.run("plan", "-input=false", "-no-color", "-lock=false", f"-out={name}", check=False)
+    plan_file = state.lab.workdir / name
+    try:
+        assert result.returncode == 0 and plan_file.is_file(), f"tofu plan -out lỗi:\n{tail(result)}"
+        assert not zipfile.is_zipfile(plan_file), (
+            "Tệp plan đang là zip đọc được: khối encryption cần cả `plan { method = ..., enforced = true }`")
+    finally:
+        plan_file.unlink(missing_ok=True)
 
 
 def test_m05_state_lockfile(infra):
@@ -221,13 +298,30 @@ def test_m05_password_never_in_state_or_plan(infra):
     state = infra.require()
     pulled = state.lab.run("state", "pull", check=False)
     assert pulled.returncode == 0, tail(pulled)
-    assert state.password not in pulled.stdout, (
-        "Mật khẩu database nằm trong state: ghi nó qua thuộc tính write-only (value_wo) từ biến ephemeral")
+    found = leaks(pulled.stdout, state.password, state.core)
+    assert not found, f"Mật khẩu database ({', '.join(found)}) nằm trong state: ghi qua write-only (value_wo) từ biến ephemeral"
     plan = state.lab.plan_json("-no-color")
-    assert state.password not in json.dumps(plan), "Mật khẩu database nằm trong plan"
-    assert state.password not in state.apply_output, "Mật khẩu database hiện trong output của apply"
-    variable = plan.get("configuration", {}).get("root_module", {}).get("variables", {}).get("db_password", {})
-    assert variable.get("sensitive") is True, f"variable db_password phải sensitive = true: {variable}"
+    found = leaks(json.dumps(plan), state.password, state.core)
+    assert not found, f"Mật khẩu database ({', '.join(found)}) nằm trong plan"
+    found = leaks(state.apply_output, state.password, state.core)
+    assert not found, f"Mật khẩu database ({', '.join(found)}) hiện trong output của apply"
+
+
+def test_m05_variables(infra):
+    state = infra.require()
+    plan = state.lab.plan_json("-no-color")
+    variables = plan.get("configuration", {}).get("root_module", {}).get("variables", {})
+    found = [f"thiếu variable {name}" for name in (*NO_DEFAULT, "log_level", "db_password_version") if name not in variables]
+    found += [f"variable {name} không được có default (thiếu thì tofu phải dừng)" for name in NO_DEFAULT
+              if "default" in (variables.get(name) or {})]
+    if (variables.get("log_level") or {}).get("default") != "INFO":
+        found.append("variable log_level mặc định INFO")
+    if (variables.get("db_password_version") or {}).get("default") != 1:
+        found.append("variable db_password_version mặc định 1")
+    for name in ("db_password", "state_passphrase"):
+        if (variables.get(name) or {}).get("sensitive") is not True:
+            found.append(f"variable {name} phải sensitive = true")
+    assert not found, "\n".join(found)
 
 
 def test_m05_backup_bucket(infra):
@@ -236,19 +330,27 @@ def test_m05_backup_bucket(infra):
     bucket = state.name("backups")
     assert state.outputs.get("backup_bucket") == bucket, f"output backup_bucket phải là {bucket}: {state.outputs}"
     found = []
+    aws(f"Không có bucket {bucket}", s3.head_bucket, Bucket=bucket)
+
+    def optional(call, key):
+        try:
+            return call(Bucket=bucket).get(key) or {}
+        except ClientError:
+            return {}
+
     if s3.get_bucket_versioning(Bucket=bucket).get("Status") != "Enabled":
         found.append("versioning phải Enabled (khôi phục được bản backup bị ghi đè hay xoá)")
-    block = s3.get_public_access_block(Bucket=bucket)["PublicAccessBlockConfiguration"]
+    block = optional(s3.get_public_access_block, "PublicAccessBlockConfiguration")
     if not (len(block) == 4 and all(block.values())):
         found.append(f"chặn đủ 4 cờ public access: {block}")
-    rules = s3.get_bucket_encryption(Bucket=bucket)["ServerSideEncryptionConfiguration"]["Rules"]
+    rules = optional(s3.get_bucket_encryption, "ServerSideEncryptionConfiguration").get("Rules") or []
     default = rules[0].get("ApplyServerSideEncryptionByDefault", {}) if rules else {}
-    key = state.outputs.get("kms_key_arn", "")
-    if default.get("SSEAlgorithm") != "aws:kms" or not key or default.get("KMSMasterKeyID") not in (key, key.rsplit("/", 1)[-1]):
-        found.append(f"mã hoá mặc định phải là aws:kms bằng khoá của bạn ({key}): {default}")
+    key, key_id, aliases = key_identity(state)
+    if default.get("SSEAlgorithm") != "aws:kms" or not key_matches(default.get("KMSMasterKeyID"), key, key_id, aliases):
+        found.append(f"mã hoá mặc định phải là aws:kms bằng khoá của bạn ({key or 'chưa có output kms_key_arn'}): {default}")
     try:
         lifecycle = s3.get_bucket_lifecycle_configuration(Bucket=bucket)["Rules"]
-    except s3.exceptions.ClientError:
+    except ClientError:
         lifecycle = []
     whole = [r for r in lifecycle if r.get("Status") == "Enabled" and not (r.get("Filter") or {}).get("Prefix")
              and not (r.get("Filter") or {}).get("And") and not (r.get("Filter") or {}).get("Tag")]
@@ -256,10 +358,24 @@ def test_m05_backup_bucket(infra):
         found.append("lifecycle cho cả bucket: bản cũ (noncurrent) hết hạn sau 30 ngày")
     if not any((r.get("AbortIncompleteMultipartUpload") or {}).get("DaysAfterInitiation") for r in whole):
         found.append("lifecycle cho cả bucket: huỷ multipart upload dở dang (AbortIncompleteMultipartUpload)")
-    tags = {t["Key"]: t["Value"] for t in s3.get_bucket_tagging(Bucket=bucket)["TagSet"]}
+    tags = {t["Key"]: t["Value"] for t in optional(s3.get_bucket_tagging, "TagSet") or []}
     if not TAGS.items() <= tags.items():
         found.append(f"thiếu tag chung {TAGS}, đang có {tags}")
     assert not found, f"Bucket {bucket}:\n" + "\n".join(found)
+
+
+def key_identity(state) -> tuple[str, str, set[str]]:
+    """(ARN, id, tên alias) của khoá trong output `kms_key_arn`; rỗng khi chưa có output hay khoá không tồn tại."""
+    key = state.outputs.get("kms_key_arn")
+    if not isinstance(key, str) or not key.startswith("arn:"):
+        return "", "", set()
+    kms = localstack_client("kms")
+    try:
+        meta = kms.describe_key(KeyId=key)["KeyMetadata"]
+        aliases = {a["AliasName"] for a in kms.list_aliases(KeyId=meta["KeyId"]).get("Aliases", [])}
+    except ClientError:
+        return "", "", set()
+    return meta["Arn"], meta["KeyId"], aliases
 
 
 def test_m05_kms_key(infra):
@@ -267,7 +383,7 @@ def test_m05_kms_key(infra):
     kms = localstack_client("kms")
     key = state.outputs.get("kms_key_arn")
     assert isinstance(key, str) and key.startswith("arn:"), f"Cần output kms_key_arn: {state.outputs}"
-    meta = kms.describe_key(KeyId=key)["KeyMetadata"]
+    meta = aws(f"Output kms_key_arn ({key}) không trỏ tới khoá KMS nào", kms.describe_key, KeyId=key)["KeyMetadata"]
     assert kms.get_key_rotation_status(KeyId=key).get("KeyRotationEnabled") is True, "Khoá KMS cần bật xoay khoá tự động"
     alias = f"alias/{state.name('olist-shop')}"
     aliases = {a["AliasName"]: a.get("TargetKeyId") for a in kms.list_aliases()["Aliases"]}
@@ -285,9 +401,8 @@ def test_m05_runtime_parameters(infra):
     secret = found["DB_PASSWORD"]
     if secret["Type"] != "SecureString" or secret["Value"] != state.password:
         problems.append(f"DB_PASSWORD phải là SecureString chứa đúng mật khẩu truyền vào (đang {secret['Type']})")
-    key = state.outputs.get("kms_key_arn", "")
-    meta_id = key.rsplit("/", 1)[-1]
-    if secret.get("KeyId") not in (key, meta_id, f"alias/{state.name('olist-shop')}"):
+    key, key_id, aliases = key_identity(state)
+    if not key_matches(secret.get("KeyId"), key, key_id, aliases):
         problems.append(f"DB_PASSWORD phải mã hoá bằng khoá KMS của bạn, không phải khoá mặc định aws/ssm: KeyId {secret.get('KeyId')}")
     assert not problems, "\n".join(problems)
 
@@ -296,12 +411,12 @@ def test_m05_app_role_least_privilege(infra):
     state = infra.require()
     iam = localstack_client("iam")
     role = state.name("olist-app")
-    info = iam.get_role(RoleName=role)["Role"]
+    info = aws(f"Không có IAM role {role}", iam.get_role, RoleName=role)["Role"]
     assert state.outputs.get("app_role_arn") == info["Arn"], f"output app_role_arn phải là {info['Arn']}"
     trust = info["AssumeRolePolicyDocument"]
     trust = json.loads(trust) if isinstance(trust, str) else trust
-    assert "ec2.amazonaws.com" in json.dumps([s.get("Principal") for s in trust.get("Statement", [])]), (
-        f"Role {role} là instance role: chỉ ec2.amazonaws.com được assume: {trust}")
+    assert trust_services(trust) == {"ec2.amazonaws.com"}, (
+        f"Role {role} là instance role: chỉ đúng ec2.amazonaws.com được assume: {trust}")
     account = localstack_client("sts").get_caller_identity()["Account"]
     params = f"arn:aws:ssm:us-east-1:{account}:parameter/{state.lab.prefix}/{ENVIRONMENT}/olist-shop"
     key = state.outputs.get("kms_key_arn")
@@ -339,6 +454,7 @@ class Fleet:
     snapshots: dict = field(default_factory=dict)
     jobs: dict = field(default_factory=dict)
     password: str = ""
+    core: str = ""
     error: str = ""
 
     def require(self) -> "Fleet":
@@ -414,11 +530,12 @@ def fleet(project_root, infra):
         Exercise.require_image(KUBE_IMAGES[image])
     runtime = dict(infra.runtime)
     with AnsibleLab(HOSTS) as lab:
-        state = Fleet(lab, password=runtime["DB_PASSWORD"])
-        lab.docker.start("postgres", KUBE_IMAGES["postgres"], env={
-            "POSTGRES_USER": runtime["DB_USER"], "POSTGRES_PASSWORD": runtime["DB_PASSWORD"], "POSTGRES_DB": runtime["DB_NAME"]})
-        lab.docker.start("redis", KUBE_IMAGES["redis"])
+        state = Fleet(lab, password=runtime["DB_PASSWORD"], core=infra.core)
         try:
+            lab.docker.start("postgres", KUBE_IMAGES["postgres"], env={
+                "POSTGRES_USER": runtime["DB_USER"], "POSTGRES_PASSWORD": runtime["DB_PASSWORD"],
+                "POSTGRES_DB": runtime["DB_NAME"]})
+            lab.docker.start("redis", KUBE_IMAGES["redis"])
             project = state.project = lab.stage(source)
             shutil.copytree(APP / "olist_shop", project / "artifacts" / "olist_shop", ignore=shutil.ignore_patterns("__pycache__"))
             (project / "runtime.json").write_text(json.dumps({"olist_worker_runtime": runtime}), encoding="utf-8")
@@ -456,8 +573,6 @@ def test_m05_role_layout(project_root):
              "templates/worker.env.j2", "templates/olist-worker.service.j2"]
     lacking = [rel for rel in files if not (role / rel).is_file()]
     assert not lacking, f"Role ansible/roles/olist_worker thiếu {lacking}. Xem tracks/devops/capstone/milestones/{DOC}"
-    import yaml
-
     spec = yaml.safe_load((role / "meta" / "argument_specs.yml").read_text(encoding="utf-8")) or {}
     options = ((spec.get("argument_specs") or {}).get("main") or {}).get("options") or {}
     for name in ("olist_worker_release", "olist_worker_runtime"):
@@ -492,8 +607,9 @@ def test_m05_rolls_one_host_at_a_time(fleet):
 
 def test_m05_secret_never_printed(fleet):
     for name in ("missing", "first", "upgrade"):
-        run = fleet.run(name)
-        assert fleet.password not in run.output, f"Lần chạy {name} (--diff -v) in mật khẩu database ra output: dùng no_log và diff: false"
+        found = leaks(fleet.run(name).output, fleet.password, fleet.core)
+        assert not found, (f"Lần chạy {name} (--diff -v) in mật khẩu database ra output ({', '.join(found)}; DATABASE_URL "
+                           "chứa bản percent-encode): dùng no_log và diff: false cho task ghi env file")
 
 
 def test_m05_release_layout(fleet):
@@ -509,8 +625,10 @@ def test_m05_release_layout(fleet):
 
 
 def env_lines(text: str | None) -> dict[str, str]:
-    pairs = [line.split("=", 1) for line in (text or "").splitlines() if "=" in line and not line.lstrip().startswith("#")]
-    return {key.strip(): value.strip() for key, value in pairs}
+    """Đọc env file như `EnvironmentFile=` của systemd: bỏ dòng trống, dòng `#`/`;`, bỏ một cặp nháy bao ngoài giá trị."""
+    pairs = [line.split("=", 1) for line in (text or "").splitlines()
+             if "=" in line and not line.lstrip().startswith(("#", ";"))]
+    return {key.strip(): strip_quotes(value) for key, value in pairs}
 
 
 def test_m05_env_file_from_ssm(fleet):
@@ -523,7 +641,7 @@ def test_m05_env_file_from_ssm(fleet):
         assert (env["REDIS_URL"], env["LOG_LEVEL"], env["APP_VERSION"]) == (PARAMS["REDIS_URL"], PARAMS["LOG_LEVEL"], release)
         url = urlsplit(env["DATABASE_URL"])
         parts = (url.scheme, url.username, unquote(url.password or ""), url.hostname, url.port, url.path)
-        assert parts == ("postgresql+psycopg", "olist", fleet.password, "postgres", 5432, "/olist"), (
+        assert parts[:2] + parts[3:] == ("postgresql+psycopg", "olist", "postgres", 5432, "/olist") and parts[2] == fleet.password, (
             f"{host}: DATABASE_URL phải dựng từ DB_USER, DB_PASSWORD (percent-encode), DB_HOST, DB_NAME: đọc ra "
             f"{parts[:2]}, mật khẩu {'đúng' if parts[2] == fleet.password else 'sai'}, {parts[3:]}")
 
@@ -579,7 +697,8 @@ def test_m05_upgrade_switches_release(fleet):
 def test_m05_password_rotation(infra):
     state = infra.require()
     lab = state.lab
-    new = f"Rot{secrets.token_hex(8)}@:/#%y"
+    core = secrets.token_hex(8)
+    new = make_password(core, "@:/#%y")
     lab.env["TF_VAR_db_password"] = new
     lab.env["TF_VAR_db_password_version"] = "2"
     plan = lab.plan_json("-no-color")
@@ -591,4 +710,34 @@ def test_m05_password_rotation(infra):
     assert result.returncode == 0, tail(result)
     value = read_parameters(f"/{lab.prefix}/{ENVIRONMENT}/olist-shop")["DB_PASSWORD"]["Value"]
     assert value == new, "Sau khi xoay, DB_PASSWORD trên SSM phải là mật khẩu mới"
-    assert new not in lab.run("state", "pull").stdout, "Mật khẩu mới nằm trong state"
+    found = leaks(lab.run("state", "pull").stdout, new, core)
+    assert not found, f"Mật khẩu mới ({', '.join(found)}) nằm trong state"
+
+
+def test_m05_helpers_catch_mistakes():
+    """Các phép kiểm thuần, không cần LocalStack hay target: dạng mật khẩu bị lộ, env file có nháy, khoá KMS qua alias,
+    trust policy thừa principal, lỗi boto3 thành fail có quy tắc."""
+    core = "0123456789abcdef"
+    password = make_password(core)
+    assert leaks(f"DATABASE_URL=postgresql+psycopg://olist:{quote(password, safe='')}@db/olist", password, core) == [
+        "percent-encode", "phần ngẫu nhiên"]
+    assert leaks(f"x {password} y", password, core)[0] == "nguyên văn"
+    assert leaks("không có gì", password, core) == []
+    assert env_lines('# c\n; c\nA="x y"\nB=\'z\'\nC= v \n') == {"A": "x y", "B": "z", "C": "v"}
+    arn, key_id = "arn:aws:kms:us-east-1:000000000000:key/k1", "k1"
+    aliases = {"alias/p-staging-olist-shop"}
+    assert key_matches("arn:aws:kms:us-east-1:000000000000:alias/p-staging-olist-shop", arn, key_id, aliases)
+    assert key_matches("alias/p-staging-olist-shop", arn, key_id, aliases) and key_matches("k1", arn, key_id, aliases)
+    assert not key_matches("alias/aws/ssm", arn, key_id, aliases) and not key_matches(None, arn, key_id, aliases)
+    allow = lambda principal: {"Statement": [{"Effect": "Allow", "Principal": principal, "Action": "sts:AssumeRole"}]}
+    assert trust_services(allow({"Service": "ec2.amazonaws.com"})) == {"ec2.amazonaws.com"}
+    assert trust_services(allow({"Service": ["ec2.amazonaws.com", "lambda.amazonaws.com"]})) != {"ec2.amazonaws.com"}
+    assert trust_services(allow({"AWS": "*", "Service": "ec2.amazonaws.com"})) != {"ec2.amazonaws.com"}
+
+    def denied():
+        raise ClientError({"Error": {"Code": "NoSuchEntity", "Message": "x"}}, "GetRole")
+
+    with pytest.raises(pytest.fail.Exception, match="Không có IAM role"):
+        aws("Không có IAM role r", denied)
+    with pytest.raises(pytest.fail.Exception, match="bắt đầu bằng"):
+        read_parameters("devops-ex-x/staging/olist-shop")

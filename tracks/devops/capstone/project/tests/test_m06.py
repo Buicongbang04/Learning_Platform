@@ -85,14 +85,33 @@ def render(chart: Path, home: Path, *args) -> list[dict]:
     return [doc for doc in yaml.safe_load_all(result.stdout) if doc]
 
 
+def meta_name(doc: dict) -> str:
+    return str((doc.get("metadata") or {}).get("name", ""))
+
+
 def find(docs, kind, name) -> dict:
-    found = [d for d in docs if d.get("kind") == kind and d["metadata"]["name"] == name]
-    assert found, f"helm template không có {kind} {name}; có {sorted((d['kind'], d['metadata']['name']) for d in docs)}"
+    found = [d for d in docs if d.get("kind") == kind and meta_name(d) == name]
+    assert found, f"helm template không có {kind} {name}; có {sorted((str(d.get('kind')), meta_name(d)) for d in docs)}"
     return found[0]
 
 
 def pod_spec(doc: dict) -> dict:
-    return doc["spec"]["template"]["spec"]
+    return ((doc.get("spec") or {}).get("template") or {}).get("spec") or {}
+
+
+def container(doc: dict, name: str) -> dict:
+    found = [c for c in pod_spec(doc).get("containers") or [] if c.get("name") == name]
+    assert found, f"{meta_name(doc)}: cần container tên {name}, có {[c.get('name') for c in pod_spec(doc).get('containers') or []]}"
+    return found[0]
+
+
+def job_id_of(answer: str) -> str | None:
+    """`job_id` trong body của câu trả lời `ok 202 <json>` do script CALL in ra; None khi body không phải JSON có job_id."""
+    try:
+        body = json.loads(answer.split(" ", 2)[2])
+    except (IndexError, ValueError):
+        return None
+    return body.get("job_id") if isinstance(body, dict) else None
 
 
 def restricted_gaps(docs) -> list[str]:
@@ -132,7 +151,7 @@ def test_m06_lint_strict(project_root, tmp_path):
 
 def test_m06_render_objects(project_root, tmp_path):
     docs = render(require_chart(project_root), tmp_path)
-    kinds = {(d["kind"], d["metadata"]["name"]) for d in docs}
+    kinds = {(d.get("kind"), meta_name(d)) for d in docs}
     assert REQUIRED <= kinds, f"Chart thiếu {sorted(REQUIRED - kinds)}"
     assert not [d for d in docs if d["kind"] == "Secret"], "Chart không tạo Secret: DATABASE_URL đến từ Secret olist-db có sẵn"
     assert not [d for d in docs if d["kind"] in ("ClusterRole", "ClusterRoleBinding", "Namespace")], (
@@ -142,11 +161,11 @@ def test_m06_render_objects(project_root, tmp_path):
 def test_m06_labels_and_selectors(project_root, tmp_path):
     docs = render(require_chart(project_root), tmp_path)
     for doc in docs:
-        labels = doc["metadata"].get("labels") or {}
+        labels = (doc.get("metadata") or {}).get("labels") or {}
         for key, value in (*SELECTOR.items(), ("app.kubernetes.io/managed-by", "Helm"), ("helm.sh/chart", "olist-shop-0.1.0")):
-            assert labels.get(key) == value, f"{doc['kind']} {doc['metadata']['name']}: nhãn {key} phải là {value}"
+            assert labels.get(key) == value, f"{doc.get('kind')} {meta_name(doc)}: nhãn {key} phải là {value}"
     for name, component in ((API, "api"), (WORKER, "worker")):
-        selector = find(docs, "Deployment", name)["spec"]["selector"]["matchLabels"]
+        selector = ((find(docs, "Deployment", name).get("spec") or {}).get("selector") or {}).get("matchLabels")
         assert selector == {**SELECTOR, "app.kubernetes.io/component": component}, (
             f"{name}: selector chỉ gồm name, instance, component (selector bất biến sau lần cài đầu): {selector}")
     assert find(docs, "Service", API)["spec"]["selector"] == {**SELECTOR, "app.kubernetes.io/component": "api"}
@@ -182,26 +201,26 @@ def test_m06_config_change_rolls_both(project_root, tmp_path):
 def test_m06_workloads_hardened(project_root, tmp_path):
     docs = render(require_chart(project_root), tmp_path)
     gaps = restricted_gaps(docs)
-    for name, account in ((API, API), (WORKER, WORKER)):
+    for name, account, component in ((API, API, "api"), (WORKER, WORKER, "worker")):
         spec = pod_spec(find(docs, "Deployment", name))
         if spec.get("serviceAccountName") != account:
             gaps.append(f"{name}: serviceAccountName phải là {account} (không dùng default)")
         if spec.get("automountServiceAccountToken") is not False:
             gaps.append(f"{name}: automountServiceAccountToken: false (app không gọi API server)")
-        container = spec["containers"][0]
-        refs = [e["valueFrom"]["secretKeyRef"] for e in container.get("env") or [] if "secretKeyRef" in (e.get("valueFrom") or {})]
+        main = container(find(docs, "Deployment", name), component)
+        refs = [e["valueFrom"]["secretKeyRef"] for e in main.get("env") or [] if "secretKeyRef" in (e.get("valueFrom") or {})]
         if {"name": "olist-db", "key": "DATABASE_URL"} not in refs:
             gaps.append(f"{name}: DATABASE_URL lấy từ secretKeyRef olist-db/DATABASE_URL")
     for account in (API, WORKER):
         if find(docs, "ServiceAccount", account).get("automountServiceAccountToken") is not False:
             gaps.append(f"ServiceAccount {account}: automountServiceAccountToken: false")
-    api = pod_spec(find(docs, "Deployment", API))["containers"][0]
+    api = container(find(docs, "Deployment", API), "api")
     if (api.get("readinessProbe") or {}).get("httpGet", {}).get("path") != "/readyz":
         gaps.append(f"{API}: readinessProbe httpGet /readyz")
     if (api.get("livenessProbe") or {}).get("httpGet", {}).get("path") != "/healthz":
         gaps.append(f"{API}: livenessProbe httpGet /healthz")
     worker = pod_spec(find(docs, "Deployment", WORKER))
-    if not worker["containers"][0].get("livenessProbe"):
+    if not container(find(docs, "Deployment", WORKER), "worker").get("livenessProbe"):
         gaps.append(f"{WORKER}: cần livenessProbe (gợi ý: metrics ở cổng 9101)")
     if (worker.get("terminationGracePeriodSeconds") or 30) < 10:
         gaps.append(f"{WORKER}: terminationGracePeriodSeconds từ 10 trở lên")
@@ -274,9 +293,13 @@ def installed(project_root, tmp_path_factory):
                               + "\n".join(gaps))
         return
     with KubeLab(pod_security="restricted") as lab:
-        lab.apply_learner(DEPS)
-        for target in ("deployment/postgres", "deployment/redis", "deployment/probe"):
-            lab.kubectl("rollout", "status", target, "--timeout=180s", timeout=200)
+        try:
+            lab.apply_learner(DEPS)
+            for target in ("deployment/postgres", "deployment/redis", "deployment/probe"):
+                lab.kubectl("rollout", "status", target, "--timeout=180s", timeout=200)
+        except pytest.fail.Exception as error:
+            yield Installed(error=f"Không dựng được Postgres, Redis, probe của test (không phải lỗi chart):\n{error}")
+            return
         try:
             install = lab.helm_install(RELEASE, chart, "--set", f"route.host={lab.hostname}", "--wait", "--timeout", "240s",
                                        check=False)
@@ -339,11 +362,13 @@ def test_m06_served_through_gateway(installed):
     job = call(lab, "probe", f"POST {KUBE_GATEWAY_SERVICE}/jobs/recompute|{host}")
     answer = list(job.values())[0]
     assert answer.startswith("ok 202"), f"POST /jobs/recompute qua Gateway phải 202: {answer}"
-    job_id = json.loads(answer.split(" ", 2)[2])["job_id"]
+    job_id = job_id_of(answer)
+    assert job_id, f"POST /jobs/recompute phải trả JSON có job_id: {answer}"
     deadline = time.monotonic() + 60
     logs = ""
+    selector = f"app.kubernetes.io/instance={RELEASE},app.kubernetes.io/component=worker"
     while time.monotonic() < deadline:
-        logs = lab.kubectl("logs", f"deployment/{WORKER}", "--tail=200", check=False).stdout
+        logs = lab.kubectl("logs", "-l", selector, "--prefix", "--tail=200", "--max-log-requests=10", check=False).stdout
         if any(job_id in line and "job done" in line for line in logs.splitlines()):
             return
         time.sleep(2)
@@ -411,4 +436,24 @@ def test_m06_oncall_least_privilege(installed, verb, resource, sub):
     lab = installed.require()
     assert not lab.can_i(verb, resource, subresource=sub, user="oncall-engineer", groups=[ONCALL_GROUP]), (
         f"Nhóm {ONCALL_GROUP} không được {verb} {resource}{'/' + sub if sub else ''}")
-    assert not lab.can_i("get", "pods", user="someone-else", groups=["olist:dev"]), "Chỉ nhóm on-call được quyền của Role này"
+
+
+def test_m06_oncall_role_bound_to_group_only(installed):
+    lab = installed.require()
+    granted = [f"{verb} {resource}{'/' + sub if sub else ''}" for verb, resource, sub in ONCALL_ALLOWED
+               if lab.can_i(verb, resource, subresource=sub, user="someone-else", groups=["olist:dev"])]
+    assert not granted, f"User ngoài nhóm {ONCALL_GROUP} không được quyền nào của Role {ONCALL}: {granted}"
+
+
+def test_m06_helpers_tolerate_bad_render():
+    """Phép kiểm tĩnh không vỡ với object thiếu metadata/spec và báo đúng container theo tên."""
+    docs = [{"kind": "ConfigMap"}, {"kind": "Deployment", "metadata": {"name": API},
+                                    "spec": {"template": {"spec": {"containers": [{"name": "sidecar"}, {"name": "api"}]}}}}]
+    assert container(find(docs, "Deployment", API), "api") == {"name": "api"}
+    with pytest.raises(AssertionError, match="không có Deployment"):
+        find(docs, "Deployment", WORKER)
+    with pytest.raises(AssertionError, match="cần container tên worker"):
+        container(docs[1], "worker")
+    assert pod_spec({"kind": "Deployment"}) == {}
+    assert job_id_of('ok 202 {"job_id": "abc"}') == "abc"
+    assert job_id_of("ok 202 <html>") is None and job_id_of("ok 202") is None
