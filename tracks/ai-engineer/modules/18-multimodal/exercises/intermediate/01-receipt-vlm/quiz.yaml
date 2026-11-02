@@ -13,7 +13,7 @@ questions:
   - id: d
     text: Không cột nào đổi quá 0.02, độ phân giải không quan trọng
 - id: tokens-ratio
-  kind: data
+  kind: knowledge
   type: single
   prompt: Số token ảnh trung bình ở ảnh gốc so với ở cạnh dài 512 pixel là bao nhiêu lần?
   options:

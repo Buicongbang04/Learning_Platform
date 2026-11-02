@@ -28,7 +28,7 @@ REPORT.md phải thấy bạn biết khối nào hỏng bao nhiêu và vì sao, 
 **Phần cứng:** GPU 4GB · ~480 phút
 
 Thời gian trên là thời gian làm bài. Phần máy chạy của bản tham chiếu (24 hoá đơn, 8 câu hỏi giọng nói, 3 lần sinh báo
-cáo) mất khoảng 10 phút trên PC của track (xem `SOLUTION.md`); Whisper và TTS chạy CPU. Chỉ có CPU: thu nhỏ ảnh về cạnh dài
+cáo) mất chưa tới 3 phút trên PC của track khi model đã tải; Whisper và TTS chạy CPU. Chỉ có CPU: thu nhỏ ảnh về cạnh dài
 768 và dùng 12 hoá đơn (vision LLM trên CPU mất cỡ 20 giây tới vài phút mỗi ảnh, mục 2 lý thuyết).
 
 **Dữ liệu cá nhân là giả lập, và phải giữ như vậy.** Dùng 24 hoá đơn đầu của split `validation` của `cord-v2` (split

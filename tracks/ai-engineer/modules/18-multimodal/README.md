@@ -144,7 +144,34 @@ N_{\min} \le N_{\text{token}} \le N_{\max}
 $$
 
 Không có thông số nào trong công thức này cần tin trên giấy: đo bằng `prompt_eval_count` mà Ollama trả về, trừ phần chữ
-của prompt. `qwen3-vl:2b` trên Ollama 0.13.5:
+của prompt.
+
+```python
+import base64
+import io
+
+import httpx
+from PIL import Image
+
+
+def prompt_tokens(size: tuple[int, int]) -> int:
+    buf = io.BytesIO()
+    Image.new("RGB", size, (200, 180, 160)).save(buf, "PNG")
+    reply = httpx.post("http://localhost:11434/api/chat", timeout=600, json={
+        "model": "qwen3-vl:2b", "stream": False, "options": {"num_predict": 1},
+        "messages": [{"role": "user", "content": "Total?", "images": [base64.b64encode(buf.getvalue()).decode()]}],
+    }).json()
+    return reply["prompt_eval_count"]
+
+
+base = prompt_tokens((32, 32))
+for size in [(448, 448), (1280, 960), (4000, 3000)]:
+    print(size, prompt_tokens(size) - base + 64)
+```
+
+Ảnh 32×32 được phóng lên mức tối thiểu 64 token, nên `prompt_eval_count` của nó trừ 64 là phần chữ của prompt. Kết quả
+`(448, 448) 196`, `(1280, 960) 1200`, `(4000, 3000) 2028`, khớp bảng dưới, đo với
+`qwen3-vl:2b` trên Ollama 0.13.5 bằng ảnh hoá đơn thật và một prompt khác:
 
 | Kích thước ảnh | Token ảnh | Ghi chú |
 | --- | --- | --- |
@@ -183,8 +210,9 @@ và log của server, trước khi hứa với ai rằng model "chạy được 
 
 `qwen3-vl:2b` có một bẫy: tag mặc định trên Ollama là bản **thinking**. Nó viết một đoạn suy nghĩ dài trước câu trả lời,
 và Ollama 0.13.5 bỏ qua `think: false` cho model này (tag `-instruct` cần Ollama mới hơn). Ghép với `format` (JSON
-schema, module 11 mục 5) thì tệ hơn: phần suy nghĩ ăn hết ngân sách token và nội dung trả về **rỗng**; đo với
-`num_predict: 300` cho `content` rỗng và 300 token suy nghĩ, không giới hạn thì một lượt gọi chạy quá 10 phút. Cách xử lý
+schema, module 11 mục 5) thì tệ hơn: phần suy nghĩ ăn hết ngân sách token và nội dung trả về **rỗng**; đo trên một
+hoá đơn với `think: false` và `num_predict: 300`: `content` rỗng, cả 300 token nằm trong trường `thinking`; không đặt giới
+hạn thì một lượt gọi thử (prompt chữ ngắn) chạy quá 10 phút chưa xong. Cách xử lý
 dùng trong module: thêm một message `assistant` có nội dung `"{"` ở cuối (**prefill**). Model coi đó là phần đầu câu trả
 lời của chính nó, viết tiếp object JSON và bỏ qua bước suy nghĩ. Đổi lại, không còn constrained decoding, nên phải
 **parse và kiểm phía client**, đúng điều module 11 đã khuyên làm dù có schema.
@@ -624,7 +652,11 @@ Ba nguyên tắc thiết kế, mỗi cái trả lời một lỗi thật đã g�
 - **Dữ liệu cá nhân ở mọi tầng**: ảnh hoá đơn, giọng nói, bản chép lời, sổ chi tiêu. Che PII trong bản chép lời trước khi
   ghi log, lưu ảnh tối thiểu, và giữ model local khi có thể.
 
-⟦TODO số đo adv01⟧
+Bài Advanced 01 dựng đúng kiến trúc này với `qwen3-vl:2b`, `qwen2.5:3b`, Whisper `small` và `mms-tts-vie`. Bản tham chiếu
+của người viết bài đọc 24 hoá đơn với F1 dòng hàng gần 1, vậy mà tổng một tháng vẫn lệch rất xa sổ dựng từ nhãn, bước kiểm số
+của báo cáo vẫn để lọt một câu sai, và bộ che PII bỏ sót một số điện thoại do Whisper viết theo định dạng lạ. Mỗi lỗi chỉ
+lộ ra khi đo **đúng thứ người dùng thấy** ở cuối pipeline, không phải ở từng khối riêng lẻ; bài portfolio yêu cầu bạn tìm
+ra những lỗi kiểu đó trong pipeline của chính mình.
 
 ### Quyết định thực tế
 

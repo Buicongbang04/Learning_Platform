@@ -34,7 +34,43 @@ thiết kế, kết quả của một bản tham chiếu (chạy ngoài repo) đ
 
 ## Kết quả tham chiếu
 
-⟦TODO adv01 ref⟧
+Bản tham chiếu (code ngoài repo), 24 hoá đơn đầu của split validation, tháng 9 và 10/2026 mỗi tháng 12 hoá đơn, PC của track
+(Ollama dùng chung; Whisper và TTS trên CPU 4 luồng); cả pipeline chạy chưa tới 3 phút khi model đã tải. Log:
+`.superpowers/scratch/logs/adv01_ref_log.json`, `adv01_ref_voice.json`, `adv01_ref_run.log`, `adv01_month_error.log`.
+
+| Khối | Thước đo | Giá trị |
+| --- | --- | --- |
+| Trích xuất (`qwen3-vl:2b`, 1024) | tổng đúng / F1 dòng hàng (24 hoá đơn) | 1.000 / 0.978 (precision 0.957, recall 1.000) |
+| Trích xuất | độ trễ p50 mỗi hoá đơn | 1.22 s |
+| Sổ chi tiêu | tổng tháng 9 so với sổ từ nhãn | 532 636 so với 532 636 (lệch 0%) |
+| Sổ chi tiêu | tổng tháng 10 so với sổ từ nhãn | 1 413 134 so với 818 771 (**lệch 73%**) |
+| Phân loại | số dòng phải gọi LLM | 49 / 87 (luật ~40 từ khoá chỉ bắt 44%) |
+| STT (`small`, giọng TTS) | CER trung bình 8 câu | 0.178 |
+| Hiểu ý định | đúng cả ý định và tham số, hỏi bằng chữ / bằng giọng | 5/8 / 3/8 |
+| Báo cáo tháng | lần chạy phải viết lại hoặc dùng mẫu | 0/3 |
+| Độ trễ một câu hỏi giọng nói (trung vị từng khối) | STT / route / TTS câu trả lời | 1.79 / 1.57 / 1.52 s |
+
+Bốn bài học, mỗi cái là một chỗ bản tham chiếu **sai** và một bài portfolio tốt phải tìm ra:
+
+- **F1 dòng hàng cao không có nghĩa sổ chi tiêu đúng.** Tháng 10 lệch 73% gần như hoàn toàn do **một** hoá đơn (số 22): nhãn
+  có một món 280 000 cùng hai món tặng kèm không ghi giá; model gán 280 000 cho cả ba dòng. Trên thước đo dòng hàng đó chỉ là 2
+  dòng thừa (precision 0.957); trên sổ chi tiêu đó là 560 000 đồng không có thật. Thước đo phải đo **thứ người dùng thấy**
+  (tổng tháng), và pipeline cần luật cảnh báo: tổng các dòng vượt tổng hoá đơn thì hỏi lại người dùng (mục 2 lý thuyết: dùng
+  làm tín hiệu, không làm luật từ chối).
+- **Kiểm số bắt số bịa, không bắt số dùng sai.** Ba báo cáo đều qua bước kiểm (không có số lạ), nhưng cả ba viết "So với tháng
+  trước: Tăng 532.636 đồng", trong khi 532 636 là **tổng tháng trước**, mức tăng thật là 880 498. Số có trong FACTS nên kiểm
+  tra cho qua. Sửa: đưa sẵn mức chênh vào FACTS kèm nhãn rõ ("chênh so với tháng trước"), hoặc để code viết các câu có số và
+  LLM chỉ viết câu nhận xét.
+- **PII lọt qua khi định dạng đổi.** Câu "gửi báo cáo qua số không chín một hai ba bốn năm sáu bảy tám" được Whisper chép thành
+  "091-234567 tăng": chỉ 9 chữ số có gạch nối, regex điện thoại (0 + 9 chữ số) không bắt, và bản chép lời đó đi thẳng vào log.
+  Bộ lọc PII phải được test trên **đầu ra thật của STT**, không chỉ trên văn bản gõ tay.
+- **Hiểu ý định là khối yếu nhất.** Ngay khi hỏi bằng chữ, `qwen2.5:3b` gán `total` cho câu hỏi theo nhóm (2 câu) và cho câu xin gửi báo cáo qua điện thoại; qua giọng
+  nói thêm lỗi: "tháng 9" thành `2026-11`, "món nào" nghe thành "móng nạo" vẫn đúng ý định nhưng tự thêm `category`. Hàm
+  `answer` của bản tham chiếu bỏ qua `category` khi intent là `total`, nên trả lời sai câu hỏi một cách tự tin. Cải thiện:
+  vài ví dụ few-shot, luật hậu kiểm (có category thì intent phải là `by_category`), và hỏi lại khi tháng nằm ngoài dữ liệu.
+
+Báo cáo của học viên không cần ra cùng các số này (tập câu hỏi, luật phân loại, prompt khác nhau); điều cần có là đo được
+từng khối và tìm ra loại lỗi như trên.
 
 ## Rubric
 
