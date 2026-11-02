@@ -21,8 +21,9 @@ cùng phép tính.
   trọng số bằng câu 30 từ. Mọi benchmark ASR (và `jiwer.wer` với danh sách câu) báo WER mức corpus. Test có một cặp câu
   mà hai cách cho 1/11 và 0.25.
 - **Chuẩn hoá cả hai phía, và báo cách chuẩn hoá.** Whisper viết hoa, chấm câu; tham chiếu FLEURS có cột "đã chuẩn hoá"
-  riêng. Không chuẩn hoá thì "Việt Nam." so với "việt nam" là hai lỗi. Bảng ở mục 3 lý thuyết cho thấy chuẩn hoá đổi WER
-  nhiều hơn đổi model một cỡ, nên một con số WER không kèm quy tắc chuẩn hoá là không so được.
+  riêng. Không chuẩn hoá thì "Việt Nam." so với "việt nam" là hai lỗi. Bài Intermediate 02 đo cùng một bản nhận dạng
+  với ba cách chuẩn hoá: chênh lệch đủ lớn để làm hai hệ gần nhau đổi thứ hạng, nên một con số WER không kèm quy tắc chuẩn
+  hoá là không so được.
 - **CER cho tiếng Việt.** Lỗi hay gặp là sai dấu thanh ("phân" thành "phong", "tân" thành "tăng"): mỗi lỗi như vậy là
   một từ sai trọn vẹn trong WER nhưng chỉ một hai ký tự trong CER. Báo cả hai để biết model "nghe gần đúng" hay "nghe sai hẳn".
 - **Không chặn WER ở 1.** Model ảo giác (hallucination) chèn cả câu không có trong audio, một lỗi đặc trưng của Whisper
