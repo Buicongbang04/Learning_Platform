@@ -1,0 +1,79 @@
+questions:
+- id: nf4-estimate
+  kind: data
+  type: single
+  prompt: "Theo `weight_memory_gib` của bạn, trọng số Qwen2.5-7B ở NF4 + double quant (4.127 bit cho lớp tuyến tính, phần còn lại bf16) khoảng bao nhiêu?"
+  options:
+  - id: a
+    text: Khoảng 3.6 GiB
+  - id: b
+    text: Khoảng 5.2 GiB
+  - id: c
+    text: Khoảng 7.1 GiB
+  - id: d
+    text: Khoảng 14.2 GiB
+- id: unquantized-share
+  kind: data
+  type: single
+  prompt: "Trong ước lượng NF4 đó của 7B, phần không lượng tử hoá (embedding, `lm_head`, norm, bias) chiếm khoảng bao nhiêu?"
+  options:
+  - id: a
+    text: Dưới 5%
+  - id: b
+    text: Khoảng 15%
+  - id: c
+    text: Khoảng 40%
+  - id: d
+    text: Trên 75%
+- id: kbit-prep
+  kind: knowledge
+  type: single
+  prompt: "Gọi `prepare_model_for_kbit_training` trên Qwen2.5-7B 4 bit làm VRAM tăng khoảng 2 GiB trước khi train. Vì sao?"
+  options:
+  - id: a
+    text: Nó giải lượng tử mọi lớp tuyến tính về bf16
+  - id: b
+    text: Nó đổi embedding và `lm_head` sang fp32
+  - id: c
+    text: Nó nạp thêm một bản sao đầy đủ của model làm reference
+  - id: d
+    text: Nó cấp phát trước toàn bộ trạng thái của AdamW
+- id: qlora-speed
+  kind: knowledge
+  type: single
+  prompt: "Vì sao một bước QLoRA chậm hơn một bước LoRA bf16 trên cùng model và batch?"
+  options:
+  - id: a
+    text: Gradient phải chảy qua trọng số 4 bit nên tốn gấp đôi
+  - id: b
+    text: Mỗi phép nhân phải giải lượng tử khối trọng số về bf16
+  - id: c
+    text: Optimizer 8 bit cập nhật chậm hơn hẳn so với optimizer fp32
+  - id: d
+    text: Adapter LoRA của QLoRA có hạng lớn hơn của LoRA
+- id: allocated-vs-smi
+  kind: knowledge
+  type: single
+  prompt: "`nvidia-smi` báo bộ nhớ lớn hơn `torch.cuda.max_memory_allocated`. Lý do chính?"
+  options:
+  - id: a
+    text: nvidia-smi tính cả bộ nhớ allocator giữ lại và CUDA context
+  - id: b
+    text: max_memory_allocated chỉ đếm tham số của model, bỏ qua activation
+  - id: c
+    text: nvidia-smi đổi đơn vị từ GiB sang GB nên con số luôn lớn hơn
+  - id: d
+    text: max_memory_allocated bỏ qua trọng số đã lượng tử hoá ở 4 bit
+- id: paged
+  kind: knowledge
+  type: single
+  prompt: "Optimizer `paged_adamw_8bit` giải quyết vấn đề gì?"
+  options:
+  - id: a
+    text: Giảm số tham số cần train xuống dưới 1%
+  - id: b
+    text: Tránh OOM khi có đỉnh bộ nhớ, trạng thái tự trang ra RAM
+  - id: c
+    text: Cho phép train trực tiếp trọng số 4 bit của model gốc
+  - id: d
+    text: Tăng learning rate hiệu dụng cho nhánh LoRA

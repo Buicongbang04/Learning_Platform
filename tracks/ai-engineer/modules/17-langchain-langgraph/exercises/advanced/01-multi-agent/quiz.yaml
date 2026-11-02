@@ -1,0 +1,37 @@
+questions:
+  - id: handoff-messages
+    kind: knowledge
+    type: single
+    prompt: "Vì sao tool handoff gửi lên đồ thị cha toàn bộ message của agent hiện tại cộng một ToolMessage, thay vì chỉ ToolMessage?"
+    options:
+      - { id: a, text: "Để đồ thị cha có AIMessage chứa lời gọi handoff; thiếu nó thì ToolMessage thành mồ côi" }
+      - { id: b, text: "Vì Command.PARENT xoá toàn bộ lịch sử của đồ thị cha nếu update không chứa message cũ" }
+      - { id: c, text: "Vì add_messages ở đồ thị cha chỉ nhận cập nhật có từ hai message trở lên" }
+      - { id: d, text: "Để agent nhận việc không cần gọi search_law lại cho những câu đã tra trước đó" }
+  - id: injected-args
+    kind: knowledge
+    type: single
+    prompt: "Tham số `state: Annotated[dict, InjectedState]` và `tool_call_id: Annotated[str, InjectedToolCallId]` của tool handoff có tác dụng gì?"
+    options:
+      - { id: a, text: "Model phải điền chúng ở mỗi lần gọi handoff; ToolNode kiểm chúng có khớp state thật không" }
+      - { id: b, text: "ToolNode tiêm giá trị lúc chạy và hai tham số không có trong schema model thấy" }
+      - { id: c, text: "Chúng chỉ dùng khi đồ thị compile với checkpointer SQLite" }
+      - { id: d, text: "Chúng làm tool chạy ở đồ thị cha thay vì trong subgraph" }
+  - id: count-subagent-calls
+    kind: knowledge
+    type: single
+    prompt: "Supervisor gọi agent con bên trong một tool. Muốn callback đếm token ở lần invoke ngoài cùng thấy cả lượt LLM của agent con, cần làm gì?"
+    options:
+      - { id: a, text: "Không cần gì: LangChain tự gắn mọi lời gọi model trong tiến trình vào lần chạy hiện tại" }
+      - { id: b, text: "Cho tool nhận RunnableConfig và truyền callbacks của nó vào lần invoke của agent con" }
+      - { id: c, text: "Đặt recursion_limit của agent con bằng của supervisor để hai bên dùng chung bộ đếm" }
+      - { id: d, text: "Compile agent con với cùng checkpointer và thread_id với supervisor ở lần chạy ngoài" }
+  - id: when-multi
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi tình huống mà multi-agent thường đáng cân nhắc hơn một agent."
+    options:
+      - { id: a, text: "Việc con tách được và chạy song song được, như tìm nhiều nguồn độc lập" }
+      - { id: b, text: "Một agent phải cầm quá nhiều tool hoặc quá nhiều context cho một lượt" }
+      - { id: c, text: "Các bước phụ thuộc chặt vào nhau, mỗi bước cần mọi quyết định ngầm của bước trước" }
+      - { id: d, text: "Model nhỏ, ngân sách token chặt, và một agent ít tool đã làm được việc" }

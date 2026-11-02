@@ -1,0 +1,92 @@
+questions:
+- id: question-tokens
+  kind: data
+  type: single
+  prompt: Trên 300 câu hỏi ghim, trung vị số token Qwen2.5 của một câu hỏi là bao nhiêu?
+  options:
+  - id: a
+    text: '9'
+  - id: b
+    text: '22'
+  - id: c
+    text: '57'
+  - id: d
+    text: '150'
+- id: gold-article-tokens
+  kind: data
+  type: single
+  prompt: Trung vị số token Qwen2.5 của các điều luật là đáp án (301 điều) là bao nhiêu?
+  options:
+  - id: a
+    text: '1 369'
+  - id: b
+    text: '248'
+  - id: c
+    text: '570'
+  - id: d
+    text: '4 646'
+- id: overflow-uncut
+  kind: data
+  type: single
+  prompt: Không cắt điều luật, 5 điều mỗi request, trả lời 300 token, bao nhiêu phần trăm request tràn context 4 096?
+  options:
+  - id: a
+    text: '0%'
+  - id: b
+    text: '4.0%'
+  - id: c
+    text: '31.7%'
+  - id: d
+    text: '72.0%'
+- id: overflow-800
+  kind: data
+  type: single
+  prompt: Cắt mỗi điều ở 800 token thì tỉ lệ tràn context 4 096 (trả lời 300 token) còn bao nhiêu?
+  options:
+  - id: a
+    text: '0%'
+  - id: b
+    text: '4.0%'
+  - id: c
+    text: '28.0%'
+  - id: d
+    text: '31.7%'
+- id: license-3b
+  kind: knowledge
+  type: single
+  prompt: Có nên dùng `qwen2.5:3b` (bản Ollama của Qwen2.5-3B-Instruct) cho sản phẩm thương mại không?
+  options:
+  - id: a
+    text: Được, mọi model Qwen đều theo Apache-2.0
+  - id: b
+    text: Được, vì đã tải về chạy trên máy của mình
+  - id: c
+    text: Không, model dưới 7B không được dùng thật
+  - id: d
+    text: Không, giấy phép qwen-research chỉ cho phi thương mại
+- id: cache-saving
+  kind: knowledge
+  type: single
+  prompt: Prompt trung bình khoảng 2 200 token, chỉ 150 token system prompt lặp lại. Prompt caching giảm chi phí cỡ nào?
+  options:
+  - id: a
+    text: Khoảng một nửa hoá đơn
+  - id: b
+    text: Vài phần trăm, phần lặp lại quá nhỏ
+  - id: c
+    text: Gần như toàn bộ phần input
+  - id: d
+    text: Không giảm, cache chỉ làm nhanh hơn
+- id: self-host-month
+  kind: knowledge
+  type: single
+  prompt: So tự host với API, vì sao phải tính chi phí GPU cả tháng chứ không chỉ theo giờ bận?
+  options:
+  - id: a
+    text: Thuê 24/7 thì lúc không ai hỏi vẫn trả tiền
+  - id: b
+    text: GPU thuê theo tháng luôn rẻ hơn thuê theo giờ
+  - id: c
+    text: Giờ bận khó đo nên lấy cả tháng cho chắc
+  - id: d
+    text: API cũng tính tiền cả tháng theo cùng cách

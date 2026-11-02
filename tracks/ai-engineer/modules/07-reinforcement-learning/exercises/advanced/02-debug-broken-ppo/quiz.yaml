@@ -1,0 +1,79 @@
+questions:
+- id: broken-greedy
+  kind: data
+  type: single
+  prompt: Chạy nguyên notebook gốc (3 seed), return trung bình qua 3 seed của policy greedy cuối trên 20 episode cố định nằm ở đâu?
+  options:
+  - id: a
+    text: Dưới 100
+  - id: b
+    text: Từ 300 tới dưới 500
+  - id: c
+    text: Đúng 500 ở cả 3 seed, không seed nào hỏng
+  - id: d
+    text: Trên 1 000
+- id: first-check
+  kind: knowledge
+  type: single
+  prompt: Bắt đầu gỡ một vòng train RL chạy không lỗi nhưng kết quả lạ, việc nào nên làm trước tiên?
+  options:
+  - id: a
+    text: Giảm learning rate rồi train lại để xem
+  - id: b
+    text: Đối chiếu số log với giới hạn lý thuyết của chúng
+  - id: c
+    text: Tăng số seed lên 10 để giảm phương sai
+  - id: d
+    text: Đổi sang thuật toán khác ổn định hơn
+- id: shape-probe
+  kind: knowledge
+  type: single
+  prompt: Phép dò nào tách nhanh nhất một lỗi shape làm loss sai mà không báo lỗi?
+  options:
+  - id: a
+    text: assert shape hai vế ngay trước khi tính loss
+  - id: b
+    text: Train thêm gấp đôi số bước rồi so đường cong
+  - id: c
+    text: Đổi optimizer từ Adam sang SGD rồi chạy lại
+  - id: d
+    text: Tăng batch size cho gradient bớt nhiễu
+- id: tiny-env
+  kind: knowledge
+  type: single
+  prompt: Vì sao nên dựng một env tí hon (vài bước, reward cố định) khi gỡ lỗi code RL?
+  options:
+  - id: a
+    text: Env nhỏ thì agent học nhanh nên đỡ tốn thời gian
+  - id: b
+    text: Tính tay được đầu ra từng hàm để so từng ô
+  - id: c
+    text: Env thật của Gymnasium có thể chứa lỗi ngầm
+  - id: d
+    text: Test chỉ chấp nhận env có ít hơn 10 bước
+- id: diagnostics
+  kind: knowledge
+  type: single
+  prompt: Đại lượng nào thường lộ một bước cập nhật policy quá đà, kể cả khi return vẫn đẹp?
+  options:
+  - id: a
+    text: Approx KL và clip fraction theo từng lần cập nhật
+  - id: b
+    text: Số episode kết thúc trong mỗi rollout thu được
+  - id: c
+    text: Thời gian chạy của mỗi lần cập nhật
+  - id: d
+    text: Giá trị reward lớn nhất xuất hiện trong rollout
+- id: masking
+  kind: knowledge
+  type: single
+  prompt: '"Bug A che bug B" nghĩa là gì trong lúc gỡ lỗi?'
+  options:
+  - id: a
+    text: Hai bug nằm cùng một dòng code trong notebook
+  - id: b
+    text: Sửa A thì B tự biến mất
+  - id: c
+    text: Triệu chứng của B chỉ đo được sau khi sửa A
+  - id: d
+    text: B chỉ xuất hiện khi chạy notebook trên GPU

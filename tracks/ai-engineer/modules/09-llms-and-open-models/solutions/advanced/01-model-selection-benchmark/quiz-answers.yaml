@@ -1,0 +1,8 @@
+test-majority: [c]
+rarest: [c]
+majority-baseline: [a]
+why-balanced: [a]
+hardware-noise: [b]
+ci-zero: [b]
+none-is-wrong: [a]
+license-first: [b]

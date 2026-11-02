@@ -1,0 +1,79 @@
+questions:
+- id: biggest-gain
+  kind: knowledge
+  type: single
+  prompt: Theo bảng ablation ở mục 4 phần lý thuyết, thay đổi nào làm bpc kém đi nhiều nhất so với bản đầy đủ?
+  options:
+  - id: a
+    text: Thay RMSNorm bằng LayerNorm thông thường
+  - id: b
+    text: Chuyển từ GQA 2 kv head sang MQA 1 kv head
+  - id: c
+    text: Bỏ RoPE, dùng position embedding học được
+  - id: d
+    text: Thay SwiGLU bằng MLP GELU cùng cỡ tham số
+- id: seed-noise
+  kind: knowledge
+  type: single
+  prompt: Theo bảng ablation ở mục 4 phần lý thuyết, hai seed của cùng một cấu hình lệch nhau cỡ bao nhiêu bpc ở ngân sách 3 000 bước?
+  options:
+  - id: a
+    text: Khoảng 0.05
+  - id: b
+    text: Dưới 0.01
+  - id: c
+    text: Khoảng 0.2
+  - id: d
+    text: Trên 0.5
+- id: gqa-cache
+  kind: knowledge
+  type: single
+  prompt: Llama 3 8B có 32 head query và 8 kv head. KV cache của nó so với bản MHA cùng cỡ thế nào?
+  options:
+  - id: a
+    text: Nhỏ hơn 8 lần
+  - id: b
+    text: Bằng nhau, chỉ khác số tham số
+  - id: c
+    text: Lớn hơn vì phải repeat K, V
+  - id: d
+    text: Nhỏ hơn 4 lần
+- id: decode-bound
+  kind: knowledge
+  type: single
+  prompt: Vì sao decode từng token của LLM lớn thường bị giới hạn bởi băng thông bộ nhớ chứ không bởi compute?
+  options:
+  - id: a
+    text: Softmax trên vocab lớn tốn nhiều phép tính nhất
+  - id: b
+    text: GPU không chạy được phép nhân ma trận với batch 1
+  - id: c
+    text: Mỗi token phải đọc toàn bộ trọng số và KV cache cho rất ít phép tính
+  - id: d
+    text: Tokenizer chạy trên CPU nên chặn GPU
+- id: rope-relative
+  kind: knowledge
+  type: single
+  prompt: Tính chất nào làm RoPE mã hoá được vị trí tương đối?
+  options:
+  - id: a
+    text: RoPE cộng một vector vị trí học được vào q và k
+  - id: b
+    text: Tích vô hướng của q, k đã quay chỉ phụ thuộc hiệu vị trí
+  - id: c
+    text: RoPE quay cả v nên output phụ thuộc vị trí
+  - id: d
+    text: RoPE chia score cho khoảng cách giữa hai token
+- id: small-diff
+  kind: knowledge
+  type: single
+  prompt: LayerNorm cho bpc kém hơn RMSNorm 0.004, hai seed lệch nhau 0.006. Kết luận nào đúng?
+  options:
+  - id: a
+    text: Chưa phân biệt được ở ngân sách này
+  - id: b
+    text: RMSNorm tốt hơn rõ rệt, nên luôn dùng
+  - id: c
+    text: LayerNorm hỏng khi dùng với RoPE
+  - id: d
+    text: Phải chạy lại với learning rate lớn hơn

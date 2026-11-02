@@ -1,0 +1,105 @@
+questions:
+- id: cot-gain
+  kind: data
+  type: single
+  prompt: Với qwen2.5:3b trên 200 câu ghim, CoT so với trả lời thẳng thế nào?
+  options:
+  - id: a
+    text: CoT hơn chưa tới 10 điểm, khoảng tin cậy chứa 0
+  - id: b
+    text: CoT hơn khoảng 20 tới 35 điểm, khoảng hẹp
+  - id: c
+    text: CoT hơn trên 50 điểm, khoảng không chứa 0
+  - id: d
+    text: Trả lời thẳng hơn CoT vì không bị cắt cụt
+- id: cot-cost
+  kind: data
+  type: single
+  prompt: So số token ra trung bình của CoT với của trả lời thẳng (qwen2.5:3b).
+  options:
+  - id: a
+    text: CoT nhiều hơn khoảng 2 lần
+  - id: b
+    text: CoT nhiều hơn khoảng 10 lần
+  - id: c
+    text: Hai chế độ gần như bằng nhau
+  - id: d
+    text: CoT nhiều hơn trên 50 lần
+- id: one-sample
+  kind: data
+  type: single
+  prompt: Với Qwen2.5-0.5B, accuracy của một lời giải lấy mẫu ở temperature 0.7 (maj ở k = 1) so với greedy?
+  options:
+  - id: a
+    text: Cao hơn greedy khoảng 10 điểm
+  - id: b
+    text: Thấp hơn greedy 10 tới 15 điểm
+  - id: c
+    text: Thấp hơn greedy dưới 5 điểm
+  - id: d
+    text: Thấp hơn greedy trên 20 điểm
+- id: vote-crossover
+  kind: data
+  type: single
+  prompt: Self-consistency của 0.5B vượt greedy từ khoảng bao nhiêu lời giải, và ở 16 lời giải hơn bao nhiêu?
+  options:
+  - id: a
+    text: Vượt ngay từ 2 lời giải, ở 16 hơn chừng 3 điểm
+  - id: b
+    text: Vượt từ khoảng 4 lời giải, ở 16 hơn trên 10 điểm
+  - id: c
+    text: Không bao giờ vượt greedy trong 16 lời giải
+  - id: d
+    text: Chỉ vượt ở 16 lời giải, hơn chưa tới 3 điểm
+- id: pass-gap
+  kind: data
+  type: single
+  prompt: Ở k = 16, khoảng cách giữa pass@16 và maj@16 của 0.5B là bao nhiêu?
+  options:
+  - id: a
+    text: Gần 0, bỏ phiếu đã đạt trần
+  - id: b
+    text: Trên 20 điểm phần trăm
+  - id: c
+    text: Khoảng 5 điểm phần trăm
+  - id: d
+    text: maj@16 cao hơn pass@16
+- id: bon-logprob
+  kind: data
+  type: single
+  prompt: Best-of-N chọn theo log-prob trung bình của chính model so với bỏ phiếu khi k lớn thế nào?
+  options:
+  - id: a
+    text: Tụt xuống dưới bỏ phiếu khi k lớn
+  - id: b
+    text: Bằng pass@k vì log-prob là verifier tốt
+  - id: c
+    text: Luôn hơn bỏ phiếu ở mọi k từ 2 trở lên
+  - id: d
+    text: Ngang bỏ phiếu ở mọi k, chênh dưới 1 điểm
+- id: paired
+  kind: knowledge
+  type: single
+  prompt: Vì sao khoảng tin cậy theo cặp của hiệu accuracy hẹp hơn so hai khoảng tin cậy riêng lẻ?
+  options:
+  - id: a
+    text: Vì lấy mẫu lại nhiều lần hơn nên ít nhiễu hơn
+  - id: b
+    text: Vì câu khó thì khó với cả hai nên hai cột tương quan
+  - id: c
+    text: Vì bootstrap theo cặp bỏ các câu cả hai cùng sai
+  - id: d
+    text: Vì hiệu của hai tỉ lệ luôn nhỏ hơn mỗi tỉ lệ
+- id: pass-deploy
+  kind: knowledge
+  type: single
+  prompt: Vì sao không nên báo pass@16 như accuracy của một chatbot giải toán?
+  options:
+  - id: a
+    text: pass@k chỉ định nghĩa cho bài code, không cho toán
+  - id: b
+    text: pass@16 luôn thấp hơn accuracy greedy của model
+  - id: c
+    text: Người dùng chỉ thấy một đáp án; pass@k cần oracle
+  - id: d
+    text: Công thức pass@k chệch khi k nhỏ hơn số mẫu n

@@ -1,0 +1,105 @@
+questions:
+- id: annotation-match
+  kind: data
+  type: single
+  prompt: Đổi hộp trong Annotation/*.txt sang quy ước cạnh pixel (trừ 1 ở góc trên trái) rồi so với hộp suy từ mask. Bao nhiêu trong 423 hộp trùng khít?
+  options:
+  - id: a
+    text: 423/423
+  - id: b
+    text: 407/423
+  - id: c
+    text: 212/423
+  - id: d
+    text: 0/423
+- id: n-boxes
+  kind: data
+  type: single
+  prompt: YOLO11n với conf=0.001 và NMS mặc định (iou 0.7) trả tổng cộng khoảng bao nhiêu hộp trên 170 ảnh (423 người có nhãn)?
+  options:
+  - id: a
+    text: Khoảng 430
+  - id: b
+    text: Khoảng 1 000
+  - id: c
+    text: Khoảng 9 000
+  - id: d
+    text: Khoảng 27 000
+- id: conf-025
+  kind: data
+  type: single
+  prompt: Chỉ giữ hộp có conf >= 0.25 (ngưỡng hiển thị của app) rồi đo lại. AP50-95 trên Penn-Fudan đổi thế nào so với conf 0.001?
+  options:
+  - id: a
+    text: Giảm rất ít, dưới 0.01
+  - id: b
+    text: Giảm khoảng một nửa
+  - id: c
+    text: Tăng vì bớt false positive
+  - id: d
+    text: Về 0 vì mất hết đuôi PR
+- id: no-nms
+  kind: data
+  type: single
+  prompt: Chạy YOLO với iou=1.0 (gần như tắt NMS) và không áp NMS nào nữa. AP50 thế nào?
+  options:
+  - id: a
+    text: Gần như không đổi
+  - id: b
+    text: Tăng nhẹ nhờ recall cao hơn
+  - id: c
+    text: Tụt xuống dưới 0.3
+  - id: d
+    text: Không tính được vì quá nhiều hộp
+- id: vs-ultralytics
+  kind: data
+  type: single
+  prompt: AP của bộ đánh giá bạn viết (all-point) so với ap_per_class của ultralytics (nội suy 101 điểm) trên cùng cờ TP lệch nhau cỡ nào?
+  options:
+  - id: a
+    text: Vài phần nghìn
+  - id: b
+    text: Khoảng 0.05
+  - id: c
+    text: Trùng tới 6 chữ số
+  - id: d
+    text: Hơn 0.1
+- id: pixel-acc
+  kind: data
+  type: single
+  prompt: YOLO11n-seg zero-shot, mask người gộp lại. Pixel accuracy trên cả tập là bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.77, bằng IoU người
+  - id: b
+    text: Khoảng 0.95, cao hơn mIoU
+  - id: c
+    text: Khoảng 0.50, như đoán mò
+  - id: d
+    text: Khoảng 0.99, gần hoàn hảo
+- id: low-conf
+  kind: knowledge
+  type: single
+  prompt: Vì sao khi đo AP phải chạy detector với ngưỡng confidence rất thấp (0.001)?
+  options:
+  - id: a
+    text: AP là diện tích dưới cả đường precision-recall, cần cả đuôi recall cao
+  - id: b
+    text: Ngưỡng thấp làm NMS chạy nhanh hơn trên tập lớn
+  - id: c
+    text: Để precision ở mọi mức recall luôn tăng dần
+  - id: d
+    text: Vì ultralytics không cho đặt ngưỡng cao hơn 0.001
+- id: duplicate
+  kind: knowledge
+  type: single
+  prompt: Hai prediction cùng khớp một người với IoU 0.9 (score 0.6) và 0.8 (score 0.9), ngưỡng 0.5. Luật ghép COCO cho kết quả nào?
+  options:
+  - id: a
+    text: Cả hai là TP vì cùng vượt ngưỡng
+  - id: b
+    text: Prediction score 0.9 là TP, cái còn lại là FP
+  - id: c
+    text: Prediction IoU 0.9 là TP, cái còn lại là FP
+  - id: d
+    text: Cả hai là FP vì trùng lặp

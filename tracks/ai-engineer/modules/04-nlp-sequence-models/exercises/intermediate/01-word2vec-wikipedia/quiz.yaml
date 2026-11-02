@@ -1,0 +1,92 @@
+questions:
+- id: vocab-phrased
+  kind: data
+  type: single
+  prompt: Sau khi ghép cụm, vocab (từ xuất hiện ít nhất 5 lần) của model thứ hai có bao nhiêu mục?
+  options:
+  - id: a
+    text: '13 077'
+  - id: b
+    text: '24 305'
+  - id: c
+    text: '33 760'
+  - id: d
+    text: '54 912'
+- id: song-neighbors
+  kind: data
+  type: single
+  prompt: Ở model train trên âm tiết (không ghép cụm), các láng giềng gần nhất của `sông` chủ yếu là gì?
+  options:
+  - id: a
+    text: Tên các con sông nước ngoài như vistula, dniepr
+  - id: b
+    text: Các con sông lớn của Việt Nam như hồng, cửu_long
+  - id: c
+    text: Các từ chỉ vùng nước như hồ, biển, suối, đầm lầy
+  - id: d
+    text: Các âm tiết chức năng như của, là, và
+- id: berlin
+  kind: data
+  type: single
+  prompt: 'Ở model ghép cụm, 5 kết quả đầu của `pháp : paris :: đức : ?` chủ yếu là gì?'
+  options:
+  - id: a
+    text: Tên các quốc gia châu Âu như áo, bỉ, hà_lan, séc
+  - id: b
+    text: Tên các thành phố châu Âu như lille, dresden
+  - id: c
+    text: Từ chỉ người như vua, tướng, hoàng_đế, quan
+  - id: d
+    text: Các âm tiết rời như đức, pháp, quốc
+- id: loss-compare
+  kind: data
+  type: single
+  prompt: Loss epoch 3 của model âm tiết và model ghép cụm so với nhau thế nào, và kết luận được gì?
+  options:
+  - id: a
+    text: Ghép cụm thấp hơn hẳn (dưới một nửa), embedding tốt hơn hẳn
+  - id: b
+    text: Chênh dưới 0.05, nhưng hai vocab khác nhau nên không so được
+  - id: c
+    text: Âm tiết thấp hơn hẳn, ghép cụm làm model học kém đi rất rõ
+  - id: d
+    text: Bằng nhau tới 4 chữ số, ghép cụm không có tác dụng gì
+- id: trung-quoc
+  kind: knowledge
+  type: single
+  prompt: Vì sao `trung quốc` không được ghép thành cụm dù rất phổ biến?
+  options:
+  - id: a
+    text: '"quốc" quá phổ biến nên mẫu số lớn, điểm thấp'
+  - id: b
+    text: Cặp này xuất hiện dưới min_count lần trong corpus
+  - id: c
+    text: TOKEN_RE đã bỏ chữ "quốc" vì có dấu thanh
+  - id: d
+    text: apply_phrases chỉ ghép cặp ở đầu câu
+- id: lr-times-batch
+  kind: knowledge
+  type: single
+  prompt: Vì sao lr của optimizer là `lr * batch_size` chứ không phải `lr`?
+  options:
+  - id: a
+    text: Gradient sparse của PyTorch tự động chia lr cho batch size
+  - id: b
+    text: Loss là trung bình, nhân lại để mỗi cặp có bước như word2vec gốc
+  - id: c
+    text: Batch lớn cần lr lớn hơn hẳn để model khỏi bị overfit
+  - id: d
+    text: Embedding sparse=True chỉ chạy được với lr lớn
+- id: power-075
+  kind: knowledge
+  type: single
+  prompt: Lấy mẫu âm theo tần suất mũ 0.75 thay vì mũ 1 có tác dụng gì?
+  options:
+  - id: a
+    text: Bỏ hẳn các từ phổ biến nhất ra khỏi tập mẫu negative
+  - id: b
+    text: Nâng xác suất từ hiếm, negative bớt toàn "của", "và"
+  - id: c
+    text: Làm loss nhỏ hơn nên train ổn định hơn
+  - id: d
+    text: Giữ mỗi lần xuất hiện của từ với xác suất 0.75

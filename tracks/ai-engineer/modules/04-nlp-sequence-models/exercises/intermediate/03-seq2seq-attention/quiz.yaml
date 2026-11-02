@@ -1,0 +1,92 @@
+questions:
+- id: unk-rate
+  kind: data
+  type: single
+  prompt: Với vocab 4 000 từ, khoảng bao nhiêu phần trăm token phía tiếng Việt (46 311 cặp câu ngắn) thành `<unk>`?
+  options:
+  - id: a
+    text: Khoảng 0.1%
+  - id: b
+    text: Khoảng 1.2%
+  - id: c
+    text: Khoảng 8%
+  - id: d
+    text: Khoảng 25%
+- id: ppl-trajectory
+  kind: data
+  type: single
+  prompt: Train perplexity của model Luong so với model không attention qua 3 epoch dịch Anh-Việt diễn biến thế nào?
+  options:
+  - id: a
+    text: Thấp hơn hẳn ngay từ epoch 1 và cách xa dần
+  - id: b
+    text: Cao hơn ở epoch 1, gần bằng nhau ở epoch 3
+  - id: c
+    text: Bằng nhau ở cả ba epoch, chênh dưới 1%
+  - id: d
+    text: Thấp hơn ở epoch 1, cao hơn hẳn ở epoch 3
+- id: slowest-reverse
+  kind: data
+  type: single
+  prompt: Trên bài đảo chuỗi (cùng 1 500 bước), model nào train mất nhiều thời gian nhất?
+  options:
+  - id: a
+    text: Không attention
+  - id: b
+    text: Luong general
+  - id: c
+    text: Bahdanau
+  - id: d
+    text: Ba model gần bằng nhau
+- id: attention-on-period
+  kind: knowledge
+  type: single
+  prompt: Heatmap attention của một model dịch cho thấy mọi bước sinh đều dồn trọng số vào dấu chấm cuối câu nguồn. Điều đó nói gì?
+  options:
+  - id: a
+    text: Model đã học căn chỉnh từ với từ rất tốt
+  - id: b
+    text: Model dùng attention như một vector tóm tắt cố định
+  - id: c
+    text: Mask padding bị sai nên trọng số dồn về cuối câu
+  - id: d
+    text: Dấu chấm là token quan trọng nhất khi dịch câu
+- id: why-parallel
+  kind: knowledge
+  type: single
+  prompt: Vì sao Luong (không input feeding) train song song theo thời gian được còn Bahdanau thì không?
+  options:
+  - id: a
+    text: Luong dùng dot product nên GPU tính nhanh hơn hẳn
+  - id: b
+    text: Bước RNN của Luong không cần context, Bahdanau thì cần
+  - id: c
+    text: Bahdanau có thêm một lớp tanh nên phải tính tuần tự
+  - id: d
+    text: Luong bỏ qua padding nên không phải lặp từng bước
+- id: mask-inf
+  kind: knowledge
+  type: single
+  prompt: Vì sao gán score `-inf` cho padding trước softmax thay vì nhân mask sau softmax?
+  options:
+  - id: a
+    text: Nhân sau làm tổng trọng số khác 1 và lệch phân phối
+  - id: b
+    text: Nhân mask sau softmax chạy chậm hơn nhiều trên GPU
+  - id: c
+    text: Softmax không nhận được tensor có số 0 ở trong đầu vào
+  - id: d
+    text: -inf giúp model học nhanh hơn ở các epoch đầu
+- id: exposure
+  kind: knowledge
+  type: single
+  prompt: Bản dịch lặp "rất rất" và lệch nghĩa sau một từ sai. Hiện tượng này gọi là gì?
+  options:
+  - id: a
+    text: Vanishing gradient ở phía encoder
+  - id: b
+    text: Exposure bias khi decode tự hồi quy
+  - id: c
+    text: Overfitting do vocab quá nhỏ hẹp
+  - id: d
+    text: Nút thắt của attention kiểu Bahdanau

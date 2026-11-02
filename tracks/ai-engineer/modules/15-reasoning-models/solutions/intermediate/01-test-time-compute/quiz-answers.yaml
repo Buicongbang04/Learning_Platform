@@ -1,0 +1,8 @@
+cot-gain: [c]
+cot-cost: [d]
+one-sample: [c]
+vote-crossover: [b]
+pass-gap: [b]
+bon-logprob: [a]
+paired: [b]
+pass-deploy: [c]

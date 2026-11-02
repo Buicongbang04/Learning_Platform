@@ -1,0 +1,4 @@
+handoff-messages: [a]
+injected-args: [b]
+count-subagent-calls: [b]
+when-multi: [a, b]

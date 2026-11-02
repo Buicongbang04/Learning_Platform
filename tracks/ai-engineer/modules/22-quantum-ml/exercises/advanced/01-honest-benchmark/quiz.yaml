@@ -1,0 +1,105 @@
+questions:
+- id: bp-slope
+  kind: data
+  type: single
+  prompt: Cost global, L = 5, n = 2..10 qubit. Độ dốc của log2(phương sai gradient) theo số qubit khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '0.0'
+  - id: b
+    text: '-0.4'
+  - id: c
+    text: '-1.0'
+  - id: d
+    text: '-2.0'
+- id: local-depth
+  kind: data
+  type: single
+  prompt: Cost local ⟨Z₀⟩ ở 10 qubit. Phương sai gradient với L = 1 và L = 20 khoảng bao nhiêu?
+  options:
+  - id: a
+    text: L = 1 khoảng 0.5, L = 20 khoảng 0.01
+  - id: b
+    text: L = 1 khoảng 0.01, L = 20 khoảng 0.5
+  - id: c
+    text: Cả hai khoảng 0.5, độ sâu không ảnh hưởng
+  - id: d
+    text: Cả hai khoảng 8e-4, giống cost global
+- id: dequant-diff
+  kind: data
+  type: single
+  prompt: Sai lệch lớn nhất giữa angle_kernel_classical và kernel tính bằng statevector PennyLane cỡ bao nhiêu?
+  options:
+  - id: a
+    text: 1e-1, công thức đóng chỉ gần đúng
+  - id: b
+    text: 1e-3, do PennyLane xấp xỉ gate
+  - id: c
+    text: 1e-15, chỉ là sai số làm tròn
+  - id: d
+    text: Không so được vì khác số chiều
+- id: moons-ci
+  kind: data
+  type: single
+  prompt: Trên moons, khoảng tin cậy 95% của chênh lệch accuracy (kernel ZZ trừ SVM RBF, 5 fold) nằm ở đâu?
+  options:
+  - id: a
+    text: Chứa 0, chưa kết luận được bên nào tốt hơn
+  - id: b
+    text: Cả khoảng dương, ZZ tốt hơn RBF rõ ràng
+  - id: c
+    text: Cả khoảng âm, RBF tốt hơn khoảng 15 điểm
+  - id: d
+    text: Cả khoảng âm, RBF tốt hơn khoảng 1 điểm
+- id: iris-ci
+  kind: data
+  type: single
+  prompt: Trên Iris, khoảng tin cậy 95% của chênh lệch kernel ZZ trừ SVM RBF thế nào?
+  options:
+  - id: a
+    text: Cả khoảng dương, ZZ thắng ngoài nhiễu
+  - id: b
+    text: Chứa 0, hai model không phân biệt được
+  - id: c
+    text: Cả khoảng âm, RBF thắng ngoài nhiễu
+  - id: d
+    text: Rộng đúng 0, vì hai model bằng nhau
+- id: noise-effect
+  kind: data
+  type: single
+  prompt: Moons 150 điểm, depolarizing p = 0.05, không có shots. So với không nhiễu thì sao?
+  options:
+  - id: a
+    text: Accuracy và độ tương phản đều giữ nguyên như không nhiễu
+  - id: b
+    text: Accuracy tụt về 0.5, kernel thành ma trận toàn hằng số
+  - id: c
+    text: Accuracy tăng vì nhiễu đóng vai trò regularization mạnh
+  - id: d
+    text: Accuracy giữ nguyên, độ tương phản kernel giảm hơn một nửa
+- id: simulability
+  kind: knowledge
+  type: single
+  prompt: Cerezo et al. (2023) đặt ra vấn đề gì với các kiến trúc được chứng minh không có barren plateau?
+  options:
+  - id: a
+    text: Chúng luôn cần số qubit tăng theo hàm mũ của kích thước dữ liệu
+  - id: b
+    text: Nhiều kiến trúc như vậy cũng mô phỏng cổ điển hiệu quả được
+  - id: c
+    text: Chúng chỉ train được bằng backprop, không bằng parameter-shift
+  - id: d
+    text: Chúng không biểu diễn được hàm phi tuyến nào của dữ liệu input
+- id: fair-tuning
+  kind: knowledge
+  type: multi
+  prompt: Những điều nào làm một benchmark QML trung thực hơn?
+  options:
+  - id: a
+    text: Tuning baseline cổ điển với ngân sách như mô hình lượng tử
+  - id: b
+    text: So trên cùng các fold và báo khoảng tin cậy của chênh lệch
+  - id: c
+    text: Chỉ báo lần chia mà mô hình lượng tử đạt kết quả tốt nhất
+  - id: d
+    text: Ablation bỏ entanglement hoặc thay bằng kernel cổ điển tương đương

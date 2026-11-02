@@ -1,0 +1,92 @@
+questions:
+- id: overhead-scale
+  kind: data
+  type: single
+  prompt: Đo bằng LLM giả, chi phí riêng của chain LangChain mỗi câu hỏi so với thời gian qwen2.5:3b sinh câu trả lời (vài giây) thế nào?
+  options:
+  - id: a
+    text: Nhỏ hơn cỡ hàng trăm lần, không đáng kể
+  - id: b
+    text: Cỡ một nửa thời gian sinh câu trả lời
+  - id: c
+    text: Lớn hơn thời gian sinh, vì LCEL chạy song song
+  - id: d
+    text: Bằng 0, vì LCEL biên dịch sẵn thành hàm Python
+- id: fair-compare
+  kind: knowledge
+  type: multi
+  prompt: Muốn so độ trễ và chất lượng hai bản cho công bằng, cần giữ giống nhau những gì?
+  options:
+  - id: a
+    text: Cùng nguồn đưa vào prompt (retrieve một lần, dùng cho cả hai)
+  - id: b
+    text: Cùng nội dung prompt gửi cho model
+  - id: c
+    text: Cùng model và cùng temperature
+  - id: d
+    text: Xen kẽ thứ tự gọi để model đã nạp sẵn không ưu ái một bên
+- id: gate-where
+  kind: knowledge
+  type: single
+  prompt: Trong chain LCEL, cổng từ chối theo điểm retrieval nên đặt ở đâu?
+  options:
+  - id: a
+    text: Sau model, bỏ câu trả lời khi điểm retrieval thấp hơn ngưỡng
+  - id: b
+    text: Trong system prompt, dặn model tự từ chối
+  - id: c
+    text: Trước khi dựng prompt, nhánh từ chối không gọi model
+  - id: d
+    text: Trong retriever, trả lỗi khi điểm thấp
+- id: lcel-dict
+  kind: knowledge
+  type: single
+  prompt: 'Trong LCEL, `{"question": RunnablePassthrough(), "docs": retriever}` làm gì với đầu vào là câu hỏi?'
+  options:
+  - id: a
+    text: Gọi retriever hai lần, mỗi khoá một lần, rồi lấy kết quả sau
+  - id: b
+    text: Chạy hai nhánh trên cùng đầu vào, ghép thành một dict
+  - id: c
+    text: Chỉ chạy retriever, khoá question bị bỏ qua
+  - id: d
+    text: Báo lỗi, vì dict không phải Runnable
+- id: see-prompt
+  kind: knowledge
+  type: single
+  prompt: Câu trả lời của chain sai và bạn nghi prompt. Cách nhanh nhất để thấy đúng các message LangChain gửi cho model?
+  options:
+  - id: a
+    text: Đọc mã nguồn ChatOllama, đoán prompt được ghép ra sao
+  - id: b
+    text: Bật set_debug(True) hoặc gắn callback on_chat_model_start
+  - id: c
+    text: Tăng temperature để model giải thích prompt
+  - id: d
+    text: Đổi sang LlamaIndex vì nó in prompt mặc định
+- id: when-framework
+  kind: knowledge
+  type: single
+  prompt: Với pipeline RAG một bước của bài này, lý do nào là lý do tốt nhất để chuyển sang LangChain?
+  options:
+  - id: a
+    text: LangChain làm câu trả lời của model chính xác hơn
+  - id: b
+    text: LangChain làm giảm độ trễ của model
+  - id: c
+    text: Cần tool, agent, streaming hay tracing có sẵn
+  - id: d
+    text: LangChain bắt buộc khi dùng Ollama
+- id: same-answers
+  kind: knowledge
+  type: single
+  prompt: Cùng prompt, cùng qwen2.5:3b, temperature 0, nhiều câu trả lời của hai bản vẫn khác nhau vài chữ. Nên làm gì trước khi kết luận framework đổi chất lượng?
+  options:
+  - id: a
+    text: Kết luận ngay là LangChain sửa prompt ngầm
+  - id: b
+    text: Gọi một bản hai lần, đo nó tự lệch bao nhiêu
+  - id: c
+    text: Tăng temperature lên 1 để hai bản giống nhau hơn
+  - id: d
+    text: Bỏ các câu khác nhau ra khỏi bảng so sánh

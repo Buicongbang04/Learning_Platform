@@ -1,0 +1,79 @@
+questions:
+- id: ref-pretrain
+  kind: data
+  type: single
+  prompt: Bản tham chiếu, cùng kiến trúc encoder ResNet-18 + decoder, bỏ weights ImageNet (train từ đầu). mIoU val đổi thế nào?
+  options:
+  - id: a
+    text: Gần như không đổi, trong dao động seed
+  - id: b
+    text: Tụt khoảng 6 điểm, kém cả UNet từ đầu
+  - id: c
+    text: Tăng vì không bị lệch miền ImageNet
+  - id: d
+    text: Về 0.5, model chỉ đoán toàn nền
+- id: ref-dice
+  kind: data
+  type: single
+  prompt: Ablation bỏ Dice loss (chỉ cross-entropy) trên cấu hình pretrain của bản tham chiếu cho kết quả gì?
+  options:
+  - id: a
+    text: mIoU tụt hơn 5 điểm vì nền áp đảo
+  - id: b
+    text: Không train được, loss ra NaN
+  - id: c
+    text: Ngang hoặc nhỉnh hơn, trong dao động seed
+  - id: d
+    text: IoU người về 0, chỉ còn IoU nền
+- id: ref-vs-yolo
+  kind: data
+  type: single
+  prompt: Trên cùng 34 ảnh val, encoder pretrain của bản tham chiếu so với YOLO11n-seg zero-shot thế nào?
+  options:
+  - id: a
+    text: Nhỉnh hơn khoảng 0.5 điểm mIoU, khoảng chênh nhỏ
+  - id: b
+    text: Hơn khoảng 20 điểm mIoU
+  - id: c
+    text: Thua khoảng 10 điểm mIoU
+  - id: d
+    text: Không so được vì YOLO-seg là instance segmentation
+- id: nearest
+  kind: knowledge
+  type: single
+  prompt: Vì sao mask phải resize bằng nearest chứ không bilinear?
+  options:
+  - id: a
+    text: Nearest nhanh hơn hẳn trên GPU khi ảnh lớn và batch có nhiều ảnh
+  - id: b
+    text: Bilinear sinh giá trị trung gian ở viền, không phải nhãn hợp lệ
+  - id: c
+    text: Bilinear luôn làm lệch toàn bộ mask đi đúng một pixel sang bên phải
+  - id: d
+    text: PyTorch không hỗ trợ bilinear cho tensor số nguyên dài
+- id: joint-params
+  kind: knowledge
+  type: single
+  prompt: Cách chắc nhất để augmentation không làm mask lệch ảnh là gì?
+  options:
+  - id: a
+    text: Rút tham số ngẫu nhiên một lần rồi áp cùng tham số cho ảnh và mask
+  - id: b
+    text: Gọi cùng một transform hai lần, một cho ảnh, một cho mask
+  - id: c
+    text: Chỉ augment ảnh, giữ nguyên mask
+  - id: d
+    text: Đặt cùng torch.manual_seed trước mỗi lần gọi trên ảnh và trên mask
+- id: serve-logits
+  kind: knowledge
+  type: single
+  prompt: Trong predict_mask, vì sao nội suy logits về (H, W) rồi mới argmax?
+  options:
+  - id: a
+    text: Để model được chạy ở đúng độ phân giải gốc của khung hình đầu vào
+  - id: b
+    text: Viền mượt và đúng vị trí hơn so với phóng to mask nhị phân
+  - id: c
+    text: Vì argmax không chạy được trên ảnh nhỏ
+  - id: d
+    text: Để BatchNorm dùng đúng running mean và running var đã học lúc train

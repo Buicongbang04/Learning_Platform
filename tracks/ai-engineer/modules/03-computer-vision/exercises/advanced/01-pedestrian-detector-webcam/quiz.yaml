@@ -1,0 +1,92 @@
+questions:
+- id: ref-recall
+  kind: data
+  type: single
+  prompt: Bản tham chiếu, YOLO11n zero-shot trên 34 ảnh val ở conf 0.25. Recall (IoU 0.5) so với nhãn là bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.70, gần một phần ba số người bị bỏ sót hoàn toàn
+  - id: b
+    text: Khoảng 0.85
+  - id: c
+    text: Đúng 1.000, mọi người có nhãn đều được tìm thấy
+  - id: d
+    text: Khoảng 0.50, vì phân nửa số người đứng bị che khuất
+- id: ref-ci
+  kind: data
+  type: single
+  prompt: Khoảng 95% bootstrap theo ảnh của AP50-95 trên 34 ảnh val (bản tham chiếu) rộng cỡ nào?
+  options:
+  - id: a
+    text: Khoảng ±0.001, đủ để so mọi cấu hình
+  - id: b
+    text: Khoảng ±0.03 tới ±0.05
+  - id: c
+    text: Khoảng ±0.3, con số gần như vô nghĩa
+  - id: d
+    text: Không tính được vì chỉ có một lớp
+- id: ref-precision
+  kind: data
+  type: single
+  prompt: Sau fine-tune, precision ở conf 0.25 (so với nhãn Penn-Fudan) của bản tham chiếu đổi thế nào so với zero-shot?
+  options:
+  - id: a
+    text: Tăng rõ, phù hợp với việc model bớt báo người không có nhãn
+  - id: b
+    text: Giảm mạnh, vì model báo nhiều hộp hơn
+  - id: c
+    text: Không đổi, vì precision ở một ngưỡng conf cố định chỉ phụ thuộc vào NMS
+  - id: d
+    text: Về gần 0 vì fine-tune làm model quên hẳn lớp person của COCO đã học
+- id: same-evaluator
+  kind: knowledge
+  type: single
+  prompt: Vì sao không được so mAP do `yolo train` in ra với mAP zero-shot bạn tự đo trên cả 170 ảnh?
+  options:
+  - id: a
+    text: Vì ultralytics làm tròn mAP tới hai chữ số nên không đủ chính xác để so với số tự đo
+  - id: b
+    text: Khác tập ảnh, khác imgsz và có thể khác cách ghép/nội suy; hai con số không cùng thước đo
+  - id: c
+    text: Vì mAP của ultralytics luôn cao hơn đúng 0.05
+  - id: d
+    text: Vì model zero-shot chưa từng được train nên không có tập val nào để đo trên đó cả
+- id: videowriter
+  kind: knowledge
+  type: single
+  prompt: VideoWriter được tạo với (W, H) khác cỡ khung thật. Chuyện gì xảy ra?
+  options:
+  - id: a
+    text: OpenCV tự resize từng khung về đúng (W, H) đã khai báo trước khi ghi
+  - id: b
+    text: Báo lỗi ngay ở lần write đầu tiên
+  - id: c
+    text: Tệp ra rỗng hoặc hỏng mà không có lỗi nào
+  - id: d
+    text: Video được ghi với tốc độ khung sai
+- id: app-conf
+  kind: knowledge
+  type: single
+  prompt: App dùng conf 0.25, còn đo AP dùng conf 0.001. Điều nào đúng?
+  options:
+  - id: a
+    text: Cả hai nên dùng 0.25 để con số đo và trải nghiệm trong app nhất quán với nhau
+  - id: b
+    text: Cả hai nên dùng 0.001 để không mất người
+  - id: c
+    text: AP cần cả đuôi PR; app cần ngưỡng chọn theo đánh đổi precision/recall của sản phẩm
+  - id: d
+    text: conf không ảnh hưởng tới AP vì AP đã sắp theo score
+- id: fps-ema
+  kind: knowledge
+  type: single
+  prompt: Vì sao FPS hiển thị nên làm mượt bằng EMA thay vì 1/dt của từng khung?
+  options:
+  - id: a
+    text: 1/dt nhảy theo từng khung (I/O, GC), số hiển thị khó đọc và gây hiểu lầm
+  - id: b
+    text: EMA làm cả vòng app chạy nhanh hơn vì bớt được một phép chia mỗi khung hình
+  - id: c
+    text: 1/dt luôn bằng 0 với đồng hồ perf_counter
+  - id: d
+    text: EMA loại bỏ thời gian của model khỏi FPS

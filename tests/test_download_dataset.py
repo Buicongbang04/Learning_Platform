@@ -34,9 +34,9 @@ def no_kaggle_env(monkeypatch, tmp_path):
 
 def test_registry_entries_complete():
     dd = load("download_dataset")
-    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud", "bike-sharing-uci", "online-retail-ii", "dunnhumby-complete-journey", "grocery-sales-synthetic", "marketing-ab", "ecommerce-events", "owid-co2"} <= set(dd.DATASETS)
+    assert {"cookie-cats", "ab-data", "hillstrom", "lalonde", "prop99", "card", "store-sales", "telco-churn", "movielens", "creditcard-fraud", "bike-sharing-uci", "online-retail-ii", "dunnhumby-complete-journey", "grocery-sales-synthetic", "marketing-ab", "ecommerce-events", "owid-co2", "mnist", "zalo-legal"} <= set(dd.DATASETS)
     for ds in dd.DATASETS.values():
-        assert ds.source in ("kaggle", "url")
+        assert ds.source in ("kaggle", "url", "hf")
         assert ds.ref and ds.files and ds.license and ds.homepage
         assert ds.homepage.startswith("https://")
 
@@ -195,3 +195,118 @@ def test_html_response_tuple_url_is_rejected(monkeypatch, tmp_path):
     with pytest.raises(SystemExit, match="HTML"):
         dd.download("t-tuple", tmp_path)
     assert not (tmp_path / "a.csv").exists()
+
+
+def _hf_dataset(dd, needs_token):
+    return dd.Dataset("hf", "o/r", ["sub/a.json"], license="x", homepage="x", needs_token=needs_token)
+
+
+def test_hf_dataset_requires_token_exits_cleanly(monkeypatch, tmp_path, capsys):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-hf", _hf_dataset(dd, True))
+    monkeypatch.setenv("HF_TOKEN", "")
+    monkeypatch.delenv("HF_TOKEN")
+    monkeypatch.setattr(dd, "ENV_FILE", tmp_path / "none")
+    with pytest.raises(SystemExit) as exc:
+        dd.main(["t-hf", "--out", str(tmp_path / "out")])
+    assert exc.value.code not in (0, None)
+    msg = str(exc.value.code)
+    assert "HF_TOKEN" in msg and "https://huggingface.co/settings/tokens" in msg
+
+
+def test_hf_download_calls_hub(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    monkeypatch.setitem(dd.DATASETS, "t-hf", _hf_dataset(dd, False))
+    monkeypatch.setenv("HF_TOKEN", "hf_x")
+    cached = tmp_path / "cache" / "a.json"
+    cached.parent.mkdir()
+    cached.write_text("{}")
+    calls = []
+
+    def fake(**kw):
+        calls.append(kw)
+        return str(cached)
+
+    monkeypatch.setattr(dd, "hf_hub_download", fake)
+    out = tmp_path / "out"
+    assert dd.download("t-hf", out) == [out / "sub" / "a.json"]
+    assert (out / "sub" / "a.json").read_text() == "{}"
+    assert calls[0]["repo_id"] == "o/r" and calls[0]["filename"] == "sub/a.json"
+    assert calls[0]["repo_type"] == "dataset" and calls[0]["token"] == "hf_x"
+
+
+def test_hf_revision_is_passed_to_hub(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    ds = dd.Dataset("hf", "o/r", ["sub/a.json"], license="x", homepage="x", revision="refs/convert/parquet")
+    monkeypatch.setitem(dd.DATASETS, "t-hf", ds)
+    cached = tmp_path / "a.json"
+    cached.write_text("{}")
+    calls = []
+    monkeypatch.setattr(dd, "hf_hub_download", lambda **kw: calls.append(kw) or str(cached))
+    dd.download("t-hf", tmp_path / "out")
+    assert calls[0]["revision"] == "refs/convert/parquet"
+
+
+def _fake_stream(payloads):
+    class Resp:
+        headers = {"Content-Type": "application/octet-stream"}
+
+        def __init__(self, data):
+            self.data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            yield self.data
+
+    it = iter(payloads)
+    return lambda *a, **k: Resp(next(it))
+
+
+def test_tuple_url_extract_keeps_dirs_and_removes_archives(monkeypatch, tmp_path):
+    import tarfile
+
+    dd = load("download_dataset")
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w") as zf:
+        zf.writestr("Ped/img/a.png", "x")
+        zf.writestr("Ped/mask/a_mask.png", "y")
+    tbuf = io.BytesIO()
+    with tarfile.open(fileobj=tbuf, mode="w:gz") as tf:
+        info = tarfile.TarInfo("batches/data_1")
+        info.size = 3
+        tf.addfile(info, io.BytesIO(b"abc"))
+    ds = dd.Dataset("url", ("http://x/a.zip", "http://x/b.tgz"), ["a.zip", "b.tgz"], license="x", homepage="x", extract=True)
+    monkeypatch.setitem(dd.DATASETS, "t-ex", ds)
+    monkeypatch.setattr(dd.requests, "get", _fake_stream([zbuf.getvalue(), tbuf.getvalue()]))
+    out = tmp_path / "out"
+    paths = dd.download("t-ex", out)
+    assert (out / "Ped" / "img" / "a.png").read_text() == "x"
+    assert (out / "batches" / "data_1").read_bytes() == b"abc"
+    assert not (out / "a.zip").exists() and not (out / "b.tgz").exists()
+    assert out / "Ped" / "mask" / "a_mask.png" in paths
+
+
+def test_extract_rejects_path_traversal(monkeypatch, tmp_path):
+    dd = load("download_dataset")
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w") as zf:
+        zf.writestr("../evil.txt", "x")
+    ds = dd.Dataset("url", ("http://x/a.zip",), ["a.zip"], license="x", homepage="x", extract=True)
+    monkeypatch.setitem(dd.DATASETS, "t-ex", ds)
+    monkeypatch.setattr(dd.requests, "get", _fake_stream([zbuf.getvalue()]))
+    with pytest.raises(SystemExit):
+        dd.download("t-ex", tmp_path / "out")
+    assert not (tmp_path / "evil.txt").exists()
+
+
+def test_phase3_datasets_registered():
+    dd = load("download_dataset")
+    assert {"cifar10", "oxford-pets", "penn-fudan", "uit-vsfc", "iwslt15-en-vi", "wikipedia-vi", "openorca-viet", "gsm8k", "prompt-injections", "fleurs-vi", "cord-v2"} <= set(dd.DATASETS)

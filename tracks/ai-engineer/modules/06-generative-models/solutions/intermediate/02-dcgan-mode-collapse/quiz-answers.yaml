@@ -1,0 +1,8 @@
+ring-k5: [b]
+ring-sat-hq: [b]
+wgan-tradeoff: [a]
+strong-d: [c]
+detach: [a]
+loss-signal: [b]
+bn-bias: [a]
+sat-variance: [b]
