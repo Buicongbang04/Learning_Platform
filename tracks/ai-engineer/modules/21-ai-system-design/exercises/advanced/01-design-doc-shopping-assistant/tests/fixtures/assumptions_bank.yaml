@@ -1,0 +1,27 @@
+# Giả định của case "chatbot CSKH ngân hàng" (interview.md) để test estimate(). Mọi giá là GIẢ ĐỊNH.
+traffic:
+  dau: 150000
+  requests_per_user_per_day: 4
+  peak_to_avg: 3
+request:
+  input_tokens: 3000
+  cached_input_tokens: 2000
+  output_tokens: 200
+  e2e_latency_s: 5.0
+api_price:          # USD / 1 triệu token
+  input: 2.0
+  output: 10.0
+  cached_input: 0.2
+self_host:
+  n_params: 7.6e+9   # PyYAML đọc "7.6e9" (thiếu dấu) thành chuỗi
+  weight_bits: 4.5
+  n_layers: 28
+  n_kv_heads: 4
+  head_dim: 128
+  kv_bits: 16
+  context_tokens: 4096
+  vram_gib: 24
+  reserve_gib: 2
+  rps_per_gpu: 3.5       # thông lượng một GPU ở điểm vận hành đạt SLO (từ benchmark)
+  headroom: 0.2
+  usd_per_gpu_hour: 0.8

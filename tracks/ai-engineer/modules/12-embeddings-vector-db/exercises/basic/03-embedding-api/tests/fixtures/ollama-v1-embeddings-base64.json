@@ -1,0 +1,25 @@
+{
+ "object": "list",
+ "data": [
+  {
+   "object": "embedding",
+   "embedding": "ZnCBvmLFvT1SPWq/7h0TPqqgXD4qjpO9p8S2PX9tzb0=",
+   "index": 0
+  },
+  {
+   "object": "embedding",
+   "embedding": "nHHPPQuHFb3DGDe/G8eBPCSLlD4+/bI9Yk8bv7WABL4=",
+   "index": 1
+  },
+  {
+   "object": "embedding",
+   "embedding": "Ho7RvE5hUD5nPnG/vOPIPQGM0j1JCRY+Y+4KvrIKyz0=",
+   "index": 2
+  }
+ ],
+ "model": "nomic-embed-text",
+ "usage": {
+  "prompt_tokens": 20,
+  "total_tokens": 20
+ }
+}

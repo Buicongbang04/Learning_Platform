@@ -1,0 +1,66 @@
+questions:
+- id: lens-last
+  kind: knowledge
+  type: single
+  prompt: Logit lens ở stream ra khỏi tầng cuối phải cho kết quả gì nếu điểm đo đúng?
+  options:
+  - id: a
+    text: Trùng top-1 với model ở mọi vị trí
+  - id: b
+    text: Trùng top-1 với model ở khoảng một nửa vị trí
+  - id: c
+    text: Cross-entropy cao hơn hẳn model gốc
+  - id: d
+    text: Không xác định trước được, tuỳ dữ liệu
+- id: control-high
+  kind: knowledge
+  type: single
+  prompt: Với đặc trưng là one-hot của token id, probe trên control task (đúng định nghĩa) đạt bao nhiêu trên test?
+  options:
+  - id: a
+    text: Gần majority baseline, vì nhãn control là ngẫu nhiên
+  - id: b
+    text: Rất cao với các loại token đã thấy ở train
+  - id: c
+    text: Đúng 0.5 bất kể phân phối nhãn
+  - id: d
+    text: Bằng accuracy của task thật
+- id: patch-same
+  kind: knowledge
+  type: single
+  prompt: Patch residual stream ở một vị trí mà hai input giống hệt nhau (và đứng trước mọi chỗ khác nhau) phải cho hiệu ứng nào?
+  options:
+  - id: a
+    text: Đúng bằng 1
+  - id: b
+    text: Đúng bằng 0
+  - id: c
+    text: Khoảng 0.5
+  - id: d
+    text: Âm, vì bị nhiễu
+- id: fvu-mean
+  kind: knowledge
+  type: single
+  prompt: Một SAE chỉ trả về trung bình của dữ liệu (decoder bằng 0, b_dec là mean) phải có FVU bằng bao nhiêu?
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: '0.5'
+  - id: c
+    text: '1'
+  - id: d
+    text: Tuỳ độ thưa
+- id: order
+  kind: knowledge
+  type: single
+  prompt: Vì sao nên chạy sanity check có đáp án biết trước trước khi nhìn kết quả thí nghiệm thật?
+  options:
+  - id: a
+    text: Để kết quả thật không thiên lệch cách ta viết phép kiểm
+  - id: b
+    text: Vì sanity check nhanh hơn nên chạy trước cho đỡ tốn thời gian máy
+  - id: c
+    text: Vì test của bài chỉ chấm các phép sanity check này
+  - id: d
+    text: Vì kết quả thật luôn luôn sai khi chưa chạy bất kỳ sanity check nào

@@ -1,0 +1,7 @@
+low-loss: [b]
+negative-brightness: [b]
+same-numbers: [b]
+oracle: [d]
+determinism: [b]
+shared-memory: [b]
+first-check: [a]

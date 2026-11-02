@@ -1,0 +1,7 @@
+norm-effect: [b]
+long-words: [c]
+tts-digits: [c]
+vad-short: [b]
+mms-digits: [a]
+corpus-wer: [a]
+roundtrip-limit: [c]

@@ -1,0 +1,105 @@
+questions:
+- id: second-token
+  kind: data
+  type: single
+  prompt: Ở bước sinh đầu tiên cho câu hỏi thủ đô, token có xác suất cao thứ hai là gì?
+  options:
+  - id: a
+    text: "'Tr'"
+  - id: b
+    text: "'Hà'"
+  - id: c
+    text: "'The'"
+  - id: d
+    text: "'Việt'"
+- id: qwen-vi-total
+  kind: data
+  type: single
+  prompt: Tokenizer Qwen2.5 cắt 1 268 câu tiếng Việt của IWSLT15 tst2013 thành tổng cộng khoảng bao nhiêu token?
+  options:
+  - id: a
+    text: Khoảng 28 nghìn
+  - id: b
+    text: Khoảng 38 nghìn
+  - id: c
+    text: Khoảng 67 nghìn
+  - id: d
+    text: Khoảng 91 nghìn
+- id: phi3-vs-qwen
+  kind: data
+  type: single
+  prompt: Trên cùng 1 268 câu tiếng Việt, tokenizer Phi-3 (32k) tốn gấp khoảng bao nhiêu lần số token của Qwen2.5?
+  options:
+  - id: a
+    text: Khoảng 1.1 lần
+  - id: b
+    text: Khoảng 1.4 lần
+  - id: c
+    text: Khoảng 2.4 lần
+  - id: d
+    text: Khoảng 3.3 lần
+- id: loop-speed
+  kind: data
+  type: single
+  prompt: So tốc độ (token/s) của ba cách greedy trong cell so sánh trên CPU, điều nào đúng?
+  options:
+  - id: a
+    text: Có cache gần bằng generate, không cache chậm hơn vài lần
+  - id: b
+    text: Cả ba gần bằng nhau vì câu trả lời chỉ vài chục token
+  - id: c
+    text: Không cache nhanh nhất vì không tốn bộ nhớ giữ cache
+  - id: d
+    text: generate chậm hơn vòng tự viết vài lần vì nhiều bước phụ
+- id: default-greedy
+  kind: knowledge
+  type: single
+  prompt: Vì sao `model.generate(..., do_sample=False)` mặc định cho câu khác với vòng greedy tự viết?
+  options:
+  - id: a
+    text: generate dùng KV cache nên logits khác vòng tự viết
+  - id: b
+    text: Nó vẫn áp repetition penalty 1.1, phạt cả token của prompt
+  - id: c
+    text: do_sample=False vẫn rút ngẫu nhiên với temperature 0.7
+  - id: d
+    text: generate tự chèn system prompt mặc định vào đầu chuỗi token
+- id: cache-cost
+  kind: knowledge
+  type: single
+  prompt: Vì sao thời gian một bước không cache tăng theo độ dài chuỗi, còn có cache thì gần như không đổi?
+  options:
+  - id: a
+    text: Không cache chạy lại cả chuỗi; có cache chỉ tính token mới
+  - id: b
+    text: Có cache dùng ít tầng hơn khi chuỗi dài ra
+  - id: c
+    text: Không cache phải đọc lại trọng số từ ổ đĩa ở mỗi bước sinh
+  - id: d
+    text: Có cache bỏ qua attention với các token cũ
+- id: distinct-meaning
+  kind: knowledge
+  type: single
+  prompt: Ở temperature 1.5, distinct-2 gần 1.0. Kết luận đúng là gì?
+  options:
+  - id: a
+    text: Câu trả lời đa dạng và chất lượng tốt nhất
+  - id: b
+    text: Chỉ biết là ít lặp, phải đọc mới biết có phải rác không
+  - id: c
+    text: Model đã học được nhiều từ vựng tiếng Việt hơn
+  - id: d
+    text: Nên đặt temperature 1.5 cho mọi tác vụ sáng tác
+- id: cache-reset
+  kind: knowledge
+  type: single
+  prompt: Vì sao `cached_next_logits` phải chạy lại từ đầu khi chuỗi mới không nối tiếp chuỗi cũ?
+  options:
+  - id: a
+    text: past_key_values chỉ đúng cho đúng tiền tố đã xử lý
+  - id: b
+    text: Model Hugging Face cấm gọi hai lần với cùng cache
+  - id: c
+    text: Để tiết kiệm bộ nhớ khi chuỗi ngắn đi
+  - id: d
+    text: Vì KV cache chỉ lưu được tối đa 64 token của chuỗi gần nhất

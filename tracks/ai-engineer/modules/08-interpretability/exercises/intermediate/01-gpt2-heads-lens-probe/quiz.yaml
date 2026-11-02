@@ -1,0 +1,105 @@
+questions:
+- id: prev-head
+  kind: data
+  type: single
+  prompt: Trên văn bản TED, head nào của GPT-2 small có điểm previous-token gần 1.00?
+  options:
+  - id: a
+    text: '5.5'
+  - id: b
+    text: '4.11'
+  - id: c
+    text: '0.5'
+  - id: d
+    text: '11.10'
+- id: induction-layers
+  kind: data
+  type: single
+  prompt: Các head có điểm induction trên 0.8 (dãy lặp lại, seed 0) nằm ở những tầng nào?
+  options:
+  - id: a
+    text: Tầng 0 tới 2
+  - id: b
+    text: Tầng 5 tới 7
+  - id: c
+    text: Tầng 9 tới 11
+  - id: d
+    text: Rải đều cả 12 tầng
+- id: zero-vs-mean
+  kind: data
+  type: single
+  prompt: Zero ablation 4 head induction mạnh nhất làm loss bản thứ nhất (phần không cần induction) tăng khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Dưới 0.1 nat
+  - id: b
+    text: Khoảng 0.5 nat
+  - id: c
+    text: Khoảng 2.4 nat
+  - id: d
+    text: Khoảng 10 nat
+- id: vs-random
+  kind: data
+  type: single
+  prompt: Mean ablation 4 head induction mạnh nhất so với 4 head ngẫu nhiên (không phải induction), loss bản thứ hai ra sao?
+  options:
+  - id: a
+    text: Cả hai cách đều giữ loss bản hai dưới 1.5 nat
+  - id: b
+    text: Head ngẫu nhiên làm loss bản hai tăng nhiều hơn head induction
+  - id: c
+    text: Head induction đẩy lên vài nat, head ngẫu nhiên dưới 1.5
+  - id: d
+    text: Cả hai cách đều đẩy loss bản hai lên trên 5 nat
+- id: lens-half
+  kind: data
+  type: single
+  prompt: Từ `resid_post` của tầng nào logit lens trùng top-1 với model ở hơn một nửa số vị trí?
+  options:
+  - id: a
+    text: Tầng 6
+  - id: b
+    text: Tầng 8
+  - id: c
+    text: Tầng 10
+  - id: d
+    text: Chỉ tầng 11 (stream cuối)
+- id: probe-peak
+  kind: data
+  type: single
+  prompt: Probe "token đã xuất hiện chưa" trên GPT-2 đạt accuracy test cao nhất ở đâu?
+  options:
+  - id: a
+    text: Ở `resid_pre.0` (embedding)
+  - id: b
+    text: Ở `resid_post` tầng 0 hoặc 1
+  - id: c
+    text: Ở `resid_post` tầng 5 hoặc 6
+  - id: d
+    text: Ở `resid_post` tầng 11 (cuối)
+- id: random-init
+  kind: data
+  type: single
+  prompt: Với GPT-2 khởi tạo ngẫu nhiên, accuracy của probe task ở các tầng nằm ở mức nào?
+  options:
+  - id: a
+    text: Quanh baseline tra theo loại token, khoảng 0.72-0.77
+  - id: b
+    text: Gần bằng GPT-2 đã train, trên 0.95 ở tầng sớm
+  - id: c
+    text: Đúng bằng majority baseline 0.605 ở mọi tầng
+  - id: d
+    text: Dưới 0.5, tệ hơn cả đoán ngẫu nhiên giữa hai nhãn cân bằng
+- id: probe-claim
+  kind: knowledge
+  type: single
+  prompt: Một probe đạt accuracy cao với selectivity dương. Kết luận nào được phép?
+  options:
+  - id: a
+    text: GPT-2 dùng đúng hướng probe này để dự đoán token kế tiếp
+  - id: b
+    text: Thông tin này giải mã tuyến tính được từ stream ở tầng đó
+  - id: c
+    text: Probe học thuộc token id nên kết quả không có giá trị gì
+  - id: d
+    text: Các tầng sau đã xoá thông tin này khỏi residual stream

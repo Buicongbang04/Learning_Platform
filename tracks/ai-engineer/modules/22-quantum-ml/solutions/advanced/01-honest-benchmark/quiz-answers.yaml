@@ -1,0 +1,8 @@
+bp-slope: [c]
+local-depth: [a]
+dequant-diff: [c]
+moons-ci: [c]
+iris-ci: [b]
+noise-effect: [d]
+simulability: [b]
+fair-tuning: [a, b, d]

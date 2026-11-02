@@ -1,0 +1,7 @@
+min-per-class: [c]
+no-normalize: [b]
+scratch-loss: [b]
+eval-image-stats: [a]
+bn-order: [b]
+lr-groups: [a]
+when-probe: [a]

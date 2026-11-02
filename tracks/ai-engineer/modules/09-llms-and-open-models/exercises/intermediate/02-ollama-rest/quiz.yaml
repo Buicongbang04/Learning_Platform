@@ -1,0 +1,105 @@
+questions:
+- id: prompt-len
+  kind: data
+  type: single
+  prompt: Với `num_ctx` 8 192, `prompt_eval_count` của prompt dài (dữ kiện + Wikipedia + câu hỏi) là khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 4 100 token
+  - id: b
+    text: Khoảng 5 800 token
+  - id: c
+    text: Khoảng 7 650 token
+  - id: d
+    text: Khoảng 20 500 token
+- id: reload
+  kind: data
+  type: single
+  prompt: Trong cell `num_ctx`, lời gọi nào có `load_s` lớn hơn hẳn, và vì sao?
+  options:
+  - id: a
+    text: Lời gọi 8 192, vì Ollama nạp lại model với context mới
+  - id: b
+    text: Lời gọi mặc định, vì đó là lần đầu gửi prompt dài
+  - id: c
+    text: Hai lời gọi bằng nhau, vì model đã nằm trong bộ nhớ
+  - id: d
+    text: Lời gọi mặc định, vì Ollama phải cắt bớt phần đầu prompt trước khi nạp
+- id: list-parameter
+  kind: knowledge
+  type: single
+  prompt: Trong `render_modelfile`, tham số `stop` có giá trị là list hai chuỗi thì được viết thành gì?
+  options:
+  - id: a
+    text: Một dòng PARAMETER chứa cả list dạng JSON
+  - id: b
+    text: Hai dòng PARAMETER stop, mỗi dòng một chuỗi
+  - id: c
+    text: Một dòng PARAMETER stop nối hai chuỗi bằng dấu phẩy
+  - id: d
+    text: Không viết gì, vì stop chỉ đặt được qua options
+- id: license-name
+  kind: knowledge
+  type: single
+  prompt: Vì sao `model_facts` đọc `general.license.name` trước `general.license`?
+  options:
+  - id: a
+    text: general.license.name luôn ngắn hơn nên dễ hiển thị
+  - id: b
+    text: Giấy phép không chuẩn ghi "other", tên thật ở .name
+  - id: c
+    text: general.license chỉ có ở model embedding
+  - id: d
+    text: Ollama 0.13 đã bỏ hẳn khoá general.license
+- id: detect-truncation
+  kind: knowledge
+  type: single
+  prompt: Cách đáng tin nhất để phát hiện Ollama đã cắt bớt prompt là gì?
+  options:
+  - id: a
+    text: Bắt HTTP 400 mà Ollama trả khi prompt quá dài
+  - id: b
+    text: So prompt_eval_count với số token đếm bằng tokenizer
+  - id: c
+    text: Đọc done_reason của response, nó là "length" khi prompt bị cắt bớt
+  - id: d
+    text: Đo thời gian, prompt bị cắt luôn trả lời chậm hơn
+- id: zero-options
+  kind: knowledge
+  type: single
+  prompt: Vì sao `chat_payload` lọc option bằng `is not None` thay vì kiểm truthiness?
+  options:
+  - id: a
+    text: Vì Ollama từ chối mọi option có giá trị bằng 0
+  - id: b
+    text: temperature=0 và keep_alive=0 là giá trị có nghĩa
+  - id: c
+    text: Vì truthiness chậm hơn khi dict có nhiều khoá
+  - id: d
+    text: Vì JSON không biểu diễn được số 0 kiểu float
+- id: why-stream
+  kind: knowledge
+  type: single
+  prompt: 'Lợi ích chính của `"stream": true` cho người dùng một ứng dụng chat là gì?'
+  options:
+  - id: a
+    text: Model sinh ra ít token hơn nên mỗi lượt gọi rẻ hơn đáng kể
+  - id: b
+    text: Chữ đầu hiện sau TTFT thay vì chờ hết câu trả lời
+  - id: c
+    text: Câu trả lời trở nên tất định với temperature 0
+  - id: d
+    text: Ollama dùng được context dài hơn num_ctx
+- id: determinism
+  kind: knowledge
+  type: single
+  prompt: temperature 0 và seed cố định mà lần gọi đầu khác các lần sau. Giải thích hợp lý nhất?
+  options:
+  - id: a
+    text: Ollama bỏ qua temperature 0 ở lần gọi đầu tiên
+  - id: b
+    text: Thứ tự cộng số thực đổi khi dùng lại cache, làm đổi token
+  - id: c
+    text: seed chỉ có hiệu lực từ lần gọi thứ hai trở đi
+  - id: d
+    text: Model tự học thêm từ câu hỏi ở lần gọi đầu rồi đổi câu trả lời

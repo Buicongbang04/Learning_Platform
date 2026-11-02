@@ -1,0 +1,55 @@
+questions:
+  - id: memory-vs-throughput
+    kind: knowledge
+    type: single
+    prompt: "Bảng ước lượng cho gpus_for_memory = 2 nhưng gpus_for_throughput = 8. Nên thuê bao nhiêu GPU và vì sao?"
+    options:
+      - { id: a, text: "8: chứa được chuỗi không có nghĩa là phục vụ kịp trong SLO" }
+      - { id: b, text: "2: bộ nhớ là ràng buộc cứng, thông lượng tự tăng khi batch lớn" }
+      - { id: c, text: "5: lấy trung bình hai con số để cân bằng chi phí và độ trễ" }
+      - { id: d, text: "10: cộng hai con số vì bộ nhớ và tính toán dùng tài nguyên riêng" }
+  - id: order-tracking-arch
+    kind: knowledge
+    type: single
+    prompt: "Kiến trúc nào hợp nhất cho yêu cầu 'đơn của tôi đang ở đâu'?"
+    options:
+      - { id: a, text: "RAG trên toàn bộ bảng đơn hàng đã embed thành vector" }
+      - { id: b, text: "Agent tự chọn tool, nhận mã đơn người dùng gõ vào câu hỏi" }
+      - { id: c, text: "Workflow cố định, tool lấy user_id từ phiên đăng nhập" }
+      - { id: d, text: "Fine-tune model trên lịch sử đơn hàng của sàn mỗi đêm" }
+  - id: policy-arch
+    kind: knowledge
+    type: single
+    prompt: "Chính sách đổi trả 60 trang, sửa khoảng mỗi tháng, câu trả lời cần trích điều khoản. Chọn gì?"
+    options:
+      - { id: a, text: "Fine-tune lại model mỗi lần chính sách được sửa đổi" }
+      - { id: b, text: "RAG theo điều khoản, kèm ngày hiệu lực, trích dẫn" }
+      - { id: c, text: "Nhét nguyên văn cả 60 trang vào mọi prompt" }
+      - { id: d, text: "Agent tự duyệt web nội bộ để tìm điều khoản" }
+  - id: reviews-injection
+    kind: knowledge
+    type: single
+    prompt: "Vì sao không đưa nguyên văn đánh giá sản phẩm vào prompt của nhánh tư vấn?"
+    options:
+      - { id: a, text: "Đánh giá làm tăng TTFT vượt SLO trong mọi trường hợp" }
+      - { id: b, text: "Đánh giá tiếng Việt làm embedding model chạy chậm hơn nhiều lần" }
+      - { id: c, text: "Đánh giá thuộc bản quyền của người bán, không được dùng" }
+      - { id: d, text: "Người ngoài viết, có thể chứa chỉ thị (injection gián tiếp)" }
+  - id: flash-sale-limit
+    kind: knowledge
+    type: single
+    prompt: "Ngày flash sale, với phương án API, giới hạn nào thường gặp trước tiên?"
+    options:
+      - { id: a, text: "Ngân sách tháng của dự án" }
+      - { id: b, text: "Rate limit của provider" }
+      - { id: c, text: "Bộ nhớ KV cache của GPU" }
+      - { id: d, text: "Số chiều của embedding" }
+  - id: doc-traceability
+    kind: knowledge
+    type: multi
+    prompt: "Điều gì làm một con số trong design doc đáng tin với người review?"
+    options:
+      - { id: a, text: "Sinh từ code chạy lại được trên giả định ghi trong repo" }
+      - { id: b, text: "Giá ghi kèm nguồn chính thức và ngày kiểm, hoặc ghi rõ giả định" }
+      - { id: c, text: "Làm tròn thật gọn để dễ nhớ" }
+      - { id: d, text: "Thông số model lấy từ config.json thật" }

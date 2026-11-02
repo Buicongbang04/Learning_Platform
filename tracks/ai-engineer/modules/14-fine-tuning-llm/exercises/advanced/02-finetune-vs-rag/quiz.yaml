@@ -1,0 +1,79 @@
+questions:
+- id: overlap
+  kind: data
+  type: single
+  prompt: "Trong 300 câu ghim, bao nhiêu câu có điều luật đúng từng được hỏi trong qrels train?"
+  options:
+  - id: a
+    text: Không câu nào
+  - id: b
+    text: Khoảng 30 câu
+  - id: c
+    text: Khoảng 150 câu
+  - id: d
+    text: Gần đủ 300 câu
+- id: bm25-top1
+  kind: data
+  type: single
+  prompt: "BM25 âm tiết top-1 trên toàn bộ 61 425 điều trích đúng điều cho khoảng bao nhiêu phần trăm trong 300 câu ghim?"
+  options:
+  - id: a
+    text: Dưới 5%
+  - id: b
+    text: Khoảng 40 tới 45%
+  - id: c
+    text: Khoảng 80%
+  - id: d
+    text: Trên 95%
+- id: sft-unseen
+  kind: data
+  type: single
+  prompt: "Model 0.5B SFT trên cặp câu hỏi train → trích dẫn (3 epoch) trích đúng điều cho bao nhiêu câu ghim?"
+  options:
+  - id: a
+    text: Gần như không câu nào
+  - id: b
+    text: Khoảng một phần tư số câu
+  - id: c
+    text: Ngang BM25 trên cùng 300 câu đó
+  - id: d
+    text: Hơn BM25, trên 60%
+- id: sft-seen
+  kind: data
+  type: single
+  prompt: "Với cấu hình train ghim trong đề, trên 300 câu train đầu (model đã thấy lúc train), tỉ lệ trích đúng điều của model SFT so với BM25 top-1 trên chính các câu đó thế nào?"
+  options:
+  - id: a
+    text: Cao hơn BM25 rõ rệt, vì đã thấy câu hỏi
+  - id: b
+    text: Ngang BM25, chênh nhau trong nhiễu
+  - id: c
+    text: Thấp hơn BM25 rõ rệt trên chính câu đã thấy
+  - id: d
+    text: Không so được, BM25 không đo trên câu train
+- id: why-not-knowledge
+  kind: knowledge
+  type: single
+  prompt: "Vì sao fine-tune trên văn bản luật thường là lựa chọn sai cho hệ hỏi đáp pháp luật?"
+  options:
+  - id: a
+    text: Vì LoRA không train được trên văn bản tiếng Việt
+  - id: b
+    text: Vì không trích nguồn được, lỗi thời khi luật đổi, và vẫn bịa
+  - id: c
+    text: Vì văn bản luật quá ngắn và quá ít để làm dữ liệu train cho model
+  - id: d
+    text: Vì model sau khi fine-tune không còn sinh được JSON hợp lệ nào
+- id: where-finetune
+  kind: knowledge
+  type: single
+  prompt: "Trong một hệ trợ lý pháp luật dùng RAG, fine-tune ở thành phần nào thường đáng nhất?"
+  options:
+  - id: a
+    text: Embedding model trên cặp câu hỏi và điều luật
+  - id: b
+    text: Tokenizer, để tách từ tiếng Việt tốt hơn
+  - id: c
+    text: Cơ sở dữ liệu vector, để tìm kiếm nhanh hơn nhiều lần
+  - id: d
+    text: Bảng BM25, để có trọng số IDF chuẩn hơn

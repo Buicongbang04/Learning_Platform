@@ -1,0 +1,7 @@
+training-program-count: [c]
+training-program-negative-share: [c]
+positive-lecturer-share: [d]
+error-as-result: [a]
+missing-id: [c]
+prompted-tradeoff: [d]
+fix-percentage: [b]

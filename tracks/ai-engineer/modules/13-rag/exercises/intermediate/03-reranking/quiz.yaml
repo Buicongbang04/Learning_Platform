@@ -1,0 +1,105 @@
+questions:
+- id: mrr-after
+  kind: data
+  type: single
+  prompt: Trên 100 câu đầu tập ghim, MRR@10 của hybrid là 0.680. Sau khi rerank top-50 bằng `bge-reranker-v2-m3` thì bao nhiêu?
+  options:
+  - id: a
+    text: '0.612'
+  - id: b
+    text: '0.680'
+  - id: c
+    text: '0.697'
+  - id: d
+    text: '0.825'
+- id: cpu-latency
+  kind: data
+  type: single
+  prompt: Độ trễ rerank trung vị mỗi câu (50 ứng viên, CPU, `max_length=512`) trên laptop của track là bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.6 giây
+  - id: b
+    text: Khoảng 3.5 giây
+  - id: c
+    text: Khoảng 35 giây
+  - id: d
+    text: Khoảng 6 phút
+- id: up-down
+  kind: data
+  type: single
+  prompt: Sau rerank top-50, bao nhiêu câu có điều đúng đầu tiên lên hạng và bao nhiêu câu tụt hạng?
+  options:
+  - id: a
+    text: 42 lên, 0 tụt
+  - id: b
+    text: 23 lên, 19 tụt
+  - id: c
+    text: 19 lên, 23 tụt
+  - id: d
+    text: 58 lên, 23 tụt
+- id: best-k
+  kind: data
+  type: single
+  prompt: Dùng lại điểm đã chấm, rerank bao nhiêu ứng viên đầu cho MRR@10 cao nhất?
+  options:
+  - id: a
+    text: Top-10
+  - id: b
+    text: Top-20
+  - id: c
+    text: Top-50
+  - id: d
+    text: Không rerank
+- id: lazy-load
+  kind: knowledge
+  type: single
+  prompt: Vì sao `cross_encoder_score_fn` chỉ import và nạp `CrossEncoder` ở lần chấm đầu tiên?
+  options:
+  - id: a
+    text: CrossEncoder chỉ chạy được bên trong một closure Python
+  - id: b
+    text: Import notebook và chạy test không phải tải model 2.3 GB
+  - id: c
+    text: Nạp sớm làm điểm của lần chấm đầu tiên bị lệch đi
+  - id: d
+    text: sentence-transformers cấm tạo model ở mức module
+- id: ceiling
+  kind: knowledge
+  type: single
+  prompt: Câu hỏi có điều đúng ở hạng 73 của hybrid. Rerank top-50 làm được gì cho câu đó?
+  options:
+  - id: a
+    text: Không gì cả, reranker chỉ thấy 50 ứng viên đầu
+  - id: b
+    text: Đưa lên hạng 1 nếu cross-encoder chấm điểm cao
+  - id: c
+    text: Đưa vào top-50 rồi xếp lại ở lần gọi sau đó
+  - id: d
+    text: Tự mở rộng danh sách cho tới khi gặp điều đúng
+- id: stable-ties
+  kind: knowledge
+  type: single
+  prompt: Vì sao `rerank` giữ thứ tự cũ của retrieval khi hai ứng viên bằng điểm?
+  options:
+  - id: a
+    text: Python không sort được hai số float bằng nhau
+  - id: b
+    text: Để mỗi lần chạy trả kết quả ngẫu nhiên khác nhau
+  - id: c
+    text: Thứ hạng retrieval vẫn là thông tin, và kết quả tái lập
+  - id: d
+    text: Cross-encoder luôn trả điểm bằng nhau cho điều cùng luật
+- id: when-rerank
+  kind: knowledge
+  type: single
+  prompt: Ngân sách 2 giây mỗi câu, chỉ có CPU như laptop track. Lựa chọn hợp lý là gì?
+  options:
+  - id: a
+    text: Rerank top-50 trên CPU vì MRR@10 tăng nhiều nhất
+  - id: b
+    text: Bỏ rerank trên CPU, sửa retrieval hoặc rerank trên GPU
+  - id: c
+    text: Thay cross-encoder bằng qwen2.5:3b chấm điểm từng đoạn
+  - id: d
+    text: Tăng max_length lên 1 024 token để chấm nhanh hơn

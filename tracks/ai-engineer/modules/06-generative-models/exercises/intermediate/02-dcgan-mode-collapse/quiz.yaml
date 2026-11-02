@@ -1,0 +1,105 @@
+questions:
+- id: ring-k5
+  kind: data
+  type: single
+  prompt: Trên vòng 8 Gauss, cấu hình G cập nhật 5 lần mỗi vòng phủ được bao nhiêu mode ở cuối, với ba seed?
+  options:
+  - id: a
+    text: 8, 8 và 8, như cấu hình thường không đổi gì
+  - id: b
+    text: Gần như không mode nào (0 hoặc 1 mỗi seed)
+  - id: c
+    text: Đúng 4 mode ở mọi seed
+  - id: d
+    text: 8 ở một seed, 4 ở hai seed còn lại
+- id: ring-sat-hq
+  kind: data
+  type: single
+  prompt: Với loss saturating trên vòng 8 Gauss, tỉ lệ mẫu chất lượng cao cuối cùng của ba seed nằm khoảng nào?
+  options:
+  - id: a
+    text: Từ 0.95 tới 1.0
+  - id: b
+    text: Từ khoảng 0.4 tới 0.7
+  - id: c
+    text: Dưới 0.05 ở mọi seed
+  - id: d
+    text: Đúng bằng 0.5 ở cả ba seed
+- id: wgan-tradeoff
+  kind: data
+  type: single
+  prompt: So với non-saturating cùng 3 000 vòng, WGAN-GP (critic 5 bước mỗi vòng) cho kết quả thế nào trên vòng 8 Gauss?
+  options:
+  - id: a
+    text: Phủ 8 mode, ít mẫu chất lượng cao hơn
+  - id: b
+    text: Phủ ít mode hơn hẳn nhưng mẫu sắc nét hơn
+  - id: c
+    text: Kém hơn rõ rệt ở cả hai chỉ số
+  - id: d
+    text: Giống hệt nhau ở mọi seed
+- id: strong-d
+  kind: data
+  type: single
+  prompt: 'Cấu hình D mạnh (lr D gấp 10) với loss saturating: D(G(z)) trung bình trong epoch đầu tiên là khoảng bao nhiêu?'
+  options:
+  - id: a
+    text: Khoảng 0.5
+  - id: b
+    text: Khoảng 0.25
+  - id: c
+    text: Dưới 0.03
+  - id: d
+    text: Gần 1.0
+- id: detach
+  kind: knowledge
+  type: single
+  prompt: Ở bước cập nhật D, vì sao đưa fake.detach() thay vì fake vào D?
+  options:
+  - id: a
+    text: Để loss của D không tạo gradient về tham số G
+  - id: b
+    text: Để giảm bộ nhớ GPU của D xuống một nửa
+  - id: c
+    text: Vì BatchNorm của D không nhận tensor cần gradient
+  - id: d
+    text: Để D nhìn thấy ảnh giả ở chế độ eval
+- id: loss-signal
+  kind: knowledge
+  type: single
+  prompt: Loss của G giảm đều và tiến gần 0 trong lúc train GAN. Bạn kết luận gì?
+  options:
+  - id: a
+    text: G đang tốt lên, có thể dừng sớm
+  - id: b
+    text: Chưa đủ; cần chỉ số có đáp án (histogram, FID)
+  - id: c
+    text: D đang thua, cần tăng lr của D lên
+  - id: d
+    text: Mode collapse chắc chắn đã xảy ra rồi, cần dừng ngay
+- id: bn-bias
+  kind: knowledge
+  type: single
+  prompt: Vì sao conv đứng ngay trước BatchNorm trong DCGAN dùng bias=False?
+  options:
+  - id: a
+    text: BN trừ mean theo batch nên bias bị triệt tiêu
+  - id: b
+    text: Bias làm conv transpose sinh vân bàn cờ
+  - id: c
+    text: PyTorch không cho conv có bias trước BatchNorm
+  - id: d
+    text: Để khởi tạo N(0, 0.02²) không áp lên bias
+- id: sat-variance
+  kind: knowledge
+  type: single
+  prompt: Cùng cấu hình D mạnh + saturating, một lần chạy sụp về vài lớp chữ số, một lần khác (khác seed hoặc khác máy) lại hồi phục đủ 10 lớp. Kết luận nào đúng?
+  options:
+  - id: a
+    text: Lần hồi phục chứng tỏ saturating an toàn, có thể dùng thay NS
+  - id: b
+    text: Hỏng có yếu tố ngẫu nhiên; cần nhiều seed trước khi kết luận
+  - id: c
+    text: Lần sụp là do lỗi cài đặt, vì GAN luôn tái lập được trên GPU
+  - id: d
+    text: Classifier giám khảo hỏng ở một trong hai lần chạy đó

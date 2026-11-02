@@ -1,0 +1,105 @@
+questions:
+- id: gain
+  kind: data
+  type: single
+  prompt: Bản tham chiếu (60 bước, 2 seed) tăng accuracy greedy trên 500 câu ghim bao nhiêu so với model gốc?
+  options:
+  - id: a
+    text: Giảm 3 tới 5 điểm vì model quên cách giải toán
+  - id: b
+    text: Khoảng 15 tới 20 điểm ở cả hai seed, rất chắc chắn
+  - id: c
+    text: Khoảng 3 tới 5 điểm, một seed chưa vượt nhiễu
+  - id: d
+    text: Không đổi một câu nào, LoRA không học được gì
+- id: format
+  kind: data
+  type: single
+  prompt: Tỉ lệ câu trả lời đúng khung chặt thay đổi thế nào sau GRPO?
+  options:
+  - id: a
+    text: Gần như đứng yên quanh 65% ở cả hai seed
+  - id: b
+    text: Từ khoảng 65% lên trên 95% ở cả hai seed
+  - id: c
+    text: Tăng ở seed 0, giảm mạnh ở seed 1
+  - id: d
+    text: Từ khoảng 90% xuống còn khoảng 60%
+- id: length-seeds
+  kind: data
+  type: single
+  prompt: Độ dài lời giải greedy sau GRPO ở hai seed ra sao?
+  options:
+  - id: a
+    text: Dài gấp đôi ở cả hai seed
+  - id: b
+    text: Gần như không đổi ở cả hai seed
+  - id: c
+    text: Ngắn đi ở cả hai seed
+  - id: d
+    text: Một seed dài ra, một seed ngắn đi
+- id: coverage
+  kind: data
+  type: single
+  prompt: pass@8 trên 200 câu đầu (lấy mẫu ở 0.7) trước và sau GRPO thế nào?
+  options:
+  - id: a
+    text: Tụt mạnh, RL đã thu hẹp độ phủ
+  - id: b
+    text: Lên gần 100% ở cả hai seed
+  - id: c
+    text: Bằng pass@1 vì mọi mẫu giống hệt nhau
+  - id: d
+    text: Không tụt; thay đổi trong vài điểm
+- id: hacking
+  kind: data
+  type: single
+  prompt: Đọc 500 câu trả lời sau GRPO, có dấu hiệu lách reward kiểu nhiều hộp hay hộp rỗng không?
+  options:
+  - id: a
+    text: Có, phần lớn câu trả lời có hai hộp trở lên
+  - id: b
+    text: Có, model trả hộp rỗng không có lập luận
+  - id: c
+    text: Không thấy; lỗi còn lại là hiểu sai đề
+  - id: d
+    text: Có, phần lớn câu sai chép số trong đề
+- id: two-metrics
+  kind: knowledge
+  type: single
+  prompt: Vì sao báo cả accuracy (bộ trích dễ dãi) lẫn boxed_correct (như reward) khi đánh giá model sau GRPO?
+  options:
+  - id: a
+    text: Vì TRL chỉ log được một trong hai cột lúc train
+  - id: b
+    text: Để tách phần tăng do khung khỏi phần giải đúng hơn
+  - id: c
+    text: Để khoảng tin cậy hẹp hơn khi lấy trung bình hai cột
+  - id: d
+    text: Vì bộ trích dễ dãi luôn cho số thấp hơn bộ trích chặt
+- id: clip-zero
+  kind: knowledge
+  type: single
+  prompt: Vì sao `clip_ratio` trong log của TRL bằng 0 ở mọi bước của bản tham chiếu?
+  options:
+  - id: a
+    text: beta = 0 nên TRL tắt luôn clipped objective
+  - id: b
+    text: Mỗi batch một bước gradient nên ratio bằng 1
+  - id: c
+    text: LoRA giữ trọng số gốc nên ratio không thể đổi
+  - id: d
+    text: Reward kiểm được không bao giờ cần phép cắt
+- id: reward-curve
+  kind: knowledge
+  type: single
+  prompt: Reward lúc train của một seed không tăng mà accuracy trên tập giữ lại vẫn tăng. Giải thích hợp lý nhất?
+  options:
+  - id: a
+    text: Reward giảm luôn là dấu hiệu reward hacking
+  - id: b
+    text: TRL tính reward sai khi dùng LoRA với bf16
+  - id: c
+    text: Tập giữ lại đã bị nhiễm bẩn từ tập train
+  - id: d
+    text: Mỗi bước là câu khác nhau, độ khó dao động

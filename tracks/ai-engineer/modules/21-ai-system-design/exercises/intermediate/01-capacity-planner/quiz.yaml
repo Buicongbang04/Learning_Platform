@@ -1,0 +1,65 @@
+questions:
+  - id: best-point-e2e8
+    kind: data
+    type: single
+    prompt: "Bảng benchmark của bài, 300 token output, SLO TTFT 1 s và E2E 8 s. Điểm vận hành tốt nhất là concurrency bao nhiêu?"
+    options:
+      - { id: a, text: "8" }
+      - { id: b, text: "16" }
+      - { id: c, text: "32" }
+      - { id: d, text: "64" }
+  - id: gpus-e2e8
+    kind: data
+    type: single
+    prompt: "Cùng SLO đó (TTFT 1 s, E2E 8 s), 20 request/giây cao điểm, headroom 20%, N+1. Cần bao nhiêu GPU?"
+    options:
+      - { id: a, text: "8" }
+      - { id: b, text: "10" }
+      - { id: c, text: "11" }
+      - { id: d, text: "16" }
+  - id: shorter-output
+    kind: data
+    type: single
+    prompt: "Giữ SLO TTFT 1 s, E2E 10 s, 20 request/giây, nhưng ép câu trả lời còn 150 token thay vì 300. Số GPU (headroom 20%, N+1) là bao nhiêu?"
+    options:
+      - { id: a, text: "3" }
+      - { id: b, text: "5" }
+      - { id: c, text: "8" }
+      - { id: d, text: "9" }
+  - id: peak-million
+    kind: data
+    type: single
+    prompt: "1 000 000 request mỗi ngày, giờ cao điểm gấp 3 lần trung bình. Peak request/giây là khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "11.6" }
+      - { id: b, text: "34.7" }
+      - { id: c, text: "41.7" }
+      - { id: d, text: "125" }
+  - id: why-not-max-concurrency
+    kind: knowledge
+    type: single
+    prompt: "Vì sao không chọn luôn concurrency 64 (thông lượng lớn nhất bảng: 4.35 request/giây mỗi GPU với 300 token output)?"
+    options:
+      - { id: a, text: "Thông lượng ở đó thấp hơn ở concurrency 32" }
+      - { id: b, text: "Concurrency 64 làm GPU hết bộ nhớ trọng số" }
+      - { id: c, text: "Ở đó TTFT 1.2 s và E2E 14.7 s, vượt cả hai SLO" }
+      - { id: d, text: "Định luật Little không áp dụng khi batch lớn" }
+  - id: little-meaning
+    kind: knowledge
+    type: single
+    prompt: "Định luật Little L = λW nói gì trong bài toán serve LLM?"
+    options:
+      - { id: a, text: "Số GPU cần bằng số request mỗi giây chia cho độ trễ" }
+      - { id: b, text: "Độ trễ tăng tuyến tính theo số token output của request" }
+      - { id: c, text: "Thông lượng GPU bằng băng thông chia cho kích thước model" }
+      - { id: d, text: "Số request đang xử lý bằng tốc độ đến nhân thời gian mỗi request" }
+  - id: break-even-factors
+    kind: knowledge
+    type: multi
+    prompt: "Những yếu tố nào làm điểm hoà vốn self-host so với API dịch về phía cần NHIỀU request hơn mỗi tháng?"
+    options:
+      - { id: a, text: "Giá API giảm" }
+      - { id: b, text: "Giá thuê GPU tăng" }
+      - { id: c, text: "SLO E2E chặt hơn" }
+      - { id: d, text: "Bật prompt caching ở API" }
+      - { id: e, text: "Benchmark cho thông lượng mỗi GPU cao hơn" }

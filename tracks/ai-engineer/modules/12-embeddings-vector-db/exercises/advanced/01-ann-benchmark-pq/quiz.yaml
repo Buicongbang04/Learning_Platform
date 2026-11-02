@@ -1,0 +1,79 @@
+questions:
+- id: pq-bytes
+  kind: knowledge
+  type: single
+  prompt: Vector 1 024 chiều float32 nén bằng PQ với m = 64, mỗi codebook 256 centroid. Phần mã của mỗi vector chiếm bao nhiêu byte?
+  options:
+  - id: a
+    text: 16 byte
+  - id: b
+    text: 64 byte
+  - id: c
+    text: 256 byte
+  - id: d
+    text: 4 096 byte
+- id: pq-vs-faiss
+  kind: data
+  type: single
+  prompt: Cùng m, cùng mẫu train, recall ANN@10 của PQ tự viết so với `faiss.IndexPQ` thế nào?
+  options:
+  - id: a
+    text: Gần bằng nhau, FAISS nhanh hơn nhiều lần
+  - id: b
+    text: Tự viết thấp hơn hẳn, khoảng 0.3 điểm recall
+  - id: c
+    text: Tự viết cao hơn hẳn, khoảng 0.3
+  - id: d
+    text: Bằng nhau, tốc độ cũng ngang nhau
+- id: rescore-effect
+  kind: data
+  type: single
+  prompt: Với PQ m = 64, rescoring top-100 bằng vector gốc làm recall ANN@10 thay đổi thế nào?
+  options:
+  - id: a
+    text: Gần như không đổi gì cả, vẫn quanh 0.68
+  - id: b
+    text: Từ khoảng 0.68 lên gần 0.99
+  - id: c
+    text: Từ khoảng 0.68 xuống 0.5
+  - id: d
+    text: Lên đúng 1.0 ở mọi câu
+- id: ivfpq-ceiling
+  kind: knowledge
+  type: single
+  prompt: Vì sao tăng nprobe không đưa recall của IVF-PQ lên gần 1?
+  options:
+  - id: a
+    text: nprobe lớn làm k-means phải train lại
+  - id: b
+    text: Khoảng cách tính trên vector đã lượng tử
+  - id: c
+    text: FAISS giới hạn nprobe tối đa là 32 cho IVF-PQ
+  - id: d
+    text: Các danh sách IVF bị trùng lặp vector
+- id: ten-million
+  kind: knowledge
+  type: single
+  prompt: 10 triệu vector 1 024 chiều float32 chiếm khoảng bao nhiêu RAM, chưa tính index?
+  options:
+  - id: a
+    text: Khoảng 4 GB
+  - id: b
+    text: Khoảng 10 GB
+  - id: c
+    text: Khoảng 41 GB
+  - id: d
+    text: Khoảng 400 GB
+- id: refine-before-add
+  kind: knowledge
+  type: single
+  prompt: '`IndexRefineFlat` bọc IVF-PQ để xếp lại bằng vector gốc. Vì sao phải bọc trước khi `add`?'
+  options:
+  - id: a
+    text: Index refine phải giữ đúng các vector đã thêm vào
+  - id: b
+    text: Bọc sau thì FAISS buộc phải train lại toàn bộ codebook PQ
+  - id: c
+    text: IndexRefineFlat chỉ chạy được trên GPU
+  - id: d
+    text: Bọc sau làm nprobe tự đặt lại về 1

@@ -1,0 +1,64 @@
+questions:
+  - id: fallback-p95
+    kind: data
+    type: single
+    prompt: "Trên trace của bài, cấu hình chỉ bật fallback (timeout 10 s, không breaker, không cache). p95 độ trễ là khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "2.70 s" }
+      - { id: b, text: "4.31 s" }
+      - { id: c, text: "5.34 s" }
+      - { id: d, text: "12.1 s" }
+  - id: timeout-3
+    kind: data
+    type: single
+    prompt: "Vẫn chỉ bật fallback nhưng giảm timeout_s xuống 3 s. p95 độ trễ còn khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "3.9 s" }
+      - { id: b, text: "4.5 s" }
+      - { id: c, text: "5.3 s" }
+      - { id: d, text: "9.1 s" }
+  - id: breaker-skipped
+    kind: data
+    type: single
+    prompt: "Fallback + circuit breaker (3 lỗi liên tiếp, ngắt 60 s), không cache. calls['large'] là bao nhiêu (không breaker là 2 000)?"
+    options:
+      - { id: a, text: "1 674" }
+      - { id: b, text: "1 695" }
+      - { id: c, text: "1 874" }
+      - { id: d, text: "2 000" }
+  - id: global-leaks
+    kind: data
+    type: single
+    prompt: "Fallback + breaker + cache global TTL 3 600 s. Bao nhiêu lần một khách nhận câu trả lời cá nhân của khách khác?"
+    options:
+      - { id: a, text: "0" }
+      - { id: b, text: "108" }
+      - { id: c, text: "925" }
+      - { id: d, text: "1 884" }
+  - id: user-cache-low
+    kind: knowledge
+    type: single
+    prompt: "Cache theo user chỉ trúng 12.8%, cache public trúng 47.8%. Vì sao?"
+    options:
+      - { id: a, text: "Cache theo user có TTL ngắn hơn cache public trong cấu hình của bài" }
+      - { id: b, text: "Một khách ít khi hỏi lại câu cũ; FAQ thì nhiều khách hỏi giống nhau" }
+      - { id: c, text: "Cache public lưu cả câu trả lời cá nhân nên có nhiều khoá hơn" }
+      - { id: d, text: "Cache theo user bị circuit breaker xoá mỗi khi model chính sự cố" }
+  - id: cascade-threshold
+    kind: knowledge
+    type: single
+    prompt: "Hạ ngưỡng cascade từ 0.7 xuống 0.5 giảm chi phí từ 2.41 xuống 1.47 USD/1 000 request. Kết luận nào đúng?"
+    options:
+      - { id: a, text: "Nên chọn 0.9 vì càng gọi model lớn càng an toàn" }
+      - { id: b, text: "Nên chọn 0.5 vì rẻ hơn 39% và p95 còn giảm" }
+      - { id: c, text: "Chưa kết luận được: mô phỏng không đo chất lượng câu trả lời của model nhỏ" }
+      - { id: d, text: "Ngưỡng không ảnh hưởng chất lượng vì model lớn luôn kiểm lại" }
+  - id: what-to-cache
+    kind: knowledge
+    type: multi
+    prompt: "Với chatbot CSKH, loại câu trả lời nào an toàn để đưa vào cache dùng chung giữa mọi khách?"
+    options:
+      - { id: a, text: "Câu hỏi chính sách chung, khoá kèm phiên bản chính sách" }
+      - { id: b, text: "Trạng thái đơn hàng của khách" }
+      - { id: c, text: "Giờ mở cửa và hotline" }
+      - { id: d, text: "Câu trả lời có tên và địa chỉ khách" }

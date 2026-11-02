@@ -1,0 +1,7 @@
+raw-size: [d]
+history-tokens: [b]
+capacity-loss: [a]
+extraction-fp: [b]
+recency-tradeoff: [c]
+lost-referent: [a]
+keyword-negative: [c]

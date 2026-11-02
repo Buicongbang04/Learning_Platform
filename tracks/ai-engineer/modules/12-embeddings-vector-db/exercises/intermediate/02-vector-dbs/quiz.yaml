@@ -1,0 +1,105 @@
+questions:
+- id: slowest-load
+  kind: data
+  type: single
+  prompt: Nạp 61 425 vector lên đĩa, store nào chậm nhất?
+  options:
+  - id: a
+    text: FaissStore
+  - id: b
+    text: ChromaStore
+  - id: c
+    text: QdrantStore
+  - id: d
+    text: LanceStore
+- id: fastest-query
+  kind: data
+  type: single
+  prompt: Trong bốn store khi chưa thêm index nào ngoài mặc định, store nào có p50 truy vấn thấp nhất?
+  options:
+  - id: a
+    text: FaissStore (exact)
+  - id: b
+    text: ChromaStore
+  - id: c
+    text: QdrantStore (local)
+  - id: d
+    text: LanceStore (quét)
+- id: lance-index
+  kind: data
+  type: single
+  prompt: Thêm index IVF_HNSW_SQ cho bảng LanceDB (trước đó quét phẳng) thay đổi p50 và recall ANN@10 thế nào?
+  options:
+  - id: a
+    text: p50 gần như không đổi, recall vẫn 1.0
+  - id: b
+    text: p50 từ cỡ 300 ms xuống dưới 10 ms, recall còn cỡ 0.95
+  - id: c
+    text: p50 tăng gấp đôi, recall tăng lên 1.0
+  - id: d
+    text: p50 dưới 1 ms, recall tụt còn khoảng 0.5
+- id: oracle-filter
+  kind: data
+  type: single
+  prompt: Lọc `where law = văn bản chứa đáp án` (lọc trong truy vấn) đưa Recall@10 theo nhãn từ 0.905 lên khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Không đổi, 0.905
+  - id: b
+    text: Khoảng 0.98
+  - id: c
+    text: Đúng 1.000
+  - id: d
+    text: Tụt còn khoảng 0.6
+- id: post-filter-short
+  kind: data
+  type: single
+  prompt: Post-filter trên FAISS HNSW, lấy top-100 rồi mới lọc theo văn bản. Bao nhiêu trong 300 câu nhận ít hơn 10 kết quả?
+  options:
+  - id: a
+    text: Không câu nào
+  - id: b
+    text: Dưới 20 câu
+  - id: c
+    text: Khoảng một phần tư
+  - id: d
+    text: Gần như tất cả 300 câu
+- id: chroma-default
+  kind: knowledge
+  type: single
+  prompt: Tạo collection Chroma không khai báo `space` rồi nạp vector chưa chuẩn hoá. Điều gì xảy ra?
+  options:
+  - id: a
+    text: Chroma báo lỗi vì thiếu metric ngay lúc tạo collection
+  - id: b
+    text: Chroma tự chuẩn hoá rồi dùng cosine
+  - id: c
+    text: Tìm theo L2, xếp hạng khác cosine, không báo lỗi
+  - id: d
+    text: Chroma dùng dot product, kết quả vẫn đúng
+- id: qdrant-ids
+  kind: knowledge
+  type: single
+  prompt: Vì sao `QdrantStore` dùng `uuid5(NAMESPACE_URL, uid)` làm id của point thay vì số thứ tự lúc nạp?
+  options:
+  - id: a
+    text: UUID ngắn hơn nên tiết kiệm bộ nhớ index
+  - id: b
+    text: Cùng uid luôn ra cùng id, upsert thay bản cũ
+  - id: c
+    text: Qdrant bắt buộc id ngẫu nhiên để chia shard
+  - id: d
+    text: UUID giúp tìm kiếm cosine nhanh hơn số nguyên
+- id: postfilter-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao tăng k' (lấy nhiều hơn rồi mới lọc) không chữa dứt điểm việc post-filter trả thiếu kết quả?
+  options:
+  - id: a
+    text: FAISS giới hạn k' tối đa chỉ là 100 cho mỗi câu
+  - id: b
+    text: Bộ lọc càng chặt, phần khớp trong top-k' càng ít
+  - id: c
+    text: Tăng k' làm giảm recall của các kết quả đầu
+  - id: d
+    text: Post-filter chỉ chạy được trên index exact

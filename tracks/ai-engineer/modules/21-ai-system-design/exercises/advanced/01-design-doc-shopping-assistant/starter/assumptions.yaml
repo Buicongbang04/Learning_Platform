@@ -1,0 +1,29 @@
+# Giả định cho trợ lý mua sắm của sàn ChợViệt (hư cấu). Điền số của BẠN, ghi nguồn hoặc lý do bên cạnh.
+# Giá API và giá thuê GPU: hoặc giá đã kiểm trên trang chính thức (ghi ngày), hoặc ghi rõ GIẢ ĐỊNH.
+# Lưu ý PyYAML: viết 7.6e+9 hoặc 7600000000, không viết 7.6e9 (bị đọc thành chuỗi).
+traffic:
+  dau:                        # TODO: người dùng hoạt động mỗi ngày CÓ dùng trợ lý
+  requests_per_user_per_day:  # TODO
+  peak_to_avg:                # TODO: hệ số giờ cao điểm (ngày thường hay ngày flash sale? ghi rõ)
+request:
+  input_tokens:               # TODO: system prompt + lịch sử + ngữ cảnh RAG/tool + câu hỏi
+  cached_input_tokens:        # TODO: phần prefix cố định được prompt caching
+  output_tokens:              # TODO
+  e2e_latency_s:              # TODO: độ trễ trung bình một request (dùng cho định luật Little)
+api_price:                    # USD / 1 triệu token
+  input:                      # TODO
+  output:                     # TODO
+  cached_input:               # TODO
+self_host:
+  n_params:                   # TODO
+  weight_bits:                # TODO
+  n_layers:                   # TODO: từ config.json của model
+  n_kv_heads:                 # TODO
+  head_dim:                   # TODO
+  kv_bits:                    # TODO
+  context_tokens:             # TODO
+  vram_gib:                   # TODO
+  reserve_gib:                # TODO
+  rps_per_gpu:                # TODO: thông lượng một GPU đạt SLO (benchmark hoặc GIẢ ĐỊNH, ghi rõ)
+  headroom:                   # TODO
+  usd_per_gpu_hour:           # TODO

@@ -1,0 +1,105 @@
+questions:
+- id: no-target-episodes
+  kind: data
+  type: single
+  prompt: Cấu hình "không target net" chạy bao nhiêu episode trong 50 000 bước env (seed 0)?
+  options:
+  - id: a
+    text: Khoảng 350 episode
+  - id: b
+    text: Khoảng 1 000 episode
+  - id: c
+    text: Khoảng 4 900 episode
+  - id: d
+    text: Khoảng 50 000 episode
+- id: why-replay
+  kind: knowledge
+  type: single
+  prompt: Replay buffer giúp DQN chủ yếu ở điểm nào?
+  options:
+  - id: a
+    text: Phá tương quan giữa mẫu liên tiếp, dùng lại mỗi mẫu
+  - id: b
+    text: Giúp mạng nhớ chính xác mọi trạng thái từng được thăm
+  - id: c
+    text: Thay thế target network khi buffer đủ lớn
+  - id: d
+    text: Giảm số bước env cần chạy trong mỗi episode
+- id: why-target
+  kind: knowledge
+  type: single
+  prompt: Không có target network, chuyện gì làm Q-value nổ?
+  options:
+  - id: a
+    text: Gradient đi qua cả Q(s') nên không còn là semi-gradient
+  - id: b
+    text: Mỗi bước học dịch luôn target, mạng đuổi theo chính nó
+  - id: c
+    text: Replay buffer bị ghi đè nhanh hơn nên thiếu mẫu tốt
+  - id: d
+    text: Huber loss đổi sang tuyến tính khi sai số còn nhỏ
+- id: double-dqn
+  kind: knowledge
+  type: single
+  prompt: Double DQN tính target thế nào?
+  options:
+  - id: a
+    text: Online chọn action ở s', target net đánh giá
+  - id: b
+    text: Lấy trung bình max Q của online và target net
+  - id: c
+    text: Target net chọn action ở s', online đánh giá
+  - id: d
+    text: Dùng hai replay buffer độc lập cho hai mạng
+- id: terminated-only
+  kind: knowledge
+  type: single
+  prompt: Vì sao buffer chỉ lưu cờ terminated mà không lưu truncated?
+  options:
+  - id: a
+    text: Truncated luôn bằng False trên CartPole nên thừa
+  - id: b
+    text: Bị cắt vì time limit vẫn phải bootstrap từ V(s')
+  - id: c
+    text: Gymnasium tự gộp truncated vào reward
+  - id: d
+    text: Để buffer nhỏ đi một cột bool cho mỗi chuyển lưu
+- id: why-checkpoint
+  kind: knowledge
+  type: single
+  prompt: Vì sao DQN trên CartPole nên đánh giá định kỳ và giữ checkpoint tốt nhất thay vì lấy trọng số cuối?
+  options:
+  - id: a
+    text: Đường cong dao động, trọng số cuối có thể đúng lúc tệ
+  - id: b
+    text: Trọng số cuối luôn overfit vì replay buffer đã đầy ắp
+  - id: c
+    text: PyTorch không lưu được trọng số khi train xong
+  - id: d
+    text: Checkpoint tốt nhất luôn có Q gần return thật hơn
+- id: soft-tau
+  kind: knowledge
+  type: single
+  prompt: Soft update với τ = 0.005 sau mỗi bước học có tác dụng gì so với chép cứng mỗi 500 bước?
+  options:
+  - id: a
+    text: Target network trôi chậm và đều thay vì nhảy bậc
+  - id: b
+    text: Target network luôn trùng khớp mạng online từng bước
+  - id: c
+    text: Bỏ hẳn được replay buffer vì target đã ổn định
+  - id: d
+    text: Gradient đi được qua cả target network khi học
+- id: huber
+  kind: knowledge
+  type: single
+  prompt: Vì sao DQN dùng Huber loss thay vì MSE cho TD error?
+  options:
+  - id: a
+    text: Huber nhanh hơn MSE vài lần trên CPU
+  - id: b
+    text: Target sai lệch lớn không sinh gradient khổng lồ
+  - id: c
+    text: Huber bắt Q-value luôn nằm trong khoảng [−1, 1]
+  - id: d
+    text: MSE không lấy được đạo hàm khi sai số đúng bằng 0

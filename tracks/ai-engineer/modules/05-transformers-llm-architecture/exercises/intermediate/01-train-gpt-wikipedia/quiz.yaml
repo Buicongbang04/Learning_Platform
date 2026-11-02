@@ -1,0 +1,92 @@
+questions:
+- id: train-tokens
+  kind: data
+  type: single
+  prompt: BPE 8 000 train trên 1 000 bài train cắt văn bản train (6 432 422 ký tự) thành khoảng bao nhiêu token?
+  options:
+  - id: a
+    text: Khoảng 0.6 triệu token
+  - id: b
+    text: Khoảng 1.8 triệu token
+  - id: c
+    text: Khoảng 6.4 triệu token
+  - id: d
+    text: Khoảng 12.9 triệu token
+- id: cpu-vs-lstm
+  kind: data
+  type: single
+  prompt: Với cấu hình CPU (n_embd 128, 1 500 bước), bpc của GPT mini trên validation so với LSTM module 04 (1.975) thế nào?
+  options:
+  - id: a
+    text: Thấp hơn hẳn, dưới 1.7
+  - id: b
+    text: Gần như bằng, trong khoảng 1.95-2.00
+  - id: c
+    text: Cao hơn, trong khoảng 2.0-2.3
+  - id: d
+    text: Cao hơn nhiều, trên 3.0
+- id: position-loss
+  kind: data
+  type: single
+  prompt: Trong biểu đồ loss theo vị trí trong cửa sổ 128 token, NLL ở vị trí 0 so với vị trí 127 thế nào?
+  options:
+  - id: a
+    text: Vị trí 0 cao hơn rõ rệt
+  - id: b
+    text: Hai vị trí gần như bằng nhau
+  - id: c
+    text: Vị trí 127 cao hơn rõ rệt
+  - id: d
+    text: Vị trí 0 bằng đúng ln 8 000
+- id: stride
+  kind: knowledge
+  type: single
+  prompt: Đánh giá bằng cửa sổ trượt block 128, stride 64. Điều nào đúng?
+  options:
+  - id: a
+    text: Mỗi target được tính hai lần rồi lấy trung bình
+  - id: b
+    text: Mỗi target tính một lần, có ít nhất 64 token ngữ cảnh
+  - id: c
+    text: Chỉ một nửa số target được tính để tiết kiệm thời gian
+  - id: d
+    text: Stride không ảnh hưởng tới perplexity đo được
+- id: weight-decay-groups
+  kind: knowledge
+  type: single
+  prompt: Vì sao thường không áp weight decay cho bias và tham số LayerNorm?
+  options:
+  - id: a
+    text: Chúng không có gradient nên decay vô nghĩa
+  - id: b
+    text: Kéo chúng về 0 không giúp tổng quát hoá, chỉ làm hại
+  - id: c
+    text: AdamW không cho decay tensor một chiều
+  - id: d
+    text: Để tiết kiệm bộ nhớ của optimizer state
+- id: warmup
+  kind: knowledge
+  type: single
+  prompt: Vai trò chính của warmup learning rate khi train Transformer với AdamW là gì?
+  options:
+  - id: a
+    text: Tránh bước cập nhật lớn khi ước lượng moment còn kém
+  - id: b
+    text: Giúp model nhìn đủ mọi bài trước khi học thật
+  - id: c
+    text: Bắt buộc để mask nhân quả hoạt động đúng
+  - id: d
+    text: Giảm số tham số cần cập nhật ở đầu quá trình
+- id: compare-budget
+  kind: knowledge
+  type: single
+  prompt: Một bài blog báo Transformer 2 triệu tham số có bpc tệ hơn LSTM 10 triệu tham số, không nói số bước train. Kết luận đúng nhất là gì?
+  options:
+  - id: a
+    text: LSTM tốt hơn Transformer trên dữ liệu này
+  - id: b
+    text: So sánh phải kèm số tham số và ngân sách train
+  - id: c
+    text: bpc không dùng được để so hai kiến trúc khác nhau
+  - id: d
+    text: GPU luôn cho model tốt hơn CPU với cùng code
