@@ -74,7 +74,7 @@ flowchart TD
 | [M08](milestones/m08-observability.md) | 13 Observability | M06, M07 | metrics, logs, traces; dashboard Grafana và alert rule | pytest |
 | [M09](milestones/m09-game-day.md) | 16 SRE & vận hành | toàn bộ | SLO, game day với sự cố bơm vào, khôi phục, postmortem; tuỳ chọn deploy AWS thật | rubric tự đánh giá |
 
-Milestone M01–M02 có ngay cùng module 00–05; M03–M06 và M07–M09 được thêm cùng các module tương ứng.
+Milestone M01–M04 đã có cùng module 00–07; M05–M06 và M07–M09 được thêm cùng các module tương ứng.
 
 ## Cách chấm
 

@@ -97,6 +97,90 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
   Với API chủ yếu được gọi qua HTTPS ngay từ đầu, 301 đủ; nếu có client cũ `POST` qua HTTP thì 308 an toàn hơn.
 - **Không HSTS** ở lab local: xem lý do trong đề M02.
 
+## M03: `project/container/`
+
+### Dockerfile
+
+- **Ba stage: `deps`, `runtime`, rồi `worker` và `api` cùng `FROM runtime`.** Dependency cài một lần vào `/opt/venv` ở
+  `deps`, `runtime` chép venv và code, hai target chỉ khác `CMD`, `HEALTHCHECK` và cổng. Hai image chung mọi layer trừ phần
+  metadata: registry lưu một lần, node kéo một lần, trivy quét một bộ gói. Cái giá: worker mang theo FastAPI và uvicorn mà nó
+  không dùng (vài MB). Tách requirements theo tiến trình chỉ đáng khi bộ dependency khác nhau thật sự.
+- **`api` là stage cuối.** `docker build` không `--target` ra image API, đúng với người quen Dockerfile một stage.
+- **`ARG APP_VERSION`, `GIT_COMMIT` đặt sau mọi `COPY`.** ARG chỉ làm đổi cache từ chỗ nó được dùng trở xuống; đặt ở đầu
+  stage thì mỗi commit build lại cả layer venv. `ENV` và `LABEL` không tạo layer nên đổi version không đổi layer nào.
+- **`USER 10001:10001` dạng số.** Tên user chỉ có nghĩa trong `/etc/passwd` của image; kubelet kiểm `runAsNonRoot` bằng số.
+  UID ngoài dải user thường của máy host (1000) để tệp do container ghi lên volume không trùng chủ với người thật.
+- **`Dockerfile.dockerignore` dạng allowlist (`**` rồi `!requirements.txt`, `!olist_shop/`).** Danh sách loại trừ luôn sót
+  thứ ai đó thêm vào repo sau này (`.env`, dump, cert); allowlist thì thứ mới mặc định ở ngoài. Dù vậy Dockerfile vẫn chỉ
+  `COPY` đúng thứ cần: ignore là lớp thứ hai, không phải lớp duy nhất. Bản lỗi trong
+  `tests/fixtures/defective/container/Dockerfile` dùng `COPY . .` và mang `.env` có token vào image.
+- **HEALTHCHECK bằng Python, `--start-interval=2s`.** Image slim không có curl, và thêm curl chỉ để healthcheck là thêm gói
+  phải quét. `--start-interval` (Docker 25+) cho kiểm dày trong lúc khởi động mà không phải kiểm 2 giây một lần suốt đời
+  container, nên `compose up --wait` xong nhanh. Worker kiểm cổng metrics `9101`: server metrics chạy ở thread riêng,
+  nên cổng trả lời chỉ chứng minh tiến trình còn sống, không chứng minh vòng lặp chính còn lấy được job; M08 bổ sung
+  bằng alert theo độ dài hàng đợi.
+- **Giữ `python:3.12.16-slim-trixie` thay vì distroless hay alpine.** `psycopg[binary]` có wheel cho glibc; alpine (musl)
+  cần wheel musllinux hay build từ nguồn. Distroless bỏ shell và pip, ít gói hơn nhiều, nhưng không còn `python -m venv`
+  cùng phiên bản và khó debug lúc sự cố. Ghi lựa chọn và số đo vào README; module 06 Intermediate 02 cho cách đếm gói.
+
+### compose.yaml
+
+- **`image: ${OLIST_API_IMAGE:?...}`, không `build:`.** Compose production chạy đúng thứ pipeline đã build và quét. Có
+  `build:` thì một lần `up --build` trên máy chủ là chạy code chưa qua CI; thiếu biến mà có giá trị mặc định thì chạy nhầm
+  bản cũ không ai biết.
+- **Anchor `x-app` cho phần chung của `api` và `worker`.** Hardening viết một lần; thêm tiến trình thứ ba không quên
+  `read_only` hay `cap_drop`.
+- **`read_only` cộng `tmpfs: /tmp`, `cap_drop: [ALL]`.** App không cần ghi gì ngoài `/tmp` và không cần capability nào
+  (cổng 8000 > 1024). Postgres và Redis giữ mặc định: entrypoint của chúng cần `chown`, `setuid` lúc khởi động.
+- **Postgres, Redis không mở cổng.** Ở production local, chỉ API nói chuyện với chúng qua mạng của project. Cần vào DB
+  thì `docker compose exec postgres psql`, không mở cổng "tạm" rồi quên.
+- **Mật khẩu qua `${POSTGRES_PASSWORD:?}`.** Compose không có secret thật khi không dùng Swarm (`secrets:` của compose
+  thường chỉ là bind mount tệp). Biến bắt buộc ít nhất bảo đảm không có mật khẩu mặc định nào lọt lên production. M07 thay
+  bằng SOPS.
+- **`stop_grace_period: 20s` cho worker.** Worker chỉ kiểm cờ dừng sau mỗi `BLPOP` (5 giây) và có thể đang giữa một job
+  tính lại doanh thu; 10 giây mặc định của Docker là sát, 20 giây cho job đang chạy kịp xong.
+- **Redis `--appendonly yes` trên volume.** Hàng đợi job nằm trong Redis; restart mà mất hàng đợi là mất job đã nhận
+  `202`. Nếu job tính lại được thì đây là lựa chọn, không phải bắt buộc.
+
+### trivy.yaml
+
+- Cùng chính sách với module 06: chặn `HIGH`/`CRITICAL` đã có bản vá, bỏ qua lỗ hổng chưa có bản vá, ngoại lệ qua tệp có
+  hạn. Thêm scanner `secret`: quét bí mật trong image rẻ và không cần DB.
+- **`.trivyignore.yaml` rỗng.** Lúc viết bản tham chiếu, cả hai image không có lỗ hổng chặn nào. Khi gate đỏ, thứ tự xử lý:
+  nâng patch của image nền (rebuild, không đổi code), nâng gói Python, rồi mới đến ngoại lệ có `purls`, lý do và
+  `expired_at` trong vòng 30 ngày.
+
+## M04: `project/.github/workflows/ci.yml`, `project/ci/smoke-test.sh`
+
+### ci.yml
+
+- **`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`.** Module 07 dạy `cancel-in-progress: true` cho
+  workflow chỉ build. Khi cùng workflow có deploy, commit thứ hai lên `main` sẽ huỷ lần chạy đang deploy, để staging với
+  compose dở dang. Deploy job có `concurrency` riêng (`deploy-staging`, không cancel): lần deploy sau chờ lần trước xong;
+  GitHub chỉ giữ một lần đang chờ (lần mới nhất), lần chờ cũ hơn bị bỏ.
+- **Build với `load: true`, quét, rồi mới `docker push`.** `build-push-action` với `push: true` đẩy ngay sau build, trước
+  khi gate kịp nói gì; image bị chặn vẫn nằm trên registry và ai đó vẫn kéo được. Tách build và push làm gate thật sự chặn.
+- **Push trong một bước `run:` đọc `RepoDigests`.** Output của job là `<repo>@sha256:...`, không phải tag; deploy nhận digest
+  nên lần chạy lại hay người khác push đè tag (nếu registry cho) không đổi thứ staging chạy.
+- **Pull request chạy build và quét nhưng không push.** Lỗi Dockerfile và lỗ hổng lộ ra trước khi merge, registry chỉ có image
+  của code đã review.
+- **`environment: staging`.** Trên GitHub, environment gắn secret riêng (`STAGING_POSTGRES_PASSWORD`), quy tắc bảo vệ (người
+  duyệt, nhánh được deploy) và lịch sử deploy. Production là một environment khác, có reviewer bắt buộc.
+- **Smoke test là một bước của pipeline, không phải việc sau.** `compose up --wait` chỉ nói container healthy theo
+  HEALTHCHECK; smoke test hỏi từ phía người dùng rằng đúng version vừa build đang trả lời và sẵn sàng. Pipeline xanh nghĩa
+  là staging đã chạy bản này.
+- **Giới hạn cố ý.** Không có bước rollback tự động: smoke test đỏ thì job đỏ và staging giữ bản lỗi cho người xem. Rollback
+  là chạy lại job deploy với digest của lần xanh trước (GitHub: "Re-run" lần chạy cũ), ghi trong README.
+
+### smoke-test.sh
+
+- **Một vòng lặp có hạn chót cho cả hai điều kiện.** Container vừa `up` thì `/healthz` thường trả lời trước `/readyz`;
+  kiểm version trước để báo đúng lý do khi staging còn chạy bản cũ (deploy không đổi image) thay vì báo "chưa sẵn sàng".
+- **`--max-time 3` cho mỗi lần gọi.** Không có nó, một cổng nhận kết nối mà không trả lời giữ script tới hết timeout mặc định
+  của curl, vượt xa `SMOKE_TIMEOUT`.
+- **Dòng `FAIL` nêu lý do cuối cùng thấy được** (`version=... expected=...`, `readyz=503`): người đọc log CI biết ngay deploy
+  sai bản hay hạ tầng chưa lên.
+
 ## Rubric cho phần tự đánh giá
 
 | Mục | Đạt | Chưa đạt |
@@ -105,3 +189,7 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 | README "Vận hành" | Ba lệnh, exit code, lệnh khôi phục có cảnh báo ghi đè | Chỉ liệt kê tên script |
 | Vòng thật M02 | curl qua `--cacert` (không `-k`), thấy 429 khi spam `/jobs/`, tìm được cùng một request id trong log Nginx và log API | Tắt kiểm cert hoặc không lần được request id |
 | README "Edge" | Có lý do cho rate/burst, 429, chính sách request id, lựa chọn Nginx | Chỉ chép cấu hình |
+| Vòng thật M03 | Build hai target, chạy compose production, gate trivy chạy bằng `trivy.yaml`, có bảng số đo image cũ và mới | Chỉ chạy test |
+| README "Container" | Lý do chọn image nền, ý nghĩa từng khoá hardening, quy trình khi gate đỏ đã làm thật một lần | Liệt kê khoá không giải thích |
+| Vòng thật M04 | Chạy workflow bằng act, đọc log từng job, rollback staging bằng digest cũ và đo thời gian | Chỉ chạy test |
+| README "Pipeline" | Sơ đồ job, lý do quét trước push và deploy theo digest, quy trình rollback có số đo, kế hoạch promote | Chỉ mô tả các bước YAML |

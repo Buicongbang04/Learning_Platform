@@ -1,0 +1,78 @@
+name: olist-shop-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Cài uv
+        run: echo "uv có sẵn"
+      - name: Cài Python và dependency
+        run: echo "python có sẵn"
+      - name: Test
+        run: python -m pytest -q tests
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Tính tag
+        id: meta
+        run: |
+          echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "devops-ex-output tag=sha-${GITHUB_SHA::12}"
+          echo "devops-ex-output revision=${GITHUB_SHA}"
+      - name: Push trước khi quét
+        if: ${{ !env.ACT && github.event_name == 'push' }}
+        run: docker push "localhost:15000/olist-shop/api:${{ steps.meta.outputs.tag }}"
+      - name: Quét api
+        if: ${{ !env.ACT }}
+        uses: aquasecurity/trivy-action@v0.33.1
+        with:
+          image-ref: localhost:15000/olist-shop/api:${{ steps.meta.outputs.tag }}
+          trivy-config: container/trivy.yaml
+      - name: Build api
+        if: ${{ !env.ACT }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: container/Dockerfile
+          target: api
+          push: true
+          tags: localhost:15000/olist-shop/api:latest
+          build-args: APP_VERSION=${{ steps.meta.outputs.tag }}
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Deploy
+        if: ${{ !env.ACT }}
+        env:
+          OLIST_API_IMAGE: localhost:15000/olist-shop/api:latest
+          OLIST_WORKER_IMAGE: localhost:15000/olist-shop/worker:latest
+          POSTGRES_PASSWORD: olist
+        run: docker compose -f container/compose.yaml up -d --wait
