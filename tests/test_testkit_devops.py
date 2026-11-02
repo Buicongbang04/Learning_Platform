@@ -5474,3 +5474,150 @@ def test_require_metrics_real():
     testkit.Exercise.require_metrics()
     with testkit.KubeLab() as lab:
         assert "devops-lab-worker" in lab.kubectl("top", "nodes").stdout
+
+
+@pytest.mark.parametrize("change,needle", [
+    (lambda d: d["spec"].update(conversion={"strategy": "Webhook", "webhook": {"clientConfig": {"url": "https://127.0.0.1:2379/"},
+                                                                         "conversionReviewVersions": ["v1"]}}), "conversion"),
+    (lambda d: d["spec"].update(conversion={"strategy": "Webhook", "webhook": {
+        "clientConfig": {"service": {"name": "x", "namespace": "kube-system"}}, "conversionReviewVersions": ["v1"]}}), "conversion"),
+    (lambda d: d["spec"]["names"].update(categories=["all"]), "categories"),
+    (lambda d: d["spec"]["names"].update(shortNames=["po"]), "shortNames"),
+])
+def test_crd_refuses_conversion_webhook_categories_short_names(change, needle):
+    group = "devops-ex-abc12345.olist.test"
+    doc = crd(group)
+    change(doc)
+    problems = testkit.kube_manifest_problems([doc], lab_id="abc12345", namespace="devops-ex-abc12345",
+                                              allow=("CustomResourceDefinition",), api_group=group)
+    assert any(needle in p for p in problems), problems
+
+
+def test_crd_conversion_none_allowed():
+    group = "devops-ex-abc12345.olist.test"
+    doc = crd(group)
+    doc["spec"]["conversion"] = {"strategy": "None"}
+    assert testkit.kube_manifest_problems([doc], lab_id="abc12345", namespace="devops-ex-abc12345",
+                                          allow=("CustomResourceDefinition",), api_group=group) == []
+
+
+def test_crd_policy_refuses_conversion_and_names(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab(allow=("CustomResourceDefinition",)) as lab:
+        items = json.loads(fake.calls_with("apply", "-f", "-")[0]["input"])["items"]
+    policy = next(i for i in items if i["kind"] == "ValidatingAdmissionPolicy" and i["metadata"]["name"] == lab.namespace)
+    text = json.dumps(policy)
+    for needle in ("object.spec.conversion.strategy == 'None'", "categories", "shortNames"):
+        assert needle in text, needle
+
+
+def test_kube_lab_node_action_drain_timeout_capped(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.node_action({"action": "drain", "node": "devops-lab-worker"}, timeout=30)
+        with pytest.raises(ValueError, match="timeout"):
+            lab.node_action({"action": "drain", "node": "devops-lab-worker"}, timeout=900)
+        with pytest.raises(ValueError, match="timeout"):
+            lab.node_action({"action": "drain", "node": "devops-lab-worker"}, timeout=1)
+    assert fake.calls_with("drain", "devops-lab-worker", "--timeout=30s")
+
+
+def node_state(tmp_path) -> Path:
+    return tmp_path / "devops-track" / "kube-nodes.state.json"
+
+
+def test_kube_lab_node_state_recorded_and_cleared(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.node_action({"action": "taint", "node": "devops-lab-worker2", "taint": {"key": "olist.io/pool", "value": "f",
+                                                                                     "effect": "NoSchedule"}})
+        lab.node_action({"action": "cordon", "node": "devops-lab-worker"})
+        state = json.loads(node_state(tmp_path).read_text())
+        assert {"node": "devops-lab-worker", "cordon": True} in state["actions"]
+        assert {"node": "devops-lab-worker2", "taint": ["olist.io/pool", "NoSchedule"]} in state["actions"]
+    assert not node_state(tmp_path).exists()
+
+
+def leftover(tmp_path, actions):
+    path = node_state(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"actions": actions}))
+    return path
+
+
+LEFTOVER = [{"node": "devops-lab-worker", "cordon": True}, {"node": "devops-lab-worker2", "taint": ["olist.io/pool", "NoSchedule"]}]
+
+
+def test_kube_lab_undoes_leftover_node_state_before_new_action(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    path = leftover(tmp_path, LEFTOVER)
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        lab.node_action({"action": "cordon", "node": "devops-lab-worker2"})
+        cmds = [c["cmd"] for c in fake.sandbox_calls]
+        first = cmds.index(["kubectl", "cordon", "devops-lab-worker2"])
+        assert ["kubectl", "uncordon", "devops-lab-worker"] in cmds[:first]
+        assert ["kubectl", "taint", "nodes", "devops-lab-worker2", "olist.io/pool:NoSchedule-"] in cmds[:first]
+    assert not path.exists()
+
+
+def leftover_fake(monkeypatch, *, cordoned: bool, tainted: bool):
+    fake = KubeFake(monkeypatch)
+    original = fake.run_sandboxed
+
+    def run(cmd, **kwargs):
+        if "nodes" in cmd and "json" in cmd and "get" in cmd:
+            items = [{"metadata": {"name": "devops-lab-worker"}, "spec": {"unschedulable": cordoned}},
+                     {"metadata": {"name": "devops-lab-worker2"},
+                      "spec": {"taints": [{"key": "olist.io/pool", "value": "f", "effect": "NoSchedule"}] if tainted else []}}]
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"items": items}), "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return fake
+
+
+def test_require_cluster_skips_on_leftover_node_state(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    leftover(tmp_path, LEFTOVER)
+    leftover_fake(monkeypatch, cordoned=True, tainted=True)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_cluster()
+    assert_skip(info, "kubectl --kubeconfig ~/.kube/devops-lab.yaml uncordon devops-lab-worker",
+                "kubectl --kubeconfig ~/.kube/devops-lab.yaml taint nodes devops-lab-worker2 olist.io/pool:NoSchedule-")
+
+
+def test_require_cluster_clears_stale_node_state(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    path = leftover(tmp_path, LEFTOVER)
+    leftover_fake(monkeypatch, cordoned=False, tainted=False)
+    testkit.Exercise.require_cluster()
+    assert not path.exists()
+
+
+def test_require_cluster_ignores_state_while_lock_held(monkeypatch, tmp_path):
+    import fcntl
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    path = leftover(tmp_path, LEFTOVER)
+    leftover_fake(monkeypatch, cordoned=True, tainted=True)
+    with open(path.parent / "kube-nodes.lock", "a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        testkit.Exercise.require_cluster()
+    assert path.exists()
+
+
+@KUBE_REQUIRED
+def test_kube_lab_crd_conversion_webhook_denied_real():
+    with testkit.KubeLab(allow=("CustomResourceDefinition",)) as lab:
+        for change in (lambda d: d["spec"].update(conversion={"strategy": "Webhook", "webhook": {
+                           "clientConfig": {"url": "https://127.0.0.1:2379/"}, "conversionReviewVersions": ["v1"]}}),
+                       lambda d: d["spec"]["names"].update(categories=["all"]),
+                       lambda d: d["spec"]["names"].update(shortNames=["po"])):
+            doc = crd(lab.api_group, {"devops-ex": lab.id})
+            change(doc)
+            result = lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
+            assert result.returncode != 0 and "denied" in result.stderr, result.stderr
+    assert testkit.kube_leftovers(lab.id) == []

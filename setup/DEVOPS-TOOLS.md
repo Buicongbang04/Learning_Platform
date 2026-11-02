@@ -240,7 +240,7 @@ Lần lấy số liệu đầu tiên mất khoảng 30 giây sau khi rollout xon
 Bài cần cordon, drain hay taint worker (module 11) làm qua `KubeLab.node_action` của testkit, chỉ trên worker, `close()` hoàn tác.
 Trạng thái node là của cả cluster, nên testkit giữ khoá `~/.cache/devops-track/kube-nodes.lock` suốt từ lần thao tác node đầu tiên
 tới khi hoàn tác xong: hai bài như vậy không bao giờ chạy chồng nhau, kể cả ở hai terminal. Tệp test của các bài này mang marker
-`kube_nodes`; muốn chạy song song phần còn lại thì loại chúng ra (`-m "not kube_nodes"`). Trong lúc bài drain một worker, pod của bài
+`kube_nodes`; muốn chạy song song phần còn lại thì loại chúng ra (`-m "not kube_nodes"`). Bài bị giết giữa chừng (SIGKILL, tắt terminal) không kịp hoàn tác: testkit ghi mọi thao tác node vào `~/.cache/devops-track/kube-nodes.state.json`, lần chạy bài thao tác node sau tự hoàn tác, còn các bài khác skip kèm đúng lệnh `kubectl uncordon`, `kubectl taint ... -` cần chạy. Trong lúc bài drain một worker, pod của bài
 khác, Traefik và metrics-server đang nằm trên worker đó cũng bị dời; sau khi hoàn tác, testkit chờ chúng available lại rồi mới trả.
 
 ## Ghim CPU

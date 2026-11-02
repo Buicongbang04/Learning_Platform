@@ -3230,6 +3230,91 @@ def _kube_ready(admin: _KubeAdmin, name: str) -> None:
         pytest.skip(KUBE_SKIP_NOT_READY.format(name=name, seconds=KUBE_READY_TIMEOUT, detail=detail[-1] if detail else "không rõ"))
 
 
+def _kube_node_paths() -> tuple[Path, Path]:
+    root = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "devops-track"
+    return root / "kube-nodes.lock", root / "kube-nodes.state.json"
+
+
+def _kube_node_entry_ok(entry) -> bool:
+    if not isinstance(entry, dict) or not isinstance(entry.get("node"), str) or not _KUBE_WORKER.fullmatch(entry["node"]):
+        return False
+    if entry.get("cordon") is True and set(entry) == {"node", "cordon"}:
+        return True
+    taint = entry.get("taint")
+    return (set(entry) == {"node", "taint"} and isinstance(taint, list) and len(taint) == 2 and isinstance(taint[0], str)
+            and bool(_KUBE_TAINT_KEY.fullmatch(taint[0])) and taint[1] in _KUBE_TAINT_EFFECTS)
+
+
+def _kube_node_state_read() -> list[dict]:
+    path = _kube_node_paths()[1]
+    try:
+        actions = json.loads(path.read_text(encoding="utf-8")).get("actions", [])
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [entry for entry in actions if _kube_node_entry_ok(entry)] if isinstance(actions, list) else []
+
+
+def _kube_node_state_write(actions: list[dict]) -> None:
+    path = _kube_node_paths()[1]
+    if not actions:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"actions": actions}), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _kube_node_undo(entry: dict) -> list[str]:
+    if entry.get("cordon"):
+        return ["uncordon", entry["node"]]
+    return ["taint", "nodes", entry["node"], f"{entry['taint'][0]}:{entry['taint'][1]}-"]
+
+
+def _kube_node_leftovers(admin: "_KubeAdmin", actions: list[dict]) -> list[dict]:
+    result = admin.run("get", "nodes", "-o", "json")
+    try:
+        nodes = {n["metadata"]["name"]: n.get("spec") or {} for n in json.loads(result.stdout).get("items", [])}
+    except (ValueError, KeyError, AttributeError):
+        return list(actions)
+    present = []
+    for entry in actions:
+        spec = nodes.get(entry["node"])
+        if spec is None:
+            continue
+        if entry.get("cordon") and spec.get("unschedulable"):
+            present.append(entry)
+        elif entry.get("taint") and any(t.get("key") == entry["taint"][0] and t.get("effect") == entry["taint"][1]
+                                        for t in spec.get("taints") or []):
+            present.append(entry)
+    return present
+
+
+def _kube_check_node_leftovers(admin: "_KubeAdmin") -> None:
+    """Một lab bị giết (SIGKILL) giữa bài thao tác node để lại cordon, taint mà `close()` chưa kịp hoàn tác. Khi khoá node đang
+    rảnh mà tệp trạng thái còn ghi thao tác vẫn còn hiệu lực trên cluster thì skip kèm đúng lệnh hoàn tác; thao tác không còn
+    trên cluster (cluster đã tạo lại, đã hoàn tác tay) thì xoá tệp."""
+    import fcntl
+
+    actions = _kube_node_state_read()
+    lock = _kube_node_paths()[0]
+    if not actions:
+        _kube_node_state_write([])
+        return
+    with open(lock, "a+") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        present = _kube_node_leftovers(admin, actions)
+        if not present:
+            _kube_node_state_write([])
+            return
+    commands = " && ".join(f"kubectl --kubeconfig {KUBE_KUBECONFIG_HINT} {' '.join(_kube_node_undo(e))}" for e in present)
+    pytest.skip(f"Một bài thao tác node trước đó bị ngắt (SIGKILL) nên worker còn cordon hay taint của lab ({_kube_node_paths()[1]}). "
+                f"Hoàn tác bằng: {commands}; hoặc chạy lại một bài dùng node_action, testkit tự hoàn tác trước khi làm tiếp")
+
+
 def _require_cluster_up(name: str) -> None:
     Exercise.require_tool("kind")
     Exercise.require_tool("kubectl")
@@ -3474,9 +3559,17 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
             found += _kube_pod_problems(where, spec)
         if kind == "PriorityClass" and doc.get("globalDefault") is True:
             found.append(f"{where}: globalDefault đổi độ ưu tiên mặc định của mọi pod trong cluster")
-        if kind == "CustomResourceDefinition" and api_group and (doc.get("spec") or {}).get("group") != api_group:
-            found.append(f"{where}: CRD phải thuộc nhóm API riêng của lab ({api_group}), không phải "
-                         f"{(doc.get('spec') or {}).get('group')}")
+        if kind == "CustomResourceDefinition":
+            crd_spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+            if api_group and crd_spec.get("group") != api_group:
+                found.append(f"{where}: CRD phải thuộc nhóm API riêng của lab ({api_group}), không phải {crd_spec.get('group')}")
+            conversion = crd_spec.get("conversion")
+            if conversion is not None and (not isinstance(conversion, dict) or conversion.get("strategy", "None") != "None"):
+                found.append(f"{where}: conversion webhook bị từ chối: API server gọi địa chỉ đó từ mạng của control plane")
+            names = crd_spec.get("names") if isinstance(crd_spec.get("names"), dict) else {}
+            for field in ("categories", "shortNames"):
+                if field in names:
+                    found.append(f"{where}: names.{field} bị từ chối: tên ngắn và nhóm (như `all`) dùng chung cho mọi lab trên cluster")
         if kind == "Service" and isinstance(doc.get("spec"), dict) and doc["spec"].get("externalIPs"):
             found.append(f"{where}: externalIPs chặn được traffic tới địa chỉ đó của mọi pod trong cluster")
         if kind == "PersistentVolume" and isinstance(doc.get("spec"), dict):
@@ -3718,6 +3811,10 @@ class KubeLab:
             {"expression": "request.operation == 'DELETE' || request.resource.resource != 'customresourcedefinitions' || "
                            f"object.spec.group == '{self.api_group}'",
              "message": f"CustomResourceDefinition của bài phải thuộc nhóm API riêng của lab: {self.api_group}"},
+            {"expression": "request.operation == 'DELETE' || request.resource.resource != 'customresourcedefinitions' || "
+                           "((!has(object.spec.conversion) || object.spec.conversion.strategy == 'None') && "
+                           "!has(object.spec.names.categories) && !has(object.spec.names.shortNames))",
+             "message": "CustomResourceDefinition của bài không được có conversion webhook, names.categories hay names.shortNames"},
             {"expression": "request.operation == 'DELETE' || request.resource.resource != 'clusterrolebindings' || "
                            "!has(object.subjects) || !object.subjects.exists(s, s.kind != 'ServiceAccount' && "
                            "s.name.startsWith('system:'))",
@@ -4066,7 +4163,7 @@ class KubeLab:
             return
         import fcntl
 
-        path = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "devops-track" / "kube-nodes.lock"
+        path = _kube_node_paths()[0]
         path.parent.mkdir(parents=True, exist_ok=True)
         handle = open(path, "a+")
         deadline = time.monotonic() + KUBE_NODE_LOCK_TIMEOUT
@@ -4081,6 +4178,18 @@ class KubeLab:
                                 f"({path}); bài dùng node_action không chạy song song")
                 time.sleep(min(2, KUBE_NODE_LOCK_TIMEOUT / 4))
         self._node_lock = handle
+        left = _kube_node_state_read()
+        for entry in list(left):
+            result = self._admin.run(*_kube_node_undo(entry))
+            if result.returncode != 0 and "not found" not in result.stderr:
+                pytest.fail(f"Không hoàn tác được thao tác node còn sót của lần chạy trước ({' '.join(_kube_node_undo(entry))}): "
+                            f"{_output_tail(result)}")
+            left.remove(entry)
+            _kube_node_state_write(left)
+
+    def _record_node(self, entry: dict, keep: bool) -> None:
+        actions = [e for e in _kube_node_state_read() if e != entry]
+        _kube_node_state_write(actions + [entry] if keep else actions)
 
     def _wait_shared_ready(self, errors: list[str]) -> None:
         deadline = time.monotonic() + KUBE_SHARED_READY_TIMEOUT
@@ -4102,7 +4211,7 @@ class KubeLab:
             errors.append(f"sau khi hoàn tác node, thành phần dùng chung chưa available lại sau {KUBE_SHARED_READY_TIMEOUT}s: "
                           f"{', '.join(waiting)}")
 
-    def node_action(self, spec: dict, *, check: bool = True) -> subprocess.CompletedProcess:
+    def node_action(self, spec: dict, *, check: bool = True, timeout: int = 120) -> subprocess.CompletedProcess:
         """Thao tác node bằng quyền admin từ spec đã kiểm, chỉ trên worker, không bao giờ control plane: `{"action": "cordon" |
         "uncordon" | "drain", "node": ...}` (drain luôn `--ignore-daemonsets --delete-emptydir-data`, có eviction, không bao giờ
         `--disable-eviction`), `{"action": "taint" | "untaint", "node": ..., "taint": {"key", "value", "effect"}}` (key không
@@ -4111,7 +4220,14 @@ class KubeLab:
         `~/.cache/devops-track/kube-nodes.lock` (flock, chờ tối đa `KUBE_NODE_LOCK_TIMEOUT`) tới khi `close()` hoàn tác xong: hai
         lab dùng `node_action` không bao giờ chạy chồng nhau, kể cả ở hai tiến trình pytest. Test dùng `node_action` mang marker
         `kube_nodes`. Sau khi hoàn tác, `close()` chờ Deployment trong `KUBE_SHARED_NAMESPACES` (CoreDNS, local-path, Gateway,
-        metrics-server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node."""
+        metrics-server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node. `timeout` là
+        `--timeout` của drain (10 tới 120 giây).
+
+        Mỗi thao tác được ghi vào `kube-nodes.state.json` cạnh khoá trước khi chạy và xoá khi đã hoàn tác; lab bị SIGKILL thì
+        lần `node_action` sau tự hoàn tác phần còn sót, còn `require_cluster` skip kèm lệnh hoàn tác khi khoá rảnh. Giới hạn: đường
+        dẫn khoá và tệp trạng thái theo `XDG_CACHE_HOME` (hai tiến trình đặt `XDG_CACHE_HOME` khác nhau không thấy khoá của nhau);
+        hai lab lồng nhau trong cùng một tiến trình cùng gọi `node_action` thì lab trong chờ khoá của lab ngoài tới hết
+        `KUBE_NODE_LOCK_TIMEOUT` rồi fail."""
         self._require_entered()
         spec = self._spec(spec, {"action", "node"}, {"taint"}, "node_action")
         action = spec["action"]
@@ -4120,6 +4236,8 @@ class KubeLab:
         node = self._worker(spec["node"])
         if (action in ("taint", "untaint")) != ("taint" in spec):
             raise ValueError("taint chỉ đi kèm action taint hay untaint, và hai action đó cần taint")
+        if not isinstance(timeout, int) or not 10 <= timeout <= 120:
+            raise ValueError(f"timeout của drain {timeout!r} phải là số giây từ 10 tới 120")
         taint_spec = None
         if action in ("taint", "untaint"):
             taint = self._spec(spec["taint"], {"key", "effect"}, {"value"}, "taint")
@@ -4135,18 +4253,23 @@ class KubeLab:
                 argv[-1] = f"{key}:{effect}-"
             else:
                 self._taints.add((node, key, effect))
+                self._record_node({"node": node, "taint": [key, effect]}, True)
         elif action == "drain":
             self._cordoned.add(node)
-            argv = ["drain", node, "--ignore-daemonsets", "--delete-emptydir-data", "--timeout=120s"]
+            self._record_node({"node": node, "cordon": True}, True)
+            argv = ["drain", node, "--ignore-daemonsets", "--delete-emptydir-data", f"--timeout={timeout}s"]
         else:
             if action == "cordon":
                 self._cordoned.add(node)
+                self._record_node({"node": node, "cordon": True}, True)
             argv = [action, node]
-        result = self._admin.run(*argv, timeout=180)
+        result = self._admin.run(*argv, timeout=timeout + 60)
         if result.returncode == 0 and action == "untaint":
             self._taints.discard((node, key, effect))
+            self._record_node({"node": node, "taint": [key, effect]}, False)
         if result.returncode == 0 and action == "uncordon":
             self._cordoned.discard(node)
+            self._record_node({"node": node, "cordon": True}, False)
         return self._checked("kubectl", argv, result, check)
 
     def _released_volumes(self) -> list[str]:
@@ -4162,10 +4285,14 @@ class KubeLab:
             result = self._admin.run("taint", "nodes", node, f"{key}:{effect}-")
             if result.returncode != 0 and "not found" not in result.stderr:
                 errors.append(f"gỡ taint {key}:{effect} khỏi {node}: {_output_tail(result)}")
+            else:
+                self._record_node({"node": node, "taint": [key, effect]}, False)
         for node in sorted(self._cordoned):
             result = self._admin.run("uncordon", node)
             if result.returncode != 0:
                 errors.append(f"uncordon {node}: {_output_tail(result)}")
+            else:
+                self._record_node({"node": node, "cordon": True}, False)
         if self._node_lock is not None:
             self._wait_shared_ready(errors)
 
@@ -4475,7 +4602,9 @@ class Exercise:
         sandbox với kubeconfig tạm lấy bằng `kind get kubeconfig`, không đọc `KUBECONFIG` hay `~/.kube` của người học."""
         _require_cluster_up(name)
         with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}ready-") as tmp:
-            _kube_ready(_KubeAdmin(Path(tmp), name), name)
+            admin = _KubeAdmin(Path(tmp), name)
+            _kube_ready(admin, name)
+            _kube_check_node_leftovers(admin)
 
     @staticmethod
     def require_gateway(name: str = KIND_CLUSTER) -> None:
