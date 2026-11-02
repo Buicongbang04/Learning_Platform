@@ -119,16 +119,16 @@ def restricted_gaps(docs) -> list[str]:
     for doc in docs:
         if doc.get("kind") not in ("Deployment", "StatefulSet", "DaemonSet", "Job", "Pod"):
             continue
-        spec = doc["spec"] if doc["kind"] == "Pod" else pod_spec(doc)
-        name = f"{doc['kind']} {doc['metadata']['name']}"
+        spec = (doc.get("spec") or {}) if doc["kind"] == "Pod" else pod_spec(doc)
+        name = f"{doc['kind']} {meta_name(doc) or '(không tên)'}"
         pod = spec.get("securityContext") or {}
         if pod.get("runAsNonRoot") is not True:
             gaps.append(f"{name}: securityContext.runAsNonRoot: true")
         if (pod.get("seccompProfile") or {}).get("type") != "RuntimeDefault":
             gaps.append(f"{name}: seccompProfile RuntimeDefault")
-        for container in spec.get("initContainers", []) + spec.get("containers", []):
+        for container in (spec.get("initContainers") or []) + (spec.get("containers") or []):
             context = container.get("securityContext") or {}
-            where = f"{name}, container {container['name']}"
+            where = f"{name}, container {container.get('name') or '(không tên)'}"
             if context.get("allowPrivilegeEscalation") is not False:
                 gaps.append(f"{where}: allowPrivilegeEscalation: false")
             if (context.get("capabilities") or {}).get("drop") != ["ALL"]:
@@ -455,5 +455,7 @@ def test_m06_helpers_tolerate_bad_render():
     with pytest.raises(AssertionError, match="cần container tên worker"):
         container(docs[1], "worker")
     assert pod_spec({"kind": "Deployment"}) == {}
+    gaps = restricted_gaps([{"kind": "Pod"}, {"kind": "Deployment", "spec": {"template": {"spec": {"containers": [{}]}}}}])
+    assert any("Pod (không tên)" in g for g in gaps) and any("container (không tên)" in g for g in gaps), gaps
     assert job_id_of('ok 202 {"job_id": "abc"}') == "abc"
     assert job_id_of("ok 202 <html>") is None and job_id_of("ok 202") is None

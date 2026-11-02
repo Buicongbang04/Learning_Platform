@@ -218,13 +218,13 @@ def infra(project_root):
     with TofuLab(source) as lab:
         core = secrets.token_hex(8)
         state = Infra(lab, password=make_password(core), core=core, passphrase=f"olist-capstone-{secrets.token_hex(8)}")
-        s3 = localstack_client("s3")
-        s3.create_bucket(Bucket=state.state_bucket)
-        s3.put_bucket_versioning(Bucket=state.state_bucket, VersioningConfiguration={"Status": "Enabled"})
         lab.write("ci.auto.tfvars.json", json.dumps(TFVARS))
         lab.env["TF_VAR_db_password"] = state.password
         lab.env["TF_VAR_state_passphrase"] = state.passphrase
         try:
+            s3 = localstack_client("s3")
+            s3.create_bucket(Bucket=state.state_bucket)
+            s3.put_bucket_versioning(Bucket=state.state_bucket, VersioningConfiguration={"Status": "Enabled"})
             result = lab.init("-no-color", check=False)
             if result.returncode == 0:
                 result = lab.apply("-no-color", check=False)
@@ -268,7 +268,8 @@ def test_m05_state_remote_encrypted(infra):
         data = {}
     assert "encrypted_data" in data and "resources" not in data, (
         "State trên S3 phải được mã hoá phía client bằng khối encryption của OpenTofu (passphrase từ var.state_passphrase)")
-    assert not leaks(raw, state.password, state.core), "Mật khẩu database nằm trong state trên S3"
+    found = leaks(raw, state.password, state.core)
+    assert not found, f"Mật khẩu database ({', '.join(found)}) nằm trong state trên S3"
     name = f".devops-ex-{uuid.uuid4().hex[:8]}.tfplan"
     result = state.lab.run("plan", "-input=false", "-no-color", "-lock=false", f"-out={name}", check=False)
     plan_file = state.lab.workdir / name
@@ -640,10 +641,15 @@ def test_m05_env_file_from_ssm(fleet):
         assert set(env) == {"DATABASE_URL", "REDIS_URL", "LOG_LEVEL", "APP_VERSION"}, f"{host}: khoá của {ENV_FILE}: {sorted(env)}"
         assert (env["REDIS_URL"], env["LOG_LEVEL"], env["APP_VERSION"]) == (PARAMS["REDIS_URL"], PARAMS["LOG_LEVEL"], release)
         url = urlsplit(env["DATABASE_URL"])
-        parts = (url.scheme, url.username, unquote(url.password or ""), url.hostname, url.port, url.path)
-        assert parts[:2] + parts[3:] == ("postgresql+psycopg", "olist", "postgres", 5432, "/olist") and parts[2] == fleet.password, (
-            f"{host}: DATABASE_URL phải dựng từ DB_USER, DB_PASSWORD (percent-encode), DB_HOST, DB_NAME: đọc ra "
-            f"{parts[:2]}, mật khẩu {'đúng' if parts[2] == fleet.password else 'sai'}, {parts[3:]}")
+        try:
+            port = url.port
+        except ValueError:
+            port = None
+        shape = (url.scheme, url.username, url.hostname, port, url.path)
+        password_ok = unquote(url.password or "") == fleet.password
+        ok = shape == ("postgresql+psycopg", "olist", "postgres", 5432, "/olist") and password_ok
+        assert ok, (f"{host}: DATABASE_URL phải dựng từ DB_USER, DB_PASSWORD (percent-encode), DB_HOST, DB_NAME: đọc ra "
+                    f"{shape}, mật khẩu {'đúng' if password_ok else 'sai'}")
 
 
 def test_m05_unit_file_verified(fleet):
@@ -709,7 +715,8 @@ def test_m05_password_rotation(infra):
     result = lab.apply("-no-color", check=False)
     assert result.returncode == 0, tail(result)
     value = read_parameters(f"/{lab.prefix}/{ENVIRONMENT}/olist-shop")["DB_PASSWORD"]["Value"]
-    assert value == new, "Sau khi xoay, DB_PASSWORD trên SSM phải là mật khẩu mới"
+    rotated = value == new
+    assert rotated, "Sau khi xoay, DB_PASSWORD trên SSM phải là mật khẩu mới"
     found = leaks(lab.run("state", "pull").stdout, new, core)
     assert not found, f"Mật khẩu mới ({', '.join(found)}) nằm trong state"
 
