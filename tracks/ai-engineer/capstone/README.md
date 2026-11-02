@@ -80,7 +80,7 @@ Mỗi milestone chỉ cần kiến thức các module trước nó (`after`).
 
 | # | Milestone | Sau module | Kết quả cần nộp |
 | --- | --- | --- | --- |
-| [M01](milestones/m01-data-bm25-baseline.md) | **Dữ liệu và baseline BM25.** Chuẩn hoá văn bản luật, tập ghim, chỉ mục BM25, recall@k | 12 | `data.py`, `text.py`, `bm25.py`, `metrics.py`; bảng recall@k (k = 1, 5, 10, 20), phân tích lỗi |
+| [M01](milestones/m01-data-bm25-baseline.md) | **Dữ liệu và baseline BM25.** Chuẩn hoá văn bản luật, tập ghim, chỉ mục BM25, recall@k | 13 | `data.py`, `text.py`, `bm25.py`, `metrics.py`; bảng recall@k (k = 1, 5, 10, 20), phân tích lỗi |
 | [M02](milestones/m02-dense-hybrid-rerank.md) | **Retrieval hiện đại.** Embedding + vector DB, hybrid RRF, reranking, so với baseline | 13 | Bảng BM25 / dense / hybrid / rerank, tham số chọn trên dev, phân tích theo cặp |
 | [M03](milestones/m03-rag-citations-faithfulness.md) | **RAG có trích dẫn.** Nguồn theo khoản, trích dẫn kiểm bằng code, cổng từ chối, faithfulness | 13 | Pipeline RAG, tỉ lệ trích đúng, từ chối, faithfulness kèm kiểm judge |
 | [M04](milestones/m04-quantize-local.md) | **Quantize và chạy local hiệu quả.** bpc trên văn bản luật, tốc độ, VRAM, Pareto front | 10 | Bảng 3+ mức quantize, mức đã chọn; sau M03 thêm số RAG |
@@ -97,7 +97,7 @@ retrieval; khi xong M03 bạn quay lại M04 để đo bằng chính pipeline RA
 
 ```mermaid
 flowchart TD
-    M4[M04 Quantize<br/>sau module 10] --> M1[M01 Dữ liệu + BM25<br/>sau module 12]
+    M4[M04 Quantize<br/>sau module 10] --> M1[M01 Dữ liệu + BM25<br/>sau module 13]
     M1 --> M2[M02 Dense, hybrid, rerank<br/>sau module 13]
     M2 --> M3[M03 RAG có trích dẫn<br/>sau module 13]
     M3 -. đo lại bằng RAG .-> M4
@@ -111,12 +111,12 @@ flowchart TD
 
 ## Cấu trúc code
 
-Code của capstone nằm ở [`project/`](project/): package `legal_assistant/` có sẵn **khung hàm** theo milestone (docstring
+Code của capstone nằm ở [`project/`](project/) (`tests/conftest.py` tự thêm `project/` vào `sys.path`, không cần đặt
+`PYTHONPATH`): package `legal_assistant/` có sẵn **khung hàm** theo milestone (docstring
 là đặc tả) và test trên bộ luật tí hon hư cấu. Hàm còn `NotImplementedError` thì test của nó skip kèm lời nhắc; viết
 xong thì test chạy thật:
 
 ```bash
-export PYTHONPATH=tracks/ai-engineer/capstone/project
 uv run pytest tracks/ai-engineer/capstone/project/tests -q -rs
 ```
 

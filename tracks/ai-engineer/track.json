@@ -316,7 +316,7 @@
       {
         "id": "m01",
         "title": "Dữ liệu, chuẩn hoá văn bản luật và baseline BM25",
-        "after": "12-embeddings-vector-db",
+        "after": "13-rag",
         "doc": "capstone/milestones/m01-data-bm25-baseline.md"
       },
       {

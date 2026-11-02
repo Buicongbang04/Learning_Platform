@@ -4,7 +4,7 @@
 
 Biến pipeline RAG một lượt của M03 thành một agent chỉ đi đường dài khi đáng: câu hỏi nhiều vế được tách và tra từng vế,
 câu hỏi thiếu dữ kiện (ví dụ mức phạt giao thông không nói loại xe) được **hỏi lại** trước khi tra, câu hỏi một ý thì
-không tốn thêm lượt LLM nào. Đo agent với RAG một lượt trên cùng bộ câu hỏi, bằng bộ chấm không dùng LLM.
+tốn thêm nhiều nhất một lượt LLM (bước lập kế hoạch). Đo agent với RAG một lượt trên cùng bộ câu hỏi, bằng bộ chấm không dùng LLM.
 
 Đây là bản đầy đủ của bài Intermediate 03 [module 17](../../modules/17-langchain-langgraph/README.md) (đồ thị, `Send`,
 reducer, `interrupt`, checkpoint SQLite). Bài đó đo trên PC của track: agent có điều đúng cho **cả hai vế** ở 34/50 câu
@@ -43,7 +43,7 @@ nên phải làm tốt hơn ở chỗ đó.
 - [ ] Ba bộ câu hỏi, cùng bộ chấm không dùng LLM, cùng retrieval, cho cả RAG một lượt và agent.
 - [ ] S2: agent có điều đúng cho cả hai vế ở nhiều câu hơn RAG một lượt, số câu cụ thể có trong báo cáo.
 - [ ] S3: tỉ lệ hỏi lại đúng trên câu thiếu và tỉ lệ hỏi thừa trên bản đủ được báo riêng; hỏi thừa không quá 1/10 bản đủ.
-- [ ] S1: với định tuyến, agent không tốn thêm lượt LLM cho câu một ý và không kém RAG một lượt quá 3 câu ở "điều đúng
+- [ ] S1: với định tuyến, agent tốn thêm nhiều nhất 1 lượt LLM cho câu một ý so với RAG một lượt (lượt lập kế hoạch; định tuyến bằng heuristic trong code thì là 0) và không kém RAG một lượt quá 3 câu ở "điều đúng
       trong nguồn".
 - [ ] Tỉ lệ từ chối dù có điều đúng trong nguồn trên S1 thấp hơn rõ so với module 17 (31/100 với RAG một lượt, nguồn cả
       điều cắt 1 500 ký tự), có số cụ thể; nếu không, phân tích chỉ ra vì sao.

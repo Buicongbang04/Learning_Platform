@@ -63,8 +63,7 @@ Bản cài đặt của người soạn, 300 câu ghim, toàn corpus 61 425 đi�
 | Âm tiết + bigram | 0.523 | 0.837 | 0.882 | 0.922 | 0.972 | 0.658 | 0.714 | 447 735 | 31.1 s | 9 ms |
 
 BM25 âm tiết không có điều đúng trong top-10 ở 49 câu; thêm bigram còn 35 câu. Bigram tăng R@1 thêm 0.09 (khoảng 27 câu), lớn
-hơn nhiều mức nhiễu, đổi lại từ vựng lớn gần 40 lần và dựng index lâu gần 3 lần. Con số R@1 của BM25 âm tiết (0.433) khớp
-cột "BM25 top-1" của bài Advanced 02 module 14 trên cùng tập: đó là baseline mà fine-tune closed-book không vượt được.
+hơn nhiều mức nhiễu, đổi lại từ vựng lớn gần 40 lần và dựng index lâu gần 3 lần.
 
 ## Gợi ý
 

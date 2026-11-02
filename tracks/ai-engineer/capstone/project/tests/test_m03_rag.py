@@ -36,10 +36,11 @@ def test_split_clauses_preamble_plain_and_empty(la, mini):
     assert hs[0].text == "Điều 3. Hồ sơ xin giấy phép\nHồ sơ gồm:"
     plain = chunking.split_clauses(arts["77/2098/tt-bxd+2"])
     assert len(plain) == 1 and plain[0].label == "" and "6 mét" in plain[0].text
+    assert "khoản 2. Trường hợp đặc biệt" in plain[0].text
     empty = chunking.split_clauses(arts["77/2098/tt-bxd+4"])
     assert [(p.label, p.text) for p in empty] == [("", "Điều 4. Điều khoản thi hành")]
     money = chunking.split_clauses(arts["901/2099/nđ-cp+3"])
-    assert len(money) == 1
+    assert len(money) == 1 and money[0].text.endswith("2.000.000 đồng là mức tối đa áp dụng cho cá nhân.")
 
 
 def _passages(la):
@@ -178,3 +179,14 @@ def test_rag_summary(la):
     assert math.isnan(none["faithfulness"]) and math.isnan(none["citation_precision"])
     with pytest.raises(ValueError):
         judge.rag_summary([])
+
+
+def test_citation_precision_counts_every_correct_citation(la):
+    judge = la("judge")
+    records = [
+        {"refused": False, "citations": ["A", "B"], "context": ["A", "B"], "relevant": ["A", "B"], "faithfulness": 1.0},
+        {"refused": False, "citations": ["C"], "context": ["C"], "relevant": ["A"], "faithfulness": 1.0},
+    ]
+    s = judge.rag_summary(records)
+    assert s["citation_precision"] == pytest.approx(2 / 3)
+    assert s["cited_correct"] == pytest.approx(1 / 2)

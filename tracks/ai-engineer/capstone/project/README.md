@@ -12,7 +12,6 @@ Zalo Legal.
 ```bash
 uv run python data/download_dataset.py zalo-legal
 ollama pull bge-m3 && ollama pull qwen2.5:3b
-export PYTHONPATH=tracks/ai-engineer/capstone/project
 uv run pytest tracks/ai-engineer/capstone/project/tests -q -rs
 ```
 

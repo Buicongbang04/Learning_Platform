@@ -1,8 +1,8 @@
 """M03: tách điều luật thành đơn vị trích dẫn được (khoản, điểm).
 
 Module 13 (bài Basic 01) trả chunk dạng chuỗi; ở đây mỗi chunk mang thêm **địa chỉ** (`label`) để câu trả lời trích
-được "khoản 2 điểm a" chứ không chỉ "Điều 5". Module 17 (bài Intermediate 03) cho thấy gần một nửa câu bị từ chối dù
-điều đúng có trong prompt, phần lớn vì cả điều bị cắt ở 1 500 ký tự: đây là chỗ sửa.
+được "khoản 2 điểm a" chứ không chỉ "Điều 5". Module 13 (mục 5) cho thấy đưa cả điều cắt ở 1 500 ký tự vào prompt làm
+model từ chối khi phần trả lời nằm sau chỗ cắt: đây là chỗ sửa.
 """
 
 from __future__ import annotations

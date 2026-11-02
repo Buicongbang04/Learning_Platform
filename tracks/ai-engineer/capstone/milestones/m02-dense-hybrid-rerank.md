@@ -68,12 +68,16 @@ với một tiến trình khác). Hybrid lấy top-100 mỗi nhánh, RRF `k = 60
 - Top-10 của BM25 bigram và dense: cả hai có điều đúng 258 câu, chỉ BM25 bigram 7, chỉ dense 14, không nhánh nào 21.
   Với BM25 âm tiết thay cho bigram: 244 / 7 / 28 / 21.
 - Rerank (fp16 trên GPU, 0.33 giây mỗi câu cho 20 cặp, VRAM đỉnh 1.3 GiB): điều đúng đầu tiên lên hạng ở 49 câu, tụt
-  ở 65 câu, giữ nguyên ở 175 câu.
+  ở 65 câu, giữ nguyên ở 175 câu. Sign test trên 114 câu đổi hạng cho p khoảng 0.16: chiều "tụt nhiều hơn lên" chưa
+  chắc chắn. Phần rõ hơn là R@5 giảm từ 0.898 xuống 0.855 (khoảng 13 câu).
 - Embed 300 câu hỏi khoảng 3 giây; dense search trên 61 425 vector khoảng 10 ms mỗi câu (numpy, 4 luồng).
 
 Hai điều đáng chú ý trong bảng, bạn nên tự kiểm lại trên số của mình: hybrid với BM25 âm tiết **thua** dense ở R@1 và
 MRR (nhánh yếu kéo thứ hạng xuống, như module 13 đã thấy), nhưng hybrid với BM25 bigram thắng dense ở mọi cột; và
-reranker nổi tiếng **làm tệ đi** top-k trên bộ này. Đừng chép kết luận của người khác về rerank mà không đo.
+reranker nổi tiếng **không giúp** ở cấu hình đã đo (top-20, tài liệu là cả điều cắt ở 512 token): R@5 giảm, MRR không tăng.
+Kết luận chỉ đúng cho cấu hình đó. Một nguyên nhân khả dĩ (chưa kiểm) là việc cắt: với điều dài, phần trả lời câu hỏi có
+thể nằm sau 512 token đầu nên cross-encoder không thấy; rerank theo khoản rồi gộp điểm lên điều là thí nghiệm đáng làm.
+Đừng chép kết luận của người khác về rerank mà không đo.
 Số dense và hybrid có thể lệch ở chữ số thứ ba giữa các máy vì vector câu hỏi qua Ollama không hoàn toàn tất định.
 
 ## Gợi ý

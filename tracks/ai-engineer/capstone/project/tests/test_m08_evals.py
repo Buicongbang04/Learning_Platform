@@ -28,7 +28,11 @@ def test_percentile_ci(la):
     assert lo < np.percentile(xs, 95) < hi
     assert hi - lo < np.percentile(xs, 99) - np.percentile(xs, 50)
     narrow = evals.percentile_ci(xs, 95, n_boot=500, seed=3, level=0.5)
-    assert lo <= narrow[0] <= narrow[1] <= hi
+    assert lo <= narrow[0] < narrow[1] <= hi
+    ninety = evals.percentile_ci(xs, 95, n_boot=500, seed=3, level=0.9)
+    assert lo <= ninety[0] and ninety[1] <= hi and (ninety[1] - ninety[0]) < (hi - lo)
+    low_level = evals.percentile_ci(xs, 50, n_boot=500, seed=3, level=0.2)
+    assert low_level[0] < low_level[1]
     assert evals.percentile_ci([2.0] * 10, 50, n_boot=50) == (2.0, 2.0)
 
 

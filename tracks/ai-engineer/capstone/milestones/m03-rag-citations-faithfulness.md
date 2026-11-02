@@ -4,9 +4,9 @@
 
 Sinh câu trả lời **chỉ dựa trên nguồn** và **trích được tới khoản**, từ chối khi thiếu căn cứ, rồi đo bằng số ba điều:
 câu trả lời có trích đúng điều luật trong qrels không, từ chối có đúng lúc không, và mọi khẳng định có nằm trong nguồn
-không (faithfulness). Phần sửa quan trọng nhất so với module 13 và 17 là **đơn vị nguồn**: module 17 (bài
-Intermediate 03) đo được gần một nửa số câu bị từ chối, và trong 31 câu RAG từ chối dù điều đúng có trong prompt, 22 câu
-có điều đúng dài hơn 1 500 ký tự, tức phần trả lời rất có thể nằm sau chỗ cắt. Ở đây nguồn là khoản có địa chỉ.
+không (faithfulness). Phần sửa quan trọng nhất so với module 13 là **đơn vị nguồn**: mục 5 module 13 (và bài Advanced 01) đã thấy model từ
+chối dù điều đúng có trong prompt khi điều đó dài hơn chỗ cắt 1 500 ký tự, vì phần trả lời nằm sau chỗ cắt. Ở đây nguồn
+là khoản có địa chỉ, và bạn đo xem chẩn đoán đó đứng vững tới đâu trên 300 câu.
 
 Dùng lại [module 13](../../modules/13-rag/README.md): prompt có nguồn đánh số, câu từ chối cố định, hai lớp từ chối
 (mục 5, bài Intermediate 02), faithfulness bằng judge tách khẳng định và cách kiểm judge bằng nguồn sai (mục 6, bài
@@ -27,7 +27,7 @@ hình là khoảng 600 lời gọi model sinh và vài trăm lời gọi judge.
    prompt).
 4. **Chọn nguồn cho prompt**: retrieval tốt nhất của M02 lấy vài điều, tách khoản, xếp khoản theo cosine với câu hỏi
    (embed khoản bằng `bge-m3`, cache theo nội dung), giữ top-5 khoản. Giữ thêm một cấu hình đối chứng: 5 **điều** đầu
-   của cùng retrieval, mỗi điều cắt ở 1 500 ký tự (cách của module 13 và 17).
+   của cùng retrieval, mỗi điều cắt ở 1 500 ký tự (cách của module 13).
 5. **Bộ câu ngoài phạm vi** trong `evalsets/`: ít nhất 20 câu tự viết, nửa rõ ràng ngoài lĩnh vực (giá vàng, nấu ăn),
    nửa "gần phạm vi" (luật nước ngoài). Ngưỡng `min_score` chọn từ phân phối điểm của tập dev (M02) và bộ này, không từ
    tập ghim.
@@ -82,7 +82,7 @@ khoảng 7 phút; pha sinh khoảng 30 phút cho 640 câu trả lời.
 
 - **Đơn vị nguồn quyết định**: theo cặp, 102 câu trích đúng ở cả hai cấu hình, 79 câu chỉ đúng với khoản, 29 câu chỉ
   đúng với cả điều: thắng ròng 50 câu, vượt xa nhiễu. Ở cấu hình cả điều, 45 trên 56 câu từ chối dù có điều đúng có
-  điều đúng dài hơn 1 500 ký tự: chẩn đoán của module 13 và 17 đứng vững trên 300 câu.
+  điều đúng dài hơn 1 500 ký tự: chẩn đoán của mục 5 module 13 đứng vững trên 300 câu.
 - **Cái giá**: điều đúng có mặt trong nguồn ít hơn một chút (262 so với 270 câu), vì 5 khoản tốt nhất trung bình chỉ đến từ
   2.86 điều khác nhau; khoản dài hơn cũng làm p95 độ trễ sinh tăng.
 - **Ngoài phạm vi**: cả hai cấu hình từ chối 20/20, nhưng cổng điểm chỉ chặn 6/20; 14 câu còn lại là LLM từ chối. Điểm
