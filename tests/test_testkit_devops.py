@@ -1525,7 +1525,8 @@ def test_act_run_clean_env_unit(monkeypatch, tmp_path):
     testkit.act_run(project, secrets={"DEPLOY_TOKEN": "sieu-bi-mat"})
     process = world.processes[0]
     env = process.kwargs["env"]
-    assert set(env) == {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST", "DEPLOY_TOKEN"}
+    assert set(env) == {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST", "DEPLOY_TOKEN", "GITHUB_TOKEN"}
+    assert env["GITHUB_TOKEN"] == testkit.ACT_DUMMY_GITHUB_TOKEN
     assert env["DOCKER_HOST"] == "unix:///run/user/1000/docker.sock"
     assert env["DEPLOY_TOKEN"] == "sieu-bi-mat"
     home = Path(env["HOME"])
@@ -1533,6 +1534,64 @@ def test_act_run_clean_env_unit(monkeypatch, tmp_path):
     assert flag(process.args, "-s") == "DEPLOY_TOKEN", "Giá trị secret đi qua env của act, không nằm trên argv"
     assert "sieu-bi-mat" not in " ".join(process.args)
     assert ".actrc" not in process.repo_files and "app.py" in process.repo_files
+
+
+@pytest.mark.parametrize("leak", ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GH_CONFIG_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"])
+def test_act_run_env_has_no_gh_credentials(monkeypatch, tmp_path, leak):
+    monkeypatch.setenv(leak, "/ro-ri-tu-may")
+    world = FakeActWorld(monkeypatch)
+    testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW))
+    env = world.processes[0].kwargs["env"]
+    assert "/ro-ri-tu-may" not in env.values()
+    assert leak == "GITHUB_TOKEN" or leak not in env
+
+
+def test_act_run_always_passes_github_token_secret(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    project = write_project(tmp_path, SIMPLE_WORKFLOW)
+    testkit.act_run(project)
+    testkit.act_run(project, secrets={"DEPLOY_TOKEN": "sieu-bi-mat"}, github_token="token-cua-nguoi-goi")
+    for process, token in zip(world.processes, [testkit.ACT_DUMMY_GITHUB_TOKEN, "token-cua-nguoi-goi"]):
+        pairs = [process.args[i + 1] for i, a in enumerate(process.args) if a == "-s"]
+        assert pairs.count("GITHUB_TOKEN") == 1
+        assert process.kwargs["env"]["GITHUB_TOKEN"] == token
+        assert token not in " ".join(process.args)
+        shim = process.kwargs["env"]["PATH"].split(":")[0]
+        assert shim.endswith("gh-shim")
+    assert sorted(pairs) == ["DEPLOY_TOKEN", "GITHUB_TOKEN"]
+
+
+def test_act_run_refuses_short_github_token(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW), github_token="abc")
+    assert "GITHUB_TOKEN" in str(info.value)
+    assert world.processes == []
+
+
+def test_act_gh_shim_marks_and_fails(tmp_path):
+    shim = testkit._act_gh_shim(tmp_path)
+    env = {"PATH": f"{shim}:/usr/local/bin:/usr/bin:/bin", "HOME": str(tmp_path)}
+    assert shutil.which("gh", path=env["PATH"]) == str(shim / "gh")
+    called = subprocess.run(["gh", "auth", "token"], env=env, capture_output=True, text=True)
+    assert called.returncode != 0 and called.stdout == ""
+    assert (tmp_path / testkit.ACT_GH_SHIM_MARKER).exists()
+
+
+def test_act_run_fails_when_act_calls_gh(monkeypatch, tmp_path):
+    world = FakeActWorld(monkeypatch)
+    fake_popen = testkit.subprocess.Popen
+
+    def popen(argv, **kwargs):
+        if argv[0] == "act":
+            subprocess.run(["gh", "auth", "token"], env=kwargs["env"], capture_output=True)
+        return fake_popen(argv, **kwargs)
+
+    monkeypatch.setattr(testkit.subprocess, "Popen", popen)
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, SIMPLE_WORKFLOW))
+    assert "gh" in str(info.value)
+    assert len(world.processes) == 1
 
 
 def test_act_run_rejects_bad_secret_names(monkeypatch, tmp_path):
@@ -1744,13 +1803,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: echo "token=[$(printf '%s' "$TOK" | sha256sum | cut -c1-64)]"
+        env:
+          TOK: ${{ secrets.GITHUB_TOKEN }}
       - run: |
-          echo "token=[$(printf '%s' "$TOK" | rev)]"
           env | rev
           echo "workspace=$(ls | tr '\\n' ' ')"
           echo "da-kiem-env"
-        env:
-          TOK: ${{ secrets.GITHUB_TOKEN }}
 """
     project = write_project(tmp_path, workflow, {
         ".actrc": "--env FROM_PROJECT_ACTRC=proj-ro-ri-777\n",
@@ -1761,10 +1820,65 @@ jobs:
     result = testkit.act_run(project, timeout=300)
     output = result.stdout + result.stderr
     assert testkit.act_job_results(result) == {"check": True}, output[-3000:]
-    assert "da-kiem-env" in output and "token=[]" in output
+    assert "da-kiem-env" in output and f"token=[{token_digest(testkit.ACT_DUMMY_GITHUB_TOKEN)}]" in output
     assert "app.py" in output
     for value in [*leaks.values(), "home-ro-ri-555", "xdg-ro-ri-666", "proj-ro-ri-777", "dotenv-ro-ri-888", "secrets-ro-ri-999"]:
         assert value not in output and value[::-1] not in output, value
+
+
+def token_digest(value: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+GH_TOKEN_PROBE_WORKFLOW = """
+name: ci
+on: push
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for name in TOK GITHUB_TOKEN; do
+            value=$(printenv "$name" || true)
+            case "$value" in gho_*|ghp_*|ghs_*|ghu_*|ghr_*|github_pat_*) real=yes ;; *) real=no ;; esac
+            echo "devops-ex-output ${name}_set=$(printenv "$name" >/dev/null && echo yes || echo no)"
+            echo "devops-ex-output ${name}_real=$real"
+            echo "devops-ex-output ${name}_len=${#value}"
+            echo "devops-ex-output ${name}_sha=$(printf '%s' "$value" | sha256sum | cut -c1-64)"
+          done
+        env:
+          TOK: ${{ secrets.GITHUB_TOKEN }}
+"""
+
+
+def test_act_run_never_reaches_host_gh_token(tmp_path):
+    require_real_act()
+    result = testkit.act_run(write_project(tmp_path, GH_TOKEN_PROBE_WORKFLOW), timeout=300)
+    assert testkit.act_job_results(result) == {"probe": True}
+    probe = testkit.act_outputs(result)["probe"]
+    dummy = testkit.ACT_DUMMY_GITHUB_TOKEN
+    assert probe["TOK_real"] == "no" and probe["GITHUB_TOKEN_real"] == "no"
+    assert probe["TOK_set"] == "yes"
+    assert probe["TOK_len"] == str(len(dummy)) and probe["TOK_sha"] == token_digest(dummy)
+    if probe["GITHUB_TOKEN_set"] == "yes":
+        assert probe["GITHUB_TOKEN_sha"] == token_digest(dummy)
+
+
+def test_act_gh_shim_catches_fallback_without_explicit_token(monkeypatch, tmp_path):
+    require_real_act()
+    real_command = testkit._act_command
+
+    def without_token(*args, **kwargs):
+        argv = real_command(*args, **kwargs)
+        assert argv[-2:] == ["-s", "GITHUB_TOKEN"]
+        return argv[:-2]
+
+    monkeypatch.setattr(testkit, "_act_command", without_token)
+    with pytest.raises(pytest.fail.Exception) as info:
+        testkit.act_run(write_project(tmp_path, GH_TOKEN_PROBE_WORKFLOW), timeout=300)
+    assert "`gh`" in str(info.value)
 
 
 def test_act_run_job_container_limits_and_secret_masking(monkeypatch, tmp_path):

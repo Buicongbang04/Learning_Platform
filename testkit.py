@@ -1230,6 +1230,8 @@ ACT_RUN_LABEL = "devops-ex.act"
 ACT_ALLOWED_ACTIONS = ("actions/checkout",)
 ACT_REMOTE = "https://github.com/olist-shop/olist-shop.git"
 ACT_SECRET_MIN_LENGTH = 4
+ACT_DUMMY_GITHUB_TOKEN = "devops-ex-dummy-token"
+ACT_GH_SHIM_MARKER = "gh-called"
 _ACT_ENV_NAMES = {"PATH", "HOME", "LANG", "LC_ALL", "DOCKER_HOST", "ACT"}
 _ACT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _ACT_EVENT = re.compile(r"[a-z_]+")
@@ -1495,7 +1497,20 @@ def _act_command(repo: Path, run_id: str, *, event: str, job: str | None, env: d
         argv += ["--env", f"{key}={value}"]
     for name in secret_names:
         argv += ["-s", name]
-    return argv
+    return argv + ["-s", "GITHUB_TOKEN"]
+
+
+def _act_gh_shim(root: Path) -> Path:
+    """Thư mục đặt đầu `PATH` của act, chứa `gh` giả: chạy thì tạo `root/ACT_GH_SHIM_MARKER` rồi thoát 1, nên act (tìm `gh`
+    bằng `exec.LookPath`) không bao giờ tới được `gh auth token` của máy."""
+    import shlex
+
+    shim = root / "gh-shim"
+    shim.mkdir()
+    gh = shim / "gh"
+    gh.write_text(f"#!/bin/sh\n: > {shlex.quote(str(root / ACT_GH_SHIM_MARKER))}\nexit 1\n", encoding="utf-8")
+    gh.chmod(0o755)
+    return shim
 
 
 def _act_cleanup(run_id: str) -> None:
@@ -1564,6 +1579,7 @@ def act_run(
     env: dict | None = None,
     secrets: dict | None = None,
     timeout: float = 600,
+    github_token: str | None = None,
 ) -> subprocess.CompletedProcess:
     """Chạy workflow GitHub Actions trong `workflow_dir/.github/workflows/` bằng `act` và trả CompletedProcess (kết quả từng
     job: `act_job_results`; giá trị gửi ra: `act_outputs`). Skip khi thiếu `act`, git hay image runner `ACT_IMAGE`.
@@ -1571,7 +1587,7 @@ def act_run(
     act chạy trên host (cần socket Docker nên không vào được bwrap) trên bản chép tạm của `workflow_dir` (bỏ `.git`,
     `.actrc`) thành repo git mới, với `name:` của mọi workflow đổi thành `devops-ex-<id>-<tên cũ>` để container, volume
     của act mang tên riêng của lần chạy. Env dựng từ đầu (`HOME` tạm nên không đọc `~/.actrc`, `~/.config/act`; không mang
-    `GITHUB_TOKEN`, `ACTIONS_*`, `AWS_*`, `DOCKER_*`; `DOCKER_HOST` lấy từ context Docker hiện tại); `.env`, `.secrets`,
+    `GITHUB_TOKEN`, `GH_*`, `ACTIONS_*`, `AWS_*`, `DOCKER_*`, `DBUS_*`, `XDG_*` của máy; `DOCKER_HOST` lấy từ context Docker hiện tại); `.env`, `.secrets`,
     `.vars`, `.input` của repo không được đọc; chỉ chạy workflow ngay trong `.github/workflows/` (`-W`, `--no-recurse`).
     Job chạy trong `ACT_IMAGE` (`--pull=false`) trên network riêng `devops-ex-<id>`, ghim CPU theo `docker_cpu_args()`,
     RAM 1g, 512 tiến trình, `no-new-privileges`, nhãn `devops-ex=1` và `devops-ex.act=<id>`, không có socket Docker
@@ -1585,6 +1601,10 @@ def act_run(
     `actions/checkout` không tải gì: act chép thẳng bản chép tạm vào job. Action khác (khi được thêm vào danh sách) tải về
     `act_cache_dir()` lần đầu rồi dùng lại offline (`--action-offline-mode`); thiếu action mà không có mạng thì skip.
 
+    Luôn truyền secret `GITHUB_TOKEN` tường minh (`github_token`, mặc định `ACT_DUMMY_GITHUB_TOKEN`) nên act không bao giờ
+    tới được token của `gh` trên máy (act 0.2.94 chạy `gh auth token` khi thiếu secret này); thêm vào đó `PATH` của act bắt
+    đầu bằng một `gh` giả, act mà gọi nó thì fail.
+
     `secrets` đi qua env của tiến trình act (argv chỉ có tên), act che giá trị thành `***` trong log, testkit che thêm
     lần nữa trong output trả về; giá trị ngắn hơn `ACT_SECRET_MIN_LENGTH` bị từ chối (che chuỗi quá ngắn làm hỏng output
     mà không bảo vệ được gì). Quá `timeout` thì SIGKILL cả nhóm tiến trình và fail kèm output cuối. Mọi đường thoát (xong,
@@ -1595,7 +1615,8 @@ def act_run(
     bad = [n for n in [*env, *secrets] if not _ACT_NAME.fullmatch(n) or n.upper() in _ACT_ENV_NAMES or n.upper().startswith("GITHUB_")]
     if bad:
         pytest.fail(f"Tên biến hoặc secret không dùng được với act_run: {bad} (chữ, số, '_'; không trùng PATH, HOME, ACT..., không bắt đầu bằng GITHUB_)")
-    short = sorted(name for name, value in secrets.items() if len(value) < ACT_SECRET_MIN_LENGTH)
+    token = ACT_DUMMY_GITHUB_TOKEN if github_token is None else str(github_token)
+    short = sorted(name for name, value in {**secrets, "GITHUB_TOKEN": token}.items() if len(value) < ACT_SECRET_MIN_LENGTH)
     if short:
         pytest.fail(f"Secret {short} ngắn hơn {ACT_SECRET_MIN_LENGTH} ký tự: act_run không che được an toàn, dùng giá trị dài hơn")
     if not _ACT_EVENT.fullmatch(event):
@@ -1611,14 +1632,18 @@ def act_run(
         home = root / "home"
         home.mkdir()
         argv = _act_command(repo, run_id, event=event, job=job, env=env, secret_names=list(secrets)) + _act_guarded_stubs(repo, root)
-        act_env = {"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": str(home), "LANG": "C.UTF-8",
-                   "LC_ALL": "C.UTF-8", "DOCKER_HOST": _act_docker_host(), **secrets}
+        path = f"{_act_gh_shim(root)}:{os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin')}"
+        act_env = {"PATH": path, "HOME": str(home), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "DOCKER_HOST": _act_docker_host(),
+                   **secrets, "GITHUB_TOKEN": token}
         stdout, stderr, returncode, timed_out = _act_execute(argv, repo, act_env, run_id, timeout)
+        gh_called = (root / ACT_GH_SHIM_MARKER).exists()
     finally:
         shutil.rmtree(root, ignore_errors=True)
-    for value in secrets.values():
+    for value in [*secrets.values(), token]:
         stdout, stderr = stdout.replace(value, "***"), stderr.replace(value, "***")
     result = subprocess.CompletedProcess(argv, returncode, stdout, stderr)
+    if gh_called:
+        pytest.fail("act đã gọi `gh` (định lấy token GitHub của máy); act_run phải luôn truyền GITHUB_TOKEN tường minh")
     if timed_out:
         pytest.fail(f"Workflow chạy quá {timeout:g} giây nên bị dừng; container của lần chạy đã được dọn. Output cuối:\n{_output_tail(result)}")
     missing = _ACT_CLONE_FAILED.search(f"{stdout}\n{stderr}")
