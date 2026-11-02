@@ -1,0 +1,79 @@
+questions:
+- id: hardest-questions
+  kind: data
+  type: single
+  prompt: Trên 5 video, câu hỏi nào gần như không cách chọn frame nào trả lời đúng?
+  options:
+  - id: a
+    text: first_shape, vì hình ở cảnh đầu quá nhỏ trên frame 448 pixel
+  - id: b
+    text: scene_count và last_number, model đếm thiếu cảnh và lấy số đầu
+  - id: c
+    text: ball_direction, vì cách nào cũng đúng nên không phân biệt được
+  - id: d
+    text: Không có câu nào, mọi câu đều đúng ở ít nhất một nửa số video
+- id: grid-tokens
+  kind: data
+  type: single
+  prompt: Lưới 4×4 của 16 frame so với gửi 16 frame riêng (rộng 448), số token prompt thế nào?
+  options:
+  - id: a
+    text: Gần bằng nhau, vì cùng là 16 frame của một video
+  - id: b
+    text: Lưới tốn gấp đôi vì ảnh lưới có độ phân giải lớn hơn
+  - id: c
+    text: Lưới chỉ tốn khoảng một phần mười số token của 16 frame
+  - id: d
+    text: Lưới tốn khoảng 60% số token của 16 frame riêng lẻ
+- id: detector-segments
+  kind: data
+  type: single
+  prompt: Bộ phát hiện đổi cảnh (ngưỡng 20 trên ảnh xám 64×36) tìm được bao nhiêu đoạn so với số cảnh thật?
+  options:
+  - id: a
+    text: Đúng bằng số cảnh thật ở cả 5 video
+  - id: b
+    text: Ít hơn số cảnh thật vì luôn bỏ sót cảnh ngắn chỉ dài 1.5 giây
+  - id: c
+    text: Nhiều hơn số cảnh thật ở mọi video, vì loé trắng tách đoạn
+  - id: d
+    text: Luôn đúng một đoạn, ngưỡng 20 quá cao cho video này
+- id: flash-sampling
+  kind: knowledge
+  type: single
+  prompt: Video 30 giây, lấy đều 16 frame. Vì sao gần như không thể đếm đúng số lần loé trắng dài 0.3 giây?
+  options:
+  - id: a
+    text: Hai frame cách nhau gần 2 giây nên phần lớn lần loé rơi vào giữa
+  - id: b
+    text: Vision encoder bỏ qua mọi ảnh toàn màu trắng khi tạo ra các token ảnh
+  - id: c
+    text: JPEG nén mất hẳn các frame có độ sáng cao như lúc loé trắng
+  - id: d
+    text: Model chỉ nhận tối đa 8 ảnh, các frame còn lại bị bỏ đi
+- id: bool-int
+  kind: knowledge
+  type: single
+  prompt: Trong `score_answers`, vì sao phải kiểm `bool` trước `int`?
+  options:
+  - id: a
+    text: Vì bool chậm hơn int rất nhiều khi so sánh bằng toán tử ==
+  - id: b
+    text: Vì isinstance(True, int) đúng và True == 1, dễ chấm nhầm
+  - id: c
+    text: Vì JSON không có kiểu bool nên model luôn trả chuỗi
+  - id: d
+    text: Vì pandas tự đổi bool thành chuỗi mỗi khi tính trung bình cột
+- id: timestamps
+  kind: knowledge
+  type: single
+  prompt: Vì sao `video_messages` ghi thời điểm của từng frame vào prompt?
+  options:
+  - id: a
+    text: Ollama yêu cầu có thời điểm để giải mã các ảnh JPEG theo đúng thứ tự
+  - id: b
+    text: Để giảm số token ảnh, vì thời điểm thay cho một số frame
+  - id: c
+    text: Nếu không ghi, model không biết các frame cách nhau bao lâu
+  - id: d
+    text: Để model đọc được chữ số trên frame dễ hơn khi có ngữ cảnh

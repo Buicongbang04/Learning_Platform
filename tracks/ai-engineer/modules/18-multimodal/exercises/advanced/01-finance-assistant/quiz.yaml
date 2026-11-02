@@ -1,0 +1,79 @@
+questions:
+- id: llm-no-math
+  kind: knowledge
+  type: single
+  prompt: Người dùng hỏi "tháng 10 tôi chi bao nhiêu cho đồ uống?". Phân công nào hợp lý nhất?
+  options:
+  - id: a
+    text: Đưa cả sổ chi tiêu vào prompt rồi để LLM tự cộng mọi khoản tiền
+  - id: b
+    text: LLM tách ý định và tham số, code tính tổng, câu trả lời điền số
+  - id: c
+    text: Fine-tune LLM trên sổ chi tiêu để nó nhớ hết các khoản đã chi trước đó
+  - id: d
+    text: Dùng vision LLM đọc lại toàn bộ ảnh hoá đơn mỗi lần được hỏi
+- id: rules-first
+  kind: knowledge
+  type: single
+  prompt: Vì sao `categorize` thử luật từ khoá trước rồi mới gọi LLM?
+  options:
+  - id: a
+    text: Luật nhanh, tất định, không tốn lượt gọi; LLM chỉ cho tên lạ
+  - id: b
+    text: LLM không phân loại được bất kỳ tên món tiếng Indonesia nào cả
+  - id: c
+    text: JSON schema enum chỉ chấp nhận tối đa sáu nhóm chi tiêu
+  - id: d
+    text: Luật luôn chính xác hơn LLM với mọi tên món có thể xuất hiện
+- id: pii-before-log
+  kind: knowledge
+  type: single
+  prompt: Bản chép lời câu hỏi giọng nói chứa số điện thoại. Che PII ở bước nào là đúng nhất?
+  options:
+  - id: a
+    text: Chỉ khi in câu trả lời cuối cùng ra màn hình cho người dùng
+  - id: b
+    text: Không cần che vì mọi model trong bài đều chạy trên máy local
+  - id: c
+    text: Ngay sau STT, trước khi ghi log hay gửi sang LLM và lưu trữ
+  - id: d
+    text: Trước khi chạy Whisper, bằng cách lọc tần số của audio
+- id: number-check
+  kind: knowledge
+  type: single
+  prompt: Agent báo cáo tháng kiểm mọi con số trong đoạn văn LLM viết với số liệu code đã tính. Kiểm tra này bắt được gì?
+  options:
+  - id: a
+    text: Câu văn sai ngữ pháp, dùng từ lặp hoặc văn phong không tự nhiên
+  - id: b
+    text: Con số LLM tự bịa hoặc chép sai so với số liệu thật
+  - id: c
+    text: Hoá đơn bị vision LLM đọc sai từ đầu pipeline
+  - id: d
+    text: Nhóm chi tiêu bị phân loại nhầm ở bước categorize
+- id: voice-vs-text
+  kind: knowledge
+  type: single
+  prompt: Câu hỏi được `route` hiểu đúng khi gõ chữ nhưng sai khi nói. Bước đầu tiên để biết lỗi nằm ở đâu?
+  options:
+  - id: a
+    text: Đổi sang LLM lớn hơn cho bước route rồi thử lại
+  - id: b
+    text: Đọc bản chép lời của Whisper và tính CER so với câu gốc
+  - id: c
+    text: Tăng nhiệt độ sinh của LLM ở bước route để câu trả lời đa dạng hơn
+  - id: d
+    text: Ghi âm lại câu hỏi bằng giọng to và chậm hơn hẳn
+- id: synthetic-data
+  kind: knowledge
+  type: single
+  prompt: Vì sao bài dùng hoá đơn gán ngày giả và câu hỏi do TTS đọc thay vì dữ liệu chi tiêu và giọng nói thật của bạn?
+  options:
+  - id: a
+    text: Dữ liệu thật quá lớn để chạy được trên GPU 4GB
+  - id: b
+    text: Whisper không nhận dạng được giọng người thật
+  - id: c
+    text: Tránh đưa dữ liệu tài chính và sinh trắc học thật vào repo, log
+  - id: d
+    text: Giấy phép CC BY 4.0 của cord-v2 cấm trộn hoá đơn với dữ liệu cá nhân khác

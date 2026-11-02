@@ -1,0 +1,6 @@
+llm-no-math: [b]
+rules-first: [a]
+pii-before-log: [c]
+number-check: [b]
+voice-vs-text: [b]
+synthetic-data: [c]

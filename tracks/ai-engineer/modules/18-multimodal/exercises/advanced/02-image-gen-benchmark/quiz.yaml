@@ -1,0 +1,79 @@
+questions:
+- id: cuda-sync
+  kind: knowledge
+  type: single
+  prompt: Đo thời gian sinh ảnh trên GPU mà không gọi `torch.cuda.synchronize` trước khi dừng đồng hồ thì số đo là gì?
+  options:
+  - id: a
+    text: Thời gian chính xác hơn vì bỏ qua được độ trễ đồng bộ giữa CPU và GPU
+  - id: b
+    text: Thời gian xếp lệnh vào hàng đợi, có thể nhỏ hơn thật nhiều
+  - id: c
+    text: Thời gian của cả lần khởi động đầu tiên cộng lần đo
+  - id: d
+    text: Thời gian chạy trên CPU vì GPU chưa được dùng tới
+- id: turbo-guidance
+  kind: knowledge
+  type: single
+  prompt: Bật `guidance_scale=2.0` với SD-Turbo thì chi phí mỗi bước thay đổi thế nào?
+  options:
+  - id: a
+    text: Không đổi, vì guidance chỉ là một phép nhân vô hướng trên nhiễu dự đoán
+  - id: b
+    text: Giảm một nửa vì model hội tụ sau ít bước hơn
+  - id: c
+    text: Khoảng gấp đôi vì U-Net chạy hai lần có và không điều kiện
+  - id: d
+    text: Tăng gấp bốn vì latent phải lớn gấp đôi mỗi chiều
+- id: clip-baseline
+  kind: knowledge
+  type: single
+  prompt: Vì sao cần đường nền "ảnh so với prompt của ảnh khác" khi đọc CLIP score?
+  options:
+  - id: a
+    text: Để biết chênh lệch giữa cấu hình lớn hay nhỏ so với khớp/không khớp
+  - id: b
+    text: Để CLIP score của mọi cấu hình cùng được đưa về nằm trong khoảng 0 tới 100
+  - id: c
+    text: Vì CLIP chỉ chấm được khi có ít nhất hai prompt khác nhau
+  - id: d
+    text: Để loại các ảnh bị safety checker che màu đen khỏi bảng
+- id: clip-blind
+  kind: knowledge
+  type: single
+  prompt: Điều nào CLIP score gần như không đo được?
+  options:
+  - id: a
+    text: Ảnh có chứa đối tượng được nhắc trong prompt hay không
+  - id: b
+    text: Chữ trong ảnh có đúng chính tả như prompt yêu cầu hay không
+  - id: c
+    text: Ảnh con mèo được chấm điểm cao hơn với prompt mèo so với khi chấm bằng prompt chó
+  - id: d
+    text: Ảnh hoàn toàn không liên quan sẽ có điểm thấp
+- id: vram-measure
+  kind: knowledge
+  type: single
+  prompt: GPU dùng chung với tiến trình khác. Cách đo VRAM đỉnh của pipeline của bạn đáng tin hơn?
+  options:
+  - id: a
+    text: Đọc cột bộ nhớ của nvidia-smi khi ảnh đang sinh ra
+  - id: b
+    text: Lấy dung lượng file model chia cho số bước sinh ảnh
+  - id: c
+    text: Đọc tổng VRAM còn trống của cả card trước và sau khi nạp xong model vào GPU
+  - id: d
+    text: reset_peak_memory_stats rồi max_memory_allocated của PyTorch
+- id: vi-prompt
+  kind: knowledge
+  type: single
+  prompt: Prompt tiếng Việt cho SD-Turbo thường kém hơn prompt tiếng Anh. Nguyên nhân chính?
+  options:
+  - id: a
+    text: Text encoder OpenCLIP train chủ yếu trên chú thích tiếng Anh
+  - id: b
+    text: Scheduler Euler của diffusers không xử lý được các ký tự có dấu thanh
+  - id: c
+    text: VAE decoder chỉ giải mã latent của câu tiếng Anh
+  - id: d
+    text: Giấy phép của model cấm dùng prompt bằng tiếng Việt
