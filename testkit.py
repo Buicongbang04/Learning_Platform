@@ -3315,29 +3315,44 @@ def _kube_node_leftovers(admin: "_KubeAdmin", actions: list[dict]) -> list[dict]
     return present
 
 
-def _kube_check_node_leftovers(admin: "_KubeAdmin") -> None:
-    """Một lab bị giết (SIGKILL) giữa bài thao tác node để lại cordon, taint mà `close()` chưa kịp hoàn tác. Khi khoá node đang
-    rảnh mà tệp trạng thái còn ghi thao tác vẫn còn hiệu lực trên cluster thì skip kèm đúng lệnh hoàn tác; thao tác không còn
-    trên cluster (cluster đã tạo lại, đã hoàn tác tay) thì xoá tệp."""
-    import fcntl
-
+def _kube_node_undo_present(admin: "_KubeAdmin") -> list[dict]:
+    """Chỉ gọi khi đang giữ khoá node. Đọc lại tệp trạng thái, so với trạng thái thật của node, hoàn tác đúng những thao tác testkit
+    đã ghi mà còn trên cluster, rồi ghi lại tệp. Trả các thao tác hoàn tác không được (tệp vẫn giữ chúng). Một cordon hay taint ghi
+    trong tệp mà vẫn còn trên node thì coi là của lab bị ngắt: testkit không phân biệt được với cùng cordon hay taint người dùng tự đặt
+    lại sau đó trên đúng node đó."""
     actions = _kube_node_state_read()
-    lock = _kube_node_paths()[0]
     if not actions:
         _kube_node_state_write([])
+        return []
+    present = _kube_node_leftovers(admin, actions)
+    failed = []
+    for entry in present:
+        result = admin.run(*_kube_node_undo(entry))
+        if result.returncode != 0 and "not found" not in result.stderr:
+            failed.append(entry)
+    _kube_node_state_write(failed)
+    return failed
+
+
+def _kube_check_node_leftovers(admin: "_KubeAdmin") -> None:
+    """Một lab bị giết (SIGKILL) giữa bài thao tác node để lại cordon, taint mà `close()` chưa kịp hoàn tác. Có tệp trạng thái và
+    khoá node đang rảnh thì giữ khoá, đọc lại tệp, hoàn tác những thao tác còn trên cluster rồi chạy tiếp; chỉ skip kèm đúng lệnh hoàn
+    tác khi chính việc hoàn tác lỗi. Khoá đang bị giữ (một bài thao tác node đang chạy) thì không đụng gì."""
+    import fcntl
+
+    lock, state = _kube_node_paths()
+    if not state.exists():
         return
     with open(lock, "a+") as handle:
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return
-        present = _kube_node_leftovers(admin, actions)
-        if not present:
-            _kube_node_state_write([])
-            return
-    commands = " && ".join(f"kubectl --kubeconfig {KUBE_KUBECONFIG_HINT} {' '.join(_kube_node_undo(e))}" for e in present)
-    pytest.skip(f"Một bài thao tác node trước đó bị ngắt (SIGKILL) nên worker còn cordon hay taint của lab ({_kube_node_paths()[1]}). "
-                f"Hoàn tác bằng: {commands}; hoặc chạy lại một bài dùng node_action, testkit tự hoàn tác trước khi làm tiếp")
+        failed = _kube_node_undo_present(admin)
+    if failed:
+        commands = " && ".join(f"kubectl --kubeconfig {KUBE_KUBECONFIG_HINT} {' '.join(_kube_node_undo(e))}" for e in failed)
+        pytest.skip(f"Một bài thao tác node trước đó bị ngắt nên worker còn cordon hay taint của lab, và testkit không tự hoàn tác "
+                    f"được ({state}). Hoàn tác bằng: {commands}")
 
 
 def _require_cluster_up(name: str) -> None:
@@ -4203,14 +4218,10 @@ class KubeLab:
                                 f"({path}); bài dùng node_action không chạy song song")
                 time.sleep(min(2, KUBE_NODE_LOCK_TIMEOUT / 4))
         self._node_lock = handle
-        left = _kube_node_state_read()
-        for entry in list(left):
-            result = self._admin.run(*_kube_node_undo(entry))
-            if result.returncode != 0 and "not found" not in result.stderr:
-                pytest.fail(f"Không hoàn tác được thao tác node còn sót của lần chạy trước ({' '.join(_kube_node_undo(entry))}): "
-                            f"{_output_tail(result)}")
-            left.remove(entry)
-            _kube_node_state_write(left)
+        failed = _kube_node_undo_present(self._admin)
+        if failed:
+            pytest.fail("Không hoàn tác được thao tác node còn sót của lần chạy trước: "
+                        + "; ".join(" ".join(_kube_node_undo(e)) for e in failed))
 
     def _record_node(self, entry: dict, keep: bool) -> None:
         actions = [e for e in _kube_node_state_read() if e != entry]
@@ -4248,11 +4259,13 @@ class KubeLab:
         metrics-server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node. `timeout` là
         `--timeout` của drain (10 tới 120 giây).
 
-        Mỗi thao tác được ghi vào `kube-nodes.state.json` cạnh khoá trước khi chạy và xoá khi đã hoàn tác; lab bị SIGKILL thì
-        lần `node_action` sau tự hoàn tác phần còn sót, còn `require_cluster` skip kèm lệnh hoàn tác khi khoá rảnh. Giới hạn: đường
+        Mỗi thao tác được ghi vào `kube-nodes.state.json` cạnh khoá (chỉ đọc, ghi, xoá khi đang giữ khoá) trước khi chạy và xoá khi
+        đã hoàn tác; lab bị SIGKILL thì `require_cluster` của bài sau (khi khoá rảnh) hay lần `node_action` sau giữ khoá, so tệp với
+        trạng thái thật của node và hoàn tác phần còn trên cluster rồi chạy tiếp; chỉ skip kèm lệnh khi hoàn tác lỗi. Giới hạn: đường
         dẫn khoá và tệp trạng thái theo `XDG_CACHE_HOME` (hai tiến trình đặt `XDG_CACHE_HOME` khác nhau không thấy khoá của nhau);
         hai lab lồng nhau trong cùng một tiến trình cùng gọi `node_action` thì lab trong chờ khoá của lab ngoài tới hết
-        `KUBE_NODE_LOCK_TIMEOUT` rồi fail."""
+        `KUBE_NODE_LOCK_TIMEOUT` rồi fail; cordon hay taint ghi trong tệp mà vẫn còn trên node bị coi là của lab bị ngắt, kể cả khi
+        người dùng tự đặt lại đúng cordon, taint đó sau khi lab chết."""
         self._require_entered()
         spec = self._spec(spec, {"action", "node"}, {"taint"}, "node_action")
         action = spec["action"]

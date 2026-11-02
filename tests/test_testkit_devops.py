@@ -5664,50 +5664,84 @@ def leftover(tmp_path, actions):
 LEFTOVER = [{"node": "devops-lab-worker", "cordon": True}, {"node": "devops-lab-worker2", "taint": ["olist.io/pool", "NoSchedule"]}]
 
 
-def test_kube_lab_undoes_leftover_node_state_before_new_action(monkeypatch, tmp_path):
+class NodeCluster:
+    """Trạng thái node giả cho KubeFake: get nodes trả cordon/taint hiện có, cordon/uncordon/taint đổi trạng thái."""
+
+    def __init__(self, monkeypatch, *, cordoned=(), taints=(), fail_undo=False):
+        self.fake = KubeFake(monkeypatch)
+        self.cordoned = set(cordoned)
+        self.taints = {(n, k, e) for n, k, e in taints}
+        self.fail_undo = fail_undo
+        self.original = self.fake.run_sandboxed
+        monkeypatch.setattr(testkit, "run_sandboxed", self.run)
+
+    def run(self, cmd, **kwargs):
+        cmd = [str(c) for c in cmd]
+        verb = cmd[1] if len(cmd) > 1 else ""
+        done = lambda code=0, out="", err="": subprocess.CompletedProcess(cmd, code, out, err)
+        if cmd[1:4] == ["get", "nodes", "-o"]:
+            self.fake.sandbox_calls.append({"cmd": cmd, "env": dict(kwargs["env"]), "input": None})
+            items = [{"metadata": {"name": n}, "spec": {"unschedulable": n in self.cordoned,
+                                                         "taints": [{"key": k, "effect": e} for m, k, e in self.taints if m == n]}}
+                     for n in ("devops-lab-worker", "devops-lab-worker2")]
+            return done(out=json.dumps({"items": items}))
+        if verb in ("cordon", "uncordon", "drain"):
+            self.fake.sandbox_calls.append({"cmd": cmd, "env": dict(kwargs["env"]), "input": None})
+            if verb == "uncordon" and self.fail_undo:
+                return done(1, err="boom")
+            (self.cordoned.discard if verb == "uncordon" else self.cordoned.add)(cmd[2])
+            return done()
+        if verb == "taint":
+            self.fake.sandbox_calls.append({"cmd": cmd, "env": dict(kwargs["env"]), "input": None})
+            node, spec = cmd[3], cmd[4]
+            key, effect = spec.rstrip("-").split(":")
+            key = key.split("=")[0]
+            if spec.endswith("-"):
+                if self.fail_undo:
+                    return done(1, err="boom")
+                self.taints.discard((node, key, effect))
+            else:
+                self.taints.add((node, key, effect))
+            return done()
+        return self.original(cmd, **kwargs)
+
+    def cmds(self):
+        return [c["cmd"] for c in self.fake.sandbox_calls]
+
+
+def test_require_cluster_recovers_leftovers_then_exercise_proceeds(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     path = leftover(tmp_path, LEFTOVER)
-    fake = KubeFake(monkeypatch)
-    with testkit.KubeLab() as lab:
-        lab.node_action({"action": "cordon", "node": "devops-lab-worker2"})
-        cmds = [c["cmd"] for c in fake.sandbox_calls]
-        first = cmds.index(["kubectl", "cordon", "devops-lab-worker2"])
-        assert ["kubectl", "uncordon", "devops-lab-worker"] in cmds[:first]
-        assert ["kubectl", "taint", "nodes", "devops-lab-worker2", "olist.io/pool:NoSchedule-"] in cmds[:first]
+    cluster = NodeCluster(monkeypatch, cordoned={"devops-lab-worker"}, taints={("devops-lab-worker2", "olist.io/pool", "NoSchedule")})
+    testkit.Exercise.require_cluster()
     assert not path.exists()
+    assert cluster.cordoned == set() and cluster.taints == set()
+    with testkit.KubeLab() as lab:
+        lab.node_action({"action": "taint", "node": "devops-lab-worker2", "taint": {"key": "olist.io/pool", "value": "f",
+                                                                                     "effect": "NoSchedule"}})
+        assert ("devops-lab-worker2", "olist.io/pool", "NoSchedule") in cluster.taints
+    assert cluster.taints == set() and not path.exists()
 
 
-def leftover_fake(monkeypatch, *, cordoned: bool, tainted: bool):
-    fake = KubeFake(monkeypatch)
-    original = fake.run_sandboxed
-
-    def run(cmd, **kwargs):
-        if "nodes" in cmd and "json" in cmd and "get" in cmd:
-            items = [{"metadata": {"name": "devops-lab-worker"}, "spec": {"unschedulable": cordoned}},
-                     {"metadata": {"name": "devops-lab-worker2"},
-                      "spec": {"taints": [{"key": "olist.io/pool", "value": "f", "effect": "NoSchedule"}] if tainted else []}}]
-            return subprocess.CompletedProcess(cmd, 0, json.dumps({"items": items}), "")
-        return original(cmd, **kwargs)
-
-    monkeypatch.setattr(testkit, "run_sandboxed", run)
-    return fake
-
-
-def test_require_cluster_skips_on_leftover_node_state(monkeypatch, tmp_path):
+def test_require_cluster_skips_only_when_undo_fails(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    leftover(tmp_path, LEFTOVER)
-    leftover_fake(monkeypatch, cordoned=True, tainted=True)
+    path = leftover(tmp_path, LEFTOVER)
+    NodeCluster(monkeypatch, cordoned={"devops-lab-worker"}, taints={("devops-lab-worker2", "olist.io/pool", "NoSchedule")},
+                fail_undo=True)
     with pytest.raises(pytest.skip.Exception) as info:
         testkit.Exercise.require_cluster()
     assert_skip(info, "kubectl --kubeconfig ~/.kube/devops-lab.yaml uncordon devops-lab-worker",
                 "kubectl --kubeconfig ~/.kube/devops-lab.yaml taint nodes devops-lab-worker2 olist.io/pool:NoSchedule-")
+    assert path.exists()
 
 
-def test_require_cluster_clears_stale_node_state(monkeypatch, tmp_path):
+def test_require_cluster_undoes_only_entries_still_present(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     path = leftover(tmp_path, LEFTOVER)
-    leftover_fake(monkeypatch, cordoned=False, tainted=False)
+    cluster = NodeCluster(monkeypatch, cordoned={"devops-lab-worker"})
     testkit.Exercise.require_cluster()
+    assert ["kubectl", "uncordon", "devops-lab-worker"] in cluster.cmds()
+    assert not any(c[1] == "taint" for c in cluster.cmds())
     assert not path.exists()
 
 
@@ -5716,11 +5750,55 @@ def test_require_cluster_ignores_state_while_lock_held(monkeypatch, tmp_path):
 
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     path = leftover(tmp_path, LEFTOVER)
-    leftover_fake(monkeypatch, cordoned=True, tainted=True)
+    cluster = NodeCluster(monkeypatch, cordoned={"devops-lab-worker"}, taints={("devops-lab-worker2", "olist.io/pool", "NoSchedule")})
     with open(path.parent / "kube-nodes.lock", "a+") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         testkit.Exercise.require_cluster()
-    assert path.exists()
+    assert path.exists() and cluster.cordoned == {"devops-lab-worker"}
+    assert not any(c[1] in ("uncordon", "taint") for c in cluster.cmds())
+
+
+def test_require_cluster_without_state_file_never_takes_lock_or_touches_state(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    cluster = NodeCluster(monkeypatch)
+    testkit.Exercise.require_cluster()
+    assert not (tmp_path / "devops-track" / "kube-nodes.lock").exists()
+    assert not any(c[1:3] == ["get", "nodes"] for c in cluster.cmds())
+
+
+def test_state_written_by_other_process_after_check_is_kept(monkeypatch, tmp_path):
+    import fcntl
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    path = node_state(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("not json")
+    cluster = NodeCluster(monkeypatch, cordoned={"devops-lab-worker"})
+    original_flock = fcntl.flock
+
+    def flock(handle, flags):
+        result = original_flock(handle, flags)
+        if flags & fcntl.LOCK_EX and not path.read_text().startswith("{"):
+            path.write_text(json.dumps({"actions": [{"node": "devops-lab-worker", "cordon": True}]}))
+        return result
+
+    monkeypatch.setattr(fcntl, "flock", flock)
+    testkit.Exercise.require_cluster()
+    assert ["kubectl", "uncordon", "devops-lab-worker"] in cluster.cmds(), "Trạng thái phải được đọc lại sau khi giữ khoá"
+    assert not path.exists()
+
+
+def test_lock_nodes_undoes_only_entries_still_present(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    cluster = NodeCluster(monkeypatch, taints={("devops-lab-worker2", "olist.io/pool", "NoSchedule")})
+    with testkit.KubeLab() as lab:
+        path = leftover(tmp_path, LEFTOVER)
+        lab.node_action({"action": "cordon", "node": "devops-lab-worker2"})
+        cmds = cluster.cmds()
+        first = cmds.index(["kubectl", "cordon", "devops-lab-worker2"])
+        assert ["kubectl", "taint", "nodes", "devops-lab-worker2", "olist.io/pool:NoSchedule-"] in cmds[:first]
+        assert ["kubectl", "uncordon", "devops-lab-worker"] not in cmds, "Không gỡ thao tác đã không còn trên cluster"
+    assert cluster.taints == set() and cluster.cordoned == set() and not path.exists()
 
 
 @KUBE_REQUIRED
