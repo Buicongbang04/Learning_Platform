@@ -1,0 +1,7 @@
+- name: Triển khai worker Olist Shop theo từng host
+  hosts: olist_workers
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: olist_worker

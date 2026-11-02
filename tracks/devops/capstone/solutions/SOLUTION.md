@@ -181,6 +181,72 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 - **Dòng `FAIL` nêu lý do cuối cùng thấy được** (`version=... expected=...`, `readyz=503`): người đọc log CI biết ngay deploy
   sai bản hay hạ tầng chưa lên.
 
+## M05: `project/infra/`, `project/ansible/`
+
+### infra/
+
+- **SSM là hợp đồng giữa OpenTofu và Ansible.** OpenTofu không biết host nào, Ansible không biết hạ tầng do ai tạo; cả hai
+  chỉ thống nhất một đường dẫn tham số. Đổi Postgres sang RDS chỉ đổi giá trị `DB_HOST`, role không đổi một dòng. Cấu hình
+  nằm trong `group_vars` thì mỗi lần đổi hạ tầng là một commit vào repo Ansible và hai nơi lệch nhau.
+- **Mật khẩu tách thành tham số riêng, không nhét vào `DATABASE_URL`.** Tham số chứa mật khẩu phải là write-only; nếu cả URL
+  là write-only thì đổi host cũng phải tăng version, và OpenTofu không thấy drift của host nữa. Tách ra thì năm tham số
+  thường vẫn được plan theo dõi bình thường, chỉ `DB_PASSWORD` đi qua `value_wo`.
+- **Biến `ephemeral` cộng `value_wo`, chứ không chỉ `sensitive`.** `sensitive` chỉ che output; giá trị vẫn nằm rõ trong
+  state và plan. Write-only không bao giờ ghi vào state, nên kể cả người đọc được state (CI, người có quyền với bucket) cũng
+  không thấy mật khẩu. Cái giá: OpenTofu không biết giá trị hiện tại, muốn ghi lại phải tăng `db_password_version`.
+- **Vẫn mã hoá state phía client.** State còn ARN, tên tài nguyên, policy; khối `encryption` với `enforced = true` cho cả
+  state và plan là lớp thứ hai, và bắt lỗi sớm nếu ai đó chạy mà quên passphrase thay vì lặng lẽ ghi state rõ.
+- **Khoá KMS riêng cho cả SSM và bucket backup.** Khoá `aws/ssm`, `aws/s3` mặc định không viết policy được và không thu hồi
+  riêng được; khoá riêng cho phép tách quyền giải mã (instance role) khỏi quyền quản trị khoá, và audit theo khoá.
+- **Instance role không có `s3:DeleteObject`, không có `ListBucket`.** Host chỉ đẩy backup lên; host bị chiếm không xoá hay liệt
+  kê được bản cũ. Versioning cộng lifecycle 30 ngày cho bản noncurrent là lưới an toàn cho ghi đè.
+  `kms:GenerateDataKey` cần cho `PutObject` lên bucket mã hoá SSE-KMS; bucket key giảm số lần gọi KMS.
+- **Lifecycle chậm trên provider 6.12.0.** Resource lifecycle chờ khoảng một phút để cấu hình "lan truyền" (hành vi của
+  provider, không phải LocalStack). Chấp nhận được; đừng dựng lifecycle bằng `null_resource` để đi tắt.
+
+### ansible/
+
+- **`argument_specs` thay cho chuỗi `assert`.** Ansible kiểm đầu vào trước task đầu tiên, báo đủ mọi lỗi một lần, và
+  `ansible-doc` đọc được giao diện của role. `no_log` trên `DB_PASSWORD` để thông báo lỗi không in giá trị.
+- **Release bất biến cộng symlink.** Đổi `current` là thao tác nguyên tử; rollback là chạy lại với release cũ, không build lại,
+  không tải lại. Thư mục release không bao giờ bị ghi đè: cùng tag mà khác nội dung là lỗi của pipeline. Bản này chưa dọn
+  release cũ; thêm task giữ N bản gần nhất là việc tiếp theo hợp lý.
+- **Một virtualenv dùng chung.** Dependency ghim cứng và đến từ cùng thư mục wheel, nên mỗi release một venv chỉ tốn đĩa. Khi
+  dependency đổi theo release, chuyển venv vào trong thư mục release.
+- **`no_log` và `diff: false` trên task env file.** `--diff` in nguyên nội dung tệp mới; `no_log` một mình không chặn diff.
+- **Percent-encode user và mật khẩu, kể cả `/`.** Filter `urlencode` của Jinja giữ nguyên `/` (an toàn cho path, không an toàn
+  cho userinfo); mật khẩu sinh ngẫu nhiên kiểu base64 có `/` sẽ làm URL vỡ ở lần xoay mật khẩu đầu tiên.
+- **`serial: 1`, `max_fail_percentage: 0`.** Với hai worker, cuốn chiếu từng host giữ một worker sống trong lúc host kia
+  restart; host đầu hỏng thì play dừng trước khi đụng host thứ hai.
+- **Test đóng vai systemd.** Lab không chạy systemd, nên test đọc unit rồi tự chạy `ExecStart` với `User`, `EnvironmentFile`,
+  `WorkingDirectory` của nó. Nhờ vậy unit sai đường dẫn hay env file sai cú pháp vẫn trượt như trên máy thật.
+
+## M06: `project/chart/olist-shop/`
+
+- **Một chart, hai Deployment.** `api` và `worker` cùng image, cùng ConfigMap, cùng vòng đời release; tách chart là hai lần
+  upgrade có thể lệch version. Postgres, Redis không thuộc chart: ở production là dịch vụ managed, và một chart ứng dụng kéo
+  theo database là cách nhanh nhất để `helm uninstall` xoá dữ liệu.
+- **Không `replicas` khi HPA bật.** Mỗi `helm upgrade` sẽ kéo số replica về giá trị trong chart rồi HPA kéo lên lại. Cái giá:
+  lần cài đầu chỉ có 1 pod cho tới vòng đồng bộ đầu của HPA (khoảng 15 giây).
+- **`maxUnavailable: 0`, `maxSurge: 1` cho `api`.** Rollout không bao giờ giảm số pod phục vụ; cộng PDB `minAvailable: 1` và
+  topology spread theo hostname thì drain một worker không làm mất service.
+- **`matchLabelKeys: [pod-template-hash]` trong topology spread.** Không có nó, pod của ReplicaSet cũ được tính khi xếp pod
+  mới trong lúc rollout, và `DoNotSchedule` có thể kẹt.
+- **Default deny theo release, không theo namespace.** `podSelector` chọn nhãn `instance` của release, nên chart không làm hỏng
+  workload khác trong namespace (pod `probe` của test). Mỗi component một policy ingress/egress; DNS phải mở tường minh
+  tới `kube-dns`, nếu không mọi tên Service đều lỗi trước cả khi tới policy của Postgres.
+- **Ingress của `api` chỉ từ pod Traefik trong `devops-gateway`.** `namespaceSelector` và `podSelector` trong **cùng** một phần
+  tử `from` (AND); viết thành hai phần tử là OR, mở cho mọi pod của namespace gateway hay mọi pod cùng namespace.
+- **Worker có NetworkPolicy ingress rỗng.** Metrics `9101` chỉ dành cho Prometheus ở M08; khi đó thêm một luật từ namespace
+  monitoring, không mở trước.
+- **ServiceAccount riêng, không token, không binding.** App không gọi API server; token mount sẵn là thứ đầu tiên kẻ tấn công
+  dùng sau khi chiếm pod. ServiceAccount riêng để sau này gắn IRSA/Workload Identity mà không cấp chung cho mọi pod.
+- **Role trực sự cố gắn vào Group.** Thêm người là việc của IdP (OIDC group), không phải sửa chart. Có `deployments/scale` để
+  xử lý sự cố (scale worker), không có `patch deployments` (đổi image là việc của pipeline), không `pods/exec`, không đọc
+  Secret.
+- **Probe của worker là `/metrics`.** Worker không có HTTP API; cổng metrics chỉ mở sau khi tạo xong bảng, nên vừa là readiness
+  vừa là liveness đủ dùng. Kiểm "còn xử lý job" thật sự là alert theo độ dài hàng đợi ở M08.
+
 ## Rubric cho phần tự đánh giá
 
 | Mục | Đạt | Chưa đạt |
@@ -193,3 +259,7 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 | README "Container" | Lý do chọn image nền, ý nghĩa từng khoá hardening, quy trình khi gate đỏ đã làm thật một lần | Liệt kê khoá không giải thích |
 | Vòng thật M04 | Chạy workflow bằng act, đọc log từng job, rollback staging bằng digest cũ và đo thời gian | Chỉ chạy test |
 | README "Pipeline" | Sơ đồ job, lý do quét trước push và deploy theo digest, quy trình rollback có số đo, kế hoạch promote | Chỉ mô tả các bước YAML |
+| Vòng thật M05 | Apply bằng tay trên LocalStack, đọc cây SSM bằng CLI, chạy playbook `--syntax-check`, runbook xoay mật khẩu có thứ tự và lý do (Postgres chỉ giữ một mật khẩu mỗi role: hai role luân phiên, hay cửa sổ restart có kiểm soát) | Chỉ chạy test |
+| README "Hạ tầng và cấu hình" | Sơ đồ tofu → SSM → Ansible, lý do write-only và cái giá, runbook xoay mật khẩu không gián đoạn | Liệt kê tài nguyên |
+| Vòng thật M06 | Cài chart vào namespace `restricted`, gọi qua Gateway, drain một worker và thấy PDB giữ `api`, upgrade rồi rollback | Chỉ chạy test |
+| README "Kubernetes" | Bảng luồng mạng được phép, lý do không HPA cho worker, con số cho min/max replica và PDB, khác biệt khi lên EKS/GKE | Chép values.yaml |

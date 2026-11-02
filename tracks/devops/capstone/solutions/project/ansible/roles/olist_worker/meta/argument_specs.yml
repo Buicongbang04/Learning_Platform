@@ -1,0 +1,56 @@
+argument_specs:
+  main:
+    short_description: Triển khai một release worker Olist Shop
+    options:
+      olist_worker_release:
+        type: str
+        required: true
+        description: Tag release do pipeline (M04) tạo; thành tên thư mục trong releases/ và APP_VERSION.
+      olist_worker_runtime:
+        type: dict
+        required: true
+        description: Cấu hình runtime đọc từ cây tham số SSM do OpenTofu tạo, khoá là tên tham số.
+        options:
+          DB_HOST:
+            type: str
+            required: true
+          DB_NAME:
+            type: str
+            required: true
+          DB_USER:
+            type: str
+            required: true
+          DB_PASSWORD:
+            type: str
+            required: true
+            no_log: true
+          REDIS_URL:
+            type: str
+            required: true
+          LOG_LEVEL:
+            type: str
+            required: true
+            choices: [DEBUG, INFO, WARNING, ERROR]
+      olist_worker_user:
+        type: str
+        default: olist
+      olist_worker_home:
+        type: path
+        default: /opt/olist-shop
+      olist_worker_config_dir:
+        type: path
+        default: /etc/olist-shop
+      olist_worker_src:
+        type: path
+      olist_worker_wheels_dir:
+        type: path
+        default: /srv/wheels
+      olist_worker_python:
+        type: path
+        default: /usr/local/bin/python3
+      olist_worker_packages:
+        type: list
+        elements: str
+      olist_worker_memory_max:
+        type: str
+        default: 512M

@@ -1,0 +1,12 @@
+olist_worker_user: olist
+olist_worker_home: /opt/olist-shop
+olist_worker_config_dir: /etc/olist-shop
+olist_worker_src: "{{ playbook_dir }}/artifacts/olist_shop/"
+olist_worker_wheels_dir: /srv/wheels
+olist_worker_python: /usr/local/bin/python3
+olist_worker_packages:
+  - sqlalchemy==2.1.6
+  - psycopg[binary]==3.3.6
+  - redis==8.1.0
+  - prometheus-client==0.26.0
+olist_worker_memory_max: 512M

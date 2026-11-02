@@ -9,9 +9,13 @@ dưới đây. Đề từng milestone ở [`../milestones/`](../milestones/), t�
 | `nginx/` | [M02](../milestones/m02-nginx-front.md) | `gen-cert.sh`, `olist-shop.conf` |
 | `container/` | [M03](../milestones/m03-containers.md) | `Dockerfile` (target `api`, `worker`), `compose.yaml` production, `trivy.yaml`, `.trivyignore.yaml` |
 | `.github/workflows/`, `ci/` | [M04](../milestones/m04-cicd-pipeline.md) | `ci.yml` (test, build, quét, push, deploy staging), `smoke-test.sh` |
+| `infra/` | [M05](../milestones/m05-iac-config.md) | Cấu hình OpenTofu: state S3 mã hoá, KMS, bucket backup, cây tham số SSM, instance role |
+| `ansible/` | [M05](../milestones/m05-iac-config.md) | `site.yml`, `inventory/hosts.yml`, role `olist_worker` |
+| `chart/olist-shop/` | [M06](../milestones/m06-kubernetes-helm.md) | Helm chart cho `api` và `worker`: HPA, PDB, NetworkPolicy, RBAC, HTTPRoute |
 | `tests/` | mọi milestone | Không sửa: test chấm bài |
 
-`.gitignore` ở đây đã chặn `backups/` (bản sao lưu thật) và `nginx/tls/` (cert và private key thật). Đừng bỏ hai dòng đó.
+`.gitignore` ở đây đã chặn `backups/` (bản sao lưu thật), `nginx/tls/` (cert và private key thật), state và thư mục `.terraform/` của
+OpenTofu, `ansible/runtime.json` (cấu hình runtime có mật khẩu) và `ansible/artifacts/`. Đừng bỏ các dòng đó.
 
 ## Chạy test
 
@@ -23,7 +27,8 @@ uv run pytest tracks/devops/capstone/project/tests -q -rs -k m01
 ```
 
 Chưa làm milestone nào thì test **fail** với thông báo "Chưa có tệp ...", không phải lỗi của test. Test skip khi máy
-thiếu công cụ (bwrap, curl, jq, openssl, shellcheck, Docker hoặc image, trivy, act, registry local) và lý do skip cho
+thiếu công cụ (bwrap, curl, jq, openssl, shellcheck, Docker hoặc image, trivy, act, registry local, tofu,
+LocalStack riêng của track, ansible, helm, cluster kind `devops-lab`) và lý do skip cho
 biết cần cài gì; skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15 ${DEVOPS_CPUSET:+taskset -c "$DEVOPS_CPUSET"}` trước `uv run`.
 
 Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và chạy được bằng
@@ -32,5 +37,5 @@ Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và ch�
 ## Vận hành
 
 Mục này là của bạn: sau M01, ghi ba lệnh vận hành, exit code của từng lệnh và cách khôi phục từ backup; sau M02, thêm
-mục "Edge" với các quyết định cấu hình Nginx; sau M03, mục "Container"; sau M04, mục "Pipeline". Xem phần "Kết quả
-nộp" của từng milestone.
+mục "Edge" với các quyết định cấu hình Nginx; sau M03, mục "Container"; sau M04, mục "Pipeline"; sau M05, mục "Hạ tầng
+và cấu hình"; sau M06, mục "Kubernetes". Xem phần "Kết quả nộp" của từng milestone.
