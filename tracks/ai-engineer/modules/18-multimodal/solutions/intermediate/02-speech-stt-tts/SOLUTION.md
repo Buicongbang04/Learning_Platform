@@ -16,8 +16,8 @@
 ## Kết quả của lời giải mẫu
 
 50 câu ghim (id câu khác nhau đầu tiên của `test.tsv`, 662 giây audio, câu dài nhất 25.4 giây), CPU 4 luồng, int8, PC của
-track (máy dùng chung); toàn bộ notebook chạy khoảng 20 phút. Log: `.superpowers/scratch/logs/int02_solution_outputs.log`
-và `int02_tts_fixed.log`.
+track (máy dùng chung); toàn bộ notebook chạy khoảng 20 phút. Bảng dưới là lần chạy thứ nhất; lần thứ hai cho cùng WER/CER tới chữ số thứ hai
+(`int02_solution_outputs_run2.log`). Log: `.superpowers/scratch/logs/int02_solution_outputs.log` và `int02_tts_fixed.log`.
 
 | Model | Cấu hình | WER | CER | Giây | RTF |
 | --- | --- | --- | --- | --- | --- |
@@ -32,12 +32,14 @@ và `int02_tts_fixed.log`.
 - **Cỡ model là núm vặn lớn nhất**: từ `tiny` lên `small`, WER giảm từ khoảng 0.6 xuống 0.23, đổi lại RTF gấp khoảng 3 lần
   (vẫn nhanh hơn thời gian thực 5 lần trên 4 luồng CPU). `tiny` và `base` sai khoảng một nửa số từ tiếng Việt: không dùng
   được cho sản phẩm. Thời gian của `tiny` và `base` gần nhau vì phần cố định (nạp, tính Mel, VAD) chiếm nhiều.
-- **Beam 5** giảm WER 0.008 tới 0.033 tuỳ cỡ, tốn thêm 3% tới 50% thời gian: với `small`, chênh lệch nằm trong nhiễu của 50 câu.
+- **Beam 5** giảm WER 0.007 tới 0.033 tuỳ cỡ (giống nhau ở hai lần chạy). Thời gian thêm thì **không** đo ổn định trên máy dùng
+  chung: lần chạy thứ hai `tiny` beam 5 còn nhanh hơn beam 1 (35.0 so với 44.4 giây). Với `small`, beam 5 thêm 2% tới 13%
+  thời gian mà WER chỉ giảm 0.007 tới 0.008, trong nhiễu của 50 câu.
 - **VAD** trên câu ngắn đã cắt sẵn gần như không đổi gì (0.234 so với 0.243): nó có ích với audio dài có khoảng lặng.
 - **Chuẩn hoá**: cùng bản nhận dạng của `small` beam 5, WER 0.301 khi không chuẩn hoá, 0.268 khi chỉ đổi chữ thường, 0.234
   sau `normalize_vi`. Chênh 0.067 chỉ vì cách chuẩn hoá, lớn hơn chênh lệch giữa mọi cấu hình beam/VAD của `small`.
 - **Audio dài** (50 câu nối lại, khoảng 9 phút, `small` beam 5): WER 0.306 và chỉ 1 381 từ ra trên 1 565 từ thật: model **bỏ
-  sót** cả đoạn khi một cửa sổ 30 giây bị đoán sai ranh giới. VAD cho 1 461 từ (WER 0.305); tắt điều kiện câu trước cho
+  sót** cả đoạn khi một cửa sổ 30 giây bị đoán sai ranh giới. VAD cho 1 452 tới 1 461 từ (WER 0.305 tới 0.307, hai lần chạy); tắt điều kiện câu trước cho
   1 527 từ và WER 0.270, tốt nhất trong ba. Câu ngắn riêng lẻ (0.234) vẫn tốt hơn: cắt audio theo câu hoặc theo khoảng lặng
   trước khi nhận dạng là cách đơn giản nhất.
 - Lỗi điển hình đọc tận mắt: sai dấu thanh ("tân ngữ" thành "tăng ngữ"), tên riêng nước ngoài ("Plitvice Lakes" thành "lít
@@ -52,7 +54,7 @@ TTS (`mms-tts-vie`, seed 0, CPU), Whisper `small` beam 5 nghe lại, CER tính s
 | 10 câu tài chính, đưa nguyên chữ số vào TTS | 0.502 |
 | 10 câu tài chính, `normalize_for_tts` trước TTS | 0.128 |
 
-RTF của TTS trên CPU 0.245. Vocab của `mms-tts-vie` có 96 ký hiệu và chữ số duy nhất là "2"; tokenizer bỏ im lặng mọi
+RTF của TTS trên CPU 0.20 tới 0.25 (hai lần chạy, máy dùng chung). Vocab của `mms-tts-vie` có 96 ký hiệu và chữ số duy nhất là "2"; tokenizer bỏ im lặng mọi
 ký tự ngoài vocab, nên "45.000 đồng" chỉ còn "đồng". Chuẩn hoá số đưa CER của câu tài chính về ngang câu thường.
 
 Về nghe: lời giải mẫu do một agent tự động chạy và **không nghe được audio**, nên không có nhận xét bằng tai ở đây; phần đó

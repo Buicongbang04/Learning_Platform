@@ -467,7 +467,7 @@ Hai số đo trên `mms-tts-vie` (CPU 4 luồng, PC của track):
 | --- | --- |
 | Vocab của tokenizer | 96 ký hiệu: chữ cái tiếng Việt có dấu, dấu cách, vài dấu câu; chữ số duy nhất là "2" |
 | `"45.000 đồng"` sau tokenizer | chỉ còn `đồng`: ký tự ngoài vocab bị bỏ **im lặng**, không lỗi, không cảnh báo |
-| RTF trên 20 câu FLEURS | 0.245 (1 giây giọng nói mất khoảng 0.25 giây CPU) |
+| RTF trên 20 câu FLEURS | 0.20 tới 0.25 qua hai lần chạy (1 giây giọng nói mất khoảng 0.2 giây CPU) |
 | CER vòng TTS → Whisper `small` trên 20 câu FLEURS đã chuẩn hoá | 0.113 |
 
 Câu tài chính đầy số tiền là trường hợp xấu nhất của model này: bài Intermediate 02 cho bạn đo CER vòng lại của chúng
