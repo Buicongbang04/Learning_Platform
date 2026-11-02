@@ -19,6 +19,7 @@ def test_normalize_vi(m):
     assert m.normalize_vi("  ĐÂY   là\n\t“câu”!!  ") == "đây là câu"
     assert m.normalize_vi("giá 60.000 đồng (đã gồm VAT)") == "giá 60 000 đồng đã gồm vat"
     assert m.normalize_vi("hiện-tượng/khác") == "hiện tượng khác"
+    assert m.normalize_vi("lãi 5%+phí 10$") == "lãi 5 phí 10", "ký hiệu nhóm S* (+, $) cũng thay bằng khoảng trắng"
     nfd = unicodedata.normalize("NFD", "Tiếng Việt")
     assert m.normalize_vi(nfd) == "tiếng việt", "chuỗi NFD phải về NFC trước khi so"
 

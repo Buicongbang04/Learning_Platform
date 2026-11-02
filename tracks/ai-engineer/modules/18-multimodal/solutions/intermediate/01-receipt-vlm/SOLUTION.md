@@ -17,7 +17,7 @@
 100 hoá đơn test của `cord-v2`, `qwen3-vl:2b` (Ollama 0.13.5, Q4_K_M), PC của track (RTX 3060, Ollama dùng chung với
 tiến trình khác lúc đo). Log: `.superpowers/scratch/logs/exp_receipts_score.log` và output của notebook.
 
-| Cấu hình | JSON hỏng | Tổng đúng | P dòng | R dòng | F1 dòng | SL đúng | Token TB | Giây p50 | Giây p95 |
+| Cấu hình | JSON hỏng | Tổng đúng | P dòng | R dòng | F1 dòng | SL đúng | Token prompt TB | Giây p50 | Giây p95 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | VLM, ảnh gốc | 0 | 0.947 | 0.908 | 0.925 | 0.916 | 0.988 | 1 206 | 2.61 | 5.58 |
 | VLM, cạnh dài 1024 | 0 | 0.968 | 0.877 | 0.910 | 0.893 | 0.971 | 712 | 1.95 | 4.39 |
@@ -31,7 +31,8 @@ tiến trình khác; so sánh độ chính xác vẫn dùng được. Pipeline V
 
 Đọc bảng:
 
-- **Token tỉ lệ diện tích**: từ ảnh gốc xuống 512, token giảm khoảng 4.2 lần (1 206 xuống 290). Từ ảnh gốc tới 768,
+- **Token tỉ lệ diện tích**: từ ảnh gốc xuống 512, token prompt giảm khoảng 4.2 lần (1 206 xuống 290); phần chữ của prompt
+  luôn là 120 token, nên phần ảnh giảm khoảng 6.4 lần (1 086 xuống 170, tính bằng công thức Basic 03 trên kích thước thật). Từ ảnh gốc tới 768,
   F1 dòng hàng chỉ giảm 0.05; từ 768 xuống 512 nó rơi 0.18 (0.862 xuống 0.687): dưới một ngưỡng, chữ số nhỏ trên hoá đơn
   không còn đọc được. Cột tổng tiền bền hơn (chữ tổng thường to và đậm).
 - **1024 so với ảnh gốc**: tổng đúng 0.968 so với 0.947 (2 hoá đơn), F1 0.893 so với 0.916 (khoảng 2 điểm): cả hai chênh

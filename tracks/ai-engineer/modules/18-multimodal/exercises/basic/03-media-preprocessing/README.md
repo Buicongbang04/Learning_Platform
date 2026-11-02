@@ -62,9 +62,8 @@ Trong `starter/media.py`:
 
 ### Gợi ý 1
 
-`scipy.signal.resample_poly(x, up, down)` lọc thông thấp rồi đổi tần số theo tỉ lệ nguyên $$\mathrm{up}/\mathrm{down}$$;
-`fractions.Fraction(sr_out, sr_in)` rút gọn tỉ lệ (44 100 → 16 000 là 160/441). `np.interp` thì không lọc gì: thử nó
-trên tông 10 kHz rồi nghe (hoặc in RMS) để thấy aliasing.
+Tìm trong `scipy.signal` một hàm đổi tần số lấy mẫu theo tỉ lệ hữu tỉ có lọc sẵn bên trong, và nghĩ cách đưa hai tần số về
+một tỉ lệ nguyên tối giản. Nội suy tuyến tính (`np.interp`) thì không lọc gì: thử nó trên tông 10 kHz rồi in RMS để thấy aliasing.
 
 ### Gợi ý 2
 

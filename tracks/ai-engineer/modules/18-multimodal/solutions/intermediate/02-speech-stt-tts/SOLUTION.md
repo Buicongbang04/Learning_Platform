@@ -31,7 +31,7 @@ track (máy dùng chung); toàn bộ notebook chạy khoảng 20 phút. Bảng d
 
 - **Cỡ model là núm vặn lớn nhất**: từ `tiny` lên `small`, WER giảm từ khoảng 0.6 xuống 0.23, đổi lại RTF gấp khoảng 3 lần
   (vẫn nhanh hơn thời gian thực 5 lần trên 4 luồng CPU). `tiny` và `base` sai khoảng một nửa số từ tiếng Việt: không dùng
-  được cho sản phẩm. Thời gian của `tiny` và `base` gần nhau vì phần cố định (nạp, tính Mel, VAD) chiếm nhiều.
+  được cho sản phẩm.
 - **Beam 5** giảm WER 0.007 tới 0.033 tuỳ cỡ (giống nhau ở hai lần chạy). Thời gian thêm thì **không** đo ổn định trên máy dùng
   chung: lần chạy thứ hai `tiny` beam 5 còn nhanh hơn beam 1 (35.0 so với 44.4 giây). Với `small`, beam 5 thêm 2% tới 13%
   thời gian mà WER chỉ giảm 0.007 tới 0.008, trong nhiễu của 50 câu.
@@ -66,7 +66,7 @@ nghe vào đâu (nhịp, chỗ ngắt) khi tự nghe. Log: `.superpowers/scratch
 
 ## Bẫy thường gặp
 
-- Dùng `faster_whisper.decode_audio` trong env GPU: lỗi với PyAV đang ghim.
+- Dùng `faster_whisper.decode_audio`: lỗi ở cả env gốc lẫn env GPU, vì cả hai đều ghim PyAV 19.0.1.
 - Đọc WAV float32 như int16: ra nhiễu trắng mà không báo lỗi.
 - So CER vòng TTS → STT mà không chuẩn hoá phía Whisper: Whisper viết "45.000", văn bản đầu vào viết chữ, CER bị thổi phồng.
 - Không ghim seed của VITS: chạy lại ra audio khác.

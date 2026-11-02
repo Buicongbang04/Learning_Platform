@@ -215,7 +215,9 @@ hoá đơn với `think: false` và `num_predict: 300`: `content` rỗng, cả 3
 hạn thì một lượt gọi thử (prompt chữ ngắn) chạy quá 10 phút chưa xong. Cách xử lý
 dùng trong module: thêm một message `assistant` có nội dung `"{"` ở cuối (**prefill**). Model coi đó là phần đầu câu trả
 lời của chính nó, viết tiếp object JSON và bỏ qua bước suy nghĩ. Đổi lại, không còn constrained decoding, nên phải
-**parse và kiểm phía client**, đúng điều module 11 đã khuyên làm dù có schema.
+**parse và kiểm phía client**, đúng điều module 11 đã khuyên làm dù có schema. Nếu Ollama của bạn mới hơn và pull được
+`qwen3-vl:2b-instruct` (bản không thinking), thử gửi `format` + JSON schema không prefill và so hai cách trên cùng tập hoá
+đơn (chưa đo trong track).
 
 ### Hoá đơn thành JSON: định nghĩa đúng trước khi đo
 
@@ -236,13 +238,13 @@ một nửa số hoá đơn đúng; dùng nó làm **tín hiệu** để hỏi l
 Đo trên 100 hoá đơn **validation** của `cord-v2` (bài Intermediate 01 đo trên 100 hoá đơn test, thêm hai mức độ phân giải
 và hai pipeline OCR), `qwen3-vl:2b`, prompt và prefill như bài, PC của track (GPU dùng chung):
 
-| Ảnh đưa vào | JSON hỏng | Tổng đúng (98 hoá đơn có nhãn tổng) | Precision dòng | Recall dòng | F1 dòng | Token ảnh TB | Giây p50 / p95 |
+| Ảnh đưa vào | JSON hỏng | Tổng đúng (98 hoá đơn có nhãn tổng) | Precision dòng | Recall dòng | F1 dòng | Token prompt TB (phần ảnh) | Giây p50 / p95 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ảnh gốc | 0 | 1.000 | 0.854 | 0.949 | 0.899 | 1 255 | 1.81 / 3.55 |
-| cạnh dài 1024 | 0 | 0.959 | 0.867 | 0.944 | 0.904 | 732 | 1.27 / 2.31 |
+| ảnh gốc | 0 | 1.000 | 0.854 | 0.949 | 0.899 | 1 255 (1 135) | 1.81 / 3.55 |
+| cạnh dài 1024 | 0 | 0.959 | 0.867 | 0.944 | 0.904 | 732 (612) | 1.27 / 2.31 |
 
 Một model 2B, chạy local, đọc đúng tổng tiền của gần như mọi hoá đơn validation và khoảng 9 trên 10 dòng hàng. Thu nhỏ
-về 1024 tiết kiệm 42% token và khoảng 30% độ trễ; F1 dòng hàng không đổi (chênh 0.005, trong nhiễu), tổng tiền mất 4 hoá
+về 1024 tiết kiệm 42% token prompt (46% phần ảnh; phần chữ của prompt luôn là 120 token) và khoảng 30% độ trễ; F1 dòng hàng không đổi (chênh 0.005, trong nhiễu), tổng tiền mất 4 hoá
 đơn. Precision thấp hơn recall, và đọc 38 dòng dự đoán không ghép được (ảnh gốc) cho thấy vì sao: chỉ một dòng là thanh toán
 ("BCA PAY"), không dòng nào là phí, thuế hay tiền thối; phần lớn là **tên món có thật đi với số tiền sai**, thường một số tiền (tạm tính, tổng) bị chép lặp cho
 cả loạt món của một hoá đơn dài. Đó là lỗi im lặng nguy hiểm nhất của trợ lý tài chính, và lý do bộ chấm đòi khớp cả tên lẫn tiền. Mỗi
@@ -288,7 +290,9 @@ kiểm được vì cần đăng ký), nhãn của nhiệm vụ trích xuất l�
 mỗi ảnh, không có từng dòng hàng. Vì vậy: (1) viết một hàm `gold_from_mcocr` trả cùng dạng `{"items": [], "total": ...}`
 và thêm trường người bán, thời điểm; (2) trong bộ chấm, bỏ precision/recall dòng hàng, thêm độ đúng của người bán (so khớp
 mờ như tên món) và thời điểm (chuẩn hoá về `YYYY-MM-DD HH:MM`); (3) đổi prompt sang yêu cầu bốn trường đó, tiếng Việt;
-(4) giữ nguyên `parse_amount`: hoá đơn tiền đồng dùng đúng quy tắc dấu chấm phân cách nghìn. Đo lại trên tập test của
+(4) giữ nguyên `parse_amount`: hoá đơn tiền đồng dùng đúng quy tắc dấu chấm phân cách nghìn; (5) sửa `name_similarity`:
+bản của Basic 02 chỉ giữ `[0-9A-Z]` nên chữ có dấu tiếng Việt bị xoá thành khoảng trắng; với tên tiếng Việt, chuẩn hoá NFC,
+chữ hoa bằng `str.upper()` và giữ mọi chữ cái Unicode (ví dụ `\w` của `re`), hoặc so sau khi bỏ dấu có chủ đích. Đo lại trên tập test của
 MC-OCR trước khi so với số của `cord-v2`.
 
 ### CLIP: ảnh và chữ chung một không gian vector
@@ -407,8 +411,8 @@ bài Intermediate 02 dùng 50 câu đầu), `language="vi"`, WER/CER mức corpu
 Đọc bảng:
 
 - Cỡ model quyết định gần hết: `tiny` sai hơn nửa số từ tiếng Việt, `small` khoảng 1 trên 4 từ, `large-v3-turbo` 1 trên
-  10. Theo bài báo Whisper (phụ lục thống kê dữ liệu), tiếng Việt chiếm dưới 1% trong 680 000 giờ dữ liệu train, và WER của ngôn ngữ ít dữ liệu giảm mạnh theo
-  cỡ model với các ngôn ngữ ít dữ liệu.
+  10. Theo bài báo Whisper (phụ lục thống kê dữ liệu), tiếng Việt chiếm dưới 1% trong 680 000 giờ dữ liệu train, và WER của
+  ngôn ngữ ít dữ liệu giảm mạnh theo cỡ model.
 - Beam 5 so với beam 1 giảm WER từ 0.004 (`large-v3-turbo`) tới 0.049 (`tiny`), tốn thêm 10% tới 35% thời gian: model
   càng yếu, beam càng có ích.
 - Cùng `small` beam 5, GPU nhanh hơn CPU 4 luồng khoảng 7.5 lần, kết quả gần như trùng (int8 so với fp16 lệch WER 0.001).
@@ -536,7 +540,7 @@ bài đọc hoá đơn.
 - Đo trên GPU bạn thật sự có; ghi VRAM đỉnh bằng `torch.cuda.max_memory_allocated`, không ước lượng từ dung lượng file.
 - Ghim seed bằng `torch.Generator(device).manual_seed(...)` cho mọi so sánh.
 - Kiểm giấy phép và chính sách nội dung: SD-Turbo không có safety checker và giấy phép cấm dùng thương mại.
-- Lỗi hay gặp: bật guidance với model Turbo (chậm gấp đôi, ảnh cháy); so CLIP score giữa hai model CLIP khác nhau; đổi
+- Lỗi hay gặp: bật guidance với model Turbo (chậm khoảng 1.4 lần mỗi ảnh, ảnh cháy); so CLIP score giữa hai model CLIP khác nhau; đổi
   scheduler mà không đổi số bước.
 
 ## 6. Video understanding
@@ -578,7 +582,7 @@ Trước khi gọi model, tính ngân sách bằng công thức ở mục 2 (hà
 | 224×126 | 66 | 528 | 1 980 | 39 600 |
 | 448×252 | 112 | 896 | 3 360 | 67 200 |
 | 640×360 | 220 | 1 760 | 6 600 | 132 000 |
-| 1280×720 | 880 | 7 040 | 26 400 | 528 000 |
+| 1280×720 | 880 (đo bằng Ollama: 880) | 7 040 | 26 400 | 528 000 |
 | 1920×1080 | 2 040 | 16 320 | 61 200 | 1 224 000 |
 
 Ollama mặc định chạy với context 4 096 token (cột CONTEXT của `ollama ps`): 30 frame 640×360 đã vượt, nên phải tăng

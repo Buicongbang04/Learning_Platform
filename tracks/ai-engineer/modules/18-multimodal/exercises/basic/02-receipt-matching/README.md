@@ -69,6 +69,5 @@ nhóm bằng `token.split(sep)` rồi kiểm độ dài từng nhóm. Kiểm t�
 
 ### Gợi ý 2
 
-Ghép một-một kiểu tham lam: dựng danh sách mọi cặp hợp lệ kèm khoá sắp xếp `(-độ_giống, i, j)`, sắp xếp, rồi duyệt và
-giữ hai tập chỉ số đã dùng. Hai món cùng tên cùng giá (hai ly trà) phải ghép được với hai dòng nhãn, và ba dòng dự đoán
-giống hệt nhau chỉ ghép được hai.
+Ghép một-một kiểu tham lam theo thứ tự ưu tiên mà đề bài nêu. Tự kiểm hai trường hợp trước khi chạy test: hai món cùng tên
+cùng giá (hai ly trà) phải ghép được với hai dòng nhãn, và ba dòng dự đoán giống hệt nhau chỉ ghép được hai.

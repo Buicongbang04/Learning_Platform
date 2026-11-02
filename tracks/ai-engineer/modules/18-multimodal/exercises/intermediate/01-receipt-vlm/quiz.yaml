@@ -15,23 +15,23 @@ questions:
 - id: tokens-ratio
   kind: knowledge
   type: single
-  prompt: Số token ảnh trung bình ở ảnh gốc so với ở cạnh dài 512 pixel là bao nhiêu lần?
+  prompt: Cột token prompt trung bình (prompt_eval_count) ở ảnh gốc so với ở cạnh dài 512 pixel gấp bao nhiêu lần?
   options:
   - id: a
-    text: Gần bằng nhau, Ollama tự thu nhỏ mọi ảnh về một cỡ
+    text: Gần bằng nhau, vì Ollama tự thu nhỏ mọi ảnh về cùng một cỡ cố định
   - id: b
-    text: Khoảng 1.5 lần, vì token tỉ lệ với cạnh dài nhất
+    text: Khoảng 1.5 lần, vì token ảnh tỉ lệ với cạnh dài nhất của ảnh
   - id: c
-    text: Khoảng 4 lần, vì token tăng theo diện tích ảnh
+    text: Khoảng 4 lần, phần ảnh giảm theo diện tích còn phần chữ giữ nguyên
   - id: d
-    text: Trên 20 lần, vì attention tăng theo bình phương
+    text: Trên 20 lần, vì attention của encoder tăng theo bình phương số patch
 - id: vlm-vs-goldocr
   kind: data
   type: single
   prompt: So VLM end-to-end ở cạnh dài 1024 với pipeline OCR từ nhãn + qwen2.5:3b, kết quả nào đúng?
   options:
   - id: a
-    text: VLM cao hơn rõ ở cả tổng đúng và F1 dòng hàng, lại nhanh hơn
+    text: VLM cao hơn rõ ở cả tổng đúng lẫn F1 dòng hàng
   - id: b
     text: Pipeline OCR từ nhãn cao hơn ở mọi cột vì chữ đã đúng tuyệt đối
   - id: c

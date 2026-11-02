@@ -30,8 +30,8 @@ gọi lại). Trên PC của track (RTX 3060, Ollama dùng chung với tiến tr
 5 phút mỗi lượt, VLM chép chữ 6 phút, hai lượt `qwen2.5:3b` khoảng 20 phút mỗi lượt (chậm bất thường, khoảng 10 giây một
 hoá đơn, vì GPU bị chia với tiến trình khác lúc đo). `qwen3-vl:2b` chiếm khoảng
 3.1 GiB khi nạp lên GPU, vừa GPU 4GB của laptop nếu không có chương trình nào khác dùng GPU. Chỉ có CPU: một ảnh
-1280×960 mất khoảng 3.5 phút với 4 luồng (mục 2 lý thuyết); đặt `N_RECEIPTS = 20`, chỉ chạy `MAX_SIDES = [768]`, bỏ bước
-VLM chép chữ.
+1280×960 mất khoảng 3.5 phút với 4 luồng (mục 2 lý thuyết); đặt `N_RECEIPTS = 20`, `MAX_SIDES = [768]`,
+`RUN_TRANSCRIBE = False` (cell đầu của phần chạy thật).
 
 **Về dữ liệu.** Đề bài portfolio của track là hoá đơn Việt Nam (MC-OCR 2021), bộ này cần đăng ký với ban tổ chức. Người
 học đã đồng ý (2026-11-02) dùng `cord-v2` (hoá đơn bán lẻ Indonesia, CC BY 4.0) thay thế: cùng định dạng số tiền dấu

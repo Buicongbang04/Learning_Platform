@@ -12,7 +12,7 @@ không gian của LLM; pha hai fine-tune projector và LLM (đôi khi cả encod
 encoder và LLM có sẵn nên rẻ hơn nhiều so với train một model đa phương thức từ đầu.
 
 Ứng viên tốt nói thêm hệ quả vận hành: mỗi token ảnh ứng với một ô $$2P \times 2P$$ pixel, nên số token tăng theo
-**diện tích** ảnh; với `qwen3-vl:2b` một hoá đơn 1280×960 là 1 200 token, và model đặt trần khoảng 2 048 token mỗi ảnh.
+**diện tích** ảnh; với `qwen3-vl:2b` một hoá đơn 1280×960 là 1 200 token ảnh, và model đặt trần khoảng 2 048 token mỗi ảnh.
 
 ## Ảnh độ phân giải cao: các model xử lý thế nào, và bạn trả giá ở đâu?
 
@@ -24,7 +24,7 @@ Ba chiến lược:
   token. Token tỉ lệ diện tích.
 - **Tiling / AnyRes** (LLaVA-NeXT, Granite Vision): cắt ảnh thành nhiều ô, mỗi ô một bộ token, cộng một bản thu nhỏ toàn
   ảnh. Đọc chữ nhỏ tốt nhưng token có thể gấp nhiều lần: một hoá đơn 1280×960 tốn 7 341 token với `granite3.2-vision:2b`
-  so với 1 222 với `qwen3-vl:2b`.
+  so với 1 222 với `qwen3-vl:2b` (cả hai là token prompt: token ảnh cộng phần chữ của prompt).
 
 Giá trả ở ba chỗ: **tiền** (API tính token ảnh như token chữ), **độ trễ prefill** (attention của encoder bậc hai theo số
 patch: trên CPU, cùng hoá đơn mất 19.6 giây ở 640×480 và 212 giây ở 1280×960), và **bộ nhớ**: encoder cần bộ nhớ tạm theo
