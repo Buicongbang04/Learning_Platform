@@ -17,13 +17,16 @@ import yaml
 
 import testkit
 from olist_stack import COMPOSE, DOCKERFILE, TARGETS, assemble, build_targets, missing
-from testkit import REGISTRY_MANIFEST_TYPES, DockerLab, Exercise, free_port, run_sandboxed
+from testkit import ROOT, REGISTRY_MANIFEST_TYPES, DockerLab, Exercise, free_port, run_sandboxed
 
 DOC = "m04-cicd-pipeline.md"
 FIXTURES = Path(__file__).parent / "fixtures"
 WORKFLOW = ".github/workflows/ci.yml"
 SMOKE = "ci/smoke-test.sh"
 SETUP_STEPS = ("Cài uv", "Cài Python và dependency")
+MODULE07_STARTER = (ROOT / "tracks" / "devops" / "modules" / "07-cicd-artifacts" / "exercises" / "basic" / "01-olist-ci-image"
+                    / "starter" / ".github" / "workflows" / "ci.yml")
+POLICY_INPUTS = {"severity", "exit-code", "ignore-unfixed", "trivyignores", "vuln-type", "skip-dirs", "skip-files"}
 SHA_TAG = re.compile(r"^sha-[0-9a-f]{12}$")
 SHA_PIN = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 STEP_OUTPUT = re.compile(r"steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)")
@@ -155,6 +158,10 @@ def build_problems(job: dict) -> list[str]:
                 found.append(f"trivy-action {target}: cần if: ${{{{ !env.ACT }}}}")
             if str(options.get("trivy-config", "")) != "container/trivy.yaml":
                 found.append(f"trivy-action {target}: cần trivy-config: container/trivy.yaml (cùng chính sách M03)")
+            override = sorted(set(map(str, options)) & POLICY_INPUTS)
+            if override:
+                found.append(f"trivy-action {target}: không đặt {', '.join(override)}; chính sách chỉ đến từ "
+                             "container/trivy.yaml")
     for target in TARGETS:
         if target not in built_at:
             found.append(f"Thiếu bước docker/build-push-action target {target}")
@@ -163,21 +170,25 @@ def build_problems(job: dict) -> list[str]:
         elif target in built_at and scanned_at[target] < built_at[target]:
             found.append(f"Bước quét {target} phải đứng sau bước build {target}")
     pushes = [i for i, s in enumerate(all_steps) if "docker push" in str(s.get("run", ""))]
-    refs = [output_step(job, key) for key in ("api_image", "worker_image")]
     if not pushes:
         found.append("Thiếu bước run: docker push")
         return found
-    push = all_steps[pushes[0]]
-    condition = compact(push.get("if"))
-    if not guarded(push) or "github.event_name=='push'" not in condition:
-        found.append("Bước docker push cần if: ${{ !env.ACT && github.event_name == 'push' }} (pull request không push)")
-    if any(index < max(scanned_at.values(), default=len(all_steps)) for index in pushes):
+    for index in pushes:
+        push = all_steps[index]
+        name = push.get("name") or push.get("id") or f"bước {index + 1}"
+        if not guarded(push) or "github.event_name=='push'" not in compact(push.get("if")):
+            found.append(f"Bước docker push ({name}) cần if: ${{{{ !env.ACT && github.event_name == 'push' }}}} "
+                         "(pull request không push)")
+        script = str(push.get("run", ""))
+        if "GITHUB_OUTPUT" not in script or "digest" not in script.lower() and "@sha256" not in script:
+            found.append(f"Bước docker push ({name}) phải ghi tham chiếu <repo>@sha256:<digest> vào $GITHUB_OUTPUT")
+    if min(pushes) < max(scanned_at.values(), default=len(all_steps)):
         found.append("docker push phải đứng sau mọi bước quét trivy: image chưa qua gate không lên registry")
-    if any(ref is None or ref[0] != push.get("id") for ref in refs):
-        found.append("Job build cần outputs api_image và worker_image lấy từ steps.<id bước docker push>.outputs.*")
-    script = str(push.get("run", ""))
-    if "GITHUB_OUTPUT" not in script or "digest" not in script.lower() and "@sha256" not in script:
-        found.append("Bước docker push phải ghi api_image, worker_image dạng <repo>@sha256:<digest> vào $GITHUB_OUTPUT")
+    push_ids = {all_steps[i].get("id") for i in pushes} - {None}
+    for key in ("api_image", "worker_image"):
+        ref = output_step(job, key)
+        if ref is None or ref[0] not in push_ids:
+            found.append(f"Job build cần outputs.{key} lấy từ steps.<id của một bước docker push>.outputs.*")
     return found
 
 
@@ -223,6 +234,19 @@ def deploy_problems(job: dict) -> list[str]:
     return found
 
 
+def setup_problems(test: dict) -> list[str]:
+    reference = yaml.safe_load(MODULE07_STARTER.read_text(encoding="utf-8"))["jobs"]["test"]
+    want = {s.get("name"): str(s.get("run", "")).strip() for s in steps(reference) if s.get("name") in SETUP_STEPS}
+    have = {s.get("name"): str(s.get("run", "")).strip() for s in steps(test) if s.get("name") in SETUP_STEPS}
+    found = [f"Job test phải giữ nguyên bước '{name}' của starter module 07 Basic 01 (cùng tên, cùng run:)"
+             for name in SETUP_STEPS if have.get(name) != want[name]]
+    env = test.get("env") if isinstance(test.get("env"), dict) else {}
+    lacking = sorted(k for k, v in (reference.get("env") or {}).items() if str(env.get(k)) != str(v))
+    if lacking:
+        found.append(f"Job test phải có env của starter module 07 Basic 01 với đúng giá trị: {', '.join(lacking)}")
+    return found
+
+
 def structure_problems(doc: dict) -> list[str]:
     found = []
     on = triggers(doc)
@@ -255,9 +279,7 @@ def structure_problems(doc: dict) -> list[str]:
     if isinstance(test, dict):
         if has_write(test.get("permissions")):
             found.append("Job test không được có quyền write")
-        names = [s.get("name") for s in steps(test)]
-        if any(name not in names for name in SETUP_STEPS):
-            found.append(f"Job test phải giữ hai bước {SETUP_STEPS} như module 07")
+        found += setup_problems(test)
         if not any("pytest" in str(s.get("run", "")) for s in steps(test)):
             found.append("Job test thiếu bước run: chạy pytest")
     if isinstance(jobs.get("build"), dict):
@@ -395,8 +417,54 @@ def test_m04_checks_catch_defective_workflow():
     for needle in ("cancel-in-progress phải đúng", "REGISTRY", "40 ký tự", "needs: test", "load: true", "không latest",
                    "GIT_COMMIT", "trivy-action quét image worker", "Bước quét api phải đứng sau", "docker push phải đứng sau",
                    "environment: staging", "không cancel-in-progress", "needs.build.outputs.api_image", "secrets.*",
-                   SMOKE):
+                   SMOKE, "giữ nguyên bước 'Cài uv'", "env của starter", "chính sách chỉ đến từ"):
         assert needle in found, found
+
+
+PER_TARGET_PUSH = """
+needs: test
+permissions: {contents: read}
+outputs:
+  tag: ${{ steps.meta.outputs.tag }}
+  api_image: ${{ steps.push-api.outputs.ref }}
+  worker_image: ${{ steps.push-worker.outputs.ref }}
+steps:
+  - id: meta
+    run: |
+      echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      echo "devops-ex-output tag=sha-${GITHUB_SHA::12}"
+      echo "devops-ex-output revision=${GITHUB_SHA}"
+""" + "".join(f"""
+  - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+    if: ${{{{ !env.ACT }}}}
+    with:
+      context: .
+      file: container/Dockerfile
+      target: {t}
+      load: true
+      tags: ${{{{ env.REGISTRY }}}}/olist-shop/{t}:${{{{ steps.meta.outputs.tag }}}}
+      build-args: |
+        APP_VERSION=${{{{ steps.meta.outputs.tag }}}}
+        GIT_COMMIT=${{{{ github.sha }}}}
+  - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+    if: ${{{{ !env.ACT }}}}
+    with:
+      image-ref: ${{{{ env.REGISTRY }}}}/olist-shop/{t}:${{{{ steps.meta.outputs.tag }}}}
+      trivy-config: container/trivy.yaml
+""" for t in TARGETS) + "".join(f"""
+  - id: push-{t}
+    if: ${{{{ !env.ACT && github.event_name == 'push' }}}}
+    run: |
+      docker push "$REGISTRY/olist-shop/{t}:$TAG"
+      echo "ref=$(docker image inspect --format '{{{{index .RepoDigests 0}}}}' "$REGISTRY/olist-shop/{t}:$TAG")" >> "$GITHUB_OUTPUT"
+""" for t in TARGETS)
+
+
+def test_m04_push_step_per_target_accepted():
+    job = yaml.safe_load(PER_TARGET_PUSH)
+    assert build_problems(job) == []
+    job["steps"][-1]["if"] = "${{ !env.ACT }}"
+    assert any("push-worker" in p for p in build_problems(job))
 
 
 def test_m04_actionlint(project_root, tmp_path):
@@ -430,7 +498,8 @@ def test_m04_red_test_blocks_pipeline(red):
     assert "tag" not in testkit.act_outputs(red).get("build", {}), "Job build vẫn tính tag dù job test fail"
 
 
-@pytest.mark.parametrize("args", [(), ("http://127.0.0.1:1",), ("a", "b", "c")])
+@pytest.mark.parametrize("args", [(), ("http://127.0.0.1:1",), ("a", "b", "c"), ("", "sha-3f9c2a1b7d10"),
+                                  ("http://127.0.0.1:1", "")])
 def test_m04_smoke_usage(project_root, tmp_path, smoke_tools, args):
     result, _ = smoke(require_file(project_root / SMOKE), tmp_path, *args)
     assert result.returncode == 2 and result.stderr.startswith("Usage:"), (
@@ -464,7 +533,8 @@ def test_m04_smoke_fails(project_root, tmp_path, smoke_tools, case):
 def test_m04_shellcheck_smoke(project_root):
     script = require_file(project_root / SMOKE)
     Exercise.require_tool("shellcheck", min_version="0.9.0")
-    result = subprocess.run(["shellcheck", "-S", "style", str(script)], capture_output=True, text=True)
+    result = subprocess.run(["shellcheck", "--norc", "-S", "style", str(script)], capture_output=True, text=True,
+                            timeout=60)
     assert result.returncode == 0, result.stdout
 
 

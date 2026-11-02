@@ -100,9 +100,10 @@ def require_trivy_db(workdir: Path) -> None:
                     f"{TRIVY_DOWNLOAD}")
 
 
-def trivy_image(tag: str, workdir: Path, *args: str, config: Path | None = None) -> tuple[int, dict, str]:
-    """`trivy image --image-src docker` với cấu hình `config` (mặc định một tệp rỗng), chạy trong `workdir`; trả mã
-    thoát, report JSON (hay CycloneDX) và stderr."""
+def trivy_image(tag: str, workdir: Path, *args: str, config: Path | None = None,
+                cwd: Path | None = None) -> tuple[int, dict, str]:
+    """`trivy image --image-src docker` với cấu hình `config` (mặc định một tệp rỗng), chạy trong `cwd` (mặc định thư mục
+    của `config`); trả mã thoát, report JSON (hay CycloneDX) và stderr."""
     work = workdir / uuid.uuid4().hex[:8]
     work.mkdir(parents=True)
     if config is None:
@@ -111,7 +112,7 @@ def trivy_image(tag: str, workdir: Path, *args: str, config: Path | None = None)
     out = work / "report.json"
     cmd = ["trivy", "image", "--image-src", "docker", *TRIVY_FLAGS, "--config", str(config), *args, "--output", str(out), tag]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=trivy_env(), cwd=config.parent)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=trivy_env(), cwd=cwd or config.parent)
     except subprocess.TimeoutExpired:
         pytest.fail(f"trivy image {tag} chạy quá 600 giây")
     text = out.read_text(encoding="utf-8") if out.is_file() else ""

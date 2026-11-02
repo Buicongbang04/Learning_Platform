@@ -146,6 +146,9 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 
 - Cùng chính sách với module 06: chặn `HIGH`/`CRITICAL` đã có bản vá, bỏ qua lỗ hổng chưa có bản vá, ngoại lệ qua tệp có
   hạn. Thêm scanner `secret`: quét bí mật trong image rẻ và không cần DB.
+- **`ignorefile: container/.trivyignore.yaml`, tính từ gốc repo.** trivy đọc đường dẫn này từ thư mục đang chạy chứ không
+  từ thư mục của `trivy.yaml`; trivy-action chạy ở gốc repo. Viết `.trivyignore.yaml` trần thì chạy tay trong `container/`
+  vẫn thấy ngoại lệ, còn CI không thấy và không báo gì: cùng một tệp chính sách cho hai kết quả.
 - **`.trivyignore.yaml` rỗng.** Lúc viết bản tham chiếu, cả hai image không có lỗ hổng chặn nào. Khi gate đỏ, thứ tự xử lý:
   nâng patch của image nền (rebuild, không đổi code), nâng gói Python, rồi mới đến ngoại lệ có `purls`, lý do và
   `expired_at` trong vòng 30 ngày.

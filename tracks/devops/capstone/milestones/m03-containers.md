@@ -58,11 +58,13 @@ Chấm trên **từng** image `api` và `worker` đã build:
 | Version trong image | Ở mục 2, `GET /healthz` trả `version` bằng `APP_VERSION` của lần build: version đi theo image, compose không đặt nó. |
 | Không mang rác của repo | Không ở đâu trong image có tệp `.env` trùng nội dung `.env` của repo, hay `test_api.py`, `test_worker.py` trùng nội dung test của sample-app. |
 | Kích thước | `Size` của `docker image inspect` tối đa **350 MB** (image nền `python:3.12.16-slim-trixie` khoảng 180 MB). |
-| SBOM đọc được | `trivy image --format cyclonedx` (không cần DB lỗ hổng) liệt kê gói `pkg:pypi` với đúng phiên bản của `requirements.txt`: image `api` có `fastapi 0.143.1`, `uvicorn 0.54.0`, `psycopg 3.3.6`, `sqlalchemy 2.1.6`; image `worker` có `redis 8.1.0`, `sqlalchemy 2.1.6`, `prometheus-client 0.26.0`, `psycopg 3.3.6`. Chép `site-packages` mà bỏ `*.dist-info` là làm scanner mù. |
+| SBOM đọc được | `trivy image --format cyclonedx` (không cần DB lỗ hổng) liệt kê, dưới dạng gói `pkg:pypi`, **mọi** gói ghim trong `requirements.txt` của sample-app với đúng phiên bản (test đọc tệp đó; tên so không phân biệt `_` và `-`, bỏ phần extras như `[binary]`), ở cả hai image. Chép `site-packages` mà bỏ `*.dist-info` là làm scanner mù. |
 | Không bí mật | `trivy image --scanners secret` không tìm thấy bí mật nào. |
 
-Và một quy tắc trên **cặp** image: `api` và `worker` dùng chung **một** bộ dependency. Test tìm thư mục `site-packages`
-chứa gói `redis` trong mỗi image và so đường dẫn cùng danh sách tệp kèm kích thước và mtime: phải trùng khớp. Cài
+Và một quy tắc trên **cặp** image: `api` và `worker` dùng chung **một** bộ dependency. Test duyệt filesystem của mỗi
+image (bằng `python3` có trong image, không phụ thuộc `PATH` hay venv của bạn) tìm thư mục chứa `redis-*.dist-info`:
+mỗi image phải có đúng một thư mục như vậy, và hai image phải trùng đường dẫn thư mục đó cùng danh sách tệp bên trong
+kèm kích thước và mtime. Cài
 dependency riêng trong từng target (hai lần `pip install`) là trượt, vì hai lần cài cho hai bộ tệp khác nhau, hai lần
 quét, hai lần đẩy layer lên registry.
 
@@ -79,7 +81,7 @@ sau khi giải anchor và `<<:` merge, trước khi thay biến):
 | Hardening `api`, `worker` | `read_only: true`; `tmpfs` có `/tmp`; `cap_drop: [ALL]`; `restart` là `unless-stopped`, `always` hoặc `on-failure`; có `deploy.resources.limits.memory`. |
 | Thứ tự khởi động | `api` và `worker` có `depends_on` tới `postgres` và `redis` với `condition: service_healthy`. |
 | Cấu hình | `api`, `worker` không đặt `APP_VERSION`; `DATABASE_URL` lấy mật khẩu từ `${POSTGRES_PASSWORD...}`. `postgres` đặt `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?<thông báo>}`. Không có mật khẩu dạng chữ nào trong tệp (ví dụ `olist:olist@`). |
-| Dữ liệu | `postgres` mount named volume vào `/var/lib/postgresql/data`. |
+| Dữ liệu | `postgres` mount named volume vào `/var/lib/postgresql` hoặc một thư mục con của nó (`/var/lib/postgresql/data` với postgres 16, 17; postgres 18 đổi `PGDATA` thành `/var/lib/postgresql/18/docker` và khai `VOLUME /var/lib/postgresql`). |
 | Cổng | Chỉ `api` mở cổng: đúng một mục, container `8000`, chỉ trên `127.0.0.1` (dạng `127.0.0.1:<cổng hoặc ${BIẾN}>:8000` hoặc dạng dài với `host_ip: 127.0.0.1`). `worker`, `postgres`, `redis` không mở cổng ra máy host. |
 | Dừng sạch | `worker` có `stop_grace_period` từ `10s` trở lên: worker chỉ thấy SIGTERM sau lần `BLPOP` hiện tại (tối đa 5 giây). |
 | Log | Mọi service có `logging.driver` là `json-file` hoặc `local` kèm `logging.options.max-size`. |
@@ -103,19 +105,28 @@ Chính sách quét giống module 06 Intermediate 02, nhưng cho image của ch�
 Đọc tĩnh:
 
 - `trivy.yaml`: `severity` đúng `HIGH` và `CRITICAL`; `exit-code` là số khác 0; `vulnerability.ignore-unfixed: true`;
-  `ignorefile: .trivyignore.yaml`; `scan.scanners` có `vuln` và `secret`.
+  `ignorefile: container/.trivyignore.yaml`; `scan.scanners` có `vuln` và `secret`. trivy tính đường dẫn `ignorefile`
+  từ **thư mục đang chạy**, không từ thư mục chứa `trivy.yaml`; CI (M04) chạy trivy ở gốc repo với
+  `--config container/trivy.yaml`, nên `ignorefile: .trivyignore.yaml` sẽ tìm ở gốc repo, không thấy tệp, và trivy lặng lẽ
+  bỏ mọi ngoại lệ.
 - `.trivyignore.yaml` phải có, với khoá `vulnerabilities` là một danh sách (rỗng được). Mỗi mục có `id` dạng `CVE-...`
   hoặc `GHSA-...`, `purls` không rỗng, `statement` ít nhất 40 ký tự, `expired_at` dạng `YYYY-MM-DD`.
 
 Rồi với từng image, test chạy `trivy image` hai lần với DB ở `~/.cache/devops-track/trivy` (`--skip-db-update
 --offline-scan`, env dựng từ đầu, không đọc `TRIVY_*` hay cấu hình của máy), luôn với `--scanners vuln`: một lần đối chứng
-không cấu hình, một lần với `trivy.yaml` và `.trivyignore.yaml` của bạn (chạy trong thư mục chứa hai tệp, `expired_at` bị
-bỏ khỏi bản chép để bài không hỏng theo ngày). Gate của bạn phải:
+không cấu hình, một lần với `trivy.yaml` và `.trivyignore.yaml` của bạn, chạy từ một bản chép **gốc repo** (chỉ có
+`container/trivy.yaml`, `container/.trivyignore.yaml`) với `--config container/trivy.yaml`, đúng như CI; `expired_at` bị bỏ
+khỏi bản chép để bài không hỏng theo ngày. Gate của bạn phải:
 
 - chỉ báo lỗ hổng `HIGH`/`CRITICAL` có trạng thái `fixed`;
 - không che lỗ hổng `HIGH`/`CRITICAL` đã có bản vá nào mà lần đối chứng thấy, trừ mục khớp `id` và `purls` trong
   `.trivyignore.yaml`;
 - trả mã khác 0 khi và chỉ khi còn lỗ hổng bị báo.
+
+Thêm một phép kiểm rằng ngoại lệ thật sự được đọc: test lấy một lỗ hổng bất kỳ mà lần đối chứng thấy trong image `api`,
+thêm vào bản chép `.trivyignore.yaml` một mục đúng `id` và `purls` của nó, chạy lại cấu hình của bạn từ gốc repo (với
+`--severity` đủ mọi mức, `--ignore-unfixed=false`, `--exit-code 0` để chỉ xét ngoại lệ): lỗ hổng đó phải biến mất. DB
+không còn lỗ hổng nào trong image thì phép kiểm này skip.
 
 Test **không** đòi image sạch lỗ hổng và không đếm CVE: DB của trivy cập nhật nhiều lần mỗi ngày, image hôm nay sạch
 mai có thể đỏ. Test chấm việc gate của bạn quyết định đúng theo chính sách. Gate đỏ trên image của bạn là thông tin, không
@@ -146,13 +157,13 @@ curl -s 127.0.0.1:28000/healthz && curl -s 127.0.0.1:28000/readyz &&
 docker compose -p olist-shop-prod -f container/compose.yaml ps
 ```
 
-Quét bằng chính sách của bạn (chạy trong `container/` để `ignorefile` tìm thấy tệp ngoại lệ):
+Quét bằng chính sách của bạn, từ gốc repo đã dựng (`$DEST`) như CI:
 
 ```bash
-cd container && for t in api worker; do
-  nice -n 15 trivy image --config trivy.yaml --cache-dir ~/.cache/devops-track/trivy "olist-shop/$t:local-1"
+for t in api worker; do
+  nice -n 15 trivy image --config container/trivy.yaml --cache-dir ~/.cache/devops-track/trivy "olist-shop/$t:local-1"
   echo "gate $t: mã thoát $?"
-done; cd ..
+done
 ```
 
 Dọn khi xong:

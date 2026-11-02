@@ -49,6 +49,7 @@ jobs:
         with:
           image-ref: localhost:15000/olist-shop/api:${{ steps.meta.outputs.tag }}
           trivy-config: container/trivy.yaml
+          severity: CRITICAL
       - name: Build api
         if: ${{ !env.ACT }}
         uses: docker/build-push-action@v7

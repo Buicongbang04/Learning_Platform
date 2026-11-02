@@ -44,8 +44,9 @@ Cấp workflow:
 - Có ba job `test`, `build`, `deploy-staging`, mỗi job `timeout-minutes` từ 1 tới 30.
 
 Job `test`: không có quyền `write`; giữ nguyên hai bước **Cài uv** và **Cài Python và dependency** của starter module 07
-Basic 01 (chép nguyên tên và nội dung, cùng `env` của job; lý do ở mục "Vì sao" của bài đó); có bước `run:` chạy pytest
-(ví dụ `"$RUNNER_TEMP/venv/bin/python" -m pytest -q tests`).
+Basic 01 (test so tên và nội dung `run:` sau khi bỏ khoảng trắng đầu cuối với tệp starter đó), và `env` của job có đủ bốn
+biến của starter (`UV_VERSION`, `UV_SHA256_X86_64`, `UV_SHA256_AARCH64`, `PYTHON_VERSION`) với đúng giá trị; lý do ở mục
+"Vì sao" của bài đó. Có bước `run:` chạy pytest (ví dụ `"$RUNNER_TEMP/venv/bin/python" -m pytest -q tests`).
 
 Job `build`:
 
@@ -54,9 +55,9 @@ Job `build`:
 | Thứ tự, quyền | `needs: test`; `permissions` đúng bằng `contents: read` (hoặc `contents: read` cộng `packages: write` nếu bạn đẩy GHCR). |
 | Tag | `outputs.tag` lấy từ `steps.<id>.outputs.tag` của một bước `run:` trong job. Bước đó tính tag từ `GITHUB_SHA` (`sha-` cộng 12 ký tự đầu), ghi vào `$GITHUB_OUTPUT`, in `devops-ex-output tag=<tag>` và `devops-ex-output revision=<GITHUB_SHA>`, và không chứa `date`, `run_number`, `run_id`, `run_attempt`, `latest`. |
 | Build | Hai bước `docker/build-push-action`, một với `target: api`, một với `target: worker`; mỗi bước có `if:` mà act bỏ qua (`${{ !env.ACT }}`, có thể nối `&&`), `context: .`, `file: container/Dockerfile`, `load: true`, `push: false` (hoặc không khai), `tags` gồm `${{ env.REGISTRY }}`, `/<target>:` và `${{ steps.<id>.outputs.tag }}` (không `latest`), `build-args` có `APP_VERSION=${{ steps.<id>.outputs.tag }}` và `GIT_COMMIT=${{ github.sha }}`. |
-| Quét | Với mỗi target, một bước `aquasecurity/trivy-action` có `if:` mà act bỏ qua, `image-ref` trỏ image `/<target>:` với tag ở trên, `trivy-config: container/trivy.yaml`; đứng **sau** bước build của target đó. |
-| Push | Một bước `run:` chạy `docker push`, có `id`, `if:` đúng dạng `${{ !env.ACT && github.event_name == 'push' }}` (pull request build và quét nhưng không đẩy); đứng **sau** mọi bước quét; ghi `api_image`, `worker_image` dạng `<registry>/<tên>@sha256:<digest>` vào `$GITHUB_OUTPUT` (script phải nhắc tới digest, ví dụ đọc `RepoDigests`). |
-| Output | `outputs.api_image` và `outputs.worker_image` lấy từ `steps.<id bước push>.outputs.*`. |
+| Quét | Với mỗi target, một bước `aquasecurity/trivy-action` có `if:` mà act bỏ qua, `image-ref` trỏ image `/<target>:` với tag ở trên, `trivy-config: container/trivy.yaml`; đứng **sau** bước build của target đó. Bước quét không đặt `severity`, `exit-code`, `ignore-unfixed`, `trivyignores`, `vuln-type`, `skip-dirs`, `skip-files`: chính sách chỉ đến từ `container/trivy.yaml` (trivy-action chạy ở gốc repo, nên `ignorefile: container/.trivyignore.yaml` của M03 tìm đúng tệp). |
+| Push | Một bước `run:` chạy `docker push` cho cả hai image, hoặc một bước cho mỗi image. Mỗi bước có `if:` dạng `${{ !env.ACT && github.event_name == 'push' }}` (pull request build và quét nhưng không đẩy), đứng **sau** mọi bước quét, và ghi tham chiếu dạng `<registry>/<tên>@sha256:<digest>` vào `$GITHUB_OUTPUT` (script phải nhắc tới digest, ví dụ đọc `RepoDigests`). |
+| Output | `outputs.api_image` và `outputs.worker_image` lấy từ `steps.<id>.outputs.*`, với `<id>` là `id` của một bước `docker push`. |
 
 Job `deploy-staging`:
 
@@ -103,7 +104,7 @@ Image, manifest trên registry và mọi container bị xoá khi test xong. Regi
 smoke-test.sh <base-url> <expected-version>
 ```
 
-- Đúng hai tham số khác rỗng; sai thì exit 2, stderr bắt đầu bằng `Usage:`.
+- Đúng hai tham số khác rỗng; sai số tham số hoặc một tham số là chuỗi rỗng thì exit 2, stderr bắt đầu bằng `Usage:`.
 - Lặp tới khi đạt hoặc quá hạn `SMOKE_TIMEOUT` giây (biến môi trường, mặc định 60): đạt khi `GET <base-url>/healthz` trả
   200 với `version` đúng bằng `<expected-version>` **và** `GET <base-url>/readyz` trả 200.
 - Đạt: exit 0, in một dòng bắt đầu bằng `OK`.

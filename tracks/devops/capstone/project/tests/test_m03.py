@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 from olist_stack import (
-    COMPOSE, DOCKERFILE, FAKE_TOKEN, TARGETS, assemble, build_targets, leak_hashes, missing, require_trivy,
+    APP, COMPOSE, DOCKERFILE, FAKE_TOKEN, TARGETS, assemble, build_targets, leak_hashes, missing, require_trivy,
     require_trivy_db, trivy_image,
 )
 from testkit import DockerLab, Exercise
@@ -31,12 +31,20 @@ INFRA_PINNED = re.compile(r"^[^@\s]+:\d+\.\d+[^@\s]*(@sha256:[0-9a-f]{64})?$|^[^
 REQUIRED_IMAGE = {"api": "OLIST_API_IMAGE", "worker": "OLIST_WORKER_IMAGE"}
 NUMERIC_USER = re.compile(r"^[1-9]\d*(:\d+)?$")
 BLOCKING = {"HIGH", "CRITICAL"}
-LIBRARIES = {
-    "api": {"fastapi": "0.143.1", "uvicorn": "0.54.0", "psycopg": "3.3.6", "sqlalchemy": "2.1.6"},
-    "worker": {"redis": "8.1.0", "sqlalchemy": "2.1.6", "prometheus-client": "0.26.0", "psycopg": "3.3.6"},
-}
+IGNOREFILE = "container/.trivyignore.yaml"
+PG_DATA_ROOT = "/var/lib/postgresql"
+
+
+def pinned_requirements() -> dict[str, str]:
+    found = {}
+    for line in (APP / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^\s*([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?==([^\s;#]+)", line)
+        if match:
+            found[match.group(1).lower().replace("_", "-")] = match.group(2)
+    return found
+
 PROBE = r"""
-import hashlib, importlib.metadata as md, json, os, shutil, sys
+import hashlib, json, os, shutil, sys
 want = set(sys.argv[1].split(","))
 tools = [t for t in sys.argv[2].split(",") if shutil.which(t)]
 leaks = []
@@ -52,17 +60,16 @@ for top, dirs, files in os.walk("/"):
                 continue
             if digest in want:
                 leaks.append(path)
-deps = ""
-try:
-    site = str(md.distribution("redis").locate_file(""))
+sites = sorted({top for top, dirs, files in os.walk("/") if not top.startswith(("/proc", "/sys", "/dev"))
+                for d in dirs if d.startswith("redis-") and d.endswith(".dist-info")})
+deps = []
+for site in sites:
     h = hashlib.sha256()
     for top, dirs, files in sorted(os.walk(site)):
         for name in sorted(files):
             st = os.lstat(os.path.join(top, name))
             h.update(f"{os.path.relpath(os.path.join(top, name), site)}|{st.st_size}|{int(st.st_mtime)}\n".encode())
-    deps = site + "#" + h.hexdigest()
-except md.PackageNotFoundError:
-    pass
+    deps.append(site + "#" + h.hexdigest())
 print(json.dumps({"uid": os.getuid(), "tools": tools, "leaks": sorted(leaks), "deps": deps}))
 """
 
@@ -116,7 +123,10 @@ def probe(lab: DockerLab, alias: str, tag: str) -> dict:
                           timeout=120)
     if result.returncode != 0:
         pytest.fail(f"Không chạy được python3 trong image {tag}: {result.stderr[-600:]}", pytrace=False)
-    return json.loads(result.stdout.strip().splitlines()[-1])
+    try:
+        return json.loads(result.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        pytest.fail(f"python3 trong image {tag} không in được kết quả kiểm tra: {result.stdout[-600:]}", pytrace=False)
 
 
 def image_problems(lab: DockerLab, tag: str, target: str, version: str, revision: str, facts: dict) -> list[str]:
@@ -222,8 +232,9 @@ def compose_problems(data: dict, text: str) -> list[str]:
         found.append("postgres: POSTGRES_PASSWORD phải là ${POSTGRES_PASSWORD:?<thông báo>}, không ghi mật khẩu trong tệp")
     volumes = [str(v.get("target") if isinstance(v, dict) else str(v).split(":")[1] if ":" in str(v) else "")
                for v in services["postgres"].get("volumes") or []]
-    if "/var/lib/postgresql/data" not in volumes:
-        found.append("postgres: dữ liệu phải nằm trên named volume mount ở /var/lib/postgresql/data")
+    if not any(v == PG_DATA_ROOT or v.startswith(PG_DATA_ROOT + "/") for v in volumes):
+        found.append(f"postgres: dữ liệu phải nằm trên named volume mount ở {PG_DATA_ROOT} hoặc thư mục con của nó "
+                     "(postgres 16, 17: /var/lib/postgresql/data; postgres 18: /var/lib/postgresql)")
     for name, svc in services.items():
         if name == "api":
             if len(ports_of(svc)) != 1 or not loopback_8000(ports_of(svc)[0]):
@@ -248,8 +259,9 @@ def trivy_config_problems(data: dict) -> list[str]:
         found.append(f"exit-code phải khác 0 để gate làm pipeline đỏ, đang là {data.get('exit-code')}")
     if (data.get("vulnerability") or {}).get("ignore-unfixed") is not True:
         found.append("vulnerability.ignore-unfixed phải là true")
-    if data.get("ignorefile") != ".trivyignore.yaml":
-        found.append(f"ignorefile phải là .trivyignore.yaml, đang là {data.get('ignorefile')}")
+    if data.get("ignorefile") != IGNOREFILE:
+        found.append(f"ignorefile phải là {IGNOREFILE} (đường dẫn tính từ gốc repo, nơi CI chạy trivy), đang là "
+                     f"{data.get('ignorefile')}")
     scanners = set((data.get("scan") or {}).get("scanners") or [])
     if not {"vuln", "secret"} <= scanners:
         found.append(f"scan.scanners phải có vuln và secret, đang là {sorted(scanners)}")
@@ -364,10 +376,14 @@ def stack(built, project_root):
            "POSTGRES_PASSWORD": secrets.token_hex(12)}
     try:
         project = built.lab.compose(built.root / COMPOSE, env=env, timeout=180)
+        url = f"http://127.0.0.1:{project.port('api', 8000)}"
     except pytest.fail.Exception as error:
         yield Stack(error=str(error))
         return
-    yield Stack(project, f"http://127.0.0.1:{project.port('api', 8000)}")
+    except KeyError:
+        yield Stack(error="Service api phải mở cổng container 8000 (xem mục 2 của đề)")
+        return
+    yield Stack(project, url)
 
 
 def test_m03_dockerfile_rules(project_root):
@@ -385,7 +401,9 @@ def test_m03_image_policy(built, target):
 def test_m03_images_share_dependencies(built):
     built.require()
     deps = {target: built.facts[target]["deps"] for target in TARGETS}
-    assert all(deps.values()), f"Không tìm thấy gói redis trong image: {deps}"
+    for target, found in deps.items():
+        assert len(found) == 1, (f"Image {target} phải có đúng một thư mục site-packages chứa redis-*.dist-info, "
+                                 f"tìm thấy {found or 'không có'}")
     assert deps["api"] == deps["worker"], (
         "api và worker phải dùng chung một bộ dependency build một lần ở stage chung (cùng đường dẫn, cùng tệp), "
         f"không cài lại riêng cho từng target: {deps}")
@@ -459,7 +477,7 @@ def test_m03_sbom_lists_dependencies(built, target, tmp_path):
     assert code == 0 and sbom, f"trivy image --format cyclonedx lỗi: {stderr[-800:]}"
     have = {(c.get("name", "").lower().replace("_", "-"), c.get("version")) for c in sbom.get("components") or []
             if str(c.get("purl", "")).startswith("pkg:pypi/")}
-    lacking = [f"{name}=={version}" for name, version in LIBRARIES[target].items() if (name, version) not in have]
+    lacking = [f"{name}=={version}" for name, version in pinned_requirements().items() if (name, version) not in have]
     assert not lacking, (f"SBOM của image {target} thiếu {lacking}: scanner phải thấy được gói Python (giữ *.dist-info "
                          "trong site-packages), nếu không mọi lần quét lỗ hổng đều mù")
 
@@ -473,20 +491,26 @@ def test_m03_no_secret_in_image(built, target, tmp_path):
     assert not secret_findings(report), f"Image {target} chứa bí mật: {secret_findings(report)}"
 
 
+def policy_repo(project_root: Path, work: Path, extra: list[dict] | None = None) -> tuple[Path, list]:
+    """Bản chép gốc repo chỉ gồm container/trivy.yaml và container/.trivyignore.yaml (bỏ expired_at, cộng `extra`), để
+    trivy chạy từ gốc repo như trivy-action trong CI."""
+    (work / "container").mkdir(parents=True)
+    shutil.copyfile(project_root / "container" / "trivy.yaml", work / "container" / "trivy.yaml")
+    ignore = project_root / IGNOREFILE
+    data = without_expiry(load_yaml(ignore)) if ignore.is_file() else {}
+    data["vulnerabilities"] = list(data.get("vulnerabilities") or []) + list(extra or [])
+    (work / IGNOREFILE).write_text(yaml.safe_dump(data), encoding="utf-8")
+    return work / "container" / "trivy.yaml", data["vulnerabilities"]
+
+
 @pytest.mark.parametrize("target", TARGETS)
 def test_m03_gate_follows_policy(built, project_root, target, tmp_path):
     built.require()
-    config_path = require_file(project_root / "container" / "trivy.yaml")
+    require_file(project_root / "container" / "trivy.yaml")
     require_trivy_db(tmp_path)
-    work = tmp_path / "policy"
-    work.mkdir()
-    shutil.copyfile(config_path, work / "trivy.yaml")
-    ignore = project_root / "container" / ".trivyignore.yaml"
-    entries = without_expiry(load_yaml(ignore)) if ignore.is_file() else {}
-    entries["vulnerabilities"] = entries.get("vulnerabilities") or []
-    (work / ".trivyignore.yaml").write_text(yaml.safe_dump(entries), encoding="utf-8")
+    config, entries = policy_repo(project_root, tmp_path / "policy")
     code, gated, stderr = trivy_image(built.tags[target], tmp_path, "--scanners", "vuln", "--format", "json",
-                                      config=work / "trivy.yaml")
+                                      config=config, cwd=config.parent.parent)
     assert gated, f"trivy với trivy.yaml của bạn không chạy được (mã {code}): {stderr[-800:]}"
     _, control, _ = trivy_image(built.tags[target], tmp_path, "--scanners", "vuln", "--format", "json")
     reported = findings(gated)
@@ -495,7 +519,7 @@ def test_m03_gate_follows_policy(built, project_root, target, tmp_path):
              if v.get("Severity") not in BLOCKING or v.get("Status") != "fixed"]
     shown_ids = {(v["VulnerabilityID"], v.get("PkgName")) for v in reported}
     hidden = [f"{v['VulnerabilityID']} ({v.get('PkgName')})" for v in findings(control)
-              if v.get("Severity") in BLOCKING and v.get("Status") == "fixed" and not purl_ignored(v, entries["vulnerabilities"])
+              if v.get("Severity") in BLOCKING and v.get("Status") == "fixed" and not purl_ignored(v, entries)
               and (v["VulnerabilityID"], v.get("PkgName")) not in shown_ids]
     if hidden:
         found.append(f"Gate che mất lỗ hổng chặn không có trong ngoại lệ: {hidden}")
@@ -503,6 +527,52 @@ def test_m03_gate_follows_policy(built, project_root, target, tmp_path):
         found.append(f"Mã thoát {code} không khớp kết quả: {len(reported)} lỗ hổng chặn (có lỗ hổng chặn thì phải khác 0, "
                      "không có thì 0)")
     assert not found, "\n".join(found)
+
+
+def test_m03_ignorefile_applies_from_repo_root(built, project_root, tmp_path):
+    """Ngoại lệ trong container/.trivyignore.yaml phải có hiệu lực khi trivy chạy từ gốc repo với
+    --config container/trivy.yaml, đúng như trivy-action trong CI M04."""
+    built.require()
+    require_file(project_root / "container" / "trivy.yaml")
+    require_trivy_db(tmp_path)
+    _, control, _ = trivy_image(built.tags["api"], tmp_path, "--scanners", "vuln", "--format", "json")
+    sample = next((v for v in findings(control) if (v.get("PkgIdentifier") or {}).get("PURL")), None)
+    if sample is None:
+        pytest.skip("DB trivy hiện tại không còn lỗ hổng nào trong image api để thử ngoại lệ")
+    probe_entry = {"id": sample["VulnerabilityID"], "purls": [sample["PkgIdentifier"]["PURL"]],
+                   "statement": "Mục thử của test: kiểm ngoại lệ được đọc khi trivy chạy từ gốc repo."}
+    config, _ = policy_repo(project_root, tmp_path / "policy", [probe_entry])
+    _, report, stderr = trivy_image(built.tags["api"], tmp_path, "--scanners", "vuln", "--format", "json",
+                                    "--severity", "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", "--ignore-unfixed=false",
+                                    "--exit-code", "0", config=config, cwd=config.parent.parent)
+    assert report, f"trivy với trivy.yaml của bạn không chạy được: {stderr[-800:]}"
+    pair = (sample["VulnerabilityID"], sample.get("PkgName"))
+    assert pair not in {(v["VulnerabilityID"], v.get("PkgName")) for v in findings(report)}, (
+        f"Chạy từ gốc repo với --config container/trivy.yaml, ngoại lệ {pair[0]} trong {IGNOREFILE} không có hiệu lực: "
+        "ignorefile phải trỏ đúng tệp tính từ gốc repo")
+
+
+def test_m03_postgres_data_path_rule():
+    def problems(target: str) -> list[str]:
+        data = {"services": {name: {} for name in ("api", "worker", "redis")}}
+        data["services"]["postgres"] = {"volumes": [f"pgdata:{target}"]}
+        return [p for p in compose_problems(data, "") if "named volume" in p]
+
+    assert not problems("/var/lib/postgresql/data")
+    assert not problems("/var/lib/postgresql")
+    assert problems("/srv/pgdata")
+
+
+def test_m03_probe_finds_venv_off_path(tmp_path):
+    """fixtures/venv-off-path: venv không nằm trong PATH, CMD gọi /opt/venv/bin/... trực tiếp; phép kiểm dependency
+    dùng chung vẫn phải tìm thấy site-packages qua redis-*.dist-info."""
+    Exercise.require_tool("docker")
+    root = assemble(tmp_path / "repo", tmp_path / "none", extra={DOCKERFILE: FIXTURES / "venv-off-path" / "Dockerfile"})
+    with DockerLab() as lab:
+        tags = build_targets(lab, root, {}, prefix="offpath-")
+        deps = {target: probe(lab, f"probe-offpath-{target}", tag)["deps"] for target, tag in tags.items()}
+    assert len(deps["api"]) == 1 and deps["api"] == deps["worker"], deps
+    assert deps["api"][0].startswith("/opt/venv/"), deps
 
 
 def test_m03_checks_catch_defective(tmp_path):
