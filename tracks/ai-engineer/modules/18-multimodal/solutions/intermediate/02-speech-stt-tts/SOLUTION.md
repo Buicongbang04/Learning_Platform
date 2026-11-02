@@ -57,7 +57,10 @@ ký tự ngoài vocab, nên "45.000 đồng" chỉ còn "đồng". Chuẩn hoá 
 
 Về nghe: lời giải mẫu do một agent tự động chạy và **không nghe được audio**, nên không có nhận xét bằng tai ở đây; phần đó
 là của bạn (file `tts_*.wav` trong thư mục cache). Thay vào đó là hai đặc điểm đo được bằng số trên 20 câu FLEURS, so giọng
-TTS với giọng người đọc cùng câu: ⟦TODO prosody⟧. CER thấp chỉ nói Whisper nghe ra chữ, không nói giọng dễ chịu.
+TTS với giọng người đọc cùng câu: giọng TTS nói nhanh hơn (trung vị 3.18 so với 2.51 âm tiết mỗi giây, tính
+trên đoạn có tiếng), và tỉ lệ khung "lặng" giữa đoạn có tiếng cao hơn (0.32 so với 0.24, ngưỡng năng lượng 10% của p95
+mỗi câu, khung 25 ms). Người đọc FLEURS đọc chậm và rõ, nên đây không phải chuẩn của giọng tự nhiên; con số chỉ để bạn biết
+nghe vào đâu (nhịp, chỗ ngắt) khi tự nghe. Log: `.superpowers/scratch/logs/tts_prosody.log`. CER thấp chỉ nói Whisper nghe ra chữ, không nói giọng dễ chịu.
 
 ## Bẫy thường gặp
 

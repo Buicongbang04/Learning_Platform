@@ -25,8 +25,8 @@ lượng (CLIP score và mắt bạn), thời gian, VRAM, đo đúng cách (seed
 **Phần cứng:** GPU 4GB · ~240 phút
 
 Thời gian trên là thời gian làm bài. `stabilityai/sd-turbo` (bản fp16, tải 2.5 GB) đạt đỉnh khoảng 3.0 GiB VRAM ở 512×512
-fp16, vừa GPU 4GB; chạy GPU bằng kernel `ai-gpu` (`setup/gpu`). Chỉ có CPU (env gốc): một ảnh 512×512 mất khoảng 12 giây
-ở 1 bước và 26 giây ở 4 bước với 4 luồng (mục 5 lý thuyết): giảm lưới xuống 2 cấu hình và 4 prompt. Phần mở rộng không
+fp16, vừa GPU 4GB; chạy GPU bằng kernel `ai-gpu` (`setup/gpu`). Chỉ có CPU (env gốc): một ảnh 512×512 mất khoảng 14 giây
+ở 1 bước và 24 giây ở 4 bước với 4 luồng (mục 5 lý thuyết): giảm lưới xuống 2 cấu hình và 4 prompt. Phần mở rộng không
 chấm trên PC 12GB: thêm một model lớn hơn (ví dụ `stabilityai/sdxl-turbo`, chưa đo trong track; kiểm VRAM và giấy phép
 trên model card trước khi tải).
 

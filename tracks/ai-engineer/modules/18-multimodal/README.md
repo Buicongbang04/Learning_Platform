@@ -33,7 +33,7 @@ Model dùng trong module, đều chạy local, tải lần đầu khi chạy cel
 | `faster-whisper` `tiny` / `base` / `small` | speech-to-text | 75 / 142 / 464 MB | CPU int8 | MIT |
 | `faster-whisper` `large-v3-turbo` (chỉ phần mở rộng trên PC) | speech-to-text | 1.6 GB | GPU fp16 | MIT |
 | `facebook/mms-tts-vie` (VITS, 36 triệu tham số) | text-to-speech | 139 MB | CPU | CC BY-NC 4.0 (không thương mại) |
-| `stabilityai/sd-turbo` (bản fp16) | sinh ảnh | 2.5 GB | 3.0 GiB GPU fp16, đỉnh | Stability AI Non-Commercial Research Community License |
+| `stabilityai/sd-turbo` (bản fp16) | sinh ảnh | 2.5 GB | 3.02 GiB GPU fp16, đỉnh | Stability AI Non-Commercial Research Community License |
 | `openai/clip-vit-base-patch32` | embedding ảnh và chữ, CLIP score | 1.2 GB (cả hai định dạng trọng số) | CPU | MIT |
 
 Hai giấy phép không thương mại (MMS-TTS, SD-Turbo) đủ cho học tập; sản phẩm thật phải đổi model hoặc mua giấy phép. Các
@@ -357,7 +357,37 @@ riêng cho tiếng Việt:
 
 ### Đo trên FLEURS tiếng Việt
 
-⟦TODO bảng whisper theory⟧
+50 câu FLEURS vi (câu thứ 51 tới 100 trong số các câu khác nhau của `test.tsv`, 615 giây audio, mỗi câu một người đọc;
+bài Intermediate 02 dùng 50 câu đầu), `language="vi"`, WER/CER mức corpus sau chuẩn hoá NFC, chữ thường, bỏ dấu câu. CPU:
+4 luồng, int8. GPU: RTX 3060 của PC (dùng chung), fp16, env `setup/gpu`; tiến trình đạt đỉnh 2.3 GiB VRAM (đo bằng
+`nvidia-smi`) khi chạy `large-v3-turbo`.
+
+| Model | Thiết bị | Beam | WER | CER | RTF |
+| --- | --- | --- | --- | --- | --- |
+| tiny | CPU | 1 | 0.611 | 0.339 | 0.051 |
+| tiny | CPU | 5 | 0.562 | 0.305 | 0.056 |
+| base | CPU | 1 | 0.440 | 0.226 | 0.054 |
+| base | CPU | 5 | 0.415 | 0.207 | 0.069 |
+| small | CPU | 1 | 0.244 | 0.110 | 0.164 |
+| small | CPU | 5 | 0.224 | 0.100 | 0.197 |
+| small | GPU | 1 | 0.233 | 0.104 | 0.019 |
+| small | GPU | 5 | 0.223 | 0.101 | 0.026 |
+| large-v3-turbo | GPU | 1 | 0.102 | 0.046 | 0.029 |
+| large-v3-turbo | GPU | 5 | **0.098** | **0.044** | 0.033 |
+
+Đọc bảng:
+
+- Cỡ model quyết định gần hết: `tiny` sai hơn nửa số từ tiếng Việt, `small` khoảng 1 trên 4 từ, `large-v3-turbo` 1 trên
+  10. Theo bài báo Whisper (phụ lục thống kê dữ liệu), tiếng Việt chiếm dưới 1% trong 680 000 giờ dữ liệu train, và WER của ngôn ngữ ít dữ liệu giảm mạnh theo
+  cỡ model với các ngôn ngữ ít dữ liệu.
+- Beam 5 so với beam 1 giảm WER từ 0.004 (`large-v3-turbo`) tới 0.049 (`tiny`), tốn thêm 10% tới 35% thời gian: model
+  càng yếu, beam càng có ích.
+- Cùng `small` beam 5, GPU nhanh hơn CPU 4 luồng khoảng 7.5 lần, kết quả gần như trùng (int8 so với fp16 lệch WER 0.001).
+  `large-v3-turbo` trên GPU vẫn nhanh hơn `small` trên CPU 6 lần: nếu có GPU, không có lý do dùng model nhỏ.
+- CER khoảng một nửa WER ở mọi dòng: phần lớn lỗi là sai một hai ký tự trong từ (dấu thanh, phụ âm cuối), không phải nghe
+  ra từ khác hẳn.
+
+Bài Intermediate 02 đo thêm trên tập câu của bài: VAD, cách chuẩn hoá, và audio dài 9 phút.
 
 ### Quyết định thực tế
 
@@ -447,7 +477,18 @@ tới 4 bước, và train **không cần guidance**: model card khuyên `guidan
 
 Đo trên PC của track, ảnh 512×512, seed ghim, số giây là trung vị:
 
-⟦TODO bảng SD⟧
+| Cấu hình | GPU RTX 3060 fp16 (dùng chung) | CPU 4 luồng fp32 |
+| --- | --- | --- |
+| 1 bước, `guidance_scale=0` | 0.24 s | 13.8 s |
+| 4 bước, `guidance_scale=0` | 0.42 s | 23.5 s |
+| 4 bước, `guidance_scale=2.0` | 0.60 s | (không đo) |
+| VRAM đỉnh (`torch.cuda.max_memory_allocated`) | 3.02 GiB | |
+| Ảnh đầu tiên (khởi tạo kernel CUDA) | 0.74 s | |
+
+Hai điều đọc được. Thời gian **không** tỉ lệ với số bước: 4 bước chỉ gấp khoảng 1.7 lần 1 bước trên cả GPU và CPU, vì text
+encoder và VAE decoder chạy một lần mỗi ảnh bất kể số bước; trên CPU phần cố định đó chiếm phần lớn của ảnh 1 bước. Và
+bật guidance làm mỗi bước U-Net chạy hai lần: 4 bước có guidance chậm hơn 4 bước không guidance khoảng 40%, không phải gấp
+đôi, cũng vì phần cố định. Bài Advanced 02 cho bạn đo đủ lưới cấu hình kèm chất lượng.
 
 ### Đánh giá ảnh sinh
 

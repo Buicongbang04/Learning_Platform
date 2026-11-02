@@ -28,7 +28,38 @@ Những lỗi hay gặp: so CLIP score giữa hai model CLIP khác nhau; bật g
 
 ## Kết quả tham chiếu
 
-⟦TODO adv02 ref⟧
+Bản tham chiếu (code ngoài repo), PC của track: RTX 3060 dùng chung, env `setup/gpu`, fp16, 512×512; 8 prompt tiếng Anh ×
+2 seed = 16 ảnh mỗi cấu hình; CLIP `openai/clip-vit-base-patch32` chạy trên cùng GPU. Log: `adv02_sweep_cuda.log`,
+`adv02_sweep_cpu.log`, `sd_probe_cuda.log` trong `.superpowers/scratch/logs/`.
+
+| Bước | `guidance_scale` | CLIP score TB | Độ lệch chuẩn | Giây mỗi ảnh (trung vị) |
+| --- | --- | --- | --- | --- |
+| 1 | 0 | 31.14 | 3.49 | 0.236 |
+| 2 | 0 | 29.68 | 3.08 | 0.297 |
+| 4 | 0 | 30.30 | 2.76 | 0.420 |
+| 1 | 2.0 | 31.23 | 3.45 | 0.305 |
+| 4 | 2.0 | 30.06 | 3.18 | 0.594 |
+| Prompt tiếng Việt, 1 bước, 0 | | 22.40 | 5.14 | 0.233 |
+| Đường nền: ảnh 1 bước so với prompt của ảnh khác | | 15.21 | | |
+
+VRAM đỉnh 3.59 GiB khi pipeline và CLIP cùng nằm trên GPU (pipeline một mình: 3.02 GiB). CPU 4 luồng fp32 (2 prompt × 2
+seed): 13.8 giây ở 1 bước, 23.5 giây ở 4 bước, CLIP 33.1 và 33.4.
+
+Đọc kết quả:
+
+- **Không cấu hình tiếng Anh nào hơn cấu hình khác một cách đo được**: CLIP score chênh tối đa 1.6 điểm, trong khi độ lệch
+  chuẩn giữa các ảnh khoảng 3 và sai số chuẩn của trung bình 16 ảnh khoảng 0.8. Khoảng cách tới đường nền (khoảng 15 điểm)
+  cho thấy CLIP score vẫn phân biệt rõ "khớp" và "không khớp"; nó chỉ không đủ nhạy để chọn giữa các cấu hình gần nhau.
+- **Khuyến nghị cho "dưới 1 giây trên GPU 4GB"**: 1 bước, không guidance: 0.24 giây, nhanh nhất, chất lượng CLIP không thua.
+  Nhìn ảnh: 4 bước có guidance cho màu bão hoà và tương phản gắt hơn (đúng hiện tượng "ảnh cháy" của guidance lớn ở module
+  06), không đẹp hơn.
+- **Prompt tiếng Việt** tụt khoảng 9 điểm CLIP, độ lệch gần gấp đôi: "một tờ hoá đơn mua hàng trên bàn" cho ảnh một con
+  phố, trong khi "một bát phở bò" vẫn ra một tô mì (chữ "phở" có trong dữ liệu train tiếng Anh). Text encoder OpenCLIP chủ
+  yếu học từ chú thích tiếng Anh; sản phẩm cho người Việt nên dịch prompt trước.
+- **Chữ trong ảnh**: mọi ảnh hoá đơn có các dòng ký tự vô nghĩa; CLIP score của chúng vẫn ngang các prompt khác. Đó là ví dụ
+  rõ nhất của thứ CLIP score không đo.
+- Giấy phép: SD-Turbo theo Stability AI Non-Commercial Research Community License, pipeline tải về không có safety checker
+  (diffusers in cảnh báo khi nạp).
 
 ## Rubric
 
