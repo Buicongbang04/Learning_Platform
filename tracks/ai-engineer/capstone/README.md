@@ -70,7 +70,7 @@ và lý do.
 | Dữ liệu train (M05) | split train trừ mọi câu trùng `query-id` hoặc trùng chữ với tập ghim | 7 câu ghim có cùng `query-id` và cùng chữ ở split train (nhãn khác) |
 | Văn bản index | `normalize(title + "\n" + text)`: NFC, gộp khoảng trắng, bỏ dòng trống | `normalize` đổi 2 109 điều; 0 điều không ở dạng NFC |
 | Thước đo retrieval | recall@k, MRR@10, nDCG@10 mức **điều**, định nghĩa mục 6 module 13 | một câu = 0.0033 trên 300 câu |
-| Đơn vị nguồn trong prompt | khoản (tách tiếp theo điểm khi khoản dài hơn 1 500 ký tự), mỗi nguồn mở đầu bằng tiêu đề điều | 28 trên 1 600 nguồn khoản của tập ghim vẫn dài hơn 1 500 ký tự |
+| Đơn vị nguồn trong prompt | khoản (tách tiếp theo điểm khi khoản dài hơn 1 500 ký tự), mỗi nguồn mở đầu bằng tiêu đề điều | 28 trên 1 600 nguồn khoản (300 câu ghim và 20 câu ngoài phạm vi, 5 nguồn mỗi câu) vẫn dài hơn 1 500 ký tự |
 | Câu từ chối | đúng chuỗi `Không tìm thấy căn cứ trong tài liệu được cung cấp.` | |
 | Trích đúng | câu trả lời trích hợp lệ (`[i]` trong khoảng) ít nhất một điều có trong qrels của câu đó | |
 
