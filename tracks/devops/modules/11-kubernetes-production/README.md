@@ -691,8 +691,10 @@ kubectl get --raw '/readyz?verbose'
 
 Không bài tự động nào được phá control plane của `devops-lab` dùng chung, nên phần này là lab tay trên một cluster kind **riêng, một
 node**, tên `devops-ts`, kubeconfig riêng trong `~/.cache/devops-track/ts-lab`; xong là xoá. Chấm bằng rubric ở mục "Lab tay" trong
-`solutions/intermediate/03-incident-drain-stuck/SOLUTION.md`. Đã chạy thử trên máy viết bài (kind 0.30.0, node 1.34.0). Không ghim CPU thì
-bỏ `taskset -c "$DEVOPS_CPUSET"`.
+`solutions/intermediate/03-incident-drain-stuck/SOLUTION.md`. Đã chạy thử trên máy viết bài (kind 0.30.0, node 1.34.0). Ghim CPU giống
+`devops-lab` (module 10 mục 0): `nice` và `taskset` chỉ áp cho lệnh `kind`; container node do Docker daemon tạo nên không kế thừa, và
+kind không có cờ cpuset, nên node chạy không ghim trong khoảng một phút lúc `kind create` dựng control plane, rồi mới được `docker update`
+ghim lại. Không ghim CPU thì bỏ `taskset -c "$DEVOPS_CPUSET"`.
 
 Tạo cluster và một workload (dùng image `pause` có sẵn trong node, không cần nạp gì):
 
@@ -738,6 +740,7 @@ kubelet`, rồi sửa. Đường lui: `docker exec devops-ts-control-plane syste
 Xoá khi xong (không đụng `devops-lab`):
 
 ```bash
+unset KUBECONFIG &&
 kind delete cluster --name devops-ts --kubeconfig ~/.cache/devops-track/ts-lab/kubeconfig &&
 rm -rf ~/.cache/devops-track/ts-lab
 ```
