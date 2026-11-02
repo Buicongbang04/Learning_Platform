@@ -308,5 +308,65 @@
         "Simulator"
       ]
     }
-  ]
+  ],
+  "capstone": {
+    "title": "Trợ lý pháp luật tiếng Việt",
+    "readme": "capstone/README.md",
+    "milestones": [
+      {
+        "id": "m01",
+        "title": "Dữ liệu, chuẩn hoá văn bản luật và baseline BM25",
+        "after": "13-rag",
+        "doc": "capstone/milestones/m01-data-bm25-baseline.md"
+      },
+      {
+        "id": "m02",
+        "title": "Retrieval bằng embedding, hybrid và reranking",
+        "after": "13-rag",
+        "doc": "capstone/milestones/m02-dense-hybrid-rerank.md"
+      },
+      {
+        "id": "m03",
+        "title": "RAG có trích dẫn điều, khoản và đánh giá độ trung thực",
+        "after": "13-rag",
+        "doc": "capstone/milestones/m03-rag-citations-faithfulness.md"
+      },
+      {
+        "id": "m04",
+        "title": "Quantize LLM và chạy local hiệu quả",
+        "after": "10-quantization",
+        "doc": "capstone/milestones/m04-quantize-local.md"
+      },
+      {
+        "id": "m05",
+        "title": "Fine-tune embedding hoặc LLM trên dữ liệu luật, so trước/sau",
+        "after": "14-fine-tuning-llm",
+        "doc": "capstone/milestones/m05-finetune.md"
+      },
+      {
+        "id": "m06",
+        "title": "Agent LangGraph: tách câu hỏi, tra nhiều bước, hỏi lại",
+        "after": "17-langchain-langgraph",
+        "doc": "capstone/milestones/m06-langgraph-agent.md"
+      },
+      {
+        "id": "m07",
+        "title": "Safety: chống injection, từ chối khi thiếu căn cứ, không bịa điều luật",
+        "after": "19-ai-safety-security",
+        "doc": "capstone/milestones/m07-safety-guardrails.md"
+      },
+      {
+        "id": "m08",
+        "title": "Eval suite, observability, serving, chi phí và độ trễ",
+        "after": "20-evaluation-production",
+        "doc": "capstone/milestones/m08-eval-observability-serving.md"
+      },
+      {
+        "id": "m09",
+        "title": "Tài liệu system design của chính hệ thống",
+        "after": "21-ai-system-design",
+        "doc": "capstone/milestones/m09-system-design-doc.md"
+      }
+    ]
+  }
 }
