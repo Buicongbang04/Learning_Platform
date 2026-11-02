@@ -85,8 +85,8 @@ tỉ lệ số từ trên giây audio, và kiểm `no_speech_prob`, `avg_logprob
 ## Real-time factor là gì? Ước lượng phần cứng cho một tổng đài chép lời 200 cuộc gọi đồng thời.
 
 RTF = thời gian xử lý / độ dài audio. RTF 0.25 nghĩa là 1 phút audio xử lý trong 15 giây; streaming cần RTF dưới 1 **và**
-độ trễ từng đoạn thấp. Ước lượng: đo RTF của model bạn chọn trên phần cứng đích (ví dụ trong module, `small` int8 chạy
-CPU 4 luồng và GPU fp16 chênh nhau một bậc độ lớn, xem mục 3 lý thuyết). Với 200 luồng đồng thời cần xử lý 200 giây audio
+độ trễ từng đoạn thấp. Ước lượng: đo RTF của model bạn chọn trên phần cứng đích (ví dụ trong module, `small` beam 5 có RTF
+0.197 trên CPU 4 luồng int8 và 0.026 trên GPU fp16, chênh khoảng 7.5 lần, xem mục 3 lý thuyết). Với 200 luồng đồng thời cần xử lý 200 giây audio
 mỗi giây thật: số máy $$\approx 200 \times \mathrm{RTF} / (\text{số luồng song song một máy})$$, cộng hệ số an toàn cho giờ
 cao điểm và cho batch không đầy. Trên GPU, gom nhiều luồng thành batch tăng thông lượng nhiều hơn tăng số máy. Câu trả lời
 tốt hỏi lại: có cần realtime không (chép lời sau cuộc gọi cho phép batch lớn, rẻ hơn nhiều), ngôn ngữ, tạp âm, và yêu cầu

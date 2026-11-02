@@ -282,7 +282,8 @@ văn bản trích ra.
 
 ### Đổi sang MC-OCR (hoá đơn Việt Nam)
 
-Khi đã đăng ký và tải MC-OCR 2021 ([trang cuộc thi](https://rivf2021-mc-ocr.vietnlp.com/)): theo mô tả của cuộc thi (chưa
+Khi đã đăng ký và tải MC-OCR 2021 ([trang cuộc thi](https://rivf2021-mc-ocr.vietnlp.com/), không truy cập được từ máy
+của track ngày 2026-11-02; hỏi ban tổ chức RIVF 2021 nếu trang vẫn tắt): theo mô tả của cuộc thi (chưa
 kiểm được vì cần đăng ký), nhãn của nhiệm vụ trích xuất là **bốn trường** (người bán, địa chỉ, thời điểm, tổng tiền) cho
 mỗi ảnh, không có từng dòng hàng. Vì vậy: (1) viết một hàm `gold_from_mcocr` trả cùng dạng `{"items": [], "total": ...}`
 và thêm trường người bán, thời điểm; (2) trong bộ chấm, bỏ precision/recall dòng hàng, thêm độ đúng của người bán (so khớp
@@ -677,7 +678,7 @@ Roadmap và dữ liệu:
   bản dùng trong track: [naver-clova-ix/cord-v2](https://huggingface.co/datasets/naver-clova-ix/cord-v2).
 - Conneau et al. [FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech](https://arxiv.org/abs/2205.12446)
   (2022); [google/fleurs](https://huggingface.co/datasets/google/fleurs).
-- [MC-OCR 2021](https://rivf2021-mc-ocr.vietnlp.com/) (hoá đơn Việt Nam, cần đăng ký).
+- [MC-OCR 2021](https://rivf2021-mc-ocr.vietnlp.com/) (hoá đơn Việt Nam, cần đăng ký; trang không truy cập được ngày 2026-11-02).
 
 Paper:
 
