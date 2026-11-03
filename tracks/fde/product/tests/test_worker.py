@@ -155,6 +155,9 @@ def test_classify_errors():
     assert ingest.classify(psycopg.OperationalError("connection refused")) == "outage"
     assert ingest.classify(psycopg.errors.AdminShutdown("bye")) == "outage"
     assert ingest.classify(psycopg.errors.ProgramLimitExceeded("row too big")) == "fail"
+    for error in (psycopg.errors.InvalidPassword("auth"), psycopg.errors.TooManyConnections("full"),
+                  psycopg.errors.QueryCanceled("statement timeout"), psycopg.errors.DiskFull("disk")):
+        assert isinstance(error, psycopg.OperationalError) and ingest.classify(error) == "outage", error.sqlstate
     assert ingest.classify(ingest.UnsupportedType("x")) == "fail"
 
 
@@ -227,4 +230,80 @@ def test_worker_survives_failed_moves(database_url, fake_llm, tmp_path):
     assert sorted(p.name for p in inbox.iterdir() if p.is_file()) == ["a_poison.txt", "b_ok.txt"]
     assert list((inbox / "failed").iterdir()) == [] and list((inbox / "done").iterdir()) == []
     ok_embeds = [t for t in fake_llm.embedded if t.startswith("search_document: This agreement")]
-    assert 0 < len(ok_embeds) <= 1 * len(ingest.chunk(TEXT))
+    assert len(ok_embeds) == len(ingest.chunk(TEXT))
+    assert len([t for t in fake_llm.embedded if "POISON" in t]) == 1
+
+
+@pytest.mark.parametrize("error", [psycopg.errors.InvalidPassword("password authentication failed"),
+                                   psycopg.errors.TooManyConnections("too many clients")])
+def test_worker_leaves_file_on_database_config_errors(database_url, fake_llm, tmp_path, monkeypatch, error):
+    def broken(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(ingest.db, "connect", broken)
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "nda.txt").write_text(TEXT)
+    make_old(inbox / "nda.txt")
+    run_worker(make_settings(database_url, fake_llm.url), inbox, lambda: False, timeout=1.0)
+    assert (inbox / "nda.txt").exists()
+    assert list((inbox / "failed").iterdir()) == []
+
+
+def test_worker_fails_file_on_data_error(database_url, fake_llm, tmp_path, monkeypatch):
+    migrated(database_url)
+
+    def too_big(*args, **kwargs):
+        raise psycopg.errors.ProgramLimitExceeded("index row size exceeds maximum")
+
+    monkeypatch.setattr(ingest.db, "save_document", too_big)
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "nda.txt").write_text(TEXT)
+    make_old(inbox / "nda.txt")
+    run_worker(make_settings(database_url, fake_llm.url), inbox, lambda: (inbox / "failed" / "nda.txt").exists())
+    assert (inbox / "failed" / "nda.txt").exists()
+
+
+def test_worker_reprocesses_redropped_file_with_same_name(database_url, fake_llm, tmp_path):
+    if os.geteuid() == 0:
+        pytest.skip("root ghi được mọi thư mục")
+    migrated(database_url)
+    inbox = tmp_path / "inbox"
+    for folder in ("done", "failed"):
+        (inbox / folder).mkdir(parents=True)
+    (inbox / "nda.txt").write_text(TEXT)
+    make_old(inbox / "nda.txt")
+    original_check = ingest.check_inbox
+
+    def check_then_lock(path):
+        original_check(path)
+        (inbox / "done").chmod(0o555)
+
+    def embeds() -> int:
+        return len([t for t in fake_llm.embedded if t.startswith("search_document: ")])
+
+    stop = threading.Event()
+    worker = threading.Thread(target=ingest.watch, args=(make_settings(database_url, fake_llm.url), inbox, 0.1, stop))
+    try:
+        ingest.check_inbox = check_then_lock
+        worker.start()
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and not embeds():
+            time.sleep(0.05)
+        time.sleep(1.0)
+        first = embeds()
+        assert first == len(ingest.chunk(TEXT))
+        (inbox / "nda.txt").unlink()
+        (inbox / "nda.txt").write_text(TEXT + " Amendment one.")
+        make_old(inbox / "nda.txt")
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and embeds() == first:
+            time.sleep(0.05)
+        time.sleep(1.0)
+        assert embeds() == first + len(ingest.chunk(TEXT + " Amendment one."))
+    finally:
+        stop.set()
+        worker.join(timeout=10)
+        ingest.check_inbox = original_check
+        (inbox / "done").chmod(0o755)

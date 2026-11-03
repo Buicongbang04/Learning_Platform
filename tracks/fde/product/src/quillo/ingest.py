@@ -28,6 +28,7 @@ UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9._ -]+")
 MAX_FILENAME = 200
 MAX_BACKOFF_S = 60.0
 MAX_FILE_RETRIES = 5
+DATA_ERROR_CLASSES = ("22", "23", "54")
 
 
 class UnsupportedType(ValueError):
@@ -189,16 +190,26 @@ def _settled(path: Path, settle_s: float) -> bool:
 
 
 def classify(error: Exception) -> str:
-    """"outage": dịch vụ phụ thuộc không với tới (chờ, không tính lỗi cho tệp); "retry": lỗi phía server có thể tạm
-    thời (thử lại tệp, tối đa MAX_FILE_RETRIES); "fail": lỗi do chính tệp (chuyển vào failed/)."""
+    """"outage": dịch vụ phụ thuộc không với tới hoặc cấu hình/tài nguyên phía server hỏng (chờ, không tính lỗi cho
+    tệp); "retry": model server trả 5xx (thử lại tệp, tối đa MAX_FILE_RETRIES); "fail": lỗi do chính tệp (4xx, lỗi dữ
+    liệu SQLSTATE 22/23/54, loại tệp…) → failed/."""
     if isinstance(error, httpx.TransportError):
         return "outage"
     if isinstance(error, httpx.HTTPStatusError):
         return "retry" if error.response.status_code >= 500 else "fail"
     if isinstance(error, psycopg.OperationalError):
-        state = error.sqlstate
-        return "outage" if state is None or state.startswith(("08", "57P")) else "fail"
+        state = error.sqlstate or ""
+        return "fail" if state.startswith(DATA_ERROR_CLASSES) else "outage"
     return "fail"
+
+
+def _key(path: Path) -> tuple | None:
+    """Nhận diện một lần "thả tệp": cùng tên nhưng inode/mtime khác là tệp mới."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    return (path.name, info.st_ino, info.st_mtime_ns)
 
 
 def _try_move(path: Path, folder: str) -> bool:
@@ -224,18 +235,21 @@ def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threadin
     max_bytes = settings.max_upload_mb * 1024 * 1024
     settle_s = 2 * interval
     backoff = interval
-    retries: dict[str, int] = {}
-    ingested_but_stuck: set[str] = set()
+    retries: dict[tuple, int] = {}
+    stuck: set[tuple] = set()
     log.info("worker bắt đầu theo dõi", extra={"fields": {"inbox": str(inbox), "version": settings.version}})
     while not stop.is_set():
         try:
-            files = sorted(p for p in inbox.iterdir() if not p.name.startswith(".") and not p.is_dir()
-                           and p.name not in ingested_but_stuck and _settled(p, settle_s))
+            present = {_key(p): p for p in inbox.iterdir() if not p.name.startswith(".") and not p.is_dir()}
         except OSError as error:
             log.error("không đọc được inbox", extra={"fields": {"inbox": str(inbox), "error": str(error)}})
-            files = []
+            present = {}
+        present.pop(None, None)
+        retries = {key: count for key, count in retries.items() if key in present}
+        stuck &= present.keys()
+        files = sorted((path, key) for key, path in present.items() if key not in stuck and _settled(path, settle_s))
         wait = interval
-        for path in files:
+        for path, key in files:
             try:
                 data = read_regular(path, max_bytes)
                 with db.connect(settings.database_url) as conn:
@@ -247,17 +261,18 @@ def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threadin
                     log.warning("dịch vụ không với tới, để nguyên tệp và thử lại sau", extra={"fields": {**fields, "retry_s": backoff}})
                     wait, backoff = backoff, min(backoff * 2, MAX_BACKOFF_S)
                     break
-                retries[path.name] = retries.get(path.name, 0) + 1
-                if kind == "retry" and retries[path.name] < MAX_FILE_RETRIES:
-                    log.warning("server lỗi khi nạp tệp, thử lại lượt sau", extra={"fields": {**fields, "attempt": retries[path.name]}})
+                retries[key] = retries.get(key, 0) + 1
+                if kind == "retry" and retries[key] < MAX_FILE_RETRIES:
+                    log.warning("server lỗi khi nạp tệp, thử lại lượt sau", extra={"fields": {**fields, "attempt": retries[key]}})
                     continue
-                log.error("nạp tài liệu lỗi", extra={"fields": {**fields, "attempts": retries.pop(path.name)}})
-                _try_move(path, "failed")
+                log.error("nạp tài liệu lỗi", extra={"fields": {**fields, "attempts": retries.pop(key)}})
+                if not _try_move(path, "failed"):
+                    stuck.add(key)
                 continue
-            retries.pop(path.name, None)
+            retries.pop(key, None)
             backoff = interval
             if not _try_move(path, "done"):
-                ingested_but_stuck.add(path.name)
+                stuck.add(key)
             if stop.is_set():
                 break
         stop.wait(wait)

@@ -163,7 +163,15 @@ Worker kiểm lúc khởi động rằng `inbox/`, `inbox/done/`, `inbox/failed/
 quét (mặc định 10 s) được coi là đang chép dở và chờ lượt sau; symlink, FIFO, thiết bị bị chuyển vào `failed/` mà không
 đọc (mở bằng `O_NOFOLLOW` rồi `fstat` trên chính fd). Không kết nối được llm/embed hay database thì để nguyên tệp và
 thử lại, chờ lùi dần tới 60 s. Model server trả 5xx cho một tệp thì tệp đó được thử lại ở các lượt sau, quá 5 lần thì
-vào `failed/`; 4xx hay lỗi dữ liệu thì vào `failed/` ngay. Một tệp hỏng không chặn các tệp xếp sau nó. Câu trả lời trích `[n]` thì `citations` là các đoạn được trích; model không trích thì trả mọi đoạn đã đưa vào prompt.
+vào `failed/`; 4xx hay lỗi dữ liệu (SQLSTATE lớp 22/23/54) thì vào `failed/` ngay. Một tệp hỏng không chặn các tệp xếp
+sau nó. Lỗi khác của database (sai mật khẩu 28P01, hết kết nối 53300, timeout 57014…) được coi là sự cố hạ tầng: tệp
+ở lại, worker chờ rồi thử lại, không đẩy cả inbox vào `failed/`. Nạp xong mà không chuyển được vào `done/` (hay không
+chuyển được vào `failed/`) thì tệp ở lại inbox và bị bỏ qua tới khi nó đổi (tên, inode hoặc mtime khác): thả lại tệp
+cùng tên vẫn được nạp.
+
+Giới hạn đã biết: tệp **luôn** gây lỗi kết nối (vd. tài liệu rất lớn làm embed vượt timeout, `ReadTimeout`) bị coi là
+sự cố hạ tầng và giữ cả hàng đợi. Log `dịch vụ không với tới…` ghi tên tệp; người vận hành chuyển tệp đó ra khỏi
+`inbox` bằng tay (hoặc cắt nhỏ) rồi worker chạy tiếp. Câu trả lời trích `[n]` thì `citations` là các đoạn được trích; model không trích thì trả mọi đoạn đã đưa vào prompt.
 
 ## Bảo mật (Phase 1)
 
