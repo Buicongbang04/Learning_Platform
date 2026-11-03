@@ -162,16 +162,18 @@ def verify(bundle: Path) -> list[str]:
             unsafe = [m.name for m in members if not _safe(m.name) or not (m.isfile() or m.isdir())]
             if unsafe:
                 return [f"đường dẫn/loại tệp không an toàn: {name}" for name in unsafe]
-            files = {m.name: m for m in members if m.isfile()}
+            named = [(PurePosixPath(m.name), m) for m in members]
+            named = [(path, m) for path, m in named if path.parts]
+            files = {str(path): m for path, m in named if m.isfile()}
             manifests = [name for name in files if PurePosixPath(name).name == "manifest.json"
                          and len(PurePosixPath(name).parts) == 2]
             if len(manifests) != 1:
                 return ["không tìm thấy <bundle>/manifest.json"]
             prefix = PurePosixPath(manifests[0]).parent
-            outside = sorted(m.name for m in members if PurePosixPath(m.name).parts[0] != prefix.name)
+            outside = sorted(str(path) for path, _ in named if path.parts[:1] != (prefix.name,))
             if outside:
                 return [f"tệp nằm ngoài thư mục gốc {prefix}/ của bundle: {name}" for name in outside]
-            manifest = json.load(tar.extractfile(manifests[0]))
+            manifest = json.load(tar.extractfile(files[manifests[0]]))
             if prefix.name != f"quillo-{manifest['version']}":
                 return [f"manifest.json ghi version {manifest['version']!r} nhưng thư mục gốc là {prefix}/"]
             expected = manifest["files"]

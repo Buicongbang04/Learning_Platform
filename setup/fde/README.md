@@ -99,7 +99,7 @@ image nào được tải sẵn).
 | `lab-open` | 64 s | 1,79 GiB | `docker.io 29.1.3-0ubuntu3~22.04.2`, `containerd 2.2.1-0ubuntu1~22.04.2`, `runc 1.3.4-0ubuntu1~22.04.1`, `docker-compose-v2 2.40.3+ds1-0ubuntu1~22.04.1` (dựng lại 2026-11-04) |
 | `hospital` | 77 s | 1,60 GiB | `docker.io 26.1.3-0ubuntu1~20.04.1`, `containerd 1.7.24-0ubuntu1~20.04.2`, `runc 1.1.12-0ubuntu2~20.04.1` |
 | `bank` | 93 s | 1,53 GiB | `podman 4.9.4-38.module+el8.10.0+40397+5e4f25d4` (AppStream, module `container-tools`) |
-| `lawfirm-staging` | 72 s | 1,73 GiB | như `lab-open` |
+| `lawfirm-staging` | 72 s | 1,73 GiB | `docker.io 29.1.3-0ubuntu3~22.04.2`, `containerd 2.2.1-0ubuntu1~22.04.2`, `runc 1.3.4-0ubuntu1~22.04.1` (không có `docker-compose-v2`) |
 
 Dựng lại cả bốn cùng lúc (`--force`, 2026-11-04) mất 89–323 s mỗi golden (bank chậm nhất do mirror Rocky), kích thước như trên.
 
@@ -133,7 +133,8 @@ hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
 ### "Tật" của khách (cố ý, không phải lỗi của lab)
 
 - `hospital`: IT khách đặt `http_proxy`/`https_proxy` trong `/etc/environment`, ngoài ra không cấu hình gì thêm
-  (CA của proxy chưa được trust, Docker daemon và apt không được cấu hình proxy).
+  (CA của proxy chưa được trust, Docker daemon và apt không được cấu hình proxy). Docker từ gói `docker.io` của Ubuntu
+  20.04, **không** có plugin `docker compose`; muốn cài qua apt thì phải đi qua proxy trên.
 - `lawfirm-staging`: registry nội bộ chạy HTTP thường ở `10.0.2.101:5000`; Docker trong VM chưa khai báo registry này
   trong `insecure-registries`. Docker cài từ gói `docker.io` của Ubuntu, **không** có plugin `docker compose` (khác
   `lab-open`), mà máy không ra internet: bundle offline phải tự mang binary compose v2 độc lập.

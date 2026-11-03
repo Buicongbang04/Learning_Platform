@@ -166,7 +166,7 @@ def test_session_cookie_expires(client, monkeypatch):
     issued, _, signature = login.cookies[auth.SESSION_COOKIE].partition(".")
     assert issued.isdigit() and len(signature) == 64
     assert client.get("/", follow_redirects=False).status_code == 200
-    monkeypatch.setattr(auth.time, "time", lambda: now + auth.SESSION_MAX_AGE + 5)
+    monkeypatch.setattr(auth, "clock", lambda: now + auth.SESSION_MAX_AGE + 5)
     assert client.get("/", follow_redirects=False).status_code == 303
     assert client.post("/api/ask", json={"question": "hi"}).status_code == 401
 
@@ -219,3 +219,42 @@ def test_healthz_answers_fast_when_llm_hangs(database_url, fake_llm):
         hanging.close()
     assert response.status_code == 503 and response.json()["checks"]["llm"] is False
     assert elapsed < 3.0
+
+
+def test_session_rejects_malformed_issued(client):
+    from quillo import auth
+
+    for value in ("9" * 40 + "." + "0" * 64, ".", "", "abc", "-5.abc"):
+        client.cookies.clear()
+        client.cookies.set(auth.SESSION_COOKIE, value)
+        assert client.get("/", follow_redirects=False).status_code == 303, value
+    assert not auth.session_valid("\u00b2\u00b2." + "0" * 64, TOKEN)
+    assert not auth.session_valid("\u0663\u0663." + "0" * 64, TOKEN)
+
+
+def test_body_limit_treats_missing_length_as_empty_except_uploads():
+    import asyncio
+
+    from quillo.app import BodyLimit
+
+    def call(path: str, headers: list) -> int:
+        seen = {}
+
+        async def inner(scope, receive, send):
+            seen["status"] = 200
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                seen["status"] = message["status"]
+
+        async def receive():
+            return {"type": "http.request", "body": b""}
+
+        scope = {"type": "http", "method": "POST", "path": path, "headers": headers}
+        asyncio.run(BodyLimit(inner, max_bytes=1024)(scope, receive, send))
+        return seen["status"]
+
+    assert call("/logout", []) == 200
+    assert call("/logout", [(b"transfer-encoding", b"chunked")]) == 411
+    assert call("/api/documents", []) == 411
+    assert call("/api/ask", [(b"content-length", b"\xc2\xb2")]) == 411

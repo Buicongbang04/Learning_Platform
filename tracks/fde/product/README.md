@@ -161,19 +161,21 @@ Worker kiểm lúc khởi động rằng `inbox/`, `inbox/done/`, `inbox/failed/
 `doc_id` là 16 ký tự đầu sha256 của nội dung: nạp lại cùng tệp thì thay bản cũ. Worker nạp tệp thả vào `./inbox`
 (chuyển sang `inbox/done/` hoặc `inbox/failed/`, trùng tên thì thêm hậu tố `-1`, `-2`…). Tệp sửa đổi chưa quá 2 chu kỳ
 quét (mặc định 10 s) được coi là đang chép dở và chờ lượt sau; symlink, FIFO, thiết bị bị chuyển vào `failed/` mà không
-đọc (mở bằng `O_NOFOLLOW` rồi `fstat` trên chính fd). Lỗi tạm thời (llm/embed hay database không phản hồi) thì để
-nguyên tệp và thử lại, chờ lùi dần tới 60 s. Câu trả lời trích `[n]` thì `citations` là các đoạn được trích; model không trích thì trả mọi đoạn đã đưa vào prompt.
+đọc (mở bằng `O_NOFOLLOW` rồi `fstat` trên chính fd). Không kết nối được llm/embed hay database thì để nguyên tệp và
+thử lại, chờ lùi dần tới 60 s. Model server trả 5xx cho một tệp thì tệp đó được thử lại ở các lượt sau, quá 5 lần thì
+vào `failed/`; 4xx hay lỗi dữ liệu thì vào `failed/` ngay. Một tệp hỏng không chặn các tệp xếp sau nó. Câu trả lời trích `[n]` thì `citations` là các đoạn được trích; model không trích thì trả mọi đoạn đã đưa vào prompt.
 
 ## Bảo mật (Phase 1)
 
 - Token so sánh bằng `hmac.compare_digest`. Cookie phiên `<thời điểm cấp>.<HMAC(token, "v1:<thời điểm cấp>")>`
   (HttpOnly, SameSite=Strict): không chứa token, server từ chối khi quá 8 giờ kể từ lúc cấp hoặc chữ ký sai. Đổi token
   = mọi phiên cũ mất hiệu lực. OIDC thêm ở Phase 2.
-- Mọi POST đều phải có `Content-Length` và bị chặn trước khi parse (trước cả kiểm token): upload tối đa
+- Upload phải có `Content-Length`; mọi POST bị chặn kích thước trước khi parse (trước cả kiểm token): upload tối đa
   `QUILLO_MAX_UPLOAD_MB`, các POST khác 64 KB. Upload chỉ nhận `.pdf .html .htm .txt .md`, tên tệp được làm sạch (bỏ thư
   mục, ký tự lạ, `-`/`.` đầu tên, tối đa 200 ký tự); không ghi tệp upload ra đĩa theo tên gốc. `tags`: tối đa 20, mỗi tag
   tối đa 64 ký tự.
-- `/healthz` kiểm db/llm/embed song song, mỗi check ≤ 1,5–2 s, nên luôn trả trong thời hạn 5 s của HEALTHCHECK.
+- `/healthz` kiểm db/llm/embed song song: llm/embed tối đa 1,5 s, db tối đa ~3,5 s (`connect_timeout` 2 s, mức thấp
+  nhất libpq cho phép, cộng `statement_timeout` 1,5 s), nên luôn trả trong thời hạn 5 s của HEALTHCHECK.
 - UI: request htmx (`HX-Request`) hết phiên nhận 401 kèm `HX-Redirect: /login`.
 - SQL luôn tham số hoá; template Jinja tự escape; CSP `default-src 'self'`, `nosniff`, `frame-ancestors 'none'`.
 - Container `api`/`worker` chạy uid 10001, root filesystem chỉ đọc, `no-new-privileges`; `llm`/`embed` chạy uid 65534,

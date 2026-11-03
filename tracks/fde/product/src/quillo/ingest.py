@@ -27,7 +27,7 @@ SUPPORTED = {".txt", ".md", ".html", ".htm", ".pdf"}
 UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9._ -]+")
 MAX_FILENAME = 200
 MAX_BACKOFF_S = 60.0
-TRANSIENT = (httpx.HTTPError, psycopg.OperationalError)
+MAX_FILE_RETRIES = 5
 
 
 class UnsupportedType(ValueError):
@@ -157,6 +157,7 @@ def read_regular(path: Path, max_bytes: int) -> bytes:
 
 def _move(path: Path, folder: str) -> Path:
     target_dir = path.parent / folder
+    target_dir.mkdir(exist_ok=True)
     target = target_dir / path.name
     n = 1
     while target.exists() or target.is_symlink():
@@ -187,11 +188,35 @@ def _settled(path: Path, settle_s: float) -> bool:
         return False
 
 
+def classify(error: Exception) -> str:
+    """"outage": dịch vụ phụ thuộc không với tới (chờ, không tính lỗi cho tệp); "retry": lỗi phía server có thể tạm
+    thời (thử lại tệp, tối đa MAX_FILE_RETRIES); "fail": lỗi do chính tệp (chuyển vào failed/)."""
+    if isinstance(error, httpx.TransportError):
+        return "outage"
+    if isinstance(error, httpx.HTTPStatusError):
+        return "retry" if error.response.status_code >= 500 else "fail"
+    if isinstance(error, psycopg.OperationalError):
+        state = error.sqlstate
+        return "outage" if state is None or state.startswith(("08", "57P")) else "fail"
+    return "fail"
+
+
+def _try_move(path: Path, folder: str) -> bool:
+    try:
+        _move(path, folder)
+        return True
+    except OSError as error:
+        log.error("không chuyển được tệp", extra={"fields": {"file": path.name, "to": folder, "error": str(error)}})
+        return False
+
+
 def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threading.Event | None = None) -> None:
     """Quét `inbox` định kỳ: nạp xong chuyển vào `done/`, lỗi của chính tệp chuyển vào `failed/`.
 
-    Bỏ qua tệp sửa đổi chưa quá 2 chu kỳ quét (có thể đang được chép vào). Lỗi tạm thời (model server, database)
-    thì để nguyên tệp và chờ lùi dần tới MAX_BACKOFF_S rồi thử lại. Inbox không ghi được thì dừng ngay (InboxNotWritable).
+    Bỏ qua tệp sửa đổi chưa quá 2 chu kỳ quét (có thể đang được chép vào). Không với tới model server/database thì để
+    nguyên tệp, dừng lượt quét và chờ lùi dần tới MAX_BACKOFF_S. Server trả 5xx cho một tệp thì thử lại tệp đó ở các
+    lượt sau, quá MAX_FILE_RETRIES lần thì chuyển vào failed/; 4xx hay lỗi dữ liệu thì vào failed/ ngay, các tệp khác
+    vẫn được nạp. Inbox không ghi được lúc khởi động thì dừng ngay (InboxNotWritable).
     """
     stop = stop or threading.Event()
     check_inbox(inbox)
@@ -199,11 +224,13 @@ def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threadin
     max_bytes = settings.max_upload_mb * 1024 * 1024
     settle_s = 2 * interval
     backoff = interval
+    retries: dict[str, int] = {}
+    ingested_but_stuck: set[str] = set()
     log.info("worker bắt đầu theo dõi", extra={"fields": {"inbox": str(inbox), "version": settings.version}})
     while not stop.is_set():
         try:
-            files = sorted(p for p in inbox.iterdir()
-                           if not p.name.startswith(".") and not p.is_dir() and _settled(p, settle_s))
+            files = sorted(p for p in inbox.iterdir() if not p.name.startswith(".") and not p.is_dir()
+                           and p.name not in ingested_but_stuck and _settled(p, settle_s))
         except OSError as error:
             log.error("không đọc được inbox", extra={"fields": {"inbox": str(inbox), "error": str(error)}})
             files = []
@@ -213,16 +240,24 @@ def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threadin
                 data = read_regular(path, max_bytes)
                 with db.connect(settings.database_url) as conn:
                     ingest_bytes(conn, embedder, safe_filename(path.name), data, max_bytes=max_bytes)
-                _move(path, "done")
-                backoff = interval
-            except TRANSIENT as error:
-                log.warning("lỗi tạm thời, để nguyên tệp và thử lại sau",
-                            extra={"fields": {"file": path.name, "error": repr(error), "retry_s": backoff}})
-                wait, backoff = backoff, min(backoff * 2, MAX_BACKOFF_S)
-                break
             except Exception as error:
-                log.error("nạp tài liệu lỗi", extra={"fields": {"file": path.name, "error": repr(error)}})
-                _move(path, "failed")
+                kind = classify(error)
+                fields = {"file": path.name, "error": repr(error)}
+                if kind == "outage":
+                    log.warning("dịch vụ không với tới, để nguyên tệp và thử lại sau", extra={"fields": {**fields, "retry_s": backoff}})
+                    wait, backoff = backoff, min(backoff * 2, MAX_BACKOFF_S)
+                    break
+                retries[path.name] = retries.get(path.name, 0) + 1
+                if kind == "retry" and retries[path.name] < MAX_FILE_RETRIES:
+                    log.warning("server lỗi khi nạp tệp, thử lại lượt sau", extra={"fields": {**fields, "attempt": retries[path.name]}})
+                    continue
+                log.error("nạp tài liệu lỗi", extra={"fields": {**fields, "attempts": retries.pop(path.name)}})
+                _try_move(path, "failed")
+                continue
+            retries.pop(path.name, None)
+            backoff = interval
+            if not _try_move(path, "done"):
+                ingested_but_stuck.add(path.name)
             if stop.is_set():
                 break
         stop.wait(wait)

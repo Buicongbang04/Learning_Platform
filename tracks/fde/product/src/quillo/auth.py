@@ -6,6 +6,11 @@ from fastapi import HTTPException, Request
 
 SESSION_COOKIE = "quillo_session"
 SESSION_MAX_AGE = 8 * 3600
+MAX_ISSUED_DIGITS = 12
+
+
+def clock() -> float:
+    return time.time()
 
 
 def token_matches(given: str | None, expected: str) -> bool:
@@ -18,15 +23,17 @@ def _sign(token: str, issued: int) -> str:
 
 def session_value(token: str, issued: int | None = None) -> str:
     """Cookie phiên `<thời điểm cấp>.<HMAC(token, "v1:<thời điểm cấp>")>`: không chứa token, hết hạn sau SESSION_MAX_AGE."""
-    issued = int(time.time()) if issued is None else issued
+    issued = int(clock()) if issued is None else issued
     return f"{issued}.{_sign(token, issued)}"
 
 
 def session_valid(value: str | None, token: str) -> bool:
     issued, _, signature = (value or "").partition(".")
-    if not issued.isdigit() or not token_matches(signature, _sign(token, int(issued))):
+    if not (issued.isascii() and issued.isdigit() and len(issued) <= MAX_ISSUED_DIGITS):
         return False
-    return 0 <= time.time() - int(issued) <= SESSION_MAX_AGE
+    if not token_matches(signature, _sign(token, int(issued))):
+        return False
+    return 0 <= clock() - int(issued) <= SESSION_MAX_AGE
 
 
 def _bearer(request: Request) -> str | None:

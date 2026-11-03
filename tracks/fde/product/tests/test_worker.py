@@ -141,3 +141,90 @@ def test_read_regular_refuses_swapped_symlink_and_fifo(tmp_path):
     big.write_bytes(b"a" * 101)
     with pytest.raises(ingest.TooLarge):
         ingest.read_regular(big, 100)
+
+
+def test_classify_errors():
+    import httpx
+
+    request = httpx.Request("POST", "http://embed/v1/embeddings")
+    assert ingest.classify(httpx.ConnectError("refused", request=request)) == "outage"
+    assert ingest.classify(httpx.ReadTimeout("slow", request=request)) == "outage"
+    for status, kind in ((400, "fail"), (413, "fail"), (500, "retry"), (503, "retry")):
+        error = httpx.HTTPStatusError("x", request=request, response=httpx.Response(status, request=request))
+        assert ingest.classify(error) == kind
+    assert ingest.classify(psycopg.OperationalError("connection refused")) == "outage"
+    assert ingest.classify(psycopg.errors.AdminShutdown("bye")) == "outage"
+    assert ingest.classify(psycopg.errors.ProgramLimitExceeded("row too big")) == "fail"
+    assert ingest.classify(ingest.UnsupportedType("x")) == "fail"
+
+
+def test_worker_poison_file_does_not_block_queue(database_url, fake_llm, tmp_path):
+    migrated(database_url)
+    fake_llm.reject = {"POISON": 400}
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "a_poison.txt").write_text("POISON " + TEXT)
+    (inbox / "b_ok.txt").write_text(TEXT)
+    make_old(*inbox.iterdir())
+    run_worker(make_settings(database_url, fake_llm.url), inbox, lambda: len(list(inbox.glob("*/*"))) >= 2)
+    assert [p.name for p in (inbox / "failed").iterdir()] == ["a_poison.txt"]
+    assert [p.name for p in (inbox / "done").iterdir()] == ["b_ok.txt"]
+
+
+def test_worker_retries_server_errors_then_gives_up(database_url, fake_llm, tmp_path):
+    migrated(database_url)
+    fake_llm.reject = {"FLAKY": 500}
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "a_flaky.txt").write_text("FLAKY " + TEXT)
+    (inbox / "b_ok.txt").write_text(TEXT)
+    make_old(*inbox.iterdir())
+    run_worker(make_settings(database_url, fake_llm.url), inbox, lambda: (inbox / "failed" / "a_flaky.txt").exists())
+    assert (inbox / "done" / "b_ok.txt").exists()
+    assert (inbox / "failed" / "a_flaky.txt").exists()
+    attempts = [text for text in fake_llm.embedded if "FLAKY" in text and text.startswith("search_document: FLAKY")]
+    assert len(attempts) == ingest.MAX_FILE_RETRIES
+
+
+def test_worker_survives_failed_moves(database_url, fake_llm, tmp_path):
+    if os.geteuid() == 0:
+        pytest.skip("root ghi được mọi thư mục")
+    migrated(database_url)
+    fake_llm.reject = {"POISON": 400}
+    inbox = tmp_path / "inbox"
+    for folder in ("done", "failed"):
+        (inbox / folder).mkdir(parents=True)
+    (inbox / "a_poison.txt").write_text("POISON " + TEXT)
+    (inbox / "b_ok.txt").write_text(TEXT)
+    make_old(*[p for p in inbox.iterdir() if p.is_file()])
+    settings = make_settings(database_url, fake_llm.url)
+    stop = threading.Event()
+    original_check = ingest.check_inbox
+
+    def check_then_lock(path):
+        original_check(path)
+        (inbox / "done").chmod(0o555)
+        (inbox / "failed").chmod(0o555)
+
+    worker = threading.Thread(target=ingest.watch, args=(settings, inbox, 0.1, stop))
+    try:
+        ingest.check_inbox = check_then_lock
+        worker.start()
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            with psycopg.connect(database_url) as conn:
+                if conn.execute("SELECT count(*) FROM documents").fetchone()[0]:
+                    break
+            time.sleep(0.1)
+        time.sleep(1.0)
+        assert worker.is_alive()
+    finally:
+        stop.set()
+        worker.join(timeout=10)
+        ingest.check_inbox = original_check
+        (inbox / "done").chmod(0o755)
+        (inbox / "failed").chmod(0o755)
+    assert sorted(p.name for p in inbox.iterdir() if p.is_file()) == ["a_poison.txt", "b_ok.txt"]
+    assert list((inbox / "failed").iterdir()) == [] and list((inbox / "done").iterdir()) == []
+    ok_embeds = [t for t in fake_llm.embedded if t.startswith("search_document: This agreement")]
+    assert 0 < len(ok_embeds) <= 1 * len(ingest.chunk(TEXT))

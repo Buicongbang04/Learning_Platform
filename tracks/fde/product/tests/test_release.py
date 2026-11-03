@@ -182,3 +182,27 @@ def test_build_removes_partial_bundle_on_failure(tmp_path, monkeypatch):
     with pytest.raises(OSError, match="No space"):
         release.build("1.0.0", out)
     assert list(out.iterdir()) == []
+
+
+def test_verify_handles_dot_members(tmp_path):
+    data = b"services: {}\n"
+    manifest = json.dumps({"version": "1.0.0", "files": {"compose.yaml": hashlib.sha256(data).hexdigest()},
+                           "images": []}).encode()
+
+    def write(path, extra=()):
+        with tarfile.open(path, "w") as tar:
+            root = tarfile.TarInfo(".")
+            root.type = tarfile.DIRTYPE
+            tar.addfile(root)
+            for name, payload in (("./quillo-1.0.0/manifest.json", manifest), ("./quillo-1.0.0/compose.yaml", data),
+                                  *extra):
+                info = tarfile.TarInfo(name)
+                info.size = len(payload)
+                tar.addfile(info, io.BytesIO(payload))
+
+    write(tmp_path / "dotted.tar")
+    ok = run_verify(tmp_path / "dotted.tar")
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    write(tmp_path / "outside.tar", [("./evil.sh", b"x")])
+    outside = run_verify(tmp_path / "outside.tar")
+    assert outside.returncode == 1 and "evil.sh" in outside.stdout and "Traceback" not in outside.stderr

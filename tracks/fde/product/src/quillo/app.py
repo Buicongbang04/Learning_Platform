@@ -39,8 +39,9 @@ class AskRequest(BaseModel):
 
 
 class BodyLimit:
-    """Từ chối POST thiếu Content-Length (411) hoặc quá giới hạn (413) trước khi parse body, kể cả trước khi kiểm token:
-    upload tối đa QUILLO_MAX_UPLOAD_MB, mọi POST khác (JSON, form) tối đa 64 KB."""
+    """Từ chối POST quá giới hạn (413) hoặc không rõ độ dài (411) trước khi parse body, kể cả trước khi kiểm token:
+    upload tối đa QUILLO_MAX_UPLOAD_MB và bắt buộc Content-Length; POST khác tối đa 64 KB, không có Content-Length lẫn
+    Transfer-Encoding thì coi như body rỗng."""
 
     def __init__(self, app, max_bytes: int) -> None:
         self.app = app
@@ -48,9 +49,13 @@ class BodyLimit:
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] == "http" and scope["method"] == "POST":
-            limit = self.max_bytes + MULTIPART_OVERHEAD if scope["path"] in UPLOAD_PATHS else MAX_FORM_BYTES
-            length = dict(scope["headers"]).get(b"content-length", b"")
-            if not length.isdigit():
+            upload = scope["path"] in UPLOAD_PATHS
+            limit = self.max_bytes + MULTIPART_OVERHEAD if upload else MAX_FORM_BYTES
+            headers = dict(scope["headers"])
+            length = headers.get(b"content-length", b"")
+            if not length and not upload and b"transfer-encoding" not in headers:
+                length = b"0"
+            if not (length.isascii() and length.isdigit()):
                 await JSONResponse({"detail": "Cần Content-Length"}, status_code=411)(scope, receive, send)
                 return
             if int(length) > limit:

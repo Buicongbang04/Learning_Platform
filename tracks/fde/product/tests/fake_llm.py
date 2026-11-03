@@ -28,6 +28,7 @@ class FakeOpenAI:
                  model: str = "fake-llm") -> None:
         self.answer = answer
         self.model = model
+        self.reject: dict[str, int] = {}
         self.chats: list[dict] = []
         self.embedded: list[str] = []
         self._server: ThreadingHTTPServer | None = None
@@ -63,6 +64,10 @@ class FakeOpenAI:
                 if self.path == "/v1/embeddings":
                     inputs = body["input"] if isinstance(body["input"], list) else [body["input"]]
                     fake.embedded.extend(inputs)
+                    for marker, status in fake.reject.items():
+                        if any(marker in text for text in inputs):
+                            self._reply(status, {"error": {"message": f"rejected {marker}"}})
+                            return
                     data = [{"object": "embedding", "index": i, "embedding": embed(t)} for i, t in enumerate(inputs)]
                     self._reply(200, {"object": "list", "data": data, "model": "fake-embed"})
                 elif self.path == "/v1/chat/completions":
