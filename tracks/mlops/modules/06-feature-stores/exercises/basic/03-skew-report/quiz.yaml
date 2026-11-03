@@ -1,0 +1,55 @@
+questions:
+  - id: skew-definition
+    kind: knowledge
+    type: single
+    prompt: "Training-serving skew là gì?"
+    options:
+      - { id: a, text: "Model train trên dữ liệu cũ nên độ chính xác giảm dần theo thời gian khi thế giới thay đổi" }
+      - { id: b, text: "Cùng một thực thể và thời điểm nhưng feature lúc train khác feature lúc serve" }
+      - { id: c, text: "Tập train có phân phối nhãn lệch so với tập validation vì chia dữ liệu ngẫu nhiên" }
+      - { id: d, text: "Service trả lời chậm hơn khi tải tăng vì phải tính feature cho từng yêu cầu" }
+  - id: skew-vs-drift
+    kind: knowledge
+    type: single
+    prompt: "Model tốt trên tập kiểm thử offline nhưng tệ ngay ngày đầu lên production, trong khi dữ liệu production nhìn không khác dữ liệu train. Nghi ngờ nào hợp lý nhất để kiểm tra trước?"
+    options:
+      - { id: a, text: "Concept drift, vì thế giới đã thay đổi nên cần train lại ngay lập tức bằng dữ liệu mới nhất có được" }
+      - { id: b, text: "Overfit, vì vậy tăng regularization rồi đánh giá lại trên tập kiểm thử cũ như trước" }
+      - { id: c, text: "Lệch giữa cách tính feature offline và online, so feature của cùng chuyến ở hai đường" }
+      - { id: d, text: "Thiếu GPU ở production, vì model cần phần cứng mạnh hơn thì mới cho ra được kết quả dự đoán đúng" }
+  - id: skew-sources
+    kind: knowledge
+    type: multi
+    prompt: "Chọn các nguồn gây training-serving skew."
+    options:
+      - { id: a, text: "Logic tiền xử lý được viết hai lần ở hai nơi, bằng hai thư viện hoặc ngôn ngữ khác nhau" }
+      - { id: b, text: "Feature lúc train lấy giá trị được tính sau thời điểm sự kiện, serve chỉ có giá trị tại lúc đó" }
+      - { id: c, text: "Giá trị mặc định khi thiếu dữ liệu ở train khác với giá trị mặc định ở serve" }
+      - { id: d, text: "Đặt random seed khác nhau khi chia train và validation trong quá trình thử nghiệm" }
+  - id: pit-why
+    kind: knowledge
+    type: single
+    prompt: "Vì sao tập train cho model dự đoán chuyến đi cần point-in-time join thay vì nối bằng khoá thực thể với bảng feature mới nhất?"
+    options:
+      - { id: a, text: "Join theo khoá thực thể chạy chậm hơn nhiều so với merge_asof trên mọi kích thước dữ liệu" }
+      - { id: b, text: "Bảng feature mới nhất không chứa khoá thực thể nên không nối được với bảng sự kiện" }
+      - { id: c, text: "Nối với giá trị mới nhất đưa thông tin tương lai vào mẫu quá khứ, làm offline đẹp giả" }
+      - { id: d, text: "Point-in-time join tự động loại các dòng trùng lặp ra khỏi tập train giúp sạch dữ liệu" }
+  - id: feature-store-parts
+    kind: knowledge
+    type: single
+    prompt: "Trong Feast, lệnh materialize-incremental làm gì?"
+    options:
+      - { id: a, text: "Huấn luyện lại model bằng dữ liệu mới rồi đẩy phiên bản mới lên registry của đội" }
+      - { id: b, text: "Xoá các feature cũ khỏi offline store để tiết kiệm dung lượng lưu trữ trên ổ đĩa" }
+      - { id: c, text: "Sao chép giá trị feature mới nhất từ offline store sang online store kể từ lần chạy trước" }
+      - { id: d, text: "Sinh mã SQL để tính feature rồi chạy nó trực tiếp trên kho dữ liệu của công ty" }
+  - id: when-not-needed
+    kind: knowledge
+    type: multi
+    prompt: "Chọn các tình huống mà feature store thường chưa đáng đầu tư."
+    options:
+      - { id: a, text: "Một model chạy theo lô mỗi đêm, một đội, feature tính bằng SQL từ kho dữ liệu" }
+      - { id: b, text: "Mọi feature đến thẳng từ thân yêu cầu và dùng chung một thư viện cho train và serve" }
+      - { id: c, text: "Nhiều model và nhiều đội dùng chung feature theo thực thể, cần tra online dưới 100 ms" }
+      - { id: d, text: "Một model duy nhất, đội ba người, feature không dùng lại ở nơi nào khác" }
