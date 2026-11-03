@@ -1,0 +1,51 @@
+{
+  "holiday-week": {
+    "title": "Tuần lễ cuối năm: dashboard đỏ, nhãn đã về gần đủ",
+    "context": "Model ETA chạy 5 tháng không sự cố. Tuần 25-31/12 dashboard báo drift trên 3 trong 6 feature so với tháng 11. Nhãn (thời lượng thật) về sau 1 ngày, đã đủ 94% cho cả tuần.",
+    "metrics": {
+      "psi_trip_distance": 0.31,
+      "psi_hour": 0.27,
+      "drifted_features_share_pct": 50.0,
+      "pred_mean_change_pct": 2.1,
+      "mae_baseline": 3.62,
+      "mae_current": 3.66,
+      "mae_change_pct": 1.1,
+      "fallback_rate_pct": 0.4,
+      "fallback_rate_baseline_pct": 0.4,
+      "labels_matured_pct": 94.0
+    },
+    "quality_keys": ["mae_baseline", "mae_current", "mae_change_pct"]
+  },
+  "bad-release": {
+    "title": "Hai ngày sau khi deploy phiên bản mới",
+    "context": "Phiên bản v7 lên production cách đây 20 giờ. Phân phối feature gần như không đổi so với trước deploy, nhưng dự đoán trung bình nhảy mạnh và fallback tăng. Phiên bản v6 vẫn chạy shadow trên cùng lưu lượng nên có MAE so sánh trực tiếp; nhãn đã về 91%.",
+    "metrics": {
+      "psi_trip_distance": 0.04,
+      "psi_hour": 0.02,
+      "pred_mean_change_pct": 38.0,
+      "fallback_rate_pct": 7.5,
+      "fallback_rate_baseline_pct": 0.4,
+      "mae_new_version": 6.9,
+      "mae_previous_version_same_traffic": 3.7,
+      "hours_since_deploy": 20.0,
+      "labels_matured_pct": 91.0
+    },
+    "quality_keys": ["mae_new_version", "mae_previous_version_same_traffic"]
+  },
+  "covid-lockdown": {
+    "title": "NYC TLC từ 2020-02 sang 2020-04 (số đo thật từ notebook)",
+    "context": "Model ETA huấn luyện trên 2020-02, không deploy lại 41 ngày. Số PSI, tỉ lệ NaN và MAE dưới đây là số đo thật của bài notebook 01 (mẫu 100 000 chuyến mỗi tháng). Phiên bản trước đó cũng được huấn luyện trên dữ liệu trước lockdown nên không phải phương án tốt hơn.",
+    "metrics": {
+      "psi_hour": 0.152,
+      "psi_fare_amount": 0.05,
+      "psi_trip_distance": 0.023,
+      "passenger_count_missing_pct": 8.2,
+      "mae_reference_holdout": 3.1,
+      "mae_current": 5.01,
+      "mae_change_pct": 61.7,
+      "pred_mean_bias_min": 4.4,
+      "days_since_last_deploy": 41.0
+    },
+    "quality_keys": ["mae_reference_holdout", "mae_current", "mae_change_pct", "pred_mean_bias_min"]
+  }
+}

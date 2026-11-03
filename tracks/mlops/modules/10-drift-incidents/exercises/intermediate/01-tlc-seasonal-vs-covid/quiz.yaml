@@ -1,0 +1,64 @@
+questions:
+  - id: covid-top-feature
+    kind: data
+    type: single
+    prompt: "Giữa 2020-02 và 2020-04, feature nào trong trip_distance, fare_amount, hour có PSI (bin theo quantile) lớn nhất?"
+    options:
+      - { id: a, text: "trip_distance" }
+      - { id: b, text: "fare_amount" }
+      - { id: c, text: "hour" }
+      - { id: d, text: "Không feature nào vượt 0.01" }
+  - id: seasonal-psi
+    kind: data
+    type: single
+    prompt: "PSI lớn nhất trong ba feature giữa 2019-07 và 2019-12 (mùa vụ) thuộc khoảng nào?"
+    options:
+      - { id: a, text: "Trên 0.25" }
+      - { id: b, text: "Từ 0.1 đến 0.25" }
+      - { id: c, text: "Từ 0.01 đến 0.1" }
+      - { id: d, text: "Dưới 0.01" }
+  - id: covid-mae
+    kind: data
+    type: single
+    prompt: "Model ETA huấn luyện trên 2020-02: MAE trên 2020-04 so với MAE holdout 2020-02 tăng khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 10%" }
+      - { id: b, text: "Khoảng 30%" }
+      - { id: c, text: "Khoảng 60%" }
+      - { id: d, text: "Khoảng 150%" }
+  - id: seasonal-mae
+    kind: data
+    type: single
+    prompt: "Model ETA huấn luyện trên 2019-07: MAE trên 2019-12 so với MAE holdout 2019-07 tăng khoảng bao nhiêu?"
+    options:
+      - { id: a, text: "Gần như không đổi (dưới 2%)" }
+      - { id: b, text: "Khoảng 11%" }
+      - { id: c, text: "Khoảng 40%" }
+      - { id: d, text: "Khoảng 100%" }
+  - id: missing-rate
+    kind: data
+    type: single
+    prompt: "Tỉ lệ passenger_count bị thiếu (NaN) trong mẫu 2020-04 gần nhất với giá trị nào?"
+    options:
+      - { id: a, text: "0,8%" }
+      - { id: b, text: "3%" }
+      - { id: c, text: "8%" }
+      - { id: d, text: "20%" }
+  - id: small-psi-big-drop
+    kind: knowledge
+    type: single
+    prompt: "PSI của hour chỉ 0.15 (vừa phải) nhưng MAE tăng 62%. Cách giải thích hợp lý nhất?"
+    options:
+      - { id: a, text: "Quan hệ từ feature sang thời lượng đã đổi (concept drift); PSI chỉ nhìn phân phối đầu vào nên báo thấp" }
+      - { id: b, text: "PSI tính sai nên phải bỏ PSI" }
+      - { id: c, text: "Model có quá ít tham số" }
+      - { id: d, text: "MAE tăng chỉ vì lấy mẫu ngẫu nhiên, nên không cần quan tâm" }
+  - id: bin-choice
+    kind: knowledge
+    type: multi
+    prompt: "Evidently (bin rộng bằng nhau, Sturges) cho PSI của fare_amount khoảng 0.005, trong khi bin theo quantile cho khoảng 0.05. Chọn mọi nhận định đúng."
+    options:
+      - { id: a, text: "Dữ liệu đuôi dài khiến bin rộng bằng nhau dồn phần lớn mẫu vào vài bin đầu, nên PSI thấp hơn" }
+      - { id: b, text: "Hai cách đo khác công thức tổng nên chỉ một trong hai là PSI thật" }
+      - { id: c, text: "Ngưỡng 0.1 và 0.25 chỉ có nghĩa khi biết cách chia bin: cùng dữ liệu, hai cách chia cho hai số khác nhau" }
+      - { id: d, text: "Cách chia bin không ảnh hưởng PSI nên mọi công cụ cho cùng một số" }
