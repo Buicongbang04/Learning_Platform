@@ -52,9 +52,14 @@ Run (scale về 0). Luật test kiểm:
   `aws_s3_bucket_lifecycle_configuration`, `aws_s3_bucket_ownership_controls`, `aws_s3_bucket_policy`,
   `aws_iam_role_policy`, `aws_iam_role_policy_attachment`, `aws_lambda_function_url`, `aws_lambda_permission`,
   `google_project_service`, `google_storage_bucket_iam_member`, `google_cloud_run_v2_service_iam_member`,
-  `google_cloud_run_service_iam_member`, `google_project_iam_member`.
+  `google_cloud_run_service_iam_member`, `google_project_iam_member`, `google_billing_budget` (budget gắn với billing
+  account, không nhận `labels`).
 - Không có `access_key = "..."` hay `secret_key = "..."` trong `.tf`: khoá lấy từ profile CLI hoặc biến môi trường.
 - `cloud/.gitignore` chặn `*.tfstate` và `.terraform` (state chứa ID, có khi chứa bí mật; không commit).
+
+Không bị test kiểm nhưng hay vấp: Lambda function URL công khai (`authorization_type = "NONE"`) từ cuối 2025 cần cả hai
+quyền `lambda:InvokeFunctionUrl` và `lambda:InvokeFunction` cho principal `"*"` (hai `aws_lambda_permission`); thiếu một
+trong hai thì URL trả 403.
 
 ### 3. `cloud/teardown.sh`: dọn theo tag, có `--dry-run`
 
@@ -94,8 +99,8 @@ Nên xoá theo thứ tự phụ thuộc (endpoint trước role nó dùng) và x
 
 Viết trước khi `apply`: ngưỡng tiền **bằng số kèm `USD`** (ví dụ trần 1 USD/tháng), alarm/cảnh báo gửi tới đâu (email,
 SNS, Pub/Sub), mỗi tài nguyên tốn gì ngoài free tier, và quy trình dọn có lệnh `teardown.sh --dry-run`. Ít nhất 150 từ,
-không còn `TODO`. Budget nên nằm trong IaC (AWS `aws_budgets_budget`, GCP `google_billing_budget`) để nó cũng mang tag và
-được dọn cuối cùng.
+không còn `TODO`. Budget nên nằm trong IaC (AWS `aws_budgets_budget` nhận tag nên được dọn theo tag, xoá cuối cùng; GCP
+`google_billing_budget` không nhận `labels`, nên ghi trong `budget.md` cách xoá nó bằng `terraform destroy` hay console).
 
 ### 5. Test chấm làm gì
 
@@ -109,7 +114,8 @@ không còn `TODO`. Budget nên nằm trong IaC (AWS `aws_budgets_budget`, GCP `
   GCP hay Azure thì script của bạn vẫn phải xoá được năm loại này qua `aws` (CLI giả nên không cần cài).
 - `test_m11_budget_doc`: các luật ở mục 4.
 - `test_m11_cloud_live`: **skip mặc định**. Đặt `ETA_CLOUD_LIVE=1` (CLI cloud đã đăng nhập) thì chạy `teardown.sh --dry-run`
-  thật trên tài khoản của bạn (chỉ đọc) và đòi exit 0.
+  thật trên tài khoản của bạn (chỉ đọc) và đòi exit 0. Test này chạy ngoài sandbox vì cần mạng và thông tin đăng nhập
+  cloud của bạn; nó chỉ chạy khi bạn đặt `ETA_CLOUD_LIVE=1`.
 
 ```bash
 uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m11

@@ -22,7 +22,7 @@ SUBRESOURCES = {
     "aws_s3_bucket_lifecycle_configuration", "aws_s3_bucket_ownership_controls", "aws_s3_bucket_policy",
     "aws_iam_role_policy", "aws_iam_role_policy_attachment", "aws_lambda_function_url", "aws_lambda_permission",
     "google_project_service", "google_storage_bucket_iam_member", "google_cloud_run_v2_service_iam_member",
-    "google_cloud_run_service_iam_member", "google_project_iam_member",
+    "google_cloud_run_service_iam_member", "google_project_iam_member", "google_billing_budget",
 }
 SKIP_REASON = "M11 tuỳ chọn: chưa có thư mục cloud/ (bỏ qua không mất điểm phần lõi; xem milestones/m11-cloud-optional.md)"
 FAKE_CLIS = ("aws", "gcloud", "az")
@@ -228,6 +228,7 @@ def test_m11_budget_doc(project):
 
 
 def test_m11_cloud_live(project):
+    """Không chạy trong sandbox: cần mạng và thông tin đăng nhập cloud của bạn (~/.aws, ~/.config/gcloud); chỉ chạy khi ETA_CLOUD_LIVE=1."""
     if os.environ.get("ETA_CLOUD_LIVE") != "1":
         pytest.skip("Test cloud thật tắt mặc định: đặt ETA_CLOUD_LIVE=1 (cần CLI cloud đã đăng nhập) để chạy teardown --dry-run thật")
     folder = cloud_dir()

@@ -310,7 +310,7 @@ Không test nào chạm cloud; bản này chưa được `apply` trong lúc vi�
   và một lỗi đảo nhánh `if` là xoá thật; test thay `aws` bằng script ghi log để chứng minh không có lời gọi nào.
 - **Không cờ thì từ chối.** Lệnh xoá cần `--yes`; gặp loại tài nguyên chưa biết thì dừng trước khi xoá bất cứ gì, để
   không bao giờ dọn dở dang. Thứ tự: Lambda, log group, bucket (`rb --force`), role (gỡ policy trước), budget cuối.
-- **Lambda URL `NONE`** cho tiện thử, kèm `aws_lambda_permission` công khai; `budget.md` ghi rủi ro và cách chuyển sang
+- **Lambda URL `NONE`** cho tiện thử, kèm hai `aws_lambda_permission` công khai (`InvokeFunctionUrl` và `InvokeFunction`, AWS đòi cả hai từ cuối 2025); `budget.md` ghi rủi ro và cách chuyển sang
   `AWS_IAM`.
 
 Rubric M11 (tuỳ chọn, không tính vào mức junior):
@@ -357,8 +357,8 @@ Vì sao chọn ba lỗi này: mỗi lỗi lộ ra ở một công cụ khác nha
 đủ pipeline; một người chỉ chạy validate thấy một lỗi và dừng là bài học chính. Lỗi `missing_zone` bị loại khi thiết kế vì
 không công cụ nào của M03/M10 đo theo zone, chỉ đoán được.
 
-Giới hạn đã biết: người học có thể dò đáp án bằng cách chạy test nhiều lần với từng nhãn (test báo số lỗi còn thiếu và
-tên nhãn thừa), hoặc so với tệp gốc của TLC. Không ép được; rubric dưới đây là nơi chấm thật.
+Giới hạn đã biết: người học có thể dò đáp án bằng cách chạy test nhiều lần với từng nhãn (test chỉ báo **số** nhãn còn thiếu và
+số nhãn thừa, không báo tên, nên dò từng nhãn tốn nhiều lần chạy), hoặc so với tệp gốc của TLC. Không ép được; rubric dưới đây là nơi chấm thật.
 
 Rubric M13 (chấm `diagnosis.yaml` và `docs/assessment.md`; test chỉ kiểm nhãn, số và luật nhất quán):
 

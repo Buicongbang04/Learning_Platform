@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
-# Dọn mọi tài nguyên AWS mang tag project=eta-mlops (đúng từng ký tự). Lưới an toàn sau `terraform destroy`.
-#
-#   bash teardown.sh --dry-run                 # chỉ liệt kê, không gọi lệnh xoá nào
-#   bash teardown.sh --yes                     # xoá thật
-#   bash teardown.sh --dry-run --inventory f   # dùng inventory JSON có sẵn thay vì hỏi AWS
-#
-# Inventory: {"resources": [{"id": ARN, "type": "aws_s3_bucket", "name": "...", "tags": {"project": "eta-mlops"}}]}
+# Dọn mọi tài nguyên AWS mang tag project=eta-mlops (đúng từng ký tự); lưới an toàn sau terraform destroy.
 set -euo pipefail
 
 TAG_KEY=project

@@ -80,9 +80,9 @@ def test_m13_finds_injected_faults(project):
     claimed = {f.get("cause") for f in data.get("findings") or [] if isinstance(f, dict)}
     injected = injected_causes()
     missed = len(injected - claimed)
-    extra = claimed - injected
+    extra = len(claimed - injected)
     assert missed == 0, f"còn {missed} lỗi trong tháng lạ chưa có finding với cause đúng"
-    assert not extra, f"cause {sorted(extra)} không có trong tháng lạ (dương tính giả)"
+    assert extra == 0, f"có {extra} cause không có trong tháng lạ (dương tính giả)"
 
 
 @pytest.fixture(scope="module")
@@ -159,8 +159,10 @@ def test_m13_evidence_matches_recomputed(project, assessment):
         expected = recomputed(summary, data_dir, zone)
         for key, claimed in evidence.items():
             if key in expected:
-                assert matches(key, claimed, expected[key]), \
-                    f"{finding.get('cause')}: evidence.{key} = {claimed}, tính lại theo đề được {expected[key]}"
+                ok = matches(key, claimed, expected[key])
+                assert ok, \
+                    f"{finding.get('cause')}: evidence.{key} = {claimed} không khớp số tính lại theo đề " \
+                    f"({'bằng đúng' if key in INTEGER_KEYS else 'sai số tương đối 1%'})"
     if data.get("decision") == "rollback":
         versions = set(summary["model_version"].astype(str))
         assert len(versions) > 1, f"champion không đổi trong phát lại (version {sorted(versions)}): không có gì để rollback"

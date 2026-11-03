@@ -119,6 +119,13 @@ resource "aws_lambda_permission" "health_url" {
   function_url_auth_type = "NONE"
 }
 
+resource "aws_lambda_permission" "health_invoke" {
+  statement_id  = "AllowPublicInvokeViaUrl"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.health.function_name
+  principal     = "*"
+}
+
 resource "aws_budgets_budget" "monthly" {
   name         = "${local.prefix}-monthly"
   budget_type  = "COST"

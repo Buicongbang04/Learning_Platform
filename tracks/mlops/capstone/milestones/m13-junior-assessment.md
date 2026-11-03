@@ -128,7 +128,7 @@ Luật test kiểm:
 - `month` là `"2019-10"`; `findings` không rỗng; mỗi finding đủ bốn khoá; `cause` thuộc bảng mục 3, không lặp; đủ khoá
   evidence bắt buộc; `symptom`, `action` mỗi câu ≥6 từ.
 - **Mỗi lỗi cài sẵn có một finding đúng `cause`**, và **không có `cause` nào ngoài các lỗi cài sẵn**: chẩn đoán thừa tốn công
-  người trực như chẩn đoán thiếu. Thông báo lỗi chỉ cho biết số lỗi còn thiếu, không cho biết là lỗi nào. Đừng dò đáp án
+  người trực như chẩn đoán thiếu. Thông báo lỗi chỉ cho biết số nhãn còn thiếu và số nhãn thừa, không cho biết là nhãn nào; số evidence lệch thì chỉ báo khoá, giá trị bạn ghi và sai số cho phép. Đừng dò đáp án
   bằng cách chạy test nhiều lần: bài tự đánh giá mất ý nghĩa, và rubric hỏi bạn chứng minh từng nhãn.
 - Mọi khoá evidence của bảng mục 4 khớp số test tính lại (test tự dựng dữ liệu, tự phát lại bằng `eta.cli replay` của bạn
   với đúng cấu hình mục 2).
