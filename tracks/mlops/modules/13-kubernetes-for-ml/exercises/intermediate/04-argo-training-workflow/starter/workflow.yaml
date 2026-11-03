@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: eta-train
+spec:
+  entrypoint: pipeline
+  arguments:
+    parameters:
+      - name: seed
+        value: "0"
+      - name: rows
+        value: "5000"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  templateDefaults:
+    script:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: prepare
+            template: prepare
+            arguments:
+              parameters:
+                - name: seed
+                  value: "{{workflow.parameters.seed}}"
+                - name: rows
+                  value: "{{workflow.parameters.rows}}"
+          - name: train
+            template: train
+            dependencies: [prepare]
+            arguments:
+              artifacts:
+                - name: train
+                  from: "{{tasks.prepare.outputs.artifacts.train}}"
+          - name: evaluate
+            template: evaluate
+            dependencies: [train]
+
+    - name: prepare
+      inputs:
+        parameters:
+          - name: seed
+          - name: rows
+      script:
+        image: eta-serve:dev
+        command: [python]
+        env:
+          - name: SEED
+            value: "{{inputs.parameters.seed}}"
+          - name: ROWS
+            value: "{{inputs.parameters.rows}}"
+        source: |
+          import os
+          import numpy as np
+          from app.etaml import make_trips
+          x, y = make_trips(int(os.environ["SEED"]), int(os.environ["ROWS"]))
+          cut = int(len(y) * 0.8)
+          np.savez("/tmp/train.npz", x=x[:cut], y=y[:cut])
+          np.savez("/tmp/test.npz", x=x[cut:], y=y[cut:])
+          print(f"train={cut} test={len(y) - cut}")
+      outputs:
+        artifacts:
+          - name: train
+            path: /tmp/train.npz
+          - name: test
+            path: /tmp/test.npz
+
+    - name: train
+      inputs:
+        artifacts:
+          - name: train
+            path: /tmp/in/train.npz
+      script:
+        image: eta-serve:dev
+        command: [python]
+        source: |
+          raise NotImplementedError("TODO: huấn luyện bằng app.etaml.train, lưu /tmp/model.joblib")
+
+    - name: evaluate
+      script:
+        image: eta-serve:dev
+        command: [python]
+        source: |
+          raise NotImplementedError("TODO: đọc model và tập test, ghi /tmp/metrics.json")

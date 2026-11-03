@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: eta-admin
+  labels:
+    app.kubernetes.io/name: eta
+type: Opaque
+stringData:
+  ETA_ADMIN_TOKEN: "${ETA_ADMIN_TOKEN}"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eta-config
+  labels:
+    app.kubernetes.io/name: eta
+data:
+  ETA_MODEL_PATH: /mnt/models/champion/model.joblib
+  ETA_CHALLENGER_PATH: /mnt/models/challenger/model.joblib
+  ETA_SHADOW: "0"
+  ETA_PREDICTION_LOG: ""
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: eta
+  labels:
+    app.kubernetes.io/name: eta
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+    serving.kserve.io/autoscalerClass: none
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    automountServiceAccountToken: false
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
+    initContainers:
+      - name: model-champion
+        image: ${ETA_CHAMPION_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c", "mkdir -p /mnt/models/champion && cp /models/model.joblib /mnt/models/champion/"]
+        volumeMounts:
+          - name: models
+            mountPath: /mnt/models
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 200m, memory: 64Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+      - name: model-challenger
+        image: ${ETA_CHALLENGER_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c", "mkdir -p /mnt/models/challenger && cp /models/model.joblib /mnt/models/challenger/"]
+        volumeMounts:
+          - name: models
+            mountPath: /mnt/models
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 200m, memory: 64Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+    containers:
+      - name: kserve-container
+        image: ${ETA_SERVE_IMAGE}
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8000
+            protocol: TCP
+        env:
+          - name: ETA_MODEL_VERSION
+            value: "${ETA_CHAMPION_VERSION}"
+          - name: ETA_CHALLENGER_VERSION
+            value: "${ETA_CHALLENGER_VERSION}"
+          - name: ETA_CANARY_WEIGHT
+            value: "${ETA_CANARY_WEIGHT}"
+        envFrom:
+          - configMapRef:
+              name: eta-config
+          - secretRef:
+              name: eta-admin
+        volumeMounts:
+          - name: models
+            mountPath: /mnt/models
+            readOnly: true
+          - name: tmp
+            mountPath: /tmp
+        startupProbe:
+          httpGet: {path: /healthz, port: 8000}
+          periodSeconds: 2
+          failureThreshold: 60
+        readinessProbe:
+          httpGet: {path: /readyz, port: 8000}
+          periodSeconds: 5
+          failureThreshold: 2
+        livenessProbe:
+          httpGet: {path: /healthz, port: 8000}
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: "1", memory: 512Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+    volumes:
+      - name: models
+        emptyDir:
+          sizeLimit: 256Mi
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi

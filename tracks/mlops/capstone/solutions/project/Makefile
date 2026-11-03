@@ -2,7 +2,7 @@ REPO := $(abspath ../../../../..)
 PY := cd $(CURDIR) && PYTHONPATH=src uv run --project $(REPO) python
 PORT ?= 28080
 
-.PHONY: test train register serve images repro replay-data replay experiments act-ci monitoring
+.PHONY: test train register serve images repro replay-data replay experiments assessment-data assessment act-ci monitoring
 
 test:
 	cd $(REPO) && SOLUTION=1 uv run pytest tracks/mlops/capstone/project/tests -q -rs
@@ -36,6 +36,16 @@ experiments:
 	$(PY) -m eta.cli experiment late-slice --config params.replay.yaml --month 2020-03 --as-of 2020-04
 	$(PY) -m eta.cli experiment retrain --config params.replay.yaml --train-month 2019-11 --month 2019-12 --as-of 2020-01
 	$(PY) -m eta.cli experiment retrain --config params.replay.yaml --train-month 2020-03 --month 2020-04,2020-05 --as-of 2020-06
+
+assessment-data:
+	cd $(REPO) && uv run python tracks/mlops/capstone/project/tests/etakit.py assessment --out $(CURDIR)/data/assessment
+
+assessment: assessment-data
+	rm -f data/assessment-mlflow.db
+	mkdir -p reports/assessment
+	$(PY) -m eta.cli prepare --config params.assessment.yaml --month 2019-10 --out data/assessment-interim/2019-10.parquet
+	-$(PY) -m eta.cli validate data/assessment-interim/2019-10.parquet --month 2019-10
+	$(PY) -m eta.cli replay --config params.assessment.yaml --start 2019-09 --end 2019-11 --out reports/assessment/replay
 
 act-ci:
 	cd $(CURDIR) && act push -W .github/workflows/ci.yml -P ubuntu-latest=mlops-act-runner:1 --pull=false --bind --container-options "--user $$(id -u):$$(id -g)"
