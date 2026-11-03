@@ -1,0 +1,20 @@
+# Điền cho từng hệ thống trong tests/fixtures/systems.yaml (đọc mô tả và các facts).
+# google_level: 0, 1 hoặc 2 (xem luật trong README)
+# microsoft_level: 0..4
+# blocker: khoá trong facts mà việc thiếu nó giữ hệ thống ở mức hiện tại (null nếu đã ở mức cao nhất)
+# rationale: 1-3 câu, nêu facts quyết định
+quote-pricing:
+  google_level: null  # TODO
+  microsoft_level: null  # TODO
+  blocker: null  # TODO
+  rationale: ""  # TODO
+recsys-ranking:
+  google_level: null  # TODO
+  microsoft_level: null  # TODO
+  blocker: null  # TODO
+  rationale: ""  # TODO
+fraud-scoring:
+  google_level: null  # TODO
+  microsoft_level: null  # TODO
+  blocker: null  # TODO
+  rationale: ""  # TODO
