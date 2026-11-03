@@ -1,0 +1,64 @@
+questions:
+  - id: three-kinds
+    kind: knowledge
+    type: single
+    prompt: "Phân phối P(X) của feature đổi nhưng quan hệ P(y|X) giữ nguyên. Đó là loại drift nào?"
+    options:
+      - { id: a, text: "Concept drift, vì mọi thay đổi dữ liệu đều là concept drift" }
+      - { id: b, text: "Label drift, vì y là thứ model dự đoán" }
+      - { id: c, text: "Data drift (covariate shift)" }
+      - { id: d, text: "Không phải drift, đây là lỗi của model" }
+  - id: drift-not-quality
+    kind: knowledge
+    type: single
+    prompt: "PSI của nhiều feature vượt 0.25 nhưng MAE trên nhãn đã về không đổi. Kết luận hợp lý nhất?"
+    options:
+      - { id: a, text: "Model chắc chắn đã hỏng, chỉ là MAE chưa kịp phản ánh nên phải train lại ngay lập tức" }
+      - { id: b, text: "Drift chưa làm giảm chất lượng, nên theo dõi và không train lại theo phản xạ" }
+      - { id: c, text: "PSI sai nên bỏ giám sát drift và chỉ dùng MAE từ nay về sau, không cần thêm gì khác" }
+      - { id: d, text: "Phải rollback về phiên bản cũ vì drift lớn luôn nguy hiểm hơn MAE trong mọi tình huống" }
+  - id: large-n
+    kind: knowledge
+    type: single
+    prompt: "Với 200 000 dòng mỗi tập, KS test cho p-value gần 0 dù hai phân phối lệch rất nhỏ. Nên làm gì?"
+    options:
+      - { id: a, text: "Tăng cỡ mẫu hơn nữa để p-value ổn định" }
+      - { id: b, text: "Hạ ngưỡng p-value xuống 0.0001 rồi dùng nó làm tiêu chí duy nhất để quyết định cảnh báo" }
+      - { id: c, text: "Bỏ KS và chỉ so sánh trung bình hai tập" }
+      - { id: d, text: "Cảnh báo theo độ lớn (PSI) và tác động lên chất lượng, không chỉ p-value" }
+  - id: multivariate
+    kind: knowledge
+    type: single
+    prompt: "PSI từng feature đều dưới 0.1 nhưng classifier phân biệt tập cũ và mới đạt AUC 0.9. Điều này nói gì?"
+    options:
+      - { id: a, text: "Classifier bị overfit nên AUC 0.9 không có ý nghĩa gì cả" }
+      - { id: b, text: "Quan hệ giữa các feature đã đổi dù từng phân phối riêng lẻ vẫn giống nhau" }
+      - { id: c, text: "PSI đúng và hoàn toàn không có drift nào, AUC cao chỉ là do ngẫu nhiên khi lấy mẫu mà thôi" }
+      - { id: d, text: "Chỉ cần thêm feature mới là AUC sẽ tự giảm về mức 0.5 như cũ" }
+  - id: label-delay
+    kind: knowledge
+    type: multi
+    prompt: "Nhãn về sau 14 ngày. Chọn mọi tín hiệu dùng được trong lúc chờ để ước lượng chất lượng."
+    options:
+      - { id: a, text: "Phân phối dự đoán so với baseline cùng thứ trong tuần" }
+      - { id: b, text: "Tỉ lệ fallback hoặc lỗi của dịch vụ" }
+      - { id: c, text: "MAE trên các dự đoán có nhãn đã về, dù chỉ là phần cũ hơn" }
+      - { id: d, text: "So dự đoán hôm nay với hôm qua, cảnh báo nếu lệch quá 3 sigma" }
+  - id: seasonal-baseline
+    kind: knowledge
+    type: single
+    prompt: "Vì sao so dự đoán Chủ nhật với thứ Bảy gây báo động giả, còn so với 4 Chủ nhật trước thì không?"
+    options:
+      - { id: a, text: "Chủ nhật luôn có ít dữ liệu hơn nên thống kê không ổn định" }
+      - { id: b, text: "Bốn tuần có nhiều điểm hơn một ngày nên ngưỡng p-value nhỏ hơn" }
+      - { id: c, text: "Thứ Bảy là ngày lỗi nên không bao giờ được dùng làm baseline" }
+      - { id: d, text: "Mức bình thường khác nhau theo thứ, baseline cùng thứ mới loại được mùa vụ" }
+  - id: first-step
+    kind: knowledge
+    type: single
+    prompt: "Dashboard báo drift lớn ở một feature. Bước đầu tiên theo khung detect, verify, impact, decide là gì?"
+    options:
+      - { id: a, text: "Decide: kích hoạt pipeline train lại để an toàn, rồi mới tìm hiểu nguyên nhân" }
+      - { id: b, text: "Verify: loại trừ lỗi ở dữ liệu và pipeline trước khi kết luận gì về model" }
+      - { id: c, text: "Impact: gửi báo cáo cho khách hàng về việc chất lượng đã giảm sút" }
+      - { id: d, text: "Rollback ngay vì chưa biết nguyên nhân và không muốn chịu rủi ro" }

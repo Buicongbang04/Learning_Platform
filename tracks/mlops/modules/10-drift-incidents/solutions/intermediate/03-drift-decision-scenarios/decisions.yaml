@@ -1,0 +1,30 @@
+holiday-week:
+  decision: keep
+  reasons:
+    - "PSI của trip_distance 0.31 và hour 0.27 là drift lớn, nhưng MAE trên nhãn đã về gần đủ không đổi (3.62 sang 3.66), nên drift này không làm hỏng dự đoán"
+    - "Dự đoán trung bình đổi 2.1% và fallback rate giữ 0.4%: cả hai proxy không báo vấn đề; đây là mẫu hình mùa lễ, theo dõi và so với cùng kỳ năm trước"
+  evidence:
+    psi_trip_distance: 0.31
+    mae_baseline: 3.62
+    mae_current: 3.66
+    fallback_rate_pct: 0.4
+bad-release:
+  decision: rollback
+  reasons:
+    - "PSI feature gần như không đổi (0.04) nên nguyên nhân không nằm ở dữ liệu đầu vào mà ở phiên bản mới; dự đoán trung bình nhảy 38% ngay sau deploy"
+    - "Trên cùng lưu lượng, v7 có MAE 6.9 so với 3.7 của v6 (shadow), fallback 7.5% so với 0.4%: có bản trước tốt hơn rõ ràng và quay về nó nhanh, ít rủi ro hơn train lại"
+  evidence:
+    pred_mean_change_pct: 38.0
+    mae_new_version: 6.9
+    mae_previous_version_same_traffic: 3.7
+    fallback_rate_pct: 7.5
+covid-lockdown:
+  decision: retrain
+  reasons:
+    - "MAE tăng từ 3.10 lên 5.01 (+61.7%) và dự đoán cao hơn thực tế 4.4 phút: chất lượng giảm thật, không chỉ drift đầu vào"
+    - "Không có bản trước nào tốt hơn để rollback (cũng train trước lockdown) và nguyên nhân là hành vi đi lại đổi bền vững, nên cần train lại trên dữ liệu gần đây rồi so với bản hiện tại trước khi promote"
+  evidence:
+    mae_reference_holdout: 3.1
+    mae_current: 5.01
+    mae_change_pct: 61.7
+    pred_mean_bias_min: 4.4
