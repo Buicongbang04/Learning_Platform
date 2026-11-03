@@ -13,6 +13,20 @@ if [[ -f "$ROOT/setup/.env" ]]; then
 fi
 HTTP_PORT="${MLOPS_KIND_HTTP_PORT:-28081}"
 HTTPS_PORT="${MLOPS_KIND_HTTPS_PORT:-28444}"
+for port in "$HTTP_PORT" "$HTTPS_PORT"; do
+  if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1024 || 10#$port > 65535 )); then
+    printf 'LỖI: cổng không hợp lệ %q (MLOPS_KIND_HTTP_PORT / MLOPS_KIND_HTTPS_PORT phải là số 1024-65535)\n' "$port" >&2
+    exit 1
+  fi
+done
+case "$(uname -m)" in
+  x86_64 | amd64) ARCH=amd64 ;;
+  aarch64 | arm64) ARCH=arm64 ;;
+  *) printf 'LỖI: kiến trúc %s chưa hỗ trợ (chỉ amd64, arm64)\n' "$(uname -m)" >&2; exit 1 ;;
+esac
+ARCH_UPPER="${ARCH^^}"
+KIND_SHA="KIND_SHA256_${ARCH_UPPER}"
+KUBECTL_SHA="KUBECTL_SHA256_${ARCH_UPPER}"
 BIN_DIR="$HOME/.local/bin"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/mlops-kind"
 CLUSTER=mlops
@@ -52,11 +66,21 @@ install_bin() {
   install -m 0755 "$CACHE/$name-$version" "$target"
 }
 
-install_bin kind "$KIND_VERSION" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" "$KIND_SHA256"
-install_bin kubectl "$KUBECTL_VERSION" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" "$KUBECTL_SHA256"
+install_bin kind "$KIND_VERSION-$ARCH" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-${ARCH}" "${!KIND_SHA}"
+install_bin kubectl "$KUBECTL_VERSION-$ARCH" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" "${!KUBECTL_SHA}"
 KIND="$BIN_DIR/kind"
 KUBECTL="$BIN_DIR/kubectl"
 k() { "$KUBECTL" --context "$CTX" "$@"; }
+
+PREVIOUS_CONTEXT="$("$KUBECTL" config current-context 2>/dev/null || true)"
+restore_context() {
+  if [[ -n "$PREVIOUS_CONTEXT" ]]; then
+    "$KUBECTL" config use-context "$PREVIOUS_CONTEXT" >/dev/null 2>&1 || true
+  else
+    "$KUBECTL" config unset current-context >/dev/null 2>&1 || true
+  fi
+}
+trap restore_context EXIT
 
 port_busy() { ss -ltnH "sport = :$1" 2>/dev/null | grep -q .; }
 
@@ -137,5 +161,6 @@ k create namespace argo --dry-run=client -o yaml | k apply -f - >/dev/null
 k apply --server-side -n argo -f "$CACHE/argo-${ARGO_VERSION}.yaml" >/dev/null
 k apply --server-side --field-manager=mlops-kind -f "$HERE/argo-artifacts.yaml" >/dev/null
 k -n argo wait --for=condition=Available deployment --all --timeout=300s
+k -n argo rollout status deployment/argo-artifacts --timeout=300s >/dev/null
 
-log "Xong. Context: $CTX. Kiểm: kubectl --context $CTX get pods -A"
+log "Xong. Context: $CTX (current-context của kubectl giữ nguyên: ${PREVIOUS_CONTEXT:-<trống>}). Kiểm: kubectl --context $CTX get pods -A"

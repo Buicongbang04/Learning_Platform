@@ -398,14 +398,14 @@ chi tiết ở `setup/mlops/kind/README.md`). Test **không** tạo/xoá cluster
 | Test cần | Dùng | Đảm bảo |
 | --- | --- | --- |
 | Cluster kind | `mlopskit.require_kind()` | Skip khi thiếu `kind`/`kubectl`, chưa có cluster `mlops` hoặc API không phản hồi; message có `bash setup/mlops/kind/up.sh` và trỏ module 13 mục 0 |
-| Gọi kubectl | `mlopskit.kubectl(*args, namespace=None, input=None, timeout=120)` | Luôn `--context kind-mlops`, không dùng context hiện hành của máy; trả `CompletedProcess` |
+| Gọi kubectl | `mlopskit.kubectl(*args, namespace=None, input=None, timeout=120)` | Luôn `--context kind-mlops`, không dùng context hiện hành của máy; dùng bản ghim trong `~/.local/bin` trước PATH; trả `CompletedProcess` |
 | Namespace tạm | `with mlopskit.k8s_namespace() as ns:` | Tên `mlops-ex-<uuid8>`, nhãn `mlops-ex=1` và `mlops-ex-run=<uuid8>`; SA `default` được gắn ClusterRole `mlops-argo-executor` (chạy Workflow Argo); `delete --wait=false` đúng namespace này trong `finally` |
-| Nạp image tự build | `mlopskit.kind_load(tag)` | `docker save --platform` + `kind load image-archive` (tránh lỗi image đa nền tảng); image ở lại trong node |
+| Nạp image tự build | `mlopskit.kind_load(tag)` | `docker save --platform` + `kind load image-archive` (tránh lỗi image đa nền tảng), tar tạm ở `~/.cache/mlops-kind/load` rồi xoá; image ở lại trong node |
 | Apply manifest | `mlopskit.apply_manifest(path_or_text, ns, check=True)` | `Path` là tệp/thư mục, `str` là nội dung YAML; `check` fail kèm stderr |
-| Chờ trạng thái | `mlopskit.wait_for(kind, name, condition, ns, timeout)` | `condition` là tên condition (`Ready`, `Available`) hoặc biểu thức đủ (`jsonpath={.status.phase}=Succeeded`); quá hạn thì fail kèm `describe`, pod, log, events |
-| Gọi service trong cluster | `with mlopskit.port_forward(ns, "svc/x", 8080) as port:` | Cổng local tự do trên 127.0.0.1, dừng tiến trình khi ra |
-| Kiểm rác | `mlopskit.leftovers(needle)` | Liệt kê thêm namespace `mlops-ex-*` còn Active trong cluster |
-| GPU | `mlopskit.require_cuda()`, `mlopskit.gpu_python(script, cwd, timeout=300)` | Skip `"Không có CUDA"` khi `nvidia-smi -L` không thấy GPU; `gpu_python` chạy `uv run --frozen --project setup/gpu python -c script` (skip khi chưa `uv sync --project setup/gpu`), script in JSON ra stdout |
+| Chờ trạng thái | `mlopskit.wait_for(kind, name, condition, ns, timeout, fail_on=())` | Chờ tài nguyên xuất hiện (`--for=create`) rồi đạt `condition` (tên condition như `Ready`, `Available`, hoặc biểu thức đủ `jsonpath={.status.phase}=Succeeded`), cùng một `timeout`; `fail_on=("Failed", "Error")` fail ngay khi `.status.phase` rơi vào các giá trị đó (Workflow Argo, Pod); fail kèm `describe`, pod, log, events (thu best-effort, không che lý do chính) |
+| Gọi service trong cluster | `with mlopskit.port_forward(ns, "svc/x", 8080) as port:` | Cổng local tự do trên 127.0.0.1; sẵn sàng khi kubectl in `Forwarding from` (không gửi request thử vào service, nên không lệch số đếm canary); output kubectl ghi tệp tạm, không PIPE; dừng tiến trình khi ra. Service chưa có pod Ready thì request đầu có thể lỗi: test tự chờ `Ready`/`Available` trước |
+| Kiểm rác | `mlopskit.leftovers(needle)` | Liệt kê thêm namespace `mlops-ex-*` còn Active hoặc kẹt Terminating quá 2 phút; phần cluster là best-effort (timeout ngắn, không cluster thì bỏ qua, không bao giờ fail) |
+| GPU | `mlopskit.require_cuda()`, `mlopskit.gpu_python(script, cwd, timeout=300)` | Skip `"Không có CUDA"` khi `nvidia-smi -L` không thấy GPU; `gpu_python` chạy `uv run --no-sync --project setup/gpu python -I -c script` (test không tự sync/tải gói; `-I` không import module trong `cwd`), skip kèm `uv sync --project setup/gpu` khi env chưa có, thiếu onnxruntime-gpu hoặc còn onnxruntime CPU đè lên; script in JSON ra stdout |
 
 Kiểm GPU bằng `session.get_providers()[0] == "CUDAExecutionProvider"` sau `onnxruntime.preload_dlls()`, không bằng
 `get_available_providers()` (liệt kê cả khi thư viện CUDA không nạp được, ORT âm thầm chạy CPU).
