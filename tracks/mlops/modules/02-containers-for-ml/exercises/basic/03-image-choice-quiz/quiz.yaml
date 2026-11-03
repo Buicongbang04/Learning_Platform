@@ -1,0 +1,79 @@
+questions:
+  - id: slim-vs-full
+    kind: knowledge
+    type: single
+    prompt: "Service sklearn nhỏ cần numpy, scipy và scikit-learn. Chọn base image nào cho production?"
+    options:
+      - id: a
+        text: "python:3.12-alpine, vì nhỏ nhất, wheel manylinux chạy bình thường trên musl"
+      - id: b
+        text: "ubuntu:latest rồi apt install python3-pip, cho giống máy dev"
+      - id: c
+        text: "python:3.12.11-slim, cài wheel bằng pip rồi chạy bằng user thường"
+      - id: d
+        text: "python:3.12 (bản đầy đủ), vì có sẵn gcc nên cài gì cũng được"
+  - id: layer-order
+    kind: knowledge
+    type: single
+    prompt: "Sửa một dòng trong app/serve.py mà lần build nào cũng cài lại 250 MB dependency. Nguyên nhân thường gặp nhất là gì?"
+    options:
+      - id: a
+        text: "pip install thiếu cờ --user nên không ghi được vào cache"
+      - id: b
+        text: "COPY toàn bộ source đứng trước RUN pip install nên layer cài đặt mất cache"
+      - id: c
+        text: "Thiếu HEALTHCHECK nên Docker không biết layer nào còn dùng được"
+      - id: d
+        text: "Dùng multi-stage build làm Docker xoá cache của stage đầu"
+  - id: model-in-image
+    kind: knowledge
+    type: single
+    prompt: "Model được retrain mỗi tuần, file 80 MB, image service 500 MB. Đánh đổi nào đúng nhất giữa đóng model vào image và mount từ volume hoặc object storage?"
+    options:
+      - id: a
+        text: "Mount ngoài: luôn tốt hơn vì image không bao giờ đổi và registry không phải lưu thêm gì cả, nên không cần lo version vì đó là cách mọi đội MLOps nên làm theo khuyến nghị và rất ít rủi ro"
+      - id: b
+        text: "Đóng vào image: luôn tốt hơn vì container không cần mạng, nên không bao giờ có lỗi khi khởi động hay khi retrain vì đó là cách mọi đội MLOps nên làm theo khuyến nghị"
+      - id: c
+        text: "Không có khác biệt vì model chỉ 80 MB, nhỏ hơn nhiều so với phần dependency nên chọn kiểu nào cũng như nhau"
+      - id: d
+        text: "Đóng vào image: version model gắn với image tag nên rollback và tái lập đơn giản, đổi lại mỗi lần retrain phải build và đẩy lại image"
+  - id: ml-image-size
+    kind: knowledge
+    type: multi
+    prompt: "Những việc nào thật sự làm image ML nhỏ đi hoặc build nhanh hơn?"
+    options:
+      - id: a
+        text: "pip install --no-cache-dir"
+      - id: b
+        text: "Multi-stage: chỉ chép venv đã cài sang stage cuối"
+      - id: c
+        text: "Dùng .dockerignore để loại data và notebook khỏi build context"
+      - id: d
+        text: "Thêm nhãn LABEL maintainer vào cuối Dockerfile"
+  - id: root-user
+    kind: knowledge
+    type: single
+    prompt: "Vì sao nên thêm USER không phải root trong image của service dự đoán?"
+    options:
+      - id: a
+        text: "Để Docker tự bật healthcheck và tự restart container khi service trả lỗi 5xx liên tục vì kernel Linux tối ưu riêng cho trường hợp đó"
+      - id: b
+        text: "Để image nhỏ hơn vì Docker bỏ được các thư viện hệ thống không cần thiết cho tiến trình thường"
+      - id: c
+        text: "Nếu service bị khai thác, kẻ tấn công không có quyền root trong container, giảm thiệt hại khi container escape"
+      - id: d
+        text: "Để service chạy nhanh hơn vì kernel bỏ bớt các bước kiểm tra quyền khi tiến trình không phải root vì kernel Linux tối ưu riêng cho trường hợp đó và rất ít rủi ro"
+  - id: cuda-base
+    kind: knowledge
+    type: single
+    prompt: "Máy dev chỉ có CPU, production sẽ có GPU NVIDIA. Cách làm hợp lý cho image inference?"
+    options:
+      - id: a
+        text: "Chỉ build trên máy production vì image GPU quá lớn và không đẩy lên registry được trong thực tế"
+      - id: b
+        text: "Một Dockerfile có build-arg chọn base: slim cho CPU, nvidia/cuda runtime cho GPU; production chạy với NVIDIA Container Toolkit (--gpus)"
+      - id: c
+        text: "Luôn dùng nvidia/cuda devel cho mọi môi trường, vì nó chạy được cả trên máy không có GPU nên không cần phân nhánh gì hết nên tiết kiệm công sức bảo trì lâu dài và rất ít rủi ro"
+      - id: d
+        text: "Cài driver NVIDIA vào trong image để container tự dùng GPU của máy chủ mà không cần cài thêm gì trên host nên tiết kiệm công sức bảo trì lâu dài"
