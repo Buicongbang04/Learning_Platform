@@ -448,6 +448,11 @@ reasons:
 Test chỉ kiểm `decision` (giá trị hợp lệ và khớp đáp án); `reasons` chấm bằng rubric trong `SOLUTION.md`. Có bài mà
 đáp án đúng là **giữ nguyên model**; không dạy "thấy drift thì retrain" như phản xạ.
 
+Ngoại lệ ở capstone (M10 trở đi), nơi người học tự phát lại trên dữ liệu thật: **không có đáp án cố định**. Test tính lại
+`summary.parquet` bằng code của người học; `evidence` trong YAML phải khớp summary đó trong sai số cho phép (M10: 1%),
+`as_of` phải là lúc nhãn đã công bố, và `decision` phải qua các luật nhất quán ghi trong đề (M10: MAE không xấu đi thì
+`keep`; MAE xấu đi hơn 50% thì không `keep`). Phần còn lại chấm bằng rubric trong `SOLUTION.md`.
+
 ### Phần `## 0. Cài đặt` của module
 
 Giống quy ước track DevOps: có khi module dùng công cụ lần đầu, luôn là phần `## ` đầu tiên, không tính vào 5–8 phần;

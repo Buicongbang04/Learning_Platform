@@ -1,0 +1,50 @@
+name: cd
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Version model cần deploy, phải đang mang alias champion"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-eta
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: .ci-deps:src
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dependency
+        run: test -d .ci-deps || python -m pip install --quiet --target .ci-deps -r requirements-ci.txt
+      - name: Alias champion phải trỏ đúng version cần deploy
+        env:
+          MODEL_VERSION: ${{ inputs.model_version }}
+        run: python -m eta.cli champion --config params.yaml --expect "$MODEL_VERSION"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: verify
+    env:
+      MODEL_VERSION: ${{ inputs.model_version }}
+      ETA_API_PORT: "28080"
+    steps:
+      - name: Dựng lại và chạy API
+        run: docker compose -f compose.yaml up -d --build --wait api
+      - name: Nạp lại alias champion
+        env:
+          ETA_ADMIN_TOKEN: ${{ secrets.ETA_ADMIN_TOKEN }}
+        run: |
+          curl -fsS -X POST -H "X-Admin-Token: ${ETA_ADMIN_TOKEN}" "http://127.0.0.1:${ETA_API_PORT}/admin/reload"
+      - name: Kiểm version đang phục vụ
+        run: |
+          served=$(curl -fsS "http://127.0.0.1:${ETA_API_PORT}/readyz" | python -c "import json, sys; print(json.load(sys.stdin)['model_version'])")
+          test "$served" = "$MODEL_VERSION" || { echo "đang phục vụ $served, cần $MODEL_VERSION" >&2; exit 1; }
+          echo "DEPLOYED model_version=$served"

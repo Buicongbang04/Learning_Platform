@@ -45,3 +45,17 @@ Feast (M06) chạy trong container `mlops-feast:0.67.0`, Redis bật bằng `--p
 
 Canary và shadow (M07): `ETA_CANARY_WEIGHT=0.1` (10% request cho alias `challenger`), `ETA_SHADOW=1` (challenger chấm sau
 response, chỉ ghi log), `ETA_PREDICTION_LOG=/tmp/predictions.jsonl`. Tải thử: `loadtest/eta.js` với `TARGET`.
+
+CI/CD (M08): `.github/workflows/ci.yml` (lint, test `tests_own/`, build `dist/eta.pyz`), `ct.yml` (validate, train, cổng
+`eta.cli promote` thoát 3 khi từ chối, announce), `cd.yml` (`workflow_dispatch` với `model_version`, chỉ deploy khi
+`eta.cli champion --expect` khớp). Chạy CI bằng act: `make act-ci` (lần đầu runner cài `requirements-ci.txt` vào
+`.ci-deps`, cần mạng).
+
+Monitoring (M09): `/metrics` có `eta_requests_total{status,variant}`, `eta_request_duration_seconds`,
+`eta_prediction_seconds`, `eta_model_info{version,variant}`. `make monitoring` bật Prometheus (`127.0.0.1:29190`) và
+Grafana (`127.0.0.1:23100`, dashboard ETA được provision) bên cạnh API; kiểm rule bằng `promtool test rules
+monitoring/rules/eta.rules.test.yml`.
+
+Drift và sự cố (M10): `make replay` (symlink 2019 và 2020 vào `data/replay`, rồi `eta.cli replay` với
+`params.replay.yaml`) ghi `reports/replay/summary.parquet`. Quyết định ở `reports/decisions/`, runbook ở
+`docs/runbook.md`, postmortem ở `docs/postmortem-covid.md`; bảng 12 tháng trong `../SOLUTION.md`.

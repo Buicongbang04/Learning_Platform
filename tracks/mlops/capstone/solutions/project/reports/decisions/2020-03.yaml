@@ -1,0 +1,17 @@
+decision: retrain
+reasons:
+  - "Số cả tháng chưa đủ kết luận: MAE 2020-03 là 207.0 s (2020-02 là 181.1 s), vẫn nằm trong dải 192 tới 212 s của nửa sau 2019 mà quyết định 2019-12 coi là bình thường; bias +104 s cũng không mới vì 2020-01 đã +103 s. Nửa đầu tháng còn giao thông bình thường nên làm loãng tác động"
+  - "Bằng chứng quyết định là lát cuối tháng (20% chuyến cuối theo thời gian, từ 2020-03-12, trùng giai đoạn NYC ban bố khẩn cấp ngày 12/3, đóng trường ngày 16/3 và lệnh PAUSE ngày 22/3): champion có MAE 283.6 s, cao hơn 34% so với đỉnh 212 s của dải 2019, tức hành vi đi lại đã đổi chứ không phải dao động mùa vụ"
+  - "Trên cùng lát cuối tháng, challenger train trên phần đầu tháng 3 có MAE 240.8 s (-15% so với champion), đo bằng make experiments chỉ với nhãn đã công bố tại as_of 2020-04: train lại có lợi đo được"
+  - "PSI trip_distance 0.0047 (dưới ngưỡng 0.1) nên drift đầu vào không phải lý do; đây là concept drift. Rollback không có ý nghĩa vì mọi version đều train trước COVID; challenger vẫn phải qua cổng promotion của M04"
+evidence:
+  psi_trip_distance: 0.00466
+  mae_before: 181.13
+  mae_after: 207.03
+  as_of: "2020-04"
+  mae_band_2019_h2: [192.6, 212.3]
+  bias_s_2020_01: 102.7
+  bias_s_2020_03: 103.9
+  late_march_slice_start: "2020-03-12"
+  late_march_mae_champion: 283.6
+  late_march_mae_challenger: 240.8

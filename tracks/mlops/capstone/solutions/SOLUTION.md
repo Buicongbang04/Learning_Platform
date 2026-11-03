@@ -1,4 +1,4 @@
-# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M07)
+# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M10)
 
 Bản tham chiếu cho phần chấm được bằng test, cùng cây thư mục với `capstone/project/`:
 
@@ -185,6 +185,111 @@ M06 và để M10 đo lại trên 2020. Lệnh đo: train/evaluate của M01 tr�
   lỗi < 1%, thêm p99 < 500 ms cho pha ổn định và `checks > 99%`. Trong test chạy xong khoảng 25 s gồm cả build image
   (đã cache). `prometheus-client==0.26.0` thêm vào `requirements-serve` (cùng bản với `uv.lock`).
 
+## M08: CI, CT, CD bằng act
+
+- **Ba workflow, chỉ `run:`**: `ci.yml` (lint → test → build `dist/eta.pyz`), `ct.yml` (validate → train → gate →
+  announce), `cd.yml` (verify → deploy). Không `uses:` nên act chạy được ngoại tuyến với `mlops-act-runner:1`.
+- **Dependency trong runner**: runner chỉ có Python và uv. Test cài một lần các gói (cùng phiên bản `uv.lock`) vào
+  `~/.cache/mlops-ex/eta-ci-<hash>`, mount chỉ đọc vào container cùng đường dẫn (`container_options="-v ..."` của
+  `act_run`), và repo tạm có symlink `.ci-deps` trỏ tới đó. Workflow chỉ cần `PYTHONPATH: .ci-deps:src` và một bước
+  `test -d .ci-deps || pip install --target .ci-deps -r requirements-ci.txt` cho GitHub thật. Không chép 300 MB vào mỗi
+  repo tạm (`/tmp` là tmpfs).
+- **Ruff 0.17 bật rất nhiều luật mặc định** (BLE, UP, PLW...): project khai báo `[tool.ruff.lint] select = ["E", "F",
+  "W", "I", "B"]`, `line-length = 160`. Không có cấu hình thì bản tham chiếu có khoảng 10 lỗi lint chỉ vì luật mặc định.
+- **Version qua output của job**, không qua tệp: act `--bind` dùng chung thư mục nên tệp cũng "chạy", nhưng trên GitHub
+  thật mỗi job một máy (chính là sự cố "deploy nhầm model" của module 08). Input/output đi vào lệnh qua `env:`.
+- **Cổng = `eta.cli promote` của M04**, exit 3 khi từ chối; act báo `exitcode '3': failure` và job `announce`
+  (`needs: [train, gate]`) không chạy. CD không đọc output của CT: `verify` hỏi registry (`eta.cli champion --expect`),
+  nên chỉ version đang mang alias `champion` mới deploy được, dù ai bấm nút.
+- **Path filter**: act bỏ qua `paths`, test dùng `cikit.triggers` của module 08. `ct` chỉ theo `params.yaml`, `dvc.lock`,
+  `src/eta/train.py`; đổi `features.py` không train lại tự động (đánh đổi: thay đổi feature thường đi kèm đổi
+  `train.py` hoặc `params.yaml`; nếu không, chạy tay `workflow_dispatch`).
+- Thời gian thật trên máy tham chiếu (bốn act run): CI test hỏng rồi xanh 12 s; CT có champion không thể thắng 28 s; CT
+  registry trống 35 s; CD sai/đúng version 19 s. Cả M08 khoảng 100 s.
+
+## M09: metric, alert, dashboard
+
+- **Đếm ở middleware**: 422 do FastAPI trả trước endpoint nên chỉ middleware thấy; endpoint ghi `request.state.variant`
+  (`scope["state"]` dùng chung). Exception chưa bắt được đếm `status="500"` trong `finally`.
+- **`eta_model_info` là Gauge = 1 với `version`, `variant`**, `clear()` khi install, reload và tắt (registry dùng chung trong
+  tiến trình, nhiều app trong test).
+- **Không traffic**: `sum(rate(5xx)) / sum(rate(all))` là 0/0 = NaN, so sánh `> 0.05` với NaN là false nên không bắn.
+  Không "sửa" bằng `or vector(0)` ở mẫu số: đó mới là chỗ sinh alert giả hoặc che lỗi.
+- **`absent(eta_model_info{job="eta-api"})`**, không `absent(eta_requests_total)`: counter có label chưa có series cho tới
+  request đầu tiên, service vừa khởi động sẽ bị báo mất metric.
+- **`EtaPredictionShift`**: `abs(median_now / median_offset_7d - 1) > 0.3`, cửa sổ 1 giờ, `for: 1h`. Test promtool dùng
+  `interval: 30m`: với `interval: 1h` cửa sổ `[1h]` chỉ chứa một mẫu (range selector của Prometheus 3 mở bên trái) nên
+  `rate` rỗng.
+- Dashboard 7 panel, provisioning trong `monitoring/grafana/provisioning/`, profile `monitoring` của `compose.yaml` project
+  (Prometheus 29190, Grafana 23100, đã kiểm `ss -ltn`).
+
+## M10: phát lại 2019-07..2020-06 trên dữ liệu thật
+
+Cấu hình (giống test và `params.replay.yaml`): champion train trên 2019-06 (80% đầu theo thời gian), mẫu 50 000 chuyến
+mỗi tháng, `seed=0`, `max_iter=100`; tham chiếu drift là dự đoán trên 2019-06; `as_of = 2020-06`. Chạy khoảng 30 s.
+
+| Tháng | PSI `trip_distance` | PSI giờ đón | PSI `eta_s` | MAE (s) | p90 sai số (s) | MAE sân bay (s) | bias (s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2019-07 | 0.0006 | 0.0018 | 0.0016 | 194.2 | 430.5 | 405.5 | +41.5 |
+| 2019-08 | 0.0015 | 0.0012 | 0.0042 | 192.6 | 420.8 | 405.1 | +72.6 |
+| 2019-09 | 0.0006 | 0.0019 | 0.0003 | 201.5 | 452.9 | 441.2 | -9.8 |
+| 2019-10 | 0.0010 | 0.0045 | 0.0002 | 195.7 | 449.6 | 421.5 | -8.9 |
+| 2019-11 | 0.0019 | 0.0012 | 0.0010 | 196.4 | 449.1 | 437.5 | -4.9 |
+| 2019-12 | 0.0023 | 0.0022 | 0.0019 | 212.3 | 497.3 | 460.5 | -21.8 |
+| 2020-01 | 0.0041 | 0.0055 | 0.0009 | 199.1 | 443.1 | 526.7 | +102.7 |
+| 2020-02 | 0.0062 | 0.0044 | 0.0026 | 181.1 | 403.1 | 470.7 | +65.1 |
+| 2020-03 | 0.0047 | 0.0147 | 0.0023 | 207.0 | 462.1 | 517.9 | +103.9 |
+| 2020-04 | 0.0161 | 0.1772 | 0.0157 | 371.8 | 806.8 | 905.2 | +340.6 |
+| 2020-05 | 0.0448 | 0.1071 | 0.0483 | 362.2 | 786.2 | 844.7 | +321.2 |
+| 2020-06 | 0.0184 | 0.1113 | 0.0321 | chưa có nhãn | | | |
+
+Điều số liệu nói:
+
+- **PSI `trip_distance` không bao giờ vượt 0.1**, kể cả tháng 4/2020 (0.016). Drift thật nằm ở **giờ đón** (0.177 ở
+  2020-04) và ở **quan hệ khoảng cách → thời gian** (concept drift): MAE gần gấp đôi, bias từ khoảng 0 lên +341 s (model
+  đoán dài hơn thực tế gần 6 phút vì đường vắng). Giám sát chỉ PSI feature sẽ bỏ lỡ sự cố.
+- Mùa lễ 2019-12: MAE +8.1% so với 2019-11, PSI rất nhỏ, tháng 1 trở lại 199 s.
+
+Thí nghiệm hỗ trợ quyết định (cùng mẫu và tham số, `eta.experiments`; mỗi thí nghiệm từ chối chạy nếu nhãn của tháng
+dùng tới chưa công bố tại `--as-of`). Tái lập sau `make replay`:
+
+```bash
+make experiments
+python -m eta.cli experiment late-slice --config params.replay.yaml --month 2020-03 --as-of 2020-04
+python -m eta.cli experiment retrain --config params.replay.yaml --train-month 2019-11 --month 2019-12 --as-of 2020-01
+python -m eta.cli experiment retrain --config params.replay.yaml --train-month 2020-03 --month 2020-04,2020-05 --as-of 2020-06
+```
+
+| Thí nghiệm | Champion (2019-06) | Model so sánh |
+| --- | --- | --- |
+| 2020-03 `late-slice`: train trên 80% đầu tháng 3, đánh giá trên 20% cuối (9 741 chuyến từ 2020-03-12; as_of 2020-04) | 283.6 s | 240.8 s (-15%) |
+| 2019-12 `retrain`: train trên 2019-11, đánh giá trên 2019-12 (as_of 2020-01) | 212.3 s | 208.1 s (-2%) |
+| Kiểm chứng sau sự việc `retrain`: train trên cả 2020-03, đánh giá trên 2020-04 / 2020-05 (as_of 2020-06) | 371.8 / 362.2 s | 270.5 / 258.1 s |
+
+Quyết định tham chiếu (`project/reports/decisions/`). Cả hai dùng cùng một mốc so sánh: dải MAE cả tháng của nửa sau 2019
+là 192.6 tới 212.3 s.
+
+- **2019-12: `keep`** (as_of 2020-01). MAE 212.3 s (+8.1% so với tháng 11) nằm trong dải, PSI nhỏ, 2020-01 quay lại
+  199 s; train lại chỉ được 2%: không đáng rủi ro của một lần promote.
+- **2020-03: `retrain`** (as_of 2020-04). Số **cả tháng không đủ kết luận**: 207.0 s vẫn trong dải trên, và bias +104 s
+  không mới (2020-01 đã +103 s); nửa đầu tháng còn giao thông bình thường nên làm loãng tác động. Bằng chứng quyết định là
+  **lát cuối tháng** từ 2020-03-12 (NYC ban bố khẩn cấp 12/3, đóng trường 16/3, lệnh PAUSE 22/3): champion 283.6 s, cao hơn
+  34% so với đỉnh 212 s của dải, trong khi challenger train trên đầu tháng 3 đạt 240.8 s (-15%). Rollback vô nghĩa (mọi
+  version đều trước COVID). Kiểm chứng sau sự việc: bản train lại giảm MAE tháng 4 từ 372 xuống 270 s.
+- Người chỉ nhìn số cả tháng và chọn `keep` cho 2020-03 vẫn qua test (tỉ lệ 1.14 nằm giữa hai luật), nhưng mất điểm
+  rubric nếu không xét lát cuối tháng; đó là chỗ phân biệt mức Đạt và Tốt.
+- Không chọn được `keep` cho 2020-04 dù quyết định muộn: MAE +79.6% vượt luật 50% của test.
+
+Rubric cho quyết định và tài liệu (test chỉ kiểm cấu trúc, số và hai luật nhất quán):
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Lý do 2020-03 | Nêu MAE trước/sau và PSI, kết luận khớp số | So số cả tháng với cùng dải mốc dùng cho tháng khác; thấy số cả tháng bị loãng và dùng lát cuối tháng; thí nghiệm tái lập được (`eta.cli experiment`) chỉ với nhãn đã có tại `as_of`; tách concept drift khỏi drift đầu vào; nói vì sao không rollback |
+| Tháng thứ hai | Quyết định có số, khớp luật | Chọn tháng drift/mùa vụ và chứng minh `keep` bằng thí nghiệm train lại không đáng |
+| `as_of` | Sau khi nhãn công bố | Giải thích chi phí của việc chờ nhãn và tín hiệu proxy dùng được trước đó (PSI giờ đón, `EtaPredictionShift`, bias) |
+| Runbook | Mỗi alert đủ bốn phần | Lệnh kiểm tra chạy được, nhánh hành động theo kết quả kiểm, tiêu chí leo thang bằng số/thời gian |
+| Postmortem | Đủ năm phần, có số | Không đổ lỗi, dòng thời gian theo `as_of`, việc cần làm đo được (feature giao thông gần đây, alert bias, CT theo chất lượng) |
+
 ## Rubric phần tự đánh giá
 
 | Mục | Đạt | Tốt |
@@ -198,3 +303,6 @@ M06 và để M10 đo lại trên 2020. Lệnh đo: train/evaluate của M01 tr�
 | Replay (M05) | Bảng 5 tháng, tháng cuối không có MAE | Giải thích vì sao không retrain mù theo lịch, có deployment Prefect có lịch |
 | Feature (M06) | Bảng MAE có/không có feature | Quyết định giữ/bỏ có lý do bằng số, nêu khi nào không cần feature store |
 | Serving (M07) | Số k6, runbook rollback | Quy trình canary có tiêu chí dừng bằng số, đo p99 có và không có warmup |
+| CI/CD (M08) | Ba workflow xanh/đỏ đúng chỗ | Thời gian từng workflow, giải thích ranh giới CI/CT/CD và vì sao CD đọc registry |
+| Monitoring (M09) | Dashboard và bảng alert | Giải thích 0/0, chọn `absent` trên metric luôn có, ảnh dashboard khi chạy k6 |
+| Drift và sự cố (M10) | Bảng summary 12 tháng | Xem rubric riêng ở mục M10 |
