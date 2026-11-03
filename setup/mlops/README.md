@@ -10,7 +10,7 @@ Một project Compose riêng (`mlops`), tách khỏi `setup/docker-compose.yml`,
 | `mlflow` | MLflow 3.17.1 tracking server, `--serve-artifacts` | `127.0.0.1:25000` |
 
 Các cổng mặc định nằm ở dải 2xxxx vì 5432, 9000, 5000, 8000 thường đã bị chiếm. Đổi cổng bằng biến
-`MLOPS_PG_PORT`, `MLOPS_MINIO_PORT`, `MLOPS_MINIO_CONSOLE_PORT`, `MLOPS_MLFLOW_PORT` trong `setup/.env`
+`MLOPS_PG_PORT`, `MLOPS_MINIO_PORT`, `MLOPS_MINIO_CONSOLE_PORT`, `MLOPS_MLFLOW_PORT` (và `MLOPS_PROMETHEUS_PORT`, `MLOPS_ALERTMANAGER_PORT`, `MLOPS_GRAFANA_PORT`, `MLOPS_REDIS_PORT` cho hai profile bên dưới) trong `setup/.env`
 (xem `setup/.env.example`). Compose chỉ đọc `.env` cạnh tệp compose (`setup/mlops/`), nên khi đã đổi cổng trong `setup/.env`, mọi lệnh phải thêm `--env-file setup/.env` (xem bên dưới). Mọi cổng chỉ bind `127.0.0.1`.
 
 ## Bật
@@ -28,6 +28,25 @@ docker compose --env-file setup/.env -f setup/mlops/compose.yaml up -d --build -
 
 Lần đầu build image MLflow mất vài phút (cài `mlflow`, `psycopg2-binary`, `boto3`). Nếu build đứt giữa
 chừng vì mạng, chạy lại lệnh trên. Muốn giới hạn CPU như stack DevOps, đặt `DEVOPS_CPUSET` (vd. `12-35`).
+
+## Bật thêm profile (Giai đoạn 2)
+
+Hai profile tuỳ chọn, mặc định không chạy cùng stack lõi:
+
+| Profile | Service | Cổng trên máy (mặc định) | Biến `.env` |
+| --- | --- | --- | --- |
+| `monitoring` | `prometheus` (v3.5.0) | `127.0.0.1:29090` | `MLOPS_PROMETHEUS_PORT` |
+| `monitoring` | `alertmanager` (v0.34.1) | `127.0.0.1:29093` | `MLOPS_ALERTMANAGER_PORT` |
+| `monitoring` | `grafana` (12.1.0, datasource Prometheus có sẵn, `admin`/`admin`) | `127.0.0.1:23000` | `MLOPS_GRAFANA_PORT` |
+| `feast` | `redis` (7.4.5, online store của Feast) | `127.0.0.1:26390` | `MLOPS_REDIS_PORT` |
+
+```bash
+docker compose -f setup/mlops/compose.yaml --profile monitoring --profile feast up -d --wait
+```
+
+Feast không cài trong môi trường Python mặc định (nó kéo `pandas` xuống 2.3.3); mọi lệnh Feast chạy trong image
+`mlops-feast:0.67.0` (build từ `setup/mlops/feast/Dockerfile`) qua `mlopskit.feast_run`. Image runner cho `act`
+(`mlops-act-runner:1`, build từ `setup/mlops/act-runner/Dockerfile`) cũng do `mlopskit` build tại chỗ.
 
 ## Kiểm
 

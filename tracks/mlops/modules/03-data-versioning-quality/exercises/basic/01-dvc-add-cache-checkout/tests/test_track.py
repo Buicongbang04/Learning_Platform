@@ -3,22 +3,14 @@ import subprocess
 
 import pytest
 
-from testkit import Exercise, run_sandboxed
+import mlopskit
+from testkit import Exercise
 
 ex = Exercise(__file__)
 
 
 def sh(repo, cmd, *args, ok=True):
-    env = {
-        "DVC_NO_ANALYTICS": "1",
-        "DVC_SITE_CACHE_DIR": str(repo / ".site"),
-        "DVC_GLOBAL_CONFIG_DIR": str(repo / ".gc"),
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-    }
-    result = run_sandboxed(["bash", "-c", cmd, "bash", *args], writable=[repo], cwd=repo, env=env, timeout=120)
-    if ok:
-        assert result.returncode == 0, f"{cmd}\n{result.stdout}\n{result.stderr}"
-    return result
+    return mlopskit.dvc_sh(repo, cmd, args, ok=ok)
 
 
 @pytest.fixture()
