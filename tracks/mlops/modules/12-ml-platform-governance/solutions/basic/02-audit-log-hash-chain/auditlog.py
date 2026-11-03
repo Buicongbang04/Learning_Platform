@@ -51,14 +51,21 @@ class AuditLog:
         return record
 
     def verify(self, anchor=None):
-        entries = self.entries()
+        lines = self.path.read_text(encoding="utf-8").splitlines() if self.path.exists() else []
+        lines = [line for line in lines if line.strip()]
         prev = GENESIS
-        for index, record in enumerate(entries):
+        for index, line in enumerate(lines):
+            try:
+                record = json.loads(line)
+            except ValueError:
+                return index
+            if not isinstance(record, dict):
+                return index
             if record.get("seq") != index or record.get("prev_hash") != prev or record.get("hash") != _digest(record):
                 return index
             prev = record["hash"]
         if anchor is not None and prev != anchor:
-            return len(entries)
+            return len(lines)
         return None
 
     def who_promoted(self, model, version) -> list[dict]:

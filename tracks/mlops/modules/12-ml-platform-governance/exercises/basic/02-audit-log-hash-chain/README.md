@@ -31,6 +31,7 @@ Luật mà test ép:
 - `append` chỉ **thêm** vào cuối tệp; các byte đã có không bao giờ bị ghi lại.
 - Hai đối tượng `AuditLog` cùng một đường dẫn nối tiếp nhau đúng chuỗi (mỗi lần `append` đọc lại dòng cuối từ tệp, không chỉ nhớ trong bộ nhớ).
 - Sửa một chữ trong `reason`, xoá một dòng giữa, đổi chỗ hai dòng, hay sửa cả hash của dòng sau cho khớp lại đều bị `verify` báo; chỉ số trả về là bản ghi đầu tiên bị ảnh hưởng.
+- Một dòng không còn là JSON object hợp lệ (bị cắt dở, sửa hỏng, hay là `42`) cũng là bản ghi không khớp: `verify` trả chỉ số của dòng đó (đếm như `entries()`, bỏ dòng trống), **không** ném lỗi. Công cụ kiểm tra mà sập đúng lúc log bị phá thì không báo được gì.
 
 ## Tiêu chí đạt
 

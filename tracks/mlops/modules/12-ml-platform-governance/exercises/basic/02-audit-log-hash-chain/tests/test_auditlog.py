@@ -118,6 +118,18 @@ def test_fixing_the_hash_of_an_edited_entry_breaks_the_next_link(log):
     assert log.verify() == 2
 
 
+@pytest.mark.parametrize("damage", [
+    lambda line: line[: len(line) // 2],
+    lambda line: "không phải json",
+    lambda line: "42",
+    lambda line: "[]",
+])
+def test_corrupted_line_is_reported_not_raised(log, damage):
+    fill(log)
+    rewrite(log, lambda lines: lines.__setitem__(3, damage(lines[3])))
+    assert log.verify() == 3
+
+
 def test_truncation_needs_an_anchor(log):
     fill(log)
     anchor = log.head()
