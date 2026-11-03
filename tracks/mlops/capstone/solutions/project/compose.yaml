@@ -48,6 +48,9 @@ services:
       - ./monitoring/rules:/etc/prometheus/rules:ro
     ports:
       - "127.0.0.1:${ETA_PROMETHEUS_PORT:-29190}:9090"
+    networks:
+      - default
+      - mlops
     mem_limit: 256m
     cpuset: "${DEVOPS_CPUSET:-}"
 

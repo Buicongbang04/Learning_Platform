@@ -38,7 +38,7 @@ experiments:
 	$(PY) -m eta.cli experiment retrain --config params.replay.yaml --train-month 2020-03 --month 2020-04,2020-05 --as-of 2020-06
 
 act-ci:
-	cd $(CURDIR) && act push -W .github/workflows/ci.yml -P ubuntu-latest=mlops-act-runner:1 --pull=false --bind
+	cd $(CURDIR) && act push -W .github/workflows/ci.yml -P ubuntu-latest=mlops-act-runner:1 --pull=false --bind --container-options "--user $$(id -u):$$(id -g)"
 
 monitoring:
 	cd $(CURDIR) && docker compose --profile monitoring up -d --wait

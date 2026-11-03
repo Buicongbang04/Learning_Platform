@@ -129,7 +129,8 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m08
 
 Lần đầu test cài các gói ở mục 1 vào `~/.cache/mlops-ex/eta-ci-<hash>` (cần mạng một lần, dùng lại về sau). Chạy tay:
 `make -C tracks/mlops/capstone/project act-ci` nếu bạn chép target này từ bản tham chiếu, hoặc
-`act push -W .github/workflows/ci.yml -P ubuntu-latest=mlops-act-runner:1 --pull=false --bind` trong thư mục project.
+`act push -W .github/workflows/ci.yml -P ubuntu-latest=mlops-act-runner:1 --pull=false --bind --container-options "--user $(id -u):$(id -g)"`
+trong thư mục project (`--user` để tệp `--bind` ghi ra, như `.ci-deps/`, thuộc về bạn chứ không phải root).
 
 ## Kết quả nộp
 
