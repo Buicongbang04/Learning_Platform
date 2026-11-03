@@ -11,10 +11,25 @@ Test không bao giờ tạo hay xoá cluster: chúng gọi `mlopskit.require_kin
 | cert-manager | v1.20.4 | KServe cần để cấp chứng chỉ cho webhook |
 | KServe | v0.21.0 | chế độ **RawDeployment**, không Knative, không Istio; tắt tạo Ingress |
 | Argo Workflows | v4.1.5 | namespace `argo`, controller theo dõi mọi namespace |
-| MinIO (kho artifact của Argo) | `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` | Deployment `argo-artifacts` trong `argo`, dữ liệu `emptyDir` |
+| MinIO + mc (kho artifact của Argo) | `pgsty/minio`, `pgsty/mc` `RELEASE.2026-08-04T00-00-00Z`, ghim digest | Deployment `argo-artifacts` trong `argo`, dữ liệu `emptyDir` |
 
 Phiên bản, ngày phát hành và checksum nằm ở `versions.env` (mọi bản phát hành ≥2 tuần trước ngày thêm 2026-11-03).
 `up.sh` kiểm sha256 của mọi tệp tải về (binary và manifest) **trước** khi dùng; không có `curl | bash`, không cần `sudo`.
+Binary chọn theo kiến trúc máy (`uname -m`: amd64 hoặc arm64, checksum riêng từng kiến trúc); kiến trúc khác thì dừng
+ngay. Helper `mlopskit` và `down.sh` ưu tiên bản ghim trong `~/.local/bin` trước bản trên PATH.
+
+Rủi ro chấp nhận (ghi cả trong `versions.env`):
+
+- Manifest upstream (cert-manager, KServe, Argo) kéo image theo **tag** (vd. `kserve/kserve-controller:v0.21.0`), không
+  theo digest. Tệp manifest được ghim sha256 nên không ai đổi được tag trong đó, nhưng nội dung tag trên registry thì
+  tin vào nhà phát hành. Không viết lại thành digest để manifest giữ đúng bản phát hành.
+- `pgsty/minio`, `pgsty/mc` là bản build của bên thứ ba (MinIO ngừng phát hành image Docker chính thức từ cuối 2025),
+  cùng họ image với stack Compose `setup/mlops`, ghim theo digest.
+
+`up.sh` **không đổi current-context** của kubectl: `kind create cluster` và `kind export kubeconfig` vẫn ghi context
+`kind-mlops` vào kubeconfig, nhưng current-context cũ được trả lại khi script kết thúc (kể cả khi lỗi; current-context
+trống thì vẫn để trống). Helper luôn truyền `--context kind-mlops`; tự gõ lệnh thì cũng thêm `--context kind-mlops`.
+Cổng trong `MLOPS_KIND_HTTP_PORT`/`MLOPS_KIND_HTTPS_PORT` phải là số 1024-65535, sai thì script dừng trước khi làm gì.
 
 ## Dựng, kiểm, gỡ
 
@@ -28,7 +43,9 @@ rm -rf ~/.cache/mlops-kind                           # xoá cache manifest/binar
 
 `up.sh` chạy lại an toàn (idempotent): binary đã có và đúng checksum thì bỏ qua; cluster đã có thì chỉ khởi động
 lại node nếu container đang dừng (vd. sau khi tắt Docker) rồi `apply --server-side` lại các manifest và chờ
-Available. Sau khi máy khởi động lại, node `mlops-control-plane` tự chạy lại và các pod tự hồi phục (đã kiểm);
+Available. Riêng KServe: khi controller đã đúng bản và `inferenceservice-config` đã ở RawDeployment thì bỏ qua (apply
+lại `kserve.yaml` với `--force-conflicts` sẽ trả ConfigMap về `Serverless` trong vài giây trước khi vá lại, InferenceService
+tạo đúng lúc đó sẽ hỏng). Đổi bản KServe thì `down.sh` rồi `up.sh`. Sau khi máy khởi động lại, node `mlops-control-plane` tự chạy lại và các pod tự hồi phục (đã kiểm);
 nếu node vẫn dừng thì chạy lại `up.sh`.
 
 ## Cổng
@@ -51,12 +68,32 @@ Deployment + Service thường; gọi bằng `port_forward` vào Service `<tên>
 `kserve-cluster-resources.yaml`: các `LLMInferenceServiceConfig` của bản v0.21.0 bị chính webhook KServe từ chối
 (`can't evaluate field TrustRemoteCode`), và track không dùng LLM serving.
 
+### Không có metrics-server: tắt HPA trong manifest bài tập
+
+Ở RawDeployment, KServe mặc định tạo HorizontalPodAutoscaler cho predictor. Cluster không cài metrics-server nên HPA
+hiện `<unknown>` và namespace đầy event `FailedGetResourceMetric` (không hỏng service, nhưng làm nhiễu `describe`/events
+mà `mlopskit.wait_for` in ra khi fail). Manifest bài tập và capstone nên tắt autoscaler:
+
+```yaml
+metadata:
+  annotations:
+    serving.kserve.io/autoscalerClass: none
+```
+
+hoặc đặt `minReplicas` bằng `maxReplicas` trong `predictor`.
+
 ## Argo Workflows và artifact
 
 - `argo-artifacts.yaml` dựng MinIO trong namespace `argo` và đặt kho artifact mặc định trong
-  `workflow-controller-configmap` (`s3`, bucket `argo-artifacts`, tự tạo bucket). Thông tin đăng nhập (chỉ dùng local)
-  được đưa vào container executor qua `executor.env` + `useSDKCreds`, nên Workflow ở **bất kỳ namespace nào** truyền
-  artifact được mà không cần tạo Secret trong namespace đó.
+  `workflow-controller-configmap` (`s3`, bucket `argo-artifacts`). Sidecar `provision` (mc) tạo bucket và user
+  `mlops-argo-workflow` chỉ có quyền đọc/ghi/xoá object trong bucket đó (policy `argo-artifacts-rw`), mỗi lần pod khởi động.
+  Root của MinIO chỉ nằm trong Secret `argo/argo-artifacts`.
+- Executor nhận khoá của user giới hạn đó qua `executor.env` + `useSDKCreds`, nên Workflow ở **bất kỳ namespace nào**
+  truyền artifact được mà không cần Secret trong namespace đó. Không dùng `accessKeySecret`/`secretKeySecret`: Argo đọc
+  Secret đó trong namespace của Workflow, tức phải chép khoá vào mọi namespace bài tập (lan rộng hơn, không hẹp hơn).
+  Khoá này chỉ dùng cho cluster local, ai đọc được ConfigMap trong `argo` hoặc env của pod workflow đều thấy.
+- NetworkPolicy `argo-artifacts` chỉ cho pod có nhãn `workflows.argoproj.io/workflow` (pod của Workflow, mọi namespace)
+  và pod trong namespace `argo` gọi tới MinIO:9000; pod khác bị chặn (kindnet thực thi NetworkPolicy, có test).
 - Executor cần quyền tạo `workflowtaskresults`. ClusterRole `mlops-argo-executor` có sẵn; `mlopskit.k8s_namespace()`
   gắn nó cho ServiceAccount `default` của namespace tạm. Tự tạo namespace thì chạy:
   `kubectl --context kind-mlops -n <ns> create rolebinding mlops-argo-executor --clusterrole=mlops-argo-executor --serviceaccount=<ns>:default`.
@@ -66,7 +103,7 @@ Deployment + Service thường; gọi bằng `port_forward` vào Service `<tên>
 
 `mlopskit.kind_load(tag)` nạp image từ Docker của máy vào node (`docker save --platform` rồi `kind load image-archive`,
 vì `kind load docker-image` lỗi `content digest ... not found` với image đa nền tảng khi Docker dùng containerd image
-store). Image đã nạp ở lại trong node; dọn khi node đầy:
+store). Tệp tar tạm nằm ở `~/.cache/mlops-kind/load` (quyền 0700, trên đĩa; `/tmp` của máy là tmpfs) và bị xoá ngay sau khi nạp. Image đã nạp ở lại trong node; dọn khi node đầy:
 `docker exec mlops-control-plane crictl rmi --prune` (xoá image không có container nào dùng).
 
 ## Tài nguyên

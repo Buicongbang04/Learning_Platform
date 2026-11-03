@@ -16,7 +16,6 @@ constraints = [
     { name = "fonttools", specifier = "<=4.67.0" },
     { name = "imageio-ffmpeg", specifier = "<=0.6.0" },
     { name = "importlib-metadata", specifier = "<=9.0.1" },
-    { name = "onnxruntime", specifier = "<=1.31.0" },
     { name = "polars", specifier = "<=2.0.0" },
     { name = "polars-runtime-32", specifier = "<=2.0.0" },
     { name = "ultralytics-platform", specifier = "<=0.1.89" },
@@ -24,7 +23,7 @@ constraints = [
     { name = "zipp", specifier = "<=4.1.1" },
 ]
 overrides = [
-    { name = "nvidia-cuda-runtime-cu12", specifier = "==12.9.79" },
+    { name = "nvidia-cuda-runtime-cu12", marker = "sys_platform == 'linux'", specifier = "==12.9.79" },
     { name = "onnxruntime", marker = "sys_platform == 'never'" },
 ]
 

@@ -2,6 +2,7 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -209,3 +210,44 @@ def test_gpu_project_has_onnxruntime_gpu():
     lock = (ROOT / "setup" / "gpu" / "uv.lock").read_text(encoding="utf-8")
     assert 'name = "onnxruntime-gpu"' in lock
     assert '{ name = "onnxruntime", marker = "sys_platform == \'never\'" }' in lock
+
+
+def test_kind_checksums_per_arch():
+    values = _versions()
+    for tool in ("KIND", "KUBECTL"):
+        for arch in ("AMD64", "ARM64"):
+            assert re.fullmatch(r"[0-9a-f]{64}", values[f"{tool}_SHA256_{arch}"]), (tool, arch)
+    text = (KIND_DIR / "up.sh").read_text(encoding="utf-8")
+    assert "uname -m" in text and "kind-linux-${ARCH}" in text
+
+
+@pytest.mark.parametrize("port", ["1;touch x", "80", "99999", "abc"])
+def test_up_sh_rejects_bad_port(port):
+    import os
+    import subprocess
+
+    env = {**os.environ, "MLOPS_KIND_HTTP_PORT": port, "HOME": "/nonexistent-mlops-test"}
+    result = subprocess.run(["bash", str(KIND_DIR / "up.sh")], capture_output=True, text=True, env=env, timeout=30)
+    assert result.returncode == 1
+    assert "cổng không hợp lệ" in result.stderr
+
+
+def test_up_sh_restores_kube_context():
+    text = (KIND_DIR / "up.sh").read_text(encoding="utf-8")
+    assert "config current-context" in text and "trap restore_context EXIT" in text
+
+
+def test_argo_artifacts_scoped_and_isolated():
+    docs = list(yaml.safe_load_all((KIND_DIR / "argo-artifacts.yaml").read_text(encoding="utf-8")))
+    by_kind = {(d["kind"], d["metadata"]["name"]): d for d in docs}
+    images = [c["image"] for c in by_kind[("Deployment", "argo-artifacts")]["spec"]["template"]["spec"]["containers"]]
+    assert images == [_versions()["ARGO_MINIO_IMAGE"], _versions()["ARGO_MC_IMAGE"]]
+    secret = by_kind[("Secret", "argo-artifacts")]["stringData"]
+    executor = by_kind[("ConfigMap", "workflow-controller-configmap")]["data"]["executor"]
+    assert secret["accesskey"] not in executor and secret["secretkey"] not in executor
+    assert secret["workflow-accesskey"] in executor
+    policy = by_kind[("NetworkPolicy", "argo-artifacts")]["spec"]
+    assert policy["policyTypes"] == ["Ingress"]
+    keys = [e["key"] for rule in policy["ingress"] for src in rule["from"]
+            for e in src.get("podSelector", {}).get("matchExpressions", [])]
+    assert keys == ["workflows.argoproj.io/workflow"]

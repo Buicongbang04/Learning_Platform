@@ -40,7 +40,6 @@ constraint-dependencies = [
     "ctranslate2<=4.8.3",
     "fonttools<=4.67.0",
     "importlib-metadata<=9.0.1",
-    "onnxruntime<=1.31.0",
     "polars<=2.0.0",
     "polars-runtime-32<=2.0.0",
     "ultralytics-platform<=0.1.89",
@@ -56,7 +55,7 @@ constraint-dependencies = [
 # chạy được nhờ CUDA minor version compatibility). Đã kiểm: check_gpu.py và ORT CUDAExecutionProvider cùng chạy.
 override-dependencies = [
     "onnxruntime; sys_platform == 'never'",
-    "nvidia-cuda-runtime-cu12==12.9.79",
+    "nvidia-cuda-runtime-cu12==12.9.79; sys_platform == 'linux'",
 ]
 
 [[tool.uv.index]]

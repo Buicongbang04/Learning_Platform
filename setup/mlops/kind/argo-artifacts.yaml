@@ -4,8 +4,34 @@ metadata:
   name: argo-artifacts
   namespace: argo
 stringData:
-  accesskey: mlops-argo
-  secretkey: mlops-argo-local-only
+  accesskey: mlops-argo-root
+  secretkey: mlops-argo-root-local-only
+  workflow-accesskey: mlops-argo-workflow
+  workflow-secretkey: mlops-argo-workflow-local-only
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argo-artifacts-provision
+  namespace: argo
+data:
+  policy.json: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {"Effect": "Allow", "Action": ["s3:ListBucket", "s3:GetBucketLocation"], "Resource": ["arn:aws:s3:::argo-artifacts"]},
+        {"Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], "Resource": ["arn:aws:s3:::argo-artifacts/*"]}
+      ]
+    }
+  provision.sh: |
+    set -eu
+    until mc alias set local http://127.0.0.1:9000 "$ROOT_USER" "$ROOT_PASSWORD" >/dev/null 2>&1; do sleep 2; done
+    mc mb --ignore-existing local/argo-artifacts
+    mc admin policy create local argo-artifacts-rw /provision/policy.json
+    mc admin user add local "$WORKFLOW_USER" "$WORKFLOW_PASSWORD"
+    mc admin policy attach local argo-artifacts-rw --user "$WORKFLOW_USER" || mc admin user info local "$WORKFLOW_USER" | grep -q argo-artifacts-rw
+    touch /tmp/provisioned
+    exec sleep infinity
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -55,9 +81,55 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+        - name: provision
+          image: pgsty/mc:RELEASE.2026-08-04T00-00-00Z@sha256:b57234d21057175b6c3358509733128e35da330094aaacf37bf33348b11d1f92
+          command: ["bash", "/provision/provision.sh"]
+          env:
+            - name: MC_CONFIG_DIR
+              value: /tmp/mc
+            - name: ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: argo-artifacts
+                  key: accesskey
+            - name: ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: argo-artifacts
+                  key: secretkey
+            - name: WORKFLOW_USER
+              valueFrom:
+                secretKeyRef:
+                  name: argo-artifacts
+                  key: workflow-accesskey
+            - name: WORKFLOW_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: argo-artifacts
+                  key: workflow-secretkey
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/tmp/provisioned"]
+            periodSeconds: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: provision
+              mountPath: /provision
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: data
           emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: provision
+          configMap:
+            name: argo-artifacts-provision
 ---
 apiVersion: v1
 kind: Service
@@ -70,6 +142,30 @@ spec:
   ports:
     - port: 9000
       targetPort: 9000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argo-artifacts
+  namespace: argo
+spec:
+  podSelector:
+    matchLabels:
+      app: argo-artifacts
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: workflows.argoproj.io/workflow
+                operator: Exists
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo
+      ports:
+        - port: 9000
+          protocol: TCP
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -84,14 +180,12 @@ data:
       endpoint: argo-artifacts.argo.svc.cluster.local:9000
       insecure: true
       useSDKCreds: true
-      createBucketIfNotPresent:
-        objectLocking: false
   executor: |
     env:
       - name: AWS_ACCESS_KEY_ID
-        value: mlops-argo
+        value: mlops-argo-workflow
       - name: AWS_SECRET_ACCESS_KEY
-        value: mlops-argo-local-only
+        value: mlops-argo-workflow-local-only
       - name: AWS_REGION
         value: us-east-1
 ---
