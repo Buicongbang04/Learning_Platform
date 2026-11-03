@@ -118,6 +118,28 @@ def test_fixing_the_hash_of_an_edited_entry_breaks_the_next_link(log):
     assert log.verify() == 2
 
 
+@pytest.mark.parametrize("damage", [
+    lambda line: line[: len(line) // 2],
+    lambda line: "không phải json",
+    lambda line: "42",
+    lambda line: "[]",
+])
+def test_corrupted_line_is_reported_not_raised(log, damage):
+    fill(log)
+    rewrite(log, lambda lines: lines.__setitem__(3, damage(lines[3])))
+    assert log.verify() == 3
+
+
+def test_unicode_line_separator_in_reason_is_not_a_new_line(log):
+    fill(log)
+    record = log.append("an", "set_alias", "taxi-eta", "champion", 1, 3, "dòng một\u2028dòng hai\u2029\x85hết",
+                        at="2026-03-06T09:00:00+00:00")
+    assert "\u2028" in log.path.read_text(encoding="utf-8")
+    assert log.entries()[-1] == record and len(log.entries()) == 6
+    assert log.verify() is None
+    assert log.verify(anchor=record["hash"]) is None
+
+
 def test_truncation_needs_an_anchor(log):
     fill(log)
     anchor = log.head()

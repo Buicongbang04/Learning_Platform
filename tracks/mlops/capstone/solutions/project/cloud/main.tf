@@ -120,10 +120,11 @@ resource "aws_lambda_permission" "health_url" {
 }
 
 resource "aws_lambda_permission" "health_invoke" {
-  statement_id  = "AllowPublicInvokeViaUrl"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.health.function_name
-  principal     = "*"
+  statement_id             = "AllowPublicInvokeViaUrl"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.health.function_name
+  principal                = "*"
+  invoked_via_function_url = true
 }
 
 resource "aws_budgets_budget" "monthly" {

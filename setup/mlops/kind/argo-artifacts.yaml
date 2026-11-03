@@ -29,7 +29,9 @@ data:
     mc mb --ignore-existing local/argo-artifacts
     mc admin policy create local argo-artifacts-rw /provision/policy.json
     mc admin user add local "$WORKFLOW_USER" "$WORKFLOW_PASSWORD"
-    mc admin policy attach local argo-artifacts-rw --user "$WORKFLOW_USER" || mc admin user info local "$WORKFLOW_USER" | grep -q argo-artifacts-rw
+    mc admin policy attach local argo-artifacts-rw --user "$WORKFLOW_USER" || true
+    info="$(mc admin user info local "$WORKFLOW_USER")"
+    [[ "$info" == *argo-artifacts-rw* ]] || { echo "policy argo-artifacts-rw chưa gắn cho $WORKFLOW_USER" >&2; exit 1; }
     touch /tmp/provisioned
     exec sleep infinity
 ---
@@ -49,6 +51,8 @@ spec:
     metadata:
       labels:
         app: argo-artifacts
+      annotations:
+        mlops/config-sha256: "__CONFIG_SHA256__"
     spec:
       containers:
         - name: minio

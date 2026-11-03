@@ -245,7 +245,15 @@ def test_argo_artifacts_scoped_and_isolated():
     secret = by_kind[("Secret", "argo-artifacts")]["stringData"]
     executor = by_kind[("ConfigMap", "workflow-controller-configmap")]["data"]["executor"]
     assert secret["accesskey"] not in executor and secret["secretkey"] not in executor
-    assert secret["workflow-accesskey"] in executor
+    env = {e["name"]: e["value"] for e in yaml.safe_load(executor)["env"]}
+    assert env["AWS_ACCESS_KEY_ID"] == secret["workflow-accesskey"]
+    assert env["AWS_SECRET_ACCESS_KEY"] == secret["workflow-secretkey"]
+    template = by_kind[("Deployment", "argo-artifacts")]["spec"]["template"]["metadata"]
+    assert template["annotations"]["mlops/config-sha256"] == "__CONFIG_SHA256__"
+    up = (KIND_DIR / "up.sh").read_text(encoding="utf-8")
+    assert 'sha256sum "$HERE/argo-artifacts.yaml"' in up and "__CONFIG_SHA256__" in up
+    provision = by_kind[("ConfigMap", "argo-artifacts-provision")]["data"]["provision.sh"]
+    assert "grep" not in provision
     policy = by_kind[("NetworkPolicy", "argo-artifacts")]["spec"]
     assert policy["policyTypes"] == ["Ingress"]
     keys = [e["key"] for rule in policy["ingress"] for src in rule["from"]

@@ -607,12 +607,14 @@ def test_port_forward_fails_when_kubectl_exits(monkeypatch):
     assert "not found" in str(info.value)
 
 
-def _fake_kubectl_factory(calls, *, create_rc=0, wait_rc=1, phase="", describe=None):
+def _fake_kubectl_factory(calls, *, create_rc=0, wait_rc=1, phase="", describe=None, wait_error=""):
     def fake_kubectl(*args, namespace=None, input=None, timeout=120):
         calls.append(args)
         if args[0] == "wait":
             if args[1] == "--for=create":
-                return subprocess.CompletedProcess(args, create_rc, "", "" if create_rc == 0 else "NotFound")
+                return subprocess.CompletedProcess(args, create_rc, "", "" if create_rc == 0 else "timed out waiting")
+            if wait_rc and wait_error:
+                return subprocess.CompletedProcess(args, wait_rc, "", wait_error)
             return subprocess.CompletedProcess(args, wait_rc, "", "timed out waiting for the condition")
         if args[0] == "describe":
             if describe is not None:
@@ -652,6 +654,25 @@ def test_wait_for_waits_for_creation_first(monkeypatch):
     with pytest.raises(pytest.fail.Exception) as info:
         mlopskit.wait_for("workflow", "wf", "Ready", "mlops-ex-abc", timeout=3)
     assert "không xuất hiện" in str(info.value)
+
+
+def test_wait_for_delete_skips_create(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_kubectl_factory(calls, wait_rc=0))
+    mlopskit.wait_for("pod", "gone", "delete", "mlops-ex-abc", timeout=10)
+    assert [c[1] for c in calls if c[0] == "wait"] == ["--for=delete"]
+
+
+def test_wait_for_non_timeout_error_fails_fast(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "kubectl",
+                        _fake_kubectl_factory(calls, wait_error='error: unrecognized condition: "bogus"'))
+    started = time.monotonic()
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.wait_for("pod", "p", "jsonpath={bad", "mlops-ex-abc", timeout=60)
+    assert time.monotonic() - started < 5
+    assert "unrecognized condition" in str(info.value)
+    assert len([c for c in calls if c[0] == "wait" and c[1] != "--for=create"]) == 1
 
 
 def test_wait_for_fail_on_phase_fails_fast(monkeypatch):
@@ -857,7 +878,8 @@ def test_bin_prefers_pinned_local_copy(monkeypatch, tmp_path):
 
 
 def test_kind_load_uses_disk_cache_and_cleans(monkeypatch, tmp_path):
-    assert mlopskit.KIND_LOAD_DIR.is_relative_to(Path.home())
+    assert mlopskit.KIND_LOAD_DIR.is_absolute()
+    assert mlopskit.KIND_LOAD_DIR.is_relative_to(mlopskit.CACHE_ROOT)
     seen = {}
 
     def fake_docker(*args, timeout=60, env=None):
@@ -904,7 +926,8 @@ spec:
 """
 
 
-def test_argo_artifacts_network_policy():
+def test_argo_artifacts_network_policy_blocks_unlabeled_pods():
+    """Pod không có nhãn workflow bị chặn; chỉ chống truy cập vô tình, pod tự gắn nhãn vẫn vào được."""
     mlopskit.require_kind()
     _busybox()
     mlopskit.kind_load("busybox:1.37")
@@ -913,3 +936,26 @@ def test_argo_artifacts_network_policy():
         mlopskit.apply_manifest(PROBE_POD.format(name="workflow-pod", labels='{"workflows.argoproj.io/workflow": "x"}'), ns)
         mlopskit.wait_for("pod", "workflow-pod", "jsonpath={.status.phase}=Succeeded", ns, timeout=120, fail_on=("Failed",))
         mlopskit.wait_for("pod", "outsider", "jsonpath={.status.phase}=Failed", ns, timeout=120, fail_on=("Succeeded",))
+
+
+def test_cache_root_ignores_empty_or_relative_xdg(monkeypatch):
+    import importlib
+
+    for value in ("", "relative/cache"):
+        monkeypatch.setenv("XDG_CACHE_HOME", value)
+        reloaded = importlib.reload(mlopskit)
+        assert reloaded.CACHE_ROOT == Path.home() / ".cache"
+    monkeypatch.delenv("XDG_CACHE_HOME")
+    importlib.reload(mlopskit)
+
+
+def test_gpu_env_problem_detects_cpu_onnxruntime(monkeypatch, tmp_path):
+    import sys
+
+    (tmp_path / ".venv" / "bin").mkdir(parents=True)
+    wrapper = tmp_path / ".venv" / "bin" / "python"
+    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    wrapper.chmod(0o755)
+    monkeypatch.setattr(mlopskit, "GPU_PROJECT", tmp_path)
+    monkeypatch.setattr(mlopskit, "_GPU_ENV_STATE", {})
+    assert "onnxruntime (CPU)" in mlopskit._gpu_env_problem()

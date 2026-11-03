@@ -535,7 +535,9 @@ def _delete_namespace(name: str) -> None:
         sys.stderr.write(f"mlopskit: không xoá được namespace {name}:\n{_tail(result)}\n")
 
 
-KIND_LOAD_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "mlops-kind" / "load"
+_XDG_CACHE = os.environ.get("XDG_CACHE_HOME") or ""
+CACHE_ROOT = Path(_XDG_CACHE) if os.path.isabs(_XDG_CACHE) else Path.home() / ".cache"
+KIND_LOAD_DIR = CACHE_ROOT / "mlops-kind" / "load"
 
 
 def kind_load(tag: str, timeout: int = 600) -> None:
@@ -592,27 +594,31 @@ def _diagnose(kind: str, name: str, namespace: str) -> str:
 
 
 def _wait_fail(kind: str, name: str, namespace: str, reason: str) -> None:
-    try:
-        details = _diagnose(kind, name, namespace)
-    except Exception as error:
-        details = f"(không lấy được chẩn đoán: {error})"
-    pytest.fail(f"{kind}/{name}: {reason}\n{details}", pytrace=False)
+    pytest.fail(f"{kind}/{name}: {reason}\n{_diagnose(kind, name, namespace)}", pytrace=False)
+
+
+def _wait_timed_out(result: subprocess.CompletedProcess) -> bool:
+    return "timed out waiting" in result.stderr
 
 
 def wait_for(kind: str, name: str, condition: str, namespace: str, timeout: int,
              fail_on: tuple[str, ...] = ()) -> None:
     """Chờ tài nguyên xuất hiện (`--for=create`) rồi đạt `condition`, cả hai trong cùng `timeout` giây.
 
-    `condition` là tên condition (`Ready`) hoặc biểu thức đủ (`jsonpath={.status.phase}=Succeeded`).
-    `fail_on` (vd. `("Failed", "Error")`) fail ngay khi `.status.phase` rơi vào một trong các giá trị đó (Workflow Argo,
-    Pod), thay vì chờ hết hạn. Fail kèm `describe`, danh sách pod, log và events của namespace.
+    `condition` là tên condition (`Ready`) hoặc biểu thức đủ (`jsonpath={.status.phase}=Succeeded`, `delete`).
+    Với `delete` thì không chờ tạo; tài nguyên đã không còn là đạt. `fail_on` (vd. `("Failed", "Error")`) fail ngay khi
+    `.status.phase` rơi vào một trong các giá trị đó (Workflow Argo, Pod), thay vì chờ hết hạn. Lỗi không phải hết hạn
+    (condition sai cú pháp, thiếu quyền...) fail ngay kèm stderr của kubectl. Fail kèm `describe`, pod, log và events.
     """
     expr = condition if condition.startswith(("condition=", "jsonpath=", "delete", "create")) else f"condition={condition}"
     deadline = time.monotonic() + timeout
     target = f"{kind}/{name}"
-    created = kubectl("wait", "--for=create", target, f"--timeout={timeout}s", namespace=namespace, timeout=timeout + 30)
-    if created.returncode != 0:
-        _wait_fail(kind, name, namespace, f"không xuất hiện sau {timeout} giây: {_tail(created, 5)}")
+    if not expr.startswith(("delete", "create")):
+        created = kubectl("wait", "--for=create", target, f"--timeout={timeout}s", namespace=namespace,
+                          timeout=timeout + 30)
+        if created.returncode != 0:
+            reason = "không xuất hiện" if _wait_timed_out(created) else "kubectl wait --for=create lỗi"
+            _wait_fail(kind, name, namespace, f"{reason} (timeout {timeout} giây): {_tail(created, 5)}")
     step = 5 if fail_on else None
     while True:
         remaining = max(1, int(deadline - time.monotonic()))
@@ -620,12 +626,15 @@ def wait_for(kind: str, name: str, condition: str, namespace: str, timeout: int,
         result = kubectl("wait", f"--for={expr}", target, f"--timeout={chunk}s", namespace=namespace, timeout=chunk + 30)
         if result.returncode == 0:
             return
+        if not _wait_timed_out(result):
+            _wait_fail(kind, name, namespace, f"kubectl wait --for={expr} lỗi: {_tail(result, 5)}")
         if fail_on:
             phase = _kubectl_quiet("get", target, "-o", "jsonpath={.status.phase}", namespace=namespace).stdout.strip()
             if phase in fail_on:
                 _wait_fail(kind, name, namespace, f"vào phase {phase} (chờ {expr})")
         if time.monotonic() >= deadline:
             _wait_fail(kind, name, namespace, f"không đạt {expr} sau {timeout} giây: {_tail(result, 5)}")
+        time.sleep(1)
 
 
 @contextmanager
@@ -633,7 +642,8 @@ def port_forward(namespace: str, target: str, port: int, timeout: float = 30) ->
     """`kubectl port-forward target <cổng tự do>:port` trên 127.0.0.1; trả cổng local, dừng tiến trình khi ra.
 
     Sẵn sàng khi kubectl in `Forwarding from 127.0.0.1:<cổng>` (không thử kết nối vào cổng, để không gửi request thừa
-    tới service). Output của kubectl ghi vào tệp tạm, không dùng PIPE (PIPE không đọc sẽ đầy và làm kubectl treo).
+    tới service). Output của kubectl ghi (append) vào tệp tạm, không dùng PIPE (PIPE không đọc sẽ đầy và làm kubectl
+    treo); test đọc bằng một lần mở riêng, không đụng offset ghi của kubectl.
     """
     binary = _bin("kubectl")
     if binary is None:
@@ -641,22 +651,20 @@ def port_forward(namespace: str, target: str, port: int, timeout: float = 30) ->
     local = testkit.free_port()
     command = [binary, "--context", KUBE_CONTEXT, "-n", namespace, "port-forward", "--address", "127.0.0.1",
                target, f"{local}:{port}"]
-    out = tempfile.TemporaryFile(mode="w+", prefix=PREFIX)
-    err = tempfile.TemporaryFile(mode="w+", prefix=PREFIX)
-    process = subprocess.Popen(command, stdout=out, stderr=err, text=True)
+    logdir = Path(tempfile.mkdtemp(prefix=PREFIX))
+    out_path, err_path = logdir / "stdout.log", logdir / "stderr.log"
     ready = f"Forwarding from 127.0.0.1:{local}"
+    with open(out_path, "a", encoding="utf-8") as out, open(err_path, "a", encoding="utf-8") as err:
+        process = subprocess.Popen(command, stdout=out, stderr=err, text=True)
     try:
         deadline = time.monotonic() + timeout
-        while True:
-            out.seek(0)
-            if ready in out.read():
-                break
+        while ready not in out_path.read_text(encoding="utf-8", errors="replace"):
             if process.poll() is not None:
-                err.seek(0)
-                pytest.fail(f"kubectl port-forward {target} thoát sớm:\n{err.read()[-4000:]}", pytrace=False)
+                stderr = err_path.read_text(encoding="utf-8", errors="replace")
+                pytest.fail(f"kubectl port-forward {target} thoát sớm:\n{stderr[-4000:]}", pytrace=False)
             if time.monotonic() > deadline:
-                err.seek(0)
-                pytest.fail(f"kubectl port-forward {target} chưa sẵn sàng sau {timeout} giây:\n{err.read()[-2000:]}",
+                stderr = err_path.read_text(encoding="utf-8", errors="replace")
+                pytest.fail(f"kubectl port-forward {target} chưa sẵn sàng sau {timeout} giây:\n{stderr[-2000:]}",
                             pytrace=False)
             time.sleep(0.1)
         yield local
@@ -666,8 +674,7 @@ def port_forward(namespace: str, target: str, port: int, timeout: float = 30) ->
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             process.kill()
-        out.close()
-        err.close()
+        shutil.rmtree(logdir, ignore_errors=True)
 
 
 def _leftover_namespaces() -> list[str]:
@@ -723,7 +730,8 @@ def _gpu_env_problem() -> str:
     else:
         probe = (
             "import importlib.metadata as m\n"
-            "names = {d.metadata['Name'].lower() for d in m.distributions()}\n"
+            "import re\n"
+            "names = {re.sub(r'[-_.]+', '-', d.metadata['Name']).lower() for d in m.distributions() if d.metadata['Name']}\n"
             "print('gpu' if 'onnxruntime-gpu' in names else 'nogpu', 'cpu' if 'onnxruntime' in names else 'nocpu')\n"
         )
         try:

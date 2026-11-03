@@ -93,7 +93,15 @@ hoặc đặt `minReplicas` bằng `maxReplicas` trong `predictor`.
   Secret đó trong namespace của Workflow, tức phải chép khoá vào mọi namespace bài tập (lan rộng hơn, không hẹp hơn).
   Khoá này chỉ dùng cho cluster local, ai đọc được ConfigMap trong `argo` hoặc env của pod workflow đều thấy.
 - NetworkPolicy `argo-artifacts` chỉ cho pod có nhãn `workflows.argoproj.io/workflow` (pod của Workflow, mọi namespace)
-  và pod trong namespace `argo` gọi tới MinIO:9000; pod khác bị chặn (kindnet thực thi NetworkPolicy, có test).
+  và pod trong namespace `argo` gọi tới MinIO:9000; pod không có nhãn đó bị chặn (kindnet thực thi NetworkPolicy, có test).
+  Đây chỉ là hàng rào chống truy cập **vô tình**, không phải ranh giới bảo mật: pod nào tự gắn nhãn
+  `workflows.argoproj.io/workflow` vẫn vào được, và ai tạo được pod thì cũng tự gắn được nhãn. Đủ cho lab local, không
+  dùng cách này cho cluster nhiều người dùng.
+- Khoá của user workflow có ở hai chỗ trong `argo-artifacts.yaml`: Secret (`workflow-accesskey`/`workflow-secretkey`, sidecar
+  dùng để tạo user) và `executor.env` của `workflow-controller-configmap` (Argo không đọc env executor từ Secret dùng chung
+  cho mọi namespace). Test `test_argo_artifacts_scoped_and_isolated` bắt hai chỗ phải khớp. `up.sh` gắn sha256 của cả tệp
+  vào annotation `mlops/config-sha256` của pod MinIO, nên sửa tệp (đổi khoá, policy, script) rồi chạy lại `up.sh` sẽ
+  rollout pod và sidecar tạo lại user theo khoá mới (dữ liệu artifact trong `emptyDir` mất theo pod cũ).
 - Executor cần quyền tạo `workflowtaskresults`. ClusterRole `mlops-argo-executor` có sẵn; `mlopskit.k8s_namespace()`
   gắn nó cho ServiceAccount `default` của namespace tạm. Tự tạo namespace thì chạy:
   `kubectl --context kind-mlops -n <ns> create rolebinding mlops-argo-executor --clusterrole=mlops-argo-executor --serviceaccount=<ns>:default`.
