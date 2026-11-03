@@ -177,8 +177,7 @@ def write_workflow(repo: Path, name: str, text: str) -> Path:
 
 
 def run_ci(repo: Path, *args: str, event: str = "push", timeout: int = 600) -> subprocess.CompletedProcess:
-    own = f"--label {mlopskit.LABEL} --user {os.getuid()}:{os.getgid()}"
-    return mlopskit.act_run(repo, *args, "--container-options", own, event=event, timeout=timeout)
+    return mlopskit.act_run(repo, *args, event=event, timeout=timeout, container_options=f"--user {os.getuid()}:{os.getgid()}")
 
 
 def log(result: subprocess.CompletedProcess) -> str:
@@ -224,6 +223,9 @@ def glob_to_regex(pattern: str) -> re.Pattern:
 
 
 def _hit(patterns, path: str) -> bool:
+    negated = [p for p in patterns if p.startswith("!")]
+    if negated:
+        raise ValueError(f"Bộ mô phỏng path filter không hỗ trợ mẫu phủ định: {negated}")
     return any(glob_to_regex(p).match(path) for p in patterns)
 
 
@@ -234,6 +236,8 @@ def triggers(workflow: dict, event: str, changed: list[str], branch: str = "main
     if cfg.get("branches") and not _hit(cfg["branches"], branch):
         return False
     paths, ignore = cfg.get("paths"), cfg.get("paths-ignore")
+    if paths and ignore:
+        raise ValueError("GitHub không cho dùng paths và paths-ignore cùng lúc trong một sự kiện")
     if paths:
         return any(_hit(paths, f) for f in changed)
     if ignore:

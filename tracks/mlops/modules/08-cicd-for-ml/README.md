@@ -142,7 +142,7 @@ flowchart TD
 | `repository_dispatch`, `workflow_run` | Móc workflow này vào sự kiện ngoài (vd. registry đổi alias) | Dễ tạo vòng lặp; chạy với quyền của repo gốc |
 
 Bộ lọc `paths` dùng glob của GitHub: `*` không vượt `/`, `**` vượt qua. `src/*` không khớp `src/etalite/model.py`; `src/**` khớp.
-Một workflow có `paths` chạy khi **ít nhất một** tệp đổi khớp.
+Một workflow có `paths` chạy khi **ít nhất một** tệp đổi khớp. Bộ mô phỏng trong test chỉ cài một phần ngữ nghĩa của GitHub: nó báo lỗi rõ ràng với mẫu phủ định `!` và với `paths` đi cùng `paths-ignore`, thay vì đánh giá sai trong im lặng.
 
 ### CD khi alias đổi
 
