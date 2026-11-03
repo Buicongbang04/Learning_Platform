@@ -372,7 +372,7 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 - Script của người học chạy qua `testkit.run_sandboxed`, như track DevOps.
 - Timeout build của `built_image` và `compose_project` mặc định 1800 giây, chỉnh bằng biến môi trường `MLOPS_BUILD_TIMEOUT` (giây, đọc lúc gọi). Quá hạn thì test fail kèm gợi ý build trước (cache) rồi chạy lại hoặc tăng biến này.
 - Mọi tài nguyên do `mlopskit` tạo có nhãn `mlops-ex=1` và tiền tố `mlops-ex-`; lỗi hay Ctrl-C giữa chừng vẫn dọn hết.
-- Helper chưa có (kind/`KubeLab`, gate GPU) được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước.
+- Helper mới được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước (kind và GPU: Giai đoạn 3, bảng bên dưới).
 
 Helper Giai đoạn 2 (test riêng ở `tests/test_mlopskit.py`):
 
@@ -389,6 +389,26 @@ Helper Giai đoạn 2 (test riêng ở `tests/test_mlopskit.py`):
 | Chạy `dvc`/`git` trong sandbox | `mlopskit.dvc_sh(repo, cmd, args, ok=True, env=None)` | DVC/git cấu hình riêng trong `repo`, `repo` ghi được |
 
 Profile Compose `monitoring` (prometheus 29090, alertmanager 29093, grafana 23000) và `feast` (redis 26390) bật bằng `docker compose -f setup/mlops/compose.yaml --profile monitoring --profile feast up -d --wait`.
+
+Helper Giai đoạn 3 (test riêng ở `tests/test_mlopskit.py`). Cluster kind duy nhất `mlops` (context `kind-mlops`) dựng bằng
+`bash setup/mlops/kind/up.sh` (kind v0.33.0, Kubernetes v1.35.8, cert-manager v1.20.4, KServe v0.21.0 chế độ RawDeployment,
+Argo Workflows v4.1.5 + MinIO làm kho artifact; phiên bản, ngày phát hành, checksum ở `setup/mlops/kind/versions.env`,
+chi tiết ở `setup/mlops/kind/README.md`). Test **không** tạo/xoá cluster và không gọi `kubectl`/`kind` trần.
+
+| Test cần | Dùng | Đảm bảo |
+| --- | --- | --- |
+| Cluster kind | `mlopskit.require_kind()` | Skip khi thiếu `kind`/`kubectl`, chưa có cluster `mlops` hoặc API không phản hồi; message có `bash setup/mlops/kind/up.sh` và trỏ module 13 mục 0 |
+| Gọi kubectl | `mlopskit.kubectl(*args, namespace=None, input=None, timeout=120)` | Luôn `--context kind-mlops`, không dùng context hiện hành của máy; dùng bản ghim trong `~/.local/bin` trước PATH; trả `CompletedProcess` |
+| Namespace tạm | `with mlopskit.k8s_namespace() as ns:` | Tên `mlops-ex-<uuid8>`, nhãn `mlops-ex=1` và `mlops-ex-run=<uuid8>`; SA `default` được gắn ClusterRole `mlops-argo-executor` (chạy Workflow Argo); `delete --wait=false` đúng namespace này trong `finally` |
+| Nạp image tự build | `mlopskit.kind_load(tag)` | `docker save --platform` + `kind load image-archive` (tránh lỗi image đa nền tảng), tar tạm ở `~/.cache/mlops-kind/load` rồi xoá; image ở lại trong node |
+| Apply manifest | `mlopskit.apply_manifest(path_or_text, ns, check=True)` | `Path` là tệp/thư mục, `str` là nội dung YAML; `check` fail kèm stderr |
+| Chờ trạng thái | `mlopskit.wait_for(kind, name, condition, ns, timeout, fail_on=())` | Chờ tài nguyên xuất hiện (`--for=create`) rồi đạt `condition` (tên condition như `Ready`, `Available`, hoặc biểu thức đủ `jsonpath={.status.phase}=Succeeded`), cùng một `timeout`; `fail_on=("Failed", "Error")` fail ngay khi `.status.phase` rơi vào các giá trị đó (Workflow Argo, Pod); fail kèm `describe`, pod, log, events (thu best-effort, không che lý do chính) |
+| Gọi service trong cluster | `with mlopskit.port_forward(ns, "svc/x", 8080) as port:` | Cổng local tự do trên 127.0.0.1; sẵn sàng khi kubectl in `Forwarding from` (không gửi request thử vào service, nên không lệch số đếm canary); output kubectl ghi tệp tạm, không PIPE; dừng tiến trình khi ra. Service chưa có pod Ready thì request đầu có thể lỗi: test tự chờ `Ready`/`Available` trước |
+| Kiểm rác | `mlopskit.leftovers(needle)` | Liệt kê thêm namespace `mlops-ex-*` còn Active hoặc kẹt Terminating quá 2 phút; phần cluster là best-effort (timeout ngắn, không cluster thì bỏ qua, không bao giờ fail) |
+| GPU | `mlopskit.require_cuda()`, `mlopskit.gpu_python(script, cwd, timeout=300)` | Skip `"Không có CUDA"` khi `nvidia-smi -L` không thấy GPU; `gpu_python` chạy `uv run --no-sync --project setup/gpu python -I -c script` (test không tự sync/tải gói; `-I` không import module trong `cwd`), skip kèm `uv sync --project setup/gpu` khi env chưa có, thiếu onnxruntime-gpu hoặc còn onnxruntime CPU đè lên; script in JSON ra stdout |
+
+Kiểm GPU bằng `session.get_providers()[0] == "CUDAExecutionProvider"` sau `onnxruntime.preload_dlls()`, không bằng
+`get_available_providers()` (liệt kê cả khi thư viện CUDA không nạp được, ORT âm thầm chạy CPU).
 
 ### Stack và cổng
 
@@ -437,7 +457,11 @@ Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack
   | `redis:7.4.5` | 2025-07-06 | GitHub `redis/redis` |
 - **GPU:** môi trường chính giữ torch CPU và `onnxruntime` CPU. Đường GPU (onnxruntime-gpu, torch CUDA) nằm trong
   project `setup/gpu`; test GPU chạy qua project đó và skip khi không có CUDA. Mọi bài GPU có đường CPU; PC mạnh chỉ
-  để đo thêm, test không bao giờ cần.
+  để đo thêm, test không bao giờ cần. `setup/gpu` dùng `onnxruntime-gpu==1.29.0` bản **CUDA 12** (feed `onnxruntime-cuda-12`
+  của ONNX Runtime), không phải 1.31.x như CPU của env gốc: PyPI `onnxruntime-gpu` từ 1.28 build cho CUDA 13 (cần driver
+  >= 580; laptop driver 550 báo `CUDA driver version is insufficient` rồi rơi về CPU), và 1.29.0 là bản CUDA 12 mới nhất
+  trên feed. Bản này cần libcudart 12.8+ nên `setup/gpu` override `nvidia-cuda-runtime-cu12==12.9.79` (torch cu126 vẫn chạy).
+  Chi tiết và cách kiểm ở `setup/gpu/README.md`.
 
 ### Bài sự cố cố ý
 

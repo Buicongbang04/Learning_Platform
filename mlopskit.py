@@ -6,9 +6,12 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
+import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -28,6 +31,12 @@ PROMETHEUS_IMAGE = "prom/prometheus:v3.5.0"
 ALERTMANAGER_IMAGE = "prom/alertmanager:v0.34.1"
 K6_IMAGE = "grafana/k6:1.8.1"
 ACT_INSTALL_HINT = "Chưa cài act. Xem module 08-cicd-for-ml, mục 0"
+KIND_CLUSTER = "mlops"
+KUBE_CONTEXT = "kind-mlops"
+KIND_HINT = "Chạy: bash setup/mlops/kind/up.sh (xem module 13-kubernetes-for-ml, mục 0)"
+LOCAL_BIN = Path.home() / ".local" / "bin"
+GPU_PROJECT = ROOT / "setup" / "gpu"
+TERMINATING_GRACE_S = 120
 
 STACK_SERVICES: dict[str, tuple[str, int]] = {
     "postgres": ("MLOPS_PG_PORT", 25433),
@@ -410,6 +419,7 @@ def _names(*args: str) -> list[str]:
 
 
 def leftovers(needle: str | None = None) -> list[str]:
+    """Rác còn lại: container, network, image Docker có nhãn/tiền tố `mlops-ex`, và namespace `mlops-ex-*` trong cluster kind `mlops` (Active, hoặc kẹt Terminating quá 2 phút)."""
     if not testkit.docker_ready():
         return []
     found = set()
@@ -423,4 +433,337 @@ def leftovers(needle: str | None = None) -> list[str]:
         name, _, project = line.partition(" ")
         if project.startswith(PREFIX):
             found.add(name)
+    found.update(_leftover_namespaces())
     return sorted(n for n in found if needle is None or needle in n)
+
+
+def _bin(name: str) -> str | None:
+    """Ưu tiên bản ghim, đã kiểm checksum trong `~/.local/bin` (do `setup/mlops/kind/up.sh` cài), rồi mới tới PATH."""
+    local = LOCAL_BIN / name
+    if local.is_file() and os.access(local, os.X_OK):
+        return str(local)
+    return shutil.which(name)
+
+
+def _kind_clusters(timeout: float = 30) -> list[str]:
+    binary = _bin("kind")
+    if binary is None:
+        return []
+    try:
+        result = subprocess.run([binary, "get", "clusters"], capture_output=True, text=True, timeout=timeout)
+    except (subprocess.SubprocessError, OSError):
+        return []
+    return result.stdout.split() if result.returncode == 0 else []
+
+
+def _kube_ready() -> bool:
+    try:
+        result = kubectl("get", "--raw", "/readyz", timeout=15)
+    except pytest.fail.Exception:
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "ok"
+
+
+def require_kind() -> None:
+    """Skip khi thiếu `kind`/`kubectl`, khi chưa có cluster `mlops` hoặc API server không phản hồi."""
+    missing = [name for name in ("kind", "kubectl") if _bin(name) is None]
+    if missing:
+        pytest.skip(f"Chưa cài {', '.join(missing)}. {KIND_HINT}")
+    if KIND_CLUSTER not in _kind_clusters():
+        pytest.skip(f"Chưa có cluster kind `{KIND_CLUSTER}`. {KIND_HINT}")
+    if not _kube_ready():
+        pytest.skip(f"Cluster kind `{KIND_CLUSTER}` không phản hồi (node bị dừng?). {KIND_HINT}")
+
+
+def kubectl(*args: str, namespace: str | None = None, input: str | None = None,
+            timeout: int = 120) -> subprocess.CompletedProcess:
+    """Chạy `kubectl --context kind-mlops [-n namespace] <args>`; không bao giờ dùng context hiện hành của máy."""
+    binary = _bin("kubectl")
+    if binary is None:
+        pytest.skip(f"Chưa cài kubectl. {KIND_HINT}")
+    command = [binary, "--context", KUBE_CONTEXT]
+    if namespace:
+        command += ["-n", namespace]
+    command += list(args)
+    try:
+        return subprocess.run(command, input=input, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"kubectl {' '.join(args)} quá {timeout} giây", pytrace=False)
+
+
+def _kubectl_quiet(*args: str, namespace: str | None = None, timeout: int = 15) -> subprocess.CompletedProcess:
+    """`kubectl` best-effort: không bao giờ raise; lỗi/quá hạn trả `CompletedProcess` mã 1 kèm lý do trong stderr."""
+    try:
+        return kubectl(*args, namespace=namespace, timeout=timeout)
+    except (pytest.fail.Exception, pytest.skip.Exception, subprocess.SubprocessError, OSError) as error:
+        return subprocess.CompletedProcess(list(args), 1, "", f"kubectl {' '.join(args)}: {error}")
+
+
+def _namespace_manifest(name: str, run: str) -> str:
+    return (
+        "apiVersion: v1\nkind: Namespace\nmetadata:\n"
+        f"  name: {name}\n  labels:\n    \"mlops-ex\": \"1\"\n    \"mlops-ex-run\": \"{run}\"\n"
+        "---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n"
+        f"  name: mlops-argo-executor\n  namespace: {name}\n"
+        "roleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: mlops-argo-executor\n"
+        f"subjects:\n  - kind: ServiceAccount\n    name: default\n    namespace: {name}\n"
+    )
+
+
+@contextmanager
+def k8s_namespace() -> Iterator[str]:
+    """Namespace tạm `mlops-ex-<uuid8>` (nhãn `mlops-ex=1`, `mlops-ex-run=<uuid8>`), xoá đúng namespace này trong `finally`.
+
+    ServiceAccount `default` của namespace được gắn ClusterRole `mlops-argo-executor` để chạy được Workflow Argo.
+    """
+    require_kind()
+    run = uuid.uuid4().hex[:8]
+    name = f"{PREFIX}{run}"
+    try:
+        result = kubectl("apply", "-f", "-", input=_namespace_manifest(name, run))
+        if result.returncode != 0:
+            pytest.fail(f"Không tạo được namespace {name}:\n{_tail(result)}", pytrace=False)
+        yield name
+    finally:
+        _delete_namespace(name)
+
+
+def _delete_namespace(name: str) -> None:
+    """Xoá namespace `name` (`--wait=false`); lỗi khi xoá chỉ ghi ra stderr, không che lỗi của chính test."""
+    result = _kubectl_quiet("delete", "namespace", name, "--wait=false", "--ignore-not-found", timeout=30)
+    if result.returncode != 0:
+        sys.stderr.write(f"mlopskit: không xoá được namespace {name}:\n{_tail(result)}\n")
+
+
+_XDG_CACHE = os.environ.get("XDG_CACHE_HOME") or ""
+CACHE_ROOT = Path(_XDG_CACHE) if os.path.isabs(_XDG_CACHE) else Path.home() / ".cache"
+KIND_LOAD_DIR = CACHE_ROOT / "mlops-kind" / "load"
+
+
+def kind_load(tag: str, timeout: int = 600) -> None:
+    """Nạp image `tag` từ Docker trên máy vào node của cluster `mlops`.
+
+    Dùng `docker save --platform` rồi `kind load image-archive`: Docker dùng containerd image store chỉ giữ blob của
+    nền tảng máy, nên `kind load docker-image` với image đa nền tảng kéo từ registry sẽ lỗi `content digest ... not found`.
+    Tệp tar tạm nằm trên đĩa (`~/.cache/mlops-kind/load`, quyền 0700), không ở `/tmp` (tmpfs, tốn RAM), xoá ngay sau khi nạp.
+    """
+    require_kind()
+    platform = f"linux/{_docker('version', '--format', '{{.Server.Arch}}').stdout.strip() or 'amd64'}"
+    KIND_LOAD_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    KIND_LOAD_DIR.chmod(0o700)
+    workdir = Path(tempfile.mkdtemp(prefix=PREFIX, dir=KIND_LOAD_DIR))
+    archive = workdir / "image.tar"
+    try:
+        try:
+            saved = _docker("save", "--platform", platform, "-o", str(archive), tag, timeout=timeout)
+            if saved.returncode != 0:
+                pytest.fail(f"docker save {tag} lỗi:\n{_tail(saved)}", pytrace=False)
+            result = subprocess.run([_bin("kind"), "load", "image-archive", str(archive), "--name", KIND_CLUSTER],
+                                    capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"kind load {tag} quá {timeout} giây", pytrace=False)
+        if result.returncode != 0:
+            pytest.fail(f"kind load {tag} lỗi:\n{_tail(result)}", pytrace=False)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def apply_manifest(path_or_text: Path | str, namespace: str, *, check: bool = True,
+                   timeout: int = 120) -> subprocess.CompletedProcess:
+    """`kubectl apply` một tệp/thư mục (`Path`) hoặc nội dung YAML (`str`) vào `namespace`; `check` fail khi lỗi."""
+    if isinstance(path_or_text, Path):
+        result = kubectl("apply", "-f", str(path_or_text), namespace=namespace, timeout=timeout)
+    else:
+        result = kubectl("apply", "-f", "-", namespace=namespace, input=path_or_text, timeout=timeout)
+    if check and result.returncode != 0:
+        pytest.fail(f"kubectl apply lỗi ({result.returncode}):\n{_tail(result)}", pytrace=False)
+    return result
+
+
+def _diagnose(kind: str, name: str, namespace: str) -> str:
+    """Thông tin chẩn đoán best-effort (timeout ngắn, không bao giờ raise)."""
+    parts = [f"--- kubectl describe {kind}/{name}", _tail(_kubectl_quiet("describe", kind, name, namespace=namespace), 60)]
+    pods = _kubectl_quiet("get", "pods", "-o", "name", namespace=namespace).stdout.split()
+    parts += ["--- pods", _tail(_kubectl_quiet("get", "pods", "-o", "wide", namespace=namespace), 20)]
+    for pod in pods[:6]:
+        logs = _kubectl_quiet("logs", pod, "--all-containers", "--prefix", "--tail=30", namespace=namespace)
+        parts += [f"--- logs {pod}", _tail(logs, 30)]
+    events = _kubectl_quiet("get", "events", "--sort-by=.lastTimestamp", namespace=namespace)
+    parts += ["--- events", _tail(events, 20)]
+    return "\n".join(parts)
+
+
+def _wait_fail(kind: str, name: str, namespace: str, reason: str) -> None:
+    pytest.fail(f"{kind}/{name}: {reason}\n{_diagnose(kind, name, namespace)}", pytrace=False)
+
+
+def _wait_timed_out(result: subprocess.CompletedProcess) -> bool:
+    return "timed out waiting" in result.stderr
+
+
+def wait_for(kind: str, name: str, condition: str, namespace: str, timeout: int,
+             fail_on: tuple[str, ...] = ()) -> None:
+    """Chờ tài nguyên xuất hiện (`--for=create`) rồi đạt `condition`, cả hai trong cùng `timeout` giây.
+
+    `condition` là tên condition (`Ready`) hoặc biểu thức đủ (`jsonpath={.status.phase}=Succeeded`, `delete`).
+    Với `delete` thì không chờ tạo; tài nguyên đã không còn là đạt. `fail_on` (vd. `("Failed", "Error")`) fail ngay khi
+    `.status.phase` rơi vào một trong các giá trị đó (Workflow Argo, Pod), thay vì chờ hết hạn. Lỗi không phải hết hạn
+    (condition sai cú pháp, thiếu quyền...) fail ngay kèm stderr của kubectl. Fail kèm `describe`, pod, log và events.
+    """
+    expr = condition if condition.startswith(("condition=", "jsonpath=", "delete", "create")) else f"condition={condition}"
+    deadline = time.monotonic() + timeout
+    target = f"{kind}/{name}"
+    if not expr.startswith(("delete", "create")):
+        created = kubectl("wait", "--for=create", target, f"--timeout={timeout}s", namespace=namespace,
+                          timeout=timeout + 30)
+        if created.returncode != 0:
+            reason = "không xuất hiện" if _wait_timed_out(created) else "kubectl wait --for=create lỗi"
+            _wait_fail(kind, name, namespace, f"{reason} (timeout {timeout} giây): {_tail(created, 5)}")
+    step = 5 if fail_on else None
+    while True:
+        remaining = max(1, int(deadline - time.monotonic()))
+        chunk = min(step, remaining) if step else remaining
+        result = kubectl("wait", f"--for={expr}", target, f"--timeout={chunk}s", namespace=namespace, timeout=chunk + 30)
+        if result.returncode == 0:
+            return
+        if not _wait_timed_out(result):
+            _wait_fail(kind, name, namespace, f"kubectl wait --for={expr} lỗi: {_tail(result, 5)}")
+        if fail_on:
+            phase = _kubectl_quiet("get", target, "-o", "jsonpath={.status.phase}", namespace=namespace).stdout.strip()
+            if phase in fail_on:
+                _wait_fail(kind, name, namespace, f"vào phase {phase} (chờ {expr})")
+        if time.monotonic() >= deadline:
+            _wait_fail(kind, name, namespace, f"không đạt {expr} sau {timeout} giây: {_tail(result, 5)}")
+        time.sleep(1)
+
+
+@contextmanager
+def port_forward(namespace: str, target: str, port: int, timeout: float = 30) -> Iterator[int]:
+    """`kubectl port-forward target <cổng tự do>:port` trên 127.0.0.1; trả cổng local, dừng tiến trình khi ra.
+
+    Sẵn sàng khi kubectl in `Forwarding from 127.0.0.1:<cổng>` (không thử kết nối vào cổng, để không gửi request thừa
+    tới service). Output của kubectl ghi (append) vào tệp tạm, không dùng PIPE (PIPE không đọc sẽ đầy và làm kubectl
+    treo); test đọc bằng một lần mở riêng, không đụng offset ghi của kubectl.
+    """
+    binary = _bin("kubectl")
+    if binary is None:
+        pytest.skip(f"Chưa cài kubectl. {KIND_HINT}")
+    local = testkit.free_port()
+    command = [binary, "--context", KUBE_CONTEXT, "-n", namespace, "port-forward", "--address", "127.0.0.1",
+               target, f"{local}:{port}"]
+    logdir = Path(tempfile.mkdtemp(prefix=PREFIX))
+    out_path, err_path = logdir / "stdout.log", logdir / "stderr.log"
+    ready = f"Forwarding from 127.0.0.1:{local}"
+    with open(out_path, "a", encoding="utf-8") as out, open(err_path, "a", encoding="utf-8") as err:
+        process = subprocess.Popen(command, stdout=out, stderr=err, text=True)
+    try:
+        deadline = time.monotonic() + timeout
+        while ready not in out_path.read_text(encoding="utf-8", errors="replace"):
+            if process.poll() is not None:
+                stderr = err_path.read_text(encoding="utf-8", errors="replace")
+                pytest.fail(f"kubectl port-forward {target} thoát sớm:\n{stderr[-4000:]}", pytrace=False)
+            if time.monotonic() > deadline:
+                stderr = err_path.read_text(encoding="utf-8", errors="replace")
+                pytest.fail(f"kubectl port-forward {target} chưa sẵn sàng sau {timeout} giây:\n{stderr[-2000:]}",
+                            pytrace=False)
+            time.sleep(0.1)
+        yield local
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        shutil.rmtree(logdir, ignore_errors=True)
+
+
+def _leftover_namespaces() -> list[str]:
+    """Best-effort: không có cluster hay cluster không phản hồi thì trả `[]` nhanh, không bao giờ fail."""
+    if _bin("kubectl") is None or KIND_CLUSTER not in _kind_clusters(timeout=10):
+        return []
+    result = _kubectl_quiet(
+        "get", "namespaces", "-o",
+        'jsonpath={range .items[*]}{.metadata.name} {.status.phase} {.metadata.deletionTimestamp}{"\\n"}{end}',
+        timeout=10,
+    )
+    if result.returncode != 0:
+        return []
+    now = datetime.now(timezone.utc)
+    names = []
+    for line in result.stdout.splitlines():
+        name, phase, deleted = (line.split(" ") + ["", ""])[:3]
+        if not name.startswith(PREFIX):
+            continue
+        if phase == "Active":
+            names.append(name)
+        elif phase == "Terminating" and deleted:
+            since = datetime.fromisoformat(deleted.replace("Z", "+00:00"))
+            if (now - since).total_seconds() > TERMINATING_GRACE_S:
+                names.append(name)
+    return names
+
+
+def require_cuda() -> None:
+    """Skip `"Không có CUDA"` khi máy không có GPU NVIDIA dùng được (`nvidia-smi -L` lỗi hoặc không thấy GPU)."""
+    binary = shutil.which("nvidia-smi")
+    if binary is None:
+        pytest.skip("Không có CUDA (không thấy nvidia-smi); bài này có đường CPU")
+    try:
+        result = subprocess.run([binary, "-L"], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        pytest.skip("Không có CUDA (nvidia-smi không phản hồi); bài này có đường CPU")
+    if result.returncode != 0 or "GPU" not in result.stdout:
+        pytest.skip("Không có CUDA (nvidia-smi không thấy GPU); bài này có đường CPU")
+
+
+GPU_SYNC_HINT = "Chạy: uv sync --project setup/gpu"
+_GPU_ENV_STATE: dict[str, str] = {}
+
+
+def _gpu_env_problem() -> str:
+    """Rỗng khi env `setup/gpu` dùng được (có onnxruntime-gpu, không có onnxruntime CPU đè lên); ngược lại là lý do."""
+    if "problem" in _GPU_ENV_STATE:
+        return _GPU_ENV_STATE["problem"]
+    python = GPU_PROJECT / ".venv" / "bin" / "python"
+    if not python.is_file():
+        problem = "Chưa có môi trường setup/gpu"
+    else:
+        probe = (
+            "import importlib.metadata as m\n"
+            "import re\n"
+            "names = {re.sub(r'[-_.]+', '-', d.metadata['Name']).lower() for d in m.distributions() if d.metadata['Name']}\n"
+            "print('gpu' if 'onnxruntime-gpu' in names else 'nogpu', 'cpu' if 'onnxruntime' in names else 'nocpu')\n"
+        )
+        try:
+            result = subprocess.run([str(python), "-I", "-c", probe], capture_output=True, text=True, timeout=60)
+            state = result.stdout.split()
+        except (subprocess.SubprocessError, OSError) as error:
+            state = [f"lỗi {error}"]
+        if state == ["gpu", "nocpu"]:
+            problem = ""
+        elif "cpu" in state:
+            problem = "Môi trường setup/gpu còn gói onnxruntime (CPU) đè lên onnxruntime-gpu"
+        else:
+            problem = f"Môi trường setup/gpu chưa có onnxruntime-gpu ({' '.join(state)})"
+    _GPU_ENV_STATE["problem"] = problem
+    return problem
+
+
+def _gpu_env_ready() -> bool:
+    return _gpu_env_problem() == ""
+
+
+def gpu_python(script: str, cwd: Path, timeout: int = 300) -> subprocess.CompletedProcess:
+    """Chạy `python -I -c script` bằng môi trường `setup/gpu` (torch CUDA, onnxruntime-gpu) trong `cwd`; script in JSON ra stdout.
+
+    Dùng `uv run --no-sync` (test không bao giờ tự sync/tải gói) và `python -I` (không import module nằm trong `cwd`).
+    Skip kèm lệnh `uv sync --project setup/gpu` khi env chưa có hoặc chưa đúng.
+    """
+    if not _gpu_env_ready():
+        pytest.skip(f"{_gpu_env_problem()}. {GPU_SYNC_HINT}")
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    command = ["uv", "run", "--no-sync", "--project", str(GPU_PROJECT), "python", "-I", "-c", script]
+    try:
+        return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"gpu_python quá {timeout} giây", pytrace=False)
