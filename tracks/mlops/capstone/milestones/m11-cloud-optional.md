@@ -75,9 +75,11 @@ bash cloud/teardown.sh --yes     [--inventory FILE]
 - Không có `--inventory`: hỏi cloud (AWS: `aws resourcegroupstaggingapi get-resources --tag-filters Key=project,Values=eta-mlops`;
   IAM role không luôn hiện ở API này, nên đặt role dưới một `path` riêng và liệt kê thêm bằng `aws iam list-roles
   --path-prefix`). Không bị test kiểm nhưng hay vấp khi chạy thật: Tagging API theo **vùng**, nên truyền `--region` bằng
-  vùng trong Terraform (cho người chạy đổi được, ví dụ cờ `--region` của script), không dựa vào vùng mặc định của CLI; và
-  output `--output json` của CLI là JSON **nhiều dòng**, đọc cả output bằng một trình phân tích JSON, đừng ghép tay thành
-  JSON Lines.
+  vùng trong Terraform (cho người chạy đổi được, ví dụ cờ `--region` của script), không dựa vào vùng mặc định của CLI;
+  budget AWS là toàn cục, liệt kê riêng như IAM role (`aws budgets describe-budgets --account-id ...` rồi
+  `aws budgets list-tags-for-resource`); xoá Lambda và log group ở đúng vùng trong ARN của chúng; CLI tự gộp mọi trang của
+  `get-resources`, đừng tự truyền `--pagination-token`; và output `--output json` của CLI là JSON **nhiều dòng**, đọc cả
+  output bằng một trình phân tích JSON, đừng ghép tay thành JSON Lines.
 - Có `--inventory FILE`: đọc danh sách từ tệp JSON thay vì hỏi cloud, định dạng:
 
   ```json

@@ -52,18 +52,16 @@ def aws(*args):
     return json.loads(done.stdout or "{}")
 
 
-mappings = []
-token = None
-while True:
-    page = aws("resourcegroupstaggingapi", "get-resources", "--region", region,
-               "--tag-filters", f"Key={key},Values={value}", *(["--pagination-token", token] if token else []))
-    mappings += page.get("ResourceTagMappingList", [])
-    token = page.get("PaginationToken")
-    if not token:
-        break
+mappings = aws("resourcegroupstaggingapi", "get-resources", "--region", region,
+               "--tag-filters", f"Key={key},Values={value}").get("ResourceTagMappingList", [])
 for role in aws("iam", "list-roles", "--path-prefix", role_path).get("Roles", []):
     tags = aws("iam", "list-role-tags", "--role-name", role["RoleName"]).get("Tags", [])
     mappings.append({"ResourceARN": role["Arn"], "Tags": tags})
+account = aws("sts", "get-caller-identity")["Account"]
+for budget in aws("budgets", "describe-budgets", "--account-id", account).get("Budgets", []):
+    arn = f"arn:aws:budgets::{account}:budget/{budget['BudgetName']}"
+    tags = aws("budgets", "list-tags-for-resource", "--resource-arn", arn).get("ResourceTags", [])
+    mappings.append({"ResourceARN": arn, "Tags": tags})
 
 seen, resources = set(), []
 for item in mappings:
@@ -85,6 +83,7 @@ PY
     INVENTORY="$WORK/inventory.json"
 }
 
+INVENTORY_ARG="$INVENTORY"
 [ -n "$INVENTORY" ] || collect_inventory
 
 python3 - "$INVENTORY" "$TAG_KEY" "$TAG_VALUE" > "$WORK/plan.tsv" <<'PY' || exit 2
@@ -115,10 +114,12 @@ delete_role() {
 }
 
 delete_one() {
-    local type="$1" id="$2" name="$3"
+    local type="$1" id="$2" name="$3" region
+    region=$(echo "$id" | cut -d: -f4)
+    region="${region:-$REGION}"
     case "$type" in
-        aws_lambda_function) aws lambda delete-function --region "$REGION" --function-name "$name" ;;
-        aws_cloudwatch_log_group) aws logs delete-log-group --region "$REGION" --log-group-name "$name" ;;
+        aws_lambda_function) aws lambda delete-function --region "$region" --function-name "$name" ;;
+        aws_cloudwatch_log_group) aws logs delete-log-group --region "$region" --log-group-name "$name" ;;
         aws_s3_bucket) aws s3 rb "s3://$name" --force ;;
         aws_iam_role) delete_role "$name" ;;
         aws_budgets_budget) aws budgets delete-budget --account-id "$(echo "$id" | cut -d: -f5)" --budget-name "$name" ;;
@@ -134,7 +135,12 @@ if [ "$DRY_RUN" -eq 1 ]; then
         echo "WOULD DELETE $type $id"
     done < "$WORK/plan.tsv"
     [ -z "$unknown" ] || echo "Cảnh báo, loại chưa có lệnh xoá (phải xoá tay): $unknown" >&2
-    echo "Tổng: $count tài nguyên mang tag $TAG_KEY=$TAG_VALUE ở vùng $REGION, cộng IAM và budget toàn cục (dry-run, không xoá gì)" >&2
+    if [ -n "$INVENTORY_ARG" ]; then
+        where="trong inventory $INVENTORY_ARG"
+    else
+        where="ở vùng $REGION, cộng IAM role dưới $ROLE_PATH và budget toàn cục"
+    fi
+    echo "Tổng: $count tài nguyên mang tag $TAG_KEY=$TAG_VALUE $where (dry-run, không xoá gì)" >&2
     exit 0
 fi
 

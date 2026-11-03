@@ -312,11 +312,15 @@ Không test nào chạm cloud; bản này chưa được `apply` trong lúc vi�
   không bao giờ dọn dở dang. Thứ tự: Lambda, log group, bucket (`rb --force`), role (gỡ policy trước), budget cuối.
 - **Một lệnh xoá lỗi không dừng cả lượt.** Không dùng `set -e` cho vòng xoá: dừng ở bucket lỗi thì role và budget còn đó;
   chạy hết, in `FAILED: <type> <id>` ra stderr, exit 1 (cùng bài học với bài kế hoạch dọn của module 12).
-- **Đọc output `aws` bằng Python, theo vùng.** Mỗi lệnh đọc (`get-resources` có phân trang, `list-roles`, `list-role-tags`)
-  gọi với `--output json` và `json.loads` cả output (JSON của CLI nhiều dòng, không ghép tay thành JSON Lines được).
+- **Đọc output `aws` bằng Python, theo vùng.** Mỗi lệnh đọc gọi với `--output json` và `json.loads` cả output (JSON của
+  CLI nhiều dòng, không ghép tay thành JSON Lines được). `get-resources` là thao tác có paginator trong botocore nên CLI
+  tự gộp mọi trang; tự truyền `--pagination-token` lại tắt việc đó, nên script không tự phân trang.
   Tagging API theo vùng: `--region` (mặc định `us-east-1` như `var.region`, đổi bằng `--region` hay `ETA_AWS_REGION`),
-  không dựa vào vùng mặc định của CLI, nếu không dry-run in 0 dòng trong khi Lambda vẫn chạy ở vùng khác. Đường này kiểm
-  bằng `aws` giả trong `tests/test_mlops_capstone_cloud.py` ở gốc repo.
+  không dựa vào vùng mặc định của CLI, nếu không dry-run in 0 dòng trong khi Lambda vẫn chạy ở vùng khác. IAM role và
+  budget là toàn cục nên liệt kê riêng: `iam list-roles --path-prefix` + `list-role-tags`, và `sts get-caller-identity`
+  → `budgets describe-budgets --account-id` + `budgets list-tags-for-resource`. Lệnh xoá Lambda và log group lấy vùng
+  từ ARN của chính tài nguyên (inventory có thể trộn vùng), `--region` chỉ là dự phòng. Đường này kiểm bằng `aws` giả
+  trong `tests/test_mlops_capstone_cloud.py` ở gốc repo.
 - **Lambda URL `NONE`** cho tiện thử, kèm hai `aws_lambda_permission` công khai (`InvokeFunctionUrl` và `InvokeFunction`, AWS đòi cả hai từ cuối 2025). Quyền `InvokeFunction` cho `"*"` **phải** có `invoked_via_function_url = true` (điều kiện `lambda:InvokedViaFunctionUrl`, provider AWS từ 6.28): thiếu nó thì bất kỳ tài khoản AWS nào cũng gọi thẳng `Invoke` được, không qua URL. `budget.md` ghi rủi ro và cách chuyển sang
   `AWS_IAM`.
 
