@@ -1,6 +1,7 @@
 import json
 import subprocess
 import time
+import uuid
 
 import jsonschema
 import pytest
@@ -26,7 +27,7 @@ echo "proxy=$(grep -h '^https_proxy=' /etc/environment 2>/dev/null | cut -d= -f2
 """
 
 
-def survey(m) -> dict:
+def survey(m) -> tuple[dict, str]:
     started = time.monotonic()
     try:
         result = m.ssh(f"sh {REMOTE}", timeout=BUDGET_SECONDS * 2)
@@ -43,7 +44,7 @@ def survey(m) -> dict:
         jsonschema.validate(report, SCHEMA)
     except jsonschema.ValidationError as error:
         pytest.fail(f"JSON không khớp schema.json: {error.message} (ở {list(error.absolute_path)})")
-    return report
+    return report, result.stdout
 
 
 def measure(m) -> dict:
@@ -74,15 +75,19 @@ def check(report: dict, truth: dict, facts: dict, *, proxy: str | None, egress: 
 def test_survey_on_hospital_before_and_after_it_changes():
     script = ex.path("site_survey.sh")
     facts = fdekit.PROFILES["hospital"].facts
+    secret = uuid.uuid4().hex
     with fdekit.customer_site("hospital", memory_mb=HOSPITAL_MEMORY_MB) as s:
         s.vm.put(script, REMOTE)
-        first, first_truth = survey(s.vm), measure(s.vm)
-        change = s.vm.ssh("sudo -n sed -i '/_proxy=/d' /etc/environment && fallocate -l 1G /home/fde/backup.img")
+        (first, _), first_truth = survey(s.vm), measure(s.vm)
+        change = s.vm.ssh(f"sudo -n sed -i 's#http://10.0.2.100#http://svc:{secret}@10.0.2.100#' /etc/environment"
+                          " && fallocate -l 1G /home/fde/backup.img")
         assert change.returncode == 0, f"Không đổi được cấu hình VM: {change.stderr}"
-        second, second_truth = survey(s.vm), measure(s.vm)
+        (second, raw), second_truth = survey(s.vm), measure(s.vm)
     check(first, first_truth, facts, proxy=facts["proxy_url"], egress=facts["egress"])
     assert first_truth["proxy"] == facts["proxy_url"]
-    check(second, second_truth, facts, proxy=None, egress="none")
+    assert second_truth["proxy"] == f"http://svc:{secret}@10.0.2.100:3128", "Không đặt được proxy có mật khẩu trong VM"
+    assert secret not in raw, "Mật khẩu proxy lọt vào output của survey; bỏ phần user:pass@ khỏi URL"
+    check(second, second_truth, facts, proxy=facts["proxy_url"], egress=facts["egress"])
     assert first["disk_free_gb_max"] - second["disk_free_gb_max"] >= 0.8, "Đã ghi 1 GiB nhưng disk_free_gb_max không giảm"
 
 
@@ -91,6 +96,6 @@ def test_survey_on_bank():
     facts = fdekit.PROFILES["bank"].facts
     with fdekit.customer_site("bank") as s:
         s.vm.put(script, REMOTE)
-        report, truth = survey(s.vm), measure(s.vm)
+        (report, _), truth = survey(s.vm), measure(s.vm)
     check(report, truth, facts, proxy=None, egress=facts["egress"])
     assert 0.8 * facts["mem_mb"] <= report["mem_mb"] <= facts["mem_mb"]

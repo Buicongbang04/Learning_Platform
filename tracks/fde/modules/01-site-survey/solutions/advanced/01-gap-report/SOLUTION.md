@@ -25,14 +25,14 @@
 | --- | --- |
 | R1 | Đoạn "Kết luận": 3 câu, nói rõ chưa cài được, hai việc chặn, mốc 09/11, cửa sổ 05/11 hoặc 20:30 ngày 12/11 |
 | R2 | Bảng "Tóm tắt" đủ 6 cột |
-| R3 | Đĩa và cổng: số đo, nguồn, yêu cầu, người làm, hạn đúng lịch cửa sổ |
+| R3 | Đĩa và cổng: số đo, nguồn (kiểm tra chỉ đọc ngày 04/11, tài khoản cài đặt), yêu cầu, người làm, hạn đúng lịch cửa sổ |
 | R4 | Hai phương án đĩa (nới đĩa ảo, hoặc volume riêng cho dữ liệu Docker), không đề nghị dọn dữ liệu |
 | R5 | Cổng: nói rõ không thấy tiến trình, lệnh `sudo ss -tlnp 'sport = :18080'`, phương án đổi cổng do IT chọn |
 | R6 | "Proxy và chứng chỉ": không chặn ngày cài; IT cấp tệp CA, FDE cấu hình |
 | R7 | Không có đề nghị nới bảo mật nào; câu cuối mục proxy nói rõ điều đó |
 | R8 | "Việc phía chúng tôi" |
 | R9 | "Cần xác nhận": NTP, tiến trình trên 18080, người trực |
-| R10 | Không tên tệp/hàm nội bộ, "Chặn" được định nghĩa, 50 dòng |
+| R10 | Không tên tệp/hàm nội bộ, "Chặn" được định nghĩa, 51 dòng |
 
 ## Bài mẫu
 
@@ -50,7 +50,8 @@ và cổng 18080 đang có một tiến trình khác nghe. Để giữ cửa s�
 
 ## Tóm tắt
 
-"Chặn" là việc phải xong trước khi bắt đầu cài; các mục còn lại không ảnh hưởng ngày 12/11.
+Số đo lấy từ bộ kiểm tra chỉ đọc anh Tuấn chạy ngày 04/11 bằng tài khoản cài đặt trên srv-ai01. "Chặn" là việc phải
+xong trước khi bắt đầu cài; các mục còn lại không ảnh hưởng ngày 12/11.
 
 | Hạng mục | Hiện trạng (đo ngày 04/11) | Yêu cầu | Mức | Ai làm | Hạn |
 | --- | --- | --- | --- | --- | --- |

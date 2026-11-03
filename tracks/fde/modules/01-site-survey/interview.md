@@ -50,11 +50,12 @@ là lỗi những thứ thật sự hỏng (không tạo được thư mục ra)
 
 ## Khách gửi lại: "chạy script của anh ra `lsb_release: command not found`". Bạn làm gì?
 
-Không sửa đúng một dòng rồi gửi lại. Lỗi đó nói máy là họ RHEL tối thiểu, nên giả định phía sau còn nữa: `sudo` không có
-quyền, `resolvectl` có nhưng resolved không chạy, không có Docker mà là Podman, không có `python3`. Rà toàn bộ script với
-ba câu hỏi (lệnh có trong bản tối thiểu không, có cần quyền không, có giả định dịch vụ đang chạy không), dựng một máy
-cùng họ (Rocky 8, không sudo, không mạng) để chạy thử, rồi gửi một bản sửa duy nhất kèm sha256 và câu "đã chạy thử trên
-Rocky 8.10 không sudo, không mạng".
+Không sửa đúng một dòng rồi gửi lại. Lỗi đó cho biết máy thuộc họ distro khác với nơi script được viết, nên giả định
+phía sau còn lỗi nữa: khách chỉ thấy chỗ đầu tiên script dừng. Cách làm: dựng một máy giống khách nhất có thể (cùng
+distro và bản, cùng ràng buộc quyền và mạng) để tái hiện; rà toàn bộ script với ba câu hỏi (lệnh có trong bản cài tối
+thiểu không, có cần quyền user này không có không, có giả định dịch vụ nào đang chạy không); sửa và chạy lại từng chỗ
+cho tới khi script đi hết trên máy giống khách; rồi mới gửi **một** bản sửa kèm sha256 và câu nói rõ đã chạy thử trên
+môi trường nào.
 
 Đồng thời xin lỗi ngắn gọn vì tốn một vòng của khách; ở ngân hàng mỗi vòng có thể là một lần duyệt change.
 
@@ -103,6 +104,17 @@ ngoài có timeout (firewall có thể ghi log), một lần `sudo -n true` (có
 bản đã duyệt, và đề nghị họ đọc script, nó ngắn.
 
 Nếu họ không cho chạy script: gửi danh sách lệnh để IT tự chạy và chép output. Chậm hơn nhưng vẫn là dữ liệu.
+
+## Support bundle của bạn được gửi qua ticket của khách. Những gì nó không được thu, và bạn làm gì với dữ liệu nhạy cảm?
+
+Không thu: dump biến môi trường, lịch sử shell, tệp cấu hình chứa token hay mật khẩu (`~/.docker/config.json`, `.netrc`,
+`.env`), khoá, dữ liệu nghiệp vụ hay log ứng dụng có dữ liệu người dùng. Ticket và email sống lâu hơn dự án, và có nhiều
+người đọc hơn bạn nghĩ.
+
+Thứ cần thu thì che trước khi ghi vào tệp: bỏ `user:pass@` trong URL proxy hay registry, che giá trị sau `password=`,
+`token=`, `secret=`, `Authorization:`. Rồi liệt kê cho người duyệt phía khách đúng những gì bundle chứa, kể cả thứ nhạy cảm
+với họ dù không phải "bí mật": IP nội bộ, route, cổng mở, DNS server, tên máy. Họ được quyết định trước, không phải phát
+hiện sau.
 
 ## Bạn gửi báo cáo khoảng cách cho IT khách. Cấu trúc nó thế nào? Điều gì làm báo cáo bị bỏ qua?
 

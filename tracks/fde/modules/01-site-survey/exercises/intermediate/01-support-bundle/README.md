@@ -17,7 +17,7 @@ run:
 ## Mục tiêu
 
 Sửa một công cụ thu thập chẩn đoán đang "chạy tốt ở mọi khách" để nó chạy được ở khách mới, khi bạn **không** ngồi trước
-máy đó và mỗi vòng gửi đi gửi lại tốn một ngày.
+máy đó và mỗi vòng gửi đi gửi lại tốn một ngày. Script có thể hỏng ở nhiều chỗ, không chỉ chỗ khách nhìn thấy.
 
 ## Đề bài
 

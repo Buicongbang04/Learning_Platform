@@ -13,8 +13,8 @@ run:
 
 ## Mục tiêu
 
-Biến báo cáo survey thành quyết định: máy này cài được `quillo` không, cái gì **chặn** (blocker, phải xử lý trước ngày
-cài) và cái gì chỉ cần **lưu ý** (warning, có cách làm nhưng tốn công hoặc cần IT phối hợp).
+Biến báo cáo survey thành quyết định: máy này cài được `quillo` không, cái gì **chặn** (blocker: có người khác, thường là IT
+khách, phải làm trước ngày cài) và cái gì chỉ cần **lưu ý** (warning: FDE tự xử lý được trong buổi cài nếu đã chuẩn bị).
 
 ## Đề bài
 

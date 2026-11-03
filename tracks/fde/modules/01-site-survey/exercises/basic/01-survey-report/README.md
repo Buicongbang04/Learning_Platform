@@ -37,11 +37,11 @@ object JSON** hợp lệ theo `schema.json`, gồm đúng 13 khoá sau (không t
 | `mem_mb` | số nguyên | `MemTotal` trong `/proc/meminfo`, đổi ra MiB (chia 1024, bỏ phần lẻ) |
 | `disk_free_gb_max` | số | Dung lượng còn trống **cho user thường** trên filesystem chứa `/`, đơn vị GiB, làm tròn 1 chữ số thập phân |
 | `gpu` | chuỗi hoặc `null` | Tên GPU NVIDIA nếu có, không có thì `null` |
-| `proxy_url` | chuỗi hoặc `null` | Proxy HTTPS khách cấu hình cho user (biến môi trường hoặc `/etc/environment`), không có thì `null` |
+| `proxy_url` | chuỗi hoặc `null` | Proxy HTTPS khách cấu hình cho user (biến môi trường hoặc `/etc/environment`), **bỏ phần `user:mật_khẩu@`** nếu URL có, không có thì `null` |
 | `sudo` | boolean | `true` nếu user chạy được `sudo` **không cần mật khẩu** |
 | `selinux` | chuỗi | `enforcing`, `permissive`, `disabled`, hoặc `n/a` khi máy không có SELinux |
 | `runtime` | chuỗi hoặc `null` | `docker` hoặc `podman` (cái nào có lệnh trên máy; có cả hai thì `docker`), không có thì `null` |
-| `egress` | chuỗi | `open`, `proxy` hoặc `none`, cùng định nghĩa với bài `01-lab-ready` của module 00 |
+| `egress` | chuỗi | `open`, `proxy` hoặc `none`, cùng định nghĩa với bài `01-lab-ready` của module 00: tới được proxy đã khai và đi qua nó được là `proxy`, kể cả khi HTTPS qua proxy lỗi chứng chỉ (proxy soi HTTPS bằng CA nội bộ chưa trust) |
 
 Tên khoá trùng với `fdekit.PROFILES[<hồ sơ>].facts`. Riêng `disk_free_gb_max`: trong hồ sơ đó là **cận trên** cho mọi
 VM boot từ golden; trong báo cáo của bạn là con số **đo được**, nên phải nhỏ hơn hoặc bằng cận trên.
@@ -52,10 +52,13 @@ Ràng buộc:
   ngoài `/tmp`.
 - Máy khách không chắc có `python3`, `jq`: JSON phải được tạo bằng shell. Starter cho sẵn hàm `json_string`.
 - Thoát mã `0` trong 30 giây kể cả khi không có mạng; không in gì khác ra stdout (thông báo phụ ra stderr).
+- Báo cáo sẽ được gửi qua email, ticket: không bao giờ chứa mật khẩu. URL proxy dạng `http://user:pass@host:port` phải
+  được in thành `http://host:port`, và mật khẩu không được xuất hiện ở bất kỳ đâu trong stdout.
 
 Test không chỉ so với hồ sơ: nó đo lại "sự thật" ngay trong cùng VM bằng lệnh của chính nó, và **đổi máy** giữa hai lần
-chạy. Trên `hospital` (boot với RAM khác mặc định): chạy lần một; rồi IT "gỡ proxy" khỏi `/etc/environment` và một tệp
-1 GiB được ghi vào đĩa; chạy lần hai. In hằng số sẽ không qua.
+chạy. Trên `hospital` (boot với RAM khác mặc định): chạy lần một; rồi IT đổi proxy trong `/etc/environment` sang tài
+khoản dịch vụ có mật khẩu (`http://svc:<mật khẩu ngẫu nhiên>@10.0.2.100:3128`) và một tệp 1 GiB được ghi vào đĩa; chạy
+lần hai. In hằng số sẽ không qua.
 
 ## Tiêu chí đạt
 
@@ -67,8 +70,8 @@ chạy. Trên `hospital` (boot với RAM khác mặc định): chạy lần mộ
 - `disk_free_gb_max` lệch không quá 0,15 GiB so với cột "Available" của `df -P -k /` và không vượt cận trên của hồ sơ; sau
   khi ghi 1 GiB, giảm ít nhất 0,8.
 - `gpu` là `null`; `sudo`, `selinux`, `runtime` bằng giá trị trong `facts`.
-- `hospital` lần một: `proxy_url` = `http://10.0.2.100:3128`, `egress` = `proxy`. Lần hai (đã gỡ proxy): `proxy_url` =
-  `null`, `egress` = `none`. `bank`: `proxy_url` = `null`, `egress` = `none`.
+- `hospital` lần một: `proxy_url` = `http://10.0.2.100:3128`, `egress` = `proxy`. Lần hai (proxy có mật khẩu): `proxy_url`
+  vẫn = `http://10.0.2.100:3128`, `egress` = `proxy`, và chuỗi mật khẩu không xuất hiện trong stdout. `bank`: `proxy_url` = `null`, `egress` = `none`.
 
 ## Gợi ý
 

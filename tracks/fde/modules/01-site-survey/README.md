@@ -152,8 +152,8 @@ tối thiểu của lab.
 
 **`set -e` không phải bạn của script dò.** Lệnh dò thất bại là **dữ liệu** ("không có getenforce" nghĩa là không có
 SELinux), không phải lỗi. Mỗi lệnh dò nằm trong `if` hoặc có `||`; khi một phần không thu được, ghi lý do vào output thay
-vì dừng hay bỏ trống. Bài Intermediate 01 cho thấy cái giá: một script `set -eu` dừng ở lỗi đầu tiên, khách gửi lại một
-dòng lỗi, sửa xong lại hỏng chỗ khác, có vòng còn **không in gì** vì stderr đã bị chuyển vào tệp.
+vì dừng hay bỏ trống. Cái giá của `set -eu` trong script dò: khách chỉ gửi lại được lỗi đầu tiên, và mỗi vòng sửa rồi gửi
+lại tốn một ngày.
 
 **Cố định môi trường của chính script.** `LC_ALL=C` để `awk printf "%.1f"` không in dấu phẩy theo locale; đặt timeout cho
 mọi lệnh mạng (`curl --max-time 5`) để máy air-gapped không treo; không dựa vào `$USER`, `$HOME` hay biến proxy của phiên
@@ -164,6 +164,13 @@ Một dòng thông báo lạc vào stdout làm hỏng parser của bạn ở ph�
 
 **Schema cố định, có kiểu.** Báo cáo có tập khoá và kiểu cố định (`null` thay vì chuỗi rỗng, số là số, boolean là
 boolean), kiểm bằng JSON Schema. Preflight và báo cáo khoảng cách dựng trên schema đó; đổi schema là đổi hợp đồng.
+
+**Không mang bí mật về.** Survey và support bundle đi qua email, ticket, ổ chung: coi mọi thứ chúng thu được là sẽ bị
+đọc bởi người không nên đọc. Không bao giờ thu: dump biến môi trường (`env`, `/proc/*/environ`), lịch sử shell, tệp
+cấu hình có token (`~/.docker/config.json`, `.netrc`, `.env`, `.pgpass`), khoá, dữ liệu nghiệp vụ. Thứ cần thì che trước
+khi ghi: bỏ `user:pass@` trong URL (`sed 's#//[^/@]*@#//#'`), che giá trị sau `password=`, `token=`, `secret=`. Và nói
+cho người duyệt phía khách **đúng** những gì được thu, kể cả thứ trông vô hại nhưng nhạy cảm với họ: IP nội bộ và route
+(`ip addr`, `ip route`), cổng đang mở và địa chỉ bind (`ss`), tên máy, DNS server nội bộ.
 
 **Dễ duyệt.** Ngắn, không tải gì, không `eval` dữ liệu đọc được, liệt kê được lệnh và tệp nó đụng tới. Gửi kèm sha256 để
 người chạy biết đúng bản đã duyệt.

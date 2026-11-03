@@ -14,6 +14,11 @@
    | Kết quả survey | Cần trước khi viết hồ sơ change | Gửi về 16/11 |
    | Script survey duyệt xong | 5 ngày làm việc | Gửi duyệt 05/11 ⇒ xong 12/11 (06, 09, 10, 11, 12) |
 
+   Đây là hạn **muộn nhất**; bài mẫu xin sớm hơn ở chỗ được (thẻ ra vào, VDI) vì một ngày nghỉ hay một câu hỏi lại của
+   An ninh thông tin là đủ làm trượt. Hồ sơ change nộp 19/11 trong khi bundle còn đang duyệt tới 23/11: đó là rủi ro có
+   chủ ý (CAB duyệt các bước, không duyệt tệp), phải ghi trong hồ sơ rằng việc cài phụ thuộc kết quả duyệt bundle, và
+   nếu An ninh thông tin từ chối thì rút change thay vì cài bản chưa duyệt.
+
    Hệ quả: script survey phải gửi **ngày mai**. Đây là điểm hay bị lỡ nhất: FDE quen "đến nơi rồi chạy survey".
 2. **Thứ cần quyền** cho Podman rootless (gợi ý 2): `loginctl enable-linger` để container chạy tiếp sau khi đăng xuất và
    tự lên sau khi khởi động lại; mở cổng `18080/tcp` trên firewalld nếu người dùng truy cập từ máy khác; kiểm
@@ -27,7 +32,7 @@
 | # | Bài mẫu đạt ở đâu |
 | --- | --- |
 | P1 | Thư 13 dòng có chữ, nêu mục đích, mốc 23/11 và 28/11, ba việc cần anh Khoa phản hồi kèm hạn |
-| P2 | Checklist: VDI và tài khoản dịch vụ trước 13/11, thẻ ra vào 18/11 |
+| P2 | Checklist: VDI và tài khoản dịch vụ trước 13/11, thẻ ra vào 16/11 (hạn muộn nhất 18/11) |
 | P3 | Mục "Thao tác cần quyền quản trị": bốn việc, có lý do; không xin sudo |
 | P4 | Mục "Ai quyết việc gì" và dòng báo chặn |
 | P5 | Lịch khớp các thời hạn ở bảng trên |
@@ -56,7 +61,7 @@ Ba việc em cần anh phản hồi:
    thông tin máy, không cần mạng, không cần quyền quản trị.
 2. Trước thứ Sáu 13/11: tạo tài khoản VDI cho em, xác nhận tài khoản dịch vụ trên máy chủ, và trả lời các câu hỏi ở
    mục "Câu hỏi".
-3. Trước thứ Tư 18/11: đăng ký thẻ ra vào cho em từ ngày 23/11.
+3. Trước thứ Hai 16/11 (hạn muộn nhất của bên mình là 18/11): đăng ký thẻ ra vào cho em từ ngày 23/11.
 
 Em sẽ gửi bản mô tả thay đổi (các bước, cách hoàn tác, bốn thao tác cần quyền quản trị) trước thứ Tư 18/11 để anh nộp
 CAB hạn thứ Năm 19/11. Việc nào bị chặn quá một ngày, em sẽ báo anh và anh Dũng ngay.
@@ -72,7 +77,8 @@ Cảm ơn anh.
 | Thứ Sáu 13/11 | Tài khoản VDI cho em; xác nhận tài khoản dịch vụ trên máy chủ | Anh Khoa | Không cần sudo |
 | Thứ Sáu 13/11 | Chốt dữ liệu pilot: tập hợp đồng nào, đã được phép dùng chưa | Anh Dũng, chị Mai duyệt | Dữ liệu nằm trên máy chủ ngân hàng, không chép ra máy của em |
 | Thứ Hai 16/11 | Đưa bản cài vào qua MFT để An ninh thông tin duyệt | Em | 3,5 GB chia hai tệp dưới 2 GB, kèm manifest sha256 để kiểm sau khi nhận; duyệt xong dự kiến 23/11 |
-| Thứ Tư 18/11 | Gửi bản mô tả thay đổi; đăng ký thẻ ra vào | Em; anh Khoa | |
+| Thứ Hai 16/11 | Đăng ký thẻ ra vào từ 23/11 | Anh Khoa | Hạn muộn nhất 18/11; xin sớm để dự phòng |
+| Thứ Tư 18/11 | Gửi bản mô tả thay đổi, ghi rõ việc cài phụ thuộc kết quả duyệt bản cài (dự kiến 23/11) | Em | Bản cài chưa được duyệt thì rút change, không cài |
 | Thứ Năm 19/11 | Nộp hồ sơ change | Anh Khoa | |
 | Thứ Hai 23/11 | Đến trụ sở: kiểm bản cài đã nhận khớp sha256, chạy khảo sát lần cuối, diễn tập trên máy chủ (chỉ đọc) | Em, anh Khoa | |
 | Thứ Ba 24/11 | Trình CAB | Anh Khoa | |
@@ -87,10 +93,17 @@ Cảm ơn anh.
 
 ### Về script khảo sát
 
-Đọc `/etc/os-release`, `/proc/meminfo`, `/etc/environment`, kết quả `uname`, `nproc`, `df`, `getconf`, `getenforce`,
-`podman --version`. Thử kết nối ra ngoài một lần bằng `curl` (tối đa 5 giây) để biết máy có đường ra không, và một lần
-`sudo -n true` để biết tài khoản có quyền quản trị không; lần thử này có thể ghi một dòng vào log bảo mật, mong chị Mai
-biết trước. Không ghi tệp, không cài gì, không gửi dữ liệu đi đâu; kết quả in ra màn hình.
+Toàn bộ những gì script đụng tới:
+
+- Tệp đọc: `/etc/os-release`, `/proc/meminfo`, `/etc/environment` (chỉ dòng proxy; phần tài khoản và mật khẩu trong URL
+  bị bỏ trước khi in), `/sys/fs/selinux/enforce` (khi không có `getenforce`).
+- Lệnh chạy, đều với tài khoản dịch vụ: `uname -r`, `getconf GNU_LIBC_VERSION` (dự phòng `ldd --version`), `nproc`,
+  `df -P -k /`, `getenforce`, `command -v` để dò `docker`, `podman`, `nvidia-smi`; `docker --version`; `nvidia-smi
+  --query-gpu=name` nếu có; `sudo -n true` một lần; `curl` hai lần, tối đa 5 giây mỗi lần: thẳng ra
+  `https://pypi.org/simple/` và qua proxy đã khai (nếu có) tới `http://pypi.org/simple/`.
+- Lần thử `sudo -n` có thể ghi một dòng vào log bảo mật, lần thử `curl` có thể làm tường lửa ghi log; mong chị Mai biết
+  trước.
+- Không ghi tệp, không cài gì, không gửi dữ liệu đi đâu; kết quả là 13 trường JSON in ra màn hình; địa chỉ duy nhất trong đó là địa chỉ proxy (nếu có), không có IP hay tên của máy.
 
 ### Ai quyết việc gì
 

@@ -39,6 +39,7 @@ proxy_from_file() {
 proxy_url=${https_proxy:-${HTTPS_PROXY:-}}
 [ -n "$proxy_url" ] || proxy_url=$(proxy_from_file https_proxy)
 [ -n "$proxy_url" ] || proxy_url=$(proxy_from_file HTTPS_PROXY)
+proxy_url=$(printf '%s' "$proxy_url" | sed 's#//[^/@]*@#//#')
 
 if sudo -n true >/dev/null 2>&1; then
     sudo_ok=true
