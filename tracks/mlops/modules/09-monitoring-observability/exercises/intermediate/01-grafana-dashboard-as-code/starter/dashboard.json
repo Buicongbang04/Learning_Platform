@@ -1,0 +1,9 @@
+{
+  "title": "",
+  "tags": [],
+  "schemaVersion": 39,
+  "refresh": "",
+  "time": {"from": "now-1h", "to": "now"},
+  "templating": {"list": []},
+  "panels": []
+}
