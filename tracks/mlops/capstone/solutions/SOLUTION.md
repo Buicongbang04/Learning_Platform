@@ -434,6 +434,81 @@ Rubric M13 (chấm `diagnosis.yaml` và `docs/assessment.md`; test chỉ kiểm 
 
 Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô cột Tốt.
 
+## M18: đánh giá senior, sự cố queens 2019-11-14
+
+Sự cố sinh bằng `solutions/assessment/senior_incident.py` (người học nhận tệp qua `etakit.py incident`): mọi chuyến thật của
+2019-11-14 ở ba borough là request, nhãn là thời gian chuyến thật. `v41` là trung vị theo cặp zone và giờ của 2019-10. `v42`
+nhân `v41` với tỉ số tốc độ điển hình của zone (2019-10) trên tốc độ 15 phút gần nhất tính từ chuyến đã kết thúc trong ngày,
+chặn trong [0.6, 2.5]. Script chạy khoảng 3 giây, không có số ngẫu nhiên. Chuỗi sự kiện:
+
+| Giờ | Sự kiện | Ở đâu thấy |
+| --- | --- | --- |
+| 13:05 | `mdl-731`: queens lên `v42` 100% traffic, bỏ canary | `deploys.log`, chat |
+| 15:20 | Consumer partition queens chết ở một message hỏng | `freshness.csv` (`age_s` tăng đều), chat lúc 16:32 |
+| 15:35 | Feature cũ quá 900 giây | `freshness.csv` |
+| 15:50 | Hết TTL 30 phút, online store trả null, `v42` điền 0 nên tỉ số chạm 2.5 | Tỉ lệ tệ queens từ 6% lên 95% |
+| 16:21 | Support báo tài xế JFK/LGA thấy ETA gấp hai, gấp ba | chat (`detected_at`) |
+| 16:40 | Restart consumer, chết lại ở cùng offset | chat |
+| 17:00 | `mdl-733` rollback queens về `v41` | `deploys.log` (16:59:52), chat |
+| 17:18 | Alert chất lượng cũ (1h và 5m trên 50%, `for` 10m, theo lúc nhãn về) mới bắn | `alerts.log` |
+| 18:27 | Bỏ qua offset hỏng, feature tươi lại | `freshness.csv`, `deploys.log` (`ops-77`) |
+
+Số đo (khung 5 phút, request queens trung bình khoảng 90 mỗi khung buổi chiều):
+
+| Trường | Giá trị | Ghi chú |
+| --- | --- | --- |
+| Request/ngày, đỉnh/phút | manhattan 236 990 / 321, queens 15 631 / 35, brooklyn 2 461 / 9 | Sau khi bỏ chuyến dưới 60 s, trên 3 giờ, khoảng cách 0 |
+| Tỉ lệ tệ thường ngày | manhattan 3.1%, queens khoảng 6%, brooklyn 9.5% | `v42` khi feature tươi (13:05–15:20) 5.3%, `v41` buổi sáng 8.3%: không có `model_regression` |
+| `started_at`, `mitigated_at` | 15:50, 17:00 | Khung tệ nhất ngoài sự cố của queens là 32%; manhattan không khung nào quá 9%, brooklyn 16% |
+| `affected_requests`, `bad_predictions` | 1 242, 1 176 (94.7%) | |
+| `quality_budget_consumed_pct` | 2.51 | Budget queens 46 893 dự đoán tệ / 30 ngày |
+| `stale_minutes`, `freshness_budget_consumed_pct` | 172, 39.81 | 15:35 tới 18:26 |
+| `severity` | SEV1 | 14 khung trên 60% |
+| Nhãn về sau (trung vị) | queens 37 phút, manhattan 12 phút | Lý do alert chất lượng luôn đến muộn |
+
+Alert của lời giải chạy trên dữ liệu sự cố: `ETAMarketFeatureStale` bắn cho queens lúc 15:46, sớm hơn support 35 phút và trước khi
+người dùng bị ảnh hưởng 4 phút; `ETAMarketQualityFastBurn` bắn lúc 17:15, sau rollback. Đó là bài học chính: với ML, SLO chất lượng
+là tín hiệu trễ (bằng thời gian nhãn về), SLO freshness của feature là tín hiệu dẫn trước. Partition brooklyn kẹt 23 phút buổi sáng
+(cũ quá 900 giây trong 8 phút) không làm alert freshness bắn, đúng vì 8 phút chỉ tiêu 1.9% budget.
+
+Vì sao chọn kịch bản này: ba mốc của sự cố cách nhau rõ (thay đổi 13:05, hỏng ngầm 15:20, người dùng bị ảnh hưởng 15:50) nên
+người kết luận theo "thay đổi gần nhất" chọn sai `cfg-514` hoặc `cfg-515`; budget chất lượng chỉ tiêu 2.5% dù cả market hỏng 70
+phút, nên người xếp severity theo phần trăm budget sẽ hạ nhầm thành SEV2; người phát hiện là support, không phải alert, nên
+`detected_at` phải đọc cả chat; hành động đầu tiên (restart) không có tác dụng và hành động chấm dứt tác động (rollback model) khác
+hành động sửa gốc (bỏ offset). Mỗi điều là một việc mà người dẫn sự cố mức senior phải phân biệt. Kịch bản khác bài module 18:
+dữ liệu là chuyến thật, nhiều market, và tác động phải tính từ log dự đoán và nhãn chứ không đọc sẵn từ một cột lỗi.
+
+Bẫy trong tập nhãn: `config_change` (`cfg-515` ở brooklyn 2 phút trước tác động; `cfg-514` là thay đổi gần nhất trên service
+queens), `model_regression` (xem tỉ lệ tệ của `v42` khi feature tươi), `label_delay` (alert đến muộn nhưng nhãn về đúng lúc trả
+khách), `traffic_spike`, `upstream_data_change` (không có bằng chứng nào).
+
+Mutation test của bộ chấm (đã chạy khi viết bài): mọi biến thể sai hợp lý sau đều fail, thông báo không lộ giá trị đúng: thêm
+`config_change` hoặc bỏ `unsafe_default`; `mitigated_at` là giờ rollback 17:02; `detected_at` là giờ alert 17:18; `trigger` là
+`cfg-514`; severity SEV2; `decision: restart`; tác động tính từ 15:20; phần trăm budget chia cho cả ba market; `stale_minutes` cộng
+brooklyn; thêm brooklyn vào `affected_markets`; budget chất lượng với SLO 95%; burn rate không `by (market)`; freshness chỉ cửa sổ
+5m; `LabelsMissing` kiểu `or vector(0)` toàn cục; ngưỡng nhanh 14.4; slow burn chỉ cửa sổ 30m; fast burn chỉ cửa sổ 1h; postmortem
+nêu tên, có cụm đổ lỗi, thiếu mốc phát hiện, thiếu loại hành động `phát hiện`; design doc dùng số request chưa làm sạch, thiếu
+fallback, thiếu một SLO. Các lời giải đúng viết khác đều pass: handle có `@`, phần trăm nhiều chữ số, ngày không ngoặc, rule viết
+inline bằng `increase` với `and on (market)` và `for: 0m`, `LabelsMissing` bằng `count by`, số có dấu phân cách hàng nghìn.
+
+Giới hạn đã biết: người học có thể dò `causes` bằng cách chạy test nhiều lần (test chỉ báo số nhãn thiếu và thừa), hoặc đọc
+script sinh. Không ép được; rubric dưới đây là nơi chấm thật. `detected_at` cần phán đoán (tin nhắn nào là "báo triệu chứng");
+đề nói rõ chat là một nguồn, và trong ngày chỉ có một tin như vậy trước alert.
+
+Rubric M18 (chấm bốn tệp; test chỉ kiểm khung, số và nhãn):
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Điều tra | Tính được mọi số của `incident.yaml` | Script tái lập một lệnh; xem theo market trước khi xem theo thời gian; tách ba mốc 13:05, 15:20, 15:50 và giải thích khoảng 30 phút là TTL |
+| Nguyên nhân | Bốn nhãn đúng | Chuỗi nhân quả có thứ tự; loại từng bẫy bằng một số (tỉ lệ tệ của brooklyn quanh 15:48, `v42` khi feature tươi, độ trễ nhãn) |
+| Severity và tác động | SEV1, số khớp | Giải thích vì sao 2.5% budget vẫn là SEV1; tính phần tệ "thừa" so với 6% thường ngày (khoảng 1 100) |
+| Dẫn sự cố | Vai trò đúng | Nhận xét IC chặn giả thuyết `cfg-515`, chọn rollback (đảo ngược được) khi restart thất bại, giữ sự cố mở tới khi feature tươi |
+| SLO và alert | Test xanh | Tính được alert của mình bắn lúc nào trên dữ liệu sự cố (15:46) và so với 16:21; giải thích burn rate tối đa 10 với SLO 90% |
+| Postmortem | Không đổ lỗi, đủ phần | Mỗi nhãn có ít nhất một hành động; hành động có cách kiểm đo được; nói rõ điều may mắn (`v41` còn và không đọc feature) |
+| Design doc | Đủ 11 phần | Cell theo market, fallback không phải 0, cổng canary có freshness, onboard bằng template; số ở phần 8 truy về phần 1 và 2; thừa nhận market nhỏ có ít nhãn |
+
+Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô cột Tốt.
+
 ## Rubric phần tự đánh giá
 
 | Mục | Đạt | Tốt |
@@ -453,3 +528,4 @@ Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô c
 | Cloud (M11, tuỳ chọn) | `--dry-run` đúng, có budget | Xem rubric riêng ở mục M11 |
 | Kubernetes (M12) | Test xanh, README có lệnh và bảng release | Xem rubric riêng ở mục M12 |
 | Đánh giá junior (M13) | Ba nhãn đúng, `keep` + cách ly | Xem rubric riêng ở mục M13 |
+| Đánh giá senior (M18) | Bốn nhãn đúng, SEV1, alert theo market | Xem rubric riêng ở mục M18 |
