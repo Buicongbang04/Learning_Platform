@@ -1,0 +1,35 @@
+from pathlib import Path
+
+import numpy as np
+import yaml
+
+from model import train
+
+ROOT = Path(__file__).resolve().parents[1]
+REQUIRED_TAGS = ("owner", "team", "cost_center")
+
+
+def metadata():
+    return yaml.safe_load((ROOT / "mlproject.yaml").read_text(encoding="utf-8"))
+
+
+def test_required_tags_present():
+    tags = metadata().get("tags") or {}
+    missing = [key for key in REQUIRED_TAGS if not str(tags.get(key) or "").strip()]
+    assert not missing, f"thiếu tag bắt buộc: {missing}"
+
+
+def test_registry_name_follows_convention():
+    meta = metadata()
+    assert meta["registry_name"] == f"{meta['tags']['team']}-{meta['name']}"
+
+
+def test_model_trains_and_predicts():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(200, 3))
+    y = X @ np.array([1.0, -2.0, 0.5])
+{%- if model_kind == "classification" %}
+    y = (y > 0).astype(int)
+{%- endif %}
+    predictions = train(X, y).predict(X)
+    assert predictions.shape == (200,)

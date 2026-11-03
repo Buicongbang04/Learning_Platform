@@ -1,0 +1,46 @@
+questions:
+  - id: idle-owner
+    kind: knowledge
+    type: single
+    prompt: "Cụm GPU dùng chung chạy trung bình 35% công suất. Báo cáo chi phí chỉ cộng giờ GPU mà từng pod đã dùng. Hệ quả là gì?"
+    options:
+      - { id: a, text: "Không sao, giờ GPU nhàn rỗi không phát sinh chi phí cho công ty" }
+      - { id: b, text: "65% hoá đơn GPU không ai thấy, nên không ai có động lực giảm" }
+      - { id: c, text: "Báo cáo luôn chính xác hơn vì chỉ tính phần thật sự được dùng" }
+      - { id: d, text: "Chỉ ảnh hưởng đội nền tảng, các đội model không cần quan tâm" }
+  - id: showback-vs-chargeback
+    kind: knowledge
+    type: single
+    prompt: "Công ty mới bắt đầu gắn nhãn chi phí, 30% chi phí chưa gắn được đội. Nên bắt đầu bằng gì?"
+    options:
+      - { id: a, text: "Chargeback ngay, trừ thẳng vào ngân sách đội để ép gắn nhãn nhanh" }
+      - { id: b, text: "Bỏ qua phần chưa gắn nhãn, chỉ báo cáo 70% đã biết chủ sở hữu" }
+      - { id: c, text: "Showback trước, phần chưa gắn hiện thành dòng riêng; chargeback sau" }
+      - { id: d, text: "Chia đều 30% chưa gắn nhãn cho mọi đội rồi chargeback toàn bộ" }
+  - id: unit-cost
+    kind: knowledge
+    type: multi
+    prompt: "Những chỉ số nào giúp đội model tự tối ưu chi phí, không chỉ biết tổng tiền?"
+    options:
+      - { id: a, text: "Chi phí trên 1 000 dự đoán của từng model, theo từng tuần" }
+      - { id: b, text: "Tỉ lệ dùng GPU thực tế trên GPU đã xin của từng deployment" }
+      - { id: c, text: "Tổng hoá đơn cloud của cả công ty trong tháng vừa rồi" }
+      - { id: d, text: "Chi phí mỗi lần huấn luyện lại, kèm mức cải thiện metric" }
+  - id: build-or-buy
+    kind: knowledge
+    type: single
+    prompt: "Công ty 3 đội ML, 2 kỹ sư nền tảng, toàn bộ dữ liệu đã ở BigQuery, không có ràng buộc chạy on-prem. Lựa chọn hợp lý nhất?"
+    options:
+      - { id: a, text: "Tự dựng Kubeflow, Feast, MLflow trên Kubernetes tự quản lý cho chủ động" }
+      - { id: b, text: "Dùng Vertex AI cho huấn luyện và serving, tự viết phần quy ước và cổng" }
+      - { id: c, text: "Viết nền tảng mới từ đầu để không phụ thuộc bất kỳ nhà cung cấp nào" }
+      - { id: d, text: "Mỗi đội tự chọn công cụ riêng, nền tảng chỉ trả hoá đơn chung" }
+  - id: lock-in
+    kind: knowledge
+    type: multi
+    prompt: "Khi mua nền tảng managed (SageMaker, Vertex, Databricks), những biện pháp nào giảm chi phí đổi nhà cung cấp về sau?"
+    options:
+      - { id: a, text: "Lưu model ở định dạng mở (safetensors, ONNX) cùng metadata riêng" }
+      - { id: b, text: "Đóng gói serving thành container chuẩn thay vì runtime riêng của hãng" }
+      - { id: c, text: "Dùng mọi tính năng độc quyền ngay từ đầu để đi nhanh nhất có thể" }
+      - { id: d, text: "Giữ code pipeline tách khỏi SDK hãng qua một lớp mỏng của nền tảng" }

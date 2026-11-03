@@ -1,0 +1,17 @@
+{% if model_kind == "classification" -%}
+from sklearn.linear_model import LogisticRegression
+
+
+def build():
+    return LogisticRegression(max_iter=500)
+{%- else -%}
+from sklearn.linear_model import Ridge
+
+
+def build():
+    return Ridge(alpha=1.0)
+{%- endif %}
+
+
+def train(X, y):
+    return build().fit(X, y)
