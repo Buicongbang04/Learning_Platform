@@ -310,3 +310,52 @@ def test_extract_rejects_path_traversal(monkeypatch, tmp_path):
 def test_phase3_datasets_registered():
     dd = load("download_dataset")
     assert {"cifar10", "oxford-pets", "penn-fudan", "uit-vsfc", "iwslt15-en-vi", "wikipedia-vi", "openorca-viet", "gsm8k", "prompt-injections", "fleurs-vi", "cord-v2"} <= set(dd.DATASETS)
+
+
+_NYC_TLC_OLD = {
+    "source": "url",
+    "ref": tuple(f"https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2019-{m:02d}.parquet" for m in range(1, 13))
+    + ("https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv",),
+    "files": [f"yellow_tripdata_2019-{m:02d}.parquet" for m in range(1, 13)] + ["taxi_zone_lookup.csv"],
+    "license": "Dữ liệu mở của NYC Taxi & Limousine Commission (NYC Open Data), dùng tự do",
+    "homepage": "https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page",
+    "about": "Chuyến Yellow Taxi NYC, ghim 12 tháng 2019-01..2019-12 (Parquet, ~1,2 GB, ~84 triệu chuyến) + taxi_zone_lookup.csv",
+}
+_OXFORD_PETS_OLD = {
+    "source": "hf",
+    "ref": "timm/oxford-iiit-pet",
+    "files": ["data/train-00000-of-00001.parquet", "data/test-00000-of-00001.parquet"],
+    "license": "CC BY-SA 4.0 (Parkhi, Vedaldi, Zisserman, Jawahar 2012, VGG Oxford); bản mirror HF của timm vì thor.robots.ox.ac.uk tải rất chậm (~1 MB/phút)",
+    "homepage": "https://huggingface.co/datasets/timm/oxford-iiit-pet",
+    "about": "Oxford-IIIT Pet: ảnh chó/mèo 37 giống (parquet: image {bytes}, label, image_id...), dùng cho transfer learning; không có trimap",
+}
+
+
+def test_nyc_tlc_2020_entry():
+    dd = load("download_dataset")
+    ds, old = dd.DATASETS["nyc-tlc-2020"], dd.DATASETS["nyc-tlc"]
+    months = [f"yellow_tripdata_2020-{m:02d}.parquet" for m in range(1, 13)]
+    assert ds.source == "url"
+    assert ds.files == months + ["taxi_zone_lookup.csv"]
+    assert len(ds.ref) == len(ds.files) == 13
+    assert [u.rsplit("/", 1)[1] for u in ds.ref[:12]] == months
+    assert {u.split("/")[2] for u in ds.ref} == {u.split("/")[2] for u in old.ref}
+    assert ds.license == old.license and ds.homepage == old.homepage
+    assert "COVID" in ds.about and "2020" in ds.about
+
+
+def test_oxford_trimaps_entry():
+    dd = load("download_dataset")
+    ds = dd.DATASETS["oxford-pets-trimaps"]
+    assert ds.extract is True
+    assert ds.source == "url"
+    assert "CC BY-SA 4.0" in ds.license
+    assert "oxford-pets" in ds.about
+
+
+def test_old_entries_unchanged():
+    dd = load("download_dataset")
+    for name, old in (("nyc-tlc", _NYC_TLC_OLD), ("oxford-pets", _OXFORD_PETS_OLD)):
+        ds = dd.DATASETS[name]
+        assert {k: getattr(ds, k) for k in old} == old
+        assert not ds.extract and not ds.needs_token and ds.revision is None
