@@ -1,4 +1,4 @@
-# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M11, M13)
+# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M13)
 
 Bản tham chiếu cho phần chấm được bằng test, cùng cây thư mục với `capstone/project/`:
 
@@ -336,6 +336,48 @@ Rubric M11 (tuỳ chọn, không tính vào mức junior):
 | Dọn | `--dry-run` đúng danh sách | Giải thích vì sao tag an toàn hơn tiền tố; thứ tự xoá theo phụ thuộc; chạy thật rồi dry-run in 0 dòng |
 | Chi phí | Có ngưỡng USD và alarm | Bảng free tier từng dịch vụ, rủi ro URL công khai, budget tạo trước tài nguyên đầu tiên |
 
+## M12: kind, KServe, Argo Workflows
+
+Bản tham chiếu ở `project/k8s/` và `project/argo/`. Không đổi dòng nào của `src/eta` hay hai Dockerfile: chuyển sang K8s là
+việc của manifest.
+
+- **Nguồn model: image model riêng + init container.** Cluster kind không tới được MLflow trên máy (stack bind `127.0.0.1`,
+  node ở network Docker khác); `storageUri: s3://` cần kéo image `kserve/storage-initializer` và Secret S3 mỗi namespace.
+  Image `busybox:1.37` + `model.joblib` nặng khoảng 3 MB, `kind_load` mất vài giây, trong khi image serve 820 MB và image
+  train 1,04 GB chỉ nạp một lần mỗi phiên test (khoảng 6 giây mỗi image, nhờ cache layer). Modelcar (`storageUri: oci://`)
+  là cùng ý tưởng nhưng chỉ nhận một model; canary của ETA cần hai.
+- **Canary trong app, không ở KServe.** Đã thử `canaryTrafficPercent: 20` trên cluster: KServe RawDeployment nhận trường,
+  InferenceService vẫn Ready, nhưng chỉ có một Deployment và không chia gì. Port-forward cũng chỉ vào một pod. Dùng lại
+  `route()` của M07 cho kết quả xác định, test tính trước từng request.
+- **Biến release trong `env` của pod template**, không trong ConfigMap. Bản thử đặt `ETA_CANARY_WEIGHT` trong ConfigMap:
+  bước 0.25 → 0.5 không sinh pod mới, test báo đúng request lệch nhánh. Đổi champion sang image của challenger (version vẫn
+  ghi v1) cũng bị bắt: pod Ready, `model_version` đúng chữ, nhưng `eta_s` là của model kia.
+- **Không có challenger = challenger trùng champion, weight 0.** Template không có điều kiện (`envsubst`), nên mọi release cùng
+  một hình dạng pod; chi phí là nạp model hai lần (vài trăm KB).
+- **Bảo mật pod:** `runAsNonRoot`, `readOnlyRootFilesystem` (thêm `emptyDir` cho `/tmp`), `drop: [ALL]`, `seccompProfile:
+  RuntimeDefault`, `automountServiceAccountToken: false` (SA `default` của namespace test có quyền executor Argo); init
+  container có limits riêng nhỏ. Các bước Workflow cũng `runAsNonRoot`, `seccompProfile: RuntimeDefault`,
+  `allowPrivilegeEscalation: false`, `drop: [ALL]` (không `readOnlyRootFilesystem` vì CLI ghi ra `/tmp/out`). Liveness gọi `/healthz`, readiness `/readyz`, startupProbe cho
+  tới 120 giây nạp model.
+- **Workflow:** DAG ba task; `validate` là `script` Python: kiểm `month` bằng regex, rồi chạy `prepare` và `validate` dạng
+  mảng (`subprocess.run([...])`, không shell, parameter đi qua `env`), xuất `sample` (parquet đã lấy mẫu) làm artifact cho
+  `train`, nên `train` đọc đúng dữ liệu đã kiểm. Bản đầu ghép `{{workflow.parameters.month}}` vào `sh -c`: ai submit được
+  Workflow là chạy được lệnh tuỳ ý trong container. `train` cũng là `script` kiểm lại `month` (template có thể bị tái dùng
+  không có `validate` phía trước), nhận artifact ở đường dẫn cố định rồi symlink thành `<month>.parquet` cho `--input`;
+  tiến trình con chết vì signal (OOM) thoát `128 + signal` kèm thông báo, không phải mã âm khó đọc. `gate` là `script` Python gọi `decide` + `Policy()`
+  của M04, thoát `EXIT_REJECTED`. Input artifact `metrics` để `archive: none` (đọc được trên MinIO) nên cần `mode: 0444`:
+  không có thì user 10001 gặp `PermissionError`. `retryStrategy` `OnError` chỉ ở `validate`, `train`; `gate` không retry.
+- **Số đo** (laptop 16 nhân, image đã cache): `-k m12` 6 test khoảng 2 phút; Workflow thành công khoảng 30 giây, Workflow
+  dừng ở `validate` khoảng 12 giây; bốn release canary cộng 160 request khoảng 26 giây.
+
+Rubric M12:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Nguồn model | Chạy được, nêu vì sao chọn | So ít nhất ba cách (bảng mục 1), nêu điều kiện chuyển sang `storageUri` + object storage |
+| Release | Bảng bốn bước với thời gian rollout | Tiêu chí dừng canary bằng số (M09: tỉ lệ fallback, p95 theo `variant`), rollback bằng manifest trong git |
+| Canary hạ tầng | Biết `canaryTrafficPercent` cần Serverless | Phác kế hoạch Knative hoặc Gateway API, cách đo tỉ lệ khi không còn `route()` trong app |
+
 ## M13: đánh giá junior, tháng lạ 2019-10
 
 Tháng lạ sinh bằng `solutions/assessment/strange_month.py` (người học nhận tệp qua `etakit.py assessment`): mẫu 400 000
@@ -407,4 +449,5 @@ Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô c
 | Monitoring (M09) | Dashboard và bảng alert | Giải thích 0/0, chọn `absent` trên metric luôn có, ảnh dashboard khi chạy k6 |
 | Drift và sự cố (M10) | Bảng summary 12 tháng | Xem rubric riêng ở mục M10 |
 | Cloud (M11, tuỳ chọn) | `--dry-run` đúng, có budget | Xem rubric riêng ở mục M11 |
+| Kubernetes (M12) | Test xanh, README có lệnh và bảng release | Xem rubric riêng ở mục M12 |
 | Đánh giá junior (M13) | Ba nhãn đúng, `keep` + cách ly | Xem rubric riêng ở mục M13 |

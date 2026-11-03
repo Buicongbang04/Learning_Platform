@@ -1,0 +1,164 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: eta-train-
+spec:
+  entrypoint: pipeline
+  activeDeadlineSeconds: 900
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  arguments:
+    parameters:
+      - name: month
+        value: "2019-01"
+      - name: champion-metrics
+        value: "{}"
+  volumes:
+    - name: data
+      configMap:
+        name: eta-train-data
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: validate
+            template: validate
+          - name: train
+            template: train
+            dependencies: [validate]
+            arguments:
+              artifacts:
+                - name: sample
+                  from: "{{tasks.validate.outputs.artifacts.sample}}"
+          - name: gate
+            template: gate
+            dependencies: [train]
+            arguments:
+              artifacts:
+                - name: metrics
+                  from: "{{tasks.train.outputs.artifacts.metrics}}"
+
+    - name: validate
+      retryStrategy:
+        limit: 1
+        retryPolicy: OnError
+      script:
+        image: ${ETA_TRAIN_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: [python]
+        env:
+          - name: MONTH
+            value: "{{workflow.parameters.month}}"
+        source: |
+          import os
+          import re
+          import subprocess
+          import sys
+
+          month = os.environ["MONTH"]
+          if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+              sys.exit(f"month phải dạng YYYY-MM, nhận {month!r}")
+          sample = "/tmp/out/sample.parquet"
+          for command in (
+              ["python", "-m", "eta.cli", "prepare", "--config", "/app/params.yaml", "--month", month, "--out", sample],
+              ["python", "-m", "eta.cli", "validate", sample, "--month", month],
+          ):
+              code = subprocess.run(command).returncode
+              if code < 0:
+                  print(f"{command[3]} bị signal {-code} giết (OOM thì xem limits.memory)", file=sys.stderr)
+                  sys.exit(128 - code)
+              if code != 0:
+                  sys.exit(code)
+        volumeMounts:
+          - {name: data, mountPath: /data, readOnly: true}
+        resources:
+          requests: {cpu: 200m, memory: 256Mi}
+          limits: {cpu: "1", memory: 1Gi}
+        securityContext: &restricted
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+      outputs:
+        artifacts:
+          - name: sample
+            path: /tmp/out/sample.parquet
+
+    - name: train
+      retryStrategy:
+        limit: 1
+        retryPolicy: OnError
+      inputs:
+        artifacts:
+          - name: sample
+            path: /tmp/in/sample.parquet
+      script:
+        image: ${ETA_TRAIN_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: [python]
+        env:
+          - name: MONTH
+            value: "{{workflow.parameters.month}}"
+        source: |
+          import os
+          import re
+          import subprocess
+          import sys
+
+          month = os.environ["MONTH"]
+          if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+              sys.exit(f"month phải dạng YYYY-MM, nhận {month!r}")
+          os.makedirs("/tmp/work", exist_ok=True)
+          os.symlink("/tmp/in/sample.parquet", f"/tmp/work/{month}.parquet")
+          command = ["python", "-m", "eta.cli", "train", "--config", "/app/params.yaml", "--input", "/tmp/work",
+                     "--model-out", "/tmp/out/model.joblib", "--metrics-out", "/tmp/out/metrics.json"]
+          code = subprocess.run(command, env={**os.environ, "ETA_MONTHS": month}).returncode
+          if code < 0:
+              print(f"train bị signal {-code} giết (OOM thì xem limits.memory)", file=sys.stderr)
+              sys.exit(128 - code)
+          sys.exit(code)
+        resources:
+          requests: {cpu: 500m, memory: 512Mi}
+          limits: {cpu: "2", memory: 1Gi}
+        securityContext: *restricted
+      outputs:
+        artifacts:
+          - name: model
+            path: /tmp/out/model.joblib
+          - name: metrics
+            path: /tmp/out/metrics.json
+            archive:
+              none: {}
+
+    - name: gate
+      inputs:
+        artifacts:
+          - name: metrics
+            path: /tmp/in/metrics.json
+            mode: 0444
+      script:
+        image: ${ETA_TRAIN_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: [python]
+        env:
+          - name: CHAMPION_METRICS
+            value: "{{workflow.parameters.champion-metrics}}"
+        source: |
+          import json
+          import os
+          import sys
+
+          from eta.cli import EXIT_REJECTED
+          from eta.promotion import Policy, decide
+
+          challenger = json.load(open("/tmp/in/metrics.json", encoding="utf-8"))
+          champion = json.loads(os.environ["CHAMPION_METRICS"] or "{}") or None
+          decision = decide(challenger, champion, Policy())
+          print(json.dumps({"promote": decision.promote, "reasons": decision.reasons}, ensure_ascii=False))
+          sys.exit(0 if decision.promote else EXIT_REJECTED)
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+          limits: {cpu: "1", memory: 512Mi}
+        securityContext: *restricted

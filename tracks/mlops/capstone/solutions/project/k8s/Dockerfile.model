@@ -1,0 +1,4 @@
+FROM busybox:1.37
+COPY model.joblib /models/model.joblib
+RUN chmod -R a+rX /models
+USER 10001

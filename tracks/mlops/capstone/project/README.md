@@ -19,6 +19,7 @@ milestone ở [`../milestones/`](../milestones/), tổng quan ở [README capsto
 | `monitoring/`, `src/eta/serve.py` (bản M09) | [M09](../milestones/m09-monitoring.md) | Metric Prometheus, alert rule có test promtool, dashboard Grafana |
 | `src/eta/drift.py`, `quality.py`, `reports/decisions/`, `docs/` | [M10](../milestones/m10-drift-replay.md) | PSI/KS, chất lượng theo nhãn về muộn, phát lại 2019–2020, quyết định, runbook, postmortem |
 | `cloud/` (tuỳ chọn) | [M11](../milestones/m11-cloud-optional.md) | Terraform có tag dự án, `teardown.sh --dry-run`, `budget.md` |
+| `k8s/eta.yaml`, `k8s/Dockerfile.model`, `argo/train-workflow.yaml` | [M12](../milestones/m12-kind-kserve.md) | InferenceService KServe (image model riêng, canary, rollback), Workflow Argo `validate → train → gate` |
 | `params.assessment.yaml`, `reports/assessment/diagnosis.yaml`, `docs/assessment.md` | [M13](../milestones/m13-junior-assessment.md) | Đánh giá độc lập: chẩn đoán tháng dữ liệu lạ, quyết định có số |
 | `tests/` | mọi milestone | Không sửa: test chấm bài. Test của bạn để ở chỗ khác (ví dụ `tests_own/`) |
 
@@ -47,6 +48,7 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 | `act` | M08 (trừ `test_m08_workflow_structure`) | Cài theo module 08, mục 0 |
 | Grafana của stack | `test_m09_dashboard_provisioned` | `docker compose -f setup/mlops/compose.yaml --profile monitoring up -d --wait` |
 | Bộ `nyc-tlc-2020` | `test_m10_replay_summary_real`, `test_m10_decision_files_valid` | `uv run python data/download_dataset.py nyc-tlc-2020` |
+| Cluster kind `mlops` | M12 (trừ `test_m12_manifests_contract`) | `bash setup/mlops/kind/up.sh` (module 13, mục 0) |
 
 M11 là milestone tuỳ chọn: chưa có thư mục `cloud/` thì test `test_m11_*` skip và không tính vào phần lõi; `test_m11_cloud_live` chỉ chạy khi đặt `ETA_CLOUD_LIVE=1`. Ngoài M11, skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15` trước `uv run`.
 
@@ -57,4 +59,4 @@ Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và ch�
 
 Mục này là của bạn. Mỗi milestone thêm một phần theo "Kết quả nộp": lệnh train và MAE (M01), container (M02), dữ liệu và
 ngưỡng validation (M03), registry, runbook rollback và model card (M04), orchestration và replay (M05), feature (M06),
-serving và kết quả k6 (M07), CI/CD (M08), monitoring (M09), drift và sự cố (M10).
+serving và kết quả k6 (M07), CI/CD (M08), monitoring (M09), drift và sự cố (M10), Kubernetes (M12).
