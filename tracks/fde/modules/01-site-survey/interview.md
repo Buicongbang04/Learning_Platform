@@ -43,7 +43,7 @@ mình bằng Python trên laptop. Kiểm bằng `shellcheck -s sh` và chạy th
 
 Có. Với script dò, lệnh thất bại là dữ liệu: không có `getenforce` nghĩa là không có SELinux, `sudo -n true` trả 1 nghĩa
 là không có sudo. `set -e` biến dữ liệu đó thành điểm dừng, và khách chỉ thấy lỗi đầu tiên; sửa xong gửi lại thì hỏng ở
-chỗ tiếp theo, mỗi vòng một ngày. Tệ hơn, nếu stderr bị chuyển vào tệp, script dừng mà không in gì.
+chỗ tiếp theo, mỗi vòng một ngày.
 
 Cách làm: bỏ `set -e` cho phần dò, mỗi lệnh dò trong `if` hoặc `||`, ghi lý do khi một phần không thu được, và chỉ coi
 là lỗi những thứ thật sự hỏng (không tạo được thư mục ra).

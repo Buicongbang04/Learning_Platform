@@ -168,7 +168,7 @@ boolean), kiểm bằng JSON Schema. Preflight và báo cáo khoảng cách dự
 **Không mang bí mật về.** Survey và support bundle đi qua email, ticket, ổ chung: coi mọi thứ chúng thu được là sẽ bị
 đọc bởi người không nên đọc. Không bao giờ thu: dump biến môi trường (`env`, `/proc/*/environ`), lịch sử shell, tệp
 cấu hình có token (`~/.docker/config.json`, `.netrc`, `.env`, `.pgpass`), khoá, dữ liệu nghiệp vụ. Thứ cần thì che trước
-khi ghi: bỏ `user:pass@` trong URL (`sed 's#//[^/@]*@#//#'`), che giá trị sau `password=`, `token=`, `secret=`. Và nói
+khi ghi: bỏ `user:pass@` trong URL (`sed 's#//[^/]*@#//#'`), che giá trị sau `password=`, `token=`, `secret=`. Và nói
 cho người duyệt phía khách **đúng** những gì được thu, kể cả thứ trông vô hại nhưng nhạy cảm với họ: IP nội bộ và route
 (`ip addr`, `ip route`), cổng đang mở và địa chỉ bind (`ss`), tên máy, DNS server nội bộ.
 

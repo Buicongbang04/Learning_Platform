@@ -95,10 +95,11 @@ Cảm ơn anh.
 
 Toàn bộ những gì script đụng tới:
 
-- Tệp đọc: `/etc/os-release`, `/proc/meminfo`, `/etc/environment` (chỉ dòng proxy; phần tài khoản và mật khẩu trong URL
-  bị bỏ trước khi in), `/sys/fs/selinux/enforce` (khi không có `getenforce`).
-- Lệnh chạy, đều với tài khoản dịch vụ: `uname -r`, `getconf GNU_LIBC_VERSION` (dự phòng `ldd --version`), `nproc`,
-  `df -P -k /`, `getenforce`, `command -v` để dò `docker`, `podman`, `nvidia-smi`; `docker --version`; `nvidia-smi
+- Tệp và biến đọc: `/etc/os-release`, `/proc/meminfo`, biến môi trường `https_proxy`/`HTTPS_PROXY` của phiên rồi
+  `/etc/environment` (chỉ dòng proxy; phần tài khoản và mật khẩu trong URL bị bỏ trước khi in),
+  `/sys/fs/selinux/enforce` (khi không có `getenforce`); kiểm `/dev/nvidia0` có tồn tại không.
+- Lệnh chạy, đều với tài khoản dịch vụ: `uname -r`, `getconf GNU_LIBC_VERSION` (dự phòng `ldd --version`), `nproc` (dự
+  phòng `getconf _NPROCESSORS_ONLN`), `df -P -k /`, `getenforce`, `command -v` để dò `docker`, `podman`, `nvidia-smi`; `docker --version`; `nvidia-smi
   --query-gpu=name` nếu có; `sudo -n true` một lần; `curl` hai lần, tối đa 5 giây mỗi lần: thẳng ra
   `https://pypi.org/simple/` và qua proxy đã khai (nếu có) tới `http://pypi.org/simple/`.
 - Lần thử `sudo -n` có thể ghi một dòng vào log bảo mật, lần thử `curl` có thể làm tường lửa ghi log; mong chị Mai biết

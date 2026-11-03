@@ -17,7 +17,7 @@ SOLUTION=1 uv run pytest tracks/fde/modules/01-site-survey/exercises/basic/01-su
 | `mem_mb` | `MemTotal` trong `/proc/meminfo` | `free -m` đổi định dạng giữa các bản procps |
 | `disk_free_gb_max` | Cột 4 của `df -P -k /` | `-P` khoá định dạng một dòng (tên device dài không bị xuống dòng); cột Available đã trừ phần dự trữ cho root, đúng với cái user cài sản phẩm thấy |
 | `gpu` | `nvidia-smi --query-gpu=name`, dự phòng `/dev/nvidia0` | `lspci` không có trên Rocky cloud image |
-| `proxy_url` | `https_proxy`/`HTTPS_PROXY` rồi `/etc/environment`, xong bỏ `user:pass@` bằng `sed 's#//[^/@]*@#//#'` | Phiên SSH có `pam_env` nạp `/etc/environment`, nhưng script chạy từ cron hay `env -i` thì không; đọc cả tệp cho chắc. Proxy công ty hay dùng tài khoản dịch vụ trong URL: báo cáo đi qua email và ticket, mật khẩu không được đi theo |
+| `proxy_url` | `https_proxy`/`HTTPS_PROXY` rồi `/etc/environment`, xong bỏ `user:pass@` bằng `sed 's#//[^/]*@#//#'` | Phiên SSH có `pam_env` nạp `/etc/environment`, nhưng script chạy từ cron hay `env -i` thì không; đọc cả tệp cho chắc. Proxy công ty hay dùng tài khoản dịch vụ trong URL: báo cáo đi qua email và ticket, mật khẩu không được đi theo |
 | `sudo` | `sudo -n true` | `id -nG` có nhóm `sudo`/`wheel` không đủ: `lab-open` cho `fde` sudo qua `/etc/sudoers.d`, không qua nhóm |
 | `selinux` | `getenforce`, dự phòng `/sys/fs/selinux/enforce` | Ubuntu không có `getenforce` ⇒ `n/a` |
 | `runtime` | `command -v docker`, rồi `podman` | Có `docker` mà `docker --version` nhắc tới podman (gói `podman-docker`) thì vẫn là `podman` |
