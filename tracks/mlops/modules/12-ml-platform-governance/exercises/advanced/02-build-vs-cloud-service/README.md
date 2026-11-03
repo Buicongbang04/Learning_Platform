@@ -32,6 +32,8 @@ Viết `starter/DECISION.md`, giữ các heading `## 1.` tới `## 6.`, không c
 | 5. Điều kiện đổi hướng | Ít nhất 3 gạch đầu dòng, mỗi dòng có một con số cụ thể (số model, tháng, tiền, độ trễ) |
 | 6. Rủi ro | Ít nhất 3 gạch đầu dòng, có nhắc `lock-in` |
 
+Cách viết số và chữ mà bộ kiểm hiểu: số tiền và điểm viết `63600`, `63 600`, `63.600` hay `63,600` (một dấu `.` hoặc `,` đứng trước đúng 3 chữ số, hoặc lặp lại nhiều lần, là phân cách nghìn), số thập phân viết `3.65` hay `3,65`, có cả hai dấu như `1.234,5` hay `1,234.5` thì dấu đứng sau là dấu thập phân; chữ `USD` hay khoảng trắng trong ô được bỏ qua. Dòng hoà vốn viết `hoà vốn` hay `hòa vốn`, tháng viết `tháng 10` hay `tháng thứ 10`.
+
 Test chỉ kiểm khung và tính nhất quán số học ở trên; một test khác đưa một quyết định yếu vào cùng bộ kiểm tra và đòi nó bị bắt. Nội dung chấm bằng rubric trong `solutions/advanced/02-build-vs-cloud-service/SOLUTION.md`; đọc rubric **sau** khi viết xong. Giá trong bài là con số bạn tự ước và phải ghi giả định ở phần 1; khi áp dụng thật dùng bảng giá hiện hành (bài ước tính chi phí ở mức Basic có thể làm bảng tính).
 
 ## Tiêu chí đạt
