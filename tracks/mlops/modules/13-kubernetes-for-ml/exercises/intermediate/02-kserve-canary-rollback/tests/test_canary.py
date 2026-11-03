@@ -28,15 +28,16 @@ def deploy_canary(ns: str) -> None:
     mlopskit.wait_for("deployment", "eta-stable-predictor", "jsonpath={.status.readyReplicas}=3", ns, 180)
     behind = behind_service(ns)
     owners = {p["metadata"]["labels"].get("serving.kserve.io/inferenceservice") for p in k8slab.pods(ns, behind)}
-    assert {"eta-stable", "eta-canary"} <= owners, (
-        f"Service eta (selector {behind or 'rỗng'}) phải chọn pod của cả eta-stable và eta-canary, đang chọn {owners}"
-    )
+    if not {"eta-stable", "eta-canary"} <= owners:
+        pytest.fail(f"Service eta (selector {behind}) phải chọn pod của cả eta-stable và eta-canary, đang chọn {owners}",
+                    pytrace=False)
     k8slab.wait_endpoints(ns, "eta", 4, 120)
 
 
 def behind_service(ns: str) -> str:
     selector = k8slab.get_json("service", "eta", ns)["spec"].get("selector") or {}
-    assert selector, "Service eta cần spec.selector"
+    if not selector:
+        pytest.fail("Service eta cần spec.selector", pytrace=False)
     return ",".join(f"{k}={v}" for k, v in selector.items())
 
 
@@ -46,7 +47,7 @@ def canary():
         try:
             deploy_canary(ns)
             yield ns, None
-        except (pytest.fail.Exception, AssertionError) as error:
+        except pytest.fail.Exception as error:
             yield ns, str(error)
 
 
@@ -70,7 +71,11 @@ def test_rollback_sends_zero_percent_to_canary(canary):
     try:
         k8slab.wait_endpoints(canary, "eta", 3, 120)
     except pytest.fail.Exception:
-        pytest.fail("Sau rollback, pod canary vẫn nằm sau Service eta (Service chưa về đúng 3 endpoint v1)", pytrace=False)
+        found = k8slab.ready_endpoints(canary, "eta")
+        cause = ("pod canary vẫn nằm sau Service eta" if found > 3
+                 else "thiếu pod v1 sẵn sàng sau Service eta (rollback có đụng eta-stable hay Service?)")
+        pytest.fail(f"Sau rollback Service eta có {found} endpoint Ready sau 120 giây, cần đúng 3 (pod v1): {cause}",
+                    pytrace=False)
     counts, errors = k8slab.in_cluster_versions(canary, URL, 100)
     assert counts == {"v1": 100}, f"Sau rollback vẫn còn traffic ngoài v1: {counts}, lỗi ví dụ {errors}"
     stable = k8slab.get_json("deployment", "eta-stable-predictor", canary)

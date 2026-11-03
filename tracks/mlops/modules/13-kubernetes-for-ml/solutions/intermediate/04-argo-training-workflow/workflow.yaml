@@ -15,6 +15,12 @@ spec:
     runAsUser: 10001
     seccompProfile:
       type: RuntimeDefault
+  templateDefaults:
+    script:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
   templates:
     - name: pipeline
       dag:
@@ -52,10 +58,6 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
         env:
           - name: SEED
             value: "{{inputs.parameters.seed}}"
@@ -88,10 +90,6 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
         source: |
           import joblib
           import numpy as np
@@ -113,10 +111,6 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
         source: |
           import json
           import joblib

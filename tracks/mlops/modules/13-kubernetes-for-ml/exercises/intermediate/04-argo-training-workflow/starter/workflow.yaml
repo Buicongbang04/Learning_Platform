@@ -15,6 +15,12 @@ spec:
     runAsUser: 10001
     seccompProfile:
       type: RuntimeDefault
+  templateDefaults:
+    script:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
   templates:
     - name: pipeline
       dag:
@@ -46,10 +52,6 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
         env:
           - name: SEED
             value: "{{inputs.parameters.seed}}"
@@ -79,10 +81,6 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
         source: |
           raise NotImplementedError("TODO: huấn luyện bằng app.etaml.train, lưu /tmp/model.joblib")
 
@@ -90,9 +88,5 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
         source: |
           raise NotImplementedError("TODO: đọc model và tập test, ghi /tmp/metrics.json")

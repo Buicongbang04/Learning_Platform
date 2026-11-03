@@ -97,7 +97,8 @@ DECIMAL = {"n": 1e-9, "u": 1e-6, "m": 1e-3, "k": 1e3, "M": 1e6, "G": 1e9, "T": 1
 def quantity(value) -> float:
     """Đổi quantity K8s (`500m`, `256Mi`, `1Gi`, `2`, `1.5e3`, `2P`...) ra số (CPU theo nhân, bộ nhớ theo byte)."""
     match = QUANTITY.match(str(value).strip())
-    assert match, f"{value!r} không phải quantity Kubernetes hợp lệ (vd. 500m, 256Mi, 1Gi, 2)"
+    if not match:
+        pytest.fail(f"{value!r} không phải quantity Kubernetes hợp lệ (vd. 500m, 256Mi, 1Gi, 2)", pytrace=False)
     number, exponent, suffix = match.groups()
     if exponent:
         return float(number + exponent)
@@ -218,7 +219,13 @@ def in_cluster_versions(namespace: str, url: str, n: int, timeout: int = 180) ->
         },
     }
     mlopskit.apply_manifest(dump([pod]), namespace)
-    mlopskit.wait_for("pod", name, "jsonpath={.status.phase}=Succeeded", namespace, timeout, fail_on=("Failed",))
+    try:
+        mlopskit.wait_for("pod", name, "jsonpath={.status.phase}=Succeeded", namespace, timeout, fail_on=("Failed",))
+    except pytest.fail.Exception as error:
+        logs = mlopskit.kubectl("logs", name, "--tail=40", namespace=namespace)
+        described = mlopskit.kubectl("describe", "pod", name, namespace=namespace)
+        pytest.fail(f"Pod client {name} không chạy xong:\n--- logs\n{(logs.stdout + logs.stderr)[-2000:]}\n"
+                    f"--- describe\n{described.stdout[-2500:]}\n--- wait_for\n{str(error)[-1500:]}", pytrace=False)
     logs = mlopskit.kubectl("logs", name, namespace=namespace)
     mlopskit.kubectl("delete", "pod", name, "--wait=false", namespace=namespace)
     lines = logs.stdout.strip().splitlines()

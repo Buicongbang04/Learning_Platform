@@ -7,6 +7,6 @@ Xem `workflow.yaml`.
 - `retryStrategy` trên `train` với `retryPolicy: OnError` thử lại khi pod lỗi hạ tầng (node mất, bị evict), không thử lại khi code lỗi logic (`OnFailure` hoặc `Always` mới thử lại cả khi exit code khác 0). Bước tốn kém thì thêm `backoff`.
 - Output parameter `metrics` lấy từ tệp (`valueFrom.path`). Test đọc nó từ `status.nodes` và so với MAE tính lại: chứng minh evaluate đọc **đúng** model của lần chạy này, không phải chỉ "Workflow xanh".
 
-- Parameter đi vào bước `prepare` qua `env` rồi `int(...)`: Argo thay `{{...}}` bằng chuỗi trước khi chạy, nên dán thẳng vào `source` biến một giá trị như `0); import os; os.system(...)` thành code. Workflow chạy với `securityContext` mức pod (non-root, seccomp) và container không leo quyền, bỏ mọi capability; pod Argo vẫn cần token ServiceAccount để executor ghi kết quả.
+- Parameter đi vào bước `prepare` qua `env` rồi `int(...)`: Argo thay `{{...}}` bằng chuỗi trước khi chạy, nên dán thẳng vào `source` biến một giá trị như `0); import os; os.system(...)` thành code. Workflow chạy với `securityContext` mức pod (non-root, seccomp); `spec.templateDefaults.script.securityContext` đặt một lần cho mọi bước script: không leo quyền, bỏ mọi capability; pod Argo vẫn cần token ServiceAccount để executor ghi kết quả.
 
 Mở rộng ngoài bài: thêm bước `register` có `when: "{{tasks.evaluate.outputs.parameters...}}"` để chỉ ghi model vào registry khi đạt ngưỡng; chạy hằng đêm bằng `CronWorkflow`; giới hạn tài nguyên mỗi bước bằng `podSpecPatch` hay `resources` trong template.

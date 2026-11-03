@@ -24,8 +24,9 @@ def test_config_comes_from_configmap():
     container = api_container(docs)
     hardcoded = [e for e in container.get("env") or [] if e.get("name") == "MODEL_PATH" and "value" in e]
     assert not hardcoded, "MODEL_PATH phải lấy từ ConfigMap, không ghi cứng trong env"
-    prefixed = [s for s in container.get("envFrom") or [] if s.get("prefix")]
-    assert not prefixed, "envFrom có prefix thì biến trong container không còn tên MODEL_PATH"
+    prefixed = [s for s in container.get("envFrom") or []
+                if s.get("prefix") and (s.get("configMapRef") or {}).get("name") == "eta-api-config"]
+    assert not prefixed, "envFrom của eta-api-config có prefix thì biến trong container không còn tên MODEL_PATH"
     refs = [s.get("configMapRef", {}).get("name") for s in container.get("envFrom") or []]
     refs += [e.get("valueFrom", {}).get("configMapKeyRef", {}).get("name") for e in container.get("env") or []]
     assert "eta-api-config" in refs, "Container chưa đọc ConfigMap eta-api-config"
@@ -43,8 +44,9 @@ def test_deployment_contract():
     assert "httpGet" in (container.get("readinessProbe") or {}), "Cần readinessProbe kiểu httpGet"
     pod = deployment["spec"]["template"]["spec"]
     assert pod.get("automountServiceAccountToken") is False, "Pod serving không cần token API: automountServiceAccountToken: false"
-    assert (pod.get("securityContext") or {}).get("runAsNonRoot") is True, "Cần securityContext.runAsNonRoot: true ở mức pod"
     hardening = container.get("securityContext") or {}
+    non_root = hardening.get("runAsNonRoot", (pod.get("securityContext") or {}).get("runAsNonRoot"))
+    assert non_root is True, "Cần runAsNonRoot: true (securityContext của pod hoặc của container)"
     assert hardening.get("allowPrivilegeEscalation") is False, "Container cần allowPrivilegeEscalation: false"
     assert "ALL" in ((hardening.get("capabilities") or {}).get("drop") or []), "Container cần capabilities.drop: [ALL]"
     service = k8slab.find(docs, "Service", "eta-api")
