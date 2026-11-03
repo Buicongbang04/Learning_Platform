@@ -50,6 +50,8 @@ flowchart LR
   `ETA_MONTHS`, `ETA_SAMPLE_ROWS`, `ETA_SEED`, `ETA_MODEL_PARAMS`, `ETA_SPEED_TABLE` (rỗng) bằng `act --env`; **đừng** đặt
   các biến này trong `env:` của workflow, job hay step (sẽ đè giá trị của test). Trên GitHub thật chúng đến từ
   `vars`/`secrets` của repo.
+- Trên GitHub thật, mỗi job cần bước lấy code (`actions/checkout`, xem README module 08) trước các bước `run:`; act với
+  `--bind` đã mount sẵn thư mục làm việc nên bài này không có bước đó.
 - Giá trị từ `${{ ... }}` (input, output của job) đưa vào lệnh qua `env:` rồi dùng `"$BIEN"`, không chèn thẳng
   `${{ }}` vào `run:` (chống script injection, xem module 08).
 
@@ -62,6 +64,9 @@ flowchart LR
   `line-length = 160`) và sửa code cho sạch.
 - Job **`test`**: `python -m pytest tests_own -q -p no:cacheprovider`. `tests_own/` là test **của bạn** (ít nhất một tệp
   `test_*.py`), khác `tests/` là test chấm; chạy nhanh, không cần dữ liệu thật hay stack.
+  Khi chạy cả thư mục capstone (`uv run pytest tracks/mlops/capstone`), `conftest.py` của capstone **bỏ qua** mọi thư mục
+  `tests_own/` (chúng import `eta` theo đường khác với test chấm). Chạy chúng riêng:
+  `cd tracks/mlops/capstone/project && PYTHONPATH=src uv run --project ../../../.. pytest tests_own -q`.
 - Job **`build`** `needs: [lint, test]`: đóng gói `src` thành `dist/eta.pyz` (`python -m zipapp src -m "eta.cli:main"`) và
   chạy thử `--help`. Image Docker thật được build trong `cd.yml` trên runner có Docker.
 

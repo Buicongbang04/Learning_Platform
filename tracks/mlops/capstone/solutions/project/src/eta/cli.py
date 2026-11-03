@@ -124,6 +124,20 @@ def cmd_champion(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_experiment(args: argparse.Namespace) -> int:
+    from eta.experiments import late_slice, retrain_on
+
+    config = load_config(args.config)
+    if args.kind == "late-slice":
+        result = late_slice(args.month, args.as_of, config)
+    else:
+        if not args.train_month:
+            raise SystemExit("--train-month bắt buộc với retrain")
+        result = retrain_on(args.train_month, [m.strip() for m in args.month.split(",")], args.as_of, config)
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
+
+
 def cmd_replay(args: argparse.Namespace) -> int:
     from eta.clock import add_months, months_between
     from eta.flows import batch_score_flow, replay_flow
@@ -168,6 +182,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--config", type=Path, required=True)
     p.add_argument("--expect")
     p.set_defaults(func=cmd_champion)
+    p = sub.add_parser("experiment", help="thí nghiệm hỗ trợ quyết định, chỉ dùng nhãn đã công bố tại --as-of")
+    p.add_argument("kind", choices=["late-slice", "retrain"])
+    p.add_argument("--config", type=Path, required=True)
+    p.add_argument("--month", required=True, help="tháng đánh giá (retrain: nhiều tháng cách nhau bằng dấu phẩy)")
+    p.add_argument("--as-of", required=True)
+    p.add_argument("--train-month", help="retrain: tháng dùng để train lại")
+    p.set_defaults(func=cmd_experiment)
     p = sub.add_parser("replay", help="phát lại từng tháng, ghi summary.parquet (drift, chất lượng khi có nhãn)")
     p.add_argument("--config", type=Path, default=Path("params.yaml"))
     p.add_argument("--start", required=True)

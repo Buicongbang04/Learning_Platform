@@ -114,7 +114,30 @@ evidence:
   mình không phải lý do train lại); MAE xấu đi **hơn 50%** thì không được `keep`. Ở giữa hai mức đó, lý do của bạn quyết
   định, và được chấm bằng rubric trong `SOLUTION.md`.
 - Nên chứng minh bằng thí nghiệm, không chỉ bằng ngưỡng: ví dụ train challenger trên phần đầu tháng, so với champion trên
-  phần cuối tháng (dữ liệu bạn **đã có** tại `as_of`).
+  phần cuối tháng (dữ liệu bạn **đã có** tại `as_of`). Số cả tháng có thể bị loãng khi sự kiện xảy ra giữa tháng; khi so
+  "bình thường hay không", dùng cùng một mốc (ví dụ dải MAE của nửa sau 2019) cho mọi tháng bạn quyết định.
+
+### 4b. Tuỳ chọn mức Tốt: thí nghiệm tái lập được (`src/eta/experiments.py`)
+
+Số thí nghiệm trích trong lý do phải chạy lại được bằng một lệnh, và chỉ dùng nhãn đã công bố tại `as_of`:
+
+```python
+late_slice(month: str, as_of: str, config: Config, test_frac: float = 0.2) -> dict
+retrain_on(train_month: str, eval_months: list[str], as_of: str, config: Config) -> dict
+```
+
+- `late_slice`: champion (alias `champion` của registry trong config) và một challenger train trên phần đầu `month`
+  (`time_split` của M01), cả hai đánh giá trên phần cuối; trả `n`, `mae_champion`, `mae_challenger` (qua
+  `monthly_quality`), `slice_start`.
+- `retrain_on`: model train trên cả `train_month`; trả theo từng tháng trong `eval_months` một dict `mae_champion`,
+  `mae_retrained`.
+- Tháng nào dùng tới mà nhãn chưa công bố tại `as_of` (`published` của M05) thì ném `ValueError`.
+- CLI: `python -m eta.cli experiment late-slice --config C --month 2020-03 --as-of 2020-04` (in JSON một dòng, có `n`,
+  `mae_champion`, `mae_challenger`) và `python -m eta.cli experiment retrain --config C --train-month 2019-11 --month 2019-12
+  --as-of 2020-01` (nhiều tháng đánh giá cách nhau bằng dấu phẩy).
+
+`test_m10_experiments_use_published_labels` chạy trên ba tháng giả (2019-01..03, champion đăng ký sẵn); **skip** khi chưa có
+`src/eta/experiments.py` (phần tuỳ chọn, không bắt buộc để đạt).
 
 ### 5. `docs/runbook.md` và `docs/postmortem-covid.md`
 
@@ -136,6 +159,8 @@ evidence:
   summary đủ cột, 12 tháng, `as_of = 2020-06`; PSI `trip_distance` của 2020-04 lớn hơn của 2019-12; tháng 2020-06 `mae`
   NaN và `n_labeled = 0`; các tháng khác có `mae`, `n_labeled == n_scored`, `mae` khớp `replay.json`.
 - `test_m10_decision_files_valid`: các luật ở mục 4, so với summary mà test vừa tính bằng code của bạn.
+- `test_m10_experiments_use_published_labels` (tuỳ chọn, mục 4b): CLI `late-slice` trên tháng 2019-02 tại as_of 2019-03 in
+  số dương; `retrain_on` chạy được; dùng tháng 2019-03 tại as_of 2019-03 thì `ValueError`.
 - `test_m10_docs_structure`: các luật ở mục 5.
 
 ```bash

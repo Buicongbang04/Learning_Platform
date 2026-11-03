@@ -1,4 +1,8 @@
-"""Hỗ trợ test module 08: dựng repo nhỏ, chạy workflow bằng act ngoại tuyến, đánh giá path filter."""
+"""Hỗ trợ test module 08: dựng repo nhỏ, chạy workflow bằng act ngoại tuyến, đánh giá path filter.
+
+Capstone dùng lại (tracks/mlops/capstone/project/tests/etaci.py): RUFF_VERSION, git, commit_all, log, load_workflow,
+events, triggers. Đổi tên hay chữ ký các tên này thì sửa etaci.py; validator kiểm chúng còn tồn tại.
+"""
 import functools
 import importlib.metadata
 import os

@@ -355,6 +355,22 @@ def test_phase2_present():
     assert not missing, f"Phase 2 còn thiếu: {missing}"
 
 
+CIKIT_SHARED = ["RUFF_VERSION", "git", "commit_all", "log", "load_workflow", "events", "triggers"]
+
+
+def test_cikit_names_used_by_capstone():
+    import ast
+
+    tree = ast.parse((MODULES_DIR / "08-cicd-for-ml" / "cikit.py").read_text(encoding="utf-8"))
+    defined = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+    defined |= {t.id for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)}
+    missing = [name for name in CIKIT_SHARED if name not in defined]
+    assert not missing, f"capstone/project/tests/etaci.py dùng cikit.{missing} của module 08 nhưng không còn"
+    etaci = (TRACK / "capstone" / "project" / "tests" / "etaci.py").read_text(encoding="utf-8")
+    used = set(re.findall(r"cikit\.(\w+)", etaci))
+    assert used <= set(CIKIT_SHARED), f"etaci.py dùng thêm cikit.{sorted(used - set(CIKIT_SHARED))}: thêm vào CIKIT_SHARED"
+
+
 README_OK = (
     "# Module\n\nMở đầu.\n\n## 0. Cài đặt\n\nx\n\n"
     + "".join(f"## {i}. Phần {i}\n\nNội dung.\n\n" for i in range(1, 5))

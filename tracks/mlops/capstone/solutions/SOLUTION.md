@@ -250,28 +250,41 @@ mỗi tháng, `seed=0`, `max_iter=100`; tham chiếu drift là dự đoán trên
   đoán dài hơn thực tế gần 6 phút vì đường vắng). Giám sát chỉ PSI feature sẽ bỏ lỡ sự cố.
 - Mùa lễ 2019-12: MAE +8.1% so với 2019-11, PSI rất nhỏ, tháng 1 trở lại 199 s.
 
-Thí nghiệm hỗ trợ quyết định (cùng mẫu và tham số, chỉ dùng dữ liệu đã có tại `as_of`):
+Thí nghiệm hỗ trợ quyết định (cùng mẫu và tham số, `eta.experiments`; mỗi thí nghiệm từ chối chạy nếu nhãn của tháng
+dùng tới chưa công bố tại `--as-of`). Tái lập sau `make replay`:
+
+```bash
+make experiments
+python -m eta.cli experiment late-slice --config params.replay.yaml --month 2020-03 --as-of 2020-04
+python -m eta.cli experiment retrain --config params.replay.yaml --train-month 2019-11 --month 2019-12 --as-of 2020-01
+python -m eta.cli experiment retrain --config params.replay.yaml --train-month 2020-03 --month 2020-04,2020-05 --as-of 2020-06
+```
 
 | Thí nghiệm | Champion (2019-06) | Model so sánh |
 | --- | --- | --- |
-| 2020-03: train trên 80% đầu tháng 3, đánh giá trên 20% cuối (từ 2020-03-12, đã có tại as_of 2020-04) | 283.6 s | 240.8 s (-15%) |
-| 2019-12: train trên 2019-11, đánh giá trên 2019-12 (as_of 2020-01) | 212.3 s | 208.1 s (-2%) |
-| Kiểm chứng sau sự việc: train trên cả 2020-03, đánh giá trên 2020-04 / 2020-05 | 371.9 / 362.2 s | 270.5 / 258.1 s |
+| 2020-03 `late-slice`: train trên 80% đầu tháng 3, đánh giá trên 20% cuối (9 741 chuyến từ 2020-03-12; as_of 2020-04) | 283.6 s | 240.8 s (-15%) |
+| 2019-12 `retrain`: train trên 2019-11, đánh giá trên 2019-12 (as_of 2020-01) | 212.3 s | 208.1 s (-2%) |
+| Kiểm chứng sau sự việc `retrain`: train trên cả 2020-03, đánh giá trên 2020-04 / 2020-05 (as_of 2020-06) | 371.8 / 362.2 s | 270.5 / 258.1 s |
 
-Quyết định tham chiếu (`project/reports/decisions/`):
+Quyết định tham chiếu (`project/reports/decisions/`). Cả hai dùng cùng một mốc so sánh: dải MAE cả tháng của nửa sau 2019
+là 192.6 tới 212.3 s.
 
-- **2020-03: `retrain`** (as_of 2020-04). MAE +14.3% (181.1 → 207.0), bias +65 → +104 s, MAE sân bay 471 → 518; challenger
-  train trên đầu tháng 3 thắng champion 15% trên cuối tháng 3. Rollback vô nghĩa (không có version tốt hơn, mọi version
-  đều trước COVID). Kiểm chứng sau sự việc: bản train lại giảm MAE tháng 4 từ 372 xuống 270 s.
-- **2019-12: `keep`** (as_of 2020-01). MAE +8.1% trong dải dao động nửa sau 2019, PSI nhỏ, train lại chỉ được 2%: không
-  đáng rủi ro của một lần promote.
+- **2019-12: `keep`** (as_of 2020-01). MAE 212.3 s (+8.1% so với tháng 11) nằm trong dải, PSI nhỏ, 2020-01 quay lại
+  199 s; train lại chỉ được 2%: không đáng rủi ro của một lần promote.
+- **2020-03: `retrain`** (as_of 2020-04). Số **cả tháng không đủ kết luận**: 207.0 s vẫn trong dải trên, và bias +104 s
+  không mới (2020-01 đã +103 s); nửa đầu tháng còn giao thông bình thường nên làm loãng tác động. Bằng chứng quyết định là
+  **lát cuối tháng** từ 2020-03-12 (NYC ban bố khẩn cấp 12/3, đóng trường 16/3, lệnh PAUSE 22/3): champion 283.6 s, cao hơn
+  34% so với đỉnh 212 s của dải, trong khi challenger train trên đầu tháng 3 đạt 240.8 s (-15%). Rollback vô nghĩa (mọi
+  version đều trước COVID). Kiểm chứng sau sự việc: bản train lại giảm MAE tháng 4 từ 372 xuống 270 s.
+- Người chỉ nhìn số cả tháng và chọn `keep` cho 2020-03 vẫn qua test (tỉ lệ 1.14 nằm giữa hai luật), nhưng mất điểm
+  rubric nếu không xét lát cuối tháng; đó là chỗ phân biệt mức Đạt và Tốt.
 - Không chọn được `keep` cho 2020-04 dù quyết định muộn: MAE +79.6% vượt luật 50% của test.
 
 Rubric cho quyết định và tài liệu (test chỉ kiểm cấu trúc, số và hai luật nhất quán):
 
 | Mục | Đạt | Tốt |
 | --- | --- | --- |
-| Lý do 2020-03 | Nêu MAE trước/sau và PSI, kết luận khớp số | Tách drift đầu vào khỏi concept drift; có thí nghiệm challenger trên dữ liệu đã có tại `as_of`; nói vì sao không rollback |
+| Lý do 2020-03 | Nêu MAE trước/sau và PSI, kết luận khớp số | So số cả tháng với cùng dải mốc dùng cho tháng khác; thấy số cả tháng bị loãng và dùng lát cuối tháng; thí nghiệm tái lập được (`eta.cli experiment`) chỉ với nhãn đã có tại `as_of`; tách concept drift khỏi drift đầu vào; nói vì sao không rollback |
 | Tháng thứ hai | Quyết định có số, khớp luật | Chọn tháng drift/mùa vụ và chứng minh `keep` bằng thí nghiệm train lại không đáng |
 | `as_of` | Sau khi nhãn công bố | Giải thích chi phí của việc chờ nhãn và tín hiệu proxy dùng được trước đó (PSI giờ đón, `EtaPredictionShift`, bias) |
 | Runbook | Mỗi alert đủ bốn phần | Lệnh kiểm tra chạy được, nhánh hành động theo kết quả kiểm, tiêu chí leo thang bằng số/thời gian |

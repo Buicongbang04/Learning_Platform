@@ -2,7 +2,7 @@ REPO := $(abspath ../../../../..)
 PY := cd $(CURDIR) && PYTHONPATH=src uv run --project $(REPO) python
 PORT ?= 28080
 
-.PHONY: test train register serve images repro replay-data replay act-ci monitoring
+.PHONY: test train register serve images repro replay-data replay experiments act-ci monitoring
 
 test:
 	cd $(REPO) && SOLUTION=1 uv run pytest tracks/mlops/capstone/project/tests -q -rs
@@ -30,7 +30,12 @@ replay-data:
 	done
 
 replay: replay-data
-	$(PY) -m eta.cli replay --config params.replay.yaml --start 2019-07 --end 2020-06 --out reports/replay
+	cd $(CURDIR) && PREFECT_HOME=$(CURDIR)/data/prefect PYTHONPATH=src uv run --project $(REPO) python -m eta.cli replay --config params.replay.yaml --start 2019-07 --end 2020-06 --out reports/replay
+
+experiments:
+	$(PY) -m eta.cli experiment late-slice --config params.replay.yaml --month 2020-03 --as-of 2020-04
+	$(PY) -m eta.cli experiment retrain --config params.replay.yaml --train-month 2019-11 --month 2019-12 --as-of 2020-01
+	$(PY) -m eta.cli experiment retrain --config params.replay.yaml --train-month 2020-03 --month 2020-04,2020-05 --as-of 2020-06
 
 act-ci:
 	cd $(CURDIR) && act push -W .github/workflows/ci.yml -P ubuntu-latest=mlops-act-runner:1 --pull=false --bind

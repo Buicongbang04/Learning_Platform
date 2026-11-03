@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
-from etakit import PROJECT, local_registry, need, require_file, write_config
+from etakit import PROJECT, local_registry, need, require_file, synthetic_month, write_config, write_months
 
 import mlopskit
 
@@ -123,6 +123,36 @@ def test_m10_replay_summary_real(project, replay):
     flow_mae = {r["month"]: r["mae"] for r in rows}
     for month, mae in labeled.set_index("month")["mae"].items():
         assert mae == pytest.approx(flow_mae[month], rel=1e-6), f"{month}: mae của summary khác mae của replay_flow"
+
+
+def test_m10_experiments_use_published_labels(project, tmp_path, capsys):
+    if not (PROJECT / "src" / "eta" / "experiments.py").is_file():
+        pytest.skip("Tuỳ chọn mức Tốt của rubric M10: chưa có src/eta/experiments.py (lệnh eta.cli experiment)")
+    from mlflow import MlflowClient
+
+    experiments = need("experiments", "late_slice", "retrain_on")
+    cli = need("cli", "main")
+    config_mod = need("config", "load_config")
+    registry = need("registry", "log_and_register")
+    features = need("features", "build_features", "clean")
+    train = need("train", "train")
+    raw = write_months(tmp_path / "raw", ["2019-01", "2019-02", "2019-03"], n=1_500)
+    uri, name = local_registry(tmp_path, "eta-m10x")
+    path = write_config(tmp_path / "params.yaml", raw, ["2019-01"], uri, name)
+    config = config_mod.load_config(path)
+    frame = features.clean(synthetic_month(1_500, seed=0), "2019-01")
+    model = train.train(*features.build_features(frame), {"max_iter": 20, "random_state": 0})
+    version = registry.log_and_register(model, {"mae": 100.0, "p90_abs_err": 200.0, "mae_airport": 300.0}, config, "sha256:m10x")
+    MlflowClient(tracking_uri=uri).set_registered_model_alias(name, "champion", str(version))
+    assert cli.main(["experiment", "late-slice", "--config", str(path), "--month", "2019-02", "--as-of", "2019-03"]) == 0
+    result = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert result["n"] > 0 and result["mae_champion"] > 0 and result["mae_challenger"] > 0, result
+    retrained = experiments.retrain_on("2019-01", ["2019-02"], "2019-03", config)
+    assert retrained["2019-02"]["mae_champion"] > 0 and retrained["2019-02"]["mae_retrained"] > 0, retrained
+    with pytest.raises(ValueError):
+        experiments.late_slice("2019-03", "2019-03", config)
+    with pytest.raises(ValueError):
+        experiments.retrain_on("2019-01", ["2019-03"], "2019-03", config)
 
 
 def decision_files() -> list:

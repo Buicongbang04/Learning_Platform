@@ -130,7 +130,7 @@ def test_m08_gate_blocks_deploy(project, ct_repo):
     result = etaci.run(repo, "-W", CT, env=env)
     text = etaci.log(result)
     assert result.returncode != 0, "challenger tệ hơn champion mà ct vẫn xanh"
-    assert "[ct/train" in text and "Job succeeded" in text, text[-3000:]
+    assert any(line.startswith("[ct/train") and "Job succeeded" in line for line in text.splitlines()), text[-3000:]
     gate = "\n".join(line for line in text.splitlines() if line.startswith("[ct/gate"))
     assert "exitcode '3'" in gate, f"job gate phải thoát với EXIT_REJECTED=3 khi bị từ chối:\n{gate[-2000:]}"
     after = [job for job, spec in etaci.load_workflow(repo / CT)["jobs"].items() if "gate" in needs(spec)]

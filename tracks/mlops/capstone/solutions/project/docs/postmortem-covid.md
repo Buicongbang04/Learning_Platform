@@ -9,15 +9,19 @@ Từ giữa tháng 3/2020 lưu lượng taxi NYC sụp, đường vắng và th�
 ETA train trên 2019-06 tiếp tục dự đoán theo nhịp giao thông cũ nên đánh giá quá cao thời gian: MAE từ 181 s (2020-02)
 lên 207 s (2020-03) rồi 372 s (2020-04), độ lệch dự đoán từ +65 s lên +341 s. Drift của `trip_distance` gần như không
 thấy (PSI 0.005 ở 2020-03, 0.016 ở 2020-04); tín hiệu sớm nằm ở phân phối giờ đón (PSI 0.177 ở 2020-04) và ở nhãn khi
-nhãn về. Quyết định tại as_of 2020-04 là train lại; challenger train trên tháng 3 giảm MAE tháng 4 từ 372 s xuống 270 s.
+nhãn về. Số cả tháng 3 còn nằm trong dải 2019 (192 tới 212 s) vì nửa đầu tháng bình thường; lát cuối tháng (từ 12/3) mới
+lộ vấn đề: champion 283.6 s, challenger train trên đầu tháng 240.8 s. Quyết định tại as_of 2020-04 là train lại; bản train
+trên cả tháng 3 giảm MAE tháng 4 từ 372 s xuống 270 s.
 
 ## Dòng thời gian
 
 - 2020-02: MAE 181 s, thấp nhất cả giai đoạn; không alert.
 - 2020-03 (giữa tháng): lệnh phong toả, lưu lượng giảm mạnh; 20% chuyến cuối tháng bắt đầu từ ngày 12. Dashboard thấy
   trung vị dự đoán đổi ít vì đầu vào gần như giữ nguyên phân phối khoảng cách.
-- 2020-04 (đầu tháng): nhãn tháng 3 công bố. Phát lại cho MAE 207 s (+14.3% so với tháng 2), bias +104 s. Thí nghiệm
-  train challenger trên đầu tháng 3, đánh giá trên cuối tháng 3: 240.8 s so với 283.6 s của champion. Quyết định
+- 2020-03-12, 16 và 22: NYC ban bố khẩn cấp, đóng trường, lệnh PAUSE.
+- 2020-04 (đầu tháng): nhãn tháng 3 công bố. MAE cả tháng 207 s (+14.3% so với tháng 2) nhưng vẫn trong dải 2019, bias
+  +104 s không khác 2020-01 (+103 s): số cả tháng chưa đủ kết luận. `make experiments` trên lát cuối tháng (20% chuyến
+  cuối, từ 12/3): champion 283.6 s (cao hơn 34% so với đỉnh dải), challenger train trên đầu tháng 240.8 s. Quyết định
   `retrain` (`reports/decisions/2020-03.yaml`).
 - 2020-04 (trong tháng): PSI giờ đón 0.177, `EtaPredictionShift` là alert proxy duy nhất có thể bắn trước khi có nhãn.
 - 2020-05 (đầu tháng): nhãn tháng 4 về, champion cũ có MAE 372 s; bản train lại trên tháng 3 cho 270 s trên cùng tháng.
@@ -43,4 +47,6 @@ thường, nhưng tỉ lệ chuyến sai trên 10 phút tăng mạnh (p90 sai s�
 - Tự động hoá: khi MAE tháng mới xấu hơn 10% so với trung bình 3 tháng, flow CT train challenger trên tháng gần nhất và
   chạy cổng promotion; người on-call duyệt quyết định trong `reports/decisions/`.
 - Giữ `EtaPredictionShift` và thêm cảnh báo PSI giờ đón trên log dự đoán hằng ngày làm tín hiệu sớm khi chưa có nhãn.
+- Tính chất lượng theo tuần (không chỉ cả tháng) khi nhãn về: MAE cả tháng 3 bị nửa đầu tháng làm loãng, tuần cuối mới lộ
+  vấn đề.
 - Diễn tập rollback và train lại mỗi quý, đo thời gian từ lúc nhãn về tới lúc model mới phục vụ.
