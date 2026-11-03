@@ -19,6 +19,8 @@ INVENTORY = [
     {"provider": "aws", "type": "nat-gateway", "name": "nat-0abc123", "region": "ap-southeast-1", "tags": OWN},
     {"provider": "aws", "type": "sagemaker-endpoint", "name": "ml-lab-7-hand-made", "region": "ap-southeast-1", "tags": {}},
     {"provider": "aws", "type": "sagemaker-endpoint", "name": "ml-lab-9-eta", "region": "ap-southeast-1", "tags": {"lab": "ml-lab-9"}},
+    {"provider": "aws", "type": "s3-bucket", "name": "ml-lab-7-untagged-logs", "region": "ap-southeast-1", "tags": None},
+    {"provider": "aws", "type": "s3-bucket", "name": "shared-data", "region": "ap-southeast-1"},
     {"provider": "gcp", "type": "vertex-endpoint", "name": "ml-lab-7-vx", "region": "asia-southeast1", "tags": OWN},
     {"provider": "gcp", "type": "vertex-model", "name": "ml-lab-7-vm", "region": "asia-southeast1", "tags": OWN},
     {"provider": "gcp", "type": "gcs-bucket", "name": "ml-lab-7-gcs", "region": "asia-southeast1", "tags": OWN},
@@ -40,7 +42,7 @@ def test_only_resources_with_the_lab_tag_are_touched(td):
     steps = td.plan_teardown(INVENTORY, LAB)
     names = {s["resource"] for s in steps}
     assert "ml-lab-7-hand-made" not in names and "ml-lab-9-eta" not in names
-    own = [i for i in INVENTORY if i["tags"].get("lab") == LAB]
+    own = [i for i in INVENTORY if (i.get("tags") or {}).get("lab") == LAB]
     assert len(steps) == len(own) + 2
     assert all("hand-made" not in s["command"] and "lab-9" not in s["command"] for s in steps)
 
@@ -208,7 +210,7 @@ def test_failure_does_not_stop_the_rest_but_exits_nonzero(td, fake_cli, tmp_path
 
 def test_leftover_warns_about_hand_made_lookalikes(td):
     warnings = td.leftover_warnings(INVENTORY, LAB)
-    assert [w["resource"] for w in warnings] == ["ml-lab-7-hand-made"]
+    assert [w["resource"] for w in warnings] == ["ml-lab-7-hand-made", "ml-lab-7-untagged-logs"]
     assert "tag" in warnings[0]["why"]
 
 
@@ -223,4 +225,4 @@ def test_leftover_needs_a_dash_boundary_after_the_lab_id(td):
 
 
 def test_leftover_empty_when_everything_is_tagged(td):
-    assert td.leftover_warnings([i for i in INVENTORY if i["tags"].get("lab") == LAB], LAB) == []
+    assert td.leftover_warnings([i for i in INVENTORY if (i.get("tags") or {}).get("lab") == LAB], LAB) == []

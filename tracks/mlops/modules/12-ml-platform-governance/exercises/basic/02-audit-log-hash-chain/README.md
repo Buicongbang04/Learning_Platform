@@ -38,6 +38,7 @@ Luật mà test ép:
 
 - Test pass.
 - Giải thích được vì sao hash chain **không** phát hiện việc cắt các dòng cuối nếu không có `anchor`, và anchor nên lưu ở đâu để kẻ sửa log không sửa luôn được.
+- Giải thích được vì sao SHA-256 không khoá chỉ chống sửa **một phần**: ai ghi được tệp có thể viết lại cả chuỗi và tính lại mọi hash, `verify()` vẫn trả `None`; chỉ `anchor` lưu ngoài tầm tay họ (hoặc chữ ký/HMAC có khoá) mới bắt được.
 - Giải thích được vì sao `who_promoted("taxi-eta", 3)` không đủ khi cần biết ai đang giữ alias hiện tại.
 
 ## Gợi ý

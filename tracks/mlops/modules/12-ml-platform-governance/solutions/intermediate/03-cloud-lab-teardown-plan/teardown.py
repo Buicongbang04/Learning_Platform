@@ -28,7 +28,7 @@ COMMANDS = {
 
 
 def _mine(inventory: list[dict], lab: str) -> list[dict]:
-    return [item for item in inventory if item.get("tags", {}).get("lab") == lab]
+    return [item for item in inventory if (item.get("tags") or {}).get("lab") == lab]
 
 
 FIELDS = {"n": "name", "r": "region", "g": "resource_group"}
@@ -74,6 +74,6 @@ def render_script(steps: list[dict]) -> str:
 def leftover_warnings(inventory: list[dict], lab: str) -> list[dict]:
     warnings = []
     for item in inventory:
-        if item.get("tags", {}).get("lab") != lab and (item["name"] == lab or item["name"].startswith(lab + "-")):
+        if (item.get("tags") or {}).get("lab") != lab and (item["name"] == lab or item["name"].startswith(lab + "-")):
             warnings.append({"resource": item["name"], "why": "tên giống lab nhưng không có tag lab đúng, kế hoạch không động tới, tự kiểm"})
     return warnings

@@ -32,6 +32,11 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$YES" -eq 0 ]; then
     exit 2
 fi
 
+if ! [[ "$REGION" =~ ^[a-z]{2}(-[a-z]+)+-[0-9]+$ ]]; then
+    echo "vùng không hợp lệ: $REGION" >&2
+    exit 2
+fi
+
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
@@ -86,26 +91,52 @@ PY
 INVENTORY_ARG="$INVENTORY"
 [ -n "$INVENTORY" ] || collect_inventory
 
-python3 - "$INVENTORY" "$TAG_KEY" "$TAG_VALUE" > "$WORK/plan.tsv" <<'PY' || exit 2
-import json, sys
+python3 - "$INVENTORY" "$TAG_KEY" "$TAG_VALUE" > "$WORK/plan.tsv" 2> "$WORK/skipped.txt" <<'PY' || exit 2
+import json, re, sys
 
 ORDER = ["aws_lambda_function", "aws_cloudwatch_log_group", "aws_s3_bucket", "aws_iam_role", "aws_budgets_budget"]
+SAFE_NAME = re.compile(r"[A-Za-z0-9_/][A-Za-z0-9._/+=@,#-]*")
+SAFE_ID = re.compile(r"[A-Za-z0-9:/._+=@,#*-]+")
+REGION = re.compile(r"[a-z]{2}(-[a-z]+)+-[0-9]+")
+ACCOUNT = re.compile(r"[0-9]{12}")
 inventory, key, value = json.load(open(sys.argv[1])), sys.argv[2], sys.argv[3]
 chosen = [r for r in inventory.get("resources", []) if (r.get("tags") or {}).get(key) == value]
 chosen.sort(key=lambda r: ORDER.index(r["type"]) if r["type"] in ORDER else len(ORDER))
 for r in chosen:
-    print("\t".join([r["type"], r["id"], r.get("name") or r["id"]]))
+    rid, name = str(r.get("id", "")), str(r.get("name") or r.get("id", ""))
+    parts = rid.split(":")
+    region = parts[3] if len(parts) > 5 and r["type"] in ("aws_lambda_function", "aws_cloudwatch_log_group") else "-"
+    account = (parts[4] if len(parts) > 5 else "") if r["type"] == "aws_budgets_budget" else "-"
+    problem = None
+    if not SAFE_ID.fullmatch(rid):
+        problem = "id có ký tự lạ"
+    elif not SAFE_NAME.fullmatch(name):
+        problem = f"name {name!r} không an toàn"
+    elif region != "-" and not REGION.fullmatch(region):
+        problem = f"vùng {region!r} trong ARN không hợp lệ"
+    elif account != "-" and not ACCOUNT.fullmatch(account):
+        problem = f"account {account!r} trong ARN không phải 12 chữ số"
+    if problem:
+        print(f"WARN: bỏ qua {r['type']} {rid!r}: {problem}; kiểm và xoá tay", file=sys.stderr)
+        continue
+    print("\t".join([r["type"], rid, name, region, account]))
 PY
+skipped=$(grep -c '^WARN' "$WORK/skipped.txt")
+[ "$skipped" -eq 0 ] || cat "$WORK/skipped.txt" >&2
 
 delete_role() {
     local name="$1" rc=0 policies policy
+    local -a list=()
     policies=$(aws iam list-role-policies --role-name "$name" --query 'PolicyNames' --output text) || rc=1
-    for policy in $policies; do
+    read -r -a list <<< "$policies"
+    for policy in "${list[@]}"; do
         [ "$policy" = "None" ] && continue
         aws iam delete-role-policy --role-name "$name" --policy-name "$policy" || rc=1
     done
+    list=()
     policies=$(aws iam list-attached-role-policies --role-name "$name" --query 'AttachedPolicies[].PolicyArn' --output text) || rc=1
-    for policy in $policies; do
+    read -r -a list <<< "$policies"
+    for policy in "${list[@]}"; do
         [ "$policy" = "None" ] && continue
         aws iam detach-role-policy --role-name "$name" --policy-arn "$policy" || rc=1
     done
@@ -114,15 +145,14 @@ delete_role() {
 }
 
 delete_one() {
-    local type="$1" id="$2" name="$3" region
-    region=$(echo "$id" | cut -d: -f4)
-    region="${region:-$REGION}"
+    local type="$1" id="$2" name="$3" region="$4" account="$5"
+    [ "$region" = "-" ] && region="$REGION"
     case "$type" in
         aws_lambda_function) aws lambda delete-function --region "$region" --function-name "$name" ;;
         aws_cloudwatch_log_group) aws logs delete-log-group --region "$region" --log-group-name "$name" ;;
         aws_s3_bucket) aws s3 rb "s3://$name" --force ;;
         aws_iam_role) delete_role "$name" ;;
-        aws_budgets_budget) aws budgets delete-budget --account-id "$(echo "$id" | cut -d: -f5)" --budget-name "$name" ;;
+        aws_budgets_budget) aws budgets delete-budget --account-id "$account" --budget-name "$name" ;;
         *) echo "không biết cách xoá $type ($id): xoá tay trên console" >&2; return 1 ;;
     esac
 }
@@ -131,7 +161,7 @@ unknown=$(awk -F'\t' '$1 !~ /^aws_(lambda_function|cloudwatch_log_group|s3_bucke
 count=$(wc -l < "$WORK/plan.tsv")
 
 if [ "$DRY_RUN" -eq 1 ]; then
-    while IFS=$'\t' read -r type id name; do
+    while IFS=$'\t' read -r type id _; do
         echo "WOULD DELETE $type $id"
     done < "$WORK/plan.tsv"
     [ -z "$unknown" ] || echo "Cảnh báo, loại chưa có lệnh xoá (phải xoá tay): $unknown" >&2
@@ -151,12 +181,15 @@ if [ -n "$unknown" ]; then
 fi
 
 failed=()
-while IFS=$'\t' read -r type id name; do
+while IFS=$'\t' read -r type id name region account; do
     echo "DELETE $type $id"
-    delete_one "$type" "$id" "$name" < /dev/null || failed+=("$type $id")
+    delete_one "$type" "$id" "$name" "$region" "$account" < /dev/null || failed+=("$type $id")
 done < "$WORK/plan.tsv"
 
-if [ "${#failed[@]}" -gt 0 ]; then
+if [ "$skipped" -gt 0 ]; then
+    echo "Đã bỏ qua $skipped tài nguyên có name/vùng/account không hợp lệ (xem WARN ở trên); chúng vẫn còn." >&2
+fi
+if [ "${#failed[@]}" -gt 0 ] || [ "$skipped" -gt 0 ]; then
     for item in "${failed[@]}"; do
         echo "FAILED: $item" >&2
     done

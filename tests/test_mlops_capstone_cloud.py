@@ -158,3 +158,41 @@ def test_regional_deletes_use_the_region_in_the_arn(live, tmp_path):
     assert result.returncode == 0, result.stderr
     regions = {c[1]: c[c.index("--region") + 1] for c in calls if "--region" in c}
     assert regions == {"delete-function": "eu-west-1", "delete-log-group": "ap-southeast-1"}, calls
+
+
+GOOD_LAMBDA = {"id": "arn:aws:lambda:us-east-1:111122223333:function:eta-mlops-health", "type": "aws_lambda_function",
+               "name": "eta-mlops-health", "tags": {"project": "eta-mlops"}}
+BAD = [
+    {"id": "arn:aws:s3:::--recursive", "type": "aws_s3_bucket", "name": "--recursive", "tags": {"project": "eta-mlops"}},
+    {"id": "arn:aws:iam::111122223333:role/eta-mlops/x", "type": "aws_iam_role", "name": "-x",
+     "tags": {"project": "eta-mlops"}},
+    {"id": "arn:aws:lambda:us-east-1;id:111122223333:function:f2", "type": "aws_lambda_function", "name": "f2",
+     "tags": {"project": "eta-mlops"}},
+    {"id": "arn:aws:logs:--profile:111122223333:log-group:/aws/lambda/g", "type": "aws_cloudwatch_log_group",
+     "name": "/aws/lambda/g", "tags": {"project": "eta-mlops"}},
+    {"id": "arn:aws:budgets::--x:budget/eta-mlops-monthly", "type": "aws_budgets_budget", "name": "eta-mlops-monthly",
+     "tags": {"project": "eta-mlops"}},
+    {"id": "eta-mlops-monthly", "type": "aws_budgets_budget", "name": "eta-mlops-monthly", "tags": {"project": "eta-mlops"}},
+]
+
+
+@pytest.fixture
+def unsafe_inventory(tmp_path):
+    path = tmp_path / "unsafe.json"
+    path.write_text(json.dumps({"resources": [GOOD_LAMBDA, *BAD]}), encoding="utf-8")
+    return path
+
+
+def test_unsafe_names_regions_and_accounts_are_skipped_with_a_warning(live, unsafe_inventory):
+    result, calls = live("--dry-run", "--inventory", str(unsafe_inventory))
+    assert result.returncode == 0 and not calls
+    assert would_delete(result.stdout) == [GOOD_LAMBDA["id"]]
+    assert result.stderr.count("WARN: bỏ qua") == len(BAD)
+    result, calls = live("--yes", "--inventory", str(unsafe_inventory))
+    assert result.returncode != 0, "tài nguyên bị bỏ qua vẫn còn đó, --yes phải exit khác 0"
+    assert calls == [["lambda", "delete-function", "--region", "us-east-1", "--function-name", "eta-mlops-health"]]
+
+
+def test_invalid_region_flag_is_refused_before_any_call(live):
+    result, calls = live("--dry-run", "--region", "us-east-1 --profile x")
+    assert result.returncode != 0 and not calls

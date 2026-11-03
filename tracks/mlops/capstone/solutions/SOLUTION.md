@@ -321,6 +321,10 @@ Không test nào chạm cloud; bản này chưa được `apply` trong lúc vi�
   → `budgets describe-budgets --account-id` + `budgets list-tags-for-resource`. Lệnh xoá Lambda và log group lấy vùng
   từ ARN của chính tài nguyên (inventory có thể trộn vùng), `--region` chỉ là dự phòng. Đường này kiểm bằng `aws` giả
   trong `tests/test_mlops_capstone_cloud.py` ở gốc repo.
+- **Không tin chuỗi trong inventory.** Trước khi xoá, mỗi tài nguyên được kiểm: `name` không bắt đầu bằng `-` (sẽ bị
+  CLI đọc thành cờ) và chỉ gồm ký tự an toàn, vùng trong ARN dạng `us-east-1`, account của budget đủ 12 chữ số; sai thì
+  `WARN: bỏ qua` và `--yes` exit khác 0 vì tài nguyên vẫn còn. Danh sách policy của role đọc bằng `read -a`, không để
+  shell glob.
 - **Lambda URL `NONE`** cho tiện thử, kèm hai `aws_lambda_permission` công khai (`InvokeFunctionUrl` và `InvokeFunction`, AWS đòi cả hai từ cuối 2025). Quyền `InvokeFunction` cho `"*"` **phải** có `invoked_via_function_url = true` (điều kiện `lambda:InvokedViaFunctionUrl`, provider AWS từ 6.28): thiếu nó thì bất kỳ tài khoản AWS nào cũng gọi thẳng `Invoke` được, không qua URL. `budget.md` ghi rủi ro và cách chuyển sang
   `AWS_IAM`.
 
