@@ -11,7 +11,7 @@ Model chỉ cần "đủ tốt" (gradient boosting). Trọng tâm là **mọi th
 ## Bài toán
 
 Dự đoán **thời gian chuyến đi (giây)** từ zone đón, zone trả, thời điểm và khoảng cách, trên dữ liệu
-[NYC TLC](../../data/README.md) thật (`nyc-tlc` cho 2019, `nyc-tlc-2020` cho 2020; mỗi bài dùng mẫu xác định
+[NYC TLC](../../../data/README.md) thật (`nyc-tlc` cho 2019, `nyc-tlc-2020` cho 2020; mỗi bài dùng mẫu xác định
 theo `seed`, ví dụ 200 000 dòng của một tháng). Dữ liệu bẩn thật: thời lượng âm hoặc 0, khoảng cách bất thường,
 ngày nằm ngoài tháng của tệp, zone 264/265 (Unknown). Bạn phải làm sạch theo luật cố định và đếm được số dòng còn lại.
 

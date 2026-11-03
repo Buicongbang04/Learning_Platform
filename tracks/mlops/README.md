@@ -53,20 +53,20 @@ module chưa có sẽ hoạt động khi module đó được thêm.
 
 ```mermaid
 flowchart LR
-    subgraph Nền tảng
+    subgraph nen[Nền tảng]
         M00[00 Giới thiệu] --> M01[01 Engineering] --> M02[02 Containers]
         M02 --> M03[03 Data versioning] --> M04[04 Tracking & registry]
     end
-    subgraph Pipeline và serving
+    subgraph pipe[Pipeline và serving]
         M05[05 Training pipeline] --> M06[06 Feature store] --> M07[07 Serving]
         M07 --> M08[08 CI/CD]
     end
-    subgraph Vận hành
+    subgraph ops[Vận hành]
         M09[09 Monitoring] --> M10[10 Drift & sự cố]
         M10 --> M11[11 DL serving] --> M12[12 Governance & cloud]
         M12 --> M13[13 K8s cho ML]
     end
-    subgraph Senior
+    subgraph sen[Senior]
         M14[14 K8s production] --> M15[15 Distributed training] --> M16[16 Streaming ML]
         M16 --> M17[17 Platform & security] --> M18[18 System design]
     end
