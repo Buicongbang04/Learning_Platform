@@ -252,9 +252,10 @@ có benchmark CPU/GPU) vì bài toán ETA không phải DL.
 ## 8. Thứ tự làm (gợi ý cho plan)
 
 - **Giai đoạn 1:** hạ tầng (`setup/mlops`, `mlopskit.py`, entry dữ liệu mới, `track.json`, README track, mục
-  "Track MLOps" trong `CONTENT_SPEC.md`), module 00–04, capstone m01–m04.
+  "Track MLOps" trong `CONTENT_SPEC.md`), module 00–04, capstone m01–m04; đổi `status` sang `active` ngay
+  (như track DevOps) để học dần các module đã xong.
 - **Giai đoạn 2:** module 05–10, capstone m05–m10.
-- **Giai đoạn 3:** module 11–13, capstone m11–m13, đổi `status` sang `active` (lõi junior đã dùng được).
+- **Giai đoạn 3:** module 11–13, capstone m11–m13 (xong lõi junior).
 - **Giai đoạn 4 (senior):** module 14–18, capstone m14–m18.
 
 Mỗi task có implementer và reviewer độc lập; cuối mỗi giai đoạn review toàn nhánh. Làm liên tục hết track
@@ -279,7 +280,9 @@ Mỗi task có implementer và reviewer độc lập; cuối mỗi giai đoạn 
 8. `mlopskit.py` tự viết helper Docker/act/kind tối thiểu thay vì chờ DevOps Phase 2; hợp nhất sau khi cả
    hai vào `main`.
 9. Dependency MLOps vào môi trường mặc định để nút "Run tests" chạy được; xung đột thì chạy công cụ trong
-   container. Đường GPU dùng `setup/gpu`.
+   container. Đường GPU dùng `setup/gpu`. Đã kiểm 2026-11-03: `dvc[s3]` và `evidently` resolve cùng pin hiện
+   tại; `feast[redis]` kéo pandas 3.1 → 2.3.3, nên Giai đoạn 2 phải xử lý (chạy Feast trong container hoặc tìm
+   bản tương thích), không hạ pandas của môi trường chung.
 10. SegFormer: người học fine-tune `segformer-b0` một lần bằng script cấp sẵn (bước chuẩn bị); test không
     cần model đó.
 
