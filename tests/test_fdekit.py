@@ -4,10 +4,12 @@ import signal
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 
 import pycdlib
 import pytest
+import requests
 
 import fdekit
 
@@ -77,6 +79,18 @@ def test_fetch_image_verifies_and_redownloads(tmp_path, monkeypatch):
     path.write_bytes(b"corrupted")
     fdekit.fetch_image("fake")
     assert len(calls) == 2 and path.read_bytes() == payload
+
+
+def test_ubuntu_helper_skips_when_offline(monkeypatch):
+    monkeypatch.setattr(fdekit, "require_kvm", lambda: None)
+
+    def offline(name):
+        raise requests.ConnectionError("no network")
+
+    monkeypatch.setattr(fdekit, "fetch_image", offline)
+    with pytest.raises(pytest.skip.Exception) as info:
+        _ubuntu()
+    assert "fdekit.fetch_image('ubuntu-22.04')" in str(info.value)
 
 
 def test_fetch_image_rejects_bad_download(tmp_path, monkeypatch):
@@ -169,7 +183,13 @@ def test_capstone_dir_solution(monkeypatch):
 
 def _ubuntu():
     fdekit.require_kvm()
-    return fdekit.fetch_image("ubuntu-22.04")
+    try:
+        return fdekit.fetch_image("ubuntu-22.04")
+    except (OSError, requests.RequestException) as error:
+        pytest.skip(
+            f"Chưa có cloud image ubuntu-22.04 và tải không được ({error}). Tải trước (~730 MB): "
+            "uv run python -c \"import fdekit; fdekit.fetch_image('ubuntu-22.04')\""
+        )
 
 
 def test_vm_boots_and_ssh():
@@ -185,15 +205,24 @@ def test_vm_boots_and_ssh():
     assert fdekit.leftovers(run_id) == []
 
 
-def test_vm_put_get(tmp_path):
+def test_vm_put_get_from_worker_thread(tmp_path):
     base = _ubuntu()
     source = tmp_path / "hello.txt"
     source.write_text("xin chào\n")
-    with fdekit.vm(None, base=base, memory_mb=1024) as m:
+    manager = fdekit.vm(None, base=base, memory_mb=1024)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        m = pool.submit(manager.__enter__).result()
+    try:
+        time.sleep(3)
+        assert fdekit._qemu_pids(m.run_id)
+        assert m.dir.is_dir()
         m.put(source, "/home/fde/hello.txt")
         assert m.ssh("cat /home/fde/hello.txt").stdout == "xin chào\n"
         m.get("/etc/hostname", tmp_path / "hostname")
+    finally:
+        manager.__exit__(None, None, None)
     assert (tmp_path / "hostname").read_text().strip()
+    assert fdekit.leftovers(m.run_id) == []
 
 
 def test_vm_cleanup_on_error():

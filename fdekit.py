@@ -15,6 +15,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -236,8 +237,8 @@ def _opt(path: Path) -> str:
 
 
 _WRAPPER = r"""
-import ctypes, os, shutil, signal, subprocess, sys
-parent, run_dir, cmd = int(sys.argv[2]), sys.argv[3], sys.argv[4:]
+import ctypes, os, select, shutil, signal, subprocess, sys
+lifeline, run_dir, cmd = int(sys.argv[2]), sys.argv[3], sys.argv[4:]
 libc = ctypes.CDLL(None, use_errno=True)
 state = {"proc": None}
 def stop(signum, frame):
@@ -252,17 +253,33 @@ def stop(signum, frame):
     os._exit(143)
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGHUP, stop)
-libc.prctl(1, signal.SIGTERM)
-if os.getppid() != parent:
-    stop(None, None)
 me = os.getpid()
 def child():
     libc.prctl(1, signal.SIGKILL)
     if os.getppid() != me:
         os._exit(1)
-state["proc"] = subprocess.Popen(cmd, preexec_fn=child, stdin=subprocess.DEVNULL)
-sys.exit(state["proc"].wait())
+state["proc"] = proc = subprocess.Popen(cmd, preexec_fn=child, stdin=subprocess.DEVNULL)
+while True:
+    ready, _, _ = select.select([lifeline], [], [], 0.5)
+    if ready and not os.read(lifeline, 1):
+        stop(None, None)
+    if proc.poll() is not None:
+        sys.exit(proc.returncode)
 """
+
+
+_LIFELINE: dict[int, tuple[int, int]] = {}
+_LIFELINE_LOCK = threading.Lock()
+
+
+def _lifeline() -> int:
+    """Đầu đọc của một pipe chung cho cả tiến trình; đầu ghi không kế thừa, chỉ đóng khi tiến trình này chết."""
+    with _LIFELINE_LOCK:
+        pid = os.getpid()
+        if pid not in _LIFELINE:
+            _LIFELINE.clear()
+            _LIFELINE[pid] = os.pipe()
+        return _LIFELINE[pid][0]
 
 
 class _PortTaken(Exception):
@@ -301,6 +318,7 @@ class VM:
         return ["ssh", *self._options(), "-p", str(self.ssh_port), f"{user}@127.0.0.1"]
 
     def ssh(self, cmd: str, *, user: str = "fde", timeout: float = 60, check: bool = False) -> subprocess.CompletedProcess:
+        """`cmd` là một chuỗi shell chạy phía VM; phần nào không tin cậy phải `shlex.quote` trước."""
         result = subprocess.run([*self.ssh_command(user), cmd], capture_output=True, text=True, timeout=timeout,
                                 stdin=subprocess.DEVNULL)
         if check and result.returncode != 0:
@@ -308,16 +326,16 @@ class VM:
         return result
 
     def _scp(self, source: str, target: str) -> None:
-        result = subprocess.run(["scp", "-q", "-r", *self._options(), "-P", str(self.ssh_port), source, target],
+        result = subprocess.run(["scp", "-q", "-r", *self._options(), "-P", str(self.ssh_port), "--", source, target],
                                 capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
         if result.returncode != 0:
             raise RuntimeError(f"scp {source} → {target} lỗi ({result.returncode}): {result.stderr.strip()}")
 
     def put(self, local: Path, remote: str) -> None:
-        self._scp(str(local), f"fde@127.0.0.1:{remote}")
+        self._scp(str(Path(local).resolve()), f"fde@127.0.0.1:{remote}")
 
     def get(self, remote: str, local: Path) -> None:
-        self._scp(f"fde@127.0.0.1:{remote}", str(local))
+        self._scp(f"fde@127.0.0.1:{remote}", str(Path(local).resolve()))
 
     def port(self, guest_port: int) -> int:
         if guest_port not in self._ports:
@@ -325,11 +343,13 @@ class VM:
         return self._ports[guest_port]
 
     def _start(self, args: list[str]) -> None:
+        lifeline = _lifeline()
         log = (self.dir / "qemu.log").open("ab")
         try:
             self._guard = subprocess.Popen(
-                [sys.executable, "-I", "-c", _WRAPPER, _GUARD, str(os.getpid()), str(self.dir), *args],
+                [sys.executable, "-I", "-c", _WRAPPER, _GUARD, str(lifeline), str(self.dir), *args],
                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                pass_fds=(lifeline,),
             )
         finally:
             log.close()
@@ -485,10 +505,12 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
                     raise RuntimeError(f"Không tìm được cổng trống cho {machine.name} sau 3 lần thử")
         yield machine
     finally:
-        if machine is not None:
-            machine._stop()
-        clean(run_id)
-        _ACTIVE.discard(run_id)
+        try:
+            if machine is not None:
+                machine._stop()
+            clean(run_id)
+        finally:
+            _ACTIVE.discard(run_id)
 
 
 def _processes(needle: str) -> list[tuple[int, bool, str]]:
@@ -557,7 +579,10 @@ def clean(run_id: str) -> None:
     shutil.rmtree(LAB / needle, ignore_errors=True)
     names = _containers(needle)
     if names:
-        subprocess.run(["docker", "rm", "-f", *names], capture_output=True, timeout=60)
+        try:
+            subprocess.run(["docker", "rm", "-f", *names], capture_output=True, timeout=60)
+        except (OSError, subprocess.SubprocessError) as error:
+            print(f"Không xoá được container {names}: {error}", file=sys.stderr)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

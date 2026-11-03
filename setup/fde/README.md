@@ -29,6 +29,13 @@ lúc thêm (2026-11-03). `fetch_image()` tải một lần vào `data/raw/fde-im
 | `rocky-8` | `8.10-20240528.0` GenericCloud Base | `CHECKSUM` cạnh image |
 | `debian-12` | `20261018-2635` genericcloud | Debian chỉ công bố `SHA512SUMS`: đã tải, khớp sha512 chính thức, rồi ghi sha256 của đúng tệp đó |
 
+Lần đầu chạy test VM, `fetch_image()` tải image cần dùng (ubuntu-22.04 ~730 MB) ngay trong test. Máy không có mạng
+thì test skip; nên tải trước:
+
+```bash
+uv run python -c "import fdekit; fdekit.fetch_image('ubuntu-22.04')"
+```
+
 ## Chuẩn bị golden image
 
 Mỗi hồ sơ khách có một golden image (đã cài sẵn runtime và "tật" của khách) ở `data/raw/fde-images/golden/<hồ sơ>.qcow2`.
@@ -45,8 +52,12 @@ Lệnh chỉ cần chạy một lần mỗi hồ sơ (thời gian dựng không 
 - Overlay qcow2 riêng trên golden: bài nào cũng bắt đầu từ trạng thái sạch, golden không bao giờ bị ghi.
 - Seed cloud-init chỉ chứa **khoá công khai** SSH sinh riêng cho lần chạy; user trong VM là `fde`.
 - Mạng user-mode của QEMU, chỉ bind `127.0.0.1` phía host; SSH và các cổng `forwards` là cổng trống ngẫu nhiên.
+- Khi `restrict` tắt (mặc định, hồ sơ egress `open`), VM ra internet được và địa chỉ `10.0.2.2` trong VM trỏ tới
+  loopback của host: mọi dịch vụ đang nghe `127.0.0.1` trên máy (Postgres, MLflow…) đều với tới được từ VM. Hồ sơ
+  egress `none`/`proxy` bật `restrict=on`: VM chỉ còn các `hostfwd`/`guestfwd` được khai báo.
 - Tên tiến trình `fde-ex-<run id 8 ký tự>`, thư mục lab `.fde-lab/fde-ex-<run id>/` (overlay, seed, key, log console).
-- QEMU chết theo tiến trình pytest (kể cả khi bị `SIGKILL` do app cắt test sau 300 s); thư mục lab bị xoá cùng lúc.
+- QEMU chết theo tiến trình pytest (kể cả khi bị `SIGKILL` do app cắt test sau 300 s, và kể cả VM mở từ luồng phụ):
+  một tiến trình canh nhỏ giữ đầu đọc của pipe "lifeline", thấy EOF thì giết QEMU và xoá thư mục lab.
 
 ## Dọn dẹp
 
