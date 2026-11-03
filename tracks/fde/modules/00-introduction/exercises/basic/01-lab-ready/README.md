@@ -47,8 +47,11 @@ Ràng buộc:
 - Thoát mã `0` và xong trong 30 giây kể cả khi không có mạng (đặt timeout cho mọi lệnh mạng).
 - Không in gì khác ra stdout; thông báo phụ (nếu có) ghi ra stderr.
 
-Script này phải đúng trên **mọi** hồ sơ khách, không chỉ `lab-open`: đừng in hằng số. Test chỉ chấm trên `lab-open`, nhưng
-bạn sẽ dùng lại ý tưởng này ở module 01 trên máy `hospital` và `bank`.
+Script này phải đúng trên **mọi** hồ sơ khách, không chỉ `lab-open`: đừng in hằng số. Test chạy script **hai lần** trong
+cùng VM `lab-open`: lần đầu như máy vừa boot; rồi dừng Docker daemon (`sudo systemctl stop docker.socket docker.service`)
+và chạy lại. Lần hai phải in `docker=missing` (client vẫn còn nhưng không có daemon trả lời), `compose=yes` (plugin
+compose là phần của client, vẫn chạy `docker compose version` được), còn `os`, `user`, `egress` giữ nguyên. Bạn sẽ dùng
+lại ý tưởng này ở module 01 trên máy `hospital` và `bank`.
 
 Xong bài, kiểm không còn VM hay tệp tạm sót lại:
 
@@ -59,10 +62,12 @@ uv run python -m fdekit leftovers      # phải in "Không còn gì sót lại"
 ## Tiêu chí đạt
 
 - `test_golden_image_is_prepared`: golden `lab-open` đã dựng (thiếu thì test skip kèm lệnh `prepare`; skip không tính là đạt).
-- `test_lab_ready_reports_the_customer_machine`: script thoát `0` trong ≤30 s và in đúng năm khoá theo thứ tự trên.
+- `test_lab_ready_reports_the_customer_machine`: cả hai lần chạy, script thoát `0` trong ≤30 s và in đúng năm khoá theo thứ
+  tự trên; script treo quá 60 s thì test fail kèm thông báo.
 - `os` khớp `ID`/`VERSION_ID` của VM, `user` là `fde`.
 - `docker` bằng đúng phiên bản server mà `docker version --format '{{.Server.Version}}'` trả trong VM.
 - `compose` khớp việc `docker compose version` chạy được hay không trong VM; `egress` là `open` trên `lab-open`.
+- Sau khi dừng daemon: `docker=missing`, `compose=yes`, `os`/`user`/`egress` như lần đầu.
 - `uv run python -m fdekit leftovers` in "Không còn gì sót lại" sau khi chạy test.
 
 ## Gợi ý

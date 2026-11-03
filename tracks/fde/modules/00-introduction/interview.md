@@ -67,7 +67,7 @@ Chỉ hứa ngày cài khi các chỗ lệch đã có hướng xử lý.
 
 Không im lặng làm cố, cũng không đổ lỗi sales trước mặt khách. Đầu tiên làm rõ "chạy thử" nghĩa là gì với sponsor: dịch
 vụ lên, hay người dùng hỏi câu thật nhận câu trả lời đúng. Sau đó đưa lựa chọn có con số: "Đĩa 8 GB không đủ cho bản
-đầy đủ. Phương án A: anh Tuấn mở rộng đĩa trước thứ Hai, thứ Sáu chị Lan hỏi được 30 câu thật. Phương án B: không mở
+đầy đủ. Phương án A: IT của anh/chị mở rộng đĩa trong cửa sổ bảo trì thứ Năm, thứ Sáu điều dưỡng trưởng hỏi được 30 câu thật. Phương án B: không mở
 rộng, chúng tôi chạy bản thu nhỏ với 50 tài liệu để chứng minh luồng, bản đầy đủ lùi sang tuần 2."
 
 Báo tin này **sớm**, bằng văn bản, kèm điều khách cần làm. Nội bộ thì báo sales và quản lý để lần sau đọc môi trường

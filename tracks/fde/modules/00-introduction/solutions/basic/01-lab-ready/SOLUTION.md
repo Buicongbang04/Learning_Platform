@@ -13,9 +13,11 @@ SOLUTION=1 uv run pytest tracks/fde/modules/00-introduction/exercises/basic/01-l
 - **`user`**: `id -un`, không dùng `$USER` (biến này không chắc có trong phiên SSH chạy lệnh, cron hay systemd).
 - **`docker`**: `docker version --format '{{.Server.Version}}'` chỉ in được khi client **nói chuyện được với daemon**.
   `docker --version` thì chỉ là client, sẽ báo "có Docker" cả khi daemon chết hay user không thuộc nhóm `docker`, đúng
-  kiểu báo cáo sai mà FDE hay nhận từ khách ("máy có Docker rồi anh ạ").
+  kiểu báo cáo sai mà FDE hay nhận từ khách ("máy có Docker rồi anh ạ"). Test kiểm đúng điều này: dừng daemon rồi chạy lại, script phải đổi
+  sang `docker=missing`.
 - **`compose`**: thử chạy `docker compose version` chứ không tìm tệp plugin; plugin có thể nằm ở
-  `/usr/libexec/docker/cli-plugins`, `/usr/lib/docker/cli-plugins` hay `~/.docker/cli-plugins` tuỳ cách cài.
+  `/usr/libexec/docker/cli-plugins`, `/usr/lib/docker/cli-plugins` hay `~/.docker/cli-plugins` tuỳ cách cài. `docker compose
+  version` không cần daemon, nên khi daemon dừng vẫn là `compose=yes`.
 - **`egress`**: thử đường thẳng với `--noproxy '*'` trước; thất bại mà có `HTTPS_PROXY` thì thử qua proxy bằng URL
   `http://`, vì proxy TLS inspection làm HTTPS lỗi chứng chỉ dù đường vẫn thông. Mọi lệnh mạng có `--max-time` để máy
   air-gapped không treo tới khi hết 30 s.

@@ -2,6 +2,8 @@ requests:
   r1:
     pillar: field
     module: 03-airgapped-proxy
+    looks_like: field
+    decides: it
     why: >-
       Lỗi chỉ xuất hiện ở máy của viện, không ở máy test: proxy công ty soi HTTPS bằng CA nội bộ mà container chưa
       trust. Đây là việc cài đặt tại hiện trường, không phải câu hỏi về scope hay giá trị.
@@ -11,6 +13,8 @@ requests:
   r2:
     pillar: customer
     module: 13-business-roi
+    looks_like: customer
+    decides: exec
     why: >-
       COO không hỏi hệ thống chạy thế nào mà hỏi giá trị kinh doanh để quyết định ký mở rộng; câu trả lời là một mô
       hình ROI có baseline đo được, không phải một bản demo.
@@ -20,6 +24,8 @@ requests:
   r3:
     pillar: field
     module: 09-production-trust
+    looks_like: customer
+    decides: business-owner
     why: >-
       Nghe như chuyện giao tiếp nhưng thực chất khách cần bằng chứng kỹ thuật: bộ eval trên tài liệu của chính họ,
       đo groundedness và citation, cộng tiêu chí nghiệm thu trước khi mở cho 40 người.
@@ -29,6 +35,8 @@ requests:
   r4:
     pillar: customer
     module: 12-scoping-sequencing
+    looks_like: field
+    decides: business-owner
     why: >-
       Ba tính năng, một hạn chót cứng và một buổi demo quan trọng: việc của FDE là tách cái khách thật sự cần cho buổi
       demo, sắp thứ tự và nói "không" hoặc "để sau" có lý do, chưa phải viết code ngay.
@@ -38,6 +46,8 @@ requests:
   r5:
     pillar: design
     module: 18-system-design-fde
+    looks_like: design
+    decides: cto
     why: >-
       Đây là bài thiết kế hệ thống có ràng buộc của khách: tách dữ liệu theo công ty con, phân quyền trong retrieval,
       ước lượng tải cho 2 triệu tài liệu và chỉ ra điểm nghẽn trước khi hứa.
@@ -47,6 +57,8 @@ requests:
   r6:
     pillar: cloud
     module: 19-cloud-iac
+    looks_like: cloud
+    decides: cloud-team
     why: >-
       Khách muốn mô hình BYOC: hạ tầng nằm trong tài khoản AWS của họ, vendor chỉ có quyền qua role được cấp và thu
       hồi được, mọi thứ dựng bằng IaC để IT khách kiểm và tái lập.

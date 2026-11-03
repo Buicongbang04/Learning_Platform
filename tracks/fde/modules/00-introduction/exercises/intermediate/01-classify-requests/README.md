@@ -30,12 +30,25 @@ Sáu câu dưới đây là nguyên văn khách gửi trong tuần đầu của 
 | `r5` | CTO tập đoàn: "Năm sau chúng tôi muốn mở cho 5 công ty con, mỗi nơi chỉ thấy tài liệu của mình, tổng khoảng 2 triệu tài liệu. Kiến trúc sẽ thế nào, chỗ nào nghẽn trước?" |
 | `r6` | Trưởng phòng cloud: "Chúng tôi muốn hệ thống chạy trong tài khoản AWS của chính chúng tôi. Bên anh không được giữ quyền admin lâu dài; mọi truy cập phải qua role chúng tôi cấp và thu hồi được." |
 
-Điền `starter/requests.yaml`, mỗi yêu cầu một mục với bốn trường:
+Điền `starter/requests.yaml`, mỗi yêu cầu một mục với sáu trường:
 
 - `pillar`: trụ của track chứa **việc chính** bạn phải làm để đáp yêu cầu đó, một trong `field` (trụ 1, module 01–10),
   `customer` (trụ 2, module 11–14), `design` (trụ 3, DSA và System Design: module 15–18 và 20), `cloud` (trụ 4: module
   19 và Cloud lab `c1`–`c3`). Bảng bốn trụ ở phần 4 của lý thuyết và bảng module ở [README của track](../../../../../README.md).
 - `module`: id module (đúng như trong `tracks/fde/track.json`, vd. `05-gpu-field`) dạy việc chính đó; phải thuộc trụ bạn chọn.
+- `looks_like`: trụ mà câu này **nghe giống** nhất nếu chỉ đọc từ khoá bề mặt (cùng bốn giá trị như `pillar`). Với câu mà
+  từ khoá và việc thật trùng nhau, `looks_like` bằng `pillar`; với câu "nghe một đằng, việc một nẻo", hai trường khác nhau.
+- `decides`: ai **phía khách** ra quyết định mà việc của bạn phục vụ, một trong:
+
+  | Giá trị | Là ai |
+  | --- | --- |
+  | `it` | IT hạ tầng của khách (máy, mạng, proxy, change window) |
+  | `security` | An ninh thông tin / tuân thủ (duyệt dữ liệu, chính sách) |
+  | `business-owner` | Trưởng bộ phận nghiệp vụ sở hữu hệ thống và người dùng (trưởng phòng, giám đốc khối) |
+  | `exec` | Lãnh đạo ký ngân sách, mở rộng hợp đồng (COO, CEO) |
+  | `cto` | CTO / kiến trúc sư trưởng, quyết định kiến trúc toàn tập đoàn |
+  | `cloud-team` | Đội cloud / platform quản lý tài khoản cloud của khách |
+
 - `why`: vì sao đây là việc chính, không phải việc khác nghe có vẻ giống (ít nhất 30 ký tự).
 - `first_step`: việc **đầu tiên, cụ thể** bạn làm trong 24 giờ tới (ít nhất 30 ký tự, khác `why`, mỗi yêu cầu một câu riêng).
 
@@ -45,10 +58,12 @@ trong câu.
 ## Tiêu chí đạt
 
 - Có đúng sáu mục `r1`…`r6` dưới khoá `requests`.
-- `pillar` thuộc `field`, `customer`, `design`, `cloud`; `module` có trong `track.json` và thuộc đúng dải module của trụ đã chọn.
+- `pillar` và `looks_like` thuộc `field`, `customer`, `design`, `cloud`; `decides` thuộc sáu giá trị ở bảng trên; `module` có
+  trong `track.json` và thuộc đúng dải module của trụ đã chọn.
 - `why` và `first_step` mỗi trường ít nhất 30 ký tự, không còn `TODO`, khác nhau trong cùng mục; sáu `first_step` khác nhau.
 - `pillar` của từng yêu cầu đúng với đáp án; `module` là một trong các module dạy việc chính đó (có yêu cầu chấp nhận hơn
   một module, vd. vừa thuộc module chuyên đề vừa thuộc module xử lý sự cố).
+- `looks_like` và `decides` của từng yêu cầu đúng với đáp án.
 
 ## Gợi ý
 
@@ -59,10 +74,9 @@ máy chạy được, một bản thiết kế, hay một mô hình quyền trê
 
 ### Gợi ý 2
 
-Một câu hỏi về độ tin cậy của câu trả lời AI cần **bằng chứng đo được** trên dữ liệu của khách, không chỉ một cuộc nói
-chuyện thuyết phục. Xem module nào của trụ 1 dạy cách đo.
+Với mỗi câu, hỏi thêm: khách cần **loại bằng chứng** nào (một máy chạy được, một con số, một tài liệu, một bản thiết kế),
+và ai phía khách sẽ dùng bằng chứng đó để quyết. Trụ nằm ở loại bằng chứng, không ở chức danh người hỏi.
 
 ### Gợi ý 3
 
-Ba tính năng cộng một hạn chót cứng: việc đầu tiên không phải là code tính năng nhanh nhất, mà là biết buổi demo cần
-chứng minh điều gì.
+Khi có hạn chót cứng, đừng bắt đầu từ cách làm nhanh nhất; bắt đầu từ việc ai quyết và họ cần thấy gì.
