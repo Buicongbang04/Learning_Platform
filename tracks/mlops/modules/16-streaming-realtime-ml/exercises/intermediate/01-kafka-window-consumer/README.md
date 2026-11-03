@@ -30,7 +30,7 @@ Mỗi message trên topic (một partition, key là `zone_id`) là JSON:
 Viết `consume_windows(bootstrap, topic, *, window_s=900, lateness_s=180, idle_ms=3000)` trong `starter/consumer.py`:
 
 - Đọc topic **từ đầu** bằng `kafka.KafkaConsumer` (thư viện `kafka-python-ng`, đã có trong môi trường), dừng khi `idle_ms` không có
-  message mới (`consumer_timeout_ms`), rồi đóng consumer.
+  message mới (`consumer_timeout_ms`), rồi đóng consumer. Một lần `poll` rỗng chưa chắc là hết dữ liệu (consumer có thể còn đang join group): tính idle theo thời gian kể từ message cuối.
 - Event time là `pickup_at` (UTC). Cửa sổ tumbling `[start, start + window_s)` với `start = ts - ts % window_s` (`ts` là giây epoch).
 - Quy tắc như Basic 01, theo thứ tự đọc: `event_id` đã gặp thì đếm `duplicates`; sự kiện có `window_end <= watermark` (watermark
   trước sự kiện đó) thì đếm `late` và bỏ; còn lại cộng vào cửa sổ; rồi `watermark = max(watermark, ts - lateness_s)`, và đóng mọi
