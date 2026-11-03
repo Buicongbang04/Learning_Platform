@@ -1,0 +1,15 @@
+services:
+  api:
+    build: ./service
+    restart: always
+    environment:
+      MODEL_PATH: /models/model.joblib
+    volumes:
+      - ./model:/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "8000"

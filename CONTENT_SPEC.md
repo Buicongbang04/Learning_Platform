@@ -345,3 +345,102 @@ Các helper sau **chưa có**; phải thêm vào `testkit.py` (kèm test) trư�
 - `DockerLab.build` và `DockerLab.compose`: build image và dựng compose với cùng bảo đảm như `start`.
 - `kind_node_exec`: chạy lệnh trong node kind.
 - Helper git cho testkit: repo tạm có commit, branch, remote giả.
+
+## Track MLOps
+
+Quy ước riêng của `tracks/mlops/`, bổ sung cho phần chung ở trên. Validator `tests/test_mlops_track.py` kiểm phần
+lớn các quy tắc này. Track đứng độc lập, không lấy track DevOps làm điều kiện. Chi tiết API xem docstring và mã
+trong `mlopskit.py`.
+
+### Helper `mlopskit`
+
+`mlopskit.py` ở gốc repo, dựng trên `testkit` (không sửa `testkit.py`), có test riêng ở `tests/test_mlopskit.py`.
+Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc `testkit.DockerLab`; gọi `docker` trần
+(`subprocess.run(["docker", ...])`, `_docker(`) trong `tracks/mlops/**/tests/*.py` bị validator báo lỗi.
+
+| Test cần | Dùng | Đảm bảo |
+| --- | --- | --- |
+| Biết cổng của dịch vụ trong stack | `mlopskit.stack_port("mlflow")` (`postgres`, `minio`, `mlflow`) | Đọc biến `MLOPS_*_PORT` từ môi trường hoặc `setup/.env`, mặc định dải 2xxxx |
+| Cần MLflow server, MinIO hoặc Postgres của stack | `mlopskit.require_stack("mlflow", "minio")` | Skip với đúng lệnh `docker compose -f setup/mlops/compose.yaml up -d --wait` khi cổng chưa mở |
+| Cần MLflow nhưng không cần server | `mlopskit.mlflow_local(tmp_path)` | Tracking URI SQLite trong `tmp_path`, experiment riêng; **không** đòi stack |
+| Build image từ Dockerfile của người học | `with mlopskit.built_image(context) as tag:` | Tên `mlops-ex-<uuid8>:test`, nhãn `mlops-ex=1`, timeout, xoá image trong `finally` kể cả khi lỗi |
+| Dựng stack Compose tạm của người học | `with mlopskit.compose_project(file, env) as project:` | Project tên `mlops-ex-<uuid8>`, `up --wait`, `project.port/logs/exec`, `down -v --rmi local` trong `finally` |
+| Kiểm tra không còn rác | `mlopskit.leftovers(needle)` | Liệt kê container, network, image có nhãn `mlops-ex=1` hoặc tiền tố `mlops-ex-`; `needle` (tuỳ chọn) lọc theo chuỗi con trong tên |
+| Xem image đã build | `mlopskit.image_inspect(tag, fmt)`, `image_size_bytes(tag)`, `image_has_healthcheck(tag)` | `docker image inspect --format` theo Go template; kích thước theo byte; có `Healthcheck` hay không |
+| Timeout build | `mlopskit.build_timeout()` | Giây, đọc `MLOPS_BUILD_TIMEOUT` lúc gọi; mặc định 1800 |
+
+- Script của người học chạy qua `testkit.run_sandboxed`, như track DevOps.
+- Timeout build của `built_image` và `compose_project` mặc định 1800 giây, chỉnh bằng biến môi trường `MLOPS_BUILD_TIMEOUT` (giây, đọc lúc gọi). Quá hạn thì test fail kèm gợi ý build trước (cache) rồi chạy lại hoặc tăng biến này.
+- Mọi tài nguyên do `mlopskit` tạo có nhãn `mlops-ex=1` và tiền tố `mlops-ex-`; lỗi hay Ctrl-C giữa chừng vẫn dọn hết.
+- Helper chưa có (`act`, kind/`KubeLab`, gate GPU) được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước.
+
+### Stack và cổng
+
+Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d --wait`. Đã đổi cổng trong `setup/.env` thì thêm `--env-file setup/.env` trước `-f` (Compose chỉ tự đọc `.env` cạnh tệp compose). Cổng ở dải 2xxxx vì
+máy đã dùng 5432, 9000, 8000; mọi cổng remap được qua `setup/.env`.
+
+| Dịch vụ | Cổng host mặc định | Biến `.env` | Ghi chú |
+| --- | --- | --- | --- |
+| postgres | 25433 | `MLOPS_PG_PORT` | Backend store của MLflow |
+| minio | 29000 (S3 API), 29001 (console) | `MLOPS_MINIO_PORT` | Artifact store, remote của DVC |
+| mlflow | 25000 | `MLOPS_MLFLOW_PORT` | Tracking server và registry |
+
+**Client tải model từ host:** MLflow 3.17 server luôn quảng bá multipart download qua presigned URL trỏ `minio:9000` (không phân giải được từ host; không có cờ server tắt). Mọi client chạy trên host đọc model/artifact từ stack (`mlflow.pyfunc.load_model("models:/...")`, `download_artifacts`) phải đặt `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` (ví dụ `monkeypatch.setenv` trong fixture) để tải qua proxy `--serve-artifacts`; nếu không sẽ treo.
+
+Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack`); test dùng được MLflow file store thì không
+được đòi stack. Skip không tính là đạt; `SOLUTION=1` phải pass không skip khi stack và công cụ đã có.
+
+### Model nhẹ, mỗi bài ≤5 phút
+
+- Mỗi bài chạy trên laptop ≤5 phút CPU, không kể lần đầu tải dữ liệu. Dữ liệu thật dùng **mẫu xác định theo
+  `seed`** (ví dụ 200 000 dòng của một tháng), không đọc cả 84 triệu chuyến; chỉ đọc các cột cần.
+- Dataset: `nyc-tlc` (2019), `nyc-tlc-2020` (2020, có cú sốc COVID), `oxford-pets` và `oxford-pets-trimaps` (module 11).
+  Không commit mẫu trích từ dữ liệu; fixture test sinh trong test.
+- Bài distributed, GPU, K8s dùng model nhỏ (nhiều tiến trình CPU, kind nhiều node). Bài chỉ "chờ model chạy" mà
+  không dạy việc vận hành thì cắt bớt.
+
+### Môi trường Python
+
+- Dependency mà test cần (mlflow, dvc, pandera, evidently, prefect…) nằm trong **môi trường mặc định** của
+  `pyproject.toml` để nút "Run tests" (`uv run pytest`) chạy được; ghim phiên bản phát hành ≥2 tuần trước ngày thêm.
+- Xung đột với pin hiện có (`numpy`, `pyarrow`, `grpcio`, `pandas`): (1) chọn phiên bản tương thích; (2) nếu không
+  được, chạy công cụ đó **trong container** của stack `setup/mlops` và test gọi qua CLI/HTTP; (3) không bao giờ hạ
+  pin làm hỏng track khác. Kết quả kiểm mỗi công cụ ghi ở đây khi thêm: `dvc[s3]` và `evidently` resolve cùng pin
+  hiện tại; `feast[redis]` kéo pandas xuống 2.3.3 nên module 06 phải chạy Feast trong container hoặc tìm bản tương thích.
+- **GPU:** môi trường chính giữ torch CPU và `onnxruntime` CPU. Đường GPU (onnxruntime-gpu, torch CUDA) nằm trong
+  project `setup/gpu`; test GPU chạy qua project đó và skip khi không có CUDA. Mọi bài GPU có đường CPU; PC mạnh chỉ
+  để đo thêm, test không bao giờ cần.
+
+### Bài sự cố cố ý
+
+Bắt buộc từ module 07 trở đi, ≥1 bài mỗi module; module 01–04 đã có sẵn. `README.md` chỉ tả triệu chứng; nguyên nhân chỉ nằm trong `solutions/`. Test
+chứng minh hành vi đúng sau khi sửa, và có một ca hồi quy chứng minh starter tái hiện đúng triệu chứng. Ví dụ:
+training-serving skew do tiền xử lý lệch, model sai version sau deploy, alert không bắn do rule sai, drift giả do
+pipeline đổi đơn vị, OOM GPU do batch size.
+
+### Bài quyết định
+
+Dùng ở module 10 và capstone (M10, M13, M18). Đề cho tình huống drift kèm số liệu; người học nộp tệp YAML:
+
+```yaml
+decision: keep   # retrain | rollback | keep
+reasons:
+  - "PSI của trip_distance 0.31 nhưng MAE trên nhãn đã về không đổi so với tháng trước"
+  - "Drift do thay đổi mùa vụ, không làm hỏng dự đoán"
+```
+
+Test chỉ kiểm `decision` (giá trị hợp lệ và khớp đáp án); `reasons` chấm bằng rubric trong `SOLUTION.md`. Có bài mà
+đáp án đúng là **giữ nguyên model**; không dạy "thấy drift thì retrain" như phản xạ.
+
+### Phần `## 0. Cài đặt` của module
+
+Giống quy ước track DevOps: có khi module dùng công cụ lần đầu, luôn là phần `## ` đầu tiên, không tính vào 5–8 phần;
+bảng phiên bản đã kiểm, kiểm checksum trước khi cài, cài vào `~/.local/bin` hoặc qua `uv`, lệnh xác nhận, cách gỡ.
+Không bao giờ `curl ... | sudo bash` (validator kiểm trong `tracks/mlops/**/*.md`).
+
+### Capstone
+
+- Test trong `capstone/project/tests` chấm `capstone/project/`; `SOLUTION=1` chấm `capstone/solutions/project/`.
+- `-k mNN` chọn một milestone; tên test bắt đầu bằng `test_mNN_`.
+- Tên tệp milestone cố định theo trường `doc` trong `track.json`; 18 milestone `m01`…`m18`, mỗi milestone có `after` là
+  module mà nó mở ra sau (m12 và m13 cùng sau module 13).

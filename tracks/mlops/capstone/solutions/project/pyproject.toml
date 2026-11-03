@@ -1,0 +1,24 @@
+[project]
+name = "eta"
+version = "0.4.0"
+description = "Dịch vụ ETA cho taxi NYC (capstone MLOps)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pandas==3.1.0",
+    "numpy==2.5.4",
+    "pyarrow==25.0.1",
+    "scikit-learn==1.9.1",
+    "joblib==1.6.0",
+    "pyyaml==6.0.3",
+    "pandera==0.35.0",
+    "fastapi==0.143.1",
+    "uvicorn==0.54.0",
+    "mlflow-skinny==3.17.1",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eta"]

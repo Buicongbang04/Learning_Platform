@@ -1,0 +1,94 @@
+name: mlops
+
+services:
+  postgres:
+    image: postgres:16.9
+    environment:
+      POSTGRES_USER: mlops
+      POSTGRES_PASSWORD: mlops
+      POSTGRES_DB: mlflow
+    ports:
+      - "127.0.0.1:${MLOPS_PG_PORT:-25433}:5432"
+    volumes:
+      - mlops_pg:/var/lib/postgresql/data
+    mem_limit: 512m
+    cpuset: "${DEVOPS_CPUSET:-}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlops -d mlflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    # minio/minio và minio/mc không còn trên Docker Hub; pgsty/* là bản build cộng đồng cùng mã nguồn.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "127.0.0.1:${MLOPS_MINIO_PORT:-29000}:9000"
+      - "127.0.0.1:${MLOPS_MINIO_CONSOLE_PORT:-29001}:9001"
+    volumes:
+      - mlops_minio:/data
+    mem_limit: 512m
+    cpuset: "${DEVOPS_CPUSET:-}"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: pgsty/mc:RELEASE.2026-08-04T00-00-00Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - >
+        mc alias set local http://minio:9000 minioadmin minioadmin &&
+        mc mb --ignore-existing local/mlflow &&
+        mc mb --ignore-existing local/dvc
+    restart: "no"
+    mem_limit: 128m
+    cpuset: "${DEVOPS_CPUSET:-}"
+
+  mlflow:
+    build: ./mlflow
+    image: mlops-mlflow:3.17.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql+psycopg2://mlops:mlops@postgres:5432/mlflow
+      - --artifacts-destination=s3://mlflow
+      - --serve-artifacts
+      - --workers=1
+      # Cho phép gọi từ container khác (Host: mlflow:5000) và từ host qua cổng đã map.
+      - --allowed-hosts=mlflow,mlflow:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+    ports:
+      - "127.0.0.1:${MLOPS_MLFLOW_PORT:-25000}:5000"
+    mem_limit: 1536m
+    cpuset: "${DEVOPS_CPUSET:-}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  mlops_pg:
+  mlops_minio:

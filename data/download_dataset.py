@@ -285,6 +285,26 @@ DATASETS: dict[str, Dataset] = {
         about="Ảnh hoá đơn bán lẻ (Indonesia) kèm nhãn JSON từng dòng hàng, tổng tiền; tập validation và test, mỗi tập 100 ảnh; ~475 MB. "
         "Thay MC-OCR (cần đăng ký) cho bài hoá đơn module 18",
     ),
+    # --- MLOps: dữ liệu theo thời gian (drift COVID) và nhãn trimap cho ảnh ---
+    "nyc-tlc-2020": Dataset(
+        "url",
+        tuple(f"https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2020-{m:02d}.parquet" for m in range(1, 13))
+        + ("https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv",),
+        [f"yellow_tripdata_2020-{m:02d}.parquet" for m in range(1, 13)] + ["taxi_zone_lookup.csv"],
+        license="Dữ liệu mở của NYC Taxi & Limousine Commission (NYC Open Data), dùng tự do",
+        homepage="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page",
+        about="Chuyến Yellow Taxi NYC, ghim 12 tháng 2020-01..2020-12 (Parquet) + taxi_zone_lookup.csv; có giai đoạn COVID 3/2020 "
+        "(số chuyến sụt mạnh từ giữa tháng 3, đáy tháng 4) nên dùng để dạy data drift và concept drift",
+    ),
+    "oxford-pets-trimaps": Dataset(
+        "url", ("https://huggingface.co/datasets/xingslong/oxford-iiit-pet/resolve/main/annotations.tar.gz",), ["annotations.tar.gz"],
+        license="CC BY-SA 4.0 (Parkhi, Vedaldi, Zisserman, Jawahar 2012, VGG Oxford)",
+        homepage="https://www.robots.ox.ac.uk/~vgg/data/pets/",
+        about="Trimap (annotations/trimaps/*.png), xml và list/split của Oxford-IIIT Pet (~19 MB). Dùng cùng oxford-pets: "
+        "ảnh lấy từ mirror HF, trimap lấy từ đây, ghép theo image_id. Thư mục giải nén có cả tệp AppleDouble của macOS `._*.png`, cần bỏ qua. Nguồn: mirror HF xingslong/oxford-iiit-pet vì "
+        "thor.robots.ox.ac.uk và www.robots.ox.ac.uk không phản hồi (connect timeout 300 s, curl 25 s) lúc tải thử",
+        extract=True,
+    ),
 }
 
 
