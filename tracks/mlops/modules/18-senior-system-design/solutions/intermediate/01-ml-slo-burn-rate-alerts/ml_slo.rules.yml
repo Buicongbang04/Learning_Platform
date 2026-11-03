@@ -1,0 +1,78 @@
+groups:
+  - name: eta-ml-slo-recording
+    rules:
+      - record: eta:quality_bad_ratio:rate30m
+        expr: |
+          sum(rate(eta_quality_checks_total{job="eta-service",outcome="bad"}[30m]))
+            /
+          sum(rate(eta_quality_checks_total{job="eta-service"}[30m]))
+      - record: eta:quality_bad_ratio:rate2h
+        expr: |
+          sum(rate(eta_quality_checks_total{job="eta-service",outcome="bad"}[2h]))
+            /
+          sum(rate(eta_quality_checks_total{job="eta-service"}[2h]))
+      - record: eta:quality_bad_ratio:rate6h
+        expr: |
+          sum(rate(eta_quality_checks_total{job="eta-service",outcome="bad"}[6h]))
+            /
+          sum(rate(eta_quality_checks_total{job="eta-service"}[6h]))
+      - record: eta:quality_bad_ratio:rate1d
+        expr: |
+          sum(rate(eta_quality_checks_total{job="eta-service",outcome="bad"}[1d]))
+            /
+          sum(rate(eta_quality_checks_total{job="eta-service"}[1d]))
+      - record: eta:feature_stale
+        expr: |
+          max((time() - eta_feature_last_success_timestamp_seconds{job="feature-pipeline",feature_view="trip_stats"}) > bool 900)
+      - record: eta:feature_stale_ratio:avg5m
+        expr: avg_over_time(eta:feature_stale[5m])
+      - record: eta:feature_stale_ratio:avg1h
+        expr: avg_over_time(eta:feature_stale[1h])
+  - name: eta-ml-slo-alerts
+    rules:
+      - alert: ETAQualityBudgetFastBurn
+        expr: |
+          eta:quality_bad_ratio:rate6h > (6 * 0.02)
+            and
+          eta:quality_bad_ratio:rate30m > (6 * 0.02)
+        for: 15m
+        labels:
+          severity: critical
+          service: eta
+        annotations:
+          summary: "Chất lượng ETA đốt error budget 6 lần nhanh hơn mức cho phép: hết 5% budget 30 ngày sau 6 giờ"
+          runbook_url: "https://runbooks.example.com/eta/quality-fast-burn"
+      - alert: ETAQualityBudgetSlowBurn
+        expr: |
+          eta:quality_bad_ratio:rate1d > (3 * 0.02)
+            and
+          eta:quality_bad_ratio:rate2h > (3 * 0.02)
+        for: 30m
+        labels:
+          severity: warning
+          service: eta
+        annotations:
+          summary: "Chất lượng ETA đốt error budget 3 lần nhanh hơn mức cho phép: hết 10% budget 30 ngày sau 1 ngày"
+          runbook_url: "https://runbooks.example.com/eta/quality-slow-burn"
+      - alert: ETAQualityLabelsMissing
+        expr: |
+          (sum(increase(eta_quality_checks_total{job="eta-service"}[6h])) or vector(0)) == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: eta
+        annotations:
+          summary: "6 giờ không có nhãn nào được join: SLO chất lượng đang mù, không phải đang xanh"
+          runbook_url: "https://runbooks.example.com/eta/quality-labels-missing"
+      - alert: ETAFeatureFreshnessFastBurn
+        expr: |
+          eta:feature_stale_ratio:avg1h > (14.4 * 0.01)
+            and
+          eta:feature_stale_ratio:avg5m > (14.4 * 0.01)
+        for: 2m
+        labels:
+          severity: critical
+          service: eta
+        annotations:
+          summary: "Feature trip_stats cũ hơn 15 phút quá thường xuyên: đốt 2% budget freshness 30 ngày trong 1 giờ"
+          runbook_url: "https://runbooks.example.com/eta/feature-freshness-fast-burn"
