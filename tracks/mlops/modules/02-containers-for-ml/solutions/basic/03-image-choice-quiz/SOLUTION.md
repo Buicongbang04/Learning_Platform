@@ -1,6 +1,6 @@
 # Lời giải: chọn image cho service ML
 
-- **slim-vs-full**: `python:3.12.11-slim` cho wheel manylinux của numpy/scipy/scikit-learn chạy tốt (glibc). Alpine dùng musl: wheel manylinux không dùng được, pip biên dịch từ source, build chậm và dễ lỗi. Bản đầy đủ nặng thêm hàng trăm MB (gcc, header) mà service không dùng. `ubuntu:latest` không ghim, tag trôi.
+- **slim-vs-full**: `python:3.12.11-slim` (glibc) cài wheel manylinux của numpy, scipy và scikit-learn. Alpine dùng musl: numpy và scipy có wheel musllinux, nhưng scikit-learn 1.9.1 thì không, nên pip phải biên dịch nó từ source (cần compiler, build chậm). Bản đầy đủ nặng thêm hàng trăm MB (gcc, header) mà service không dùng. `ubuntu` không ghim kèm `apt` thêm một lớp phải bảo trì.
 - **layer-order**: Docker cache layer theo đầu vào. `COPY . .` đứng trước `pip install` làm mọi thay đổi source vô hiệu hoá layer cài đặt. Đặt `COPY requirements.txt` + `pip install` trước, code sau.
 - **model-in-image**: model trong image thì version model = image tag, rollback bằng `docker run` tag cũ, tái lập hoàn toàn; đổi lại mỗi lần retrain là một lần build và đẩy image. Mount ngoài (volume, object storage) tách chu kỳ model khỏi image nhưng thêm điểm hỏng lúc khởi động (thiếu file, sai version) và khó truy vết nếu không ghi version model.
 - **ml-image-size**: `--no-cache-dir`, multi-stage và `.dockerignore` đều làm image nhỏ hơn hoặc build nhanh hơn; thêm `LABEL` không ảnh hưởng.

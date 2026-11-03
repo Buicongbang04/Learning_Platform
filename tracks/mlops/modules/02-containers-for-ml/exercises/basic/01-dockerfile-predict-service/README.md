@@ -22,6 +22,8 @@ run:
 
 ## Đề bài
 
+Docker cơ bản (image, container, layer) đã học ở [DE 08](../../../../../../data-engineer/modules/08-devops-for-data/README.md); bài này chỉ áp dụng cho một service ML.
+
 Service dự đoán ETA (phút) cho chuyến taxi dựa trên `distance_km`, `hour`, `passengers`. Build context mà test dựng sẵn cho bạn gồm:
 
 ```text

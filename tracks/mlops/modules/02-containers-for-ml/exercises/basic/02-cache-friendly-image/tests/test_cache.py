@@ -8,7 +8,6 @@ import pytest
 from testkit import DockerLab, Exercise
 
 ex = Exercise(__file__)
-image_cli = mlopskit._docker
 FIXTURES = Path(__file__).parent / "fixtures"
 sys.path.insert(0, str(FIXTURES))
 MAX_MB = 600
@@ -117,7 +116,7 @@ def test_pip_cache_not_kept(dockerfile_text):
 
 def test_image_stays_small_despite_big_context(image):
     image = need(image)
-    megabytes = int(image_cli("image", "inspect", "--format", "{{.Size}}", image).stdout.strip()) / 1_000_000
+    megabytes = mlopskit.image_size_bytes(image) / 1_000_000
     assert megabytes < MAX_MB, f"Image nặng {megabytes:.0f} MB (ngưỡng {MAX_MB} MB): dữ liệu hoặc cache nào đó lọt vào image"
 
 

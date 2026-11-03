@@ -59,6 +59,37 @@ def service(spec: dict, name: str) -> dict:
     return spec["services"][name]
 
 
+def volume_mounts(item) -> tuple[str, str]:
+    if isinstance(item, dict):
+        return str(item.get("source", "")), str(item.get("target", ""))
+    parts = str(item).split(":")
+    return parts[0], (parts[1] if len(parts) > 1 else "")
+
+
+def named_targets(spec: dict) -> list[str]:
+    named = (spec.get("volumes") or {}).keys()
+    mounts = [volume_mounts(item) for item in service(spec, "mlflow").get("volumes", [])]
+    return [target for source, target in mounts if source in named]
+
+
+def command_text(spec: dict) -> str:
+    command = service(spec, "mlflow").get("command")
+    return " ".join(command) if isinstance(command, list) else str(command)
+
+
+def host_port_is_fixed(port) -> bool:
+    if isinstance(port, dict):
+        return bool(port.get("published"))
+    text = str(port)
+    return text.count(":") > 0 and not text.startswith("127.0.0.1::")
+
+
+def container_port(port) -> int:
+    if isinstance(port, dict):
+        return int(port["target"])
+    return int(str(port).split(":")[-1].split("/")[0])
+
+
 def test_both_services_have_healthchecks(spec):
     for name in ("mlflow", "api"):
         check = service(spec, name).get("healthcheck")
@@ -73,13 +104,9 @@ def test_api_waits_for_healthy_mlflow(spec):
 
 
 def test_mlflow_store_is_a_named_volume(spec):
-    mlflow = service(spec, "mlflow")
-    named = (spec.get("volumes") or {}).keys()
-    mounts = [str(item).split(":") for item in mlflow.get("volumes", [])]
-    targets = [parts[1] for parts in mounts if len(parts) >= 2 and parts[0] in named]
+    targets = named_targets(spec)
     assert targets, "MLflow phải ghi vào một named volume khai báo ở `volumes:` cấp cao nhất"
-    command = mlflow.get("command")
-    command = " ".join(command) if isinstance(command, list) else str(command)
+    command = command_text(spec)
     assert any(target in command for target in targets), (
         f"command của mlflow phải trỏ --backend-store-uri và --default-artifact-root vào {targets}"
     )
@@ -87,13 +114,13 @@ def test_mlflow_store_is_a_named_volume(spec):
 
 
 def test_config_comes_from_env_file_and_ports_are_not_fixed(spec):
-    api = service(spec, "api")
-    assert api.get("env_file"), "Biến môi trường của API phải nằm trong env_file (api.env)"
-    for name in ("api", "mlflow"):
-        for port in service(spec, name).get("ports", []):
-            text = str(port)
-            assert text.count(":") == 0 or text.startswith("127.0.0.1::"), (
-                f"{name}: cổng `{text}` cố định trên host; chỉ khai báo cổng container để Docker chọn cổng trống"
+    assert service(spec, "api").get("env_file"), "Biến môi trường của API phải nằm trong env_file (api.env)"
+    for name, needed in (("api", 8000), ("mlflow", 5000)):
+        ports = service(spec, name).get("ports", [])
+        assert needed in [container_port(port) for port in ports], f"{name} phải publish cổng container {needed}"
+        for port in ports:
+            assert not host_port_is_fixed(port), (
+                f"{name}: cổng `{port}` cố định trên host; chỉ khai báo cổng container để Docker chọn cổng trống"
             )
 
 
@@ -115,11 +142,6 @@ def test_prediction_is_recorded_in_mlflow(project):
 
 def test_mlflow_data_lives_on_the_volume(project, spec):
     project = need(project)
-    command = service(spec, "mlflow")["command"]
-    command = " ".join(command) if isinstance(command, list) else str(command)
-    target = next(
-        str(item).split(":")[1] for item in service(spec, "mlflow")["volumes"] if str(item).split(":")[0] in spec["volumes"]
-    )
-    assert target in command
-    listing = project.exec("mlflow", "sh", "-c", f"ls {target}/mlruns | head -20")
+    target = named_targets(spec)[0]
+    listing = project.exec("mlflow", "sh", "-c", f"ls -A {target} | head -20")
     assert listing.returncode == 0 and listing.stdout.strip(), f"Không thấy dữ liệu MLflow trong {target}: {listing.stderr}"

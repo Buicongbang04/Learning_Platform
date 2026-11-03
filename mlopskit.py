@@ -108,6 +108,21 @@ def built_image(context: Path, dockerfile: str = "Dockerfile", build_args: dict[
         _docker("rmi", "-f", tag)
 
 
+def image_inspect(tag: str, fmt: str) -> str:
+    result = _docker("image", "inspect", "--format", fmt, tag)
+    if result.returncode != 0:
+        pytest.fail(f"docker image inspect {tag} lỗi:\n{_tail(result)}", pytrace=False)
+    return result.stdout.strip()
+
+
+def image_size_bytes(tag: str) -> int:
+    return int(image_inspect(tag, "{{.Size}}"))
+
+
+def image_has_healthcheck(tag: str) -> bool:
+    return image_inspect(tag, "{{json .Config.Healthcheck}}") not in ("", "null")
+
+
 class ComposeProject:
     def __init__(self, name: str, file: Path, env: dict[str, str]) -> None:
         self.name = name

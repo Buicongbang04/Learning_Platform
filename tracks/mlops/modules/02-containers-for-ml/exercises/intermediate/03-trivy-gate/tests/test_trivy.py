@@ -1,9 +1,9 @@
 import json
-from pathlib import Path
+import shutil
 
 import pytest
 
-from testkit import Exercise, run_sandboxed
+from testkit import Exercise, parse_version, run_sandboxed, tool_version
 
 ex = Exercise(__file__)
 
@@ -56,7 +56,11 @@ def test_gate_handles_clean_scan_with_null_vulnerabilities():
 
 
 def test_dockerfile_has_no_trivy_misconfigurations(tmp_path):
-    ex.require_tool("trivy", "0.60")
+    if not shutil.which("trivy"):
+        pytest.skip("Chưa cài trivy. Xem mục `## 0. Cài đặt` trong README của module 02-containers-for-ml")
+    have = tool_version("trivy")
+    if have is None or have < parse_version("0.60"):
+        pytest.skip("trivy cũ hơn 0.60. Xem mục `## 0. Cài đặt` trong README của module 02-containers-for-ml")
     (tmp_path / "scan").mkdir()
     (tmp_path / "scan" / "Dockerfile").write_text(ex.read("Dockerfile"))
     result = run_sandboxed(
@@ -75,5 +79,6 @@ def test_dockerfile_has_no_trivy_misconfigurations(tmp_path):
 
 
 def test_dockerfile_still_installs_flask_pinned():
-    text = ex.read("Dockerfile")
-    assert "flask==" in text, "Giữ pip install flask nhưng ghim phiên bản"
+    lines = [line for line in ex.read("Dockerfile").splitlines() if not line.strip().startswith("#")]
+    text = "\n".join(lines)
+    assert "pip install" in text and "flask==" in text, "Giữ pip install flask nhưng ghim phiên bản"

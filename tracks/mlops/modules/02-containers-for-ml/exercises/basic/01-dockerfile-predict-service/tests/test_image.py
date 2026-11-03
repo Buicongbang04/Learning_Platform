@@ -12,7 +12,6 @@ import pytest
 from testkit import DockerLab, Exercise
 
 ex = Exercise(__file__)
-image_cli = mlopskit._docker
 FIXTURES = Path(__file__).parent / "fixtures"
 sys.path.insert(0, str(FIXTURES))
 MAX_MB = 600
@@ -108,8 +107,7 @@ def test_has_user_instruction(dockerfile_text):
 
 def test_image_size_under_limit(image):
     image = need(image)
-    size = image_cli("image", "inspect", "--format", "{{.Size}}", image)
-    megabytes = int(size.stdout.strip()) / 1_000_000
+    megabytes = mlopskit.image_size_bytes(image) / 1_000_000
     assert megabytes < MAX_MB, f"Image nặng {megabytes:.0f} MB, ngưỡng {MAX_MB} MB"
 
 
@@ -141,5 +139,4 @@ def test_predict_uses_model_inside_image(api, tmp_path):
 
 def test_container_reports_docker_healthcheck(image):
     image = need(image)
-    result = image_cli("image", "inspect", "--format", "{{json .Config.Healthcheck}}", image)
-    assert result.stdout.strip() not in ("", "null"), "Dockerfile chưa có HEALTHCHECK"
+    assert mlopskit.image_has_healthcheck(image), "Dockerfile chưa có HEALTHCHECK"

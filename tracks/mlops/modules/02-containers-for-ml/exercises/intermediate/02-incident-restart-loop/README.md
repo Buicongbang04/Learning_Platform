@@ -21,7 +21,7 @@ Chẩn đoán một sự cố container theo thứ tự một on-call làm: xem 
 
 Thứ Hai, đội staging báo: "API dự đoán ETA **restart liên tục**" ngay sau khi chạy `docker compose up -d`. Bước build không lỗi. Dịch vụ `api` chưa bao giờ ổn định, và khi nó có vẻ chạy được thì Compose vẫn không coi nó là sẵn sàng. `starter/compose.yaml` là tệp đang chạy trên staging.
 
-Hợp đồng của service (không đổi): code và `Dockerfile` trong `service/` giữ nguyên; image không chứa model; service nghe cổng 8000, đọc model ở đường dẫn trong biến `MODEL_PATH` và có `GET /healthz`; thư mục model của dự án là `./models` cạnh `compose.yaml`. Chỉ sửa `compose.yaml`. Có thể có nhiều hơn một lỗi.
+Hợp đồng của service (không đổi): code và `Dockerfile` trong `service/` giữ nguyên; image không chứa model; service nghe cổng 8000, đọc model ở đường dẫn trong biến `MODEL_PATH` và có `GET /healthz`; thư mục model của dự án là `./models` cạnh `compose.yaml`. Chỉ sửa `compose.yaml`, và dịch vụ `api` vẫn phải có `healthcheck` hoạt động (xoá nó để qua bài là không đạt). Có thể có nhiều hơn một lỗi.
 
 Test dựng dự án tạm (`service/`, `models/model.joblib`, `compose.yaml` của bạn), một test chạy lại bản lúc sự cố và đòi nó tái hiện triệu chứng.
 

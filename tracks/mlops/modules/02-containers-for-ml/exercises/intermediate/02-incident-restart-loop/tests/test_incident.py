@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import httpx
+import yaml
 import mlopskit
 import pytest
 
@@ -30,6 +31,12 @@ def test_incident_compose_reproduces_the_symptom(tmp_path):
     with pytest.raises(pytest.fail.Exception):
         with mlopskit.compose_project(target):
             pass
+
+
+def test_api_keeps_a_healthcheck():
+    spec = yaml.safe_load(ex.read("compose.yaml"))
+    check = spec["services"]["api"].get("healthcheck")
+    assert check and check.get("test"), "Dịch vụ api phải có healthcheck chạy được (đừng xoá nó để `up --wait` qua)"
 
 
 def test_stack_comes_up_healthy(tmp_path):

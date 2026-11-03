@@ -99,6 +99,25 @@ def test_built_image_build_args(tmp_path):
         assert out.stdout.strip() == "mlops"
 
 
+def test_image_inspect_helpers(tmp_path):
+    _busybox()
+    (tmp_path / "Dockerfile").write_text("FROM busybox:1.37\n")
+    with mlopskit.built_image(tmp_path) as plain:
+        assert mlopskit.image_size_bytes(plain) > 1_000_000
+        assert mlopskit.image_inspect(plain, "{{.Os}}") == "linux"
+        assert not mlopskit.image_has_healthcheck(plain)
+    (tmp_path / "Dockerfile").write_text("FROM busybox:1.37\nHEALTHCHECK CMD true\n")
+    with mlopskit.built_image(tmp_path) as checked:
+        assert mlopskit.image_has_healthcheck(checked)
+
+
+def test_image_inspect_missing_image_fails():
+    if not testkit.docker_ready():
+        pytest.skip("Docker chưa sẵn sàng")
+    with pytest.raises(pytest.fail.Exception):
+        mlopskit.image_size_bytes("mlops-ex-does-not-exist:none")
+
+
 def test_built_image_failure_reports_log(tmp_path):
     _busybox()
     (tmp_path / "Dockerfile").write_text("FROM busybox:1.37\nRUN exit 3\n")

@@ -32,11 +32,11 @@ Viết `starter/compose.yaml` và `starter/api.env` với hai dịch vụ tên �
 - `api`: build từ `./service`, mount `./models` vào `/models` chỉ đọc. `MODEL_PATH` và `MLFLOW_TRACKING_URI` (địa chỉ MLflow trong network của Compose) nằm trong `api.env`, nạp bằng `env_file`. Service nghe cổng 8000 và có `/healthz`.
 - Cả hai có `healthcheck` với `test`, `interval`, `retries` (image slim không có `curl`).
 - `api` chỉ khởi động khi `mlflow` đã healthy: `depends_on` dạng map với `condition: service_healthy`.
-- Không bind cổng cố định trên host: khai báo cổng container (vd. `"8000"`) hoặc `127.0.0.1::8000`, để Docker chọn cổng trống và nhiều dự án chạy song song được.
+- Cả hai dịch vụ publish cổng container của mình (`api` 8000, `mlflow` 5000) mà không bind cổng cố định trên host (test lấy cổng bằng `docker compose port`; cú pháp ngắn hay dài đều được): khai báo cổng container (vd. `"8000"`) hoặc `127.0.0.1::8000`, để Docker chọn cổng trống và nhiều dự án chạy song song được.
 
 ## Tiêu chí đạt
 
-- `nice -n 15 uv run pytest tracks/mlops/modules/02-containers-for-ml/exercises/intermediate/01-compose-api-mlflow -q` pass: stack lên healthy (`up --wait`), `POST /predict` trả `run_id` và MLflow có metric `predictions` bằng số dòng đã gửi, dữ liệu MLflow nằm trên volume.
+- `nice -n 15 uv run pytest tracks/mlops/modules/02-containers-for-ml/exercises/intermediate/01-compose-api-mlflow -q` pass: stack lên healthy (`up --wait`), `POST /predict` trả `run_id` và MLflow có metric `predictions` bằng số dòng đã gửi, dữ liệu MLflow nằm trên volume (thư mục mount không rỗng sau khi API ghi metric).
 - Giải thích được vì sao `depends_on` không kèm `condition` chỉ đảm bảo thứ tự khởi động chứ không đảm bảo dịch vụ sẵn sàng, và vì sao file store không dùng được khi nhiều người cùng ghi.
 
 ## Gợi ý

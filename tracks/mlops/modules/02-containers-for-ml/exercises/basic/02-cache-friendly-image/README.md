@@ -20,6 +20,8 @@ Sắp xếp layer để sửa code không kéo theo cài lại dependency nặng
 
 ## Đề bài
 
+Cơ chế layer và cache của Docker đã học ở [DE 08](../../../../../../data-engineer/modules/08-devops-for-data/README.md); bài này áp dụng vào image ML.
+
 `starter/Dockerfile` của đồng nghiệp chạy được nhưng: mỗi lần sửa một dòng `app/serve.py` là cài lại cả numpy, scipy, scikit-learn; image chứa cả thư mục `notebooks/` (150 MB CSV trong build context của test) lẫn `__pycache__`.
 
 Context của test giống bài trước (`requirements.txt`, `app/`, `model.joblib`) cộng `notebooks/trips-2019-01.csv` và `app/__pycache__/`. Sửa `Dockerfile` và `.dockerignore` sao cho:

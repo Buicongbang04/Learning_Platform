@@ -57,7 +57,7 @@ Image ML nặng vì dependency: numpy, scipy, scikit-learn trên `python:3.12.11
 | --- | --- | --- | --- |
 | `python:3.12.11` (đầy đủ) | lớn nhất | Cần biên dịch nhiều thứ | Kéo gcc, header mà service không dùng |
 | `python:3.12.11-slim` | nhỏ | Mặc định cho service ML trên CPU | Không có `curl`, `gcc` |
-| `python:3.12-alpine` | nhỏ nhất | Chỉ khi mọi dependency có wheel musl | numpy/scipy/sklearn không có wheel manylinux dùng được trên musl, pip biên dịch từ source: chậm, dễ lỗi |
+| `python:3.12-alpine` | nhỏ nhất | Chỉ khi mọi dependency có wheel musl | numpy và scipy có wheel musllinux nhưng scikit-learn 1.9.1 thì không: pip biên dịch từ source, chậm và cần compiler |
 | `nvidia/cuda:*-runtime` | vài GB | Inference GPU | Dùng `devel` thì phình thêm GB |
 
 ### Multi-stage và virtualenv
@@ -151,7 +151,7 @@ Các mảnh quan trọng:
 
 - **`healthcheck`**: lệnh chạy *bên trong* container; trạng thái `healthy` là cái mà `depends_on` và `up --wait` dựa vào. Lệnh phải dùng công cụ có trong image.
 - **`depends_on` với `condition: service_healthy`**: không có `condition` thì chỉ đảm bảo thứ tự *khởi động*, không đảm bảo dịch vụ phía trước đã sẵn sàng nhận kết nối.
-- **Volume**: named volume cho dữ liệu của dịch vụ (sống sót qua `down`, không dính quyền host); bind mount (`./models:/models:ro`) cho tệp bạn sở hữu. Bind mount kiểu viết tắt tự tạo thư mục host nếu thiếu: một lỗi gõ đường dẫn thành thư mục rỗng thay vì thông báo lỗi.
+- **Volume**: named volume cho dữ liệu của dịch vụ (sống sót qua `down`, không dính quyền host); bind mount (`./models:/models:ro`) cho tệp bạn sở hữu. Bind mount kiểu viết tắt tự tạo thư mục nguồn trên host nếu nó chưa có; muốn báo lỗi thay vì tự tạo, dùng cú pháp dài (`type: bind`) với `create_host_path: false`.
 - **`env_file` và biến môi trường**: cấu hình ngoài định nghĩa dịch vụ; bí mật không dán vào tệp compose đưa vào git. Trong network của Compose, dịch vụ gọi nhau bằng *tên dịch vụ*, không phải `localhost`.
 - **`profiles`**: dịch vụ tuỳ chọn (UI, smoke test, GPU) chỉ lên khi gọi `--profile`.
 - **Cổng**: khai báo cổng container (`"8000"`) để Docker chọn cổng host trống; cổng cố định gây xung đột giữa các dự án.

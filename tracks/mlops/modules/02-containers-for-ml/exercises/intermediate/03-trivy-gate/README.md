@@ -20,9 +20,9 @@ Dùng trivy như một cổng chất lượng trong CI: sửa lỗi cấu hình 
 
 ## Đề bài
 
-Cài trivy theo mục `## 0. Cài đặt` của lý thuyết. Thiếu trivy thì test quét Dockerfile sẽ skip (kèm lệnh cài); các test còn lại vẫn chạy.
+Cài trivy theo mục `## 0. Cài đặt` của lý thuyết. Thiếu trivy thì test quét Dockerfile sẽ skip (thông báo trỏ tới mục cài đặt đó); các test còn lại vẫn chạy.
 
-**Phần 1 - `starter/Dockerfile`.** Sửa để `trivy config` không còn finding nào ở trạng thái FAIL (mọi mức độ). Vẫn phải cài `flask` bằng `pip install`, nhưng ghim phiên bản (`flask==<phiên bản>`).
+**Phần 1 - `starter/Dockerfile`.** Sửa để `trivy config` không còn finding nào ở trạng thái FAIL (mọi mức độ). Vẫn phải cài `flask` bằng `pip install`, nhưng ghim phiên bản (`flask==<phiên bản>` trong một dòng `RUN pip install` không phải comment).
 
 **Phần 2 - `starter/triage.py`.** Viết `gate(report, policy)` đọc báo cáo của `trivy image --format json` (`Results[].Vulnerabilities[]` với `VulnerabilityID`, `Severity`, `FixedVersion`):
 

@@ -6,7 +6,7 @@ Virtualenv chốt thư viện Python, không chốt Python, thư viện hệ th�
 
 ## Image sklearn của bạn nặng 2 GB. Bạn giảm bằng cách nào?
 
-Đo trước (`docker history`, `docker image inspect`) để biết cái gì nặng. Rồi theo thứ tự thường gặp: đổi base đầy đủ sang `slim`; `pip install --no-cache-dir`; multi-stage để stage cuối chỉ có venv; `.dockerignore` loại data, notebook, `.git`; bỏ dependency chỉ dùng khi train (jupyter, matplotlib); torch CPU thay vì bản CUDA nếu không có GPU. Không dùng Alpine chỉ vì nhỏ: wheel numpy/scipy/sklearn không có cho musl nên phải biên dịch, build chậm và dễ lỗi.
+Đo trước (`docker history`, `docker image inspect`) để biết cái gì nặng. Rồi theo thứ tự thường gặp: đổi base đầy đủ sang `slim`; `pip install --no-cache-dir`; multi-stage để stage cuối chỉ có venv; `.dockerignore` loại data, notebook, `.git`; bỏ dependency chỉ dùng khi train (jupyter, matplotlib); torch CPU thay vì bản CUDA nếu không có GPU. Không dùng Alpine chỉ vì nhỏ: numpy và scipy có wheel musllinux nhưng scikit-learn thì không, nên phải biên dịch từ source, build chậm và cần compiler.
 
 ## Mỗi lần sửa một dòng code, build lại cài lại cả numpy và scipy. Vì sao và sửa thế nào?
 
