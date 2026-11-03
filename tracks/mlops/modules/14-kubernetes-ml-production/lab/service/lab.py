@@ -28,6 +28,7 @@ LOAD_SECONDS = float(os.environ.get("MODEL_LOAD_SECONDS", "2"))
 SERVICE_SECONDS = float(os.environ.get("SERVICE_MS", "25")) / 1000
 SLOTS = threading.Semaphore(int(os.environ.get("CONCURRENCY", "1")))
 LEASE_EXTRA = float(os.environ.get("LEASE_EXTRA_SECONDS", "10"))
+MAX_ENQUEUE = 10_000
 COEF = (4.0, 2.1, 0.35, 0.8)
 
 
@@ -128,8 +129,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self.body()
-        except (ValueError, json.JSONDecodeError) as error:
+        except ValueError as error:
             self.reply(400, {"error": str(error)})
+            return
+        if not isinstance(payload, dict):
+            self.reply(400, {"error": "body phải là object JSON"})
             return
         if ROLE == "predictor" and self.path == f"/v1/models/{NAME}:predict":
             rows = payload.get("instances")
@@ -140,13 +144,24 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(SERVICE_SECONDS)
             self.reply(200, {"predictions": predict(rows), "pod": POD})
         elif ROLE == "queue" and self.path == "/enqueue":
-            n, seconds = int(payload.get("n", 1)), float(payload.get("seconds", 0.5))
+            try:
+                n, seconds = int(payload.get("n", 1)), float(payload.get("seconds", 0.5))
+            except (TypeError, ValueError):
+                n, seconds = -1, -1.0
+            if not (1 <= n <= MAX_ENQUEUE and 0 <= seconds <= 60):
+                self.reply(400, {"error": f"n phải từ 1 đến {MAX_ENQUEUE}, seconds từ 0 đến 60"})
+                return
             self.reply(200, {"pending": QUEUE.enqueue(n, seconds)})
         elif ROLE == "queue" and self.path == "/take":
             job = QUEUE.take()
             self.reply(200, {"job": job})
         elif ROLE == "queue" and self.path == "/done":
-            QUEUE.finish(int(payload["id"]), str(payload.get("pod", "")))
+            try:
+                job_id = int(payload["id"])
+            except (KeyError, TypeError, ValueError):
+                self.reply(400, {"error": "thiếu id"})
+                return
+            QUEUE.finish(job_id, str(payload.get("pod", "")))
             self.reply(200, {"ok": True})
         else:
             self.reply(404, {"error": "not found"})
