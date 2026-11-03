@@ -31,7 +31,7 @@ Server chạy `--serve-artifacts` nhưng MinIO nằm trong mạng Docker. Client
 - *pick-tool-selfhost* (b): ràng buộc "dữ liệu không rời mạng nội bộ" loại SaaS; bảng tính không có registry hay truy vấn.
 - *pick-tool-saas* (c): đội nhỏ không có người vận hành, dữ liệu công khai, cần so sánh run: SaaS hợp lý. Ràng buộc đổi
   thì đáp án đổi, đó là ý của câu trước.
-- *serve-by-alias* (d): "version lớn nhất" là đúng cách gây sự cố ở bài tập sự cố; số version cứng bắt phải deploy lại.
+- *serve-by-alias* (d): biến môi trường sửa tay dễ lệch giữa các máy và không có cổng duyệt; số version cứng bắt phải deploy lại mỗi lần đổi model; copy vào image gắn model với bản build.
 - *resolve-then-load* (c): tính nhất quán giữa version báo cáo và version nạp, không phải tốc độ.
 - *rollback-mechanics* (a, b): xoá version lỗi không cần thiết (c sai) và service đang chạy không tự nạp lại (d sai): service
   phải có cơ chế refresh hoặc restart, xem bài sự cố tiếp theo và module 07.

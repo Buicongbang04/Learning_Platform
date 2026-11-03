@@ -46,7 +46,7 @@ tượng có `.promote` và `.reasons`. Trong `starter/gate.py`, với `client =
 - Model tốt hơn được promote; tag quyết định, lý do, version so sánh và đường lui đều có trên registry.
 - Model tốt hơn tổng nhưng xấu đi ở slice `airport` bị từ chối, lý do nêu `airport`, alias đứng yên.
 - Model tốt hơn nhưng train từ cây thư mục bẩn bị từ chối, lý do nêu `git_dirty`, và vẫn có tag `rejected`.
-- Không còn model hay experiment mang tiền tố `mlops-ex-` sau khi chạy.
+- Test dọn sau khi chạy: model xoá hẳn khỏi registry, experiment chuyển sang trạng thái deleted (MLflow xoá mềm).
 
 ## Gợi ý
 

@@ -27,7 +27,7 @@ Bài chạy trên MLflow cục bộ (SQLite trong thư mục tạm, không cần
    `outs` thì `ValueError` nêu tên stage.
 3. `log_run(tracking_uri, experiment_id, params, metrics, repo, lock_path, stage) -> str`: một run `FINISHED` có
    params, metrics và ba tag `git_commit`, `git_dirty` (`"true"`/`"false"`), `data_version`. Dùng `MlflowClient`,
-   không đổi tracking URI toàn cục. Lỗi giữa chừng thì run phải là `FAILED`, không để `RUNNING` treo.
+   không đổi tracking URI toàn cục. Lỗi giữa chừng khi ghi param/metric thì lỗi vẫn được ném ra và run phải là `FAILED`, không để `RUNNING` treo.
 4. `find_runs(tracking_uri, experiment_id, data_version=None, git_commit=None) -> list[str]`: run_id của các run
    `FINISHED` khớp mọi điều kiện đã cho, mới nhất đứng đầu.
 
@@ -35,6 +35,7 @@ Bài chạy trên MLflow cục bộ (SQLite trong thư mục tạm, không cần
 
 - Cây thư mục sạch cho `git_dirty = "false"`, sửa một tệp hay thêm tệp mới cho `"true"`.
 - `data_version` đổi khi `dvc.lock` đổi, và `find_runs` tách đúng các run theo phiên bản dữ liệu và theo commit.
+- Ghi param hoặc metric lỗi giữa chừng không để lại run `RUNNING`.
 - Run `FAILED` không bao giờ xuất hiện trong kết quả `find_runs`.
 - Gọi `log_run` với một tracking URI khác không làm đổi `mlflow.get_tracking_uri()` của tiến trình.
 

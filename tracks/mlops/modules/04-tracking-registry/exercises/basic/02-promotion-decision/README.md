@@ -20,7 +20,8 @@ không phải so hai con số MAE mà là các ca biên: tổng tốt hơn nhưn
 
 Model dự đoán thời gian chuyến taxi (MAE tính bằng giây). Trong `starter/promotion.py` cài
 `decide_promotion(challenger, champion, policy) -> Decision`. Mỗi model mô tả bằng
-`{"mae", "latency_p95_ms", "slices": {tên: {"mae", "n"}}}`; `policy` ghi đè các khoá của `DEFAULT_POLICY`.
+`{"mae", "latency_p95_ms", "slices": {tên: {"mae", "n"}}}`; `policy` ghi đè các khoá của `DEFAULT_POLICY` (đã có trong starter: `min_improvement` 0.01, `slice_tolerance` 0.05,
+`min_slice_n` 200, `max_latency_ratio` 1.2, `max_latency_ms` None, `max_mae` None).
 
 Ba cổng, đều phải qua:
 

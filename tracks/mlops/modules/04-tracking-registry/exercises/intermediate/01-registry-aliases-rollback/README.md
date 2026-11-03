@@ -22,7 +22,7 @@ bằng cách đổi alias, và chứng minh client nạp đúng version sau mỗ
 ## Đề bài
 
 Cần stack `setup/mlops` đang chạy (test tự skip và nói lệnh bật nếu chưa). Test dùng tên model và experiment có hậu tố
-ngẫu nhiên và xoá hết khi xong. Test tự đặt `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` cho tiến trình pytest; khi
+ngẫu nhiên và dọn khi xong (model xoá hẳn, experiment xoá mềm). Test tự đặt `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` cho tiến trình pytest; khi
 bạn tự chạy code ngoài pytest với server này, đặt biến đó (và `MLFLOW_TRACKING_URI`) trong shell, không thì tải artifact có
 thể treo vì URL presigned trỏ tới tên miền nội bộ của MinIO.
 
@@ -50,7 +50,7 @@ Sau khi test pass, làm phần trắc nghiệm trong app.
   sau `rollback` thì trả version 1 và dự đoán của v1.
 - Promote lần đầu không ghi tag `previous_*`; promote lần hai ghi đúng tag.
 - Các ngoại lệ `LookupError` đúng như mô tả ở trên.
-- Không còn registered model hay experiment nào mang tiền tố `mlops-ex-` sau khi chạy.
+- Test dọn sau khi chạy: model xoá hẳn khỏi registry, experiment chuyển sang trạng thái deleted (MLflow xoá mềm).
 
 ## Gợi ý
 

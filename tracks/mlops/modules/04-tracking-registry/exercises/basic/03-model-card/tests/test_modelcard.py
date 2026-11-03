@@ -79,3 +79,11 @@ def test_linter_catches_each_problem(mod):
 
 def test_linter_reports_all_problems_at_once(mod):
     assert len(mod.card_problems("# Model card: x v1\n")) >= 5
+
+
+def test_card_has_exactly_one_table(mod):
+    card = mod.build_model_card(INFO)
+    performance = card.split("## Hiệu năng")[1].split("## Hạn chế")[0]
+    blocks = [b for b in performance.split("\n\n") if b.lstrip().startswith("|")]
+    assert len(blocks) == 1
+    assert card.count("\n|") == performance.count("\n|")

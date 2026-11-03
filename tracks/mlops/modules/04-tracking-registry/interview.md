@@ -33,13 +33,14 @@ Version lỗi giữ lại để điều tra. Với service đang chạy cần c�
 "refresh lỗi thì giữ model cũ". Sau rollback phải kiểm bằng đầu ra thật (phân phối dự đoán, `model_version` trong response), không
 chỉ tin vào việc đã đổi alias.
 
-## Sự cố: sau lần restart, dự đoán của service đột nhiên khác hẳn dù không ai deploy model mới. Bạn điều tra thế nào?
+## Sự cố: sau một đợt deploy thường lệ, dự đoán của service khác hẳn dù không ai báo đổi model. Bạn điều tra thế nào?
 
-Bắt đầu từ "service đang phục vụ version nào, và vì sao chọn nó": log lúc khởi động, trường `model_version` trong response. So
-với trạng thái registry (alias `champion` đang ở đâu, có version nào mới đăng ký gần đây). Nếu hai thứ lệch nhau, nghi cách
-service chọn model: restart đã đổi kết quả của một phép chọn không xác định theo thời gian. Sửa gốc là cho service chọn model
-theo thứ gắn với quyết định duyệt (alias), không fallback sang "bất cứ cái gì có", và log version. Sau đó thêm alert so phân
-phối dự đoán 1 giờ với 7 ngày, vì alert chỉ nhìn tỉ lệ lỗi và latency sẽ không thấy gì (HTTP vẫn 200).
+Làm theo thứ tự bằng chứng, không đoán. Một: service đang phục vụ model nào? Xem log khởi động và trường `model_version` trong
+response. Hai: so với trạng thái registry (model nào đang được duyệt, version nào mới đăng ký hay mới đổi alias gần đây, ai đổi
+và khi nào). Ba: nếu hai thứ lệch nhau, tìm trong mã và cấu hình đúng điểm quyết định "nạp model nào", và hỏi vì sao cùng một
+mã cho kết quả khác nhau ở hai thời điểm. Bốn: nếu khớp nhau, chuyển sang nghi dữ liệu đầu vào hoặc feature (module 10). Sau khi
+khắc phục, thêm phát hiện sớm: alert so phân phối dự đoán 1 giờ với 7 ngày, vì alert chỉ nhìn tỉ lệ lỗi và latency sẽ không thấy
+gì khi HTTP vẫn 200, và viết test hồi quy cho tình huống vừa xảy ra.
 
 ## Thiết kế cổng promotion cho model ETA: bạn kiểm những gì?
 
@@ -98,9 +99,8 @@ Service khởi động mới sẽ không lên được nếu nạp model ở bư
 image cho đường khởi động khẩn cấp (đánh đổi: phải có quy trình giữ bản ghim đúng). Không promote hay rollback được trong lúc
 đó, nên registry là hạ tầng cần SLO và backup, không phải công cụ phụ.
 
-## Khi nào bạn thay `latest version` bằng ghim cứng số version trong cấu hình triển khai?
+## Khi nào bạn ghim cứng số version trong cấu hình triển khai thay vì dùng alias?
 
 Khi cần audit và tái lập tuyệt đối: GitOps, đổi model là một commit (version = một dòng trong manifest), có review và lịch sử.
 Đổi lại mất tính tức thì và mỗi lần đổi model là một lần deploy. Alias hợp khi muốn đổi model không động tới service và có cổng
-kiểm riêng. Dù chọn cách nào, không nạp "version mới nhất theo số" cho production: số version chỉ cho biết thứ tự đăng ký, không
-nói gì về việc đã được duyệt.
+kiểm riêng. Dù chọn cách nào, quyền đổi (commit hay đổi alias) phải đi qua cổng promotion và để lại bản ghi.

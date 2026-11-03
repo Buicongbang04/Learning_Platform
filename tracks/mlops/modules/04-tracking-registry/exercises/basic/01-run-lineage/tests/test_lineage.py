@@ -121,7 +121,7 @@ def test_find_runs_by_data_version_and_commit(lineage, repo, tracking):
     uri, exp_id = tracking
     lock = repo / "dvc.lock"
     first = lineage.log_run(uri, exp_id, {}, {"mae": 3.0}, repo, lock, "prepare")
-    time.sleep(0.01)
+    time.sleep(0.05)
     second = lineage.log_run(uri, exp_id, {}, {"mae": 2.0}, repo, lock, "prepare")
     first_commit = git(repo, "rev-parse", "HEAD").strip()
 
@@ -143,3 +143,18 @@ def test_find_runs_ignores_failed(lineage, repo, tracking):
     client.set_terminated(bad.info.run_id, status="FAILED")
     ok = lineage.log_run(uri, exp_id, {}, {"mae": 1.0}, repo, repo / "dvc.lock", "prepare")
     assert lineage.find_runs(uri, exp_id, data_version="c0ffee01") == [ok]
+
+
+def test_failure_while_logging_leaves_no_running_run(lineage, repo, tracking, monkeypatch):
+    uri, exp_id = tracking
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("ghi lỗi")
+
+    for name in ("log_param", "log_metric", "log_batch"):
+        monkeypatch.setattr(MlflowClient, name, boom)
+    with pytest.raises(RuntimeError):
+        lineage.log_run(uri, exp_id, {"a": 1}, {"mae": 1.0}, repo, repo / "dvc.lock", "prepare")
+    monkeypatch.undo()
+    runs = MlflowClient(uri).search_runs([exp_id])
+    assert runs and all(r.info.status == "FAILED" for r in runs)

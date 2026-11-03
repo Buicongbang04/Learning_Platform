@@ -31,7 +31,7 @@ questions:
     type: single
     prompt: "Service cần luôn nạp model đã được duyệt cho production, và đội muốn đổi model mà không phải deploy lại service. Cách làm đúng?"
     options:
-      - { id: a, text: "Nạp version có số lớn nhất, vì theo quy ước version mới nhất luôn là tốt nhất" }
+      - { id: a, text: "Đặt tên model vào biến môi trường của từng máy chủ, sửa tay sau mỗi lần duyệt model" }
       - { id: b, text: "Ghi cứng số version vào mã nguồn rồi deploy lại mỗi khi có model mới được duyệt" }
       - { id: c, text: "Sao chép tệp model vào image ngay lúc build và đặt tên tệp theo ngày huấn luyện" }
       - { id: d, text: "Nạp theo alias models:/taxi-eta@champion; chỉ người được duyệt mới đổi alias" }
