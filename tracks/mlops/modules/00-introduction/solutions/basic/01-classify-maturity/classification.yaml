@@ -1,0 +1,22 @@
+quote-pricing:
+  google_level: 0
+  microsoft_level: 1
+  blocker: training_triggered_automatically
+  rationale: >
+    Có CI cho code API nên theo Microsoft là mức 1 (DevOps nhưng chưa MLOps), nhưng training
+    là notebook chạy tay và deploy bằng copy pickle nên theo Google vẫn là mức 0.
+recsys-ranking:
+  google_level: 1
+  microsoft_level: 2
+  blocker: pipeline_cicd
+  rationale: >
+    Training tự động theo lịch, có data validation và cổng so baseline nên đã qua mức 0 của
+    Google; nhưng pipeline được cập nhật bằng tay (không CI/CD cho pipeline) và deploy model
+    còn thủ công nên dừng ở mức 1 Google, mức 2 Microsoft.
+fraud-scoring:
+  google_level: 2
+  microsoft_level: 4
+  blocker: null
+  rationale: >
+    CI/CD cho chính pipeline, deploy model tự động qua cổng kiểm tra, và monitoring kích hoạt
+    retrain: đủ cho mức 2 của Google và mức 4 của Microsoft.

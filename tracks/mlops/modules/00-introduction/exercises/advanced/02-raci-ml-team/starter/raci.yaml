@@ -1,0 +1,17 @@
+# Vai trò: ds (Data Scientist), mlops (MLOps/ML engineer), de (Data Engineer), backend, pm (product owner)
+# Giá trị mỗi ô: R (làm), A (chịu trách nhiệm cuối, đúng một vai trò), AR (vừa A vừa R), C (được hỏi), I (được báo), - (không liên quan)
+activities:
+  define-problem-label: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  ingest-data: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  data-contract-change: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  train-model: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  promotion-gate: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  build-serving-ci: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  deploy-rollback: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  monitoring-alerts: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  model-quality-oncall: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+  retrain-vs-rollback-decision: {ds: null, mlops: null, de: null, backend: null, pm: null}  # TODO
+decisions:
+  promotion-gate: ""  # TODO: vì sao phân công như vậy, đánh đổi nào bạn chấp nhận
+  model-quality-oncall: ""  # TODO
+  retrain-vs-rollback-decision: ""  # TODO

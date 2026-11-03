@@ -1,0 +1,52 @@
+- id: quote-pricing
+  name: Báo giá vận chuyển (đội Logistics)
+  story: >
+    Code nằm trong Git, API báo giá có CI chạy unit test và build image. Model được train bằng
+    notebook; chị analyst chạy tay mỗi khi nhớ ra, lưu pickle rồi nhờ backend copy vào image
+    mới. Không có tracking, không có kiểm tra dữ liệu.
+  facts:
+    code_in_git: true
+    ci_tests_code: true
+    training_scripted: false
+    training_triggered_automatically: false
+    data_validation: false
+    model_validation_gate: false
+    experiment_tracking_registry: false
+    deploy_automated: false
+    pipeline_cicd: false
+    monitoring_triggers_retraining: false
+- id: recsys-ranking
+  name: Xếp hạng đề xuất (đội Growth)
+  story: >
+    Airflow chạy pipeline train mỗi đêm: kiểm tra schema dữ liệu, train, so với baseline, chỉ
+    ghi vào registry khi vượt ngưỡng. Một người duyệt và chạy tay lệnh deploy lên production.
+    Sửa code pipeline thì kỹ sư tự build image và ssh lên server cập nhật DAG.
+  facts:
+    code_in_git: true
+    ci_tests_code: true
+    training_scripted: true
+    training_triggered_automatically: true
+    data_validation: true
+    model_validation_gate: true
+    experiment_tracking_registry: true
+    deploy_automated: false
+    pipeline_cicd: false
+    monitoring_triggers_retraining: false
+- id: fraud-scoring
+  name: Chấm điểm gian lận (đội Payments)
+  story: >
+    Mỗi PR vào pipeline kích hoạt CI: test từng component, build image, deploy pipeline lên
+    staging rồi production. Training chạy theo lịch và khi cảnh báo drift bắn; model qua cổng
+    kiểm tra mới được alias `champion` và tự deploy. Dashboard drift gắn alert tự tạo run
+    retrain.
+  facts:
+    code_in_git: true
+    ci_tests_code: true
+    training_scripted: true
+    training_triggered_automatically: true
+    data_validation: true
+    model_validation_gate: true
+    experiment_tracking_registry: true
+    deploy_automated: true
+    pipeline_cicd: true
+    monitoring_triggers_retraining: true
