@@ -423,6 +423,18 @@ Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack
   được, chạy công cụ đó **trong container** của stack `setup/mlops` và test gọi qua CLI/HTTP; (3) không bao giờ hạ
   pin làm hỏng track khác. Kết quả kiểm mỗi công cụ ghi ở đây khi thêm: `dvc[s3]` resolve cùng pin
   hiện tại; `feast[redis]` kéo pandas xuống 2.3.3 nên module 06 phải chạy Feast trong container hoặc tìm bản tương thích. `evidently==0.7.23` (bản mới nhất, kiểm 2026-11-03) **không import được với pandas 3.1** (`infer_dtype_from_object` đã bị bỏ) và đòi `plotly<6`, nên Evidently chạy trong image `mlops-evidently:0.7.23` (pandas 2.3.3) qua `mlopskit.evidently_python`, giống Feast trong `mlops-feast`. Không shim/monkeypatch pandas trong bài.
+- Ngày phát hành của bản ghim chạy trong container (kiểm 2026-11-03 qua PyPI JSON `upload_time` và GitHub Releases
+  `published_at`; mọi bản ≥2 tuần trước ngày thêm):
+
+  | Bản ghim | Phát hành | Nguồn |
+  | --- | --- | --- |
+  | `feast==0.67.0` (image `mlops-feast`) | 2026-10-13 | PyPI |
+  | `evidently==0.7.23` (image `mlops-evidently`) | 2026-09-11 | PyPI |
+  | `prom/alertmanager:v0.34.1` | 2026-09-17 | GitHub `prometheus/alertmanager` |
+  | `grafana/k6:1.8.1` | 2026-08-12 | GitHub `grafana/k6` |
+  | `prom/prometheus:v3.5.0` | 2025-07-14 | GitHub `prometheus/prometheus` |
+  | `grafana/grafana:12.1.0` | 2025-07-23 | GitHub `grafana/grafana` |
+  | `redis:7.4.5` | 2025-07-06 | GitHub `redis/redis` |
 - **GPU:** môi trường chính giữ torch CPU và `onnxruntime` CPU. Đường GPU (onnxruntime-gpu, torch CUDA) nằm trong
   project `setup/gpu`; test GPU chạy qua project đó và skip khi không có CUDA. Mọi bài GPU có đường CPU; PC mạnh chỉ
   để đo thêm, test không bao giờ cần.
