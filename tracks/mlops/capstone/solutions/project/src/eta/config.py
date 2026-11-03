@@ -35,7 +35,7 @@ ENV_PARSERS = {
 
 def _resolve_sqlite(uri: str, base: Path) -> str:
     prefix = "sqlite:///"
-    if not uri.startswith(prefix) or uri.startswith(prefix + "/"):
+    if not uri.startswith(prefix) or uri[len(prefix):].startswith(("/", ":")):
         return uri
     return prefix + str((base / uri[len(prefix):]).resolve())
 
