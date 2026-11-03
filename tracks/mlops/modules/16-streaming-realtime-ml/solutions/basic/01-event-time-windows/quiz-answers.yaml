@@ -1,0 +1,8 @@
+event-vs-processing: [b]
+lateness-tradeoff: [a]
+window-kind: [c]
+duplicates: [a, b]
+watermark-source: [a]
+engine-choice: [b]
+flink-vs-spark: [a]
+freshness-measure: [b]
