@@ -24,6 +24,6 @@ roles:
   comms: yen
   ops: phuc
 reasons:
-  - "Từ 15:50 tới 17:00 có 14 khung 5 phút liên tiếp ở queens với hơn 94% dự đoán tệ, nên là SEV1 dù chỉ tiêu 2.51% budget chất lượng"
+  - "Từ 15:50 tới 17:00 có 14 khung 5 phút liên tiếp ở queens, mỗi khung trên 88% dự đoán tệ, tổng cộng 94.7%, nên là SEV1 dù chỉ tiêu 2.51% budget chất lượng"
   - "Rollback mdl-733 lúc 17:00 đưa tỉ lệ tệ của queens về dưới 40% ngay khung kế tiếp, còn restart consumer lúc 16:40 không đổi gì"
   - "Feature zone_speed_15m của queens cũ hơn 900 giây trong 172 phút, tiêu 39.81% budget freshness 30 ngày mà không alert nào bắn"

@@ -303,9 +303,8 @@ def write_rules(tmp_path, data: dict) -> str:
 
 
 def seconds(text) -> int:
-    match = re.match(r"^(\d+)([smh])$", str(text))
-    assert match, f"thời lượng không hợp lệ: {text!r}"
-    return int(match.group(1)) * {"s": 1, "m": 60, "h": 3600}[match.group(2)]
+    assert re.fullmatch(r"(\d+[smh])+", str(text)), f"thời lượng không hợp lệ: {text!r}"
+    return sum(int(n) * {"s": 1, "m": 60, "h": 3600}[unit] for n, unit in re.findall(r"(\d+)([smh])", str(text)))
 
 
 def test_m18_rules_metadata(project, tmp_path):
@@ -433,16 +432,16 @@ def test_m18_rules_on_incident(project, tmp_path, incident):
     stale_at = minutes(truth["started_at"]) + 10
     checks = [firing("ETAMarketFeatureStale", f"{stale_at}m", truth["affected"]),
               firing("ETAMarketQualityFastBurn", f"{late}m", truth["affected"])]
-    checks.append(firing("ETAMarketFeatureStale", "622m", []))
-    for at in ("6h", "11h", "20h"):
+    for at in ("6h", "622m", "11h", "20h"):
         checks += [firing(name, at, []) for name in ALERTS]
     tests = [{"interval": "1m", "input_series": [{"series": s, "values": v} for s, v in incident_series(truth)],
               "promql_expr_test": checks}]
     result = run_scenarios(tmp_path, data, tests)
     failed = len(re.findall(r"expr: ", result.stdout + result.stderr))
+    detail = "" if failed else f"\npromtool không chạy được các kiểm tra:\n{result.stderr}"
     assert result.returncode == 0, (
         f"rule chưa bắn đúng trên dữ liệu sự cố: {failed} kiểm tra sai trên {len(checks)} "
-        f"(có {len(markets)} market; xem mục 3 của đề về các ca được kiểm)")
+        f"(có {len(markets)} market; xem mục 3 của đề về các ca được kiểm){detail}")
 
 
 def test_m18_postmortem(project):

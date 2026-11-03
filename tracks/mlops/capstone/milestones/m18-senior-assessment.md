@@ -21,7 +21,8 @@ không thay được kinh nghiệm dẫn sự cố thật; nó cho bạn khung �
 
 **Đừng mở `capstone/solutions/`** (nhất là `solutions/assessment/senior_incident.py`, script sinh sự cố): nó chứa đáp án. Test chỉ
 kiểm được phần đo được; phần lập luận chấm bằng rubric trong `SOLUTION.md` sau khi bạn nộp. `tests/etakit.py` gọi script đó để dựng
-dữ liệu; bạn không cần đọc nó.
+dữ liệu; bạn không cần đọc nó. Cũng đừng gọi `etakit.incident_facts()` và đừng chạy pytest với `-l`/`--showlocals`: cả hai in
+đáp án ra màn hình.
 
 ```mermaid
 flowchart LR
@@ -56,7 +57,9 @@ Lệnh ghi vào `capstone/project/data/incident/` (đã bị `.gitignore` chặn
 | `alerts.log` | Thông báo `firing`/`resolved` của Alertmanager hôm đó |
 | `chat.log` | Kênh sự cố, mỗi người là một handle `@tên` |
 
-Mọi thời điểm là giờ New York, cùng múi với chat. Có thông tin không liên quan trong mọi tệp. Phân tích bằng notebook hay script
+Mọi thời điểm là giờ New York, cùng múi với chat. Tin báo từ bên ngoài đội có thể chỉ nhắc địa điểm (sân bay, khu
+phố) chứ không nhắc market: ánh xạ địa điểm hay zone sang market bằng `taxi_zone_lookup.csv` của bộ `nyc-tlc` (cột `Borough`).
+Có thông tin không liên quan trong mọi tệp. Phân tích bằng notebook hay script
 riêng của bạn (không bắt buộc nộp, nhưng nên có để tự chấm phần "cách điều tra" của rubric).
 
 ### 2. Định nghĩa đã thống nhất với đội sản phẩm
