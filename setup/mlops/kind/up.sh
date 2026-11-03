@@ -159,7 +159,9 @@ fetch "https://github.com/argoproj/argo-workflows/releases/download/${ARGO_VERSI
   "$ARGO_SHA256" "$CACHE/argo-${ARGO_VERSION}.yaml"
 k create namespace argo --dry-run=client -o yaml | k apply -f - >/dev/null
 k apply --server-side -n argo -f "$CACHE/argo-${ARGO_VERSION}.yaml" >/dev/null
-k apply --server-side --field-manager=mlops-kind -f "$HERE/argo-artifacts.yaml" >/dev/null
+artifacts_sha="$(sha256sum "$HERE/argo-artifacts.yaml" | cut -d' ' -f1)"
+sed "s/__CONFIG_SHA256__/${artifacts_sha}/" "$HERE/argo-artifacts.yaml" \
+  | k apply --server-side --field-manager=mlops-kind -f - >/dev/null
 k -n argo wait --for=condition=Available deployment --all --timeout=300s
 k -n argo rollout status deployment/argo-artifacts --timeout=300s >/dev/null
 
