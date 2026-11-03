@@ -45,6 +45,11 @@ Track DevOps **đang được làm trên máy khác**, nên MLOps **đứng đ�
   heading `## `, có link về module gốc. Bài tập phải **khác** bài các track đó và tập trung vào tự động hoá,
   deploy, monitoring, rollback, tái lập.
 
+- **Model nhẹ, việc thật (người học chốt khi duyệt).** Không chạy model nặng. Trọng tâm là thực hành được và
+  hiểu đúng việc một MLOps phải làm trong môi trường thực tế. Ngân sách: mỗi bài chạy trên laptop trong vài
+  phút (mục tiêu ≤5 phút CPU, không kể tải dữ liệu lần đầu); model ETA train trên mẫu dữ liệu; bài distributed,
+  GPU, K8s dùng model nhỏ. Bài nào chỉ "chờ model chạy" mà không dạy việc vận hành thì cắt bớt.
+
 **Ngoài phạm vi**
 - K8s tổng quát (kiến trúc, RBAC, NetworkPolicy, Helm, vận hành cluster), IaC chuyên sâu, service mesh: thuộc
   track DevOps. Module 13–14 chỉ dạy phần K8s đặc thù ML và ghi rõ phần nào kế thừa từ DevOps.
@@ -237,8 +242,8 @@ phân phối zone đổi). Người học phải phân biệt drift không làm 
 
 **Model SegFormer cho module 11:** không có checkpoint công khai cho trimap Pets, nên module cấp sẵn script
 fine-tune `segformer-b0` (khởi từ checkpoint ImageNet/ADE20K công khai trên HF) mà người học **chạy một lần
-như bước chuẩn bị**, không phải bài học: khoảng 15–30 phút trên 3050 4 GB, đường CPU dùng tập con nhỏ hơn
-(chất lượng thấp hơn, đủ cho bài serving). Không host artifact nào; model nằm trong MLflow local của người học.
+như bước chuẩn bị**, không phải bài học: trên tập con nhỏ, vài phút trên 3050 4 GB hoặc lâu hơn một chút trên CPU
+(chất lượng vừa đủ cho bài serving, không theo đuổi điểm cao). Không host artifact nào; model nằm trong MLflow local của người học.
 Test dùng model nhỏ sinh trong test (vài lớp conv export ONNX), không cần model đã fine-tune.
 
 Module 11 (DL serving) **không** có milestone; nó có bài portfolio riêng ở mức Advanced (service SegFormer
