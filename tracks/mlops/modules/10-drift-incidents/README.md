@@ -16,7 +16,10 @@ Evidently 0.7.23 **không** nằm trong môi trường mặc định: nó nạp 
 | `scipy` | 1.18.1 | môi trường mặc định |
 
 ```python
+import json
+
 import mlopskit
+import pandas as pd
 
 pd.DataFrame(reference).to_parquet(workdir / "ref.parquet")
 pd.DataFrame(current).to_parquet(workdir / "cur.parquet")

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-FEATURES = ["trip_distance", "fare_amount", "trip_time"]
+FEATURES = ["trip_distance", "fare_amount", "duration_value"]
 PSI_ALERT = 0.25
 
 
@@ -32,16 +32,16 @@ def change_point_day(df, column):
     return None if hits.empty else hits.index[0]
 
 
-def median_ratio(df, column, day):
-    before = df.loc[df["day"] < day, column].median()
-    after = df.loc[df["day"] >= day, column].median()
-    return float(round(before / after))
+def level_by_period(df, column, day):
+    before = float(df.loc[df["day"] < day, column].median())
+    after = float(df.loc[df["day"] >= day, column].median())
+    return before, after
 
 
-def adjust_from(df, column, day, factor):
+def adjust_from(df, column, day, transform):
     out = df.copy()
     mask = out["day"] >= day
-    out.loc[mask, column] = out.loc[mask, column] * factor
+    out.loc[mask, column] = transform(out.loc[mask, column])
     return out
 
 

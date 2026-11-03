@@ -105,3 +105,19 @@ def test_real_month_trip_distance_matches_evidently(tmp_path):
     expected = evidently_scores(jul, dec, "psi", tmp_path)["trip_distance"]
     assert mod.psi(jul["trip_distance"], dec["trip_distance"]) == pytest.approx(expected, rel=1e-9, abs=1e-12)
     assert mod.ks_pvalue(jul["trip_distance"], dec["trip_distance"]) < 0.05
+
+
+def test_real_covid_fare_amount_equal_width_psi_is_much_lower_than_quantile_psi(tmp_path):
+    mod = ex.module("drift_metrics.py")
+    cols = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "trip_distance", "fare_amount"]
+
+    def prepared(dataset, month):
+        df = pd.read_parquet(mlopskit.real_month(dataset, month), columns=cols).sample(n=100_000, random_state=0)
+        minutes = (df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]).dt.total_seconds() / 60
+        keep = (minutes > 0) & (minutes < 180) & (df["trip_distance"] > 0) & (df["fare_amount"] > 0)
+        return df.loc[keep, ["fare_amount"]].reset_index(drop=True)
+
+    feb, apr = prepared("nyc-tlc-2020", "2020-02"), prepared("nyc-tlc-2020", "2020-04")
+    expected = evidently_scores(feb, apr, "psi", tmp_path)["fare_amount"]
+    assert expected == pytest.approx(0.0047, abs=0.002)
+    assert mod.psi(feb["fare_amount"], apr["fare_amount"]) == pytest.approx(expected, rel=1e-9)

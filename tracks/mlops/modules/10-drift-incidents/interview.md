@@ -14,7 +14,7 @@ Retrain theo phản xạ tốn tiền, có thể làm model tệ đi (train trê
 
 ## Sự cố: dashboard báo drift mạnh từ hôm qua, không ai báo có thay đổi nào. Bạn làm gì trong giờ đầu?
 
-Không đụng model trước. (1) Xác nhận tín hiệu thật: kiểm chính giám sát (cỡ mẫu, baseline cùng thứ, ngưỡng có vừa đổi không). (2) Xem phạm vi: một cột hay nhiều cột, cột nào, có hợp lý về nghiệp vụ không (nếu các cột liên quan không đổi theo thì đáng ngờ). (3) Tìm điểm gãy: đột ngột trong một đêm
+Không đụng model trước. (1) Xác nhận tín hiệu thật: kiểm chính giám sát (cỡ mẫu, baseline cùng thứ, ngưỡng có vừa đổi không). (2) Xem phạm vi: một cột hay nhiều cột, cột nào, và các cột phụ thuộc vào nó có đổi cùng không. (3) Tìm điểm gãy: đột ngột trong một đêm
 hay trôi dần; đột ngột gợi thay đổi hệ thống. (4) Loại trừ lỗi dữ liệu và pipeline: deploy, thay đổi nguồn hay lược đồ trong 48 giờ, tỉ lệ thiếu, khoảng giá trị của cột. (5) Chỉ sau đó xem MAE trên nhãn đã về và proxy để biết có thiệt hại không.
 Mỗi bước loại một giả thuyết và tốn ít hơn bước sau. Kết thúc bằng việc sửa nguyên nhân (nguồn, rào kiểm), không phải bằng retrain.
 
@@ -77,7 +77,7 @@ Hành động tốt có chủ sở hữu (vai trò), hạn, cách kiểm hoàn t
 
 Gồm ba lớp. (1) Thu thập: mọi dự đoán ghi `ts`, phiên bản model, feature, dự đoán, cờ fallback vào kho chung; nhãn ghép theo khoá khi về. (2) Phép đo theo model, cấu hình bằng khai báo: PSI hay Wasserstein từng feature với cách chia bin ghi rõ, tỉ lệ thiếu và khoảng giá trị,
 phân phối dự đoán so với baseline cùng thứ, tỉ lệ fallback, AUC miền hằng tuần, MAE trên nhãn đã về (kèm độ trễ riêng của từng model). Chạy bằng job định kỳ (Evidently hoặc mã tự viết), lưu số đo lịch sử cho dashboard. Model nhãn trễ nhiều tuần cần ước lượng hiệu năng không nhãn hoặc proxy mạnh hơn.
-(3) Quy trình: mức nghiêm trọng gắn tác động, runbook chung với nhánh quyết định giữ, rollback, retrain; rào dữ liệu ở cửa vào (schema, khoảng giá trị, so trung vị với bảy ngày trước) để lô lỗi bị chặn trước khi thành "drift"; registry có alias để rollback một lệnh; pipeline retrain kèm so champion và challenger; postmortem cho sự cố có ảnh hưởng.
+(3) Quy trình: mức nghiêm trọng gắn tác động, runbook chung với nhánh quyết định giữ, rollback, retrain; rào dữ liệu ở cửa vào (schema, khoảng giá trị, so phân phối với các ngày trước) để lô lỗi bị chặn trước khi thành "drift"; registry có alias để rollback một lệnh; pipeline retrain kèm so champion và challenger; postmortem cho sự cố có ảnh hưởng.
 Đo chính hệ thống giám sát: số cảnh báo giả mỗi tuần, thời gian từ sự cố tới phát hiện, tỉ lệ cảnh báo dẫn tới hành động.
 
 ## Nhìn lại một ca "drift lớn nhưng không cần làm gì" bạn từng gặp: bạn biết là vô hại bằng cách nào?

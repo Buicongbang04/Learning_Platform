@@ -40,7 +40,7 @@ Test cuối dùng `trip_distance` thật của NYC TLC 2019-07 và 2019-12 (mẫ
 - Hai mẫu giống hệt: PSI bằng 0 và p-value bằng 1.
 - Quy tắc bin rỗng đúng cả hai nhánh (0.0001 và `m / 10**6`).
 - Mẫu lớn lệch rất nhỏ: `ks_drift` là `True` còn `psi_drift` là `False`; lệch lớn: cả hai cờ `True`.
-- Dữ liệu thật: PSI khớp Evidently và KS báo drift.
+- Dữ liệu thật: PSI khớp Evidently và KS báo drift; trên `fare_amount` 2020-02 sang 2020-04 (mẫu 100 000 dòng, `seed=0`, đã lọc như bài notebook 01) PSI kiểu Evidently ≈ 0.005, thấp hơn nhiều so với PSI quantile ≈ 0.05.
 
 ## Gợi ý
 

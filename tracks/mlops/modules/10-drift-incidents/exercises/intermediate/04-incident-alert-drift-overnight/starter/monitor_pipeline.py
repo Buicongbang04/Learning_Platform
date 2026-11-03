@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-FEATURES = ["trip_distance", "fare_amount", "trip_time"]
+FEATURES = ["trip_distance", "fare_amount", "duration_value"]
 PSI_ALERT = 0.25
 
 
@@ -29,13 +29,13 @@ def change_point_day(df, column):
     raise NotImplementedError
 
 
-def median_ratio(df, column, day):
-    # TODO: trung vị trước `day` chia trung vị từ `day` trở đi, làm tròn về số nguyên gần nhất (float)
+def level_by_period(df, column, day):
+    # TODO: (trung vị `column` ở các dòng có day nhỏ hơn mốc, trung vị ở các dòng từ mốc trở đi), cả hai là float
     raise NotImplementedError
 
 
-def adjust_from(df, column, day, factor):
-    # TODO: bản sao df, nhân cột với factor ở các dòng từ `day` trở đi
+def adjust_from(df, column, day, transform):
+    # TODO: bản sao df; ở các dòng từ `day` trở đi, thay `column` bằng transform(Series của các dòng đó)
     raise NotImplementedError
 
 

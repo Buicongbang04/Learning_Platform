@@ -42,7 +42,7 @@ Luật mà test ép:
 
 - Khoá cấp một của tệp đúng ba id tình huống. `decision` là một trong `retrain`, `rollback`, `keep` và phải là quyết định đúng của tình huống đó. Ba tình huống có ba quyết định khác nhau.
 - `reasons`: danh sách ít nhất 2 chuỗi, mỗi chuỗi dài từ 30 ký tự. Nội dung lý do không do test chấm; tự chấm bằng rubric trong `SOLUTION.md`.
-- `evidence`: mapping có ít nhất 2 mục. Khoá phải là tên có trong `metrics` của tình huống, giá trị phải là số khớp `metrics` (sai số tương đối 1%), và phải có **ít nhất một** khoá thuộc `quality_keys`
+- `evidence`: mapping có ít nhất 2 mục. Khoá phải là tên có trong `metrics` của tình huống, giá trị phải là số khớp `metrics` (sai số tương đối 1% hoặc tuyệt đối 0.005, lấy mức nào rộng hơn), và phải có **ít nhất một** khoá thuộc `quality_keys`
   (bằng chứng từ nhãn, không chỉ từ drift).
 - Không sửa `scenarios.json` (test so với bản gốc).
 
