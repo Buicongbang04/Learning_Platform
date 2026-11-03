@@ -13,9 +13,7 @@
 - **Đánh đổi của inhibit.** `ETAMetricsAbsent` là warning nên cũng bị im khi cùng service có critical; chấp nhận được vì người
   trực đã đang xử lý service đó, nhưng hãy viết ra để mọi người biết.
 - **`send_resolved`.** Oncall cần biết khi sự cố tự hết để khỏi chờ vô ích; ticket thì không cần thông báo "đã hết".
-- **Vì sao mô phỏng.** Ngữ nghĩa route đủ nhỏ để một bộ mô phỏng 30 dòng kiểm được; kiểm bằng Alertmanager thật cần dựng
-  tiến trình và gửi alert qua API, chậm và dễ flake. `amtool check-config` và `amtool config routes test --config.file=...
-  severity=critical` là cách làm thật ngoài đời; chạy chúng trong container của stack để đối chiếu.
+- **Kiểm bằng công cụ thật.** `amtool config routes test --config.file=am.yml severity=critical` in receiver mà cảnh báo đó tới; `amtool check-config` bắt lỗi cấu hình. `amtool` không kiểm được inhibit nên test chỉ kiểm hình dạng luật (có `equal`, đúng nguồn và đích); hành vi inhibit thật cần Alertmanager chạy và gửi alert qua API.
 
 ## Lỗi hay gặp
 

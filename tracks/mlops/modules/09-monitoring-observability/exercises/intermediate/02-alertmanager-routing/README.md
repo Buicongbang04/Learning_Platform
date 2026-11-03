@@ -20,10 +20,7 @@ người trực, `warning` chỉ mở ticket, và một sự cố lớn không k
 
 ## Đề bài
 
-Viết `starter/alertmanager.yml`. Image `prom/alertmanager` có `amtool` nhưng `mlopskit` chưa có helper chạy nó, nên test không
-dựng Alertmanager: nó đọc YAML và **mô phỏng** cây route và luật inhibit đúng ngữ nghĩa của Alertmanager (duyệt theo
-chiều sâu, route con khớp đầu tiên thắng trừ khi có `continue`, không route con nào khớp thì dùng receiver của route cha). Bạn tự
-có thể kiểm thêm bằng `amtool check-config` trong container của stack.
+Viết `starter/alertmanager.yml`. Test chạy `amtool` thật (image `prom/alertmanager`, qua `mlopskit.amtool`, không cần stack): `amtool check-config` kiểm cấu hình hợp lệ và `amtool config routes test` cho biết cảnh báo với tập nhãn cho trước đi tới receiver nào. `amtool` không mô phỏng được `inhibit_rules`, nên phần inhibit chỉ kiểm hình dạng của luật trong YAML.
 
 Luật mà test kiểm:
 
@@ -37,8 +34,8 @@ Luật mà test kiểm:
   12h. Cả hai route có `group_interval` từ 1m và `repeat_interval` không nhỏ hơn `group_interval`. Thời lượng viết dạng `30s`, `5m`, `4h`.
 - `oncall` và `ticket` mỗi receiver có ít nhất một `webhook_configs` với `url` bắt đầu `http://` hoặc `https://`; webhook của
   `oncall` có `send_resolved: true`.
-- Có `inhibit_rules`, mỗi luật phải có `equal`. Một cảnh báo `critical` làm im cảnh báo `warning` **cùng `service`**; `warning`
-  của service khác không bị im; `critical` không bị im bởi `warning`; không có `critical` thì không có gì bị im.
+- Có `inhibit_rules`, mỗi luật phải có `equal`; có ít nhất một luật với nguồn `severity="critical"`, đích `severity="warning"` và `equal` chứa `service` (critical của một service chỉ im warning của đúng service đó).
+- `amtool check-config` báo thành công.
 
 ## Tiêu chí đạt
 
