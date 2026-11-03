@@ -106,12 +106,18 @@ fetch "https://github.com/kserve/kserve/releases/download/${KSERVE_VERSION}/kser
   "$KSERVE_SHA256" "$CACHE/kserve-${KSERVE_VERSION}.yaml"
 fetch "https://github.com/kserve/kserve/releases/download/${KSERVE_VERSION}/kserve-cluster-resources.yaml" \
   "$KSERVE_RUNTIMES_SHA256" "$CACHE/kserve-cluster-resources-${KSERVE_VERSION}.yaml"
-k create namespace kserve --dry-run=client -o yaml | k apply -f - >/dev/null
-retry k apply --server-side --force-conflicts -f "$CACHE/kserve-${KSERVE_VERSION}.yaml" >/dev/null
-ingress="$(k -n kserve get configmap inferenceservice-config -o jsonpath='{.data.ingress}')"
-ingress="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); d["disableIngressCreation"]=True; print(json.dumps(d))' "$ingress")"
-patch="$(python3 -c 'import json,sys; print(json.dumps({"data": {"deploy": json.dumps({"defaultDeploymentMode": "RawDeployment"}), "ingress": sys.argv[1]}}))' "$ingress")"
-k -n kserve patch configmap inferenceservice-config --type merge -p "$patch" >/dev/null
+kserve_image="$(k -n kserve get deployment kserve-controller-manager -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)"
+kserve_mode="$(k -n kserve get configmap inferenceservice-config -o jsonpath='{.data.deploy}' 2>/dev/null || true)"
+if [[ "$kserve_image" == "kserve/kserve-controller:${KSERVE_VERSION}" && "$kserve_mode" == *RawDeployment* ]]; then
+  log "KServe ${KSERVE_VERSION} đã cài ở RawDeployment, không apply lại (apply lại sẽ trả inferenceservice-config về mặc định trong chốc lát)"
+else
+  k create namespace kserve --dry-run=client -o yaml | k apply -f - >/dev/null
+  retry k apply --server-side --force-conflicts -f "$CACHE/kserve-${KSERVE_VERSION}.yaml" >/dev/null
+  ingress="$(k -n kserve get configmap inferenceservice-config -o jsonpath='{.data.ingress}')"
+  ingress="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); d["disableIngressCreation"]=True; print(json.dumps(d))' "$ingress")"
+  patch="$(python3 -c 'import json,sys; print(json.dumps({"data": {"deploy": json.dumps({"defaultDeploymentMode": "RawDeployment"}), "ingress": sys.argv[1]}}))' "$ingress")"
+  k -n kserve patch configmap inferenceservice-config --type merge -p "$patch" >/dev/null
+fi
 k -n kserve wait --for=condition=Available deployment/kserve-controller-manager --timeout=300s
 runtimes="$CACHE/kserve-runtimes-${KSERVE_VERSION}.yaml"
 python3 - "$CACHE/kserve-cluster-resources-${KSERVE_VERSION}.yaml" "$runtimes" <<'PY'

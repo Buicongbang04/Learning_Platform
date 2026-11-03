@@ -6,10 +6,12 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -34,6 +36,7 @@ KUBE_CONTEXT = "kind-mlops"
 KIND_HINT = "Chạy: bash setup/mlops/kind/up.sh (xem module 13-kubernetes-for-ml, mục 0)"
 LOCAL_BIN = Path.home() / ".local" / "bin"
 GPU_PROJECT = ROOT / "setup" / "gpu"
+TERMINATING_GRACE_S = 120
 
 STACK_SERVICES: dict[str, tuple[str, int]] = {
     "postgres": ("MLOPS_PG_PORT", 25433),
@@ -416,7 +419,7 @@ def _names(*args: str) -> list[str]:
 
 
 def leftovers(needle: str | None = None) -> list[str]:
-    """Rác còn lại: container, network, image Docker có nhãn/tiền tố `mlops-ex`, và namespace `mlops-ex-*` (Active) trong cluster kind `mlops`."""
+    """Rác còn lại: container, network, image Docker có nhãn/tiền tố `mlops-ex`, và namespace `mlops-ex-*` trong cluster kind `mlops` (Active, hoặc kẹt Terminating quá 2 phút)."""
     if not testkit.docker_ready():
         return []
     found = set()
@@ -515,7 +518,18 @@ def k8s_namespace() -> Iterator[str]:
             pytest.fail(f"Không tạo được namespace {name}:\n{_tail(result)}", pytrace=False)
         yield name
     finally:
-        kubectl("delete", "namespace", name, "--wait=false", "--ignore-not-found")
+        _delete_namespace(name)
+
+
+def _delete_namespace(name: str) -> None:
+    """Xoá namespace `name` (`--wait=false`); lỗi khi xoá chỉ ghi ra stderr, không che lỗi của chính test."""
+    try:
+        result = kubectl("delete", "namespace", name, "--wait=false", "--ignore-not-found", timeout=30)
+    except (pytest.fail.Exception, pytest.skip.Exception, OSError, subprocess.SubprocessError) as error:
+        sys.stderr.write(f"mlopskit: không xoá được namespace {name}: {error}\n")
+        return
+    if result.returncode != 0:
+        sys.stderr.write(f"mlopskit: không xoá được namespace {name}:\n{_tail(result)}\n")
 
 
 def kind_load(tag: str, timeout: int = 600) -> None:
@@ -590,12 +604,14 @@ def port_forward(namespace: str, target: str, port: int, timeout: float = 30) ->
     local = testkit.free_port()
     command = [binary, "--context", KUBE_CONTEXT, "-n", namespace, "port-forward", "--address", "127.0.0.1",
                target, f"{local}:{port}"]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    log = tempfile.TemporaryFile(mode="w+", prefix=PREFIX)
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=log, text=True)
     try:
         deadline = time.monotonic() + timeout
         while not _port_open(local):
             if process.poll() is not None:
-                pytest.fail(f"kubectl port-forward {target} thoát sớm:\n{process.stderr.read()}", pytrace=False)
+                log.seek(0)
+                pytest.fail(f"kubectl port-forward {target} thoát sớm:\n{log.read()[-4000:]}", pytrace=False)
             if time.monotonic() > deadline:
                 pytest.fail(f"kubectl port-forward {target} chưa mở cổng sau {timeout} giây", pytrace=False)
             time.sleep(0.2)
@@ -606,18 +622,27 @@ def port_forward(namespace: str, target: str, port: int, timeout: float = 30) ->
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             process.kill()
+        log.close()
 
 
 def _leftover_namespaces() -> list[str]:
     if _bin("kubectl") is None or KIND_CLUSTER not in _kind_clusters():
         return []
     result = kubectl("get", "namespaces", "-o",
-                     'jsonpath={range .items[*]}{.metadata.name} {.status.phase}{"\\n"}{end}', timeout=30)
+                     'jsonpath={range .items[*]}{.metadata.name} {.status.phase} {.metadata.deletionTimestamp}{"\\n"}{end}',
+                     timeout=30)
+    now = datetime.now(timezone.utc)
     names = []
     for line in result.stdout.splitlines():
-        name, _, phase = line.partition(" ")
-        if name.startswith(PREFIX) and phase == "Active":
+        name, phase, deleted = (line.split(" ") + ["", ""])[:3]
+        if not name.startswith(PREFIX):
+            continue
+        if phase == "Active":
             names.append(name)
+        elif phase == "Terminating" and deleted:
+            since = datetime.fromisoformat(deleted.replace("Z", "+00:00"))
+            if (now - since).total_seconds() > TERMINATING_GRACE_S:
+                names.append(name)
     return names
 
 

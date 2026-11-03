@@ -28,7 +28,9 @@ rm -rf ~/.cache/mlops-kind                           # xoá cache manifest/binar
 
 `up.sh` chạy lại an toàn (idempotent): binary đã có và đúng checksum thì bỏ qua; cluster đã có thì chỉ khởi động
 lại node nếu container đang dừng (vd. sau khi tắt Docker) rồi `apply --server-side` lại các manifest và chờ
-Available. Sau khi máy khởi động lại, node `mlops-control-plane` tự chạy lại và các pod tự hồi phục (đã kiểm);
+Available. Riêng KServe: khi controller đã đúng bản và `inferenceservice-config` đã ở RawDeployment thì bỏ qua (apply
+lại `kserve.yaml` với `--force-conflicts` sẽ trả ConfigMap về `Serverless` trong vài giây trước khi vá lại, InferenceService
+tạo đúng lúc đó sẽ hỏng). Đổi bản KServe thì `down.sh` rồi `up.sh`. Sau khi máy khởi động lại, node `mlops-control-plane` tự chạy lại và các pod tự hồi phục (đã kiểm);
 nếu node vẫn dừng thì chạy lại `up.sh`.
 
 ## Cổng
@@ -50,6 +52,20 @@ vẫn nhận tên cũ) và `ingress.disableIngressCreation = true` (không có I
 Deployment + Service thường; gọi bằng `port_forward` vào Service `<tên>-predictor`. Chỉ áp `ClusterServingRuntime` từ
 `kserve-cluster-resources.yaml`: các `LLMInferenceServiceConfig` của bản v0.21.0 bị chính webhook KServe từ chối
 (`can't evaluate field TrustRemoteCode`), và track không dùng LLM serving.
+
+### Không có metrics-server: tắt HPA trong manifest bài tập
+
+Ở RawDeployment, KServe mặc định tạo HorizontalPodAutoscaler cho predictor. Cluster không cài metrics-server nên HPA
+hiện `<unknown>` và namespace đầy event `FailedGetResourceMetric` (không hỏng service, nhưng làm nhiễu `describe`/events
+mà `mlopskit.wait_for` in ra khi fail). Manifest bài tập và capstone nên tắt autoscaler:
+
+```yaml
+metadata:
+  annotations:
+    serving.kserve.io/autoscalerClass: none
+```
+
+hoặc đặt `minReplicas` bằng `maxReplicas` trong `predictor`.
 
 ## Argo Workflows và artifact
 

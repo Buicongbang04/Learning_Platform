@@ -567,6 +567,14 @@ def test_port_forward_cleans_process(monkeypatch):
 
     monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
     monkeypatch.setattr(mlopskit.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(FakePopen, "kwargs", None, raising=False)
+    original_init = FakePopen.__init__
+
+    def init(self, command, **kwargs):
+        original_init(self, command, **kwargs)
+        self.kwargs = kwargs
+
+    monkeypatch.setattr(FakePopen, "__init__", init)
     monkeypatch.setattr(mlopskit, "_port_open", lambda port, timeout=0.5: True)
     with mlopskit.port_forward("mlops-ex-abc", "svc/api", 8080) as local:
         command = started[0].command
@@ -574,6 +582,8 @@ def test_port_forward_cleans_process(monkeypatch):
         assert "svc/api" in command and f"{local}:8080" in command
         assert command[command.index("--address") + 1] == "127.0.0.1"
     assert started[0].killed
+    assert started[0].kwargs["stdout"] is not subprocess.PIPE
+    assert started[0].kwargs["stderr"] is not subprocess.PIPE
     assert sys.modules["mlopskit"] is mlopskit
 
 
@@ -721,3 +731,36 @@ def test_gpu_python_skip_or_run(tmp_path):
     data = json.loads(result.stdout.strip().splitlines()[-1])
     assert data["providers"][0] == "CUDAExecutionProvider", data
     assert data["out"] == [[0.0, 2.0], [3.0, 0.0]]
+
+
+def test_k8s_namespace_delete_failure_does_not_mask_error(monkeypatch, capsys):
+    calls = []
+
+    def fake_kubectl(*args, namespace=None, input=None, timeout=120):
+        calls.append((args, timeout))
+        if args[0] == "delete":
+            pytest.fail("kubectl delete quá 30 giây", pytrace=False)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "kubectl", fake_kubectl)
+    with pytest.raises(RuntimeError, match="boom"):
+        with mlopskit.k8s_namespace():
+            raise RuntimeError("boom")
+    delete = [c for c in calls if c[0][0] == "delete"]
+    assert delete and delete[0][1] <= 30
+    assert "không xoá được namespace" in capsys.readouterr().err
+
+
+def test_leftovers_reports_stuck_terminating(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    old = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fresh = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    listing = (f"default Active \nmlops-ex-aaaa1111 Active \nmlops-ex-bbbb2222 Terminating {old}\n"
+               f"mlops-ex-cccc3333 Terminating {fresh}\n")
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda: ["mlops"])
+    monkeypatch.setattr(mlopskit, "kubectl",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, listing, ""))
+    assert mlopskit._leftover_namespaces() == ["mlops-ex-aaaa1111", "mlops-ex-bbbb2222"]
