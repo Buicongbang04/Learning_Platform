@@ -1,0 +1,35 @@
+month: "2019-10"
+findings:
+  - cause: clock_error
+    symptom: "eta.cli validate trên mẫu 50 000 chuyến của 2019-10 exit 1 với lỗi negative_duration_share > 1%: 3.59% chuyến có dropoff trước pickup, tháng trước 0%"
+    evidence:
+      negative_duration_share: 0.03594
+      negative_duration_share_before: 0.0
+      vendor_of_negative_rows: 1
+    action: "Cách ly tháng, báo nhóm nguồn dữ liệu rằng hãng VendorID 1 ghi đảo pickup và dropoff từ 15 tới 17/10; không tự đảo lại cột vì không chứng minh được mọi dòng của hãng đó đều đảo"
+  - cause: unit_change
+    symptom: "PSI trip_distance của 2019-10 là 0.265 so với dưới 0.005 ở các tháng khác, median khoảng cách tăng từ 1.68 lên 2.67, tỉ lệ 1.59 gần đúng 1.609 km mỗi dặm"
+    evidence:
+      psi_trip_distance: 0.26459
+      ks_trip_distance: 0.22267
+      median_trip_distance: 2.67
+      median_trip_distance_before: 1.68
+      median_ratio: 1.589
+      psi_eta_s: 0.13613
+    action: "Yêu cầu nguồn xác nhận đơn vị và phát hành lại tệp bằng dặm; thêm check median trip_distance trong khoảng 1.2 tới 2.2 dặm vào schema Pandera để tháng sau validate chặn được"
+  - cause: timezone_shift
+    symptom: "PSI giờ đón của 2019-10 là 0.331 trong khi các tháng khác dưới 0.002; giờ cao điểm dời từ 18 giờ sang 22 giờ, chuyến sớm nhất ngày 1 lúc gần 4 giờ sáng, và 0.67% chuyến rơi sang ngày 1/11"
+    evidence:
+      psi_pickup_hour: 0.33103
+      peak_pickup_hour: 22
+      peak_pickup_hour_before: 18
+      outside_month_share: 0.0067
+      outside_month_share_before: 0.00006
+      shift_hours: 4
+    action: "Báo nguồn rằng thời gian đang ghi theo UTC thay vì giờ New York (lệch 4 giờ, EDT); thêm check tỉ lệ chuyến ngoài tháng ở mép tháng và phân phối giờ đón so với tháng tham chiếu"
+decision: keep
+quarantine: true
+reasons:
+  - "MAE 2019-10 là 308.0 s so với 204.0 s của 2019-09 (+51%) và bias từ -72 s lên +163 s, nhưng cả ba nguyên nhân đều nằm ở dữ liệu đầu vào, không phải ở hành vi đi lại hay ở model"
+  - "Train lại trên tháng này sẽ dạy model rằng khoảng cách tính bằng km và giờ cao điểm là 22 giờ; rollback vô nghĩa vì champion (version 1) không đổi suốt phát lại"
+  - "Đảo ngược hai lỗi trên bản sao tháng đó (chia khoảng cách cho 1.609344, lùi 4 giờ) đưa MAE về 198.9 s, ngang 2019-09; champion vẫn tốt khi dữ liệu đúng, nên giữ champion và cách ly tháng"
