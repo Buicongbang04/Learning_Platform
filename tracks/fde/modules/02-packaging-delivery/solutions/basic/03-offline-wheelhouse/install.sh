@@ -24,13 +24,18 @@ pip install --no-deps "$app_wheel"
 "$new/bin/python" -c "import intake.cli, pydantic_core, yaml"
 
 old=$(readlink "$dest" 2>/dev/null || true)
+before=""
 if [ -e "$dest" ] && [ ! -L "$dest" ]; then
-    mv -T "$dest" "$dest.before-$$"
+    before=$dest.before-$$
+    mv -T "$dest" "$before"
 fi
 ln -sfn "$new" "$dest.link-$$"
 mv -T "$dest.link-$$" "$dest"
 trap - EXIT
-if [ -n "$old" ] && [ "$old" != "$new" ]; then
-    rm -rf -- "$old"
+case "$old" in
+    "$releases"/*) [ "$old" != "$new" ] && rm -rf -- "$old" ;;
+esac
+if [ -n "$before" ]; then
+    echo "Bản cài cũ không theo bố cục releases được giữ lại ở $before; kiểm tra rồi tự xoá" >&2
 fi
 echo "Đã cài intake vào $dest"

@@ -45,7 +45,9 @@ mỗi lần ≤180 s. Installer phải:
    `enable` dịch vụ, tạo `/etc/beacon/beacon.env` từ cấu hình mặc định **chỉ khi chưa có**.
 3. Khởi động bản mới và chờ `/healthz` báo đúng version (tối đa 60 s). Bất kỳ bước nào sau khi bắt đầu chuyển bản thất
    bại (unit mới không nạp được, `systemctl restart` lỗi, `/healthz` không đạt) ⇒ quay về bản đang chạy trước đó **gồm cả
-   unit systemd của nó**, xoá bản lỗi vừa giải nén khỏi `/opt/beacon`, thoát khác `0`.
+   unit systemd của nó**, xoá bản lỗi vừa giải nén khỏi `/opt/beacon`, thoát khác `0`. Nếu đó là lần cài **đầu tiên**
+   (chưa có bản trước) thì gỡ sạch thứ vừa tạo: `disable --now` dịch vụ, xoá unit, `current` và bản vừa giải nén, ghi log
+   `failed`, thoát khác `0` (user `beacon` và `/etc/beacon/beacon.env` được giữ lại).
 4. Chạy lại đúng bundle đang chạy ⇒ thoát `0` và **không đổi gì**: không tệp/symlink nào trong `/opt/beacon`,
    `/etc/beacon`, `/etc/systemd/system/beacon.service` bị tạo, xoá, ghi lại (inode, kích thước, mtime giữ nguyên),
    dịch vụ không bị restart.

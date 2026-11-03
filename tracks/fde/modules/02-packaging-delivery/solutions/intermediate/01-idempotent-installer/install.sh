@@ -214,22 +214,36 @@ activate() {
     health "$(port)" "$version" "$HEALTH_TIMEOUT"
 }
 
+clean_failed_first_install() {
+    local failed=$1
+    systemctl disable --now beacon 2>/dev/null || true
+    rm -f -- "$UNIT" "$PREFIX/current"
+    systemctl daemon-reload || true
+    systemctl reset-failed beacon 2>/dev/null || true
+    if [ "$NEW_RELEASE" = 1 ]; then
+        rm -rf -- "${PREFIX:?}/$failed"
+    fi
+    die "lần cài đầu không lên: đã gỡ unit, current và bản vừa giải nén; máy trở về như trước khi cài"
+}
+
 rollback() {
     local previous=$1 failed=$2
     if [ -z "$previous" ] || [ "$previous" = "$failed" ] || [ ! -d "$PREFIX/$previous" ]; then
-        systemctl stop beacon 2>/dev/null || true
-        die "beacon không lên và không có bản trước để quay về"
+        clean_failed_first_install "$failed"
     fi
     if [ -f "$WORK/beacon.service.previous" ]; then
-        cp -p "$WORK/beacon.service.previous" "$UNIT"
+        cp -p "$WORK/beacon.service.previous" "$UNIT" || die "không trả lại được unit cũ"
+    else
+        install -m 0644 "$PREFIX/$previous/systemd/beacon.service" "$UNIT" || die "không trả lại được unit của $previous"
     fi
-    systemctl daemon-reload || true
-    switch_to "$previous"
+    systemctl daemon-reload || die "daemon-reload lỗi khi quay về"
+    switch_to "$previous" || die "không trỏ lại được current về $previous"
     local old=${previous#releases/}
     if [ "$NEW_RELEASE" = 1 ]; then
         rm -rf -- "${PREFIX:?}/$failed"
         say "đã xoá bản lỗi $failed"
     fi
+    systemctl reset-failed beacon 2>/dev/null || true
     if systemctl restart beacon && health "$(port)" "$old" "$HEALTH_TIMEOUT"; then
         say "đã quay về $old (cả unit lẫn mã)"
         finish rolled-back

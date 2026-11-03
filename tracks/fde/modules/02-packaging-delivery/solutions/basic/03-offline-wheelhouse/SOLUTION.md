@@ -43,7 +43,9 @@ Một bẫy thứ tư không báo lỗi: `--system-site-packages` (hay cài `--u
 3. Chạy pip từ wheel với `--no-index --find-links wheels --require-hashes -r requirements.txt`, rồi app với `--no-deps`.
    `--no-index` biến mọi thiếu sót thành lỗi ngay thay vì treo chờ mạng.
 4. Thử `import`; đạt thì đổi symlink `~/intake` sang thư mục mới (`ln -sfn` + `mv -T`), rồi mới xoá bản cũ. Lỗi giữa
-   chừng thì `trap` xoá thư mục mới, bản cũ không bị đụng.
+   chừng thì `trap` xoá thư mục mới, bản cũ không bị đụng. Chỉ xoá bản cũ nếu nó nằm trong `~/.intake-releases/`
+   (không bao giờ `rm -rf` một đường dẫn đọc từ symlink mà chưa kiểm). `~/intake` cũ là thư mục thật (cài theo kiểu
+   khác) thì đổi tên thành `~/intake.before-<pid>`, giữ lại và in cảnh báo để người cài tự kiểm rồi xoá.
 
 Vì sao symlink mà không `mv ~/intake.new ~/intake`: venv ghi **đường dẫn tuyệt đối** vào shebang của `bin/intake` và vào
 `pyvenv.cfg`; đổi tên thư mục venv sau khi cài là làm hỏng các script đó. Venv phải được tạo ở đúng chỗ nó sẽ nằm, nên

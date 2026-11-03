@@ -39,6 +39,11 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/02-packaging-delivery/exe
    `installed`. **Bất kỳ** bước nào lỗi (unit không nạp được, `restart` lỗi, health quá giờ) ⇒ `rollback`: trả unit cũ,
    `daemon-reload`, trỏ `current` về bản trước, xoá release vừa giải nén ở lần chạy này (máy có thể có đĩa nhỏ), restart,
    chờ bản cũ khoẻ ⇒ `rolled-back`, thoát 1. Bản cũ cũng không lên ⇒ `failed`, log nói rõ cần người xem.
+   Unit cũ lấy từ bản sao chụp trước khi kích hoạt; không có bản sao thì lấy `systemd/beacon.service` của chính release
+   trước (release nào cũng mang unit của nó). Mọi bước trong `rollback` chạy dưới `set -e` nên có `|| die` riêng, và có
+   `systemctl reset-failed` trước khi restart (sau một vòng crash, systemd có thể đã chạm `StartLimitBurst` và từ chối
+   khởi động). Lần cài **đầu** thất bại thì không có gì để quay về: `disable --now`, xoá unit, `current`, release vừa giải
+   nén, `daemon-reload`, log `failed`; giữ user `beacon` và `/etc/beacon/beacon.env` (vô hại, lần cài sau dùng lại).
 6. **Log**: mọi thông báo vào stderr và log; dòng cuối mỗi lần chạy do `finish` ghi, kể cả khi `die`.
 
 ## Những chi tiết hay sai
@@ -59,4 +64,6 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/02-packaging-delivery/exe
 
 - Khoá chạy song song (`flock /run/beacon-install.lock`): hai người cùng chạy installer là chuyện có thật.
 - Migration dữ liệu khi lên version: rollback mã dễ, rollback **schema** thì không (xem README module, phần versioning).
+- Tín hiệu (Ctrl-C, `kill`, SSH rớt) **trong lúc** `activate` không kích hoạt rollback: `trap` chỉ dọn thư mục tạm. Máy có thể
+  dừng ở trạng thái nửa chuyển; chạy lại installer với bundle cũ là cách khôi phục (nên chạy installer trong `tmux`/`systemd-run`).
 - Gỡ cài (`uninstall.sh`): khách nào cũng hỏi, trả lời "xoá `/opt/beacon`" là chưa đủ (user, unit, log, dữ liệu).
