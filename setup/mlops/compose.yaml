@@ -72,6 +72,8 @@ services:
       - --artifacts-destination=s3://mlflow
       - --serve-artifacts
       - --workers=1
+      # Cho phép gọi từ container khác (Host: mlflow:5000) và từ host qua cổng đã map.
+      - --allowed-hosts=mlflow,mlflow:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*
     environment:
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: minioadmin

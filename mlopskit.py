@@ -16,7 +16,7 @@ import testkit
 ROOT = testkit.ROOT
 LABEL = "mlops-ex=1"
 PREFIX = "mlops-ex-"
-BUILD_TIMEOUT = 600
+BUILD_TIMEOUT_DEFAULT = 1800
 STACK_HINT = "docker compose -f setup/mlops/compose.yaml up -d"
 
 STACK_SERVICES: dict[str, tuple[str, int]] = {
@@ -60,6 +60,24 @@ def mlflow_local(tmp_path: Path) -> str:
     return uri
 
 
+def build_timeout() -> int:
+    """Timeout build (giây) từ env MLOPS_BUILD_TIMEOUT, đọc lúc gọi; mặc định 1800."""
+    raw = os.environ.get("MLOPS_BUILD_TIMEOUT", "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return BUILD_TIMEOUT_DEFAULT
+    return value if value > 0 else BUILD_TIMEOUT_DEFAULT
+
+
+def _timeout_message(what: str, seconds: int) -> str:
+    return (
+        f"{what} quá {seconds} giây (build lần đầu trên mạng chậm có thể mất ~20 phút). "
+        "Hãy build trước (docker build / docker compose build) rồi chạy lại để dùng cache, "
+        "hoặc tăng MLOPS_BUILD_TIMEOUT (giây), ví dụ MLOPS_BUILD_TIMEOUT=3600."
+    )
+
+
 def _docker(*args: str, timeout: float = 60, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout, env=env)
 
@@ -78,10 +96,11 @@ def built_image(context: Path, dockerfile: str = "Dockerfile", build_args: dict[
         command += ["--build-arg", f"{key}={value}"]
     command.append(str(context))
     try:
+        seconds = build_timeout()
         try:
-            result = _docker(*command, timeout=BUILD_TIMEOUT)
+            result = _docker(*command, timeout=seconds)
         except subprocess.TimeoutExpired:
-            pytest.fail(f"docker build quá {BUILD_TIMEOUT} giây", pytrace=False)
+            pytest.fail(_timeout_message("docker build", seconds), pytrace=False)
         if result.returncode != 0:
             pytest.fail(f"docker build lỗi ({result.returncode}):\n{_tail(result)}", pytrace=False)
         yield tag
@@ -118,7 +137,11 @@ def compose_project(file: Path, env: dict[str, str] | None = None, services: tup
         pytest.skip("Docker chưa sẵn sàng")
     project = ComposeProject(f"{PREFIX}{uuid.uuid4().hex[:8]}", file, {**os.environ, **(env or {})})
     try:
-        result = project._compose("up", "-d", "--build", "--wait", *services, timeout=BUILD_TIMEOUT)
+        seconds = build_timeout()
+        try:
+            result = project._compose("up", "-d", "--build", "--wait", *services, timeout=seconds)
+        except subprocess.TimeoutExpired:
+            pytest.fail(_timeout_message("docker compose up", seconds), pytrace=False)
         if result.returncode != 0:
             pytest.fail(f"docker compose up lỗi ({result.returncode}):\n{_tail(result)}", pytrace=False)
         yield project

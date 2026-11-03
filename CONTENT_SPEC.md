@@ -368,6 +368,7 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 | Kiểm tra không còn rác | `mlopskit.leftovers()` | Liệt kê container, network, image có nhãn `mlops-ex=1` hoặc tiền tố `mlops-ex-` |
 
 - Script của người học chạy qua `testkit.run_sandboxed`, như track DevOps.
+- Timeout build của `built_image` và `compose_project` mặc định 1800 giây, chỉnh bằng biến môi trường `MLOPS_BUILD_TIMEOUT` (giây, đọc lúc gọi). Quá hạn thì test fail kèm gợi ý build trước (cache) rồi chạy lại hoặc tăng biến này.
 - Mọi tài nguyên do `mlopskit` tạo có nhãn `mlops-ex=1` và tiền tố `mlops-ex-`; lỗi hay Ctrl-C giữa chừng vẫn dọn hết.
 - Helper chưa có (`act`, kind/`KubeLab`, gate GPU) được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước.
 

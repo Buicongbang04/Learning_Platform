@@ -54,6 +54,8 @@ Vì server chạy với `--serve-artifacts`, client đẩy artifact qua HTTP t�
 cần `MLFLOW_TRACKING_URI`. `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` là bắt buộc để `mlflow.pyfunc.load_model("models:/...")` hoặc `download_artifacts` chạy trên host: MLflow 3.17 server tự quảng bá tải multipart qua presigned URL trỏ `minio:9000` (tên chỉ phân giải trong mạng Compose), client mặc định sẽ treo; server không có cờ tắt tính năng này. Hai biến `AWS_*` và `MLFLOW_S3_ENDPOINT_URL` cần khi client đọc/ghi thẳng
 MinIO (ví dụ `boto3`, DVC remote `s3://dvc`).
 
+Gọi MLflow từ container khác: nối vào network `mlops_default` và dùng `http://mlflow:5000` (server đã cho phép Host `mlflow`, `localhost`, `127.0.0.1` qua `--allowed-hosts`; Host khác bị 403).
+
 ## Tắt và xoá dữ liệu
 
 ```bash
