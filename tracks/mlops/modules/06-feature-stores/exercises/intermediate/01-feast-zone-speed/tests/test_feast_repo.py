@@ -45,14 +45,6 @@ print(json.dumps({{"online": online, "offline": json.loads(offline.to_json(orien
 """
 
 
-def retry(call, *args, **kwargs):
-    for _ in range(3):
-        result = call(*args, **kwargs)
-        if result.returncode != 137:
-            break
-    return result
-
-
 def real_zone_stats(now):
     path = mlopskit.real_month("nyc-tlc", "2019-03")
     df = pd.read_parquet(path, columns=["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "trip_distance"])
@@ -92,19 +84,15 @@ def deployed(tmp_path_factory):
     zones = sorted(table["zone_id"].unique().tolist()) + [999999]
     result = {"table": table, "zones": zones, "now": now}
     try:
-        result["apply"] = retry(mlopskit.feast_run, repo, "apply", network=NETWORK)
+        result["apply"] = mlopskit.feast_run(repo, "apply", network=NETWORK)
         if result["apply"].returncode == 0:
             end = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-            result["materialize"] = retry(mlopskit.feast_run, repo, "materialize-incremental", end, network=NETWORK)
+            result["materialize"] = mlopskit.feast_run(repo, "materialize-incremental", end, network=NETWORK)
             script = READ_SCRIPT.format(zones=zones, names=FEATURES)
-            result["read"] = retry(mlopskit.feast_python, repo, script, network=NETWORK)
+            result["read"] = mlopskit.feast_python(repo, script, network=NETWORK)
         yield result
     finally:
-        retry(mlopskit.feast_python, repo, "from feast import FeatureStore\nFeatureStore('.').teardown()", network=NETWORK)
-
-
-def output(cp):
-    return f"returncode={cp.returncode}\nstdout:\n{cp.stdout[-1200:]}\nstderr:\n{cp.stderr[-1500:]}"
+        mlopskit.feast_python(repo, "from feast import FeatureStore\nFeatureStore('.').teardown()", network=NETWORK)
 
 
 def output(cp):

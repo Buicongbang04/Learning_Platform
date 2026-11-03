@@ -137,14 +137,6 @@ def test_missing_default_for_missing_value_is_an_error(client):
         client.parse_response(resp, {"trip_count": 0})
 
 
-def retry(call, *args, **kwargs):
-    for _ in range(3):
-        result = call(*args, **kwargs)
-        if result.returncode != 137:
-            break
-    return result
-
-
 def real_zone_stats(now):
     path = mlopskit.real_month("nyc-tlc", "2019-03")
     df = pd.read_parquet(path, columns=["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "trip_distance"])
@@ -181,15 +173,15 @@ def served(tmp_path_factory):
     zones = sorted(table["zone_id"].unique().tolist())[:2] + [999999]
     result = {"table": table, "zones": zones}
     try:
-        result["apply"] = retry(mlopskit.feast_run, repo, "apply", network=NETWORK)
+        result["apply"] = mlopskit.feast_run(repo, "apply", network=NETWORK)
         if result["apply"].returncode == 0:
             end = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-            result["materialize"] = retry(mlopskit.feast_run, repo, "materialize-incremental", end, network=NETWORK)
+            result["materialize"] = mlopskit.feast_run(repo, "materialize-incremental", end, network=NETWORK)
             script = SERVER_SCRIPT.format(refs=REFS, zones=zones + [zones[0]], defaults=DEFAULTS)
-            result["run"] = retry(mlopskit.feast_python, repo, script, network=NETWORK, timeout=240)
+            result["run"] = mlopskit.feast_python(repo, script, network=NETWORK, timeout=240)
         yield result
     finally:
-        retry(mlopskit.feast_python, repo, "from feast import FeatureStore\nFeatureStore('.').teardown()", network=NETWORK)
+        mlopskit.feast_python(repo, "from feast import FeatureStore\nFeatureStore('.').teardown()", network=NETWORK)
 
 
 def parsed(served):

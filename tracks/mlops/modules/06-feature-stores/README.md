@@ -6,7 +6,7 @@ này đi từ bệnh (training-serving skew, rò rỉ thời gian) tới thuốc
 store Redis) và dạy cả khi nào **không** nên dùng thuốc.
 
 Ví dụ xuyên suốt là dữ liệu chuyến taxi NYC tháng 3/2019: tốc độ trung bình theo zone và giờ, giá cước dự đoán. Bài Basic chạy hoàn toàn bằng
-pandas; hai bài Intermediate cần Redis của stack (profile `feast`):
+pandas; hai trong ba bài Intermediate cần Redis của stack (profile `feast`):
 
 ```bash
 nice -n 15 docker compose -f setup/mlops/compose.yaml --profile feast up -d --wait
@@ -39,7 +39,7 @@ nice -n 15 docker compose -f setup/mlops/compose.yaml --profile feast up -d --wa
 ```
 
 Lệnh đầu build image (một lần, vài phút) nếu chưa có và in tên image; lệnh hai in digest của image đã build để bạn đối chiếu
-giữa các máy (pip kiểm hash từng gói khi tải từ PyPI). Kiểm Feast chạy:
+giữa các máy (phiên bản Feast được ghim, chưa ghim hash từng gói). Kiểm Feast chạy:
 
 ```bash
 uv run python - <<'PY'
@@ -108,7 +108,7 @@ flowchart TB
 - `feature_ts` phải là lúc giá trị **khả dụng**, không phải lúc nó mô tả. Trung bình giờ 10:00–11:00 chỉ tính xong lúc 11:00.
 - `pd.merge_asof(direction="backward", by=key)` làm đúng phép này; bài `01-point-in-time-join` bắt bạn viết nó và kiểm bằng phép tìm vét cạn.
 - **TTL/tolerance:** giá trị cũ quá ngưỡng coi như thiếu. Offline và online phải dùng cùng ngưỡng, nếu không train thấy giá trị mà serve không thấy.
-- Test duy nhất đáng có: với mọi dòng của tập train, `feature_timestamp <= event_ts`. Một dòng vi phạm là rò rỉ.
+- Bằng nhau thì vẫn lấy: feature có `feature_ts` đúng bằng thời điểm sự kiện được dùng. Test duy nhất đáng có: với mọi dòng của tập train, `feature_timestamp <= event_ts`. Một dòng vi phạm là rò rỉ.
 
 Cái giá: tập train theo point-in-time cần lịch sử feature (mỗi giá trị cùng thời điểm hiệu lực), nên lưu bảng feature dạng chuỗi
 thời gian chứ không ghi đè.
@@ -162,7 +162,7 @@ def serve_one(request): return compute_features(pd.DataFrame([request])).iloc[0]
   lệch rất ít mẫu nên số tổng hợp không bao giờ lộ ra.
 - **Test parity bằng dữ liệu thật:** phát lại N chuyến qua cả hai đường, so từng cột; đây là phiên bản nhỏ của kiểm tra mà bạn cũng
   chạy mỗi đêm trên production (lấy mẫu thực thể, so online với offline cùng thời điểm).
-- **Hợp đồng đầu vào gồm cả kiểu và ý nghĩa của từng trường**; ghi chúng trong tài liệu API và kiểm khoảng hợp lý ở biên dịch vụ.
+- **Ghi hợp đồng đầu vào đầy đủ và kiểm nó ở cả hai phía** (người gọi và dịch vụ).
 
 Feature store giải bài toán này ở quy mô nhiều model: định nghĩa ở một nơi, hai kho đọc cùng một nguồn. Nhưng nếu bạn có một model một
 đội, một hàm chung cộng test parity thường là đủ.
