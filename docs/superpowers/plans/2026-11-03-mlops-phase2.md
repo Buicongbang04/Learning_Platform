@@ -166,7 +166,7 @@ def test_m10_docs_structure(project): runbook có các heading Triệu chứng/K
 - [ ] **Step 2:** `SOLUTION=1 nice -n 15 uv run pytest tracks/mlops -q -rs --durations=10` (stack + hai profile bật) → chỉ skip bài Advanced; bài chậm nhất ≤300 s.
 - [ ] **Step 3:** `cd app && pnpm test && pnpm typecheck && pnpm build` → PASS.
 - [ ] **Step 4:** dọn: `leftovers()` rỗng; `docker compose -f setup/mlops/compose.yaml --profile monitoring --profile feast down` cho các profile (giữ stack lõi nếu Giai đoạn 3 dùng tiếp).
-- [ ] **Step 5:** rebase lên `origin/main`; nếu PR #13 chưa merge thì push lên `mlops-track` và cập nhật mô tả PR (phạm vi Giai đoạn 1 + 2); nếu đã merge thì mở PR mới. Rồi viết plan Giai đoạn 3.
+- [ ] **Step 5:** rebase lên `origin/main`, push `mlops-track`, mở PR mới (PR #13 của Giai đoạn 1 đã merge ngày 2026-11-03). Rồi viết plan Giai đoạn 3.
 
 ## Thứ tự và song song
 
