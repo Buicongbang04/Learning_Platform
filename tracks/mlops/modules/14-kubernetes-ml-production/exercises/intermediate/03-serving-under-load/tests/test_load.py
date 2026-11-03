@@ -1,0 +1,81 @@
+import copy
+import time
+
+import k8sprodkit as kit
+import mlopskit
+
+from testkit import Exercise
+
+ex = Exercise(__file__)
+REPLICAS = (1, 3)
+SELECTOR = {"serving.kserve.io/inferenceservice": "eta-load"}
+
+
+def isvc() -> dict:
+    return kit.find(kit.load_docs(ex.path("isvc.yaml")), "InferenceService", "eta-load")
+
+
+def with_replicas(doc: dict, n: int, image: str) -> dict:
+    doc = kit.substitute([copy.deepcopy(doc)], **{kit.IMAGE: image})[0]
+    doc["spec"]["predictor"]["minReplicas"] = n
+    doc["spec"]["predictor"]["maxReplicas"] = n
+    return doc
+
+
+def metric(summary: dict, name: str) -> dict:
+    found = (summary.get("metrics") or {}).get(name)
+    assert found is not None, f"Summary của k6 không có metric {name}"
+    return found
+
+
+def test_isvc_contract():
+    doc = isvc()
+    annotations = (doc.get("metadata") or {}).get("annotations") or {}
+    predictor = doc["spec"]["predictor"]
+    fixed = predictor.get("minReplicas") is not None and predictor.get("minReplicas") == predictor.get("maxReplicas")
+    assert annotations.get("serving.kserve.io/autoscalerClass") == "none" or fixed, \
+        "Cần tắt autoscaler: autoscalerClass none hoặc minReplicas == maxReplicas"
+    container = kit.containers(doc)[0]
+    probe = (container.get("readinessProbe") or {}).get("httpGet") or {}
+    assert probe.get("path") == "/v1/models/eta", "readinessProbe phải là httpGet vào /v1/models/eta"
+    resources = container.get("resources") or {}
+    for part in ("requests", "limits"):
+        for key in ("cpu", "memory"):
+            assert key in (resources.get(part) or {}), f"Thiếu resources.{part}.{key}"
+    assert predictor.get("automountServiceAccountToken") is False, "Pod serving không cần token API"
+    env = {e.get("name"): e.get("value") for e in container.get("env") or []}
+    assert env.get("SERVICE_MS") == "20" and env.get("CONCURRENCY") == "1", "Không đổi SERVICE_MS, CONCURRENCY"
+
+
+def test_throughput_scales_with_replicas():
+    test_isvc_contract()
+    script = ex.path("load.js")
+    mlopskit.require_kind()
+    image = kit.lab_image()
+    results = {}
+    with mlopskit.k8s_namespace() as ns:
+        mlopskit.apply_manifest(kit.dump([kit.node_port_service("eta-load-np", SELECTOR, 8080)]), ns)
+        for n in REPLICAS:
+            mlopskit.apply_manifest(kit.dump([with_replicas(isvc(), n, image)]), ns)
+            mlopskit.wait_for("inferenceservice", "eta-load", "Ready", ns, 180)
+            kit.wait_until(lambda: kit.ready_endpoints(ns, "eta-load-np") == n, 180,
+                           f"Service chưa có đúng {n} pod Ready")
+            time.sleep(5)
+            summary = kit.k6(script, kit.node_url(ns, "eta-load-np"))
+            requests = metric(summary, "http_reqs")
+            duration = metric(summary, "http_req_duration")
+            failed = metric(summary, "http_req_failed")
+            checks = metric(summary, "checks")
+            assert requests.get("count", 0) > 0, "k6 không gửi request nào"
+            assert checks.get("passes", 0) > 0, "Script k6 chưa có check nào chạy"
+            assert any("thresholds" in m for m in summary["metrics"].values()), "Script k6 chưa khai báo thresholds"
+            assert failed.get("value", 1) < 0.01, f"{n} replica: tỉ lệ lỗi {failed.get('value')}"
+            results[n] = (requests["rate"], duration["p(95)"])
+
+    print("\nreplica | req/s | p95 (ms)")
+    for n, (rate, p95) in results.items():
+        print(f"{n:>7} | {rate:5.1f} | {p95:8.1f}")
+    (one_rate, one_p95), (many_rate, many_p95) = results[1], results[3]
+    assert many_rate >= 1.5 * one_rate, "Thông lượng không tăng theo số replica như kỳ vọng"
+    assert many_p95 <= 0.75 * one_p95, "p95 không giảm khi thêm replica như kỳ vọng"
+

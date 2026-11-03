@@ -1,0 +1,67 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: default-__RUN__
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: ml-train-__RUN__
+spec:
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  resourceGroups:
+    - coveredResources: [cpu, memory, __GPU__]
+      flavors:
+        - name: default-__RUN__
+          resources:
+            - {name: cpu, nominalQuota: "4"}
+            - {name: memory, nominalQuota: 4Gi}
+            - {name: __GPU__, nominalQuota: 2}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: training
+spec:
+  clusterQueue: ml-train-__RUN__
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: train-eta
+  labels:
+    kueue.x-k8s.io/queue-name: training
+spec:
+  parallelism: 2
+  completions: 2
+  completionMode: Indexed
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 1
+      volumes:
+        - name: work
+          emptyDir: {}
+      initContainers:
+        - name: fetch-data
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "echo shard-$JOB_COMPLETION_INDEX > /work/shard"]
+          volumeMounts:
+            - {name: work, mountPath: /work}
+          resources:
+            requests: {cpu: 200m, memory: 3Gi}
+            limits: {cpu: "1", memory: 3Gi}
+      containers:
+        - name: train
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "test -s /work/shard && echo training on $(cat /work/shard) && sleep 5"]
+          volumeMounts:
+            - {name: work, mountPath: /work}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi, __GPU__: "1"}
+            limits: {cpu: "1", memory: 1Gi, __GPU__: "1"}

@@ -1,0 +1,20 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-serving-__RUN__
+value: 0
+# TODO: giá trị, globalDefault, preemptionPolicy, description
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-research-__RUN__
+value: 0
+# TODO
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-training-__RUN__
+value: 0
+# TODO

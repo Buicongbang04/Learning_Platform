@@ -1,0 +1,35 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: pool-__RUN__
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: team-a-__RUN__
+spec:
+  resourceGroups:
+    - coveredResources: [cpu, memory, __GPU__]
+      flavors:
+        - name: pool-__RUN__
+          resources:
+            - {name: cpu, nominalQuota: "2"}
+            - {name: memory, nominalQuota: 2Gi}
+            - {name: __GPU__, nominalQuota: 2}
+  # TODO: cohort chung, namespace nào được gửi job, hạn mức mượn, đòi lại quota
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: team-b-__RUN__
+spec:
+  resourceGroups:
+    - coveredResources: [cpu, memory, __GPU__]
+      flavors:
+        - name: pool-__RUN__
+          resources:
+            - {name: cpu, nominalQuota: "2"}
+            - {name: memory, nominalQuota: 2Gi}
+            - {name: __GPU__, nominalQuota: 2}
+  # TODO: như team-a
+# TODO: hai LocalQueue team-a và team-b

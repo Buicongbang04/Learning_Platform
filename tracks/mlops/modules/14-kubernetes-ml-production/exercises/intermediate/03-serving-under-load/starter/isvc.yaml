@@ -1,0 +1,20 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: eta-load
+spec:
+  predictor:
+    containers:
+      - name: kserve-container
+        image: ml-lab:dev
+        imagePullPolicy: IfNotPresent
+        env:
+          - {name: ROLE, value: predictor}
+          - {name: MODEL_NAME, value: eta}
+          - {name: SERVICE_MS, value: "20"}
+          - {name: CONCURRENCY, value: "1"}
+          - {name: MODEL_LOAD_SECONDS, value: "2"}
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        # TODO: số replica cố định (không autoscaler), readinessProbe kiểm model, resources, cứng hoá pod

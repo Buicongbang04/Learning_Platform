@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: triton}
+  template:
+    metadata:
+      labels: {app: triton}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: triton
+          image: nvcr.io/nvidia/tritonserver:26.09-py3
+          imagePullPolicy: IfNotPresent
+          args: ["tritonserver", "--model-repository=/models", "--strict-model-config=true"]
+          ports:
+            - {name: http, containerPort: 8000}
+            - {name: metrics, containerPort: 8002}
+          readinessProbe:
+            httpGet: {path: /v2/health/ready, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          volumeMounts:
+            - {name: models, mountPath: /models, readOnly: true}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 4Gi}
+      volumes:
+        - name: models
+          configMap:
+            name: triton-models
+            items:
+              - {key: config.pbtxt, path: eta/config.pbtxt}
+              - {key: model.py, path: eta/1/model.py}
