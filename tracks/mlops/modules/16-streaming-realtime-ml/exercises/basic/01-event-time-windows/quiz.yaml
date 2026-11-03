@@ -1,0 +1,73 @@
+questions:
+  - id: event-vs-processing
+    kind: knowledge
+    type: single
+    prompt: "Feature `trips_15m` của mỗi zone tính theo processing time. Consumer chết 20 phút rồi chạy lại và đọc dồn backlog. Điều gì xảy ra với feature?"
+    options:
+      - { id: a, text: "Không đổi gì, vì Kafka giữ nguyên thứ tự trong mỗi partition của topic" }
+      - { id: b, text: "Cửa sổ lúc chạy lại phình to, các cửa sổ lúc consumer chết thì rỗng" }
+      - { id: c, text: "Feature đúng hơn, vì consumer đọc được nhiều sự kiện hơn trong một lần" }
+      - { id: d, text: "Chỉ sai nếu producer bật idempotence, còn lại kết quả giống event time" }
+  - id: lateness-tradeoff
+    kind: knowledge
+    type: single
+    prompt: "Tăng allowed lateness của cửa sổ 15 phút từ 1 phút lên 10 phút. Đánh đổi chính là gì?"
+    options:
+      - { id: a, text: "Ít sự kiện trễ bị bỏ hơn, nhưng feature của mỗi cửa sổ có muộn hơn 9 phút" }
+      - { id: b, text: "Feature có sớm hơn, nhưng consumer phải giữ thêm trạng thái của mọi cửa sổ trong RAM" }
+      - { id: c, text: "Không có đánh đổi nào, lateness chỉ ảnh hưởng tới số partition cần" }
+      - { id: d, text: "Sự kiện trùng lặp bị đếm hai lần, nhưng sự kiện trễ thì đều được giữ" }
+  - id: window-kind
+    kind: knowledge
+    type: single
+    prompt: "Cần feature `số giao dịch của thẻ trong 10 phút gần nhất`, cập nhật mỗi phút. Chọn loại cửa sổ nào?"
+    options:
+      - { id: a, text: "Tumbling 10 phút, vì mỗi sự kiện chỉ thuộc một cửa sổ nên rẻ nhất" }
+      - { id: b, text: "Session với gap 10 phút, vì giao dịch của một thẻ thường đến theo đợt" }
+      - { id: c, text: "Sliding (hopping) dài 10 phút, bước 1 phút, mỗi sự kiện vào 10 cửa sổ" }
+      - { id: d, text: "Global window không giới hạn, kèm trigger đếm mỗi khi đủ 10 sự kiện" }
+  - id: duplicates
+    kind: knowledge
+    type: multi
+    prompt: "Producer bật retry, consumer xử lý at-least-once. Những cách nào chống đếm trùng trong feature cửa sổ?"
+    options:
+      - { id: a, text: "Gắn `event_id` ở nguồn và bỏ qua id đã gặp trong khoảng giữ trạng thái" }
+      - { id: b, text: "Producer idempotent và transaction Kafka (exactly-once trong Kafka)" }
+      - { id: c, text: "Ghi feature theo khoá (zone, cửa sổ) bằng upsert để ghi lại không cộng dồn" }
+      - { id: d, text: "Tăng số partition của topic để mỗi sự kiện chỉ nằm trong một partition" }
+  - id: watermark-source
+    kind: knowledge
+    type: single
+    prompt: "Một thiết bị có đồng hồ chạy nhanh 6 giờ gửi một sự kiện. Watermark tính bằng max event time trừ lateness. Rủi ro nào lớn nhất?"
+    options:
+      - { id: a, text: "Watermark nhảy lên 6 giờ, mọi sự kiện đúng giờ sau đó bị coi là trễ và bị bỏ" }
+      - { id: b, text: "Sự kiện đó bị đếm hai lần vì nó rơi vào hai cửa sổ tumbling liền nhau" }
+      - { id: c, text: "Consumer lag tăng mạnh vì broker phải sắp xếp lại toàn bộ sự kiện trong partition theo event time" }
+      - { id: d, text: "Không có rủi ro, vì watermark chỉ tăng nên không thể làm hỏng cửa sổ cũ" }
+  - id: engine-choice
+    kind: knowledge
+    type: single
+    prompt: "Đội 3 người, đã dùng Python, cần vài feature cửa sổ từ một topic 2 000 sự kiện/giây, không có ai vận hành JVM. Chọn engine nào hợp lý trước?"
+    options:
+      - { id: a, text: "Flink trên Kubernetes với RocksDB state backend và checkpoint lên S3" }
+      - { id: b, text: "Bytewax hoặc một consumer Python có checkpoint offset, đo trước khi mở rộng" }
+      - { id: c, text: "Spark Structured Streaming chế độ continuous trên một cụm Spark riêng" }
+      - { id: d, text: "Kafka Streams viết bằng Java, chạy nhúng trong service gợi ý hiện có" }
+  - id: flink-vs-spark
+    kind: knowledge
+    type: single
+    prompt: "Điểm khác biệt cốt lõi giữa Spark Structured Streaming (mặc định) và Flink khi cần độ trễ dưới 100 ms là gì?"
+    options:
+      - { id: a, text: "Spark xử lý theo micro-batch nên độ trễ thường từ vài trăm ms trở lên" }
+      - { id: b, text: "Flink không hỗ trợ event time nên chỉ dùng được với processing time" }
+      - { id: c, text: "Spark không đọc được Kafka, phải qua một connector viết riêng bằng Java" }
+      - { id: d, text: "Flink không có checkpoint nên khi lỗi phải đọc lại topic từ offset đầu" }
+  - id: freshness-measure
+    kind: knowledge
+    type: single
+    prompt: "Freshness của feature online nên đo từ đâu tới đâu?"
+    options:
+      - { id: a, text: "Từ lúc consumer nhận sự kiện tới lúc consumer gọi lệnh push xong xuôi" }
+      - { id: b, text: "Từ event time của sự kiện tới lúc giá trị đọc được trong online store" }
+      - { id: c, text: "Từ lúc producer gửi sự kiện tới lúc broker ghi xong vào partition" }
+      - { id: d, text: "Từ lúc model nhận request tới lúc model trả kết quả dự đoán cho client" }
