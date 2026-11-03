@@ -130,7 +130,7 @@ def _names(*args: str) -> list[str]:
     return _docker(*args).stdout.split()
 
 
-def leftovers() -> list[str]:
+def leftovers(needle: str | None = None) -> list[str]:
     if not testkit.docker_ready():
         return []
     found = set()
@@ -144,4 +144,4 @@ def leftovers() -> list[str]:
         name, _, project = line.partition(" ")
         if project.startswith(PREFIX):
             found.add(name)
-    return sorted(found)
+    return sorted(n for n in found if needle is None or needle in n)

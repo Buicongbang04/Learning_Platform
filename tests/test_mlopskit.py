@@ -121,13 +121,16 @@ def test_compose_roundtrip_and_down(tmp_path):
         assert project.name.startswith("mlops-ex-")
         assert project.exec("app", "echo", "hi").stdout.strip() == "hi"
         assert isinstance(project.logs("app"), str)
-    assert mlopskit.leftovers() == []
+        name = project.name
+        assert mlopskit.leftovers(name)
+    assert mlopskit.leftovers(name) == []
 
 
 def test_compose_down_on_error(tmp_path):
     _busybox()
     (tmp_path / "compose.yaml").write_text(COMPOSE)
     with pytest.raises(RuntimeError):
-        with mlopskit.compose_project(tmp_path / "compose.yaml"):
+        with mlopskit.compose_project(tmp_path / "compose.yaml") as project:
+            name = project.name
             raise RuntimeError("boom")
-    assert mlopskit.leftovers() == []
+    assert mlopskit.leftovers(name) == []

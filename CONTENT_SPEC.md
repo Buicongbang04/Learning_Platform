@@ -373,7 +373,7 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 
 ### Stack và cổng
 
-Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d`. Cổng ở dải 2xxxx vì
+Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d`. Đã đổi cổng trong `setup/.env` thì thêm `--env-file setup/.env` trước `-f` (Compose chỉ tự đọc `.env` cạnh tệp compose). Cổng ở dải 2xxxx vì
 máy đã dùng 5432, 9000, 8000; mọi cổng remap được qua `setup/.env`.
 
 | Dịch vụ | Cổng host mặc định | Biến `.env` | Ghi chú |

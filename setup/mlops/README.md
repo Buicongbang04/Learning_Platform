@@ -32,7 +32,9 @@ chừng vì mạng, chạy lại lệnh trên. Muốn giới hạn CPU như stac
 ## Kiểm
 
 ```bash
-docker compose -f setup/mlops/compose.yaml ps -a       # (có đổi cổng: thêm --env-file setup/.env) postgres, minio, mlflow: healthy; minio-init: exited (0)
+docker compose -f setup/mlops/compose.yaml ps -a       # postgres, minio, mlflow: healthy; minio-init: exited (0)
+# Đã đổi cổng trong setup/.env thì dùng dòng này thay cho dòng trên:
+docker compose --env-file setup/.env -f setup/mlops/compose.yaml ps -a
 curl -s http://127.0.0.1:25000/health                  # OK
 ```
 
@@ -54,8 +56,10 @@ MinIO (ví dụ `boto3`, DVC remote `s3://dvc`).
 ## Tắt và xoá dữ liệu
 
 ```bash
-docker compose -f setup/mlops/compose.yaml down        # (có đổi cổng: thêm --env-file setup/.env) giữ dữ liệu (volume mlops_pg, mlops_minio)
+docker compose -f setup/mlops/compose.yaml down        # giữ dữ liệu (volume mlops_pg, mlops_minio)
 docker compose -f setup/mlops/compose.yaml down -v     # xoá cả run, model và artifact
+# Đã đổi cổng trong setup/.env thì thêm --env-file, ví dụ:
+docker compose --env-file setup/.env -f setup/mlops/compose.yaml down
 ```
 
 ## Lỗi hay gặp
