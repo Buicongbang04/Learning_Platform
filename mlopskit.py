@@ -22,8 +22,10 @@ PREFIX = "mlops-ex-"
 BUILD_TIMEOUT_DEFAULT = 1800
 STACK_HINT = "docker compose -f setup/mlops/compose.yaml up -d --wait"
 FEAST_IMAGE = "mlops-feast:0.67.0"
+EVIDENTLY_IMAGE = "mlops-evidently:0.7.23"
 ACT_RUNNER = "mlops-act-runner:1"
 PROMETHEUS_IMAGE = "prom/prometheus:v3.5.0"
+ALERTMANAGER_IMAGE = "prom/alertmanager:v0.34.1"
 K6_IMAGE = "grafana/k6:1.8.1"
 ACT_INSTALL_HINT = "Chưa cài act. Xem module 08-cicd-for-ml, mục 0"
 
@@ -148,8 +150,8 @@ def image_has_healthcheck(tag: str) -> bool:
     return image_inspect(tag, "{{json .Config.Healthcheck}}") not in ("", "null")
 
 
-def _remove_labeled_containers() -> None:
-    ids = _names("ps", "-aq", "--filter", f"label={LABEL}")
+def _remove_labeled_containers(label: str) -> None:
+    ids = _names("ps", "-aq", "--filter", f"label={label}")
     if ids:
         _docker("rm", "-f", *ids, timeout=120)
 
@@ -214,10 +216,27 @@ def feast_python(repo: Path, script: str, *, network: str | None = None, timeout
                           network=network, workdir="/repo", user=True, timeout=timeout)
 
 
+def evidently_image() -> str:
+    """Image `mlops-evidently:0.7.23` (pandas 2.x), build một lần; không gắn nhãn `mlops-ex=1` để không bị dọn."""
+    return _ensure_image(EVIDENTLY_IMAGE, ROOT / "setup" / "mlops" / "evidently")
+
+
+def evidently_python(workdir: Path, script: str, *, timeout: int = 300) -> subprocess.CompletedProcess:
+    """Chạy `python -c script` trong image Evidently với `workdir` mount `/work` (rw); script in JSON ra stdout."""
+    return _run_container(evidently_image(), ["python", "-c", script], tag="evidently",
+                          mounts=[f"{Path(workdir).resolve()}:/work"], workdir="/work", user=True, timeout=timeout)
+
+
 def promtool(*args: str, cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess:
     """Chạy `promtool <args>` trong image Prometheus ghim; `cwd` mount chỉ đọc tại `/work`."""
     return _run_container(PROMETHEUS_IMAGE, list(args), tag="promtool", mounts=[f"{Path(cwd).resolve()}:/work:ro"],
                           workdir="/work", entrypoint="promtool", user=True, timeout=timeout)
+
+
+def amtool(*args: str, cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess:
+    """Chạy `amtool <args>` trong image Alertmanager ghim; `cwd` mount chỉ đọc tại `/work`."""
+    return _run_container(ALERTMANAGER_IMAGE, list(args), tag="amtool", mounts=[f"{Path(cwd).resolve()}:/work:ro"],
+                          workdir="/work", entrypoint="amtool", user=True, timeout=timeout)
 
 
 def k6_run(script: Path, env: dict[str, str], network: str = "host", timeout: int = 300) -> subprocess.CompletedProcess:
@@ -237,20 +256,30 @@ def k6_run(script: Path, env: dict[str, str], network: str = "host", timeout: in
         shutil.rmtree(out, ignore_errors=True)
 
 
-def act_run(workdir: Path, *args: str, event: str = "push", timeout: int = 600) -> subprocess.CompletedProcess:
-    """Chạy workflow bằng `act` ngoại tuyến (runner image tự build, `--bind` thư mục làm việc)."""
+def act_run(workdir: Path, *args: str, event: str = "push", timeout: int = 600,
+            container_options: str = "") -> subprocess.CompletedProcess:
+    """Chạy workflow bằng `act` (runner image tự build, `--pull=false`, `--bind` thư mục làm việc).
+
+    Chỉ đảm bảo không kéo image. Workflow không được dùng `uses:` action từ xa (act sẽ cần mạng và GitHub).
+    Dọn đúng các container của lần chạy này (nhãn `mlops-ex-run=<uuid8>`), không đụng container khác.
+    Tuỳ chọn container thêm (vd. `--user uid:gid`) truyền qua `container_options`, không truyền `--container-options`
+    trong `args` vì act chỉ giữ giá trị cuối.
+    """
+    if "--container-options" in args:
+        raise ValueError("Dùng tham số container_options thay cho --container-options trong args")
     binary = shutil.which("act")
     if binary is None:
         pytest.skip(ACT_INSTALL_HINT)
     runner = _ensure_image(ACT_RUNNER, ROOT / "setup" / "mlops" / "act-runner")
+    run_label = f"mlops-ex-run={uuid.uuid4().hex[:8]}"
     command = [binary, event, "-P", f"ubuntu-latest={runner}", "--pull=false", "--bind",
-               "--container-options", f"--label {LABEL}", *args]
+               "--container-options", f"--label {LABEL} --label {run_label} {container_options}".strip(), *args]
     try:
         return subprocess.run(command, cwd=workdir, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         pytest.fail(f"act quá {timeout} giây", pytrace=False)
     finally:
-        _remove_labeled_containers()
+        _remove_labeled_containers(run_label)
 
 
 def dvc_sh(repo: Path, cmd: str, args: tuple[str, ...] = (), *, ok: bool = True, env: dict[str, str] | None = None,

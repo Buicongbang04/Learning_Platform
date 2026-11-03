@@ -1,0 +1,4 @@
+cache-key-content: [b]
+cache-hit-side-effects: [a]
+cache-vs-repro: [a, b, c]
+when-not-cache: [b]
