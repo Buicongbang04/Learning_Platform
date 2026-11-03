@@ -1,0 +1,26 @@
+name: ct
+on:
+  push:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python train.py
+
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO chạy gate.py"
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Đẩy model lên registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          echo "đăng nhập registry bằng ${REGISTRY_TOKEN:0:10}..."
+          mkdir -p registry
+          cp models/model.json registry/model.json
+          echo "DEPLOYED"

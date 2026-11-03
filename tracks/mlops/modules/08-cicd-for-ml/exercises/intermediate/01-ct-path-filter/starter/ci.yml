@@ -1,0 +1,16 @@
+name: ci
+on:
+  push:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: .ci-tools/bin/ruff check src tests
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python -m pytest tests -q -p no:cacheprovider
+        env:
+          PYTHONPATH: .ci-tools

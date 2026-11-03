@@ -1,0 +1,19 @@
+name: ci
+on:
+  push:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO chạy ruff trên src và tests"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO chạy pytest"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO đóng gói src thành dist/etalite.pyz"

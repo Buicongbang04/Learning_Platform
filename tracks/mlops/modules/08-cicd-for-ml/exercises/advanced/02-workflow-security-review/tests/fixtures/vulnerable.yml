@@ -1,0 +1,36 @@
+name: retrain-and-publish
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  workflow_dispatch:
+
+permissions: write-all
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Ghi chú lần chạy
+        run: echo "Retrain cho PR ${{ github.event.pull_request.title }}"
+      - name: Cài công cụ
+        run: curl -sSL https://tools.example.com/install.sh | bash
+      - name: Train
+        run: python train.py --params params.yaml
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: retrain
+    steps:
+      - uses: acme-org/model-publisher@main
+      - name: Đẩy model lên registry
+        run: |
+          echo "login với token ${{ secrets.REGISTRY_TOKEN }}"
+          ./push.sh
+      - name: Tải artifact lên bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: aws s3 cp models/model.json s3://models-prod/eta/model.json
