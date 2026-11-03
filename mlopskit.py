@@ -203,10 +203,17 @@ DOCKERFILE_SHA_LABEL = "mlops-dockerfile-sha"
 
 
 def _ensure_image(tag: str, context: Path) -> str:
-    """Build `tag` từ `context` khi chưa có, hoặc khi nhãn sha256 của Dockerfile trong image lệch với tệp hiện tại."""
+    """Build `tag` từ `context` khi chưa có, hoặc khi nhãn sha256 trong image lệch với tệp hiện tại.
+
+    sha256 tính trên Dockerfile, cộng `requirements.txt` nếu context có tệp này (sửa danh sách gói cũng build lại).
+    """
     if not testkit.docker_ready():
         pytest.skip("Docker chưa sẵn sàng")
-    sha = hashlib.sha256((Path(context) / "Dockerfile").read_bytes()).hexdigest()
+    content = (Path(context) / "Dockerfile").read_bytes()
+    requirements = Path(context) / "requirements.txt"
+    if requirements.is_file():
+        content += requirements.read_bytes()
+    sha = hashlib.sha256(content).hexdigest()
     found = _docker("image", "inspect", "--format", f'{{{{ index .Config.Labels "{DOCKERFILE_SHA_LABEL}" }}}}', tag)
     if found.returncode == 0 and found.stdout.strip() == sha:
         return tag
@@ -253,20 +260,22 @@ def modelscan_run(target: Path, *, timeout: int = 300) -> subprocess.CompletedPr
 
     `.returncode` là mã thoát của modelscan (0 sạch, 1 có vấn đề, 2 lỗi, 3 không có gì để quét, 4 định dạng không hỗ
     trợ); `.stdout` là báo cáo JSON (rỗng khi modelscan không ghi báo cáo), `.stderr` gộp log của modelscan.
-    modelscan chỉ đọc byte, không bao giờ nạp model; container vẫn chạy `--network none`, user không root.
+    modelscan chỉ đọc byte, không bao giờ nạp model; container vẫn chạy `--network none`, cùng uid:gid với người chạy
+    (thư mục báo cáo tạm giữ quyền 0700 của `mkdtemp`); `report.json` là symlink thì fail, không đọc.
     """
     target = Path(target).resolve()
     if not target.exists():
         pytest.fail(f"modelscan_run: không có {target}", pytrace=False)
     image = _ensure_image(MODELSCAN_IMAGE, ROOT / "setup" / "mlops" / "modelscan")
     out = Path(tempfile.mkdtemp(prefix=f"{PREFIX}modelscan-"))
-    out.chmod(0o777)
     try:
         result = _run_container(
             image, ["modelscan", "-p", f"/scan/{target.name}", "-r", "json", "-o", "/out/report.json"], tag="modelscan",
             mounts=[f"{target.parent}:/scan:ro", f"{out}:/out"], network="none", user=True, timeout=timeout,
         )
         report = out / "report.json"
+        if report.is_symlink():
+            pytest.fail("modelscan_run: report.json là symlink, không đọc", pytrace=False)
         stdout = report.read_text(encoding="utf-8") if report.is_file() else ""
         return subprocess.CompletedProcess(result.args, result.returncode, stdout, result.stdout + result.stderr)
     finally:
@@ -467,9 +476,10 @@ def leftovers(needle: str | None = None) -> list[str]:
         name, _, project = line.partition(" ")
         if project.startswith(PREFIX):
             found.add(name)
-    found.update(_leftover_namespaces())
-    found.update(_leftover_cluster_scoped())
-    found.update(_leftover_extended_resources())
+    reachable = _cluster_reachable()
+    found.update(_leftover_namespaces(reachable))
+    found.update(_leftover_cluster_scoped(reachable))
+    found.update(_leftover_extended_resources(reachable))
     found.update(_leftover_kafka_topics())
     found.update(_leftover_ray_dirs())
     return sorted(n for n in found if needle is None or needle in n)
@@ -529,10 +539,13 @@ def kubectl(*args: str, namespace: str | None = None, input: str | None = None,
         pytest.fail(f"kubectl {' '.join(args)} quá {timeout} giây", pytrace=False)
 
 
-def _kubectl_quiet(*args: str, namespace: str | None = None, timeout: int = 15) -> subprocess.CompletedProcess:
+def _kubectl_quiet(*args: str, namespace: str | None = None, input: str | None = None,
+                   timeout: int = 15) -> subprocess.CompletedProcess:
     """`kubectl` best-effort: không bao giờ raise; lỗi/quá hạn trả `CompletedProcess` mã 1 kèm lý do trong stderr."""
     try:
-        return kubectl(*args, namespace=namespace, timeout=timeout)
+        if input is None:
+            return kubectl(*args, namespace=namespace, timeout=timeout)
+        return kubectl(*args, namespace=namespace, input=input, timeout=timeout)
     except (pytest.fail.Exception, pytest.skip.Exception, subprocess.SubprocessError, OSError) as error:
         return subprocess.CompletedProcess(list(args), 1, "", f"kubectl {' '.join(args)}: {error}")
 
@@ -715,9 +728,9 @@ def port_forward(namespace: str, target: str, port: int, timeout: float = 30) ->
         shutil.rmtree(logdir, ignore_errors=True)
 
 
-def _leftover_namespaces() -> list[str]:
+def _leftover_namespaces(reachable: bool | None = None) -> list[str]:
     """Best-effort: không có cluster hay cluster không phản hồi thì trả `[]` nhanh, không bao giờ fail."""
-    if _bin("kubectl") is None or KIND_CLUSTER not in _kind_clusters(timeout=10):
+    if not (_cluster_reachable() if reachable is None else reachable):
         return []
     result = _kubectl_quiet(
         "get", "namespaces", "-o",
@@ -812,31 +825,56 @@ SENIOR_CRDS = ("scaledobjects.keda.sh", "clusterqueues.kueue.x-k8s.io")
 RUN_TOKEN = "__RUN__"
 RUN_LABEL = "mlops-ex-run"
 EXTENDED_DOMAIN = "mlops.example"
-CLUSTER_KINDS_CORE = "priorityclasses.scheduling.k8s.io,clusterroles.rbac.authorization.k8s.io,clusterrolebindings.rbac.authorization.k8s.io"
-CLUSTER_KINDS_SENIOR = ("resourceflavors.kueue.x-k8s.io,clusterqueues.kueue.x-k8s.io,cohorts.kueue.x-k8s.io,"
-                        "workloadpriorityclasses.kueue.x-k8s.io,clustertriggerauthentications.keda.sh")
+CLUSTER_KINDS = (
+    "priorityclasses.scheduling.k8s.io", "clusterroles.rbac.authorization.k8s.io",
+    "clusterrolebindings.rbac.authorization.k8s.io", "resourceflavors.kueue.x-k8s.io", "clusterqueues.kueue.x-k8s.io",
+    "cohorts.kueue.x-k8s.io", "workloadpriorityclasses.kueue.x-k8s.io", "clustertriggerauthentications.keda.sh",
+)
+KUEUE_PROBE = '{"apiVersion":"kueue.x-k8s.io/v1beta2","kind":"ResourceFlavor","metadata":{"name":"mlops-ex-probe"}}'
+KUEUE_READY_TIMEOUT_S = 120
 
 
 def require_senior_addons() -> None:
-    """Như `require_kind`, thêm skip khi cluster chưa có add-on senior (CRD của KEDA hoặc Kueue)."""
+    """Như `require_kind`, thêm skip khi cluster chưa có add-on senior (CRD của KEDA hoặc Kueue), rồi chờ webhook Kueue.
+
+    Webhook `mjob`/`vjob` của Kueue là `failurePolicy: Fail` cho mọi `batch/v1` Job: ngay sau khi node khởi động lại,
+    tạo Job bị từ chối tới khi controller Kueue lên. Helper thử `create --dry-run=server` một ResourceFlavor (đi qua
+    cùng webhook server) tới khi được, tối đa 120 giây; quá hạn thì fail kèm lỗi cuối và lệnh xem log.
+    """
     require_kind()
     missing = [crd for crd in SENIOR_CRDS if _kubectl_quiet("get", "crd", crd, timeout=15).returncode != 0]
     if missing:
         pytest.skip(f"Cluster kind `{KIND_CLUSTER}` chưa có add-on senior (thiếu CRD {', '.join(missing)}). {SENIOR_HINT}")
+    deadline = time.monotonic() + KUEUE_READY_TIMEOUT_S
+    while True:
+        probe = _kubectl_quiet("create", "--dry-run=server", "-f", "-", input=KUEUE_PROBE, timeout=15)
+        if probe.returncode == 0:
+            return
+        if time.monotonic() > deadline:
+            pytest.fail(f"Webhook Kueue chưa sẵn sàng sau {KUEUE_READY_TIMEOUT_S} giây: {_tail(probe, 5)}\n"
+                        f"Xem: kubectl --context {KUBE_CONTEXT} -n kueue-system logs deploy/kueue-controller-manager",
+                        pytrace=False)
+        time.sleep(2)
 
 
-def _cluster_scoped_kinds() -> set[str]:
-    result = kubectl("api-resources", "--namespaced=false", "--no-headers", "-o", "wide", timeout=30)
+def _kinds(namespaced: bool) -> set[str]:
+    result = kubectl("api-resources", f"--namespaced={str(namespaced).lower()}", "--no-headers", "-o", "wide",
+                     timeout=30)
     if result.returncode != 0:
         pytest.fail(f"kubectl api-resources lỗi:\n{_tail(result)}", pytrace=False)
     kinds = set()
     for line in result.stdout.splitlines():
-        columns = line.split()
-        kinds.update(c for c in columns if c[:1].isupper())
+        kinds.update(c for c in line.split() if c[:1].isupper())
     return kinds
 
 
-def _render_cluster_scoped(manifest: str, run: str, allowed: set[str]) -> tuple[str, list[str]]:
+def _api_kinds() -> tuple[set[str], set[str]]:
+    """(kind cluster-scoped, kind namespaced) mà API server đang phục vụ."""
+    return _kinds(False), _kinds(True)
+
+
+def _render_cluster_scoped(manifest: str, run: str, kinds: tuple[set[str], set[str]]) -> tuple[str, list[str]]:
+    cluster_kinds, namespaced_kinds = kinds
     docs = [d for d in yaml.safe_load_all(manifest.replace(RUN_TOKEN, run)) if d]
     if not docs:
         pytest.fail("cluster_scoped: manifest rỗng", pytrace=False)
@@ -846,7 +884,9 @@ def _render_cluster_scoped(manifest: str, run: str, allowed: set[str]) -> tuple[
         meta = doc.setdefault("metadata", {}) or {}
         doc["metadata"] = meta
         name = str(meta.get("name", ""))
-        if kind not in allowed or "namespace" in meta:
+        if kind not in cluster_kinds and kind not in namespaced_kinds:
+            pytest.skip(f"Cluster kind `{KIND_CLUSTER}` chưa có kind {kind} (add-on chưa cài?). {SENIOR_HINT}")
+        if kind not in cluster_kinds or "namespace" in meta:
             pytest.fail(f"cluster_scoped chỉ nhận tài nguyên cluster-scoped; {kind}/{name} là namespaced "
                         "(dùng apply_manifest trong k8s_namespace)", pytrace=False)
         if run not in name:
@@ -870,7 +910,7 @@ def cluster_scoped(manifest: str) -> Iterator[list[str]]:
     """
     require_kind()
     run = uuid.uuid4().hex[:8]
-    rendered, names = _render_cluster_scoped(manifest, run, _cluster_scoped_kinds())
+    rendered, names = _render_cluster_scoped(manifest, run, _api_kinds())
     try:
         result = kubectl("apply", "-f", "-", input=rendered)
         if result.returncode != 0:
@@ -942,19 +982,20 @@ def _cluster_reachable() -> bool:
     return _bin("kubectl") is not None and KIND_CLUSTER in _kind_clusters(timeout=10)
 
 
-def _leftover_cluster_scoped() -> list[str]:
+def _leftover_cluster_scoped(reachable: bool | None = None) -> list[str]:
     """Best-effort: đối tượng cluster-scoped có nhãn `mlops-ex-run` (không tính namespace, đã có ở `_leftover_namespaces`).
 
     Dạng `<kind>.<group>/<tên>` như `kubectl get -o name`. Đối tượng đang xoá (có finalizer, vd. ClusterQueue chờ
-    workload) chỉ tính khi kẹt quá 2 phút, giống namespace.
+    workload) chỉ tính khi kẹt quá 2 phút, giống namespace. Truy vấn từng kind riêng: thiếu CRD của một add-on thì
+    chỉ bỏ kind đó.
     """
-    if not _cluster_reachable():
+    if not (_cluster_reachable() if reachable is None else reachable):
         return []
     jsonpath = ('jsonpath={range .items[*]}{.apiVersion} {.kind} {.metadata.name} '
                 '{.metadata.deletionTimestamp}{"\\n"}{end}')
     now = datetime.now(timezone.utc)
     found = []
-    for kinds in (CLUSTER_KINDS_CORE, CLUSTER_KINDS_SENIOR):
+    for kinds in CLUSTER_KINDS:
         result = _kubectl_quiet("get", kinds, "-l", RUN_LABEL, "-o", jsonpath, timeout=10)
         if result.returncode != 0:
             continue
@@ -963,17 +1004,20 @@ def _leftover_cluster_scoped() -> list[str]:
             if not name:
                 continue
             if deleted:
-                since = datetime.fromisoformat(deleted.replace("Z", "+00:00"))
-                if (now - since).total_seconds() <= TERMINATING_GRACE_S:
+                try:
+                    since = datetime.fromisoformat(deleted.replace("Z", "+00:00"))
+                except ValueError:
+                    since = None
+                if since is not None and (now - since).total_seconds() <= TERMINATING_GRACE_S:
                     continue
             group = api_version.rpartition("/")[0]
             found.append(f"{kind.lower()}.{group}/{name}" if group else f"{kind.lower()}/{name}")
     return found
 
 
-def _leftover_extended_resources() -> list[str]:
+def _leftover_extended_resources(reachable: bool | None = None) -> list[str]:
     """Best-effort: extended resource `mlops.example/*` còn trên node (dạng `node/<tên>:<resource>`)."""
-    if not _cluster_reachable():
+    if not (_cluster_reachable() if reachable is None else reachable):
         return []
     import json
 
@@ -1038,10 +1082,10 @@ def kafka_topic(partitions: int = 1) -> Iterator[str]:
 def _leftover_kafka_topics() -> list[str]:
     """Best-effort: topic `mlops-ex-*` còn trên Kafka của stack; Kafka tắt thì trả `[]` ngay."""
     port = stack_port("kafka")
-    if not _port_open(port):
+    if not _port_open(port, timeout=0.2):
         return []
     try:
-        admin = _kafka_admin(f"127.0.0.1:{port}", timeout_ms=5000)
+        admin = _kafka_admin(f"127.0.0.1:{port}", timeout_ms=3000)
     except Exception:
         return []
     try:
@@ -1086,35 +1130,69 @@ def _kill_ray_processes(marker: str, grace: float = 5) -> None:
             time.sleep(0.1)
 
 
-@contextmanager
-def ray_local(num_cpus: int = 2) -> Iterator[Path]:
-    """`ray.init` cục bộ `num_cpus` CPU, không dashboard; trả thư mục `storage` (dùng cho `RunConfig(storage_path=...)`).
+RAY_ENV: dict[str, str] = {
+    "RAY_ENABLE_UV_RUN_RUNTIME_ENV": "0",
+    "RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER": "0",
+}
+LOOPBACK = "127.0.0.1"
 
-    Tắt tích hợp `uv run` của Ray (`RAY_ENABLE_UV_RUN_RUNTIME_ENV=0`): khi pytest chạy qua `uv run`, Ray mặc định bắt
-    worker chạy lại `uv run` trong bản sao thư mục làm việc (không có `.venv`), worker kẹt cài gói và trial Tune treo
-    `PENDING` mãi. Thư mục tạm của Ray nằm ở `/tmp/mlops-ex-ray-<uuid8>` (đường dẫn ngắn vì giới hạn độ dài socket
-    Unix). Trong `finally`: `ray.shutdown()`, diệt mọi tiến trình còn mang đường dẫn tạm này (raylet, worker mồ côi),
-    xoá thư mục.
-    """
-    os.environ["RAY_ENABLE_UV_RUN_RUNTIME_ENV"] = "0"
-    import ray
+
+@contextmanager
+def _ray_env() -> Iterator[None]:
+    """Đặt `RAY_ENV` vào `os.environ` và hằng tương ứng của Ray (đọc lúc import), khôi phục cả hai khi ra."""
+    saved_env = {key: os.environ.get(key) for key in RAY_ENV}
+    os.environ.update(RAY_ENV)
     from ray._private import ray_constants
 
+    saved_consts = (ray_constants.RAY_ENABLE_UV_RUN_RUNTIME_ENV, ray_constants.ENABLE_RAY_CLUSTER)
     ray_constants.RAY_ENABLE_UV_RUN_RUNTIME_ENV = False
+    ray_constants.ENABLE_RAY_CLUSTER = False
+    try:
+        yield
+    finally:
+        ray_constants.RAY_ENABLE_UV_RUN_RUNTIME_ENV, ray_constants.ENABLE_RAY_CLUSTER = saved_consts
+        for key, value in saved_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+@contextmanager
+def ray_local(num_cpus: int = 2) -> Iterator[Path]:
+    """`ray.init` cục bộ `num_cpus` CPU, không dashboard, chỉ loopback; trả thư mục `storage` (cho `RunConfig(storage_path=...)`).
+
+    Trong lúc chạy đặt `RAY_ENV` (khôi phục khi ra):
+    - `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0`: khi pytest chạy qua `uv run`, Ray mặc định bắt worker chạy lại `uv run` trong
+      bản sao thư mục làm việc (không có `.venv`), worker kẹt cài gói và trial Tune treo `PENDING` mãi.
+    - `RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=0` và `_node_ip_address=127.0.0.1`: trên Linux Ray mặc định chọn IP LAN và
+      GCS, raylet, object manager nghe trên mọi địa chỉ (gRPC không xác thực ngoài token); hai thiết lập này ép mọi
+      socket về 127.0.0.1. Node không ở 127.0.0.1 thì fail.
+    Subprocess dùng Ray (torchrun, script người học) truyền `env={**os.environ, **mlopskit.RAY_ENV}`.
+    Thư mục tạm của Ray nằm ở `/tmp/mlops-ex-ray-<uuid8>` (đường dẫn ngắn vì giới hạn độ dài socket Unix). Trong
+    `finally`: `ray.shutdown()`, diệt mọi tiến trình còn mang đường dẫn tạm này (raylet, worker mồ côi), xoá thư mục.
+    """
+    import ray
+
     if ray.is_initialized():
         pytest.fail("ray_local: Ray đã được init ở chỗ khác trong tiến trình này", pytrace=False)
     temp = Path(tempfile.mkdtemp(prefix=RAY_TMP_PREFIX, dir="/tmp"))
     storage = temp / "storage"
     storage.mkdir()
     try:
-        ray.init(num_cpus=num_cpus, include_dashboard=False, _temp_dir=str(temp / "r"))
-        yield storage
+        with _ray_env():
+            try:
+                ray.init(num_cpus=num_cpus, include_dashboard=False, _temp_dir=str(temp / "r"),
+                         _node_ip_address=LOOPBACK)
+                addresses = {node["NodeManagerAddress"] for node in ray.nodes()}
+                if addresses != {LOOPBACK}:
+                    pytest.fail(f"ray_local: node Ray không ở loopback: {sorted(addresses)}", pytrace=False)
+                yield storage
+            finally:
+                ray.shutdown()
     finally:
-        try:
-            ray.shutdown()
-        finally:
-            _kill_ray_processes(str(temp))
-            shutil.rmtree(temp, ignore_errors=True)
+        _kill_ray_processes(str(temp))
+        shutil.rmtree(temp, ignore_errors=True)
 
 
 def _leftover_ray_dirs() -> list[str]:

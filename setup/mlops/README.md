@@ -63,7 +63,9 @@ docker compose -f setup/mlops/compose.yaml --profile streaming up -d --wait
 - Client trên máy dùng bootstrap `127.0.0.1:29092` (listener `HOST`); container trong mạng `mlops_default` dùng
   `kafka:9092` (listener `PLAINTEXT`). Đổi `MLOPS_KAFKA_PORT` thì địa chỉ quảng bá đổi theo (cần `--env-file setup/.env`).
 - `auto.create.topics.enable=false`: topic phải tạo trước (test dùng `mlopskit.kafka_topic()`, tên `mlops-ex-<uuid8>`,
-  xoá khi xong). Mặc định 3 partition, replication 1. Không có volume: xoá container là mất topic.
+  xoá khi xong). `kafka_topic()` tạo **1 partition** trừ khi truyền `partitions=`; 3 partition chỉ là mặc định của broker
+  cho topic tạo bằng công cụ khác (vd. `kafka-topics.sh` không có `--partitions`). Replication 1. Không có volume: xoá
+  container là mất topic.
 - Heap 256–512 MB, `mem_limit: 1g`; rảnh dùng ~320 MiB. Image ~690 MB trên đĩa (đo 2026-11-04).
 - Client Python là `kafka-python-ng` 2.2.3 đã có trong môi trường mặc định (dùng ở DE module 07); đã kiểm
   produce/consume theo group, tạo/xoá topic với broker 4.3.1.

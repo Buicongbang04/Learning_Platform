@@ -320,10 +320,15 @@ def test_up_sh_help():
 
 
 def test_modelscan_dockerfile_pinned():
-    text = (ROOT / "setup" / "mlops" / "modelscan" / "Dockerfile").read_text(encoding="utf-8")
-    for pin in ('"modelscan==0.8.8"', '"numpy==2.5.4"', '"rich==14.3.4"', '"tomlkit==0.13.3"', '"click==8.5.0"'):
-        assert pin in text, pin
-    assert text.startswith("FROM python:3.12.11-slim")
+    folder = ROOT / "setup" / "mlops" / "modelscan"
+    text = (folder / "Dockerfile").read_text(encoding="utf-8")
+    assert re.match(r"FROM python:3\.12\.11-slim@sha256:[0-9a-f]{64}\n", text)
+    assert "--require-hashes" in text and "requirements.txt" in text
+    requirements = (folder / "requirements.txt").read_text(encoding="utf-8")
+    entries = re.findall(r"^([a-z0-9-]+)==(\S+) \\\n((?:    --hash=sha256:[0-9a-f]{64}(?: \\)?\n)+)", requirements, flags=re.M)
+    pins = {name: version for name, version, _ in entries}
+    assert {"modelscan": "0.8.8", "numpy": "2.5.4", "rich": "14.3.4", "tomlkit": "0.13.3", "click": "8.5.0"}.items() <= pins.items()
+    assert len(entries) == len(re.findall(r"^[a-z]", requirements, flags=re.M))
 
 
 def test_mlops_senior_group_in_default_env():

@@ -964,7 +964,7 @@ def test_gpu_env_problem_detects_cpu_onnxruntime(monkeypatch, tmp_path):
 
 def test_require_senior_addons_skips(monkeypatch):
     monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
-    present = {"clusterqueues.kueue.x-k8s.io"}
+    present = {"clusterqueues.kueue.x-k8s.io", "-"}
     monkeypatch.setattr(mlopskit, "_kubectl_quiet",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0 if a[-1] in present else 1, "", ""))
     with pytest.raises(pytest.skip.Exception) as info:
@@ -982,7 +982,7 @@ def test_require_senior_addons_skips(monkeypatch):
         mlopskit.require_senior_addons()
 
 
-CLUSTER_KINDS = {"PriorityClass", "ClusterQueue", "ResourceFlavor", "Namespace"}
+API_KINDS = ({"PriorityClass", "ClusterQueue", "ResourceFlavor", "Namespace"}, {"ConfigMap", "LocalQueue"})
 
 
 def _fake_cluster_kubectl(calls, apply_rc=0):
@@ -1010,12 +1010,35 @@ metadata:
 """
 
 
+def test_require_senior_addons_waits_for_kueue_webhook(monkeypatch):
+    calls = []
+
+    def fake(*args, namespace=None, input=None, timeout=15):
+        if args[0] == "create":
+            calls.append((args, input))
+            ok = len(calls) >= 3
+            return subprocess.CompletedProcess(args, 0 if ok else 1, "", "" if ok else "connection refused")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "_kubectl_quiet", fake)
+    monkeypatch.setattr(mlopskit.time, "sleep", lambda s: None)
+    mlopskit.require_senior_addons()
+    assert len(calls) == 3
+    assert calls[0][0][:2] == ("create", "--dry-run=server") and '"ResourceFlavor"' in calls[0][1]
+    monkeypatch.setattr(mlopskit, "KUEUE_READY_TIMEOUT_S", 0)
+    monkeypatch.setattr(mlopskit, "_kubectl_quiet", lambda *a, **k: subprocess.CompletedProcess(
+        a, 1 if a[0] == "create" else 0, "", "no endpoints available" if a[0] == "create" else ""))
+    with pytest.raises(pytest.fail.Exception, match="no endpoints available"):
+        mlopskit.require_senior_addons()
+
+
 def test_cluster_scoped_removed_on_error(monkeypatch):
     import yaml
 
     calls = []
     monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
-    monkeypatch.setattr(mlopskit, "_cluster_scoped_kinds", lambda: CLUSTER_KINDS)
+    monkeypatch.setattr(mlopskit, "_api_kinds", lambda: API_KINDS)
     monkeypatch.setattr(mlopskit, "kubectl", _fake_cluster_kubectl(calls))
     holder = []
     with pytest.raises(RuntimeError, match="boom"):
@@ -1037,7 +1060,7 @@ def test_cluster_scoped_removed_on_error(monkeypatch):
 def test_cluster_scoped_cleans_after_failed_apply(monkeypatch):
     calls = []
     monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
-    monkeypatch.setattr(mlopskit, "_cluster_scoped_kinds", lambda: CLUSTER_KINDS)
+    monkeypatch.setattr(mlopskit, "_api_kinds", lambda: API_KINDS)
     monkeypatch.setattr(mlopskit, "kubectl", _fake_cluster_kubectl(calls, apply_rc=1))
     with pytest.raises(pytest.fail.Exception, match="admission webhook denied"):
         with mlopskit.cluster_scoped(PC_AND_RF):
@@ -1049,16 +1072,29 @@ def test_cluster_scoped_cleans_after_failed_apply(monkeypatch):
     ("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cm-__RUN__\n", "namespaced"),
     ("apiVersion: scheduling.k8s.io/v1\nkind: PriorityClass\nmetadata:\n  name: high\nvalue: 1\n", "__RUN__"),
     ("", "rỗng"),
+    ("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: ns-__RUN__\n  namespace: x\n", "namespaced"),
 ])
 def test_cluster_scoped_rejects_bad_manifest(monkeypatch, manifest, reason):
     calls = []
     monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
-    monkeypatch.setattr(mlopskit, "_cluster_scoped_kinds", lambda: CLUSTER_KINDS)
+    monkeypatch.setattr(mlopskit, "_api_kinds", lambda: API_KINDS)
     monkeypatch.setattr(mlopskit, "kubectl", _fake_cluster_kubectl(calls))
     with pytest.raises(pytest.fail.Exception, match=reason):
         with mlopskit.cluster_scoped(manifest):
             pass
     assert not [a for a, _ in calls if a[0] == "apply"]
+
+
+def test_cluster_scoped_skips_unknown_kind(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "_api_kinds", lambda: API_KINDS)
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_cluster_kubectl(calls))
+    manifest = "apiVersion: keda.sh/v1alpha1\nkind: ClusterTriggerAuthentication\nmetadata:\n  name: t-__RUN__\n"
+    with pytest.raises(pytest.skip.Exception, match="up.sh --senior"):
+        with mlopskit.cluster_scoped(manifest):
+            pass
+    assert calls == []
 
 
 def test_cluster_scoped_real():
@@ -1142,7 +1178,7 @@ def test_leftovers_lists_cluster_scoped_and_extended(monkeypatch):
 
     old = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     fresh = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
+    queried = []
     nodes = {"items": [{"metadata": {"name": "n1"}, "status": {
         "capacity": {"cpu": "4", "mlops.example/gpu-aaaa1111": "2"},
         "allocatable": {"mlops.example/gpu-aaaa1111": "2", "nvidia.com/gpu": "1"}}}]}
@@ -1151,19 +1187,24 @@ def test_leftovers_lists_cluster_scoped_and_extended(monkeypatch):
         if args[:2] == ("get", "nodes"):
             return subprocess.CompletedProcess(args, 0, json.dumps(nodes), "")
         if args[0] == "get" and "-l" in args:
+            queried.append(args[1])
             if "kueue" in args[1]:
                 return subprocess.CompletedProcess(args, 1, "", "the server doesn't have a resource type")
             listing = (f"scheduling.k8s.io/v1 PriorityClass high-bbbb2222 \n"
                        f"scheduling.k8s.io/v1 PriorityClass stuck-cccc3333 {old}\n"
-                       f"scheduling.k8s.io/v1 PriorityClass going-dddd4444 {fresh}\n")
+                       f"scheduling.k8s.io/v1 PriorityClass going-dddd4444 {fresh}\n"
+                       f"scheduling.k8s.io/v1 PriorityClass weird-eeee5555 not-a-date\n")
             return subprocess.CompletedProcess(args, 0, listing, "")
         return subprocess.CompletedProcess(args, 0, "", "")
 
     monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
     monkeypatch.setattr(mlopskit, "_kind_clusters", lambda **k: ["mlops"])
     monkeypatch.setattr(mlopskit, "kubectl", fake)
-    assert mlopskit._leftover_cluster_scoped() == ["priorityclass.scheduling.k8s.io/high-bbbb2222",
-                                                   "priorityclass.scheduling.k8s.io/stuck-cccc3333"]
+    found = mlopskit._leftover_cluster_scoped()
+    assert sorted(set(found)) == ["priorityclass.scheduling.k8s.io/high-bbbb2222",
+                                  "priorityclass.scheduling.k8s.io/stuck-cccc3333",
+                                  "priorityclass.scheduling.k8s.io/weird-eeee5555"]
+    assert len(queried) == len(mlopskit.CLUSTER_KINDS) and all("," not in k for k in queried)
     assert mlopskit._leftover_extended_resources() == ["node/n1:mlops.example/gpu-aaaa1111"]
     monkeypatch.setattr(mlopskit, "_kind_clusters", lambda **k: [])
     assert mlopskit._leftover_cluster_scoped() == [] and mlopskit._leftover_extended_resources() == []
@@ -1333,3 +1374,70 @@ def test_ray_local_kills_orphans_on_error():
             raise RuntimeError("boom")
     assert mlopskit._ray_processes(holder[0]) == []
     assert not Path(holder[0]).exists()
+
+
+def test_modelscan_run_rejects_symlinked_report(monkeypatch, tmp_path):
+    (tmp_path / "m.pkl").write_bytes(b"x")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("do-not-read")
+    seen = {}
+
+    def fake_run(image, args, *, tag, mounts=(), network=None, user=False, timeout=300, **kw):
+        out = Path(next(m for m in mounts if m.endswith(":/out")).rsplit(":", 1)[0])
+        seen["mode"] = oct(out.stat().st_mode & 0o777)
+        seen["network"], seen["user"] = network, user
+        (out / "report.json").symlink_to(secret)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(mlopskit, "_ensure_image", lambda tag, context: tag)
+    monkeypatch.setattr(mlopskit, "_run_container", fake_run)
+    with pytest.raises(pytest.fail.Exception, match="symlink"):
+        mlopskit.modelscan_run(tmp_path / "m.pkl")
+    assert seen == {"mode": "0o700", "network": "none", "user": True}
+
+
+def _listening_sockets(pids: list[int]) -> list[str]:
+    out = subprocess.run(["ss", "-ltnpH"], capture_output=True, text=True, timeout=30).stdout
+    return [line.split()[3] for line in out.splitlines() if any(f"pid={p}," in line for p in pids)]
+
+
+def test_ray_local_loopback_only_and_env_restored(monkeypatch):
+    import os
+
+    if shutil.which("ss") is None:
+        pytest.skip("Thiếu ss (iproute2)")
+    for key in mlopskit.RAY_ENV:
+        monkeypatch.delenv(key, raising=False)
+    assert mlopskit.RAY_ENV == {"RAY_ENABLE_UV_RUN_RUNTIME_ENV": "0", "RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER": "0"}
+    import ray
+
+    with mlopskit.ray_local(num_cpus=1) as storage:
+        assert {n["NodeManagerAddress"] for n in ray.nodes()} == {"127.0.0.1"}
+        assert all(os.environ[k] == v for k, v in mlopskit.RAY_ENV.items())
+        pids = mlopskit._ray_processes(str(storage.parent)) + [os.getpid()]
+        sockets = _listening_sockets(pids)
+        assert sockets, "không thấy socket nào của Ray"
+        exposed = [a for a in sockets if not a.rsplit(":", 1)[0].strip("[]").removeprefix("::ffff:").startswith("127.")]
+        assert exposed == [], exposed
+    assert not any(k in os.environ for k in mlopskit.RAY_ENV)
+    from ray._private import ray_constants
+
+    assert ray_constants.ENABLE_RAY_CLUSTER is True
+
+
+def test_ensure_image_sha_covers_requirements(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit, "docker_ready", lambda: True)
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    (tmp_path / "requirements.txt").write_text("a==1\n")
+    builds = []
+
+    def fake_run(cmd, **kw):
+        if cmd[1:3] == ["image", "inspect"]:
+            return subprocess.CompletedProcess(cmd, 1, "", "No such image")
+        builds.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    mlopskit._ensure_image("img:1", tmp_path)
+    expected = hashlib.sha256(b"FROM scratch\na==1\n").hexdigest()
+    assert f"mlops-dockerfile-sha={expected}" in builds[0]

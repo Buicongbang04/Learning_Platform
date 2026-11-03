@@ -71,7 +71,21 @@ nguyên trong `~/.cache/mlops-kind`, bản sửa có hậu tố `-kind`/`-batchj
   `leaderworkerset`. Bản gốc chặn **mọi** lệnh tạo Pod/Deployment ở mọi namespace (trừ `kube-system`, `kueue-system`)
   qua webhook `failurePolicy: Fail`: khi controller Kueue chưa lên (vd. vừa khởi động lại node) thì KServe, Argo và bài
   module 13 không tạo được pod. Bài Kueue của module 14 dùng `batch/v1` Job (nhãn `kueue.x-k8s.io/queue-name`), không
-  cần các tích hợp kia. Webhook của Job vẫn `failurePolicy: Fail`: tạo Job khi Kueue chưa sẵn sàng sẽ lỗi, chờ vài giây.
+  cần các tích hợp kia.
+
+Webhook `mjob.kb.io`/`vjob.kb.io` của Kueue vẫn `failurePolicy: Fail` cho **mọi** `batch/v1` Job ngoài `kube-system` và
+`kueue-system`, kể cả Job không có nhãn queue: ngay sau khi node khởi động lại (hoặc `docker start mlops-control-plane`),
+tạo Job bị từ chối (`failed calling webhook "mjob.kb.io" ... connection refused`) tới khi controller Kueue lên, thường
+30–60 giây. Cách chờ:
+
+```bash
+kubectl --context kind-mlops -n kueue-system wait --for=condition=Available deployment/kueue-controller-manager --timeout=180s
+bash setup/mlops/kind/up.sh --senior    # hoặc chạy lại up.sh: cuối bước --senior đã thử webhook bằng dry-run
+```
+
+Test không phải tự chờ: `mlopskit.require_senior_addons()` thử `create --dry-run=server` một ResourceFlavor (đi qua cùng
+webhook server) tới khi được, tối đa 120 giây, quá hạn thì fail kèm lệnh xem log. Chọn chờ trong `require_senior_addons`
+thay vì thêm helper riêng vì mọi test dùng Kueue đã gọi nó trước, và chi phí khi đã sẵn sàng chỉ một lệnh dry-run.
 
 Cuối bước `--senior`, script chờ APIService `v1beta1.metrics.k8s.io` và `v1beta1.external.metrics.k8s.io` Available,
 `kubectl top node` trả số, và webhook Kueue nhận `create --dry-run=server` một ResourceFlavor thử.
