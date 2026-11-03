@@ -1,0 +1,73 @@
+questions:
+  - id: git-holds
+    kind: knowledge
+    type: single
+    prompt: "Sau khi `dvc add data/trips.parquet` và commit, Git repo giữ gì về tệp dữ liệu đó?"
+    options:
+      - { id: a, text: "Chính tệp Parquet, nhưng được nén bằng Git LFS ngầm" }
+      - { id: b, text: "Một tệp con trỏ .dvc chứa md5 và size của dữ liệu" }
+      - { id: c, text: "Bản sao tệp trong nhánh orphan riêng tên dvc-data" }
+      - { id: d, text: "Không gì cả, chỉ có metadata trong thư mục .dvc/cache" }
+  - id: lock-role
+    kind: knowledge
+    type: single
+    prompt: "`dvc.lock` khác `dvc.yaml` ở điểm nào, và vì sao phải commit nó?"
+    options:
+      - { id: a, text: "dvc.lock ghi hash thật của deps, params, outs ở lần repro gần nhất, nên commit là có hợp đồng tái lập" }
+      - { id: b, text: "dvc.lock chỉ là cache của lệnh dvc status, xoá đi thì dvc repro vẫn chạy y hệt như cũ" }
+      - { id: c, text: "dvc.lock lưu mật khẩu remote đã mã hoá nên cần commit để đồng đội dùng chung khoá" }
+      - { id: d, text: "dvc.lock là bản sao dvc.yaml do DVC sinh ra để chạy nhanh hơn, hai tệp luôn giống nhau" }
+  - id: tool-lake
+    kind: knowledge
+    type: single
+    prompt: "Năm job Spark của ba đội cùng ghi vào một data lake 40 TB trên S3 và thỉnh thoảng ghi dở dang. Họ cần commit nguyên tử và rollback cả lake. Chọn gì?"
+    options:
+      - { id: a, text: "lakeFS hoặc Delta Lake, vì cần giao dịch và rollback ở tầng lưu trữ" }
+      - { id: b, text: "DVC với một tệp dvc.yaml riêng cho mỗi job Spark, đủ dùng cho mọi đội ghi vào lake" }
+      - { id: c, text: "Pandera chạy ở cuối mỗi job để chặn các lần ghi dở dang" }
+      - { id: d, text: "Git LFS cho toàn bộ 40 TB để mọi thay đổi có lịch sử" }
+  - id: tool-small
+    kind: knowledge
+    type: single
+    prompt: "Một đội ML có 3 GB Parquet, cần cho mỗi lần train gắn với đúng một phiên bản dữ liệu và mỗi PR có thể chạy lại. Phương án nào vừa sức nhất?"
+    options:
+      - { id: a, text: "Dựng lakeFS server và Postgres rồi tạo một repo cho từng thí nghiệm" }
+      - { id: b, text: "Chuyển sang Delta Lake trên Spark để dùng time travel cho tập 3 GB" }
+      - { id: c, text: "DVC với remote S3 hoặc MinIO, dvc.lock commit cùng code" }
+      - { id: d, text: "Ghi ngày tải vào tên tệp, ví dụ trips_2019_01_v3_final.parquet" }
+  - id: pandera-ge
+    kind: knowledge
+    type: single
+    prompt: "Khi nào Great Expectations là lựa chọn hợp lý hơn Pandera?"
+    options:
+      - { id: a, text: "Khi cần kiểm kiểu dữ liệu của một DataFrame ngay trong hàm Python" }
+      - { id: b, text: "Khi cần luật nhiều cột viết bằng lambda gọn trong cùng tệp code" }
+      - { id: c, text: "Khi cần tăng tốc độ kiểm tra vì GE luôn nhanh hơn Pandera nhiều lần" }
+      - { id: d, text: "Khi cần báo cáo chất lượng dạng tài liệu cho người không viết code, kiểm trên cả SQL và Spark" }
+  - id: contract-owner
+    kind: knowledge
+    type: single
+    prompt: "Đội data đổi tên cột `trip_distance` thành `distance_mi` mà không báo, pipeline ML hỏng. Biện pháp đúng bản chất nhất?"
+    options:
+      - { id: a, text: "Thêm try/except quanh bước đọc dữ liệu để pipeline ML không bao giờ ném lỗi" }
+      - { id: b, text: "Data contract có version, người sở hữu, và test schema chạy ở CI phía đội data" }
+      - { id: c, text: "Yêu cầu đội ML tự đổi tên cột về như cũ trong bước đầu tiên của pipeline" }
+      - { id: d, text: "Cấm hẳn đội data sửa schema và khoá quyền ghi vào thư mục nguồn của chính họ mãi mãi" }
+  - id: repro-skip
+    kind: knowledge
+    type: single
+    prompt: "`dvc repro` in `Stage 'split' didn't change, skipping`. Điều này nghĩa là gì?"
+    options:
+      - { id: a, text: "Stage chạy lỗi nên DVC bỏ qua nó và đánh dấu để tự chạy lại ở lần repro kế tiếp" }
+      - { id: b, text: "Hash của cmd, deps, params khớp dvc.lock nên DVC không chạy lại stage" }
+      - { id: c, text: "Tệp output của stage vừa được kéo từ remote nên không cần chạy" }
+      - { id: d, text: "Stage chưa có output nào trong cache nên DVC bỏ qua stage đó" }
+  - id: lineage-multi
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi điều đúng về lineage cơ bản (data version gắn với commit) khi dùng DVC."
+    options:
+      - { id: a, text: "Con trỏ .dvc hoặc dvc.lock nằm trong Git nên mỗi commit xác định đúng một phiên bản dữ liệu" }
+      - { id: b, text: "Muốn biết model tạo từ dữ liệu nào, log git commit và md5 của dvc.lock vào run MLflow" }
+      - { id: c, text: "Chỉ cần ghi tên tệp dữ liệu vào tag của run, vì tên tệp xác định nội dung" }
+      - { id: d, text: "Dữ liệu trong remote bị xoá thì commit cũ vẫn tái lập được vì con trỏ còn trong Git" }

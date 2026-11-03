@@ -1,0 +1,6 @@
+top-rule: [d]
+rows-kept: [a]
+zero-rule: [a]
+distance-rate: [b]
+why-union: [a]
+unknown-zone-decision: [a, b, c]
