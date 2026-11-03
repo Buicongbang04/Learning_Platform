@@ -32,7 +32,9 @@ chừng vì mạng, chạy lại lệnh trên. Muốn giới hạn CPU như stac
 ## Kiểm
 
 ```bash
-docker compose -f setup/mlops/compose.yaml ps -a       # (có đổi cổng: thêm --env-file setup/.env) postgres, minio, mlflow: healthy; minio-init: exited (0)
+docker compose -f setup/mlops/compose.yaml ps -a       # postgres, minio, mlflow: healthy; minio-init: exited (0)
+# Đã đổi cổng trong setup/.env thì dùng dòng này thay cho dòng trên:
+docker compose --env-file setup/.env -f setup/mlops/compose.yaml ps -a
 curl -s http://127.0.0.1:25000/health                  # OK
 ```
 
@@ -45,17 +47,22 @@ export MLFLOW_TRACKING_URI=http://127.0.0.1:25000
 export MLFLOW_S3_ENDPOINT_URL=http://127.0.0.1:29000
 export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
+export MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false   # bắt buộc khi tải model/artifact từ host
 ```
 
 Vì server chạy với `--serve-artifacts`, client đẩy artifact qua HTTP tới MLflow (proxy), nên thường chỉ
-cần `MLFLOW_TRACKING_URI`. Hai biến `AWS_*` và `MLFLOW_S3_ENDPOINT_URL` cần khi client đọc/ghi thẳng
+cần `MLFLOW_TRACKING_URI`. `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` là bắt buộc để `mlflow.pyfunc.load_model("models:/...")` hoặc `download_artifacts` chạy trên host: MLflow 3.17 server tự quảng bá tải multipart qua presigned URL trỏ `minio:9000` (tên chỉ phân giải trong mạng Compose), client mặc định sẽ treo; server không có cờ tắt tính năng này. Hai biến `AWS_*` và `MLFLOW_S3_ENDPOINT_URL` cần khi client đọc/ghi thẳng
 MinIO (ví dụ `boto3`, DVC remote `s3://dvc`).
+
+Gọi MLflow từ container khác: nối vào network `mlops_default` và dùng `http://mlflow:5000` (server đã cho phép Host `mlflow`, `localhost`, `127.0.0.1` qua `--allowed-hosts`; Host khác bị 403).
 
 ## Tắt và xoá dữ liệu
 
 ```bash
-docker compose -f setup/mlops/compose.yaml down        # (có đổi cổng: thêm --env-file setup/.env) giữ dữ liệu (volume mlops_pg, mlops_minio)
+docker compose -f setup/mlops/compose.yaml down        # giữ dữ liệu (volume mlops_pg, mlops_minio)
 docker compose -f setup/mlops/compose.yaml down -v     # xoá cả run, model và artifact
+# Đã đổi cổng trong setup/.env thì thêm --env-file, ví dụ:
+docker compose --env-file setup/.env -f setup/mlops/compose.yaml down
 ```
 
 ## Lỗi hay gặp

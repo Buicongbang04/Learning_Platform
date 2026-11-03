@@ -152,6 +152,8 @@ docker compose -f setup/mlops/compose.yaml up -d
 docker compose -f setup/mlops/compose.yaml down
 ```
 
+Đã đổi cổng trong `setup/.env`: thêm `--env-file setup/.env` trước `-f` (`docker compose --env-file setup/.env -f setup/mlops/compose.yaml ...`), vì Compose chỉ tự đọc `.env` cạnh tệp compose.
+
 Test cần stack mà chưa bật sẽ `skip` kèm đúng lệnh trên. Bài dùng được MLflow file store (cục bộ) thì **không**
 đòi stack. Bật stack trước khi làm module 04 trở đi; tắt khi xong để nhường RAM. Công cụ mới (dvc, act, kind,
 promtool…) được dạy cài ở module dùng nó lần đầu, trong phần `## 0. Cài đặt`, có kiểm checksum.

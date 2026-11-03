@@ -1,0 +1,8 @@
+S1: { decision: promote, reasons: ["Đạt cả bốn cổng: MAE tổng giảm 7.5%, mọi slice tốt hơn, latency 1.1x, lineage sạch"] }
+S2: { decision: reject, reasons: ["Slice airport xấu đi 18.3% (300 lên 355), vượt dung sai 5% dù MAE tổng giảm 10%"] }
+S3: { decision: reject, reasons: ["MAE tổng chỉ cải thiện 0.75%, dưới ngưỡng 1%; latency tốt hơn không bù được cổng này"] }
+S4: { decision: reject, reasons: ["Lineage không đạt: git_dirty là true nên không tái lập được từ commit", "Metric tốt không thay được khả năng tái lập"] }
+S5: { decision: reject, reasons: ["Slice long_haul xấu đi 16.7% với 400 chuyến, đủ lớn để tính, vượt dung sai 5%"] }
+S6: { decision: reject, reasons: ["Latency p95 52 ms bằng 1.3 lần champion, vượt trần 1.2 lần"] }
+S7: { decision: reject, reasons: ["Slice night có ở champion nhưng thiếu ở báo cáo của challenger nên không kiểm được"] }
+S8: { decision: promote, reasons: ["Slice long_haul chỉ có 150 chuyến, dưới min_slice_n 200 nên bị bỏ qua; các cổng còn lại đều đạt"] }

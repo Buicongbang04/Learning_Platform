@@ -368,12 +368,13 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 | Kiểm tra không còn rác | `mlopskit.leftovers()` | Liệt kê container, network, image có nhãn `mlops-ex=1` hoặc tiền tố `mlops-ex-` |
 
 - Script của người học chạy qua `testkit.run_sandboxed`, như track DevOps.
+- Timeout build của `built_image` và `compose_project` mặc định 1800 giây, chỉnh bằng biến môi trường `MLOPS_BUILD_TIMEOUT` (giây, đọc lúc gọi). Quá hạn thì test fail kèm gợi ý build trước (cache) rồi chạy lại hoặc tăng biến này.
 - Mọi tài nguyên do `mlopskit` tạo có nhãn `mlops-ex=1` và tiền tố `mlops-ex-`; lỗi hay Ctrl-C giữa chừng vẫn dọn hết.
 - Helper chưa có (`act`, kind/`KubeLab`, gate GPU) được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước.
 
 ### Stack và cổng
 
-Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d`. Cổng ở dải 2xxxx vì
+Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d`. Đã đổi cổng trong `setup/.env` thì thêm `--env-file setup/.env` trước `-f` (Compose chỉ tự đọc `.env` cạnh tệp compose). Cổng ở dải 2xxxx vì
 máy đã dùng 5432, 9000, 8000; mọi cổng remap được qua `setup/.env`.
 
 | Dịch vụ | Cổng host mặc định | Biến `.env` | Ghi chú |
@@ -381,6 +382,8 @@ máy đã dùng 5432, 9000, 8000; mọi cổng remap được qua `setup/.env`.
 | postgres | 25433 | `MLOPS_PG_PORT` | Backend store của MLflow |
 | minio | 29000 (S3 API), 29001 (console) | `MLOPS_MINIO_PORT` | Artifact store, remote của DVC |
 | mlflow | 25000 | `MLOPS_MLFLOW_PORT` | Tracking server và registry |
+
+**Client tải model từ host:** MLflow 3.17 server luôn quảng bá multipart download qua presigned URL trỏ `minio:9000` (không phân giải được từ host; không có cờ server tắt). Mọi client chạy trên host đọc model/artifact từ stack (`mlflow.pyfunc.load_model("models:/...")`, `download_artifacts`) phải đặt `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` (ví dụ `monkeypatch.setenv` trong fixture) để tải qua proxy `--serve-artifacts`; nếu không sẽ treo.
 
 Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack`); test dùng được MLflow file store thì không
 được đòi stack. Skip không tính là đạt; `SOLUTION=1` phải pass không skip khi stack và công cụ đã có.

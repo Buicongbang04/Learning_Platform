@@ -349,6 +349,7 @@ def test_oxford_trimaps_entry():
     ds = dd.DATASETS["oxford-pets-trimaps"]
     assert ds.extract is True
     assert ds.source == "url"
+    assert ds.files == ["annotations.tar.gz"]
     assert "CC BY-SA 4.0" in ds.license
     assert "oxford-pets" in ds.about
 

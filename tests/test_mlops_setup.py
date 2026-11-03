@@ -81,3 +81,10 @@ def test_env_example_lists_mlops_ports():
 def test_readme_documents_env_file():
     text = (ROOT / "setup" / "mlops" / "README.md").read_text(encoding="utf-8")
     assert "--env-file setup/.env" in text
+
+
+def test_mlflow_allows_container_host_header():
+    cmd = _compose()["services"]["mlflow"]["command"]
+    flag = next(c for c in cmd if str(c).startswith("--allowed-hosts="))
+    hosts = flag.split("=", 1)[1].split(",")
+    assert {"mlflow", "mlflow:*", "localhost:*", "127.0.0.1:*"} <= set(hosts)
