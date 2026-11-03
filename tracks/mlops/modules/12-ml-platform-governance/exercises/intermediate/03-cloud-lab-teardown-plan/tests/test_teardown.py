@@ -41,7 +41,7 @@ def test_only_resources_with_the_lab_tag_are_touched(td):
     names = {s["resource"] for s in steps}
     assert "ml-lab-7-hand-made" not in names and "ml-lab-9-eta" not in names
     own = [i for i in INVENTORY if i["tags"].get("lab") == LAB]
-    assert len(steps) == len(own) + 1
+    assert len(steps) == len(own) + 2
     assert all("hand-made" not in s["command"] and "lab-9" not in s["command"] for s in steps)
 
 
@@ -59,11 +59,12 @@ def test_exact_commands(td):
     assert "az group delete --name rg-ml-lab-7 --yes --no-wait" in cmds
 
 
-def test_notebook_is_stopped_before_deleted(td):
+def test_notebook_is_stopped_and_waited_before_deleted(td):
     cmds = commands(td)
     stop = cmds.index("aws sagemaker stop-notebook-instance --notebook-instance-name ml-lab-7-dev --region ap-southeast-1")
+    wait = cmds.index("aws sagemaker wait notebook-instance-stopped --notebook-instance-name ml-lab-7-dev --region ap-southeast-1")
     delete = cmds.index("aws sagemaker delete-notebook-instance --notebook-instance-name ml-lab-7-dev --region ap-southeast-1")
-    assert stop + 1 == delete
+    assert stop + 1 == wait and wait + 1 == delete
 
 
 def test_order_serving_before_artifacts_and_storage_last(td):
@@ -96,6 +97,36 @@ def test_unsafe_names_are_rejected_by_name(td, bad):
     inv = [{"provider": "aws", "type": "s3-bucket", "name": bad, "region": "r", "tags": OWN}]
     with pytest.raises(ValueError):
         td.plan_teardown(inv, LAB)
+
+
+@pytest.mark.parametrize("item", [
+    {"provider": "aws", "type": "sagemaker-endpoint", "name": "ml-lab-7-eta", "region": "ap-southeast-1; rm -rf ~"},
+    {"provider": "aws", "type": "sagemaker-model", "name": "ml-lab-7-eta", "region": "$(whoami)"},
+    {"provider": "aws", "type": "sagemaker-model", "name": "ml-lab-7-eta"},
+    {"provider": "gcp", "type": "vertex-endpoint", "name": "ml-lab-7-vx", "region": "asia-southeast1 --quiet; id"},
+    {"provider": "azure", "type": "azureml-endpoint", "name": "ml-lab-7-az", "region": "eastus", "resource_group": "rg`id`"},
+    {"provider": "azure", "type": "azureml-endpoint", "name": "ml-lab-7-az", "region": "eastus", "resource_group": "rg x"},
+])
+def test_unsafe_or_missing_region_and_resource_group_are_rejected(td, item):
+    with pytest.raises(ValueError, match=item["name"]):
+        td.plan_teardown([{**item, "tags": OWN}], LAB)
+
+
+def test_unsafe_region_never_reaches_the_script(td, fake_cli, tmp_path):
+    marker = tmp_path / "pwned"
+    inv = INVENTORY + [{"provider": "aws", "type": "sagemaker-endpoint", "name": "ml-lab-7-x",
+                        "region": f"ap-southeast-1; touch {marker}", "tags": OWN}]
+    try:
+        steps = td.plan_teardown(inv, LAB)
+    except ValueError:
+        return
+    script = tmp_path / "teardown.sh"
+    script.write_text(td.render_script(steps), encoding="utf-8")
+    bin_dir, _ = fake_cli
+    run_sandboxed(["bash", str(script)], writable=[tmp_path], cwd=tmp_path,
+                  env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path)}, timeout=60)
+    assert not marker.exists(), "region độc đã chạy như lệnh shell trong script dry-run"
+    pytest.fail("plan_teardown phải từ chối region không khớp SAFE_NAME bằng ValueError")
 
 
 def test_unsafe_name_of_another_lab_is_ignored_not_an_error(td):
@@ -179,6 +210,16 @@ def test_leftover_warns_about_hand_made_lookalikes(td):
     warnings = td.leftover_warnings(INVENTORY, LAB)
     assert [w["resource"] for w in warnings] == ["ml-lab-7-hand-made"]
     assert "tag" in warnings[0]["why"]
+
+
+def test_leftover_needs_a_dash_boundary_after_the_lab_id(td):
+    inv = [
+        {"provider": "aws", "type": "sagemaker-endpoint", "name": "ml-lab-70-eta", "region": "r", "tags": {}},
+        {"provider": "aws", "type": "s3-bucket", "name": "ml-lab-7", "region": "r", "tags": {}},
+        {"provider": "aws", "type": "s3-bucket", "name": "ml-lab-7x", "region": "r", "tags": {}},
+        {"provider": "aws", "type": "s3-bucket", "name": "ml-lab-7-old", "region": "r", "tags": {"lab": "ml-lab-70"}},
+    ]
+    assert [w["resource"] for w in td.leftover_warnings(inv, LAB)] == ["ml-lab-7", "ml-lab-7-old"]
 
 
 def test_leftover_empty_when_everything_is_tagged(td):
