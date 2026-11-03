@@ -1,0 +1,7 @@
+[project]
+name = "eta-mini"
+version = "0.1.0"
+
+# TODO: requires-python (>=3.11), dependencies (pandas, scikit-learn, pyarrow, joblib)
+# TODO: [project.scripts] eta-train = "eta_mini.cli:main"
+# TODO: [build-system] dùng setuptools, và chỉ cho setuptools tìm package trong src/

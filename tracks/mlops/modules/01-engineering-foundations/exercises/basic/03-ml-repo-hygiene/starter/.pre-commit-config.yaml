@@ -1,0 +1,4 @@
+repos: []
+# TODO: ghim rev cho từng repo (không dùng main/master).
+# - https://github.com/pre-commit/pre-commit-hooks: check-added-large-files (--maxkb=500), check-yaml, end-of-file-fixer
+# - https://github.com/astral-sh/ruff-pre-commit: ruff, ruff-format
