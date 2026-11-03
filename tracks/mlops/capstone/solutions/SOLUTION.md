@@ -120,8 +120,9 @@ Lựa chọn loss: `absolute_error` nghe hợp với MAE nhưng đo ra tệ hơn
 - **Khoá cache theo nội dung**: `cache_key_fn` băm `data_version` (sha256 tệp) cùng `months`, `sample_rows`, `seed`,
   `model_params`, `mlflow_uri`, `model_name`, `speed_table` và hash mã nguồn (`code_version()`: sha256 các tệp dựng dữ
   liệu, feature, model). Thiếu hash code thì sửa `clean` xong chạy lại vẫn nhận model cũ. Hash tham số mặc định của Prefect chỉ thấy đường dẫn config, không thấy
-  tệp dữ liệu đổi. Đánh đổi: xoá version trong registry thì cache vẫn trả số cũ; xoá thư mục kết quả Prefect hoặc đổi
-  khoá khi cần train lại có chủ đích.
+  tệp dữ liệu đổi. Khoá không biết registry, nên `train_flow` đối chiếu: cache trả version mà registry không còn (hay
+  tag `data_version` lệch) thì log `stale_cache` và train lại với `refresh_cache=True`; xoá `data/replay-mlflow.db` rồi
+  `make replay` lại vẫn đúng. Muốn train lại có chủ đích thì xoá thư mục kết quả Prefect hoặc đổi khoá.
 - **Retry ở I/O, không ở train**: `fingerprint` và `score_month` có `retries=2` (đọc tệp, MinIO chập chờn); train lỗi
   thường là lỗi thật (dữ liệu, code), chạy lại y hệt không giúp gì.
 - **Ghi parquet qua tệp tạm rồi `replace`**: flow chết giữa chừng không để lại tệp dở mà lần sau tưởng đã xong.
