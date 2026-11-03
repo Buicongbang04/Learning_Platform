@@ -35,7 +35,7 @@ Test dựng một repo git tạm, chép ba tệp của bạn vào, tạo tệp g
 | `train` | tạo `models/` rồi chạy `$(PYTHON) -m eta_mini --data $(DATA) --out models/model.joblib --seed $(SEED)`; `PYTHON`, `DATA`, `SEED` ghi đè được từ dòng lệnh |
 | `clean` | xoá `models/`, cache và `__pycache__`, giữ nguyên `data/` |
 
-**`.pre-commit-config.yaml`**: hook `check-added-large-files` (giới hạn không quá 1024 KB), `check-yaml`, `ruff`, `ruff-format`; ghim `rev` của từng repo bằng tag bắt đầu bằng `v` (không dùng `main`, `master`, `HEAD`).
+**`.pre-commit-config.yaml`**: hook `check-added-large-files` với đối số dạng `--maxkb=N` và N không quá 1024, `check-yaml`, `ruff`, `ruff-format`; ghim `rev` của từng repo bằng tag bắt đầu bằng `v` (không dùng `main`, `master`, `HEAD`).
 
 ## Tiêu chí đạt
 

@@ -118,7 +118,7 @@ flowchart TB
 ```
 
 Ưu tiên tăng dần: mặc định < YAML < env. Nguyên tắc 12-factor: thứ gì **đổi giữa các môi trường** (đường dẫn dữ liệu, URI tracking, mật khẩu) thuộc về config; thứ gì **định nghĩa hành vi** (danh sách feature, luật làm sạch) thuộc về code và được review.
-Bí mật không bao giờ vào YAML trong Git: lấy từ env hoặc secret manager (module 17).
+Bí mật không bao giờ vào YAML trong Git: lấy từ env hoặc secret manager ([module 17-ml-platform-security](../17-ml-platform-security/README.md)).
 
 Ba quyết định thiết kế đáng nhớ (Basic 02 bắt bạn làm cả ba):
 
@@ -213,9 +213,9 @@ Chênh lệch 0,04 phút là **nhiễu của cách chia dữ liệu**. Nếu b�
 | Đa luồng, song song, GPU không xác định | Sai khác ở chữ số thập phân cuối | Ghim số luồng; chấp nhận dung sai; ghi nhận rõ |
 | Phiên bản thư viện, dữ liệu đổi ngầm | Khác khi chạy lại sau vài tháng | Lockfile, DVC (module 03) |
 
-### Seed rò: seed có mặt nhưng không bao phủ hết
+### Seed có mặt chưa chứng minh được tái lập
 
-Đây là kịch bản của bài sự cố (Intermediate 02): code có `np.random.seed(seed)` ở dòng đầu, nhưng hàm chia dữ liệu dùng `random.shuffle` của Python và đọc tệp theo `os.listdir`. Người đọc thấy chữ `seed` và yên tâm. Ba cách chẩn đoán theo thứ tự rẻ nhất:
+Thấy chữ `seed` trong code làm người đọc yên tâm, nhưng nó chỉ bao phủ những nguồn thực sự đọc seed đó. Khi hai lần chạy ra hai kết quả khác nhau, ba cách chẩn đoán theo thứ tự rẻ nhất:
 
 1. **Chạy hai lần trong cùng một tiến trình rồi so**, sau khi cố ý đổi trạng thái ngẫu nhiên toàn cục giữa hai lần. Nếu khác, nguồn ngẫu nhiên không nằm dưới `seed` bạn truyền.
 2. **Giả lập môi trường khác** (đổi thứ tự liệt kê tệp, đổi số luồng) để lộ phụ thuộc môi trường.
@@ -262,7 +262,7 @@ uv run python -m eta_mini --data "$DATA" --out models/model.joblib
 jq -r '.mae' <<<"$(tail -n1 run.log)"          # đọc một trường từ dòng log JSON
 ```
 
-Ba bẫy kinh điển: biến không bọc dấu nháy (`$DATA` có dấu cách vỡ lệnh), thiếu `set -e` (lệnh lỗi mà script vẫn "thành công"), và pipe nuốt mã lỗi (cần `pipefail`). Dùng `shellcheck` để bắt chúng (module DevOps 03).
+Ba bẫy kinh điển: biến không bọc dấu nháy (`$DATA` có dấu cách vỡ lệnh), thiếu `set -e` (lệnh lỗi mà script vẫn "thành công"), và pipe nuốt mã lỗi (cần `pipefail`). Dùng `shellcheck` để bắt chúng ([DevOps module 02](../../../devops/modules/02-scripting/README.md)).
 
 ### Go: chỉ giới thiệu
 
@@ -276,7 +276,7 @@ Với MLOps engineer, mức cần có là: **đọc được** code Go của cá
 | Vào Git | Không vào Git | Quản lý bằng |
 | --- | --- | --- |
 | Code, test, `pyproject.toml`, `uv.lock` | Dữ liệu (`data/`) | DVC + remote (module 03) |
-| Config YAML của môi trường | Bí mật, `.env` | Secret manager, biến môi trường (module 17) |
+| Config YAML của môi trường | Bí mật, `.env` | Secret manager, biến môi trường (module 17-ml-platform-security) |
 | `dvc.yaml`, `dvc.lock` (con trỏ tới dữ liệu) | Model (`*.joblib`, `*.pkl`) | Model registry (module 04) |
 | Notebook đã xoá output (`nbstripout`) | Cache, `.venv`, `mlruns/` | `.gitignore` |
 

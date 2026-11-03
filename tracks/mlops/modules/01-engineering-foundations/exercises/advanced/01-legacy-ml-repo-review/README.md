@@ -27,7 +27,7 @@ Trưởng nhóm cho bạn một tuần. Điền `starter/review.md`:
 3. **Thứ tự và lý do**: vì sao theo thứ tự đó, bước nào chặn bước nào, việc nào làm trong ngày hôm nay.
 4. **Không làm (và vì sao)**: ít nhất 2 việc bạn cố ý không làm lúc này.
 
-Test chỉ kiểm cấu trúc: đúng bốn heading `## ` như template theo thứ tự, không còn `TODO`; mỗi phát hiện dài ít nhất 60 ký tự; phần thứ tự và lý do dài ít nhất 300 ký tự; phần không làm có ít nhất 2 gạch đầu dòng; dòng nói về mật khẩu trong `config.py` (chứa một trong các chữ `password`, `mật khẩu`, `secret`, `DB_URL`, `lộ`) mang mức `[P0]`. Cụ thể (đủ mục, mức độ, tham chiếu ít nhất 6 vị trí trong repo, mật khẩu trong `config.py` là `[P0]`, mỗi bước có `Kiểm:`). Chất lượng nội dung chấm theo rubric trong `SOLUTION.md`.
+Test chỉ kiểm cấu trúc: đúng bốn heading `## ` như template theo thứ tự, không còn `TODO`; mỗi phát hiện dài ít nhất 60 ký tự; phần thứ tự và lý do dài ít nhất 300 ký tự; phần không làm có ít nhất 2 gạch đầu dòng; dòng nói về mật khẩu trong `config.py` (chứa một trong các chữ `password`, `mật khẩu`, `secret`, `DB_URL`, `lộ`) mang mức `[P0]`; mỗi phát hiện là một dòng bắt đầu bằng `-` hoặc `*` rồi tới `[P0]`, `[P1]` hoặc `[P2]`, có ít nhất 8 dòng như vậy và phần phát hiện nhắc tới ít nhất 6 vị trí trong repo (tệp hoặc thư mục); kế hoạch có ít nhất 5 dòng bắt đầu bằng `1.`, `2.`... và mỗi dòng chứa `Kiểm:`. Chất lượng nội dung chấm theo rubric trong `SOLUTION.md`.
 
 ## Tiêu chí đạt
 

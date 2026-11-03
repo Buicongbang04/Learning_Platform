@@ -24,4 +24,4 @@ train: ## Train ETA mini
 
 clean: ## Xoá model, cache; giữ nguyên data
 	rm -rf models .pytest_cache .ruff_cache
-	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+	find . -path ./.venv -prune -o -name __pycache__ -type d -prune -exec rm -rf {} +

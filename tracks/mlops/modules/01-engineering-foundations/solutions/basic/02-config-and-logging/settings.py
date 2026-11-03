@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Mapping
 
@@ -52,8 +52,5 @@ def load_settings(yaml_path: Path | None = None, env: Mapping[str, str] | None =
     if "data_path" not in values:
         raise ValueError("Thiếu data_path (đặt trong YAML hoặc ETA_DATA_PATH)")
     settings = Settings(**values)
-    return Settings(**{
-        **settings.__dict__,
-        "data_path": settings.data_path.resolve(),
-        "model_dir": (settings.model_dir if "model_dir" in values else Path.cwd() / settings.model_dir).resolve(),
-    })
+    model_dir = settings.model_dir if "model_dir" in values else Path.cwd() / settings.model_dir
+    return replace(settings, data_path=settings.data_path.resolve(), model_dir=model_dir.resolve())

@@ -30,14 +30,37 @@ def data_dir(tmp_path):
     return folder
 
 
+class PermutedScandir:
+    def __init__(self, iterator, permutation):
+        entries = sorted(iterator, key=lambda entry: entry.name)
+        self.entries = [entries[i] for i in permutation(len(entries))]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        return iter(self.entries)
+
+    def close(self):
+        pass
+
+
 def list_in_order(monkeypatch, permutation):
-    real = os.listdir
+    real_listdir, real_scandir = os.listdir, os.scandir
 
     def listing(path="."):
-        names = sorted(real(path))
+        names = sorted(real_listdir(path))
         return [names[i] for i in permutation(len(names))]
 
+    def scanning(path="."):
+        with real_scandir(path) as iterator:
+            return PermutedScandir(list(iterator), permutation)
+
     monkeypatch.setattr(os, "listdir", listing)
+    monkeypatch.setattr(os, "scandir", scanning)
 
 
 def test_two_runs_same_seed_give_the_same_mae(pipeline, data_dir):

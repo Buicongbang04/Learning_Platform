@@ -26,7 +26,7 @@ Viết `starter/test-strategy.yaml`:
 - `flaky_policy`: `max_retries` (0 hoặc 1), `quarantine`, `owner`, `deadline_days`.
 - `gaps`: ít nhất 3 rủi ro ML bạn cố ý **không** bắt bằng CI, mỗi mục có `risk` và `reason`.
 
-Các ràng buộc test kiểm thêm: `name` duy nhất; `what` và `catches` dài ít nhất 20 ký tự và `catches` khác nhau giữa các lớp; `budget_seconds` là số nguyên dương; lớp `model-quality` chạy ở `pr` chỉ khi `budget_seconds` không quá 120; `flaky_policy.owner` khác rỗng và `deadline_days` dương; mỗi `gaps` có `risk` từ 10 ký tự và `reason` từ 20 ký tự. Test chỉ kiểm cấu trúc và ngân sách; nội dung chấm theo rubric trong `SOLUTION.md`.
+Các ràng buộc test kiểm thêm: `name` duy nhất; `what` và `catches` dài ít nhất 20 ký tự và `catches` khác nhau giữa các lớp và khác `what` của chính lớp đó; có ít nhất một lớp `runs_on` khác `pr`; `budget_seconds` là số nguyên dương; lớp `model-quality` chạy ở `pr` chỉ khi `budget_seconds` không quá 120; `flaky_policy.owner` khác rỗng và `deadline_days` dương; mỗi `gaps` có `risk` từ 10 ký tự và `reason` từ 20 ký tự. Test chỉ kiểm cấu trúc và ngân sách; nội dung chấm theo rubric trong `SOLUTION.md`.
 
 ## Tiêu chí đạt
 

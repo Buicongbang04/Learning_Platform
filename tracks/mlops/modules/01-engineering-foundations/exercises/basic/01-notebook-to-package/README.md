@@ -38,7 +38,7 @@ Chuyển logic sang package `eta_mini` theo `src/` layout (đã có khung trong 
 - `features.build_features(df)`: DataFrame đúng cột và thứ tự của `FEATURES`.
 - `model.train(df, seed, max_iter)` chia 80/20 (số dòng test xấp xỉ 20%, `n_train + n_test` bằng số dòng đầu vào) và trả `TrainResult`; `model.predict(model, df)` dự đoán từ chuyến thô.
 - `cli.main(argv)` với `--data`, `--out`, `--seed`, `--max-rows`; in đúng một dòng JSON `{"mae", "n_train", "n_test"}` ra stdout.
-- `pyproject.toml`: `requires-python`, dependencies, entry point `eta-train`, build backend setuptools tìm package trong `src/`.
+- `pyproject.toml`: `name = "eta-mini"`; `requires-python` bắt đầu bằng `>=3.`; dependencies gồm `pandas`, `scikit-learn`, `pyarrow`, `joblib`; entry point `eta-train = "eta_mini.cli:main"`; `setuptools` trong `build-system.requires`; `[tool.setuptools.packages.find]` với `where = ["src"]`.
 
 Package không được chứa đường dẫn của máy cá nhân. Test chạy CLI trong sandbox `bubblewrap`; thiếu `bwrap` thì test đó tự skip (xem `## 0. Cài đặt` của module).
 
@@ -49,7 +49,7 @@ Package không được chứa đường dẫn của máy cá nhân. Test chạy
 - `load_trips` đọc được CSV và Parquet, trả đúng 5 cột theo thứ tự `TRIP_COLUMNS` (cột giờ đón và giờ trả là kiểu datetime, `max_rows` cho đúng `max_rows` dòng), mẫu giống nhau khi cùng seed.
 - `clean` loại đúng các chuyến bẩn theo luật; `build_features` đúng cột và thứ tự.
 - `train` chạy được, `predict` trả đúng một giá trị hữu hạn cho mỗi chuyến, MAE nhỏ hơn một nửa MAE của cách đoán trung bình trên dữ liệu tổng hợp, cùng seed thì cùng MAE.
-- `python -m eta_mini ...` chạy được từ thư mục bất kỳ, ghi model ra `--out`.
+- `python -m eta_mini ...` chạy được từ thư mục bất kỳ, ghi model ra `--out` (một tệp joblib nạp lại được, có `predict`); dòng JSON có đúng ba khoá và `0 < mae < 5` trên dữ liệu tổng hợp của test.
 - Trên một mẫu 30 000 chuyến thật của 2019-01 (nếu đã tải `nyc-tlc`), MAE tốt hơn đoán trung vị.
 
 ## Gợi ý
