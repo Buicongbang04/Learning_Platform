@@ -1,6 +1,7 @@
-# Cluster kind `mlops` (Giai đoạn 3 track MLOps)
+# Cluster kind `mlops` (Giai đoạn 3–4 track MLOps)
 
-Một cluster Kubernetes local duy nhất, tên `mlops`, context `kind-mlops`, dùng chung cho module 13 và capstone m12.
+Một cluster Kubernetes local duy nhất, tên `mlops`, context `kind-mlops`, dùng chung cho module 13, capstone m12 và
+(với add-on senior, xem mục [Add-on senior](#add-on-senior---senior)) module 14–18.
 Test không bao giờ tạo hay xoá cluster: chúng gọi `mlopskit.require_kind()` và skip kèm lệnh dựng khi cluster chưa có.
 
 | Thành phần | Bản ghim | Ghi chú |
@@ -20,7 +21,7 @@ ngay. Helper `mlopskit` và `down.sh` ưu tiên bản ghim trong `~/.local/bin` 
 
 Rủi ro chấp nhận (ghi cả trong `versions.env`):
 
-- Manifest upstream (cert-manager, KServe, Argo) kéo image theo **tag** (vd. `kserve/kserve-controller:v0.21.0`), không
+- Manifest upstream (cert-manager, KServe, Argo, metrics-server, KEDA, Kueue) kéo image theo **tag** (vd. `kserve/kserve-controller:v0.21.0`), không
   theo digest. Tệp manifest được ghim sha256 nên không ai đổi được tag trong đó, nhưng nội dung tag trên registry thì
   tin vào nhà phát hành. Không viết lại thành digest để manifest giữ đúng bản phát hành.
 - `pgsty/minio`, `pgsty/mc` là bản build của bên thứ ba (MinIO ngừng phát hành image Docker chính thức từ cuối 2025),
@@ -48,6 +49,63 @@ lại `kserve.yaml` với `--force-conflicts` sẽ trả ConfigMap về `Serverl
 tạo đúng lúc đó sẽ hỏng). Đổi bản KServe thì `down.sh` rồi `up.sh`. Sau khi máy khởi động lại, node `mlops-control-plane` tự chạy lại và các pod tự hồi phục (đã kiểm);
 nếu node vẫn dừng thì chạy lại `up.sh`.
 
+## Add-on senior (`--senior`)
+
+Module 14–18 cần thêm ba thành phần, cài bằng `bash setup/mlops/kind/up.sh --senior` (chạy toàn bộ `up.sh` như trên rồi
+cài thêm; không bắt buộc cho module 13). Chạy lại an toàn; không đổi current-context. Test cần add-on gọi
+`mlopskit.require_senior_addons()` và skip kèm đúng lệnh này khi thiếu CRD của KEDA hoặc Kueue.
+
+| Thành phần | Bản ghim | Phát hành | Ghi chú |
+| --- | --- | --- | --- |
+| metrics-server | v0.9.0 | 2026-07-13 | `components.yaml`; `up.sh` thêm `--kubelet-insecure-tls` (kubelet của kind dùng chứng chỉ tự ký). Cho `kubectl top`, HPA theo CPU/RAM |
+| KEDA | v2.21.0 | 2026-09-23 | `keda-2.21.0.yaml` (CRD + operator + metrics apiserver + admission webhook), namespace `keda`. Webhook của KEDA là `failurePolicy: Ignore` |
+| Kueue | v0.20.2 | 2026-10-15 | `manifests.yaml`, namespace `kueue-system`, API `kueue.x-k8s.io/v1beta2` |
+
+Ngày lấy từ GitHub Releases (`published_at`, kiểm 2026-11-04), mọi bản ≤ 2026-10-21; checksum là digest asset của
+release, `up.sh` kiểm sha256 trước khi dùng. Hai chỗ sửa so với manifest gốc, làm trên bản đã kiểm checksum (bản gốc giữ
+nguyên trong `~/.cache/mlops-kind`, bản sửa có hậu tố `-kind`/`-batchjob`), script dừng nếu không thấy đúng chỗ cần sửa:
+
+- metrics-server: thêm `--kubelet-insecure-tls`. Không có cờ này metrics-server không scrape được kubelet của kind và
+  `kubectl top` báo `Metrics API not available`.
+- Kueue: `integrations.frameworks` chỉ còn `batch/job`, và bỏ 8 webhook `m|v` + `pod`, `deployment`, `statefulset`,
+  `leaderworkerset`. Bản gốc chặn **mọi** lệnh tạo Pod/Deployment ở mọi namespace (trừ `kube-system`, `kueue-system`)
+  qua webhook `failurePolicy: Fail`: khi controller Kueue chưa lên (vd. vừa khởi động lại node) thì KServe, Argo và bài
+  module 13 không tạo được pod. Bài Kueue của module 14 dùng `batch/v1` Job (nhãn `kueue.x-k8s.io/queue-name`), không
+  cần các tích hợp kia.
+
+Webhook `mjob.kb.io`/`vjob.kb.io` của Kueue vẫn `failurePolicy: Fail` cho **mọi** `batch/v1` Job ngoài `kube-system` và
+`kueue-system`, kể cả Job không có nhãn queue: ngay sau khi node khởi động lại (hoặc `docker start mlops-control-plane`),
+tạo Job bị từ chối (`failed calling webhook "mjob.kb.io" ... connection refused`) tới khi controller Kueue lên, thường
+30–60 giây. Cách chờ:
+
+```bash
+kubectl --context kind-mlops -n kueue-system wait --for=condition=Available deployment/kueue-controller-manager --timeout=180s
+bash setup/mlops/kind/up.sh --senior    # hoặc chạy lại up.sh: cuối bước --senior đã thử webhook bằng dry-run
+```
+
+Test không phải tự chờ: `mlopskit.require_senior_addons()` thử `create --dry-run=server` một ResourceFlavor (đi qua cùng
+webhook server) tới khi được, tối đa 120 giây, quá hạn thì fail kèm lệnh xem log. Chọn chờ trong `require_senior_addons`
+thay vì thêm helper riêng vì mọi test dùng Kueue đã gọi nó trước, và chi phí khi đã sẵn sàng chỉ một lệnh dry-run.
+
+Cuối bước `--senior`, script chờ APIService `v1beta1.metrics.k8s.io` và `v1beta1.external.metrics.k8s.io` Available,
+`kubectl top node` trả số, và webhook Kueue nhận `create --dry-run=server` một ResourceFlavor thử.
+
+Đo trên laptop 16 nhân, 31 GB RAM (2026-11-04), cluster rảnh, không workload bài tập:
+
+| | Thời gian `up.sh --senior` | Bộ nhớ container node (`docker stats`) |
+| --- | --- | --- |
+| Trước khi cài | | 3,17 GiB |
+| Lần đầu (kéo 5 image) | 113 giây | |
+| Chạy lại | 9 giây | |
+| Sau khi cài, đã ổn định 3 phút | | 3,72 GiB (**+0,55 GiB**, dưới ngân sách 1,5 GB) |
+
+`kubectl top pods`: Kueue ~145 MiB, KEDA 3 pod ~80 MiB, metrics-server ~26 MiB; phần còn lại là `kube-apiserver` lớn lên
+vì thêm CRD của KEDA và Kueue. Gỡ add-on mà giữ cluster: không có lệnh riêng, chạy `down.sh` rồi `up.sh` (không `--senior`).
+
+Tài nguyên cluster-scoped (ClusterQueue, ResourceFlavor, PriorityClass, WorkloadPriorityClass...) trong test chỉ tạo qua
+`mlopskit.cluster_scoped(manifest)` (tên chứa run id, nhãn `mlops-ex-run=<uuid8>`, xoá trong `finally`); extended
+resource giả trên node chỉ qua `mlopskit.fake_extended_resource(...)`. `mlopskit.leftovers()` liệt kê cả hai loại.
+
 ## Cổng
 
 `cluster.yaml` map hai cổng của node ra máy, chỉ bind `127.0.0.1`:
@@ -68,9 +126,9 @@ Deployment + Service thường; gọi bằng `port_forward` vào Service `<tên>
 `kserve-cluster-resources.yaml`: các `LLMInferenceServiceConfig` của bản v0.21.0 bị chính webhook KServe từ chối
 (`can't evaluate field TrustRemoteCode`), và track không dùng LLM serving.
 
-### Không có metrics-server: tắt HPA trong manifest bài tập
+### Không có metrics-server (khi chưa chạy `--senior`): tắt HPA trong manifest bài tập
 
-Ở RawDeployment, KServe mặc định tạo HorizontalPodAutoscaler cho predictor. Cluster không cài metrics-server nên HPA
+Ở RawDeployment, KServe mặc định tạo HorizontalPodAutoscaler cho predictor. Cluster cơ bản không cài metrics-server nên HPA
 hiện `<unknown>` và namespace đầy event `FailedGetResourceMetric` (không hỏng service, nhưng làm nhiễu `describe`/events
 mà `mlopskit.wait_for` in ra khi fail). Manifest bài tập và capstone nên tắt autoscaler:
 
@@ -80,7 +138,8 @@ metadata:
     serving.kserve.io/autoscalerClass: none
 ```
 
-hoặc đặt `minReplicas` bằng `maxReplicas` trong `predictor`.
+hoặc đặt `minReplicas` bằng `maxReplicas` trong `predictor`. Bài module 13 giữ cách này kể cả khi cluster đã có
+metrics-server (từ `--senior`), để không phụ thuộc vào add-on.
 
 ## Argo Workflows và artifact
 

@@ -100,9 +100,21 @@ dependencies = [
 [dependency-groups]
 # Build từ source (cần gcc, g++, cmake, ~4 phút), không có wheel CPU dựng sẵn: cài bằng `uv sync --group llama`
 llama = ["llama-cpp-python==0.3.36"]
+# MLOps giai đoạn 4 (module 14–18), nằm trong default-groups nên `uv sync`/`uv run` mặc định đã cài.
+# Phát hành ≥2 tuần trước 2026-11-04 (≤ 2026-10-21), kiểm cả phụ thuộc gián tiếp. modelscan chạy trong container
+# (đòi rich<15, tomlkit<0.14, sẽ hạ bản của env), xem CONTENT_SPEC.md mục Track MLOps.
+mlops-senior = [
+    "copier==9.19.1",
+    "cyclonedx-bom==7.5.0",
+    "model-signing==1.1.1",
+    "pyopenssl==26.4.0",
+    "ray[train,tune]==2.59.0",
+    "river==0.26.1",
+]
 
 [tool.uv]
 package = false
+default-groups = ["mlops-senior"]
 # Phụ thuộc gián tiếp phát hành < 2 tuần trước 2026-10-30: chặn ở bản cũ hơn (bỏ dòng này khi đã đủ 2 tuần)
 constraint-dependencies = [
     "av<=19.0.1",

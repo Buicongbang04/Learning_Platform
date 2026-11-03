@@ -138,8 +138,8 @@ def test_helper_dockerfiles_present():
 
 
 KIND_DIR = ROOT / "setup" / "mlops" / "kind"
-ADDED_ON = "2026-11-03"
-LATEST_RELEASE = "2026-10-20"
+ADDED_ON = "2026-11-04"
+LATEST_RELEASE = "2026-10-21"
 
 
 def _versions() -> dict[str, str]:
@@ -161,7 +161,8 @@ def test_kind_files_present():
 def test_versions_env_dates():
     values = _versions()
     components = sorted(k.removesuffix("_VERSION") for k in values if k.endswith("_VERSION"))
-    assert {"KIND", "KUBECTL", "KUBERNETES", "CERT_MANAGER", "KSERVE", "ARGO", "ARGO_MINIO"} <= set(components)
+    assert {"KIND", "KUBECTL", "KUBERNETES", "CERT_MANAGER", "KSERVE", "ARGO", "ARGO_MINIO",
+            "METRICS_SERVER", "KEDA", "KUEUE"} <= set(components)
     for component in components:
         released = values.get(f"{component}_RELEASED")
         assert released and re.fullmatch(r"\d{4}-\d{2}-\d{2}", released), component
@@ -259,3 +260,83 @@ def test_argo_artifacts_scoped_and_isolated():
     keys = [e["key"] for rule in policy["ingress"] for src in rule["from"]
             for e in src.get("podSelector", {}).get("matchExpressions", [])]
     assert keys == ["workflows.argoproj.io/workflow"]
+
+
+def test_kafka_service_pinned_local_and_healthchecked():
+    kafka = _compose()["services"]["kafka"]
+    assert kafka["profiles"] == ["streaming"]
+    assert re.fullmatch(r"apache/kafka:4\.3\.1@sha256:[0-9a-f]{64}", kafka["image"])
+    assert kafka["ports"] == ["127.0.0.1:${MLOPS_KAFKA_PORT:-29092}:9094"]
+    assert 29092 not in TAKEN_PORTS | {6379, 25000, 29000, 29001, 25433, 29090, 29093, 23000, 26390}
+    env = kafka["environment"]
+    assert env["KAFKA_PROCESS_ROLES"] == "broker,controller"
+    assert env["KAFKA_AUTO_CREATE_TOPICS_ENABLE"] == "false"
+    assert "HOST://127.0.0.1:${MLOPS_KAFKA_PORT:-29092}" in env["KAFKA_ADVERTISED_LISTENERS"]
+    assert "PLAINTEXT://kafka:9092" in env["KAFKA_ADVERTISED_LISTENERS"]
+    assert "kafka-broker-api-versions.sh" in " ".join(kafka["healthcheck"]["test"])
+    assert mlopskit.STACK_SERVICES["kafka"] == ("MLOPS_KAFKA_PORT", 29092)
+    assert mlopskit.STACK_PROFILES["kafka"] == "streaming"
+
+
+def test_env_example_ends_with_kafka_port():
+    lines = ENV_EXAMPLE.read_text(encoding="utf-8").splitlines()
+    assert lines[-1] == "# MLOPS_KAFKA_PORT=29092"
+
+
+def test_readme_documents_streaming_profile():
+    text = (ROOT / "setup" / "mlops" / "README.md").read_text(encoding="utf-8")
+    assert "--profile streaming up -d --wait" in text and "MLOPS_KAFKA_PORT" in text
+
+
+def test_up_sh_senior_addons_pinned():
+    text = (KIND_DIR / "up.sh").read_text(encoding="utf-8")
+    assert "--senior" in text
+    for key in ("METRICS_SERVER_SHA256", "KEDA_SHA256", "KUEUE_SHA256"):
+        assert f'"${key}"' in text, key
+    assert "--kubelet-insecure-tls" in text and '"batch/job"' in text
+    values = _versions()
+    assert values["KEDA_VERSION"] == "v2.21.0" and values["KUEUE_VERSION"] == "v0.20.2"
+    assert values["METRICS_SERVER_VERSION"] == "v0.9.0"
+    readme = (KIND_DIR / "README.md").read_text(encoding="utf-8")
+    assert "up.sh --senior" in readme and "+0,55 GiB" in readme
+
+
+@pytest.mark.parametrize("arg", ["--bogus", "senior", "--senior=1"])
+def test_up_sh_rejects_unknown_arg(arg):
+    import os
+    import subprocess
+
+    env = {**os.environ, "HOME": "/nonexistent-mlops-test"}
+    result = subprocess.run(["bash", str(KIND_DIR / "up.sh"), arg], capture_output=True, text=True, env=env, timeout=30)
+    assert result.returncode == 1
+    assert "tham số không hợp lệ" in result.stderr
+
+
+def test_up_sh_help():
+    import subprocess
+
+    result = subprocess.run(["bash", str(KIND_DIR / "up.sh"), "--help"], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0 and "--senior" in result.stdout
+
+
+def test_modelscan_dockerfile_pinned():
+    folder = ROOT / "setup" / "mlops" / "modelscan"
+    text = (folder / "Dockerfile").read_text(encoding="utf-8")
+    assert re.match(r"FROM python:3\.12\.11-slim@sha256:[0-9a-f]{64}\n", text)
+    assert "--require-hashes" in text and "requirements.txt" in text
+    requirements = (folder / "requirements.txt").read_text(encoding="utf-8")
+    entries = re.findall(r"^([a-z0-9-]+)==(\S+) \\\n((?:    --hash=sha256:[0-9a-f]{64}(?: \\)?\n)+)", requirements, flags=re.M)
+    pins = {name: version for name, version, _ in entries}
+    assert {"modelscan": "0.8.8", "numpy": "2.5.4", "rich": "14.3.4", "tomlkit": "0.13.3", "click": "8.5.0"}.items() <= pins.items()
+    assert len(entries) == len(re.findall(r"^[a-z]", requirements, flags=re.M))
+
+
+def test_mlops_senior_group_in_default_env():
+    import tomllib
+
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "mlops-senior" in data["tool"]["uv"]["default-groups"]
+    group = set(data["dependency-groups"]["mlops-senior"])
+    assert {"ray[train,tune]==2.59.0", "river==0.26.1", "copier==9.19.1", "model-signing==1.1.1",
+            "cyclonedx-bom==7.5.0", "pyopenssl==26.4.0"} == group
+    assert not any(d.startswith("modelscan") for d in data["project"]["dependencies"] + sorted(group))
