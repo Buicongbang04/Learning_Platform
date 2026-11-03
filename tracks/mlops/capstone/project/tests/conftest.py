@@ -62,3 +62,14 @@ def dirty_frame() -> pd.DataFrame:
             "trip_distance": [r[4] for r in rows],
         }
     )
+
+
+@pytest.fixture(scope="session")
+def prefect_harness(tmp_path_factory):
+    """Prefect không cần server: API tạm của `prefect_test_harness`, kết quả task lưu trong thư mục tạm."""
+    from prefect.settings import PREFECT_HOME, PREFECT_LOCAL_STORAGE_PATH, temporary_settings
+    from prefect.testing.utilities import prefect_test_harness
+
+    home = tmp_path_factory.mktemp("prefect-home")
+    with temporary_settings({PREFECT_HOME: home, PREFECT_LOCAL_STORAGE_PATH: home / "storage"}), prefect_test_harness():
+        yield home

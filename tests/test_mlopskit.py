@@ -1,3 +1,5 @@
+import hashlib
+import shutil
 import subprocess
 
 import pytest
@@ -27,6 +29,10 @@ def test_stack_services_table():
         "postgres": ("MLOPS_PG_PORT", 25433),
         "minio": ("MLOPS_MINIO_PORT", 29000),
         "mlflow": ("MLOPS_MLFLOW_PORT", 25000),
+        "prometheus": ("MLOPS_PROMETHEUS_PORT", 29090),
+        "alertmanager": ("MLOPS_ALERTMANAGER_PORT", 29093),
+        "grafana": ("MLOPS_GRAFANA_PORT", 23000),
+        "redis": ("MLOPS_REDIS_PORT", 26390),
     }
 
 
@@ -187,3 +193,274 @@ def test_build_timeout_message(monkeypatch, tmp_path):
         assert "MLOPS_BUILD_TIMEOUT" in str(exc.value) and "7 giây" in str(exc.value)
         assert "cache" in str(exc.value)
         assert seen["timeout"] == 7
+
+
+def test_ensure_image_rebuilds_on_dockerfile_change(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit, "docker_ready", lambda: True)
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    sha = hashlib.sha256(b"FROM scratch\n").hexdigest()
+    labels = {"img:1": sha}
+    builds = []
+
+    def fake_run(cmd, **kw):
+        if cmd[1:3] == ["image", "inspect"]:
+            tag = cmd[-1]
+            if tag not in labels:
+                return subprocess.CompletedProcess(cmd, 1, "", "No such image")
+            return subprocess.CompletedProcess(cmd, 0, labels[tag] + "\n", "")
+        if cmd[1] == "build":
+            builds.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert mlopskit._ensure_image("img:1", tmp_path) == "img:1"
+    assert builds == [], "nhãn khớp sha Dockerfile thì không build lại"
+    (tmp_path / "Dockerfile").write_text("FROM busybox\n")
+    mlopskit._ensure_image("img:1", tmp_path)
+    new_sha = hashlib.sha256(b"FROM busybox\n").hexdigest()
+    assert len(builds) == 1 and f"mlops-dockerfile-sha={new_sha}" in builds[0], builds
+    assert not any("mlops-ex=1" in part for part in builds[0])
+    labels["img:1"] = "<no value>"
+    mlopskit._ensure_image("img:1", tmp_path)
+    assert len(builds) == 2, "image cũ không có nhãn thì build lại"
+    mlopskit._ensure_image("img:2", tmp_path)
+    assert len(builds) == 3 and builds[-1][-2:] == ["img:2", str(tmp_path)]
+
+
+def test_stack_port_new_services(monkeypatch):
+    for env in ("MLOPS_PROMETHEUS_PORT", "MLOPS_ALERTMANAGER_PORT", "MLOPS_GRAFANA_PORT", "MLOPS_REDIS_PORT"):
+        monkeypatch.delenv(env, raising=False)
+    assert mlopskit.stack_port("prometheus") == 29090
+    assert mlopskit.stack_port("alertmanager") == 29093
+    assert mlopskit.stack_port("grafana") == 23000
+    assert mlopskit.stack_port("redis") == 26390
+
+
+@pytest.mark.parametrize("service,profile", [("prometheus", "monitoring"), ("alertmanager", "monitoring"),
+                                              ("grafana", "monitoring"), ("redis", "feast")])
+def test_require_stack_profile_hint(monkeypatch, service, profile):
+    env = mlopskit.STACK_SERVICES[service][0]
+    monkeypatch.setenv(env, str(testkit.free_port()))
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_stack(service)
+    assert f"--profile {profile}" in str(info.value)
+    assert "setup/mlops/compose.yaml" in str(info.value)
+
+
+def test_require_stack_core_hint_has_no_profile(monkeypatch):
+    monkeypatch.setenv("MLOPS_MLFLOW_PORT", str(testkit.free_port()))
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_stack("mlflow")
+    assert "--profile" not in str(info.value)
+
+
+def _fake_month(tmp_path, monkeypatch, content=b"not a parquet"):
+    folder = tmp_path / "nyc-tlc"
+    folder.mkdir()
+    (folder / "yellow_tripdata_2019-01.parquet").write_bytes(content)
+    monkeypatch.setattr(testkit.Exercise, "dataset", staticmethod(lambda name: tmp_path / name))
+
+
+def test_real_month_checksum_mismatch(tmp_path, monkeypatch):
+    _fake_month(tmp_path, monkeypatch)
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.real_month("nyc-tlc", "2019-01")
+    assert "sha256" in str(info.value)
+
+
+def test_real_month_accepts_matching_checksum(tmp_path, monkeypatch):
+    import hashlib
+
+    _fake_month(tmp_path, monkeypatch, b"abc")
+    key = "nyc-tlc/yellow_tripdata_2019-01.parquet"
+    monkeypatch.setitem(mlopskit.REAL_SHA256, key, hashlib.sha256(b"abc").hexdigest())
+    assert mlopskit.real_month("nyc-tlc", "2019-01").name == "yellow_tripdata_2019-01.parquet"
+
+
+def test_real_month_unknown_month():
+    with pytest.raises(pytest.fail.Exception):
+        mlopskit.real_month("nyc-tlc", "2019-13")
+
+
+def test_real_month_skips_when_missing(monkeypatch):
+    def missing(name):
+        pytest.skip(f"Chưa tải bộ {name}")
+
+    monkeypatch.setattr(testkit.Exercise, "dataset", staticmethod(missing))
+    with pytest.raises(pytest.skip.Exception):
+        mlopskit.real_month("nyc-tlc", "2019-01")
+
+
+def test_real_sha256_table_complete():
+    expected = {f"{ds}/yellow_tripdata_{year}-{m:02d}.parquet"
+                for ds, year in (("nyc-tlc", 2019), ("nyc-tlc-2020", 2020)) for m in range(1, 13)}
+    assert set(mlopskit.REAL_SHA256) == expected
+    assert all(len(v) == 64 for v in mlopskit.REAL_SHA256.values())
+
+
+def test_real_month_real_data_matches_table():
+    path = mlopskit.real_month("nyc-tlc", "2019-01")
+    assert path.stat().st_size > 1_000_000
+
+
+def test_promtool_check_config(tmp_path):
+    _need_docker()
+    (tmp_path / "ok.yml").write_text("global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: a\n    static_configs:\n      - targets: ['localhost:9090']\n")
+    (tmp_path / "bad.yml").write_text("scrape_configs: [unclosed\n")
+    ok = mlopskit.promtool("check", "config", "ok.yml", cwd=tmp_path)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    bad = mlopskit.promtool("check", "config", "bad.yml", cwd=tmp_path)
+    assert bad.returncode != 0
+    assert "bad.yml" in bad.stdout + bad.stderr or "yaml" in (bad.stdout + bad.stderr).lower()
+    assert mlopskit.leftovers("promtool") == []
+
+
+def test_evidently_python_report(tmp_path):
+    _need_docker()
+    import json
+
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    pd.DataFrame({"x": rng.normal(0, 1, 500)}).to_parquet(tmp_path / "ref.parquet")
+    pd.DataFrame({"x": rng.normal(2, 1, 500)}).to_parquet(tmp_path / "cur.parquet")
+    script = (
+        "import json, pandas as pd, evidently\n"
+        "from evidently import Report\n"
+        "from evidently.presets import DataDriftPreset\n"
+        "r = Report([DataDriftPreset()]).run(pd.read_parquet('cur.parquet'), pd.read_parquet('ref.parquet'))\n"
+        "print(json.dumps({'v': evidently.__version__, 'n': len(r.dict()['metrics'])}))\n"
+    )
+    result = mlopskit.evidently_python(tmp_path, script)
+    assert result.returncode == 0, result.stdout + result.stderr
+    out = json.loads(result.stdout.strip().splitlines()[-1])
+    assert out["v"] == "0.7.23" and out["n"] > 0
+    assert mlopskit.leftovers("evidently") == []
+
+
+def test_evidently_not_in_host_env():
+    import importlib.util
+
+    assert importlib.util.find_spec("evidently") is None
+
+
+def test_amtool_check_config(tmp_path):
+    _need_docker()
+    (tmp_path / "ok.yml").write_text("route:\n  receiver: oncall\nreceivers:\n  - name: oncall\n")
+    (tmp_path / "bad.yml").write_text("route:\n  receiver: missing\nreceivers:\n  - name: oncall\n")
+    ok = mlopskit.amtool("check-config", "ok.yml", cwd=tmp_path)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    bad = mlopskit.amtool("check-config", "bad.yml", cwd=tmp_path)
+    assert bad.returncode != 0
+    assert "missing" in bad.stdout + bad.stderr
+    routes = mlopskit.amtool("config", "routes", "test", "--config.file=ok.yml", "severity=critical", cwd=tmp_path)
+    assert routes.returncode == 0 and "oncall" in routes.stdout, routes.stdout + routes.stderr
+    assert mlopskit.leftovers("amtool") == []
+
+
+def test_act_run_rejects_container_options_in_args(tmp_path):
+    if shutil.which("act") is None:
+        pytest.skip("act chưa cài")
+    with pytest.raises(ValueError):
+        mlopskit.act_run(tmp_path, "--container-options", "--user 1:1")
+
+
+def test_feast_run_version(tmp_path):
+    _need_docker()
+    result = mlopskit.feast_run(tmp_path, "version")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "0.67.0" in result.stdout + result.stderr
+
+
+def test_feast_python_json(tmp_path):
+    _need_docker()
+    result = mlopskit.feast_python(tmp_path, "import json, feast; print(json.dumps({'v': feast.__version__}))")
+    assert result.returncode == 0, result.stdout + result.stderr
+    import json
+
+    assert json.loads(result.stdout.strip().splitlines()[-1]) == {"v": "0.67.0"}
+
+
+def test_feast_image_not_labeled_for_cleanup():
+    _need_docker()
+    tag = mlopskit.feast_image()
+    assert tag == mlopskit.FEAST_IMAGE == "mlops-feast:0.67.0"
+    assert tag not in mlopskit.leftovers()
+
+
+WORKFLOW = """name: mlopskit-selftest
+on: push
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python3 -c "print(42)"
+"""
+
+
+def test_act_run_offline(tmp_path):
+    _need_docker()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(WORKFLOW)
+    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    import os
+
+    for cmd in (["git", "init", "-q", "-b", "main"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "init"]):
+        subprocess.run(cmd, cwd=tmp_path, check=True, env={**os.environ, **env})
+    result = mlopskit.act_run(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "42" in result.stdout + result.stderr
+    assert mlopskit.leftovers("mlopskit-selftest") == []
+
+
+def test_act_run_skips_without_binary(tmp_path, monkeypatch):
+    monkeypatch.setattr(mlopskit.shutil, "which", lambda name: None)
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.act_run(tmp_path)
+    assert "08-cicd-for-ml" in str(info.value)
+
+
+def test_k6_run_smoke(tmp_path):
+    _need_docker()
+    import http.server
+    import json
+    import threading
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        script = tmp_path / "smoke.js"
+        script.write_text(
+            "import http from 'k6/http';\nimport { check } from 'k6';\n"
+            "export const options = { vus: 1, iterations: 5 };\n"
+            "export default function () {\n  const r = http.get(`${__ENV.TARGET}/`);\n"
+            "  check(r, { ok: (x) => x.status === 200 });\n}\n"
+        )
+        result = mlopskit.k6_run(script, {"TARGET": f"http://127.0.0.1:{server.server_address[1]}"})
+        assert result.returncode == 0, result.stdout + result.stderr
+        summary = json.loads(result.stdout)
+        assert summary["metrics"]["http_reqs"]["count"] == 5
+    finally:
+        server.shutdown()
+    assert mlopskit.leftovers("k6") == []
+
+
+def test_dvc_sh_runs_in_repo(tmp_path):
+    result = mlopskit.dvc_sh(tmp_path, 'echo "$1 $DVC_NO_ANALYTICS"', args=("hi",))
+    assert result.stdout.strip() == "hi 1"
+    with pytest.raises(AssertionError):
+        mlopskit.dvc_sh(tmp_path, "exit 3")
+    assert mlopskit.dvc_sh(tmp_path, "exit 3", ok=False).returncode == 3

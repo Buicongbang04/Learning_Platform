@@ -1,0 +1,63 @@
+name: ct
+on:
+  push:
+    branches: [main]
+    paths: ["params.yaml", "dvc.lock", "src/eta/train.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: .ci-deps:src
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dependency
+        run: test -d .ci-deps || python -m pip install --quiet --target .ci-deps -r requirements-ci.txt
+      - name: Lấy mẫu và kiểm schema từng tháng
+        run: |
+          months=$(python -c "from eta.config import load_config; print(' '.join(load_config('params.yaml').months))")
+          for month in $months; do
+            python -m eta.cli prepare --config params.yaml --month "$month" --out "data/ci/$month.parquet"
+            python -m eta.cli validate "data/ci/$month.parquet" --month "$month"
+          done
+
+  train:
+    runs-on: ubuntu-latest
+    needs: validate
+    outputs:
+      model_version: ${{ steps.train.outputs.model_version }}
+    steps:
+      - name: Dependency
+        run: test -d .ci-deps || python -m pip install --quiet --target .ci-deps -r requirements-ci.txt
+      - name: Train và đăng ký challenger
+        id: train
+        run: |
+          python -m eta.cli train --config params.yaml --register | tail -n 1 > train.json
+          version=$(python -c "import json; print(json.load(open('train.json'))['model_version'])")
+          echo "TRAINED model_version=$version"
+          echo "model_version=$version" >> "$GITHUB_OUTPUT"
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: train
+    steps:
+      - name: Dependency
+        run: test -d .ci-deps || python -m pip install --quiet --target .ci-deps -r requirements-ci.txt
+      - name: Cổng promotion
+        env:
+          MODEL_VERSION: ${{ needs.train.outputs.model_version }}
+        run: python -m eta.cli promote --config params.yaml --version "$MODEL_VERSION"
+
+  announce:
+    runs-on: ubuntu-latest
+    needs: [train, gate]
+    steps:
+      - name: Báo model mới là champion
+        env:
+          MODEL_VERSION: ${{ needs.train.outputs.model_version }}
+        run: echo "PROMOTED model_version=$MODEL_VERSION; chạy workflow cd với model_version=$MODEL_VERSION để deploy"

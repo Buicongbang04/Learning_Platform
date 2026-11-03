@@ -5,7 +5,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
-from eta.features import AIRPORT_ZONES, FEATURES
+from eta.features import AIRPORT_ZONES, feature_columns
 
 ZONES = ["PULocationID", "DOLocationID"]
 DEFAULT_PARAMS = {"max_iter": 200, "learning_rate": 0.1, "max_leaf_nodes": 63, "random_state": 0}
@@ -22,7 +22,7 @@ def build_pipeline(params: dict) -> Pipeline:
 
 
 def train(X: pd.DataFrame, y: pd.Series, params: dict) -> Pipeline:
-    return build_pipeline(params).fit(X[FEATURES], y)
+    return build_pipeline(params).fit(X[feature_columns(X)], y)
 
 
 def time_split(df: pd.DataFrame, test_frac: float = 0.2) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -32,7 +32,7 @@ def time_split(df: pd.DataFrame, test_frac: float = 0.2) -> tuple[pd.DataFrame, 
 
 
 def evaluate(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> dict[str, float]:
-    err = np.abs(np.asarray(y, dtype=float) - model.predict(X[FEATURES]))
+    err = np.abs(np.asarray(y, dtype=float) - model.predict(X[feature_columns(X)]))
     airport = (X["PULocationID"].isin(AIRPORT_ZONES) | X["DOLocationID"].isin(AIRPORT_ZONES)).to_numpy()
     return {
         "mae": float(err.mean()),

@@ -36,6 +36,17 @@ def test_m04_promotion_rules(project, challenger, champion, policy, promote, men
         assert mention in " ".join(decision.reasons).lower(), f"reasons phải nhắc '{mention}': {decision.reasons}"
 
 
+@pytest.mark.parametrize("champion", [{"mae": 150.0, "p90_abs_err": 320.0},
+                                      {"mae": 150.0, "p90_abs_err": 320.0, "mae_airport": float("nan")}],
+                         ids=["missing", "nan"])
+def test_m04_promotion_champion_missing_metric(project, champion):
+    promotion = need("promotion", "Policy", "decide")
+    challenger = {"mae": 140.0, "p90_abs_err": 300.0, "mae_airport": 290.0}
+    decision = promotion.decide(challenger, champion, promotion.Policy())
+    assert decision.promote is False, "champion thiếu mae_airport: không so được thì không promote (không coi như vắng champion)"
+    assert "mae_airport" in " ".join(decision.reasons), f"reasons phải nêu tên metric thiếu: {decision.reasons}"
+
+
 def test_m04_alias_rollback(project, tmp_path, synthetic_trips, monkeypatch):
     mlopskit.require_stack("mlflow")
     import mlflow

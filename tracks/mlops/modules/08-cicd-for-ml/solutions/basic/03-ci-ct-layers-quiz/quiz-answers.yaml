@@ -1,0 +1,7 @@
+ci-vs-ct: [b]
+seam: [d]
+trigger-choice: [b]
+oidc: [a]
+secrets-log: [a, b, d]
+act-limits: [c]
+tool-choice: [a]

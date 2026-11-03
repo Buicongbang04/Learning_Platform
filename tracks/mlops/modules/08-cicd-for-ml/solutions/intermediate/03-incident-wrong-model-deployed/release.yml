@@ -1,0 +1,25 @@
+name: release
+on:
+  push:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python train.py
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: train
+    env:
+      RUN_DIR: store/run-${{ github.run_number }}
+    steps:
+      - name: Lấy model của chính lần chạy này và deploy
+        run: |
+          if [ ! -f "$RUN_DIR/model.json" ]; then
+            echo "không có model của lần chạy này: $RUN_DIR" >&2
+            exit 1
+          fi
+          mkdir -p deployed
+          cp "$RUN_DIR/model.json" deployed/model.json
+          echo "deployed ${RUN_DIR}"

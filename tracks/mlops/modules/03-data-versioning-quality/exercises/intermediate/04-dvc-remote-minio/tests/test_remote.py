@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 import mlopskit
-from testkit import Exercise, run_sandboxed
+from testkit import Exercise
 
 ex = Exercise(__file__)
 KEY = os.environ.get("MINIO_ROOT_USER", "minioadmin")
@@ -23,16 +23,8 @@ def s3():
 
 
 def sh(repo, cmd, args=()):
-    env = {
-        "DVC_NO_ANALYTICS": "1",
-        "DVC_SITE_CACHE_DIR": str(repo / ".site"),
-        "DVC_GLOBAL_CONFIG_DIR": str(repo / ".gc"),
-        "AWS_ACCESS_KEY_ID": KEY, "AWS_SECRET_ACCESS_KEY": SECRET, "AWS_DEFAULT_REGION": "us-east-1",
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-    }
-    result = run_sandboxed(["bash", "-c", cmd, "bash", *args], writable=[repo], cwd=repo, env=env, timeout=180)
-    assert result.returncode == 0, f"{cmd}\n{result.stdout}\n{result.stderr}"
-    return result
+    env = {"AWS_ACCESS_KEY_ID": KEY, "AWS_SECRET_ACCESS_KEY": SECRET, "AWS_DEFAULT_REGION": "us-east-1"}
+    return mlopskit.dvc_sh(repo, cmd, args, env=env, timeout=180)
 
 
 @pytest.fixture()

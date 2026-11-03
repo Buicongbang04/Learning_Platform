@@ -1,0 +1,64 @@
+questions:
+  - id: ci-vs-ct
+    kind: knowledge
+    type: single
+    prompt: "Một PR chỉ sửa hàm tiền xử lý trong src/. Bước nào thuộc lớp CI cho code, chạy trên mọi PR kiểu này?"
+    options:
+      - { id: a, text: "Huấn luyện lại model trên toàn bộ dữ liệu của tháng gần nhất rồi so với champion" }
+      - { id: b, text: "ruff, pytest trên hàm đã sửa và build image; không train lại model" }
+      - { id: c, text: "Đăng ký version mới vào registry và đổi alias champion sang version đó" }
+      - { id: d, text: "Chạy kiểm tra drift trên dữ liệu production của 7 ngày qua" }
+  - id: seam
+    kind: knowledge
+    type: single
+    prompt: "Đội có workflow CI (lint, test, build image) và workflow huấn luyện (train, cổng promotion) chạy riêng. Chỗ nào dễ hỏng nhất khi hai lớp nối nhau?"
+    options:
+      - { id: a, text: "Tốc độ chạy của ruff khi repo có hàng nghìn tệp Python nhỏ" }
+      - { id: b, text: "Màu sắc của badge trạng thái trên README" }
+      - { id: c, text: "Việc đặt tên job cho đẹp và thống nhất giữa hai workflow" }
+      - { id: d, text: "Thứ được giao từ lớp này sang lớp kia, và bằng chứng về nó" }
+  - id: trigger-choice
+    kind: knowledge
+    type: single
+    prompt: "Dữ liệu mới về cuối mỗi tháng nhưng không ai commit gì vào repo. Cách kích hoạt nào bắt được việc cần train lại?"
+    options:
+      - { id: a, text: "Chỉ trigger push có path filter trên params.yaml, vì mọi thay đổi đều đi qua commit" }
+      - { id: b, text: "Lịch định kỳ, kèm so phiên bản dữ liệu với phiên bản của model đang chạy" }
+      - { id: c, text: "Bắt người trực bấm workflow_dispatch vào mỗi thứ Hai và hy vọng họ nhớ ra" }
+      - { id: d, text: "Chạy workflow mỗi phút để chắc chắn không bỏ sót" }
+  - id: oidc
+    kind: knowledge
+    type: single
+    prompt: "Job CI cần đẩy image lên cloud registry. Vì sao OIDC được ưa hơn lưu khoá truy cập dài hạn thành secret?"
+    options:
+      - { id: a, text: "Job nhận token ngắn hạn theo danh tính workflow, không có khoá dài hạn để lộ" }
+      - { id: b, text: "Vì OIDC làm job chạy nhanh hơn rất nhiều so với cách đọc secret từ kho lưu trữ của GitHub" }
+      - { id: c, text: "Vì OIDC không cần cấu hình gì thêm ở phía nhà cung cấp cloud, chỉ cần bật một cờ trong workflow" }
+      - { id: d, text: "Vì secret thường bị GitHub xoá sau 90 ngày kể từ lần tạo gần nhất" }
+  - id: secrets-log
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi điều đúng về secrets trong log của workflow."
+    options:
+      - { id: a, text: "Runner che giá trị secret khi in nguyên văn, nhưng bản đã biến đổi (base64, cắt, đảo) thì không che được" }
+      - { id: b, text: "Secret dùng qua biến môi trường của bước cần nó an toàn hơn đặt vào dòng lệnh" }
+      - { id: c, text: "Workflow chạy từ PR của repo fork nhận secrets đầy đủ như PR nội bộ" }
+      - { id: d, text: "Không bao giờ in secret ra log, kể cả để gỡ lỗi; kiểm bằng cách đọc log, không tin vào cơ chế che" }
+  - id: act-limits
+    kind: knowledge
+    type: single
+    prompt: "act chạy workflow trên máy bạn. Điều nào là giới hạn thật của nó?"
+    options:
+      - { id: a, text: "Nó không chạy được workflow chỉ gồm các bước run" }
+      - { id: b, text: "Nó cần kết nối tới github.com để đọc từng dòng của workflow trước khi chạy" }
+      - { id: c, text: "Runner khác bản thật, không có OIDC, không bắt chước hết ngữ nghĩa của máy chủ" }
+      - { id: d, text: "Nó chỉ chạy được một job mỗi lần và hoàn toàn không hiểu khoá needs của workflow" }
+  - id: tool-choice
+    kind: knowledge
+    type: single
+    prompt: "Công ty đã dùng GitLab cho code và có runner riêng trong mạng nội bộ. Đội ML muốn CI cho repo ML. Chọn gì hợp lý nhất?"
+    options:
+      - { id: a, text: "GitLab CI, vì đã có runner và quyền truy cập" }
+      - { id: b, text: "Chuyển toàn bộ code sang GitHub chỉ để dùng được GitHub Actions cho đội ML" }
+      - { id: c, text: "Dựng Jenkins mới vì nó là công cụ duy nhất chạy được pipeline cho ML" }
+      - { id: d, text: "Không dùng CI, mỗi người tự chạy test trước khi push" }

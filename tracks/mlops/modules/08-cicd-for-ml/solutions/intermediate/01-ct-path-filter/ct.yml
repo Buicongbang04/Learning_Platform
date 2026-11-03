@@ -1,0 +1,21 @@
+name: ct
+on:
+  push:
+    branches: [main]
+    paths: ["params.yaml", "data.dvc", "train.py", "gate.py"]
+  pull_request:
+    paths: ["params.yaml", "data.dvc", "train.py", "gate.py"]
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python train.py
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: train
+    steps:
+      - run: python gate.py
+

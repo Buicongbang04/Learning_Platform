@@ -1,0 +1,20 @@
+name: release
+on:
+  push:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python train.py
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: train
+    steps:
+      - name: Lấy model từ kho artifact và deploy
+        run: |
+          latest=$(ls store | sort | tail -1)
+          mkdir -p deployed
+          cp store/$latest/model.json deployed/model.json
+          echo "deployed ${latest}"

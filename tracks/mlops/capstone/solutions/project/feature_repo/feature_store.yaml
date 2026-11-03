@@ -1,0 +1,9 @@
+project: eta
+provider: local
+registry: data/registry.db
+offline_store:
+  type: file
+online_store:
+  type: redis
+  connection_string: redis:6379
+entity_key_serialization_version: 3

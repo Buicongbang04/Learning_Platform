@@ -24,14 +24,12 @@ def _value(metrics: dict, key: str) -> float:
     return value
 
 
-def _compare(key: str, challenger: dict, champion: dict, allowed: float, required: bool) -> tuple[bool, str]:
+def _compare(key: str, challenger: dict, champion: dict, allowed: float) -> tuple[bool, str]:
     new, old = _value(challenger, key), _value(champion, key)
     if math.isnan(new):
         return False, f"{key}: challenger không có số đo, không thể so"
-    if math.isnan(old) and required:
-        return False, f"{key}: champion không có số đo, không so được; kiểm lại run của champion trước khi promote"
     if math.isnan(old):
-        return True, f"{key}: champion không có số đo, bỏ qua tiêu chí này"
+        return False, f"{key}: champion thiếu số đo, không so được; đánh giá lại champion trước khi promote"
     limit = old * (1 + allowed)
     ok = new <= limit
     verdict = "đạt" if ok else "trượt"
@@ -44,11 +42,11 @@ def decide(challenger: dict, champion: dict | None, policy: Policy) -> Decision:
         reason = "chưa có champion, challenger thành champion đầu tiên" if ok else "mae: challenger không có số đo"
         return Decision(ok, [reason])
     checks = [
-        _compare("mae", challenger, champion, policy.max_mae_regression, required=True),
-        _compare("mae_airport", challenger, champion, policy.max_airport_regression, required=False),
+        _compare("mae", challenger, champion, policy.max_mae_regression),
+        _compare("mae_airport", challenger, champion, policy.max_airport_regression),
     ]
     reasons = [reason for _, reason in checks]
-    if not checks[1][0]:
+    if not checks[1][0] and not math.isnan(_value(champion, "mae_airport")):
         reasons.append("chặn vì nhóm chuyến sân bay (airport: JFK, LaGuardia) tệ hơn mức cho phép")
     return Decision(all(ok for ok, _ in checks), reasons)
 

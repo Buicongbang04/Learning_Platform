@@ -372,7 +372,23 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 - Script của người học chạy qua `testkit.run_sandboxed`, như track DevOps.
 - Timeout build của `built_image` và `compose_project` mặc định 1800 giây, chỉnh bằng biến môi trường `MLOPS_BUILD_TIMEOUT` (giây, đọc lúc gọi). Quá hạn thì test fail kèm gợi ý build trước (cache) rồi chạy lại hoặc tăng biến này.
 - Mọi tài nguyên do `mlopskit` tạo có nhãn `mlops-ex=1` và tiền tố `mlops-ex-`; lỗi hay Ctrl-C giữa chừng vẫn dọn hết.
-- Helper chưa có (`act`, kind/`KubeLab`, gate GPU) được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước.
+- Helper chưa có (kind/`KubeLab`, gate GPU) được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước.
+
+Helper Giai đoạn 2 (test riêng ở `tests/test_mlopskit.py`):
+
+| Test cần | Dùng | Đảm bảo |
+| --- | --- | --- |
+| Prometheus, Alertmanager, Grafana, Redis của stack | `mlopskit.require_stack("prometheus")`, `("redis")` | Skip kèm lệnh có `--profile monitoring` (Prometheus, Alertmanager, Grafana) hay `--profile feast` (Redis) |
+| Chạy Feast | `mlopskit.feast_run(repo, "apply")`, `mlopskit.feast_python(repo, script)` | **Feast chỉ chạy trong container** `mlops-feast:0.67.0` (vì `feast[redis]` kéo `pandas` xuống 2.3.3, không vào môi trường mặc định); `repo` mount `/repo` rw, user không root, `--rm`, nhãn `mlops-ex=1`; `feast_python` in JSON ra stdout |
+| Kiểm cấu hình, rule Prometheus | `mlopskit.promtool("check", "rules", "r.yml", cwd=dir)` | `promtool` trong `prom/prometheus:v3.5.0`, `cwd` mount chỉ đọc tại `/work` |
+| Kiểm cấu hình, route Alertmanager | `mlopskit.amtool("check-config", "am.yml", cwd=dir)`, `amtool("config", "routes", "test", "--config.file=am.yml", "severity=critical", cwd=dir)` | `amtool` trong `prom/alertmanager:v0.34.1`, `cwd` mount chỉ đọc tại `/work` |
+| Chạy Evidently | `mlopskit.evidently_python(dir, script)` | `python -c script` trong `mlops-evidently:0.7.23`, `dir` mount `/work` (rw), script in JSON ra stdout |
+| Tải thử | `mlopskit.k6_run(script, {"TARGET": url})` | `grafana/k6:1.8.1`, mạng `host`; `.stdout` là JSON của `--summary-export` |
+| Chạy workflow CI | `mlopskit.act_run(workdir)` | `act` với runner `mlops-act-runner:1` tự build, `--pull=false --bind`; `act_run` chỉ đảm bảo không kéo image, **workflow không được dùng `uses:` action từ xa** (chỉ bước `run:`, nếu không act cần mạng và GitHub); skip khi thiếu `act`; trong `finally` chỉ dọn container của chính lần chạy (nhãn `mlops-ex-run=<uuid8>`), không đụng container khác; tuỳ chọn container thêm (vd. `--user uid:gid`) truyền qua tham số `container_options=`, **không** truyền `--container-options` trong `args` (act chỉ giữ giá trị cuối, `act_run` báo lỗi) |
+| Dữ liệu NYC TLC thật | `mlopskit.real_month("nyc-tlc", "2019-03")` (hoặc `"nyc-tlc-2020"`) | Skip khi chưa tải; `pytest.fail` khi sha256 lệch bảng `REAL_SHA256` (tệp nguồn bị TLC sửa hoặc tải hỏng). Không đọc thẳng `data/raw/...` |
+| Chạy `dvc`/`git` trong sandbox | `mlopskit.dvc_sh(repo, cmd, args, ok=True, env=None)` | DVC/git cấu hình riêng trong `repo`, `repo` ghi được |
+
+Profile Compose `monitoring` (prometheus 29090, alertmanager 29093, grafana 23000) và `feast` (redis 26390) bật bằng `docker compose -f setup/mlops/compose.yaml --profile monitoring --profile feast up -d --wait`.
 
 ### Stack và cổng
 
@@ -401,12 +417,24 @@ Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack
 
 ### Môi trường Python
 
-- Dependency mà test cần (mlflow, dvc, pandera, evidently, prefect…) nằm trong **môi trường mặc định** của
+- Dependency mà test cần (mlflow, dvc, pandera, prefect…) nằm trong **môi trường mặc định** của
   `pyproject.toml` để nút "Run tests" (`uv run pytest`) chạy được; ghim phiên bản phát hành ≥2 tuần trước ngày thêm.
 - Xung đột với pin hiện có (`numpy`, `pyarrow`, `grpcio`, `pandas`): (1) chọn phiên bản tương thích; (2) nếu không
   được, chạy công cụ đó **trong container** của stack `setup/mlops` và test gọi qua CLI/HTTP; (3) không bao giờ hạ
-  pin làm hỏng track khác. Kết quả kiểm mỗi công cụ ghi ở đây khi thêm: `dvc[s3]` và `evidently` resolve cùng pin
-  hiện tại; `feast[redis]` kéo pandas xuống 2.3.3 nên module 06 phải chạy Feast trong container hoặc tìm bản tương thích.
+  pin làm hỏng track khác. Kết quả kiểm mỗi công cụ ghi ở đây khi thêm: `dvc[s3]` resolve cùng pin
+  hiện tại; `feast[redis]` kéo pandas xuống 2.3.3 nên module 06 phải chạy Feast trong container hoặc tìm bản tương thích. `evidently==0.7.23` (bản mới nhất, kiểm 2026-11-03) **không import được với pandas 3.1** (`infer_dtype_from_object` đã bị bỏ) và đòi `plotly<6`, nên Evidently chạy trong image `mlops-evidently:0.7.23` (pandas 2.3.3) qua `mlopskit.evidently_python`, giống Feast trong `mlops-feast`. Không shim/monkeypatch pandas trong bài.
+- Ngày phát hành của bản ghim chạy trong container (kiểm 2026-11-03 qua PyPI JSON `upload_time` và GitHub Releases
+  `published_at`; mọi bản ≥2 tuần trước ngày thêm):
+
+  | Bản ghim | Phát hành | Nguồn |
+  | --- | --- | --- |
+  | `feast==0.67.0` (image `mlops-feast`) | 2026-10-13 | PyPI |
+  | `evidently==0.7.23` (image `mlops-evidently`) | 2026-09-11 | PyPI |
+  | `prom/alertmanager:v0.34.1` | 2026-09-17 | GitHub `prometheus/alertmanager` |
+  | `grafana/k6:1.8.1` | 2026-08-12 | GitHub `grafana/k6` |
+  | `prom/prometheus:v3.5.0` | 2025-07-14 | GitHub `prometheus/prometheus` |
+  | `grafana/grafana:12.1.0` | 2025-07-23 | GitHub `grafana/grafana` |
+  | `redis:7.4.5` | 2025-07-06 | GitHub `redis/redis` |
 - **GPU:** môi trường chính giữ torch CPU và `onnxruntime` CPU. Đường GPU (onnxruntime-gpu, torch CUDA) nằm trong
   project `setup/gpu`; test GPU chạy qua project đó và skip khi không có CUDA. Mọi bài GPU có đường CPU; PC mạnh chỉ
   để đo thêm, test không bao giờ cần.
@@ -431,6 +459,11 @@ reasons:
 
 Test chỉ kiểm `decision` (giá trị hợp lệ và khớp đáp án); `reasons` chấm bằng rubric trong `SOLUTION.md`. Có bài mà
 đáp án đúng là **giữ nguyên model**; không dạy "thấy drift thì retrain" như phản xạ.
+
+Ngoại lệ ở capstone (M10 trở đi), nơi người học tự phát lại trên dữ liệu thật: **không có đáp án cố định**. Test tính lại
+`summary.parquet` bằng code của người học; `evidence` trong YAML phải khớp summary đó trong sai số cho phép (M10: 1%),
+`as_of` phải là lúc nhãn đã công bố, và `decision` phải qua các luật nhất quán ghi trong đề (M10: MAE không xấu đi thì
+`keep`; MAE xấu đi hơn 50% thì không `keep`). Phần còn lại chấm bằng rubric trong `SOLUTION.md`.
 
 ### Phần `## 0. Cài đặt` của module
 

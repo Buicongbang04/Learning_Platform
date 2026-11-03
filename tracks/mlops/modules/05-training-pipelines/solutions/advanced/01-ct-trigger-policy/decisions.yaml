@@ -1,0 +1,29 @@
+C1:
+  decision: skip
+  reasons:
+    - "Dữ liệu mới chỉ 0.4% và MAE 201 giây sát baseline 200: train lại tốn tiền mà không đổi gì"
+C2:
+  decision: skip
+  reasons:
+    - "PSI 0.31 sau kỳ nghỉ lễ là thay đổi mùa vụ; MAE trên nhãn thật 203 giây không đổi nên model vẫn dự đoán tốt"
+C3:
+  decision: retrain
+  reasons:
+    - "MAE 228 giây tệ hơn baseline 14%, vượt SLO 10%, và 85% dữ liệu mới đã có nhãn (qua ngưỡng 20%)"
+    - "Null rate ổn định nên dữ liệu đáng tin để train"
+C4:
+  decision: investigate
+  reasons:
+    - "MAE nhảy cùng lúc null rate của fare_amount lên 31% sau khi ETL đổi nguồn: nhiều khả năng lỗi dữ liệu, retrain sẽ học dữ liệu hỏng"
+C5:
+  decision: retrain
+  reasons:
+    - "Model 13 tháng tuổi vượt trần tuổi 12 tháng của chính sách dù MAE ổn định: retrain định kỳ để không tụt hậu và để kiểm tra pipeline còn chạy được"
+C6:
+  decision: skip
+  reasons:
+    - "Chỉ 35% dòng mới có nhãn (nhãn về chậm 14 ngày), hash đổi chưa đủ lý do; chờ đủ nhãn rồi trigger lại"
+C7:
+  decision: investigate
+  reasons:
+    - "Alert bắn lần thứ ba trong 36 giờ, retrain 20 giờ trước không cải thiện và cooldown 24 giờ chưa hết: retrain tiếp là mù, cần tìm nguyên nhân (nhãn, slice, đổi hành vi ngoài dữ liệu đầu vào)"

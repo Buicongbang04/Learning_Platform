@@ -1,0 +1,51 @@
+groups:
+  - name: eta-api
+    rules:
+      - alert: EtaHighErrorRate
+        expr: |
+          sum(rate(eta_requests_total{job="eta-api",status=~"5.."}[5m]))
+            /
+          sum(rate(eta_requests_total{job="eta-api"}[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: eta
+        annotations:
+          summary: "Hơn 5% request /predict trả 5xx trong 5 phút"
+          runbook_url: "https://github.com/example/eta/blob/main/docs/runbook.md#etahigherrorrate"
+      - alert: EtaHighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(eta_request_duration_seconds_bucket{job="eta-api"}[5m])))
+            > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          service: eta
+        annotations:
+          summary: "p95 thời gian xử lý /predict trên 0.3 giây suốt 10 phút"
+          runbook_url: "https://github.com/example/eta/blob/main/docs/runbook.md#etahighlatencyp95"
+      - alert: EtaMetricsAbsent
+        expr: absent(eta_model_info{job="eta-api"})
+        for: 5m
+        labels:
+          severity: critical
+          service: eta
+        annotations:
+          summary: "Không còn thấy eta_model_info: API chết, chưa nạp model hoặc Prometheus không scrape được"
+          runbook_url: "https://github.com/example/eta/blob/main/docs/runbook.md#etametricsabsent"
+      - alert: EtaPredictionShift
+        expr: |
+          abs(
+            histogram_quantile(0.5, sum by (le) (rate(eta_prediction_seconds_bucket{job="eta-api",variant!="shadow"}[1h])))
+              /
+            histogram_quantile(0.5, sum by (le) (rate(eta_prediction_seconds_bucket{job="eta-api",variant!="shadow"}[1h] offset 7d)))
+            - 1
+          ) > 0.3
+        for: 1h
+        labels:
+          severity: warning
+          service: eta
+        annotations:
+          summary: "Trung vị ETA dự đoán lệch hơn 30% so với cùng giờ 7 ngày trước"
+          runbook_url: "https://github.com/example/eta/blob/main/docs/runbook.md#etapredictionshift"

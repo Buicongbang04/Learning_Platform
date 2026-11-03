@@ -82,6 +82,7 @@ decide(challenger: dict, champion: dict | None, policy: Policy) -> Decision   # 
 | --- | --- |
 | `champion is None` (chưa có champion) | promote |
 | Champion có nhưng thiếu `mae` hoặc `mae` là `nan` | không promote, `reasons` có chữ `mae` |
+| Champion có nhưng thiếu `mae_airport` hoặc `mae_airport` là `nan` | không promote, `reasons` có chữ `mae_airport` |
 | `challenger["mae"] > champion["mae"] * (1 + max_mae_regression)` | không promote, `reasons` có chữ `mae` |
 | `challenger["mae_airport"] > champion["mae_airport"] * (1 + max_airport_regression)` | không promote, `reasons` có chữ `airport` |
 | Còn lại (kể cả bằng nhau đúng ngưỡng) | promote |
@@ -94,8 +95,9 @@ decide(challenger: dict, champion: dict | None, policy: Policy) -> Decision   # 
 - Metric thiếu hoặc `nan` ở challenger thì không promote.
 - Champion thiếu `mae` hoặc `mae` là `nan`: **không** promote, `reasons` có chữ `mae`. Champion không có số đo chính là
   dấu hiệu registry hỏng (run bị xoá, log metric lỗi); cổng không được mở chỉ vì không so được.
-- Champion không có `mae_airport` (không có chuyến sân bay trong tập test của nó) thì bỏ qua tiêu chí đó và ghi vào
-  `reasons`.
+- Champion thiếu `mae_airport` (hoặc `nan`): **không** promote, `reasons` nêu tên `mae_airport`. Cùng lý do như `mae`:
+  thiếu số đo của champion là không so được, không phải "coi như chưa có champion". Muốn thay champion đó thì đánh giá
+  lại nó trên tập test hiện tại rồi log metric, sau đó mới chạy cổng.
 
 ```python
 promote_if_better(name: str, version: str, policy: Policy) -> Decision
@@ -133,6 +135,8 @@ Viết thành runbook ngắn trong README: lệnh, thời gian thực đo đư�
   nhau, MAE tệ hơn 1,3% với `max_mae_regression=0.02`, chưa có champion, champion thiếu `mae`, champion có
   `mae` là `nan`), dùng `Policy()` mặc định trừ ca có ghi
   ngưỡng. Không cần stack.
+- `test_m04_promotion_champion_missing_metric`: challenger tốt hơn mọi mặt, champion thiếu `mae_airport` hoặc có
+  `mae_airport` là `nan` → không promote, `reasons` có chữ `mae_airport`.
 - `test_m04_alias_rollback` (cần stack MLflow, skip kèm lệnh bật nếu chưa có): tạo `Config` với `model_name` ngẫu nhiên,
   đăng ký v1 (model yếu), promote (chưa có champion); đăng ký v2 (tốt hơn), kiểm tag `git_commit`, `data_version` của
   v2, promote; đăng ký v3 tốt hơn về MAE nhưng tệ hơn 14% ở sân bay, cổng phải chặn và alias vẫn là v2; đặt alias về

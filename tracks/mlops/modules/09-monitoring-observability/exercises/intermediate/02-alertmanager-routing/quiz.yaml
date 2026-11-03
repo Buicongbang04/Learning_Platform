@@ -1,0 +1,64 @@
+questions:
+  - id: "symptom-alert"
+    kind: knowledge
+    type: single
+    prompt: "Đâu là alert theo triệu chứng, nên đánh thức người trực lúc nửa đêm?"
+    options:
+      - { id: a, text: "Tỉ lệ yêu cầu trả 5xx của dịch vụ vượt 5% suốt 5 phút" }
+      - { id: b, text: "CPU của một node vượt 80% trong 2 phút liên tiếp" }
+      - { id: c, text: "Dung lượng đĩa của máy chủ log đã dùng quá 70%" }
+      - { id: d, text: "Số goroutine của tiến trình tăng gấp đôi so với hôm qua" }
+  - id: "for-clause"
+    kind: knowledge
+    type: single
+    prompt: "Vai trò chính của `for: 5m` trong một rule alert của Prometheus là gì?"
+    options:
+      - { id: a, text: "Đặt thời gian giữ dữ liệu của chuỗi thời gian mà alert đọc" }
+      - { id: b, text: "Điều kiện phải đúng liên tục suốt khoảng đó mới bắn" }
+      - { id: c, text: "Chỉ định cửa sổ mà hàm rate() dùng để tính tốc độ tăng" }
+      - { id: d, text: "Cho biết Alertmanager sẽ gửi lại thông báo sau mỗi 5 phút" }
+  - id: "label-cardinality"
+    kind: knowledge
+    type: single
+    prompt: "Vì sao đặt request_id làm label của một metric Prometheus là một sai lầm?"
+    options:
+      - { id: a, text: "Label nhận giá trị chuỗi dài sẽ bị Prometheus tự cắt ngắn khi scrape" }
+      - { id: b, text: "Prometheus cấm mọi tên label chứa dấu gạch dưới trong chuỗi id" }
+      - { id: c, text: "Mỗi giá trị mới sinh một chuỗi thời gian mới, series tăng vô hạn" }
+      - { id: d, text: "Label bị mã hoá nên Grafana không đọc ngược lại được giá trị gốc" }
+  - id: "inhibit-purpose"
+    kind: knowledge
+    type: single
+    prompt: "Luật inhibit_rules với source severity=critical, target severity=warning và equal [service] dùng để làm gì?"
+    options:
+      - { id: a, text: "Chuyển mọi cảnh báo của service sang receiver mặc định khi có critical" }
+      - { id: b, text: "Xoá vĩnh viễn rule warning khỏi Prometheus sau khi critical bắn một lần" }
+      - { id: c, text: "Gộp mọi cảnh báo của cùng service thành một thông báo duy nhất mỗi giờ" }
+      - { id: d, text: "Khi service có critical, im các warning của đúng service đó" }
+  - id: "quantile-aggregation"
+    kind: knowledge
+    type: single
+    prompt: "Để tính p95 độ trễ của cả dịch vụ từ nhiều instance, cách nào đúng?"
+    options:
+      - { id: a, text: "histogram_quantile(0.95, sum by (le) (rate(..._bucket[5m])))" }
+      - { id: b, text: "avg(histogram_quantile(0.95, rate(..._bucket[5m]))) lấy trung bình p95 các instance" }
+      - { id: c, text: "max(rate(..._count[5m])) rồi nhân với 0.95 để ước lượng" }
+      - { id: d, text: "histogram_quantile(0.95, rate(..._sum[5m])) trên tổng thời gian xử lý" }
+  - id: "good-alert-practices"
+    kind: knowledge
+    type: multi
+    prompt: "Chọn các thực hành tốt khi viết alert rule."
+    options:
+      - { id: a, text: "Gắn runbook_url trong annotations để người trực biết bước đầu tiên" }
+      - { id: b, text: "Gắn nhãn severity để Alertmanager định tuyến critical và warning khác nhau" }
+      - { id: c, text: "Bắn alert cho mọi đợt CPU tăng đột ngột để không bỏ sót điều gì" }
+      - { id: d, text: "Có thêm một alert riêng cho trường hợp số đo biến mất hoàn toàn" }
+  - id: "model-metrics"
+    kind: knowledge
+    type: multi
+    prompt: "Chọn các metric đặc thù của model nên có ngoài RED của service."
+    options:
+      - { id: a, text: "Histogram phân phối giá trị dự đoán để phát hiện model lệch bất thường" }
+      - { id: b, text: "Tỉ lệ yêu cầu phải dùng heuristic dự phòng thay cho model" }
+      - { id: c, text: "Info metric cho biết phiên bản model đang chạy, giá trị luôn là 1" }
+      - { id: d, text: "Counter theo từng request_id để truy vết từng dự đoán riêng lẻ" }
