@@ -60,8 +60,8 @@ Ngoài đời, image model được CI build khi một version qua cổng promot
 revision). Ở RawDeployment, KServe **nhận** trường này nhưng vẫn chỉ có một Deployment (đã thử trên cluster của track).
 Thêm nữa, `kubectl port-forward svc/...` luôn chọn **một** pod, nên chia traffic giữa hai Deployment sau một Service không
 đo được qua đường test dùng. Vì vậy canary dùng chính cơ chế của M07: pod chạy champion **và** challenger, `ETA_CANARY_WEIGHT`
-quyết định tỉ lệ, `route(request_id, weight)` (sha256, M07 mục 3) chọn nhánh một cách xác định. Test tính trước nhánh của
-từng `X-Request-ID` và so với câu trả lời của pod.
+quyết định tỉ lệ, `route(request_id, weight)` (sha256, M07 mục 3) chọn nhánh một cách xác định. Test gọi chính
+`eta.serve.route` của bạn để tính trước nhánh của từng `X-Request-ID`, rồi so với câu trả lời của pod.
 
 ### 3. `k8s/eta.yaml`: một manifest, bảy biến release
 
@@ -76,7 +76,8 @@ Python (cùng cú pháp `${TÊN}` với `envsubst`), rồi `kubectl apply` vào 
 | `${ETA_CANARY_WEIGHT}` | Tỉ lệ canary, chuỗi số thực trong [0, 1] |
 | `${ETA_ADMIN_TOKEN}` | Token cho `POST /admin/reload` (M07 mục 6) |
 
-- Dùng **cả bảy** biến; biến nào khác dạng `${...}` hay `$TÊN` làm test fail. Cần ký tự `$` thật thì viết `$$`.
+- Dùng **cả bảy** biến; biến nào khác dạng `${...}` hay `$TÊN` làm test fail. Đừng dùng ký tự `$` cho việc khác trong
+  tệp: `string.Template` hiểu `$$` là một `$`, còn `envsubst` để nguyên `$$`, nên hai cách render sẽ ra hai manifest khác nhau.
 - **Không có challenger** được biểu diễn bằng challenger trùng champion (cùng image, cùng version) và
   `ETA_CANARY_WEIGHT=0`: một manifest, một hình dạng pod cho mọi release.
 - Không ghi `metadata.namespace` ở document nào.
@@ -85,12 +86,14 @@ Python (cùng cú pháp `${TÊN}` với `envsubst`), rồi `kubectl apply` vào 
 - `InferenceService` tên **`eta`**, annotation `serving.kserve.io/deploymentMode: RawDeployment`. Cluster không có
   metrics-server, nên tắt autoscaler: annotation `serving.kserve.io/autoscalerClass: none` hoặc `minReplicas` bằng
   `maxReplicas` (không thì HPA báo `<unknown>` và `FailedGetResourceMetric` mãi).
-- `spec.predictor.containers` có **đúng một** container, image `${ETA_SERVE_IMAGE}`, khai `containerPort: 8000`. KServe tạo
+- `spec.predictor.containers` có **đúng một** container, image `${ETA_SERVE_IMAGE}`, khai **đúng một** `containerPort: 8000`. KServe tạo
   Deployment `eta-predictor` và Service `eta-predictor` cổng 80 trỏ vào cổng đó; test `port_forward` vào `svc/eta-predictor:80`.
 - `readinessProbe` là `httpGet` `/readyz`, `livenessProbe` là `httpGet` `/healthz`. Liveness **không** trỏ `/readyz`: pod
   chưa nạp xong model là chưa sẵn sàng, không phải đã chết, và kubelet sẽ giết nó lặp lại. Thêm `startupProbe` nếu model
   nạp chậm (bài sự cố của module 13).
 - Container chính có `resources.requests` và `resources.limits`, đủ cả `cpu` và `memory`.
+- `spec.predictor.automountServiceAccountToken: false`. API ETA không gọi API Kubernetes, và ServiceAccount `default` của
+  namespace test được gắn quyền executor của Argo (`k8s_namespace`): token mount vào pod là quyền thừa nếu pod bị chiếm.
 - Mọi container và init container có `imagePullPolicy: IfNotPresent` (hoặc `Never`): image chỉ nằm trong node, không có
   registry nào để kéo.
 - Model của champion và challenger đi vào pod bằng init container chạy image `${ETA_CHAMPION_IMAGE}` /
@@ -98,8 +101,9 @@ Python (cùng cú pháp `${TÊN}` với `envsubst`), rồi `kubectl apply` vào 
   version qua `ETA_MODEL_VERSION`, `ETA_CHALLENGER_VERSION`.
 - **Đổi bất kỳ biến release nào cũng phải sinh pod mới.** Biến đặt trong ConfigMap mà container đọc bằng `envFrom` chỉ được
   đọc khi container khởi động: đổi ConfigMap rồi `apply`, pod cũ vẫn chạy với giá trị cũ, `kubectl rollout status` báo xong
-  ngay. Đặt biến release thẳng trong `env` của container (thuộc pod template), hoặc thêm annotation chứa hash cấu hình vào pod
-  template. Test có một bước chỉ đổi `ETA_CANARY_WEIGHT` (0.25 → 0.5) để bắt lỗi này.
+  ngay. Đặt biến release thẳng trong `env` của container (thuộc pod template); muốn giữ chúng trong ConfigMap thì thêm vào
+  pod template một annotation chứa chính các biến đó (vd. `eta/release: "${ETA_CHAMPION_VERSION}/${ETA_CHALLENGER_VERSION}/${ETA_CANARY_WEIGHT}"`)
+  để giá trị đổi thì pod template đổi. Test có một bước chỉ đổi `ETA_CANARY_WEIGHT` (0.25 → 0.5) để bắt lỗi này.
 
 `k8s/Dockerfile.model`: test build nó với build context chỉ chứa **một** tệp `model.joblib` (quyền 0644). Image phải có
 lệnh để init container chép model (vd. `busybox`), và nên chạy bằng user không phải root. `COPY --chmod=0444` cũng đặt quyền
@@ -114,12 +118,13 @@ uv run python -c "import mlopskit; [mlopskit.kind_load(t) for t in ('eta-serve:d
 kubectl --context kind-mlops create namespace eta
 export ETA_SERVE_IMAGE=eta-serve:dev ETA_CHAMPION_IMAGE=eta-model:v1 ETA_CHAMPION_VERSION=v1 \
        ETA_CHALLENGER_IMAGE=eta-model:v1 ETA_CHALLENGER_VERSION=v1 ETA_CANARY_WEIGHT=0 ETA_ADMIN_TOKEN=$(openssl rand -hex 16)
-envsubst < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
+envsubst '$ETA_SERVE_IMAGE $ETA_CHAMPION_IMAGE $ETA_CHAMPION_VERSION $ETA_CHALLENGER_IMAGE $ETA_CHALLENGER_VERSION $ETA_CANARY_WEIGHT $ETA_ADMIN_TOKEN' \
+  < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
 kubectl --context kind-mlops -n eta rollout status deployment/eta-predictor
 kubectl --context kind-mlops -n eta port-forward svc/eta-predictor 28090:80
 ```
 
-Tag kiểu `:dev`, `:v1` (không phải `:latest`) để `IfNotPresent` dùng image đã nạp. Dọn: `kubectl --context kind-mlops delete
+Truyền danh sách biến cho `envsubst` (như trên) để nó chỉ thay đúng bảy biến release, không đụng `$` nào khác. Tag kiểu `:dev`, `:v1` (không phải `:latest`) để `IfNotPresent` dùng image đã nạp. Dọn: `kubectl --context kind-mlops delete
 namespace eta`.
 
 ### 4. Quy trình release: canary rồi rollback
@@ -140,10 +145,12 @@ git (GitOps, Argo CD ở module 13). `POST /admin/reload` của M07 vẫn có, n
 có trong pod; đổi model trên K8s là đổi pod.
 
 Sau mỗi `apply`, test chờ `status.observedGeneration` của InferenceService bằng `metadata.generation`, `kubectl rollout
-status deployment/eta-predictor` (tối đa 240 giây), InferenceService `Ready`, và `/readyz` báo đúng champion (tối đa 90
-giây). Rồi 30 request `POST /predict` cùng một chuyến, mỗi request một `X-Request-ID` riêng: `variant` phải bằng
-`route(id, weight)`, `model_version` phải là version của nhánh đó, và `eta_s` phải bằng ETA mà model của nhánh đó cho trên
-máy test (sai số tương đối 1e-6). Pod báo `v2` mà chạy model của `v1` thì fail.
+status deployment/eta-predictor` (tối đa 240 giây), InferenceService `Ready`, và `/readyz` báo đúng release (tối đa 90
+giây): `model_version` là champion, và nếu `/readyz` có `challenger`, `canary_weight` (M07 khuyên có) thì hai trường đó
+cũng phải khớp. Rồi 30 request `POST /predict` cùng một chuyến, mỗi request một `X-Request-ID` riêng: `variant` phải bằng
+`route(id, weight)` của bạn, `model_version` phải là version của nhánh đó, và `eta_s` phải bằng ETA mà **chính `eta.serve`
+của bạn** trả cho model đó khi chạy trên máy (`TestClient`, chế độ tệp, sai số tương đối 1e-4). Làm tròn hay kẹp ngưỡng
+trong `/predict` là việc của bạn, hai phía cùng code nên vẫn khớp. Pod báo `v2` mà chạy model của `v1` thì fail.
 
 ### 5. `argo/train-workflow.yaml`: `validate → train → gate`
 
@@ -159,7 +166,10 @@ Test đọc tệp, đặt giá trị parameter, rồi `kubectl create` vào name
   volume.
 - Ba bước Pod tên **`validate`**, **`train`**, **`gate`** (tên task trong `dag` hay tên step), chạy tuần tự: bước sau bắt đầu
   sau khi bước trước xong. Có `retryStrategy` cũng được (Argo đặt tên `train(0)`, `train(1)`; test lấy lần chạy cuối).
-- `validate`: `eta.cli prepare` rồi `eta.cli validate` (M03) cho tháng `month`; exit khác 0 khi dữ liệu hỏng. Test cho
+- `validate`: `eta.cli prepare` rồi `eta.cli validate` (M03) cho tháng `month`; exit khác 0 khi dữ liệu hỏng. Parameter là
+  dữ liệu do người submit đưa vào: đừng ghép `{{workflow.parameters.month}}` vào chuỗi `sh -c` (một giá trị như
+  `2019-01"; rm -rf /tmp; "` thành lệnh shell). Truyền nó qua `env` hay `args` dạng mảng, và kiểm `^\d{4}-(0[1-9]|1[0-2])$`
+  trước khi dùng. Test cho
   một tháng có 10% chuyến thời lượng âm: Workflow phải **Failed** ở `validate` và **không** có bước `train` nào chạy.
 - `train`: output artifact tên **`model`** và **`metrics`** (JSON của `--metrics-out`).
 - `gate`: input artifact tên **`metrics`**, so với `champion-metrics` bằng `decide` và `Policy()` của M04; qua thì exit 0,
@@ -167,7 +177,8 @@ Test đọc tệp, đặt giá trị parameter, rồi `kubectl create` vào name
   có registry trong cluster, bước này đổi thành `eta.cli promote` với cùng mã thoát.
 - Test: `champion-metrics = "{}"` → Workflow **Succeeded**, cả ba bước Succeeded. Champion có `mae = 1.0`,
   `mae_airport = 1.0` (không model nào thắng nổi) → Workflow **Failed**, `validate` và `train` Succeeded, `gate` Failed với
-  `exitCode` 3. Mỗi Workflow phải xong trong 360 giây.
+  `exitCode` 3. Mỗi Workflow phải xong trong 360 giây; test chờ bằng `mlopskit.wait_for(..., fail_on=...)`, nên Workflow vào
+  phase khác phase mong đợi là fail ngay kèm log.
 
 Hay vấp:
 
@@ -175,6 +186,12 @@ Hay vấp:
   `/tmp/in/metrics.json`); đặt `mode: 0444` cho input artifact đó, hoặc để artifact ở dạng nén mặc định.
 - `kubectl wait --for=jsonpath='{.status.phase}'=Succeeded` không dừng khi Workflow Failed, chờ tới hết hạn. Hỏi
   `status.phase` theo vòng lặp và dừng ở `Succeeded`, `Failed` hoặc `Error`.
+- Container của các bước nên có `securityContext` như pod serve: `allowPrivilegeEscalation: false`,
+  `capabilities.drop: [ALL]`, và `seccompProfile: RuntimeDefault` ở `spec.securityContext` của Workflow.
+- Artifact (`sample`, `model`, `metrics`) nằm trong bucket MinIO dùng chung của Argo dưới khoá `<tên workflow>/...` và **không**
+  tự mất khi xoá namespace. Không dùng `artifactGC: OnWorkflowDeletion` trong bài: nó gắn finalizer vào Workflow và chạy pod
+  dọn trong chính namespace đang bị xoá, dễ làm namespace kẹt `Terminating`. MinIO của cluster lưu trong `emptyDir`, nên
+  khởi động lại pod `argo-artifacts` (hoặc chạy lại `up.sh`) là xoá sạch; xem `setup/mlops/kind/README.md`.
 - Dùng `retryPolicy: OnError` (lỗi hạ tầng: pod bị xoá, node mất), không retry khi bước thoát khác 0: retry `gate` bị từ
   chối chỉ ra cùng kết quả ba lần.
 
@@ -185,6 +202,7 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m12
 ```
 
 - `test_m12_manifests_contract` (không cần cluster): các luật tĩnh của mục 3 trên `k8s/eta.yaml` đã render.
+- Các test còn lại kiểm tệp trước, rồi mới kiểm cluster (skip nếu chưa có), rồi mới build image và train model.
 - `test_m12_isvc_serves_champion`: build `Dockerfile.serve` và một image model, `kind_load`, apply, chờ rollout; `/readyz`
   báo version, `/predict` trả `eta_s > 0` đúng của model đó và `model_version` đúng; `POST /admin/reload` không có
   `X-Admin-Token` → 403, có token đúng → 200 với `champion` là version đó.

@@ -33,6 +33,7 @@ spec:
   predictor:
     minReplicas: 1
     maxReplicas: 1
+    automountServiceAccountToken: false
     securityContext:
       runAsNonRoot: true
       runAsUser: 10001

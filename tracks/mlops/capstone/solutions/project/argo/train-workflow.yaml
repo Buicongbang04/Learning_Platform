@@ -8,6 +8,8 @@ spec:
   securityContext:
     runAsNonRoot: true
     runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
   arguments:
     parameters:
       - name: month
@@ -43,24 +45,43 @@ spec:
       retryStrategy:
         limit: 1
         retryPolicy: OnError
-      container:
+      script:
         image: ${ETA_TRAIN_IMAGE}
         imagePullPolicy: IfNotPresent
-        command: [sh, -c]
-        args:
-          - >-
-            python -m eta.cli prepare --config /app/params.yaml --month "{{workflow.parameters.month}}"
-            --out "/tmp/out/{{workflow.parameters.month}}.parquet" &&
-            python -m eta.cli validate "/tmp/out/{{workflow.parameters.month}}.parquet" --month "{{workflow.parameters.month}}"
+        command: [python]
+        env:
+          - name: MONTH
+            value: "{{workflow.parameters.month}}"
+        source: |
+          import os
+          import re
+          import subprocess
+          import sys
+
+          month = os.environ["MONTH"]
+          if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+              sys.exit(f"month phải dạng YYYY-MM, nhận {month!r}")
+          sample = "/tmp/out/sample.parquet"
+          for command in (
+              ["python", "-m", "eta.cli", "prepare", "--config", "/app/params.yaml", "--month", month, "--out", sample],
+              ["python", "-m", "eta.cli", "validate", sample, "--month", month],
+          ):
+              code = subprocess.run(command).returncode
+              if code != 0:
+                  sys.exit(code)
         volumeMounts:
           - {name: data, mountPath: /data, readOnly: true}
         resources:
           requests: {cpu: 200m, memory: 256Mi}
           limits: {cpu: "1", memory: 1Gi}
+        securityContext: &restricted
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
       outputs:
         artifacts:
           - name: sample
-            path: "/tmp/out/{{workflow.parameters.month}}.parquet"
+            path: /tmp/out/sample.parquet
 
     - name: train
       retryStrategy:
@@ -81,6 +102,7 @@ spec:
         resources:
           requests: {cpu: 500m, memory: 512Mi}
           limits: {cpu: "2", memory: 1Gi}
+        securityContext: *restricted
       outputs:
         artifacts:
           - name: model
@@ -119,3 +141,4 @@ spec:
         resources:
           requests: {cpu: 100m, memory: 128Mi}
           limits: {cpu: "1", memory: 512Mi}
+        securityContext: *restricted

@@ -340,10 +340,14 @@ việc của manifest.
 - **Không có challenger = challenger trùng champion, weight 0.** Template không có điều kiện (`envsubst`), nên mọi release cùng
   một hình dạng pod; chi phí là nạp model hai lần (vài trăm KB).
 - **Bảo mật pod:** `runAsNonRoot`, `readOnlyRootFilesystem` (thêm `emptyDir` cho `/tmp`), `drop: [ALL]`, `seccompProfile:
-  RuntimeDefault`; init container có limits riêng nhỏ. Liveness gọi `/healthz`, readiness `/readyz`, startupProbe cho
+  RuntimeDefault`, `automountServiceAccountToken: false` (SA `default` của namespace test có quyền executor Argo); init
+  container có limits riêng nhỏ. Các bước Workflow cũng `runAsNonRoot`, `seccompProfile: RuntimeDefault`,
+  `allowPrivilegeEscalation: false`, `drop: [ALL]` (không `readOnlyRootFilesystem` vì CLI ghi ra `/tmp/out`). Liveness gọi `/healthz`, readiness `/readyz`, startupProbe cho
   tới 120 giây nạp model.
-- **Workflow:** DAG ba task; `validate` chạy `prepare` rồi `validate` trong một container và xuất `sample` (parquet đã lấy
-  mẫu) làm artifact cho `train`, nên `train` đọc đúng dữ liệu đã kiểm. `gate` là `script` Python gọi `decide` + `Policy()`
+- **Workflow:** DAG ba task; `validate` là `script` Python: kiểm `month` bằng regex, rồi chạy `prepare` và `validate` dạng
+  mảng (`subprocess.run([...])`, không shell, parameter đi qua `env`), xuất `sample` (parquet đã lấy mẫu) làm artifact cho
+  `train`, nên `train` đọc đúng dữ liệu đã kiểm. Bản đầu ghép `{{workflow.parameters.month}}` vào `sh -c`: ai submit được
+  Workflow là chạy được lệnh tuỳ ý trong container. `gate` là `script` Python gọi `decide` + `Policy()`
   của M04, thoát `EXIT_REJECTED`. Input artifact `metrics` để `archive: none` (đọc được trên MinIO) nên cần `mode: 0444`:
   không có thì user 10001 gặp `PermissionError`. `retryStrategy` `OnError` chỉ ở `validate`, `train`; `gate` không retry.
 - **Số đo** (laptop 16 nhân, image đã cache): `-k m12` 6 test khoảng 2 phút; Workflow thành công khoảng 30 giây, Workflow
