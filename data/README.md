@@ -362,6 +362,7 @@ Ghi chú:
 | `nyc-tlc-2020` | Chuyến Yellow Taxi NYC 2020 (Parquet) + `taxi_zone_lookup.csv`, có giai đoạn COVID; số dòng đã đếm: 2020-03 = 3 007 687, 2020-04 = 238 073 (sụt ~92% so với tháng 3), dùng làm số tham chiếu cho module/capstone MLOps | [TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) | Dữ liệu mở NYC | ~358 MB | 12 tháng 2020-01..2020-12 |
 | `nasa-http-logs` | Access log HTTP NASA KSC, ~1,9 triệu request (Common Log) | [ITA](https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html) | Dùng tự do | ~20 MB (gz) | Tháng 7/1995 (`NASA_access_log_Jul95.gz`) |
 | `air-quality-uci` | Cảm biến khí thật ở Ý, 9 357 dòng theo giờ, -200 là giá trị thiếu | [UCI #360](https://archive.ics.uci.edu/dataset/360/air+quality) | CC BY 4.0 | ~1,5 MB (zip) | Bản UCI id 360 (03/2004-04/2005) |
+| `cuad` | CUAD v1: 510 hợp đồng thương mại thật (SEC EDGAR; PDF + txt) với nhãn chuyên gia 41 loại điều khoản (`CUAD_v1.json` dạng SQuAD, `master_clauses.csv`), dùng cho track FDE. **Ghi công bắt buộc (CC BY 4.0):** The Atticus Project; Hendrycks, Burns, Chen, Ball, "CUAD: An Expert-Annotated NLP Dataset for Legal Contract Review", NeurIPS 2021; nêu rõ nếu bạn chỉnh sửa | [Zenodo 4595826](https://zenodo.org/records/4595826) | CC BY 4.0 | ~106 MB (zip), ~169 MB giải nén | v1, DOI 10.5281/zenodo.4595826 |
 
 Ba nguồn dưới đây (hai API và một luồng SSE) không nằm trong danh mục vì việc thu thập chính là bài tập: notebook tự gọi API hoặc ghi luồng, lưu dữ liệu thô vào `data/raw/` và test tự skip khi chưa có.
 

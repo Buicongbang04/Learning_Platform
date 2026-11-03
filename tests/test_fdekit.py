@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import shlex
 import signal
 import socket
@@ -262,6 +263,51 @@ def test_vm_rejects_unknown_profile_and_foreign_run_id():
         fdekit._vm_defaults("no-such-customer", restrict=None, sudo=None)
     with pytest.raises(ValueError, match="run id"):
         with fdekit.vm(None, base=fdekit.__file__, run_id="deadbeef"):
+            pass
+
+
+def test_guard_halt_cancels_pending_qemu_start(tmp_path):
+    run_dir = tmp_path / "fde-ex-aaaaaaaa"
+    run_dir.mkdir()
+    marker = tmp_path / "launched"
+    guard = fdekit._spawn_guard(run_dir)
+    try:
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            caught = int(next(line for line in open(f"/proc/{guard.pid}/status") if line.startswith("SigCgt")).split()[1], 16)
+            if caught & (1 << (signal.SIGUSR1 - 1)):
+                break
+            time.sleep(0.05)
+        os.kill(guard.pid, signal.SIGSTOP)
+        (run_dir / "qemu.start").write_text(f'["touch", "{marker}"]')
+        os.kill(guard.pid, signal.SIGUSR1)
+        os.kill(guard.pid, signal.SIGCONT)
+        time.sleep(1.5)
+        assert not marker.exists()
+        assert not (run_dir / "qemu.start").exists()
+    finally:
+        fdekit._stop_guard(guard)
+
+
+def test_relay_matcher_only_matches_this_runs_relay(tmp_path):
+    namespace = {"os": os}
+    exec(fdekit._RELAY_MATCH, namespace)
+    mine, other = tmp_path / "fde-ex-aaaaaaaa", tmp_path / "fde-ex-bbbbbbbb"
+    procs = [subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", str(d / fdekit._RELAY_NAME)])
+             for d in (mine, other)]
+    try:
+        time.sleep(0.5)
+        assert namespace["relay_pids"](str(mine / fdekit._RELAY_NAME)) == [procs[0].pid]
+    finally:
+        for proc in procs:
+            proc.kill()
+            proc.wait()
+
+
+def test_vm_checks_run_id_before_host_prerequisites(monkeypatch):
+    monkeypatch.setattr(fdekit, "require_kvm", lambda: pytest.fail("require_kvm được gọi trước kiểm tra run id"))
+    with pytest.raises(ValueError, match="run id"):
+        with fdekit.vm("lab-open", run_id="deadbeef"):
             pass
 
 
@@ -660,3 +706,34 @@ def test_site_containers_die_with_parent():
             child.kill()
         if len(run_id) == 8:
             fdekit.clean(run_id)
+
+
+def test_models_pinned():
+    assert {"llm-small", "llm-medium", "embed-small"} <= fdekit.MODELS.keys()
+    for weights in fdekit.MODELS.values():
+        assert re.fullmatch(r"[0-9a-f]{40}", weights.revision)
+        assert re.fullmatch(r"[0-9a-f]{64}", weights.sha256)
+        assert weights.filename.endswith(".gguf")
+    assert "q4_k_m" in fdekit.MODELS["llm-small"].filename.lower()
+    assert "q4_k_m" in fdekit.MODELS["llm-medium"].filename.lower()
+    assert fdekit.MODELS["llm-small"].repo == "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+
+
+def test_fetch_model_rejects_bad_sha(tmp_path, monkeypatch):
+    monkeypatch.setattr(fdekit, "MODEL_CACHE", tmp_path)
+    monkeypatch.setattr(fdekit, "_download", lambda url, dest: dest.write_bytes(b"not the model"))
+    with pytest.raises(RuntimeError, match="sha256"):
+        fdekit.fetch_model("embed-small")
+    assert [p.name for p in tmp_path.iterdir() if not p.name.endswith(".lock")] == []
+
+
+def test_fetch_model_downloads_once_and_verifies(tmp_path, monkeypatch):
+    payload = b"gguf-bytes"
+    monkeypatch.setattr(fdekit, "MODEL_CACHE", tmp_path)
+    monkeypatch.setitem(fdekit.MODELS, "embed-small", fdekit.Weights(
+        "o/r", "m.gguf", "0" * 40, hashlib.sha256(payload).hexdigest()))
+    urls = []
+    monkeypatch.setattr(fdekit, "_download", lambda url, dest: urls.append(url) or dest.write_bytes(payload))
+    path = fdekit.fetch_model("embed-small")
+    assert fdekit.fetch_model("embed-small") == path and path.read_bytes() == payload
+    assert urls == ["https://huggingface.co/o/r/resolve/" + "0" * 40 + "/m.gguf"]

@@ -32,6 +32,7 @@ import testkit
 ROOT = testkit.ROOT
 RAW = ROOT / "data" / "raw"
 CACHE = RAW / "fde-images"
+MODEL_CACHE = RAW / "fde-models"
 LAB = ROOT / ".fde-lab"
 PREFIX = "fde-ex-"
 QEMU = "qemu-system-x86_64"
@@ -249,6 +250,60 @@ def fetch_image(name: str) -> Path:
     return path
 
 
+@dataclass(frozen=True)
+class Weights:
+    repo: str
+    filename: str
+    revision: str
+    sha256: str
+
+    @property
+    def url(self) -> str:
+        return f"https://huggingface.co/{self.repo}/resolve/{self.revision}/{self.filename}"
+
+
+MODELS: dict[str, Weights] = {
+    "llm-small": Weights(
+        "Qwen/Qwen2.5-0.5B-Instruct-GGUF", "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "9217f5db79a29953eb74d5343926648285ec7e67",
+        "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+    ),
+    "llm-medium": Weights(
+        "Qwen/Qwen2.5-1.5B-Instruct-GGUF", "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        "91cad51170dc346986eccefdc2dd33a9da36ead9",
+        "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+    ),
+    "embed-small": Weights(
+        "nomic-ai/nomic-embed-text-v1.5-GGUF", "nomic-embed-text-v1.5.Q8_0.gguf",
+        "0188c9bf409793f810680a5a431e7b899c46104c",
+        "3e24342164b3d94991ba9692fdc0dd08e3fd7362e0aacc396a9a5c54a544c3b7",
+    ),
+}
+
+
+def fetch_model(name: str) -> Path:
+    """Tải trọng số GGUF đã ghim vào MODEL_CACHE (một lần), kiểm sha256 trước khi đặt tên chính thức; tệp sai thì xoá."""
+    weights = MODELS[name]
+    MODEL_CACHE.mkdir(parents=True, exist_ok=True)
+    path = MODEL_CACHE / weights.filename
+    with (MODEL_CACHE / f".{weights.filename}.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if _verified(path, weights.sha256):
+            return path
+        path.unlink(missing_ok=True)
+        part = path.with_name(path.name + ".part")
+        try:
+            _download(weights.url, part)
+            actual = _sha256(part)
+            if actual != weights.sha256:
+                raise RuntimeError(f"sha256 của {weights.url} không khớp: cần {weights.sha256}, nhận {actual}")
+            os.replace(part, path)
+        finally:
+            part.unlink(missing_ok=True)
+        path.with_name(path.name + ".sha256").write_text(_stamp(path, weights.sha256))
+    return path
+
+
 def golden_path(profile: str) -> Path:
     return CACHE / "golden" / f"{profile}.qcow2"
 
@@ -436,8 +491,25 @@ def _netdev(*, ssh_port: int, forwards: Mapping[int, int], guestfwds: Mapping[st
     return ",".join(parts)
 
 
+_RELAY_MATCH = r"""
+def relay_pids(script, proc="/proc"):
+    found = []
+    for name in os.listdir(proc):
+        if not name.isdigit() or int(name) == os.getpid():
+            continue
+        try:
+            with open(os.path.join(proc, name, "cmdline"), "rb") as handle:
+                argv = handle.read().split(b"\0")
+        except OSError:
+            continue
+        if os.fsencode(script) in argv:
+            found.append(int(name))
+    return found
+"""
+
 _WRAPPER = r"""
 import ctypes, json, os, select, shutil, signal, subprocess, sys, time
+""" + _RELAY_MATCH + r"""
 lifeline, run_dir = int(sys.argv[2]), sys.argv[3]
 needle = os.path.basename(run_dir)
 libc = ctypes.CDLL(None, use_errno=True)
@@ -484,8 +556,15 @@ def purge_docker():
         if elapsed > 10 or (not names and not networks and elapsed > 4):
             return
         time.sleep(2)
+def kill_relays():
+    for pid in relay_pids(path("guestfwd-relay.py")):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
 def purge():
     kill()
+    kill_relays()
     if os.path.exists(path("containers")) and shutil.which("docker"):
         purge_docker()
     shutil.rmtree(run_dir, ignore_errors=True)
@@ -526,6 +605,10 @@ while True:
     if state["halt"]:
         state["halt"] = False
         kill()
+        try:
+            os.unlink(path("qemu.start"))
+        except OSError:
+            pass
     proc = state["proc"]
     if proc is not None and proc.poll() is not None:
         finished(proc)
@@ -793,6 +876,8 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
     egress `none`/`proxy` ⇒ `restrict=True` (không ra internet, không tới loopback host, trừ forward đã khai báo).
     `run_id` chỉ dùng khi thư mục lab của run id đó đã được tạo (customer_site dùng chung run id với container).
     """
+    if run_id is not None and run_id not in _GUARDS:
+        raise ValueError(f"run id {run_id!r} không có tiến trình canh; chỉ customer_site truyền run_id")
     restrict, sudo = _vm_defaults(profile, restrict=restrict, sudo=sudo)
     require_kvm()
     _require_ssh_tools()
@@ -805,8 +890,6 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
     if not base.is_file():
         raise FileNotFoundError(base)
     owned = run_id is None
-    if not owned and run_id not in _GUARDS:
-        raise ValueError(f"run id {run_id!r} không có tiến trình canh; chỉ customer_site truyền run_id")
     run_id = run_id or uuid.uuid4().hex[:8]
     if owned:
         _ACTIVE.add(run_id)
