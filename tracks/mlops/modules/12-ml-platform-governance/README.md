@@ -121,7 +121,7 @@ Phần này là **hướng dẫn**, không có test nào cần tài khoản. N�
 4. **Gắn tag `lab=<id>` cho mọi thứ**, để bước dọn chỉ động tới đồ của mình (bài 03 trung cấp).
 5. **Dọn trước khi ngủ.** In kế hoạch dọn bằng dry-run trước, rồi mới chạy thật; sau đó kiểm trong console xem có gì còn sót.
 
-Lệnh dọn (đã có trong bài 03 trung cấp, ở dạng sinh và kiểm tĩnh; đối chiếu với tài liệu của nhà cung cấp trước khi chạy thật):
+Lệnh dọn (đã có trong bài 03 trung cấp, ở dạng sinh và kiểm tĩnh; logic script dọn được chấm bằng một lần chạy `bash` với CLI `aws`, `gcloud`, `az` giả (dry-run mặc định, tiếp tục khi một bước lỗi, mã thoát), không chấm theo một phiên bản CLI thật; đối chiếu với tài liệu của nhà cung cấp trước khi chạy thật):
 
 | Dịch vụ | Việc phải dọn | Thứ tự |
 | --- | --- | --- |

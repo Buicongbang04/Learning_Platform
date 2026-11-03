@@ -17,7 +17,7 @@ Lab cloud (SageMaker, Vertex AI, Azure ML) là phần **tuỳ chọn** của mod
 
 ## Đề bài
 
-Lý do chấm được mà không cần cloud: test (1) kiểm **tĩnh** các lệnh sinh ra (so chuỗi với bảng lệnh bên dưới) và (2) chạy script thật bằng `bash` với các CLI `aws`, `gcloud`, `az` **giả** do test dựng trong thư mục tạm, chỉ ghi lại tham số. Bạn không chạy lệnh nào với tài khoản cloud thật, và test không kiểm lệnh đúng với bản CLI nào. Trước khi tự dọn lab thật, đối chiếu từng lệnh với tài liệu của nhà cung cấp.
+Lý do chấm được mà không cần cloud: test (1) kiểm **tĩnh** các lệnh sinh ra (so chuỗi với bảng lệnh bên dưới) và (2) chạy script thật bằng `bash` (qua `testkit.run_sandboxed`) với các CLI `aws`, `gcloud`, `az` **giả** do test dựng trong thư mục tạm, chỉ ghi lại tham số. Bạn không chạy lệnh nào với tài khoản cloud thật, và test không kiểm lệnh đúng với bản CLI nào. Trước khi tự dọn lab thật, đối chiếu từng lệnh với tài liệu của nhà cung cấp.
 
 Danh sách tài nguyên (`inventory`) là list dict `{"provider", "type", "name", "region", "tags"}`. Trong `starter/teardown.py`:
 

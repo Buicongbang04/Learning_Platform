@@ -1,11 +1,10 @@
 import os
 import stat
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from testkit import Exercise
+from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
 LAB = "ml-lab-7"
@@ -140,7 +139,7 @@ def run_script(td, fake_cli, tmp_path, dry=None, fail_on=None):
         env["DRY_RUN"] = dry
     if fail_on:
         env["FAIL_ON"] = fail_on
-    done = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True, timeout=60)
+    done = run_sandboxed(["bash", str(script)], writable=[tmp_path], cwd=tmp_path, env=env, timeout=60)
     calls = log.read_text().splitlines() if log.exists() else []
     return done, calls
 

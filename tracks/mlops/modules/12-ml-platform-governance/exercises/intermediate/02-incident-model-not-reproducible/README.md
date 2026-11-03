@@ -28,7 +28,7 @@ Model ETA đang chạy production có dự đoán trên một tập giữ lại 
 - Dựng lại hai lần liên tiếp thì hai kết quả giống hệt nhau, nên không phải ngẫu nhiên giữa các lần chạy.
 - Không ai đổi mã, không ai đổi dữ liệu, không ai đổi tham số.
 
-Sửa `starter/pipeline.py` để `replay` cho ra đúng dự đoán đã sinh ra lúc train, kể cả khi `index` lúc dựng lại không giống `index` lúc train. Hợp đồng giao diện mà test dùng:
+Sửa `starter/pipeline.py` để `replay` cho ra đúng dự đoán đã sinh ra lúc train, kể cả khi môi trường lúc dựng lại có thể khác lúc train; `replay` nhận tham số `index` do test cấp. Hợp đồng giao diện mà test dùng:
 
 - `train_and_log(tracking_uri, experiment_id, workdir, index, seed=7, alpha=1.0) -> run_id`: train, ghi run `FINISHED` lên MLflow (artifact `preds.json` là dự đoán gốc). Lỗi giữa chừng thì run phải là `FAILED`.
 - `replay(tracking_uri, run_id, workdir, index) -> list[float]`: dựng lại từ **những gì run ghi** và trả dự đoán trên tập giữ lại. Không sửa run gốc (tag, param, metric, artifact giữ nguyên).
@@ -37,7 +37,7 @@ Sửa `starter/pipeline.py` để `replay` cho ra đúng dự đoán đã sinh r
 
 ## Tiêu chí đạt
 
-- `replay` khớp dự đoán gốc trong sai số 1e-9, kể cả khi `index` lúc dựng lại khác `index` lúc train (test thử nhiều dạng khác nhau).
+- `replay` khớp dự đoán gốc trong sai số 1e-9, kể cả khi môi trường lúc dựng lại khác lúc train (test thử nhiều dạng khác nhau).
 - `replay` hai lần cho cùng kết quả; không sửa run gốc.
 - Dựng lại không được thì `LookupError` nêu rõ, không trả kết quả khác.
 - Bạn nói được trong một câu vì sao bốn thứ trong tag chưa đủ, và thêm vào run thứ gì để công cụ audit lần sau bắt được lỗi kiểu này.

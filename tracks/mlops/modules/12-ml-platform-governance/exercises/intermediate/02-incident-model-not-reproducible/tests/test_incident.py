@@ -62,14 +62,14 @@ def test_replay_matches_original_when_nothing_changed(env):
     assert replay(run_id, index) == pytest.approx(original(run_id), abs=1e-9)
 
 
-def test_replay_matches_original_with_a_different_index(env):
+def test_replay_matches_original_in_a_later_environment(env):
     _, train, replay, original = env
     run_id = train(index_of("1.4.0"))
     later = index_of("1.4.0", "1.5.0", "1.6.0")
     assert replay(run_id, later) == pytest.approx(original(run_id), abs=1e-9)
 
 
-def test_fixture_sanity_two_indexes_give_different_models(env):
+def test_fixture_sanity_two_environments_differ(env):
     _, train, replay, original = env
     old = train(index_of("1.4.0"), name="old")
     new = train(index_of("1.4.0", "1.5.0"), name="new")
