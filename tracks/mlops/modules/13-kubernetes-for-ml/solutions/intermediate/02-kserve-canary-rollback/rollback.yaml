@@ -1,0 +1,26 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: eta-canary
+  annotations:
+    serving.kserve.io/autoscalerClass: none
+    serving.kserve.io/stop: "true"
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    labels:
+      eta-traffic: "on"
+    containers:
+      - name: kserve-container
+        image: eta-serve:dev
+        env:
+          - name: MODEL_PATH
+            value: /models/eta-v2.joblib
+        resources:
+          requests:
+            cpu: 50m
+            memory: 192Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi

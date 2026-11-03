@@ -1,0 +1,111 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: eta-train
+spec:
+  entrypoint: pipeline
+  arguments:
+    parameters:
+      - name: seed
+        value: "0"
+      - name: rows
+        value: "5000"
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: prepare
+            template: prepare
+            arguments:
+              parameters:
+                - name: seed
+                  value: "{{workflow.parameters.seed}}"
+                - name: rows
+                  value: "{{workflow.parameters.rows}}"
+          - name: train
+            template: train
+            dependencies: [prepare]
+            arguments:
+              artifacts:
+                - name: train
+                  from: "{{tasks.prepare.outputs.artifacts.train}}"
+          - name: evaluate
+            template: evaluate
+            dependencies: [prepare, train]
+            arguments:
+              artifacts:
+                - name: model
+                  from: "{{tasks.train.outputs.artifacts.model}}"
+                - name: test
+                  from: "{{tasks.prepare.outputs.artifacts.test}}"
+
+    - name: prepare
+      inputs:
+        parameters:
+          - name: seed
+          - name: rows
+      script:
+        image: eta-serve:dev
+        command: [python]
+        source: |
+          import numpy as np
+          from app.etaml import make_trips
+          x, y = make_trips({{inputs.parameters.seed}}, {{inputs.parameters.rows}})
+          cut = int(len(y) * 0.8)
+          np.savez("/tmp/train.npz", x=x[:cut], y=y[:cut])
+          np.savez("/tmp/test.npz", x=x[cut:], y=y[cut:])
+          print(f"train={cut} test={len(y) - cut}")
+      outputs:
+        artifacts:
+          - name: train
+            path: /tmp/train.npz
+          - name: test
+            path: /tmp/test.npz
+
+    - name: train
+      retryStrategy:
+        limit: "2"
+        retryPolicy: OnError
+      inputs:
+        artifacts:
+          - name: train
+            path: /tmp/in/train.npz
+      script:
+        image: eta-serve:dev
+        command: [python]
+        source: |
+          import joblib
+          import numpy as np
+          from app.etaml import train
+          data = np.load("/tmp/in/train.npz")
+          joblib.dump(train(data["x"], data["y"]), "/tmp/model.joblib")
+      outputs:
+        artifacts:
+          - name: model
+            path: /tmp/model.joblib
+
+    - name: evaluate
+      inputs:
+        artifacts:
+          - name: model
+            path: /tmp/in/model.joblib
+          - name: test
+            path: /tmp/in/test.npz
+      script:
+        image: eta-serve:dev
+        command: [python]
+        source: |
+          import json
+          import joblib
+          import numpy as np
+          from app.etaml import mae
+          data = np.load("/tmp/in/test.npz")
+          model = joblib.load("/tmp/in/model.joblib")
+          metrics = {"mae": mae(model, data["x"], data["y"]), "n_test": int(len(data["y"]))}
+          json.dump(metrics, open("/tmp/metrics.json", "w"))
+          print(metrics)
+      outputs:
+        parameters:
+          - name: metrics
+            valueFrom:
+              path: /tmp/metrics.json

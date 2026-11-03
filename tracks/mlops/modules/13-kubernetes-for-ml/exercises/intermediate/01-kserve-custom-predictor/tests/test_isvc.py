@@ -1,0 +1,38 @@
+import k8slab
+import mlopskit
+import pytest
+
+from testkit import Exercise
+
+ex = Exercise(__file__)
+
+
+def manifest() -> list[dict]:
+    return k8slab.load_docs(ex.path("isvc.yaml"))
+
+
+def test_custom_predictor_shape():
+    isvc = k8slab.find(manifest(), "InferenceService", "eta")
+    predictor = isvc["spec"]["predictor"]
+    assert "model" not in predictor, "Bài này dùng custom container, không dùng predictor.model (runtime có sẵn)"
+    containers = predictor.get("containers") or []
+    assert len(containers) == 1 and containers[0].get("name") == "kserve-container", (
+        "Cần đúng một container tên kserve-container"
+    )
+    probe = containers[0].get("readinessProbe") or {}
+    assert probe.get("httpGet", {}).get("path") == "/v1/models/eta", (
+        "readinessProbe phải hỏi /v1/models/eta (model đã nạp), không chỉ kiểm cổng TCP"
+    )
+
+
+def test_serves_v2_over_http_not_just_ready():
+    docs = k8slab.with_image(manifest(), k8slab.eta_image())
+    with mlopskit.k8s_namespace() as ns:
+        mlopskit.apply_manifest(k8slab.dump(docs), ns)
+        mlopskit.wait_for("inferenceservice", "eta", "Ready", ns, 180)
+        with mlopskit.port_forward(ns, "svc/eta-predictor", 80) as port:
+            meta = k8slab.call(port, "/v1/models/eta")
+            body = k8slab.call(port, "/v1/models/eta:predict", {"instances": k8slab.ROWS})
+        assert meta["model_version"] == "v2", f"InferenceService Ready nhưng đang phục vụ model {meta['model_version']}"
+        assert body["model_version"] == "v2", f"/predict trả model {body['model_version']}, cần v2"
+        assert body["predictions"] == pytest.approx(k8slab.expected_predictions("v2"), abs=1e-3)
