@@ -1,0 +1,9 @@
+from sklearn.linear_model import Ridge
+
+
+def build():
+    return Ridge(alpha=1.0)
+
+
+def train(X, y):
+    return build().fit(X, y)
