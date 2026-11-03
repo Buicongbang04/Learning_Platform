@@ -2,6 +2,376 @@
   "id": "mlops",
   "name": "MLOps",
   "icon": "workflow",
-  "status": "soon",
-  "order": 6
+  "status": "active",
+  "order": 6,
+  "description": "19 module (từ module 00 giới thiệu MLOps): lõi junior 00–13 gồm engineering cho ML code, container, DVC, MLflow, Prefect, Feast, serving, CI/CD bằng act, Prometheus/Grafana, drift, deploy DL và Kubernetes cho ML; tầng senior 14–18 phủ K8s production, distributed training, streaming, nền tảng nhiều đội, bảo mật model và system design. Capstone dịch vụ ETA cho taxi NYC chạy local.",
+  "source": "https://roadmap.sh/mlops",
+  "modules": [
+    {
+      "id": "00-introduction",
+      "title": "Giới thiệu MLOps",
+      "summary": "Vòng đời ML trong production, các mức trưởng thành MLOps, vai trò MLOps / ML engineer / DS / DE, bản đồ phần đã học ở track khác và bản đồ công cụ của cả lộ trình.",
+      "topics": [
+        "Vòng đời ML",
+        "Maturity levels",
+        "Vai trò",
+        "Technical debt trong ML",
+        "Bản đồ công cụ"
+      ]
+    },
+    {
+      "id": "01-engineering-foundations",
+      "title": "Nền tảng kỹ thuật cho ML code",
+      "summary": "Từ notebook sang package với uv và pyproject, config tách khỏi code, logging có cấu trúc, test cho code ML, Makefile, Git flow cho dự án ML.",
+      "topics": [
+        "uv / pyproject",
+        "Cấu trúc src/",
+        "Config",
+        "Structured logging",
+        "Test cho ML",
+        "Makefile",
+        "Git flow"
+      ]
+    },
+    {
+      "id": "02-containers-for-ml",
+      "title": "Container cho ML",
+      "summary": "Image ML multi-stage và nhỏ, ghim phiên bản, CUDA base image, cache layer cho dependency nặng, Compose nhiều dịch vụ và quét image bằng trivy.",
+      "topics": [
+        "Multi-stage",
+        "Layer cache",
+        "CUDA base image",
+        "Compose",
+        "Healthcheck",
+        "trivy"
+      ]
+    },
+    {
+      "id": "03-data-versioning-quality",
+      "title": "Data versioning & chất lượng dữ liệu",
+      "summary": "DVC với remote MinIO và pipeline dvc.yaml, validation bằng Pandera, data contract, lineage cơ bản; so sánh Great Expectations, lakeFS, Delta.",
+      "topics": [
+        "DVC",
+        "dvc repro",
+        "Pandera",
+        "Data contract",
+        "Lineage",
+        "Great Expectations"
+      ]
+    },
+    {
+      "id": "04-tracking-registry",
+      "title": "Experiment tracking & model registry",
+      "summary": "MLflow server thật với backend Postgres và artifact MinIO, lineage model - commit - data, alias, cổng promotion, model card; so sánh W&B, Neptune, Comet.",
+      "topics": [
+        "MLflow server",
+        "Registry & alias",
+        "Cổng promotion",
+        "Lineage",
+        "Model card",
+        "W&B / Neptune"
+      ]
+    },
+    {
+      "id": "05-training-pipelines",
+      "title": "Training pipeline & orchestration",
+      "summary": "Pipeline tái lập, Prefect 3 cho flow training và batch, continuous training theo lịch, data mới hoặc cảnh báo; so sánh Airflow, Kubeflow, ZenML, Metaflow.",
+      "topics": [
+        "Reproducibility",
+        "Prefect 3",
+        "Retry / cache / schedule",
+        "Continuous training",
+        "Backfill",
+        "Airflow / Kubeflow"
+      ]
+    },
+    {
+      "id": "06-feature-stores",
+      "title": "Feature store & training-serving skew",
+      "summary": "Skew và point-in-time correctness, Feast local với offline store file và online store, materialize, parity giữa batch và online; so sánh Tecton, Hopsworks.",
+      "topics": [
+        "Training-serving skew",
+        "Point-in-time",
+        "Feast",
+        "Materialize",
+        "Online store",
+        "Tecton / Hopsworks"
+      ]
+    },
+    {
+      "id": "07-model-serving",
+      "title": "Model serving",
+      "summary": "FastAPI production, load model theo alias, readiness, warmup, shadow, canary, A/B, rollback, batch inference, load test; so sánh BentoML, Triton, Ray Serve.",
+      "topics": [
+        "FastAPI production",
+        "Shadow / canary / A/B",
+        "Rollback",
+        "Batch inference",
+        "Load test",
+        "BentoML / Triton"
+      ]
+    },
+    {
+      "id": "08-cicd-for-ml",
+      "title": "CI/CD cho ML",
+      "summary": "GitHub Actions chạy local bằng act: CI cho code, lớp data/model với train trên mẫu và cổng promotion, CD khi alias đổi; ranh giới hai lớp CI/CD.",
+      "topics": [
+        "GitHub Actions",
+        "act",
+        "CI cho code",
+        "CT / data & model",
+        "Cổng promotion",
+        "Secrets",
+        "GitLab CI / CML"
+      ]
+    },
+    {
+      "id": "09-monitoring-observability",
+      "title": "Monitoring & observability",
+      "summary": "Prometheus và Grafana: metric service (RED), metric model, log dự đoán để join nhãn sau, alert rule và Alertmanager, dashboard as code.",
+      "topics": [
+        "Prometheus",
+        "Grafana",
+        "RED metrics",
+        "Metric model",
+        "Alertmanager",
+        "promtool",
+        "Dashboard as code"
+      ]
+    },
+    {
+      "id": "10-drift-incidents",
+      "title": "Drift, nhãn về muộn & xử lý sự cố",
+      "summary": "Data, prediction và concept drift, Evidently và PSI/KS, nhãn về muộn, khung quyết định retrain / rollback / giữ nguyên, runbook, on-call, postmortem.",
+      "topics": [
+        "Data drift",
+        "Concept drift",
+        "Evidently",
+        "Nhãn về muộn",
+        "Retrain / rollback / giữ",
+        "Runbook",
+        "Postmortem"
+      ]
+    },
+    {
+      "id": "11-deep-learning-serving",
+      "title": "Deploy model Deep Learning",
+      "summary": "SegFormer trên Oxford-IIIT Pets: export ONNX, ONNX Runtime CPU và CUDA, kiểm sai số, dynamic batching, benchmark, bộ nhớ GPU 4 GB, quantization INT8.",
+      "topics": [
+        "ONNX",
+        "ONNX Runtime",
+        "Dynamic batching",
+        "Benchmark",
+        "FP16 / INT8",
+        "GPU memory",
+        "Triton / TensorRT"
+      ]
+    },
+    {
+      "id": "12-ml-platform-governance",
+      "title": "Nền tảng ML, governance & cloud",
+      "summary": "Reproducibility audit, governance và audit log, chi phí, IaC cho ML ở mức đọc hiểu, cloud ML services (SageMaker, Vertex AI, Azure ML) và lab cloud tuỳ chọn.",
+      "topics": [
+        "Reproducibility audit",
+        "Governance",
+        "Chi phí",
+        "IaC cho ML",
+        "SageMaker / Vertex / Azure ML",
+        "Cloud free tier"
+      ]
+    },
+    {
+      "id": "13-kubernetes-for-ml",
+      "title": "Kubernetes cho ML",
+      "summary": "Chuyển service ETA từ Compose sang kind, KServe InferenceService, Argo Workflows cho pipeline training, GPU trên K8s ở mức khái niệm; ghi rõ phần kế thừa từ track DevOps.",
+      "topics": [
+        "kind",
+        "Deployment / Service / probes",
+        "KServe",
+        "Argo Workflows",
+        "Argo CD",
+        "GPU trên K8s"
+      ]
+    },
+    {
+      "id": "14-kubernetes-ml-production",
+      "title": "K8s cho ML production",
+      "summary": "Autoscaling inference theo custom metric, KEDA, scale-to-zero, Triton dưới tải, GPU scheduling, hàng đợi job bằng Kueue, multi-tenant với quota và preemption.",
+      "topics": [
+        "HPA / KEDA",
+        "Scale-to-zero",
+        "Triton dưới tải",
+        "GPU scheduling",
+        "Kueue",
+        "Quota & priority"
+      ]
+    },
+    {
+      "id": "15-distributed-training",
+      "title": "Distributed training & GPU compute",
+      "summary": "Data/model parallel, DDP, FSDP, ZeRO, torchrun nhiều tiến trình CPU (gloo), Ray Train và Tune, checkpoint và resume khi bị preempt, ước tính chi phí GPU.",
+      "topics": [
+        "DDP / FSDP / ZeRO",
+        "torchrun gloo",
+        "Ray Train / Tune",
+        "Checkpoint & resume",
+        "Data loading",
+        "Chi phí GPU"
+      ]
+    },
+    {
+      "id": "16-streaming-realtime-ml",
+      "title": "Streaming feature & real-time ML",
+      "summary": "Kafka tới feature theo cửa sổ thời gian, Feast push vào online store, freshness và độ trễ end-to-end, online learning với River, feedback loop.",
+      "topics": [
+        "Kafka",
+        "Windowed features",
+        "Feast push",
+        "Freshness",
+        "River",
+        "Feedback loop"
+      ]
+    },
+    {
+      "id": "17-ml-platform-security",
+      "title": "Nền tảng ML nhiều đội & bảo mật model",
+      "summary": "Golden path và template dự án, self-service deploy, FinOps cho ML, build vs buy, supply chain của model: pickle, safetensors, modelscan, ký model, SBOM.",
+      "topics": [
+        "Golden path",
+        "Copier",
+        "FinOps",
+        "Build vs buy",
+        "safetensors / modelscan",
+        "Ký model",
+        "SBOM"
+      ]
+    },
+    {
+      "id": "18-senior-system-design",
+      "title": "ML system design & dẫn dắt vận hành",
+      "summary": "SLO/SLI và error budget cho ML, incident command, postmortem không đổ lỗi, design doc, đánh đổi chi phí - độ trễ - chất lượng, bộ đề system design mức senior có rubric.",
+      "topics": [
+        "SLO / error budget",
+        "Incident command",
+        "Design doc",
+        "Trade-off",
+        "System design",
+        "Rubric"
+      ]
+    }
+  ],
+  "capstone": {
+    "title": "Dịch vụ ETA cho taxi NYC",
+    "readme": "capstone/README.md",
+    "milestones": [
+      {
+        "id": "m01",
+        "title": "Biến notebook baseline ETA thành package có test, config, logging",
+        "after": "01-engineering-foundations",
+        "doc": "capstone/milestones/m01-package.md"
+      },
+      {
+        "id": "m02",
+        "title": "Đóng gói training và serving thành image, stack Compose",
+        "after": "02-containers-for-ml",
+        "doc": "capstone/milestones/m02-containers.md"
+      },
+      {
+        "id": "m03",
+        "title": "DVC pipeline và data validation chặn tháng dữ liệu hỏng",
+        "after": "03-data-versioning-quality",
+        "doc": "capstone/milestones/m03-data-pipeline.md"
+      },
+      {
+        "id": "m04",
+        "title": "Tracking, registry và cổng promotion có tiêu chí rõ",
+        "after": "04-tracking-registry",
+        "doc": "capstone/milestones/m04-registry-promotion.md"
+      },
+      {
+        "id": "m05",
+        "title": "Flow Prefect: train theo lịch, batch inference, đồng hồ phát lại theo tháng",
+        "after": "05-training-pipelines",
+        "doc": "capstone/milestones/m05-prefect-replay.md"
+      },
+      {
+        "id": "m06",
+        "title": "Feature tốc độ theo zone/giờ qua Feast, không skew batch và online",
+        "after": "06-feature-stores",
+        "doc": "capstone/milestones/m06-feast-features.md"
+      },
+      {
+        "id": "m07",
+        "title": "API production, shadow, canary và rollback",
+        "after": "07-model-serving",
+        "doc": "capstone/milestones/m07-serving-canary.md"
+      },
+      {
+        "id": "m08",
+        "title": "Workflow GitHub Actions chạy bằng act: CI code, CT model, deploy khi promotion qua",
+        "after": "08-cicd-for-ml",
+        "doc": "capstone/milestones/m08-cicd-act.md"
+      },
+      {
+        "id": "m09",
+        "title": "Prometheus và Grafana: dashboard service và model, alert rule có test",
+        "after": "09-monitoring-observability",
+        "doc": "capstone/milestones/m09-monitoring.md"
+      },
+      {
+        "id": "m10",
+        "title": "Phát lại 2019 tới 2020: phát hiện, quyết định, runbook và postmortem COVID",
+        "after": "10-drift-incidents",
+        "doc": "capstone/milestones/m10-drift-replay.md"
+      },
+      {
+        "id": "m11",
+        "title": "Tuỳ chọn: đưa một phần lên cloud free tier, có lệnh dọn",
+        "after": "12-ml-platform-governance",
+        "doc": "capstone/milestones/m11-cloud-optional.md"
+      },
+      {
+        "id": "m12",
+        "title": "Chuyển ETA sang kind và KServe, pipeline training trên Argo Workflows",
+        "after": "13-kubernetes-for-ml",
+        "doc": "capstone/milestones/m12-kind-kserve.md"
+      },
+      {
+        "id": "m13",
+        "title": "Đánh giá độc lập mức junior: tháng dữ liệu lạ, tự chẩn đoán và vận hành",
+        "after": "13-kubernetes-for-ml",
+        "doc": "capstone/milestones/m13-junior-assessment.md"
+      },
+      {
+        "id": "m14",
+        "title": "ETA chịu tải trên K8s: autoscale, Kueue, quota tách serving và training",
+        "after": "14-kubernetes-ml-production",
+        "doc": "capstone/milestones/m14-k8s-load.md"
+      },
+      {
+        "id": "m15",
+        "title": "Retrain bằng Ray nhiều worker, checkpoint, chịu worker bị kill",
+        "after": "15-distributed-training",
+        "doc": "capstone/milestones/m15-ray-retrain.md"
+      },
+      {
+        "id": "m16",
+        "title": "Feature real-time từ stream Kafka phát lại, đo freshness",
+        "after": "16-streaming-realtime-ml",
+        "doc": "capstone/milestones/m16-streaming-features.md"
+      },
+      {
+        "id": "m17",
+        "title": "Onboard model thứ hai qua template, ký và quét model, báo cáo chi phí",
+        "after": "17-ml-platform-security",
+        "doc": "capstone/milestones/m17-platform-onboarding.md"
+      },
+      {
+        "id": "m18",
+        "title": "Đánh giá độc lập mức senior: design doc, SLO, dẫn sự cố, postmortem",
+        "after": "18-senior-system-design",
+        "doc": "capstone/milestones/m18-senior-assessment.md"
+      }
+    ]
+  }
 }
