@@ -14,7 +14,7 @@ questions:
     prompt: Tập train 40 GB nằm trên S3, mỗi tuần đổi vài phần trăm. Bạn muốn mỗi commit Git trỏ tới đúng phiên bản dữ liệu và `git checkout` + một lệnh là dựng lại được. Chọn gì?
     options:
       - { id: a, text: "Git LFS cho toàn bộ 40 GB vì nó cũng là một công cụ của Git, không cần học gì thêm" }
-      - { id: b, text: "'DVC: Git giữ tệp .dvc và dvc.lock, dữ liệu ở remote S3 theo hash'" }
+      - { id: b, text: "DVC: Git giữ tệp .dvc và dvc.lock, dữ liệu ở remote S3 theo hash" }
       - { id: c, text: "Đặt tên thư mục theo ngày trên S3 rồi ghi ngày đó vào README của dự án" }
       - { id: d, text: "Feast, vì nó quản lý phiên bản dữ liệu cho model" }
   - id: orchestrator-existing-airflow
@@ -52,7 +52,7 @@ questions:
       - { id: a, text: "Dùng DVC để version riêng phần mã sinh feature và dữ liệu đầu vào của nó" }
       - { id: b, text: "Tăng số cây của model lên gấp đôi để bù lại phần chất lượng bị mất khi chạy online" }
       - { id: c, text: "Chuyển sang GPU cho API để tính nhanh hơn" }
-      - { id: d, text: "'Feature store như Feast: một định nghĩa feature dùng cho cả offline và online'" }
+      - { id: d, text: "Feature store như Feast: một định nghĩa feature dùng cho cả offline và online" }
   - id: ci-for-ml
     kind: knowledge
     type: multi
