@@ -12,13 +12,13 @@ Nó là hợp đồng tái lập: PR review đọc diff `dvc.lock` để thấy 
 
 ## `dvc repro` quyết định chạy hay bỏ qua stage dựa trên gì?
 
-Hash của `cmd`, `deps` và các khoá `params` được khai, so với `dvc.lock`. Khớp thì in "didn't change, skipping". Chỉ những gì được liệt kê trong `dvc.yaml` mới được theo dõi: DVC không đọc code của bạn để đoán stage cần tệp nào.
+Hash của `cmd`, `deps` và các khoá `params` được khai trong `dvc.yaml`, so với `dvc.lock`. Khớp thì in "didn't change, skipping"; lệch thì chạy lại stage đó và mọi stage phụ thuộc vào đầu ra của nó.
 
-## Sự cố: sửa code lọc dữ liệu, `dvc repro` báo không đổi, model vẫn học dữ liệu cũ. Bạn điều tra thế nào?
+## Sự cố: pipeline huấn luyện xanh nhưng metric offline tụt 8% sau một đêm. Bạn điều tra từ phía dữ liệu thế nào?
 
-Tái hiện ở repo sạch: sửa, `dvc status`, `dvc repro`. Nếu `dvc status` báo up to date thì lỗi nằm ở khai báo, không ở DVC: mở `dvc.lock` xem `deps` và `params` của stage rồi đối chiếu với những gì
-code thực sự đọc (script, tệp cấu hình, tệp tham chiếu). Sửa `dvc.yaml`, chạy lại. Phòng ngừa: sinh stage bằng `dvc stage add`, thêm CI chạy `dvc repro` trên repo sạch và một test "sửa script thì stage phải chạy lại".
-Hậu kiểm: model nào đã train trong khoảng thời gian lỗi, cần huấn luyện lại.
+Đi từ rộng tới hẹp, mỗi bước loại một giả thuyết. `git log -p dvc.lock` và `dvc diff <rev cũ>` cho biết dữ liệu có đổi giữa hai lần train hay không, `dvc params diff` cho biết tham số nào đổi,
+`dvc status` và `dvc dag` cho biết pipeline có đang đúng như khai báo. Nếu dữ liệu đổi: `dvc diff` chỉ ra tệp nào, rồi chạy bộ luật kiểm chất lượng trên hai phiên bản để thấy tỉ lệ vi phạm nào nhảy. Nếu dữ liệu không đổi: so run MLflow
+của hai lần train (code, tham số, seed, môi trường). Giữ nguyên tắc chỉ đổi một yếu tố mỗi lần thử, và cuối cùng thêm kiểm tự động để lần sau máy báo thay con người.
 
 ## Sự cố: `dvc pull` báo missing cache dù Git đủ commit. Nguyên nhân thường gặp?
 

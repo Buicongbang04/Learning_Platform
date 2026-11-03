@@ -31,7 +31,7 @@ Hai script đã viết sẵn. Việc của bạn là điền `starter/dvc.yaml` 
 | `prepare` | `python prepare.py` | script, `data/raw/trips.csv`, tham số `prepare.min_distance` | `data/clean.csv` |
 | `split` | `python split.py` | script, `data/clean.csv`, tham số `split.seed` và `split.test_size` | `data/train.csv`, `data/test.csv` |
 
-Tên stage phải đúng `prepare` và `split`; dữ liệu thô `data/raw/trips.csv` do test tạo (không thuộc stage nào). `params.yaml` đã có
+Nguyên tắc khai báo: mọi tệp mà stage đọc phải nằm trong `deps`, mọi khoá tham số stage dùng phải nằm trong `params`. Tên stage phải đúng `prepare` và `split`; dữ liệu thô `data/raw/trips.csv` do test tạo (không thuộc stage nào). `params.yaml` đã có
 sẵn các khoá trên. Test dựng repo Git + DVC tạm, chép các tệp starter vào, rồi chạy `dvc repro` nhiều lần trong sandbox.
 
 ## Tiêu chí đạt

@@ -2,7 +2,7 @@
 
 Xem `dvc.yaml`. Ba điểm quyết định:
 
-1. **`deps` gồm cả script.** Nếu thiếu `prepare.py` trong `deps`, sửa logic lọc mà `dvc repro` vẫn bỏ qua stage (bài sự cố của module này).
+1. **`deps` liệt kê mọi tệp stage đọc**, kể cả script chạy nó: DVC chỉ băm những gì được khai, nên đây là danh sách đầu vào thật của stage.
 2. **Đồ thị suy ra từ tệp, không từ thứ tự khai báo.** `data/clean.csv` là `outs` của `prepare` và `deps` của `split`; DVC nối hai stage
    theo đường dẫn. Đảo thứ tự hai khối trong YAML vẫn chạy đúng.
 3. **`params:` theo từng khoá.** `split.test_size` đổi thì chỉ `split` có hash đầu vào khác. Nếu ghi `params.yaml` vào `deps`, mọi thay

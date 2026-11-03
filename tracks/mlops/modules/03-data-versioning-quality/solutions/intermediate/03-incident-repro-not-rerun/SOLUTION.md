@@ -8,7 +8,7 @@ và `dvc.lock` vẫn khớp. Đây là lỗi im lặng nguy hiểm: pipeline "xa
 
 1. `dvc status` báo up to date sau khi sửa script: manh mối đầu tiên.
 2. Mở `dvc.lock`: phần `deps` của stage chỉ có một dòng. Mọi tệp stage đọc phải xuất hiện ở đó.
-3. `strace -f -e openat dvc repro` hoặc đọc code script để liệt kê tệp thật sự được mở.
+3. `dvc dag` để xem đồ thị DVC đang biết, rồi đọc script để liệt kê tệp và khoá tham số nó thực sự dùng, đối chiếu với `deps` và `params` trong `dvc.lock`.
 
 **Cách sửa** (xem `dvc.yaml`): thêm `prepare.py` vào `deps` và `prepare.min_distance` vào `params`. Không thêm cả `params.yaml` vào `deps`,
 vì khi đó đổi `train.seed` cũng chạy lại `prepare`; tiêu chí cuối của đề kiểm điều này.

@@ -38,7 +38,7 @@ Chạy các cell `explore` để thấy tỉ lệ và biểu đồ, rồi làm p
 ## Tiêu chí đạt
 
 - Test pass trên khung nhỏ (kể cả dòng vi phạm nhiều luật) và trên mẫu thật.
-- Notebook chạy trọn vẹn kể cả cell `explore`, không lỗi.
+- Tự kiểm (test không chạy cell `explore`): notebook chạy trọn vẹn kể cả cell `explore`, không lỗi.
 - Trắc nghiệm đúng ít nhất 5/6 câu.
 
 ## Gợi ý

@@ -27,8 +27,7 @@ Triệu chứng từ đồng đội: "Mình sửa `prepare.py` để lọc thêm
 Đổi tham số lọc trong `params.yaml` cũng không thấy gì xảy ra."
 
 Việc của bạn: tìm nguyên nhân bằng cách tự tái hiện trong một repo tạm (`dvc init`, `dvc repro`, sửa, `dvc repro`, `dvc status`,
-`dvc dag`), rồi sửa **chỉ** `starter/dvc.yaml`. Không sửa `prepare.py` và `params.yaml`; chỉ ghi nguyên nhân vào commit message
-hoặc ghi chú của bạn, test không đọc.
+`dvc dag`), rồi sửa lỗi trong `starter/`. Giữ nguyên tên stage `prepare`, lệnh `python prepare.py`, đường dẫn `data/raw/trips.csv` và `data/clean.csv`, và nội dung `prepare.py` (test sẽ tự sửa `prepare.py` và `params.yaml` để kiểm). Ghi nguyên nhân vào ghi chú của bạn, test không đọc.
 
 Test dùng sandbox để chạy `dvc repro` trong repo tạm.
 
@@ -47,4 +46,4 @@ Tái hiện trước khi đoán: chạy `dvc repro`, sửa script, chạy `dvc s
 
 ### Gợi ý 2
 
-Mở `dvc.lock` và `dvc dag` sau lần chạy đầu và đối chiếu với những gì script thực sự đọc khi chạy.
+Sau mỗi loại thay đổi (code, tham số, dữ liệu), ghi lại loại nào làm `dvc repro` chạy lại và loại nào không, rồi so với điều bạn mong đợi.
