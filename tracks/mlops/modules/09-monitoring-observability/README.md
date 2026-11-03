@@ -28,7 +28,7 @@ Prometheus. Không cài gì lên máy ngoài Docker và các gói Python đã c�
 | Công cụ | Phiên bản đã kiểm | Dùng ở | Cổng mặc định |
 | --- | --- | --- | --- |
 | Prometheus (và `promtool`) | v3.5.0 (`prom/prometheus:v3.5.0`) | Basic 03, Intermediate 03, Advanced 01 | 29090 |
-| Alertmanager | v0.34.1 (`prom/alertmanager:v0.34.1`) | Intermediate 02 (mô phỏng) | 29093 |
+| Alertmanager | v0.34.1 (`prom/alertmanager:v0.34.1`) | Intermediate 02 (`amtool`) | 29093 |
 | Grafana | 12.1.0 (`grafana/grafana:12.1.0`), đăng nhập `admin`/`admin` | Intermediate 01 | 23000 |
 | `prometheus_client` | 0.26.0 (ghim ở môi trường repo bằng `prometheus-client>=0.21`) | Basic 01 | |
 
