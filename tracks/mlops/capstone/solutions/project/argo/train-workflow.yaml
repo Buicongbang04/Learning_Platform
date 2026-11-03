@@ -1,0 +1,121 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: eta-train-
+spec:
+  entrypoint: pipeline
+  activeDeadlineSeconds: 900
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  arguments:
+    parameters:
+      - name: month
+        value: "2019-01"
+      - name: champion-metrics
+        value: "{}"
+  volumes:
+    - name: data
+      configMap:
+        name: eta-train-data
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: validate
+            template: validate
+          - name: train
+            template: train
+            dependencies: [validate]
+            arguments:
+              artifacts:
+                - name: sample
+                  from: "{{tasks.validate.outputs.artifacts.sample}}"
+          - name: gate
+            template: gate
+            dependencies: [train]
+            arguments:
+              artifacts:
+                - name: metrics
+                  from: "{{tasks.train.outputs.artifacts.metrics}}"
+
+    - name: validate
+      retryStrategy:
+        limit: 1
+        retryPolicy: OnError
+      container:
+        image: ${ETA_TRAIN_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: [sh, -c]
+        args:
+          - >-
+            python -m eta.cli prepare --config /app/params.yaml --month "{{workflow.parameters.month}}"
+            --out "/tmp/out/{{workflow.parameters.month}}.parquet" &&
+            python -m eta.cli validate "/tmp/out/{{workflow.parameters.month}}.parquet" --month "{{workflow.parameters.month}}"
+        volumeMounts:
+          - {name: data, mountPath: /data, readOnly: true}
+        resources:
+          requests: {cpu: 200m, memory: 256Mi}
+          limits: {cpu: "1", memory: 1Gi}
+      outputs:
+        artifacts:
+          - name: sample
+            path: "/tmp/out/{{workflow.parameters.month}}.parquet"
+
+    - name: train
+      retryStrategy:
+        limit: 1
+        retryPolicy: OnError
+      inputs:
+        artifacts:
+          - name: sample
+            path: "/tmp/in/{{workflow.parameters.month}}.parquet"
+      container:
+        image: ${ETA_TRAIN_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: [python, -m, eta.cli]
+        args: [train, --config, /app/params.yaml, --input, /tmp/in, --model-out, /tmp/out/model.joblib, --metrics-out, /tmp/out/metrics.json]
+        env:
+          - name: ETA_MONTHS
+            value: "{{workflow.parameters.month}}"
+        resources:
+          requests: {cpu: 500m, memory: 512Mi}
+          limits: {cpu: "2", memory: 1Gi}
+      outputs:
+        artifacts:
+          - name: model
+            path: /tmp/out/model.joblib
+          - name: metrics
+            path: /tmp/out/metrics.json
+            archive:
+              none: {}
+
+    - name: gate
+      inputs:
+        artifacts:
+          - name: metrics
+            path: /tmp/in/metrics.json
+            mode: 0444
+      script:
+        image: ${ETA_TRAIN_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command: [python]
+        env:
+          - name: CHAMPION_METRICS
+            value: "{{workflow.parameters.champion-metrics}}"
+        source: |
+          import json
+          import os
+          import sys
+
+          from eta.cli import EXIT_REJECTED
+          from eta.promotion import Policy, decide
+
+          challenger = json.load(open("/tmp/in/metrics.json", encoding="utf-8"))
+          champion = json.loads(os.environ["CHAMPION_METRICS"] or "{}") or None
+          decision = decide(challenger, champion, Policy())
+          print(json.dumps({"promote": decision.promote, "reasons": decision.reasons}, ensure_ascii=False))
+          sys.exit(0 if decision.promote else EXIT_REJECTED)
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+          limits: {cpu: "1", memory: 512Mi}
