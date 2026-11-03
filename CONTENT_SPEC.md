@@ -382,6 +382,8 @@ máy đã dùng 5432, 9000, 8000; mọi cổng remap được qua `setup/.env`.
 | minio | 29000 (S3 API), 29001 (console) | `MLOPS_MINIO_PORT` | Artifact store, remote của DVC |
 | mlflow | 25000 | `MLOPS_MLFLOW_PORT` | Tracking server và registry |
 
+**Client tải model từ host:** MLflow 3.17 server luôn quảng bá multipart download qua presigned URL trỏ `minio:9000` (không phân giải được từ host; không có cờ server tắt). Mọi client chạy trên host đọc model/artifact từ stack (`mlflow.pyfunc.load_model("models:/...")`, `download_artifacts`) phải đặt `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` (ví dụ `monkeypatch.setenv` trong fixture) để tải qua proxy `--serve-artifacts`; nếu không sẽ treo.
+
 Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack`); test dùng được MLflow file store thì không
 được đòi stack. Skip không tính là đạt; `SOLUTION=1` phải pass không skip khi stack và công cụ đã có.
 
