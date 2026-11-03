@@ -412,6 +412,27 @@ chi tiết ở `setup/mlops/kind/README.md`). Test **không** tạo/xoá cluster
 Kiểm GPU bằng `session.get_providers()[0] == "CUDAExecutionProvider"` sau `onnxruntime.preload_dlls()`, không bằng
 `get_available_providers()` (liệt kê cả khi thư viện CUDA không nạp được, ORT âm thầm chạy CPU).
 
+Helper Giai đoạn 4 (test riêng ở `tests/test_mlopskit.py`). Add-on senior của cluster (metrics-server v0.9.0, KEDA
+v2.21.0, Kueue v0.20.2) cài bằng `bash setup/mlops/kind/up.sh --senior`; Kafka bằng profile Compose `streaming`. Chi tiết
+và số đo ở `setup/mlops/kind/README.md`, `setup/mlops/README.md`.
+
+| Test cần | Dùng | Đảm bảo |
+| --- | --- | --- |
+| KEDA, Kueue, metrics-server | `mlopskit.require_senior_addons()` | Như `require_kind`, thêm skip khi thiếu CRD `scaledobjects.keda.sh` hoặc `clusterqueues.kueue.x-k8s.io`; message có `bash setup/mlops/kind/up.sh --senior` |
+| Tài nguyên cluster-scoped (ClusterQueue, ResourceFlavor, Cohort, PriorityClass, WorkloadPriorityClass, ClusterTriggerAuthentication...) | `with mlopskit.cluster_scoped(manifest) as names:` | Mọi `__RUN__` trong manifest thay bằng run id `<uuid8>`; tên mỗi tài nguyên phải chứa run id (không thì fail); ép nhãn `mlops-ex=1`, `mlops-ex-run=<uuid8>`; trả `["clusterqueue/cq-<uuid8>", ...]`; xoá đúng các đối tượng này trong `finally`, kể cả khi apply lỗi giữa chừng. Tài nguyên namespaced bị từ chối (dùng `apply_manifest` trong `k8s_namespace`; LocalQueue tham chiếu ClusterQueue bằng tên trả về) |
+| GPU giả để thực hành lập lịch | `with mlopskit.fake_extended_resource("gpu", 2) as res:` | Patch `status.capacity` của node: `mlops.example/gpu-<uuid8>` = 2, chờ `allocatable` thấy rồi mới trả tên resource; gỡ khỏi `capacity` và `allocatable` trong `finally`. Không test nào sửa node theo cách khác |
+| Kafka | `mlopskit.require_kafka()` → `"127.0.0.1:<cổng>"`; `with mlopskit.kafka_topic(partitions=1) as topic:` | Skip kèm lệnh có `--profile streaming`; topic `mlops-ex-<uuid8>` tạo bằng admin client (broker tắt tự tạo topic), xoá trong `finally`. Client là `kafka-python-ng` của môi trường mặc định |
+| Ray cục bộ | `with mlopskit.ray_local(num_cpus=2) as storage:` | `ray.init` không dashboard, thư mục tạm `/tmp/mlops-ex-ray-<uuid8>`; tắt tích hợp `uv run` của Ray (`RAY_ENABLE_UV_RUN_RUNTIME_ENV=0`, nếu không trial Tune treo `PENDING` khi chạy qua `uv run pytest`); `storage` dùng cho `tune.RunConfig(storage_path=str(storage))` (không ghi `~/ray_results`); `finally`: `ray.shutdown()`, diệt mọi tiến trình còn mang đường dẫn tạm (worker mồ côi), xoá thư mục. Không lồng hai `ray_local` |
+| Quét model | `mlopskit.modelscan_run(path)` | `modelscan` 0.8.8 trong image `mlops-modelscan:0.8.8` (build tại chỗ từ `setup/mlops/modelscan/Dockerfile`), `--network none`, `path` mount chỉ đọc; `.returncode` là mã thoát modelscan (0 sạch, 1 có vấn đề, 2 lỗi, 3 không có gì để quét, 4 không hỗ trợ), `.stdout` là báo cáo JSON |
+| Kiểm rác | `mlopskit.leftovers(needle)` | Liệt kê thêm: đối tượng cluster-scoped có nhãn `mlops-ex-run` (PriorityClass, ClusterRole/Binding, các kind Kueue/KEDA; đang xoá vì finalizer, vd. ClusterQueue chờ workload, thì chỉ tính khi kẹt quá 2 phút), extended resource `mlops.example/*` trên node (`node/<tên>:<resource>`), topic `kafka-topic/mlops-ex-*`, thư mục `/tmp/mlops-ex-ray-*`; best-effort, không bao giờ fail |
+
+Ruling Triton (đo 2026-11-04): image nhỏ nhất chạy được là `nvcr.io/nvidia/tritonserver:26.09-py3` (tạo 2026-09-24),
+**9,04 GB nén** cho amd64 (46 layer); `26.09-pyt-python-py3` 7,49 GB nén; `26.09-py3-min` (6,47 GB) chỉ là base để build,
+không có server. NGC không có image CPU-only. Giải nén trên đĩa gấp ~2 lần, `kind load` cần thêm bản tar và bản trong
+containerd của node: vượt xa ngưỡng 6 GB đĩa / 5 phút. Vì vậy bài Triton của module 14 có test gate `MLOPS_TRITON=1`
+(mặc định skip, message nêu lý do và kích thước), không kéo sẵn image; bài load test bắt buộc chạy trên KServe custom
+predictor.
+
 ### Stack và cổng
 
 Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d --wait`. Đã đổi cổng trong `setup/.env` thì thêm `--env-file setup/.env` trước `-f` (Compose chỉ tự đọc `.env` cạnh tệp compose). Cổng ở dải 2xxxx vì
@@ -422,6 +443,7 @@ máy đã dùng 5432, 9000, 8000; mọi cổng remap được qua `setup/.env`.
 | postgres | 25433 | `MLOPS_PG_PORT` | Backend store của MLflow |
 | minio | 29000 (S3 API), 29001 (console) | `MLOPS_MINIO_PORT` | Artifact store, remote của DVC |
 | mlflow | 25000 | `MLOPS_MLFLOW_PORT` | Tracking server và registry |
+| kafka (profile `streaming`) | 29092 | `MLOPS_KAFKA_PORT` | `apache/kafka:4.3.1` KRaft 1 node; container khác trong mạng `mlops_default` dùng `kafka:9092` |
 
 **Client tải model từ host:** MLflow 3.17 server luôn quảng bá multipart download qua presigned URL trỏ `minio:9000` (không phân giải được từ host; không có cờ server tắt). Mọi client chạy trên host đọc model/artifact từ stack (`mlflow.pyfunc.load_model("models:/...")`, `download_artifacts`) phải đặt `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` (ví dụ `monkeypatch.setenv` trong fixture) để tải qua proxy `--serve-artifacts`; nếu không sẽ treo.
 
@@ -445,8 +467,20 @@ Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack
   được, chạy công cụ đó **trong container** của stack `setup/mlops` và test gọi qua CLI/HTTP; (3) không bao giờ hạ
   pin làm hỏng track khác. Kết quả kiểm mỗi công cụ ghi ở đây khi thêm: `dvc[s3]` resolve cùng pin
   hiện tại; `feast[redis]` kéo pandas xuống 2.3.3 nên module 06 phải chạy Feast trong container hoặc tìm bản tương thích. `evidently==0.7.23` (bản mới nhất, kiểm 2026-11-03) **không import được với pandas 3.1** (`infer_dtype_from_object` đã bị bỏ) và đòi `plotly<6`, nên Evidently chạy trong image `mlops-evidently:0.7.23` (pandas 2.3.3) qua `mlopskit.evidently_python`, giống Feast trong `mlops-feast`. Không shim/monkeypatch pandas trong bài.
-- Ngày phát hành của bản ghim chạy trong container (kiểm 2026-11-03 qua PyPI JSON `upload_time` và GitHub Releases
-  `published_at`; mọi bản ≥2 tuần trước ngày thêm):
+- Giai đoạn 4 (kiểm 2026-11-04 bằng `uv add` dưới pin hiện tại, rồi import và chạy thử thật): `ray[train,tune]==2.59.0`,
+  `river==0.26.1`, `copier==9.19.1`, `model-signing==1.1.1`, `cyclonedx-bom==7.5.0` resolve cùng pin hiện có, **không hạ
+  bản gói nào**, nên nằm trong group `mlops-senior` của `pyproject.toml`, group này có trong `[tool.uv] default-groups`
+  (`uv sync`/`uv run` mặc định cài). Mọi gói mới kể cả gián tiếp (sigstore 4.5.1, securesystemslib 1.6.0, tuf 7.0.1,
+  chardet 7.7.0...) phát hành ≤ 2026-10-21. `model-signing` 1.1.1 import `OpenSSL` nhưng không khai báo (sigstore 4.x
+  đã bỏ pyOpenSSL), nên group ghim thêm `pyopenssl==26.4.0`. Ký/verify bằng khoá EC sinh trong test chạy offline
+  (`use_elliptic_key_signer`/`use_elliptic_key_verifier`), không cần Sigstore. SBOM dùng `cyclonedx-py environment`
+  (CycloneDX 1.6). `modelscan==0.8.8` đòi `rich<15` và `tomlkit<0.14` (env đang có rich 15.0.0, tomlkit 0.15.2) nên
+  **không** vào môi trường mặc định: chạy trong image `mlops-modelscan:0.8.8` qua `mlopskit.modelscan_run`. Client Kafka
+  dùng `kafka-python-ng` 2.2.3 đã có (DE module 07); đã kiểm với broker 4.3.1 (tạo/xoá topic, produce, consume theo
+  group), không thêm `confluent-kafka`. Ray chạy qua `uv run` cần `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` (test dùng
+  `mlopskit.ray_local`; script của người học chạy trực tiếp bằng `uv run` cũng phải đặt biến này, ghi trong README module).
+- Ngày phát hành của bản ghim chạy trong container, và của dependency thêm ở Giai đoạn 4 (kiểm 2026-11-03, Giai đoạn 4
+  kiểm 2026-11-04, qua PyPI JSON `upload_time`, GitHub Releases `published_at`, Docker Hub; mọi bản ≥2 tuần trước ngày thêm):
 
   | Bản ghim | Phát hành | Nguồn |
   | --- | --- | --- |
@@ -457,6 +491,14 @@ Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack
   | `prom/prometheus:v3.5.0` | 2025-07-14 | GitHub `prometheus/prometheus` |
   | `grafana/grafana:12.1.0` | 2025-07-23 | GitHub `grafana/grafana` |
   | `redis:7.4.5` | 2025-07-06 | GitHub `redis/redis` |
+  | `modelscan==0.8.8` (image `mlops-modelscan`, cùng `rich==14.3.4`, `tomlkit==0.13.3`) | 2026-02-18 | PyPI |
+  | `apache/kafka:4.3.1` (ghim digest) | 2026-06-23 | Docker Hub `apache/kafka` |
+  | `ray==2.59.0` | 2026-10-02 | PyPI |
+  | `river==0.26.1` | 2026-08-21 | PyPI |
+  | `copier==9.19.1` | 2026-10-13 | PyPI |
+  | `model-signing==1.1.1` | 2025-10-10 | PyPI |
+  | `cyclonedx-bom==7.5.0` | 2026-09-29 | PyPI |
+  | `pyopenssl==26.4.0` | 2026-08-01 | PyPI |
 - **GPU:** môi trường chính giữ torch CPU và `onnxruntime` CPU. Đường GPU (onnxruntime-gpu, torch CUDA) nằm trong
   project `setup/gpu`; test GPU chạy qua project đó và skip khi không có CUDA. Mọi bài GPU có đường CPU; PC mạnh chỉ
   để đo thêm, test không bao giờ cần. `setup/gpu` dùng `onnxruntime-gpu==1.29.0` bản **CUDA 12** (feed `onnxruntime-cuda-12`

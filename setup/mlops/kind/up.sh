@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # Dựng cluster kind `mlops` (1 node) với cert-manager, KServe (RawDeployment) và Argo Workflows. Chạy lại an toàn.
+# `--senior` cài thêm add-on cho module 14–18: metrics-server, KEDA, Kueue.
 set -euo pipefail
+
+SENIOR=0
+for arg in "$@"; do
+  case "$arg" in
+    --senior) SENIOR=1 ;;
+    -h | --help) printf 'Dùng: bash setup/mlops/kind/up.sh [--senior]\n  --senior  cài thêm metrics-server, KEDA, Kueue (module 14–18)\n'; exit 0 ;;
+    *) printf 'LỖI: tham số không hợp lệ %q (chỉ có --senior)\n' "$arg" >&2; exit 1 ;;
+  esac
+done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
@@ -164,5 +174,91 @@ sed "s/__CONFIG_SHA256__/${artifacts_sha}/" "$HERE/argo-artifacts.yaml" \
   | k apply --server-side --field-manager=mlops-kind -f - >/dev/null
 k -n argo wait --for=condition=Available deployment --all --timeout=300s
 k -n argo rollout status deployment/argo-artifacts --timeout=300s >/dev/null
+
+if (( SENIOR )); then
+  log "metrics-server ${METRICS_SERVER_VERSION} (thêm --kubelet-insecure-tls: kubelet của kind dùng chứng chỉ tự ký)"
+  fetch "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICS_SERVER_VERSION}/components.yaml" \
+    "$METRICS_SERVER_SHA256" "$CACHE/metrics-server-${METRICS_SERVER_VERSION}.yaml"
+  KEDA_FILE="keda-${KEDA_VERSION#v}.yaml"
+  fetch "https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/${KEDA_FILE}" \
+    "$KEDA_SHA256" "$CACHE/keda-${KEDA_VERSION}.yaml"
+  fetch "https://github.com/kubernetes-sigs/kueue/releases/download/${KUEUE_VERSION}/manifests.yaml" \
+    "$KUEUE_SHA256" "$CACHE/kueue-${KUEUE_VERSION}.yaml"
+  python3 - "$CACHE" "$METRICS_SERVER_VERSION" "$KUEUE_VERSION" <<'PY'
+import re
+import sys
+
+cache, ms, kueue = sys.argv[1:4]
+
+
+def rewrite(src, dst, edit):
+    text = open(f"{cache}/{src}", encoding="utf-8").read()
+    open(f"{cache}/{dst}", "w", encoding="utf-8").write(edit(text))
+
+
+def metrics_server(text):
+    anchor = "        - --metric-resolution=15s\n"
+    if text.count(anchor) != 1:
+        sys.exit("metrics-server: không thấy đúng một dòng --metric-resolution để thêm --kubelet-insecure-tls")
+    return text.replace(anchor, anchor + "        - --kubelet-insecure-tls\n")
+
+
+DROP = {f"{p}{r}.kb.io" for p in "mv" for r in ("pod", "deployment", "statefulset", "leaderworkerset")}
+
+
+def kueue_manifest(text):
+    docs = re.split(r"^---\s*$", text, flags=re.M)
+    dropped = set()
+    for i, doc in enumerate(docs):
+        if not re.search(r"^kind: (Mutating|Validating)WebhookConfiguration\s*$", doc, flags=re.M):
+            continue
+        head, sep, body = doc.partition("\nwebhooks:\n")
+        entries = re.split(r"(?m)^(?=- admissionReviewVersions:)", body)
+        keep = []
+        for entry in entries:
+            name = re.search(r"(?m)^  name: (\S+)$", entry)
+            if name and name.group(1) in DROP:
+                dropped.add(name.group(1))
+                continue
+            keep.append(entry)
+        docs[i] = head + sep + "".join(keep)
+    if dropped != DROP:
+        sys.exit(f"kueue: thiếu webhook cần bỏ: {sorted(DROP - dropped)}")
+    out = "---".join(docs)
+    frameworks = re.compile(r"(    integrations:\n      frameworks:\n)(?:      .*\n)+?(?=    #  externalFrameworks:)")
+    if len(frameworks.findall(out)) != 1:
+        sys.exit("kueue: không thấy đúng một khối integrations.frameworks")
+    return frameworks.sub(lambda m: m.group(1) + '      - "batch/job"\n', out)
+
+
+rewrite(f"metrics-server-{ms}.yaml", f"metrics-server-{ms}-kind.yaml", metrics_server)
+rewrite(f"kueue-{kueue}.yaml", f"kueue-{kueue}-batchjob.yaml", kueue_manifest)
+PY
+  retry k apply --server-side --force-conflicts -f "$CACHE/metrics-server-${METRICS_SERVER_VERSION}-kind.yaml" >/dev/null
+  k -n kube-system rollout status deployment/metrics-server --timeout=300s >/dev/null
+
+  log "KEDA ${KEDA_VERSION} (namespace keda)"
+  retry k apply --server-side --force-conflicts -f "$CACHE/keda-${KEDA_VERSION}.yaml" >/dev/null
+  k -n keda wait --for=condition=Available deployment --all --timeout=300s >/dev/null
+
+  log "Kueue ${KUEUE_VERSION} (namespace kueue-system; chỉ tích hợp batch/job, bỏ webhook pod/deployment/statefulset)"
+  retry k apply --server-side --force-conflicts -f "$CACHE/kueue-${KUEUE_VERSION}-batchjob.yaml" >/dev/null
+  k -n kueue-system wait --for=condition=Available deployment/kueue-controller-manager --timeout=300s >/dev/null
+
+  log "Chờ APIService metrics, external metrics và webhook Kueue sẵn sàng"
+  k wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io apiservice/v1beta1.external.metrics.k8s.io \
+    --timeout=300s >/dev/null
+  probe='{"apiVersion":"kueue.x-k8s.io/v1beta2","kind":"ResourceFlavor","metadata":{"name":"mlops-up-probe"}}'
+  ready=0
+  for _ in $(seq 1 90); do
+    if echo "$probe" | k create --dry-run=server -f - >/dev/null 2>&1 && k top node >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 2
+  done
+  (( ready )) || die "webhook Kueue hoặc metrics-server chưa sẵn sàng sau 180 giây (xem: kubectl --context $CTX -n kueue-system logs deploy/kueue-controller-manager)"
+  log "Add-on senior sẵn sàng: metrics-server ${METRICS_SERVER_VERSION}, KEDA ${KEDA_VERSION}, Kueue ${KUEUE_VERSION}"
+fi
 
 log "Xong. Context: $CTX (current-context của kubectl giữ nguyên: ${PREVIOUS_CONTEXT:-<trống>}). Kiểm: kubectl --context $CTX get pods -A"

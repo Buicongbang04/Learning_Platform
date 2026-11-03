@@ -10,7 +10,7 @@ Một project Compose riêng (`mlops`), tách khỏi `setup/docker-compose.yml`,
 | `mlflow` | MLflow 3.17.1 tracking server, `--serve-artifacts` | `127.0.0.1:25000` |
 
 Các cổng mặc định nằm ở dải 2xxxx vì 5432, 9000, 5000, 8000 thường đã bị chiếm. Đổi cổng bằng biến
-`MLOPS_PG_PORT`, `MLOPS_MINIO_PORT`, `MLOPS_MINIO_CONSOLE_PORT`, `MLOPS_MLFLOW_PORT` (và `MLOPS_PROMETHEUS_PORT`, `MLOPS_ALERTMANAGER_PORT`, `MLOPS_GRAFANA_PORT`, `MLOPS_REDIS_PORT` cho hai profile bên dưới) trong `setup/.env`
+`MLOPS_PG_PORT`, `MLOPS_MINIO_PORT`, `MLOPS_MINIO_CONSOLE_PORT`, `MLOPS_MLFLOW_PORT` (và `MLOPS_PROMETHEUS_PORT`, `MLOPS_ALERTMANAGER_PORT`, `MLOPS_GRAFANA_PORT`, `MLOPS_REDIS_PORT`, `MLOPS_KAFKA_PORT` cho các profile bên dưới) trong `setup/.env`
 (xem `setup/.env.example`). Compose chỉ đọc `.env` cạnh tệp compose (`setup/mlops/`), nên khi đã đổi cổng trong `setup/.env`, mọi lệnh phải thêm `--env-file setup/.env` (xem bên dưới). Mọi cổng chỉ bind `127.0.0.1`.
 
 ## Bật
@@ -49,6 +49,24 @@ Feast không cài trong môi trường Python mặc định (nó kéo `pandas` x
 (`mlops-act-runner:1`, build từ `setup/mlops/act-runner/Dockerfile`) cũng do `mlopskit` build tại chỗ. Mỗi image này
 mang nhãn `mlops-dockerfile-sha=<sha256 của Dockerfile>`; sửa Dockerfile thì lần gọi sau tự build lại cùng tag, không cần
 `docker rmi`.
+
+## Profile `streaming` (Giai đoạn 4)
+
+| Profile | Service | Cổng trên máy (mặc định) | Biến `.env` |
+| --- | --- | --- | --- |
+| `streaming` | `kafka` (`apache/kafka:4.3.1`, ghim digest; KRaft 1 node, không ZooKeeper) | `127.0.0.1:29092` | `MLOPS_KAFKA_PORT` |
+
+```bash
+docker compose -f setup/mlops/compose.yaml --profile streaming up -d --wait
+```
+
+- Client trên máy dùng bootstrap `127.0.0.1:29092` (listener `HOST`); container trong mạng `mlops_default` dùng
+  `kafka:9092` (listener `PLAINTEXT`). Đổi `MLOPS_KAFKA_PORT` thì địa chỉ quảng bá đổi theo (cần `--env-file setup/.env`).
+- `auto.create.topics.enable=false`: topic phải tạo trước (test dùng `mlopskit.kafka_topic()`, tên `mlops-ex-<uuid8>`,
+  xoá khi xong). Mặc định 3 partition, replication 1. Không có volume: xoá container là mất topic.
+- Heap 256–512 MB, `mem_limit: 1g`; rảnh dùng ~320 MiB. Image ~690 MB trên đĩa (đo 2026-11-04).
+- Client Python là `kafka-python-ng` 2.2.3 đã có trong môi trường mặc định (dùng ở DE module 07); đã kiểm
+  produce/consume theo group, tạo/xoá topic với broker 4.3.1.
 
 ## Kiểm
 

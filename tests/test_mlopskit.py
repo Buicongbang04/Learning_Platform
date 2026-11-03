@@ -35,6 +35,7 @@ def test_stack_services_table():
         "alertmanager": ("MLOPS_ALERTMANAGER_PORT", 29093),
         "grafana": ("MLOPS_GRAFANA_PORT", 23000),
         "redis": ("MLOPS_REDIS_PORT", 26390),
+        "kafka": ("MLOPS_KAFKA_PORT", 29092),
     }
 
 
@@ -959,3 +960,376 @@ def test_gpu_env_problem_detects_cpu_onnxruntime(monkeypatch, tmp_path):
     monkeypatch.setattr(mlopskit, "GPU_PROJECT", tmp_path)
     monkeypatch.setattr(mlopskit, "_GPU_ENV_STATE", {})
     assert "onnxruntime (CPU)" in mlopskit._gpu_env_problem()
+
+
+def test_require_senior_addons_skips(monkeypatch):
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    present = {"clusterqueues.kueue.x-k8s.io"}
+    monkeypatch.setattr(mlopskit, "_kubectl_quiet",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0 if a[-1] in present else 1, "", ""))
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_senior_addons()
+    assert "bash setup/mlops/kind/up.sh --senior" in str(info.value)
+    assert "scaledobjects.keda.sh" in str(info.value) and "clusterqueues" not in str(info.value)
+    present.add("scaledobjects.keda.sh")
+    mlopskit.require_senior_addons()
+
+    def no_cluster():
+        pytest.skip("no cluster")
+
+    monkeypatch.setattr(mlopskit, "require_kind", no_cluster)
+    with pytest.raises(pytest.skip.Exception, match="no cluster"):
+        mlopskit.require_senior_addons()
+
+
+CLUSTER_KINDS = {"PriorityClass", "ClusterQueue", "ResourceFlavor", "Namespace"}
+
+
+def _fake_cluster_kubectl(calls, apply_rc=0):
+    def fake(*args, namespace=None, input=None, timeout=120):
+        calls.append((args, input))
+        if args[0] == "apply":
+            return subprocess.CompletedProcess(args, apply_rc, "", "" if apply_rc == 0 else "admission webhook denied")
+        return subprocess.CompletedProcess(args, 0, "", "")
+    return fake
+
+
+PC_AND_RF = """
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-__RUN__
+value: 1000
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: rf-__RUN__
+  labels:
+    team: a
+"""
+
+
+def test_cluster_scoped_removed_on_error(monkeypatch):
+    import yaml
+
+    calls = []
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "_cluster_scoped_kinds", lambda: CLUSTER_KINDS)
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_cluster_kubectl(calls))
+    holder = []
+    with pytest.raises(RuntimeError, match="boom"):
+        with mlopskit.cluster_scoped(PC_AND_RF) as names:
+            holder.extend(names)
+            raise RuntimeError("boom")
+    run = holder[0].rsplit("-", 1)[1]
+    assert len(run) == 8 and holder == [f"priorityclass/high-{run}", f"resourceflavor/rf-{run}"]
+    docs = list(yaml.safe_load_all(calls[0][1]))
+    for doc in docs:
+        assert doc["metadata"]["labels"]["mlops-ex-run"] == run
+        assert doc["metadata"]["labels"]["mlops-ex"] == "1"
+    assert docs[1]["metadata"]["labels"]["team"] == "a"
+    deletes = [a for a, _ in calls if a[0] == "delete"]
+    assert [d[1] for d in deletes] == [f"resourceflavor/rf-{run}", f"priorityclass/high-{run}"]
+    assert all("--ignore-not-found" in d for d in deletes)
+
+
+def test_cluster_scoped_cleans_after_failed_apply(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "_cluster_scoped_kinds", lambda: CLUSTER_KINDS)
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_cluster_kubectl(calls, apply_rc=1))
+    with pytest.raises(pytest.fail.Exception, match="admission webhook denied"):
+        with mlopskit.cluster_scoped(PC_AND_RF):
+            pass
+    assert len([a for a, _ in calls if a[0] == "delete"]) == 2
+
+
+@pytest.mark.parametrize("manifest, reason", [
+    ("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cm-__RUN__\n", "namespaced"),
+    ("apiVersion: scheduling.k8s.io/v1\nkind: PriorityClass\nmetadata:\n  name: high\nvalue: 1\n", "__RUN__"),
+    ("", "rỗng"),
+])
+def test_cluster_scoped_rejects_bad_manifest(monkeypatch, manifest, reason):
+    calls = []
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "_cluster_scoped_kinds", lambda: CLUSTER_KINDS)
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_cluster_kubectl(calls))
+    with pytest.raises(pytest.fail.Exception, match=reason):
+        with mlopskit.cluster_scoped(manifest):
+            pass
+    assert not [a for a, _ in calls if a[0] == "apply"]
+
+
+def test_cluster_scoped_real():
+    mlopskit.require_kind()
+    manifest = "apiVersion: scheduling.k8s.io/v1\nkind: PriorityClass\nmetadata:\n  name: probe-__RUN__\nvalue: 10\n"
+    with mlopskit.cluster_scoped(manifest) as names:
+        (name,) = names
+        run = name.rsplit("-", 1)[1]
+        got = mlopskit.kubectl("get", name, "-o", "jsonpath={.metadata.labels.mlops-ex-run} {.value}")
+        assert got.stdout == f"{run} 10", got.stderr
+        assert mlopskit.leftovers(run) == [f"priorityclass.scheduling.k8s.io/probe-{run}"]
+    mlopskit.wait_for("priorityclass", f"probe-{run}", "delete", "default", timeout=60)
+    assert mlopskit.leftovers(run) == []
+
+
+def test_fake_extended_resource_removed_on_error(monkeypatch):
+    patches = []
+
+    def fake(*args, namespace=None, input=None, timeout=120):
+        if args[0] == "patch":
+            patches.append(args)
+        if args[:2] == ("get", "nodes"):
+            return subprocess.CompletedProcess(args, 0, "mlops-control-plane", "")
+        if args[:2] == ("get", "node"):
+            return subprocess.CompletedProcess(args, 0, "3", "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    import json
+
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "kubectl", fake)
+    holder = []
+    with pytest.raises(RuntimeError, match="boom"):
+        with mlopskit.fake_extended_resource("gpu", 3) as resource:
+            holder.append(resource)
+            raise RuntimeError("boom")
+    resource = holder[0]
+    assert resource.startswith("mlops.example/gpu-") and len(resource) == len("mlops.example/gpu-") + 8
+    escaped = resource.replace("/", "~1")
+    assert json.loads(patches[0][-1]) == [{"op": "add", "path": f"/status/capacity/{escaped}", "value": "3"}]
+    removed = [json.loads(p[-1])[0] for p in patches[1:]]
+    assert {r["path"] for r in removed} == {f"/status/capacity/{escaped}", f"/status/allocatable/{escaped}"}
+    assert all(r["op"] == "remove" for r in removed)
+    assert all("--subresource=status" in p for p in patches)
+
+
+@pytest.mark.parametrize("suffix, quantity", [("GPU", 1), ("gpu/x", 1), ("", 1), ("gpu", 0)])
+def test_fake_extended_resource_validates(suffix, quantity):
+    with pytest.raises(ValueError):
+        with mlopskit.fake_extended_resource(suffix, quantity):
+            pass
+
+
+def test_fake_extended_resource_real():
+    mlopskit.require_kind()
+    with mlopskit.fake_extended_resource("gpu", 2) as resource:
+        run = resource.rsplit("-", 1)[1]
+        assert mlopskit.leftovers(run) == [f"node/mlops-control-plane:{resource}"]
+        with mlopskit.k8s_namespace() as ns:
+            pod = (
+                "apiVersion: v1\nkind: Pod\nmetadata:\n  name: {name}\nspec:\n  restartPolicy: Never\n"
+                "  containers:\n    - name: c\n      image: busybox:1.37\n      imagePullPolicy: IfNotPresent\n"
+                "      command: [sh, -c, 'true']\n      resources:\n        limits:\n"
+                f"          {resource}: {{n}}\n"
+            )
+            _busybox()
+            mlopskit.kind_load("busybox:1.37")
+            mlopskit.apply_manifest(pod.format(name="fits", n=2), ns)
+            mlopskit.apply_manifest(pod.format(name="too-big", n=3), ns)
+            mlopskit.wait_for("pod", "fits", "jsonpath={.status.phase}=Succeeded", ns, timeout=120, fail_on=("Failed",))
+            mlopskit.wait_for("pod", "too-big", "condition=PodScheduled=False", ns, timeout=60)
+            reason = mlopskit.kubectl("get", "pod", "too-big", "-o",
+                                      "jsonpath={.status.conditions[?(@.type=='PodScheduled')].message}", namespace=ns)
+            assert f"Insufficient {resource}" in reason.stdout, reason.stdout + reason.stderr
+    assert mlopskit.leftovers(run) == []
+
+
+def test_leftovers_lists_cluster_scoped_and_extended(monkeypatch):
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    old = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fresh = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    nodes = {"items": [{"metadata": {"name": "n1"}, "status": {
+        "capacity": {"cpu": "4", "mlops.example/gpu-aaaa1111": "2"},
+        "allocatable": {"mlops.example/gpu-aaaa1111": "2", "nvidia.com/gpu": "1"}}}]}
+
+    def fake(*args, namespace=None, input=None, timeout=120):
+        if args[:2] == ("get", "nodes"):
+            return subprocess.CompletedProcess(args, 0, json.dumps(nodes), "")
+        if args[0] == "get" and "-l" in args:
+            if "kueue" in args[1]:
+                return subprocess.CompletedProcess(args, 1, "", "the server doesn't have a resource type")
+            listing = (f"scheduling.k8s.io/v1 PriorityClass high-bbbb2222 \n"
+                       f"scheduling.k8s.io/v1 PriorityClass stuck-cccc3333 {old}\n"
+                       f"scheduling.k8s.io/v1 PriorityClass going-dddd4444 {fresh}\n")
+            return subprocess.CompletedProcess(args, 0, listing, "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda **k: ["mlops"])
+    monkeypatch.setattr(mlopskit, "kubectl", fake)
+    assert mlopskit._leftover_cluster_scoped() == ["priorityclass.scheduling.k8s.io/high-bbbb2222",
+                                                   "priorityclass.scheduling.k8s.io/stuck-cccc3333"]
+    assert mlopskit._leftover_extended_resources() == ["node/n1:mlops.example/gpu-aaaa1111"]
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda **k: [])
+    assert mlopskit._leftover_cluster_scoped() == [] and mlopskit._leftover_extended_resources() == []
+
+
+def test_senior_addons_installed():
+    mlopskit.require_senior_addons()
+    for crd in ("scaledobjects.keda.sh", "clusterqueues.kueue.x-k8s.io", "resourceflavors.kueue.x-k8s.io",
+                "localqueues.kueue.x-k8s.io", "workloads.kueue.x-k8s.io"):
+        assert mlopskit.kubectl("get", "crd", crd).returncode == 0, crd
+    for namespace, name in (("kube-system", "metrics-server"), ("keda", "keda-operator"),
+                            ("keda", "keda-metrics-apiserver"), ("keda", "keda-admission"), ("kueue-system", "kueue-controller-manager")):
+        status = mlopskit.kubectl("get", "deployment", name, "-o", "jsonpath={.status.availableReplicas}",
+                                  namespace=namespace)
+        assert status.stdout == "1", f"{namespace}/{name}: {status.stdout}{status.stderr}"
+    top = mlopskit.kubectl("top", "node", "--no-headers")
+    assert top.returncode == 0 and "mlops-control-plane" in top.stdout, top.stderr
+    frameworks = mlopskit.kubectl("get", "configmap", "kueue-manager-config", "-o",
+                                  "jsonpath={.data.controller_manager_config\\.yaml}", namespace="kueue-system").stdout
+    assert '- "batch/job"' in frameworks and '- "pod"' not in frameworks
+    hooks = mlopskit.kubectl("get", "mutatingwebhookconfiguration", "kueue-mutating-webhook-configuration", "-o",
+                             "jsonpath={.webhooks[*].name}").stdout.split()
+    assert "mjob.kb.io" in hooks and "mpod.kb.io" not in hooks and "mdeployment.kb.io" not in hooks
+
+
+def test_require_kafka_skips(monkeypatch):
+    monkeypatch.setenv("MLOPS_KAFKA_PORT", str(testkit.free_port()))
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_kafka()
+    assert "--profile streaming up -d --wait" in str(info.value)
+
+
+def test_kafka_roundtrip():
+    from kafka import KafkaConsumer, KafkaProducer
+
+    bootstrap = mlopskit.require_kafka()
+    assert bootstrap == f"127.0.0.1:{mlopskit.stack_port('kafka')}"
+    with mlopskit.kafka_topic(partitions=2) as topic:
+        assert topic.startswith("mlops-ex-") and len(topic) == len("mlops-ex-") + 8
+        assert mlopskit.leftovers(topic) == [f"kafka-topic/{topic}"]
+        producer = KafkaProducer(bootstrap_servers=bootstrap)
+        for i in range(10):
+            producer.send(topic, key=str(i % 2).encode(), value=f"m{i}".encode())
+        producer.flush()
+        producer.close()
+        consumer = KafkaConsumer(topic, bootstrap_servers=bootstrap, group_id=f"{topic}-g",
+                                 auto_offset_reset="earliest", consumer_timeout_ms=10000)
+        got = sorted(m.value.decode() for m in consumer)
+        consumer.close()
+        assert got == sorted(f"m{i}" for i in range(10))
+    deadline = time.monotonic() + 30
+    while mlopskit.leftovers(topic) and time.monotonic() < deadline:
+        time.sleep(0.5)
+    assert mlopskit.leftovers(topic) == []
+
+
+def test_kafka_topic_unknown_without_create():
+    from kafka import KafkaProducer
+    from kafka.errors import KafkaTimeoutError
+
+    bootstrap = mlopskit.require_kafka()
+    producer = KafkaProducer(bootstrap_servers=bootstrap, max_block_ms=3000)
+    try:
+        with pytest.raises(KafkaTimeoutError):
+            producer.send("mlops-ex-not-created", b"x").get(timeout=10)
+    finally:
+        producer.close()
+    assert mlopskit.leftovers("mlops-ex-not-created") == []
+
+
+NEW_DEPS = {"ray": "2.59.0", "river": "0.26.1", "copier": "9.19.1", "model-signing": "1.1.1",
+            "cyclonedx-bom": "7.5.0", "pyopenssl": "26.4.0"}
+
+
+def test_new_deps_import(tmp_path):
+    import importlib
+    import importlib.metadata as md
+
+    for dist, version in NEW_DEPS.items():
+        assert md.version(dist) == version, dist
+    for module in ("ray", "ray.train", "ray.tune", "ray.tune.schedulers", "river", "copier", "model_signing",
+                   "cyclonedx_py", "OpenSSL"):
+        importlib.import_module(module)
+    import importlib.util
+
+    assert importlib.util.find_spec("modelscan") is None
+    (tmp_path / "ok.pkl").write_bytes(b"\x80\x04\x95\x05\x00\x00\x00\x00\x00\x00\x00]\x94K\x01a.")
+    result = mlopskit.modelscan_run(tmp_path / "ok.pkl")
+    assert result.returncode == 0, result.stderr[-2000:]
+    import json
+
+    assert json.loads(result.stdout)["summary"]["modelscan_version"] == "0.8.8"
+
+
+def test_modelscan_flags_unsafe_pickle(tmp_path):
+    import json
+
+    (tmp_path / "bad.pkl").write_bytes(b"cbuiltins\neval\n(S'1+1'\ntR.")
+    result = mlopskit.modelscan_run(tmp_path / "bad.pkl")
+    assert result.returncode == 1, result.stdout + result.stderr[-2000:]
+    issue = json.loads(result.stdout)["issues"][0]
+    assert (issue["module"], issue["operator"], issue["severity"]) == ("builtins", "eval", "CRITICAL")
+    assert mlopskit.leftovers("modelscan") == []
+
+
+def test_model_signing_offline(tmp_path):
+    import model_signing
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    (tmp_path / "k.pem").write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                                       serialization.NoEncryption()))
+    (tmp_path / "k.pub").write_bytes(key.public_key().public_bytes(serialization.Encoding.PEM,
+                                                                   serialization.PublicFormat.SubjectPublicKeyInfo))
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "w.bin").write_bytes(b"weights")
+    model_signing.signing.Config().use_elliptic_key_signer(private_key=tmp_path / "k.pem").sign(model, tmp_path / "m.sig")
+    verifier = model_signing.verifying.Config().use_elliptic_key_verifier(public_key=tmp_path / "k.pub")
+    verifier.verify(model, tmp_path / "m.sig")
+    (model / "w.bin").write_bytes(b"weightz")
+    with pytest.raises(ValueError):
+        verifier.verify(model, tmp_path / "m.sig")
+
+
+def test_ray_local_runs_and_cleans():
+    import ray
+    from ray import tune
+
+    with mlopskit.ray_local(num_cpus=2) as storage:
+        marker = str(storage.parent)
+
+        @ray.remote
+        def square(x):
+            return x * x
+
+        assert ray.get([square.remote(i) for i in range(4)], timeout=120) == [0, 1, 4, 9]
+
+        def objective(config):
+            tune.report({"loss": (config["x"] - 2) ** 2})
+
+        tuner = tune.Tuner(objective, param_space={"x": tune.grid_search([0, 2, 3])},
+                           tune_config=tune.TuneConfig(metric="loss", mode="min"),
+                           run_config=tune.RunConfig(storage_path=str(storage), name="probe"))
+        assert tuner.fit().get_best_result().config == {"x": 2}
+        assert mlopskit._ray_processes(marker)
+    assert not ray.is_initialized()
+    assert mlopskit._ray_processes(marker) == []
+    assert mlopskit.leftovers(Path(marker).name) == []
+
+
+def test_ray_local_kills_orphans_on_error():
+    import ray
+
+    holder = []
+    with pytest.raises(RuntimeError, match="boom"):
+        with mlopskit.ray_local(num_cpus=1) as storage:
+            holder.append(str(storage.parent))
+
+            @ray.remote
+            def hang():
+                time.sleep(600)
+
+            hang.remote()
+            time.sleep(1)
+            raise RuntimeError("boom")
+    assert mlopskit._ray_processes(holder[0]) == []
+    assert not Path(holder[0]).exists()
