@@ -43,8 +43,9 @@ mỗi lần ≤180 s. Installer phải:
    không đạt ⇒ thoát khác `0` và không để lại gì trong `/opt/beacon`, `/etc/beacon`, unit.
 2. Đặt mã ở `/opt/beacon/current/` (unit trỏ vào đó; bố cục bên dưới tuỳ bạn), tạo user hệ thống `beacon`, cài unit,
    `enable` dịch vụ, tạo `/etc/beacon/beacon.env` từ cấu hình mặc định **chỉ khi chưa có**.
-3. Khởi động bản mới và chờ `/healthz` báo đúng version (tối đa 60 s). Không lên ⇒ quay về bản đang chạy trước đó, thoát
-   khác `0`.
+3. Khởi động bản mới và chờ `/healthz` báo đúng version (tối đa 60 s). Bất kỳ bước nào sau khi bắt đầu chuyển bản thất
+   bại (unit mới không nạp được, `systemctl restart` lỗi, `/healthz` không đạt) ⇒ quay về bản đang chạy trước đó **gồm cả
+   unit systemd của nó**, xoá bản lỗi vừa giải nén khỏi `/opt/beacon`, thoát khác `0`.
 4. Chạy lại đúng bundle đang chạy ⇒ thoát `0` và **không đổi gì**: không tệp/symlink nào trong `/opt/beacon`,
    `/etc/beacon`, `/etc/systemd/system/beacon.service` bị tạo, xoá, ghi lại (inode, kích thước, mtime giữ nguyên),
    dịch vụ không bị restart.
@@ -52,7 +53,7 @@ mỗi lần ≤180 s. Installer phải:
    `<thời điểm ISO-8601> <version> <kết quả>`, với kết quả là `installed`, `unchanged`, `failed` hoặc `rolled-back`.
 
 Test dựng bundle ngay trong VM bằng `beacon/make_bundle.py` (bundle sai sha256 là `--bad-sha`, bản không khởi động được
-là `--broken-app`). Bạn chạy thử tay được: boot VM như trong test, `python3 make_bundle.py 1.0.0 4 /home/fde/beacon-1.0.0.tar`.
+là `--broken-app`, bản có unit systemd hỏng là `--broken-unit`). Bạn chạy thử tay được: boot VM như trong test, `python3 make_bundle.py 1.0.0 4 /home/fde/beacon-1.0.0.tar`.
 
 ## Tiêu chí đạt
 
@@ -66,6 +67,7 @@ là `--broken-app`). Bạn chạy thử tay được: boot VM như trong test, `
 | Cài 1.1.0, rồi cài lại 1.1.0 | `installed` rồi `unchanged`; `/healthz` trả `1.1.0` với lời chào của khách |
 | Cài 1.2.0 sai sha256 | Thoát khác `0`, log `1.2.0 failed`, trạng thái không đổi, vẫn phục vụ 1.1.0 |
 | Cài 1.3.0 không khởi động được | Thoát khác `0`, log `1.3.0 rolled-back`, `/healthz` lại trả `1.1.0`, dịch vụ `active` |
+| Cài 1.4.0 có unit hỏng (`systemctl restart` lỗi) | Thoát khác `0`, log `1.4.0 rolled-back`, `/healthz` trả `1.1.0`, unit trên máy giống hệt unit trước khi cài 1.3.0, không còn gì mang tên `1.4.0` trong `/opt/beacon`, dịch vụ `active` |
 
 ## Gợi ý
 

@@ -30,16 +30,24 @@ Một bẫy thứ tư không báo lỗi: `--system-site-packages` (hay cài `--u
    Thông số đo trên VM: `python3 --version` = 3.10.12, `ldd --version` = glibc 2.35 ⇒ nhận mọi tag manylinux tới
    `2_35`. `--only-binary=:all:` là bắt buộc khi đặt nền tảng khác máy mình: pip không được build sdist cho máy khác.
 4. Tải thêm **wheel của pip** vào bundle. Wheel là tệp zip chạy được: `python pip-25.1.1-py3-none-any.whl/pip install …`
-   là cách pip tự cài chính nó (tài liệu pip "Installing pip"), không cần `ensurepip`.
+   là cách pip tự cài chính nó (tài liệu pip "Installing pip"), không cần `ensurepip`. Wheel này không nằm trong
+   `requirements.txt` có hash, nên script ghim sha256 của nó (`2913a38a…51af`) và kiểm ngay sau khi tải: chính công cụ
+   cài đặt cũng phải được kiểm như mọi thứ khác.
 5. Ghi `SHA256SUMS` cho cả bundle.
 
 **Install (máy khách):**
 
 1. `sha256sum -c SHA256SUMS` trước tiên.
-2. `python3 -m venv --without-pip ~/intake`: module `venv` có sẵn, chỉ `ensurepip` bị Ubuntu tách ra.
+2. `python3 -m venv --without-pip ~/.intake-releases/<thời điểm>`: module `venv` có sẵn, chỉ `ensurepip` bị Ubuntu tách
+   ra. Cài vào thư mục **mới**, không xoá bản đang có trước.
 3. Chạy pip từ wheel với `--no-index --find-links wheels --require-hashes -r requirements.txt`, rồi app với `--no-deps`.
    `--no-index` biến mọi thiếu sót thành lỗi ngay thay vì treo chờ mạng.
-4. Thử `import` trước khi báo xong.
+4. Thử `import`; đạt thì đổi symlink `~/intake` sang thư mục mới (`ln -sfn` + `mv -T`), rồi mới xoá bản cũ. Lỗi giữa
+   chừng thì `trap` xoá thư mục mới, bản cũ không bị đụng.
+
+Vì sao symlink mà không `mv ~/intake.new ~/intake`: venv ghi **đường dẫn tuyệt đối** vào shebang của `bin/intake` và vào
+`pyvenv.cfg`; đổi tên thư mục venv sau khi cài là làm hỏng các script đó. Venv phải được tạo ở đúng chỗ nó sẽ nằm, nên
+"đổi bản nguyên tử" thực hiện bằng symlink trỏ vào nó.
 
 ## Các đường khác cũng đạt
 

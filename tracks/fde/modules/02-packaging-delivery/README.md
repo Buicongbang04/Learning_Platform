@@ -192,7 +192,7 @@ stateDiagram-v2
 | Dọn khi chết giữa chừng | `trap ... EXIT` xoá thư mục tạm; không để `.partial` làm lần sau tưởng đã cài |
 
 Lỗi thường gặp ngoài hiện trường: `set -e` thoát ngay sau khi đã dừng dịch vụ; tar giữ uid/gid của máy build; unit systemd ghi lại mỗi lần làm `daemon-reload` + restart vô cớ; installer chỉ được thử
-trên một máy "sạch" giống máy dev. Hai bài intermediate tập đúng các chỗ này.
+trên một máy "sạch" giống máy dev.
 
 ## 5. Cấu hình theo khách
 

@@ -12,6 +12,7 @@ BUNDLE=${1:-}
 VERSION=unknown
 WORK=""
 STAGE=""
+NEW_RELEASE=0
 
 say() {
     printf '%s %s\n' "$(date -Is)" "$*" >>"$LOG"
@@ -37,7 +38,7 @@ die() {
 
 manifest_py() {
     python3 - "$@" <<'PY'
-import hashlib, json, os, sys
+import hashlib, json, os, stat, sys
 from pathlib import PurePosixPath
 
 command, manifest_path = sys.argv[1], sys.argv[2]
@@ -54,16 +55,20 @@ if command == "info":
 elif command == "verify":
     root = sys.argv[3]
     problems = []
-    found = set()
-    for top, _, names in os.walk(root):
-        for name in names:
-            found.add(os.path.relpath(os.path.join(top, name), root))
-    for name in sorted(found - set(files) - {"manifest.json"}):
-        problems.append(f"tệp thừa: {name}")
+    found = {}
+    for top, dirs, names in os.walk(root):
+        for name in dirs + names:
+            path = os.path.join(top, name)
+            mode = os.lstat(path).st_mode
+            if stat.S_ISDIR(mode) and os.listdir(path):
+                continue
+            found[os.path.relpath(path, root)] = mode
+    for name in sorted(set(found) - set(files) - {"manifest.json"}):
+        problems.append(f"thừa: {name}")
     for name, meta in sorted(files.items()):
         path = os.path.join(root, name)
-        if not os.path.isfile(path) or os.path.islink(path):
-            problems.append(f"thiếu tệp: {name}")
+        if not stat.S_ISREG(found.get(name, 0)):
+            problems.append(f"thiếu hoặc không phải tệp thường: {name}")
             continue
         sha = hashlib.sha256()
         with open(path, "rb") as handle:
@@ -171,6 +176,7 @@ main() {
         rm -rf -- "$release"
         mv -T "$STAGE" "$release"
         STAGE=""
+        NEW_RELEASE=1
         say "đã giải nén và kiểm tra $release"
     fi
 
@@ -179,36 +185,57 @@ main() {
         install -D -m 0640 -o root -g beacon "$release/config/beacon.env" "$CONF"
         say "tạo $CONF từ cấu hình mặc định"
     fi
-    if ! cmp -s "$release/systemd/beacon.service" "$UNIT"; then
-        install -m 0644 "$release/systemd/beacon.service" "$UNIT"
-        systemctl daemon-reload
-    fi
-    systemctl is-enabled --quiet beacon || systemctl enable --quiet beacon
-
     local previous
     previous=$(current_release)
-    if [ "$previous" != "$target" ]; then
-        switch_to "$target"
+    if [ -f "$UNIT" ]; then
+        cp -p "$UNIT" "$WORK/beacon.service.previous"
     fi
-    systemctl restart beacon
-    if health "$(port)" "$VERSION" "$HEALTH_TIMEOUT"; then
+    if activate "$target" "$release" "$VERSION"; then
         prune "$target" "$previous"
         say "beacon $VERSION đang chạy"
         finish installed
         return 0
     fi
-    say "beacon $VERSION không trả lời /healthz sau ${HEALTH_TIMEOUT}s"
-    if [ -n "$previous" ] && [ "$previous" != "$target" ] && [ -d "$PREFIX/$previous" ]; then
-        switch_to "$previous"
-        systemctl restart beacon
-        local old=${previous#releases/}
-        if health "$(port)" "$old" "$HEALTH_TIMEOUT"; then
-            say "đã quay về $old"
-            finish rolled-back
-            exit 1
-        fi
+    say "beacon $VERSION không lên (unit, khởi động hoặc /healthz sau ${HEALTH_TIMEOUT}s)"
+    rollback "$previous" "$target"
+}
+
+activate() {
+    local target=$1 release=$2 version=$3
+    if ! cmp -s "$release/systemd/beacon.service" "$UNIT"; then
+        install -m 0644 "$release/systemd/beacon.service" "$UNIT" || return 1
+        systemctl daemon-reload || return 1
     fi
-    die "beacon không lên và không có bản trước để quay về"
+    systemctl is-enabled --quiet beacon || systemctl enable --quiet beacon || return 1
+    if [ "$(current_release)" != "$target" ]; then
+        switch_to "$target" || return 1
+    fi
+    systemctl restart beacon || return 1
+    health "$(port)" "$version" "$HEALTH_TIMEOUT"
+}
+
+rollback() {
+    local previous=$1 failed=$2
+    if [ -z "$previous" ] || [ "$previous" = "$failed" ] || [ ! -d "$PREFIX/$previous" ]; then
+        systemctl stop beacon 2>/dev/null || true
+        die "beacon không lên và không có bản trước để quay về"
+    fi
+    if [ -f "$WORK/beacon.service.previous" ]; then
+        cp -p "$WORK/beacon.service.previous" "$UNIT"
+    fi
+    systemctl daemon-reload || true
+    switch_to "$previous"
+    local old=${previous#releases/}
+    if [ "$NEW_RELEASE" = 1 ]; then
+        rm -rf -- "${PREFIX:?}/$failed"
+        say "đã xoá bản lỗi $failed"
+    fi
+    if systemctl restart beacon && health "$(port)" "$old" "$HEALTH_TIMEOUT"; then
+        say "đã quay về $old (cả unit lẫn mã)"
+        finish rolled-back
+        exit 1
+    fi
+    die "đã trỏ về $old nhưng $old cũng không lên: cần người xem ngay"
 }
 
 main "$@"

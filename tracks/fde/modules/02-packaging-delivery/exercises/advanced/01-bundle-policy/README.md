@@ -42,7 +42,7 @@ trong `solutions/`.
 | B4 | Hợp đồng version: PATCH/MINOR/MAJOR định nghĩa bằng **migration và khả năng quay lại**, không bằng "lớn/nhỏ"; xếp đúng 1.1.0, 1.2.0, 2.0.0 của lộ trình vào bảng đó |
 | B5 | Đường nâng cấp cho khách nhảy nhiều MINOR (ngân hàng nâng mỗi quý): hoặc chuỗi migration được kiểm trên đúng đường nhảy, hoặc bắt buộc bản trung gian; nói cái nào và vì sao |
 | B6 | Cửa sổ hỗ trợ (bao nhiêu bản được vá) và cách giao bản vá khẩn: là một PATCH đầy đủ qua cùng quy trình kiểm, không phải chép tay một tệp |
-| B7 | Rollback: với từng loại bản, quay lại bằng gì và mất bao lâu; 2.0.0 có kế hoạch riêng (backup trước, embed lại ngoài giờ hay theo lô) vừa cửa sổ 4 giờ của ngân hàng hoặc nói rõ vì sao không vừa và làm gì |
+| B7 | Rollback: với từng loại bản, quay lại bằng gì và mất bao lâu (thời gian đề không cho thì ghi là ước tính, kèm cách đo); 2.0.0 có kế hoạch riêng (backup trước, embed lại ngoài giờ hay theo lô) vừa cửa sổ 4 giờ của ngân hàng hoặc nói rõ vì sao không vừa và làm gì |
 | B8 | Cấu hình theo khách nằm **ngoài** bundle; với mỗi khách nêu ít nhất hai khác biệt cụ thể đến từ bảng đề (proxy/CA, registry, đĩa, Podman/SELinux, staging/prod…) |
 | B9 | Toàn vẹn và nguồn gốc: sha256 của bundle qua kênh riêng, chữ ký (cosign với khoá, kiểm offline), khoá công khai giao một lần; SBOM cho ngân hàng |
 | B10 | Bảng giao hàng theo khách: kênh, kích thước thực tế mỗi lần cập nhật thường kỳ, thời gian truyền ước tính (bệnh viện ~2 MB/s), tần suất, ai cài, và cách tận dụng staging của công ty luật |
@@ -50,7 +50,9 @@ trong `solutions/`.
 ## Tiêu chí đạt
 
 - `bundle-policy.md` đạt đủ B1–B10 khi tự chấm từng mục.
-- Mọi kích thước và thời gian trong tài liệu tính lại được từ số liệu đề (ghi phép tính hoặc nguồn).
+- Mọi kích thước và thời gian truyền tính lại được từ số liệu đề (ghi phép tính hoặc nguồn).
+- Thời gian thao tác mà đề không cho (rollback, migration, khôi phục backup) không được viết như số đã biết: ghi rõ là
+  ước tính, kèm **cách đo** trên staging (diễn tập gì, trên dữ liệu nào) và ngưỡng nào thì đổi kế hoạch.
 
 ## Gợi ý
 

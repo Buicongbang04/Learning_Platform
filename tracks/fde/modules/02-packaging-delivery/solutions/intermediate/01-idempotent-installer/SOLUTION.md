@@ -31,9 +31,14 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/02-packaging-delivery/exe
 3. **Chuẩn bị release** (chỉ khi chưa có đúng release đó): kiểm chỗ trống (tổng `size` + 5% + 64 MiB), giải nén vào
    `releases/.<v>.partial` với `--no-same-owner --no-same-permissions`, kiểm từng tệp theo manifest (thiếu, thừa, sai
    sha256/size), rồi `mv -T` thành `releases/<v>`.
-4. **Áp cấu hình**: user hệ thống, env chỉ khi chưa có, unit chỉ khi khác, `enable` chỉ khi chưa enable.
-5. **Chuyển + xác minh**: đổi `current`, `restart`, chờ `/healthz` đúng version 60 s. Đạt ⇒ dọn release cũ (giữ bản hiện
-   tại + bản trước), `installed`. Không đạt ⇒ trỏ `current` về bản trước, restart, chờ nó khoẻ ⇒ `rolled-back`, thoát 1.
+4. **Áp cấu hình không đổi bản**: user hệ thống, env chỉ khi chưa có. Chép unit đang dùng sang thư mục tạm để còn đường
+   quay về.
+5. **Chuyển + xác minh trong một hàm `activate`** gọi dưới `if`: unit mới (chỉ khi khác) + `daemon-reload`, `enable`, đổi
+   `current`, `restart`, chờ `/healthz` đúng version 60 s; mỗi lệnh `|| return 1`. Trong ngữ cảnh `if`, `set -e` không
+   còn tác dụng, nên không lệnh nào được phép lỗi im lặng. Đạt ⇒ dọn release cũ (giữ bản hiện tại + bản trước),
+   `installed`. **Bất kỳ** bước nào lỗi (unit không nạp được, `restart` lỗi, health quá giờ) ⇒ `rollback`: trả unit cũ,
+   `daemon-reload`, trỏ `current` về bản trước, xoá release vừa giải nén ở lần chạy này (máy có thể có đĩa nhỏ), restart,
+   chờ bản cũ khoẻ ⇒ `rolled-back`, thoát 1. Bản cũ cũng không lên ⇒ `failed`, log nói rõ cần người xem.
 6. **Log**: mọi thông báo vào stderr và log; dòng cuối mỗi lần chạy do `finish` ghi, kể cả khi `die`.
 
 ## Những chi tiết hay sai
@@ -47,6 +52,8 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/02-packaging-delivery/exe
 | Thư mục tạm cạnh chỗ cài | `mv` trong cùng filesystem là đổi tên nguyên tử, không chép lại dữ liệu |
 | Đọc cổng từ env của khách | Khách đổi `BEACON_PORT` thì health check vẫn đúng |
 | `trap cleanup EXIT` | Ctrl-C hay `die` giữa chừng không để lại `.partial` hay thư mục tạm |
+| Unit được ghi trong `activate`, không trước đó | Ghi unit mới rồi `daemon-reload` *trước* khi có đường quay về là cách để rollback trả mã cũ mà chạy bằng unit mới (lỗi) |
+| `set -e` không phải cơ chế rollback | Lệnh lỗi sau khi đã đổi `current` mà thoát thẳng bằng `set -e` là bỏ máy ở trạng thái nửa cũ nửa mới, đúng lỗi phần 4 của README module cảnh báo |
 
 ## Không làm trong lời giải (nên nói trong tài liệu bàn giao)
 

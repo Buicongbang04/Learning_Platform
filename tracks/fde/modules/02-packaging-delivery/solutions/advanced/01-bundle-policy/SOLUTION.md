@@ -20,7 +20,7 @@
 | B4 | Mục 2.1: bảng PATCH/MINOR/MAJOR theo migration + quay lại; 1.1.0, 1.2.0 = MINOR, 2.0.0 = MAJOR |
 | B5 | Mục 2.2: chuỗi migration liên tục, CI kiểm đúng các đường nhảy N−3→N; ngân hàng không cần bản trung gian trong cùng MAJOR, nhưng **phải** qua 1.3 trước 2.0 |
 | B6 | Mục 2.3: hỗ trợ N, N−1; ngân hàng một bản "dài hạn" 6 tháng; bản vá khẩn là PATCH đầy đủ lớp ứng dụng, qua cùng manifest, chữ ký, preflight |
-| B7 | Mục 3: bảng rollback có thời gian; 2.0 tách expand (1.3, embed lại nền theo lô trong giờ làm việc) và contract (2.0, ~20 phút trong cửa sổ) |
+| B7 | Mục 3: bảng rollback, thời gian không có trong đề đều ghi là ước tính kèm cách đo và ngưỡng đổi kế hoạch; 2.0 tách expand (1.3, embed lại theo lô ngoài giờ, tài liệu mới embed vào cả hai cột) và contract (2.0, không tính toán nặng trong cửa sổ) |
 | B8 | Mục 4.3: mỗi khách ≥2 khác biệt cụ thể (proxy+CA, đĩa, registry, staging/prod, Podman/SELinux, không sudo) trong hồ sơ ngoài bundle |
 | B9 | Mục 5: sha256 qua kênh riêng, cosign khoá (kiểm offline, tắt tlog), khoá công khai giao một lần kèm fingerprint, SBOM CycloneDX mỗi lớp |
 | B10 | Mục 4.1: bảng kênh, kích thước, thời gian truyền (60 MB / 2 MB/s ≈ 30 s; 1 102 MB ≈ 9 phút), tần suất, người cài; công ty luật: staging nhận trước, prod cài đúng bundle đã soak (cùng sha256) |
@@ -104,17 +104,18 @@ khách. Lớp nền không đổi nên ngân hàng không phải duyệt lại i
 
 ## 3. Rollback
 
-| Bản | Quay lại bằng | Thời gian ước tính |
-| --- | --- | --- |
-| PATCH, MINOR | Installer trỏ `current` về release trước, khởi động lại; schema giữ nguyên | ~2 phút (ước tính; đo lại trên staging công ty luật) |
-| Đổi lớp nền | Release ứng dụng trước + image nền trước (installer giữ lớp nền N−1 trên đĩa nếu đủ chỗ) | ~5 phút |
-| MAJOR | Khôi phục `pg_dump` lấy ngay trước migration + release trước | Theo dung lượng DB; đo trên staging trước mỗi lần nâng |
+| Bản | Quay lại bằng | Thời gian | Cách đo (trên staging công ty luật, trước mỗi bản) |
+| --- | --- | --- | --- |
+| PATCH, MINOR | Installer trỏ `current` về release trước (kèm unit/Quadlet của nó), khởi động lại; schema giữ nguyên | Ước tính vài phút: không chép dữ liệu, chỉ khởi động lại 3 container và chờ model nạp | Diễn tập "cài N rồi quay về N−1" bằng installer thật, bấm giờ từ lúc chạy tới `/healthz` đúng bản; ghi vào runbook |
+| Đổi lớp nền | Release ứng dụng trước + image nền trước (installer giữ lớp nền N−1 trên đĩa nếu đủ chỗ) | Ước tính: như trên cộng thời gian nạp lại 1 102 MB image + model | Như trên, đo cả `podman load`/`docker load` |
+| MAJOR | Khôi phục `pg_dump` lấy ngay trước migration + release trước | Chưa biết: phụ thuộc dung lượng DB của từng khách | Diễn tập khôi phục một bản `pg_dump` cỡ bằng DB thật của khách (IT cho biết dung lượng); quá 1 giờ thì không làm MAJOR trong cửa sổ 4 giờ của ngân hàng mà xin cửa sổ dài hơn |
 
 2.0.0 tách hai bước để vừa cửa sổ 4 giờ của ngân hàng: **1.3** (MINOR, quý 1/2027) mang model embedding mới trong lớp
-nền mới, thêm cột embedding mới và một tác vụ nền embed lại theo lô ngoài giờ cao điểm (3 giờ CPU cho 100 000 trang, chia
-nhiều đêm, không cần cửa sổ); bản 1.3 vẫn đọc cột cũ. **2.0** (MAJOR) chỉ chuyển sang đọc cột mới và bỏ cột cũ: backup +
-migration + kiểm ~20 phút, rollback bằng backup nằm gọn trong cửa sổ. Khách nào chưa embed lại xong thì installer 2.0
-dừng ở preflight.
+nền mới, thêm cột embedding mới và một tác vụ nền embed lại theo lô ngoài giờ cao điểm (đề cho 3 giờ CPU cho 100 000
+trang, chia nhiều đêm, không cần cửa sổ). Trong suốt thời gian đó, tài liệu **mới** nạp vào được embed vào **cả hai**
+cột, nên khi tác vụ nền xong thì cột mới đầy đủ mà không phải chạy lại. Bản 1.3 vẫn đọc cột cũ. **2.0** (MAJOR) chỉ
+chuyển sang đọc cột mới và bỏ cột cũ: không còn tính toán nặng trong cửa sổ, thời gian chủ yếu là backup + migration,
+đo bằng diễn tập trên staging như bảng trên. Khách nào chưa embed lại xong thì installer 2.0 dừng ở preflight.
 
 ## 4. Theo từng khách
 

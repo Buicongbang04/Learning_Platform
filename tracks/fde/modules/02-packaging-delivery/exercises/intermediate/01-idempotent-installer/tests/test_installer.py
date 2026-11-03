@@ -96,6 +96,7 @@ def test_install_rerun_upgrade_and_rollback():
             bundle(m, version)
         bundle(m, "1.2.0", "--bad-sha")
         bundle(m, "1.3.0", "--broken-app")
+        bundle(m, "1.4.0", "--broken-unit")
 
         check_run(m, install(m, "1.0.0"), "1.0.0", "installed", ok=True)
         serving(m, "1.0.0", "xin chao")
@@ -124,6 +125,15 @@ def test_install_rerun_upgrade_and_rollback():
         assert state(m) == before, "Bundle sai sha256 phải bị từ chối trước khi đụng vào bản đang chạy, không để lại rác"
         serving(m, "1.1.0", "chao khoa noi")
 
+        good_unit = m.ssh("cat /etc/systemd/system/beacon.service", timeout=30).stdout
         check_run(m, install(m, "1.3.0"), "1.3.0", "rolled-back", ok=False)
         serving(m, "1.1.0", "chao khoa noi")
         assert m.ssh("systemctl is-active beacon", timeout=30).stdout.strip() == "active"
+
+        check_run(m, install(m, "1.4.0"), "1.4.0", "rolled-back", ok=False)
+        serving(m, "1.1.0", "chao khoa noi")
+        assert m.ssh("cat /etc/systemd/system/beacon.service", timeout=30).stdout == good_unit, (
+            "Sau khi quay về, unit systemd phải là unit của bản đang chạy (1.1.0), không phải unit lỗi của 1.4.0")
+        assert m.ssh("systemctl is-active beacon", timeout=30).stdout.strip() == "active"
+        assert "1.4.0" not in m.ssh("sudo -n find /opt/beacon", timeout=30).stdout, (
+            "Bản lỗi vừa giải nén phải bị xoá sau khi quay về (máy khách có thể có đĩa nhỏ)")

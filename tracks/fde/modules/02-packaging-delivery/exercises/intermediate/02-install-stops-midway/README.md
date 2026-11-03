@@ -63,4 +63,5 @@ Hỏi hai câu riêng: vì sao cài **thất bại**, và vì sao thất bại l
 
 ### Gợi ý 3
 
-Với mỗi bước của installer, ước lượng nó cần thêm bao nhiêu và ở đâu, rồi cộng lại.
+Đi lần lượt từng bước của installer và ghi lại nó **để lại gì trên máy** (tệp, thư mục, tiến trình, dịch vụ) ở `lab-open`
+và ở `hospital`. Bước đầu tiên mà hai cột khác nhau là chỗ cần nhìn kỹ.

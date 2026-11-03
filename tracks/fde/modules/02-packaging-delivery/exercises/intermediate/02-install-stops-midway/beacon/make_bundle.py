@@ -1,6 +1,6 @@
 """Dựng bundle beacon-<version>.tar ngay trong máy (Python 3.8+), in manifest ra stdout.
 
-    python3 make_bundle.py <version> <weights_mib> <out.tar> [--broken-app] [--bad-sha]
+    python3 make_bundle.py <version> <weights_mib> <out.tar> [--broken-app] [--broken-unit] [--bad-sha]
 
 `models/weights.bin` là dữ liệu giả ngẫu nhiên, xác định theo version (openssl aes-128-ctr), sinh dạng luồng nên không
 cần chỗ trống ngoài chính tệp tar. Manifest nằm đầu bundle.
@@ -62,6 +62,7 @@ def main() -> None:
     parser.add_argument("weights_mib", type=int)
     parser.add_argument("out")
     parser.add_argument("--broken-app", action="store_true")
+    parser.add_argument("--broken-unit", action="store_true")
     parser.add_argument("--bad-sha", action="store_true")
     args = parser.parse_args()
     app = BROKEN_APP.encode() if args.broken_app else (KIT / "beacon.py").read_bytes()
@@ -71,6 +72,10 @@ def main() -> None:
         "config/beacon.env": (KIT / "beacon.env").read_bytes(),
         "systemd/beacon.service": (KIT / "beacon.service").read_bytes(),
     }
+    if args.broken_unit:
+        unit = small["systemd/beacon.service"].decode()
+        small["systemd/beacon.service"] = "\n".join(
+            line for line in unit.splitlines() if not line.startswith("ExecStart=")).encode() + b"\n"
     size = args.weights_mib * CHUNK
     files = {name: {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)} for name, data in small.items()}
     files["models/weights.bin"] = {"sha256": weights_sha(args.version, size), "size": size}
