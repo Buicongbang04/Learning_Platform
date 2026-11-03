@@ -1,4 +1,4 @@
-# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M10)
+# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M11, M13)
 
 Bản tham chiếu cho phần chấm được bằng test, cùng cây thư mục với `capstone/project/`:
 
@@ -291,6 +291,90 @@ Rubric cho quyết định và tài liệu (test chỉ kiểm cấu trúc, số 
 | Runbook | Mỗi alert đủ bốn phần | Lệnh kiểm tra chạy được, nhánh hành động theo kết quả kiểm, tiêu chí leo thang bằng số/thời gian |
 | Postmortem | Đủ năm phần, có số | Không đổ lỗi, dòng thời gian theo `as_of`, việc cần làm đo được (feature giao thông gần đây, alert bias, CT theo chất lượng) |
 
+## M11: cloud tuỳ chọn, dọn theo tag
+
+Bản tham chiếu chọn AWS (`project/cloud/`): bucket S3 cho model, Lambda 128 MB trả `/healthz` (đọc `head_object`, không nạp
+model nên không cần sklearn trong Lambda), log group 3 ngày, budget 1 USD có cảnh báo `ACTUAL > 50%` và `FORECASTED > 100%`.
+Không test nào chạm cloud; bản này chưa được `apply` trong lúc viết (không có tài khoản trong môi trường dựng bài), nên
+`main.tf` chỉ được kiểm bằng test tĩnh. Lần chạy thật đầu tiên nên `terraform validate` và `terraform plan` trước.
+
+- **Tag ở từng resource, không dùng `default_tags`.** Cả hai đều qua test; viết tường minh để người đọc thấy ngay tài
+  nguyên nào mang tag, và để test chỉ ra đúng resource quên tag. Tài nguyên con (`public_access_block`, `role_policy`,
+  `function_url`, `lambda_permission`) không nhận tag và bị xoá theo cha.
+- **Dọn theo tag, không theo tiền tố tên.** Tên `eta-mlops-...` có thể do người khác hay chính bạn tạo tay (bucket thử
+  nghiệm có dữ liệu); tag do IaC gắn nên là bằng chứng "Terraform của bài này tạo ra nó". So sánh đúng từng ký tự:
+  `Project` hay `eta-mlops-staging` không khớp. Inventory giả của test có đủ năm bẫy đó.
+- **IAM role dưới path `/eta-mlops/`.** API Resource Groups Tagging không luôn trả IAM role, nên `teardown.sh` liệt kê thêm
+  bằng `aws iam list-roles --path-prefix /eta-mlops/` rồi lấy tag của từng role; role vẫn chỉ bị chọn khi có tag đúng.
+- **`--dry-run` không gọi CLI khi đã có inventory, kể cả lệnh đọc.** "Dry-run" mà vẫn gọi cloud thì không chạy được ở CI,
+  và một lỗi đảo nhánh `if` là xoá thật; test thay `aws` bằng script ghi log để chứng minh không có lời gọi nào.
+- **Không cờ thì từ chối.** Lệnh xoá cần `--yes`; gặp loại tài nguyên chưa biết thì dừng trước khi xoá bất cứ gì, để
+  không bao giờ dọn dở dang. Thứ tự: Lambda, log group, bucket (`rb --force`), role (gỡ policy trước), budget cuối.
+- **Lambda URL `NONE`** cho tiện thử, kèm `aws_lambda_permission` công khai; `budget.md` ghi rủi ro và cách chuyển sang
+  `AWS_IAM`.
+
+Rubric M11 (tuỳ chọn, không tính vào mức junior):
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| IaC | Mọi resource có tag, không khoá trong repo | `plan` sạch, giải thích từng tài nguyên con không nhận tag bị xoá theo đâu |
+| Dọn | `--dry-run` đúng danh sách | Giải thích vì sao tag an toàn hơn tiền tố; thứ tự xoá theo phụ thuộc; chạy thật rồi dry-run in 0 dòng |
+| Chi phí | Có ngưỡng USD và alarm | Bảng free tier từng dịch vụ, rủi ro URL công khai, budget tạo trước tài nguyên đầu tiên |
+
+## M13: đánh giá junior, tháng lạ 2019-10
+
+Tháng lạ sinh bằng `solutions/assessment/strange_month.py` (người học nhận tệp qua `etakit.py assessment`): mẫu 400 000
+chuyến của 2019-10 thật (`SEED = 1313`), cài **ba** lỗi:
+
+| `cause` | Cách cài | Công cụ lộ ra | Số đo (mẫu 50 000, `seed=0`) | Tháng 2019-09 |
+| --- | --- | --- | --- | --- |
+| `clock_error` | `VendorID == 1`, pickup 15–17/10: đảo pickup và dropoff | `eta.cli validate` exit 1, `negative_duration_share > 1%` | 3.59% dòng thời lượng âm | 0% |
+| `unit_change` | `trip_distance` × 1.609344 (km) cả tháng | PSI/KS `trip_distance` của M10 | PSI 0.265, KS 0.223, median 2.67 | PSI 0.0016, median 1.68 |
+| `timezone_shift` | Hai cột thời gian + 4 giờ (UTC thay cho EDT) cả tháng | PSI giờ đón của M10 | PSI 0.331, giờ đông nhất 22 | PSI 0.0005, giờ 18 |
+
+Phát lại `2019-09..2019-11` (champion train trên 2019-08, `as_of = 2019-11`): MAE 2019-10 là 308.0 s (2019-09: 204.0 s),
+bias +163.2 s (2019-09: -72.2 s), PSI `eta_s` 0.136. Đối chứng với tệp 2019-10 thật cùng pipeline: mọi PSI dưới 0.005,
+MAE 197.8 s, validate qua. Chạy test khoảng 30 giây (dựng dữ liệu 2 s, phát lại 15–20 s).
+
+Tác động từng lỗi (đảo ngược lỗi trên bản sao rồi phát lại):
+
+| Bản sao | MAE (s) | bias (s) |
+| --- | --- | --- |
+| Nguyên trạng | 308.0 | +163.2 |
+| Chỉ sửa khoảng cách | 261.9 | -134.2 |
+| Chỉ sửa giờ | 318.4 | +242.0 |
+| Sửa cả hai | 198.9 | -75.1 |
+
+Hai lỗi kéo bias ngược chiều nhau và che bớt nhau. `clock_error` gần như không đổi MAE vì `clean` loại dòng thời lượng âm;
+tác động của nó là chặn pipeline (đúng việc của validation).
+
+Bẫy có chủ ý trong tập nhãn: `outside_month` (0.67% chuyến rơi sang 1/11, dưới ngưỡng 1% của validate; đó là hệ quả của
+lệch giờ, không phải chuyến của tháng khác), `concept_drift` (MAE và bias tăng thật, nhưng do dữ liệu), `duplicate_rows`
+(0.004%, như nhiễu thường). Quyết định đúng là `keep` champion và `quarantine: true`: luật test ép "lỗi dữ liệu thì không
+`retrain`", và `rollback` vô nghĩa vì champion không đổi.
+
+Vì sao chọn ba lỗi này: mỗi lỗi lộ ra ở một công cụ khác nhau (validate, PSI khoảng cách, PSI giờ), nên người học phải chạy
+đủ pipeline; một người chỉ chạy validate thấy một lỗi và dừng là bài học chính. Lỗi `missing_zone` bị loại khi thiết kế vì
+không công cụ nào của M03/M10 đo theo zone, chỉ đoán được.
+
+Giới hạn đã biết: người học có thể dò đáp án bằng cách chạy test nhiều lần với từng nhãn (test báo số lỗi còn thiếu và
+tên nhãn thừa), hoặc so với tệp gốc của TLC. Không ép được; rubric dưới đây là nơi chấm thật.
+
+Rubric M13 (chấm `diagnosis.yaml` và `docs/assessment.md`; test chỉ kiểm nhãn, số và luật nhất quán):
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Quy trình | Chạy validate và replay, có bảng summary | Validate trước, phát lại có tháng đối chứng trước và sau, xác minh từng giả thuyết trên mẫu thô |
+| `clock_error` | Trích `negative_duration_share` từ validate | Khoanh được hãng (`VendorID 1`) và ba ngày; không tự đảo cột khi chưa có xác nhận của nguồn |
+| `unit_change` | PSI `trip_distance` cao, median tăng | Thấy tỉ lệ median ≈ 1.609 nên kết luận km; nêu PSI `eta_s` tăng là hệ quả, không phải nguyên nhân |
+| `timezone_shift` | PSI giờ đón cao, giờ đông nhất dời | Độ lệch đúng 4 giờ khớp UTC−4 (EDT); chuyến sớm nhất ngày 1 gần 4 giờ sáng; giải thích 0.67% chuyến sang 1/11 là hệ quả |
+| Loại trừ | Không có nhãn thừa | Nêu rõ đã loại `outside_month`, `concept_drift`, `seasonal_drift` bằng số nào |
+| Tác động | MAE và bias trước/sau | Đo tác động từng lỗi bằng bản sao đảo ngược; thấy hai lỗi bù trừ bias |
+| Quyết định | `keep` + `quarantine: true` | Tách quyết định cho model và cho dữ liệu; nói batch tháng đó hoãn, realtime không ảnh hưởng |
+| Phòng ngừa | Có đề xuất check | Check mới có ngưỡng bằng số (median khoảng cách, PSI giờ đón, tỉ lệ theo hãng) và chỗ đặt trong DVC/runbook |
+
+Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô cột Tốt.
+
 ## Rubric phần tự đánh giá
 
 | Mục | Đạt | Tốt |
@@ -307,3 +391,5 @@ Rubric cho quyết định và tài liệu (test chỉ kiểm cấu trúc, số 
 | CI/CD (M08) | Ba workflow xanh/đỏ đúng chỗ | Thời gian từng workflow, giải thích ranh giới CI/CT/CD và vì sao CD đọc registry |
 | Monitoring (M09) | Dashboard và bảng alert | Giải thích 0/0, chọn `absent` trên metric luôn có, ảnh dashboard khi chạy k6 |
 | Drift và sự cố (M10) | Bảng summary 12 tháng | Xem rubric riêng ở mục M10 |
+| Cloud (M11, tuỳ chọn) | `--dry-run` đúng, có budget | Xem rubric riêng ở mục M11 |
+| Đánh giá junior (M13) | Ba nhãn đúng, `keep` + cách ly | Xem rubric riêng ở mục M13 |

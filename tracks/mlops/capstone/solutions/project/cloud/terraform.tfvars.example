@@ -1,0 +1,4 @@
+suffix      = "7f3a"
+owner       = "ten-ban"
+alert_email = "ban@example.com"
+budget_usd  = "1"
