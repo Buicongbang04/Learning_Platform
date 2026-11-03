@@ -148,8 +148,8 @@ def image_has_healthcheck(tag: str) -> bool:
     return image_inspect(tag, "{{json .Config.Healthcheck}}") not in ("", "null")
 
 
-def _remove_labeled_containers() -> None:
-    ids = _names("ps", "-aq", "--filter", f"label={LABEL}")
+def _remove_labeled_containers(label: str) -> None:
+    ids = _names("ps", "-aq", "--filter", f"label={label}")
     if ids:
         _docker("rm", "-f", *ids, timeout=120)
 
@@ -238,19 +238,24 @@ def k6_run(script: Path, env: dict[str, str], network: str = "host", timeout: in
 
 
 def act_run(workdir: Path, *args: str, event: str = "push", timeout: int = 600) -> subprocess.CompletedProcess:
-    """Chạy workflow bằng `act` ngoại tuyến (runner image tự build, `--bind` thư mục làm việc)."""
+    """Chạy workflow bằng `act` (runner image tự build, `--pull=false`, `--bind` thư mục làm việc).
+
+    Chỉ đảm bảo không kéo image. Workflow không được dùng `uses:` action từ xa (act sẽ cần mạng và GitHub).
+    Dọn đúng các container của lần chạy này (nhãn `mlops-ex-run=<uuid8>`), không đụng container khác.
+    """
     binary = shutil.which("act")
     if binary is None:
         pytest.skip(ACT_INSTALL_HINT)
     runner = _ensure_image(ACT_RUNNER, ROOT / "setup" / "mlops" / "act-runner")
+    run_label = f"mlops-ex-run={uuid.uuid4().hex[:8]}"
     command = [binary, event, "-P", f"ubuntu-latest={runner}", "--pull=false", "--bind",
-               "--container-options", f"--label {LABEL}", *args]
+               "--container-options", f"--label {LABEL} --label {run_label}", *args]
     try:
         return subprocess.run(command, cwd=workdir, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         pytest.fail(f"act quá {timeout} giây", pytrace=False)
     finally:
-        _remove_labeled_containers()
+        _remove_labeled_containers(run_label)
 
 
 def dvc_sh(repo: Path, cmd: str, args: tuple[str, ...] = (), *, ok: bool = True, env: dict[str, str] | None = None,
