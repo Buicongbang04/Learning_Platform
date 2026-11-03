@@ -18,6 +18,7 @@ class Config:
     model_params: dict = field(default_factory=dict)
     mlflow_uri: str = "http://127.0.0.1:25000"
     model_name: str = "eta"
+    speed_table: Path | None = None
 
 
 ENV_PARSERS = {
@@ -28,6 +29,7 @@ ENV_PARSERS = {
     "model_params": json.loads,
     "mlflow_uri": str,
     "model_name": str,
+    "speed_table": lambda v: Path(v) if v else None,
 }
 
 
@@ -41,6 +43,9 @@ def load_config(path: Path) -> Config:
     if "data_dir" in raw:
         data_dir = Path(raw["data_dir"])
         raw["data_dir"] = data_dir if data_dir.is_absolute() else (path.parent / data_dir).resolve()
+    if raw.get("speed_table"):
+        table = Path(raw["speed_table"])
+        raw["speed_table"] = table if table.is_absolute() else (path.parent / table).resolve()
     for name, parse in ENV_PARSERS.items():
         value = os.environ.get(f"ETA_{name.upper()}")
         if value is not None:
@@ -50,6 +55,7 @@ def load_config(path: Path) -> Config:
         raise ValueError(f"{path}: thiếu {missing}")
     config = Config(**raw)
     config.data_dir = Path(config.data_dir)
+    config.speed_table = Path(config.speed_table) if config.speed_table else None
     config.months = [str(m) for m in config.months]
     bad = [m for m in config.months if not MONTH.match(m)]
     if bad or not config.months:

@@ -23,3 +23,7 @@ def get_logger(name: str) -> logging.Logger:
 
 def log_event(logger: logging.Logger, event: str, **fields) -> None:
     logger.info(event, extra={"fields": fields})
+
+
+PREDICTION_LOG_COLUMNS = ["request_id", "ts", "model_version", "variant", "PULocationID", "DOLocationID",
+                          "pickup_datetime", "trip_distance", "eta_s"]

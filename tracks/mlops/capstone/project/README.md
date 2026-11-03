@@ -12,6 +12,9 @@ milestone ở [`../milestones/`](../milestones/), tổng quan ở [README capsto
 | `src/eta/serve.py`, `Dockerfile.serve`, `Dockerfile.train`, `compose.yaml` | [M02](../milestones/m02-containers.md) | API, hai image, stack Compose |
 | `src/eta/validate.py`, `dvc.yaml` | [M03](../milestones/m03-data-pipeline.md) | Pipeline DVC, schema Pandera |
 | `src/eta/registry.py`, `promotion.py` | [M04](../milestones/m04-registry-promotion.md) | Registry, cổng promotion, rollback |
+| `src/eta/clock.py`, `labels.py`, `flows.py`, `PREDICTION_LOG_COLUMNS` trong `logs.py` | [M05](../milestones/m05-prefect-replay.md) | Đồng hồ mô phỏng, nhãn về muộn, flow Prefect train/batch/replay |
+| `src/eta/zone_features.py`, `feature_repo/` | [M06](../milestones/m06-feast-features.md) | Feature tốc độ zone/giờ, point-in-time, Feast online/offline |
+| `src/eta/serve.py` (bản M07), `loadtest/eta.js` | [M07](../milestones/m07-serving-canary.md) | Readiness, canary, shadow, reload/rollback, k6 |
 | `tests/` | mọi milestone | Không sửa: test chấm bài. Test của bạn để ở chỗ khác (ví dụ `tests_own/`) |
 
 `.gitignore` ở đây chặn `data/`, `models/`, `reports/`, `metrics.json`: dữ liệu và model đi qua DVC và MLflow, không
@@ -32,8 +35,9 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 | Thiếu | Test skip | Cách bật |
 | --- | --- | --- |
 | Bộ `nyc-tlc` | `test_m01_real_data_baseline` | `uv run python data/download_dataset.py nyc-tlc` |
-| Docker | M02 | Cài Docker, user thuộc nhóm `docker` |
+| Docker | M02, `test_m06_online_offline_parity`, `test_m07_loadtest_thresholds` | Cài Docker, user thuộc nhóm `docker` |
 | Stack MLOps | `test_m02_compose_api`, `test_m04_alias_rollback` | `docker compose -f setup/mlops/compose.yaml up -d --wait` |
+| Redis cho Feast | `test_m06_online_offline_parity` | `docker compose -f setup/mlops/compose.yaml --profile feast up -d --wait` |
 | bubblewrap (`bwrap`) | test chạy CLI, DVC | `sudo apt install bubblewrap` |
 
 Skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15` trước `uv run`.
@@ -44,4 +48,5 @@ Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và ch�
 ## Vận hành
 
 Mục này là của bạn. Mỗi milestone thêm một phần theo "Kết quả nộp": lệnh train và MAE (M01), container (M02), dữ liệu và
-ngưỡng validation (M03), registry, runbook rollback và model card (M04).
+ngưỡng validation (M03), registry, runbook rollback và model card (M04), orchestration và replay (M05), feature (M06),
+serving và kết quả k6 (M07).
