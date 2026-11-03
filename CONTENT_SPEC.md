@@ -382,7 +382,7 @@ Helper Giai đoạn 2 (test riêng ở `tests/test_mlopskit.py`):
 | Chạy Feast | `mlopskit.feast_run(repo, "apply")`, `mlopskit.feast_python(repo, script)` | **Feast chỉ chạy trong container** `mlops-feast:0.67.0` (vì `feast[redis]` kéo `pandas` xuống 2.3.3, không vào môi trường mặc định); `repo` mount `/repo` rw, user không root, `--rm`, nhãn `mlops-ex=1`; `feast_python` in JSON ra stdout |
 | Kiểm cấu hình, rule Prometheus | `mlopskit.promtool("check", "rules", "r.yml", cwd=dir)` | `promtool` trong `prom/prometheus:v3.5.0`, `cwd` mount chỉ đọc tại `/work` |
 | Tải thử | `mlopskit.k6_run(script, {"TARGET": url})` | `grafana/k6:1.8.1`, mạng `host`; `.stdout` là JSON của `--summary-export` |
-| Chạy workflow CI | `mlopskit.act_run(workdir)` | `act` **ngoại tuyến**: runner `mlops-act-runner:1` tự build, `--pull=false --bind`, workflow chỉ có bước `run:` (không `uses:` từ xa); skip khi thiếu `act`; dọn container nhãn `mlops-ex=1` trong `finally` |
+| Chạy workflow CI | `mlopskit.act_run(workdir)` | `act` với runner `mlops-act-runner:1` tự build, `--pull=false --bind`; `act_run` chỉ đảm bảo không kéo image, **workflow không được dùng `uses:` action từ xa** (chỉ bước `run:`, nếu không act cần mạng và GitHub); skip khi thiếu `act`; trong `finally` chỉ dọn container của chính lần chạy (nhãn `mlops-ex-run=<uuid8>`), không đụng container khác |
 | Dữ liệu NYC TLC thật | `mlopskit.real_month("nyc-tlc", "2019-03")` (hoặc `"nyc-tlc-2020"`) | Skip khi chưa tải; `pytest.fail` khi sha256 lệch bảng `REAL_SHA256` (tệp nguồn bị TLC sửa hoặc tải hỏng). Không đọc thẳng `data/raw/...` |
 | Chạy `dvc`/`git` trong sandbox | `mlopskit.dvc_sh(repo, cmd, args, ok=True, env=None)` | DVC/git cấu hình riêng trong `repo`, `repo` ghi được |
 

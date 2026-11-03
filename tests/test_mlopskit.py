@@ -277,6 +277,7 @@ def test_promtool_check_config(tmp_path):
     assert ok.returncode == 0, ok.stdout + ok.stderr
     bad = mlopskit.promtool("check", "config", "bad.yml", cwd=tmp_path)
     assert bad.returncode != 0
+    assert "bad.yml" in bad.stdout + bad.stderr or "yaml" in (bad.stdout + bad.stderr).lower()
     assert mlopskit.leftovers("promtool") == []
 
 
