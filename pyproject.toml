@@ -95,6 +95,8 @@ dependencies = [
     "gguf==0.19.0",
     "imageio[ffmpeg]==2.38.1",
     "dvc[s3]==3.67.1",
+    # FDE: tạo seed NoCloud ISO cho cloud-init (không cần cloud-localds/genisoimage). Phát hành 2026-10-09.
+    "pycdlib==1.22.0",
 ]
 
 [dependency-groups]

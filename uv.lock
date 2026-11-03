@@ -1128,6 +1128,7 @@ dependencies = [
     { name = "prometheus-client" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pyarrow" },
+    { name = "pycdlib" },
     { name = "pymongo" },
     { name = "pyspark" },
     { name = "pytest" },
@@ -1229,6 +1230,7 @@ requires-dist = [
     { name = "prometheus-client", specifier = ">=0.21" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pyarrow", specifier = ">=17.0" },
+    { name = "pycdlib", specifier = "==1.22.0" },
     { name = "pymongo", specifier = ">=4.10" },
     { name = "pyspark", specifier = ">=3.5,<4" },
     { name = "pytest", specifier = ">=8.3" },
@@ -4964,6 +4966,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/65/aa/bcd4c05d9fc86ca4c4fa831750f59341a2d08a033c306dc749bfd98ad3be/pybase64-1.5.1-graalpy312-graalpy250_312_native-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:fb89fb39a895510d801106444eccef0760308423dd2d4100f7798629892b6c1a", size = 54308, upload-time = "2026-10-04T13:46:00.855Z" },
     { url = "https://files.pythonhosted.org/packages/42/e2/ea68f2b1a47c21b5d2d4e21050c51fe64bb9853a3b7528c4110482ea4661/pybase64-1.5.1-graalpy312-graalpy250_312_native-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9cb085be91424b1e33aa0fe6fd6f2e3f6e4d29b91f8bb861e0798685a4aa5e14", size = 45956, upload-time = "2026-10-04T13:46:03.09Z" },
     { url = "https://files.pythonhosted.org/packages/e0/4f/92393fd5b0ee26a11e336e7c4b813e525e30dd9d4a744397e58a9c2e1da1/pybase64-1.5.1-graalpy312-graalpy250_312_native-win_amd64.whl", hash = "sha256:a663dc685f1204bb6ac856861806faa041d6ba3a2686f9a5d198b68e480fbcc1", size = 45069, upload-time = "2026-10-04T13:46:05.375Z" },
+]
+
+[[package]]
+name = "pycdlib"
+version = "1.22.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/4a/894c8cb0fbc8a7f3846a3ff1d24cd05d6acca962b9610d61a65c74398aea/pycdlib-1.22.0.tar.gz", hash = "sha256:00456c146e2834eac96ddf738b6b2cbe81564d9efe2022ae6a155fc6649870c6", size = 362477, upload-time = "2026-10-09T13:56:15.768Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/64/5a5912a3f3ba47dba3eb7f707e51f91926b26be4bde25fe2da483f3c4a9b/pycdlib-1.22.0-py3-none-any.whl", hash = "sha256:bfa0b3631345a14b2741fe088398b6b8dc2838442ea607fd07d027dcc67b9e94", size = 238118, upload-time = "2026-10-09T13:56:14.117Z" },
 ]
 
 [[package]]
