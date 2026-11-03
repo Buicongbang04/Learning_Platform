@@ -1,6 +1,6 @@
 [project]
 name = "eta"
-version = "0.4.0"
+version = "0.7.0"
 description = "Dịch vụ ETA cho taxi NYC (capstone MLOps)"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -14,6 +14,8 @@ dependencies = [
     "fastapi==0.143.1",
     "uvicorn==0.54.0",
     "mlflow-skinny==3.17.1",
+    "prometheus-client==0.26.0",
+    "prefect==3.9.0",
 ]
 
 [build-system]

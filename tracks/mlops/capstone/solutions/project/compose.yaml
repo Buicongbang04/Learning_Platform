@@ -10,6 +10,10 @@ services:
       MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD: "false"
       ETA_MODEL_NAME: ${ETA_MODEL_NAME:-eta}
       ETA_MODEL_PATH: ${ETA_MODEL_PATH:-}
+      ETA_CANARY_WEIGHT: ${ETA_CANARY_WEIGHT:-0}
+      ETA_SHADOW: ${ETA_SHADOW:-0}
+      ETA_PREDICTION_LOG: ${ETA_PREDICTION_LOG:-}
+      ETA_ADMIN_TOKEN: ${ETA_ADMIN_TOKEN:-}
     volumes:
       - ${ETA_MODEL_DIR:-./models}:/models:ro
     ports:
@@ -25,9 +29,10 @@ services:
     security_opt:
       - no-new-privileges:true
     mem_limit: 512m
+    stop_grace_period: 15s
     cpuset: "${DEVOPS_CPUSET:-}"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 12

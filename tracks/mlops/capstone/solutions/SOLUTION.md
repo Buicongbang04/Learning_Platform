@@ -1,4 +1,4 @@
-# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M04)
+# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M07)
 
 Bản tham chiếu cho phần chấm được bằng test, cùng cây thư mục với `capstone/project/`:
 
@@ -103,8 +103,78 @@ Lựa chọn loss: `absolute_error` nghe hợp với MAE nhưng đo ra tệ hơn
   kê đúng ba kiểu mà thông báo lỗi nêu. Chuyển sang pickle cũng chạy, nhưng mất lớp kiểm tra khi nạp.
 - **`MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false`:** đặt trong test, trong `serve.py` (mặc định) và `compose.yaml`;
   không có thì client xin URL presigned trỏ `minio:9000` và treo.
+- **Champion thiếu số đo nào thì cổng đóng** (`mae` hay `mae_airport`, thiếu hay `nan`). Bản đầu bỏ qua tiêu chí sân bay
+  khi champion thiếu `mae_airport`; nghĩa là một run log metric hỏng của champion âm thầm tắt một nửa cổng. Không so được
+  thì không promote, và `reasons` nói đúng metric nào thiếu để người trực đánh giá lại champion.
 - **API nạp theo số version đã phân giải** (`get_model_version_by_alias` rồi `models:/eta/<N>`): `/healthz` báo đúng
   version, không có khoảng trống giữa "đọc alias" và "tải model" mà alias đổi giữa chừng.
+
+## M05: Prefect, đồng hồ mô phỏng, nhãn về muộn
+
+- **Cổng nhãn là một hàm** (`labels.published`), và `labels_for` là đường **duy nhất** tới `duration_s` của tháng đã
+  chấm. Replay không đọc nhãn bằng cách khác; vì vậy không có đường tắt nào rò nhãn chưa công bố. Tháng cuối của replay
+  luôn `mae = None` với độ trễ 1 tháng: đúng thứ người trực thấy ngoài đời.
+- **`request_id` sinh ở một chỗ** (`labels.month_trips`): `"<month>-<vị trí>"` sau `clean` trên mẫu xác định theo
+  `seed`. Chấm và nhãn đi qua cùng hàm nên join một-một. Ngoài đời `request_id` do API sinh và đi cùng log; ở mô phỏng nó
+  phải tái tạo được.
+- **Khoá cache theo nội dung**: `cache_key_fn` băm `data_version` (sha256 tệp) cùng `months`, `sample_rows`, `seed`,
+  `model_params`, `mlflow_uri`, `model_name`. Hash tham số mặc định của Prefect chỉ thấy đường dẫn config, không thấy
+  tệp dữ liệu đổi. Đánh đổi: xoá version trong registry thì cache vẫn trả số cũ; xoá thư mục kết quả Prefect hoặc đổi
+  khoá khi cần train lại có chủ đích.
+- **Retry ở I/O, không ở train**: `fingerprint` và `score_month` có `retries=2` (đọc tệp, MinIO chập chờn); train lỗi
+  thường là lỗi thật (dữ liệu, code), chạy lại y hệt không giúp gì.
+- **Ghi parquet qua tệp tạm rồi `replace`**: flow chết giữa chừng không để lại tệp dở mà lần sau tưởng đã xong.
+- **Replay không train trên tháng sắp chấm**: chưa có champion thì train trên `start - 1`. Champion cố định suốt M05;
+  M10 mới quyết định retrain.
+
+## M06: feature tốc độ zone/giờ và Feast
+
+- **Trung vị, ngưỡng 5 chuyến**: tốc độ từng chuyến trên dữ liệu thật trải từ 3 tới 35 dặm/giờ (p1–p99) nhưng có chuyến
+  100 dặm trong 2 phút; trung vị chịu được, trung bình thì không. Mẫu 200 000 dòng 2019-01 cho 1 690 nhóm `(zone, giờ)`
+  có ≥ 5 chuyến; 98,6% chuyến 2019-03 có feature từ 2019-02, phần còn lại nhận mặc định.
+- **`DEFAULT_SPEED_MPH = 10.1`**: trung vị toàn thành phố 2019-01 (10,14; 2019-02 là 9,86; 2019-07 là 10,15). Tháng
+  2020-04 là **15,28**: tín hiệu COVID rõ nhất mà M10 sẽ dùng.
+- **`event_timestamp` = đầu tháng sau, TTL 62 ngày ở cả hai phía** (`merge_asof(tolerance=...)` trên host và `ttl` của
+  feature view). Lệch TTL giữa hai bên là skew dù code tính feature giống hệt.
+- **Hai entity** vì Feast 0.67 từ chối entity nhiều join key (`An entity may only have a single join key`).
+- **Feature tuỳ chọn theo dữ liệu**: `make_features` thêm `avg_speed_mph` khi cột có mặt; không có cờ config. Test
+  M01–M04 không đổi, và serve biết model cần feature hay không qua `feature_names_in_`. API đọc bảng feature từ
+  `ETA_SPEED_TABLE` (CSV, image serving không có `pyarrow`) qua cùng `attach_speed`; Feast online chỉ dùng trong
+  container Feast ở capstone này.
+
+MAE thật (mẫu 200 000 dòng/tháng, `seed=0`, `HistGradientBoostingRegressor` mặc định của lời giải):
+
+| Train | Đánh giá | Feature tốc độ | MAE (s) | p90 (s) | MAE sân bay (s) |
+| --- | --- | --- | --- | --- | --- |
+| 2019-01 | 2019-02 | không | 155.7 | 344.2 | 324.0 |
+| 2019-01 | 2019-02 | có (train toàn mặc định vì không có 2018-12; đánh giá dùng 2019-01) | 155.7 | 344.2 | 324.0 |
+| 2019-02 | 2019-03 | không | 160.1 | 351.9 | 325.6 |
+| 2019-02 (feature 2019-01) | 2019-03 (feature 2019-02) | có | 162.7 | 356.2 | 326.0 |
+
+Đọc bảng: hàng 2 cho đúng con số hàng 1 vì point-in-time làm đúng việc: chuyến tháng 1 không có tháng trước nên feature
+là hằng số, model bỏ qua nó. Hàng 4: feature **không** giúp ở 2019 (tệ hơn 2,6 s), vì trung vị theo `(zone, giờ)` của
+tháng trước gần như là thứ model đã học được từ zone và giờ. Giá trị của nó là khi đường phố đổi hẳn (2020-03, 2020-04):
+lúc đó feature tháng trước mang thông tin mà model cũ không có. Bản tham chiếu giữ champion **không** có feature tốc độ ở
+M06 và để M10 đo lại trên 2020. Lệnh đo: train/evaluate của M01 trên `attach_speed(clean(load_month(...)))`.
+
+## M07: serving production
+
+- **Readiness tách khỏi liveness**: `/healthz` luôn 200 (kubelet không giết pod đang nạp model), `/readyz` 503 tới khi
+  warmup xong và 503 lại khi tắt (load balancer rút traffic trước khi tiến trình dừng). Nạp đồng bộ trong `lifespan`: đơn
+  giản, và `up --wait` của Compose chờ đúng `/readyz`.
+- **Bộ model bất biến** (`Models(champion, challenger)`, dataclass frozen): mỗi request lấy một tham chiếu lúc vào;
+  reload tạo bộ mới, warmup, rồi gán một lần. Không request nào thấy champion mới với challenger cũ.
+- **Định tuyến sha256, không `hash()`**: `hash()` của Python có salt theo tiến trình; hai replica sẽ định tuyến khác
+  nhau cho cùng `request_id`.
+- **Shadow trong `BackgroundTasks`**: chạy sau khi response đã gửi, nên shadow chậm không cộng vào độ trễ; mọi exception
+  bị bắt và đếm. Canary lỗi thì chấm lại bằng champion trong cùng request (người dùng nhận ETA, `eta_fallback_total` cho
+  người trực thấy).
+- **Challenger warmup lỗi vẫn sẵn sàng**: readiness chỉ phụ thuộc champion; challenger hỏng hiện ra ở counter, không
+  làm sập dịch vụ.
+- **Reload lỗi giữ model cũ** và trả 5xx: rollback không bao giờ được làm mất model đang chạy tốt.
+- **k6**: pha warmup 3 s rồi 40 req/s trong 15 s (`constant-arrival-rate`, khoảng 600 request), ngưỡng p95 < 200 ms,
+  lỗi < 1%, thêm p99 < 500 ms cho pha ổn định và `checks > 99%`. Trong test chạy xong khoảng 25 s gồm cả build image
+  (đã cache). `prometheus-client==0.26.0` thêm vào `requirements-serve` (cùng bản với `uv.lock`).
 
 ## Rubric phần tự đánh giá
 
@@ -116,3 +186,6 @@ Lựa chọn loss: `absolute_error` nghe hợp với MAE nhưng đo ra tệ hơn
 | Ngưỡng validation (M03) | Có ngưỡng, mọi tháng 2019 qua | Lý do bằng số đo thật, nói rõ đánh đổi chặt/lỏng |
 | Remote DVC | `dvc push` thành công | Xoá cache, `dvc pull` lại đúng, khoá ở `config.local` |
 | Registry (M04) | Có ≥2 version, một lần promote | Runbook rollback có thời gian đo, model card nêu giới hạn đã biết |
+| Replay (M05) | Bảng 5 tháng, tháng cuối không có MAE | Giải thích vì sao không retrain mù theo lịch, có deployment Prefect có lịch |
+| Feature (M06) | Bảng MAE có/không có feature | Quyết định giữ/bỏ có lý do bằng số, nêu khi nào không cần feature store |
+| Serving (M07) | Số k6, runbook rollback | Quy trình canary có tiêu chí dừng bằng số, đo p99 có và không có warmup |

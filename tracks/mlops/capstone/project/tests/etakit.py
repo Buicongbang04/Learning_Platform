@@ -66,3 +66,39 @@ def synthetic_month(n: int, month: str = "2019-01", seed: int = 0, extra_columns
         }
     )
     return frame if extra_columns else frame[COLUMNS]
+
+
+PREDICTION_LOG_COLUMNS = ["request_id", "ts", "model_version", "variant", "PULocationID", "DOLocationID",
+                          "pickup_datetime", "trip_distance", "eta_s"]
+
+
+def write_months(raw: Path, months: list[str], n: int = 1_500, seed: int = 0) -> Path:
+    """Ghi tệp `yellow_tripdata_<month>.parquet` giả cho từng tháng vào `raw`."""
+    raw.mkdir(parents=True, exist_ok=True)
+    for i, month in enumerate(months):
+        synthetic_month(n, month=month, seed=seed + i).to_parquet(raw / f"yellow_tripdata_{month}.parquet", index=False)
+    return raw
+
+
+def write_config(path: Path, raw: Path, months: list[str], mlflow_uri: str, model_name: str, **extra) -> Path:
+    """Tệp params.yaml nhỏ cho flow: mẫu 1 200 dòng, model 20 vòng."""
+    import yaml
+
+    params = {"data_dir": str(raw), "months": months, "sample_rows": 1_200, "seed": 0,
+              "model_params": {"max_iter": 20}, "mlflow_uri": mlflow_uri, "model_name": model_name, **extra}
+    path.write_text(yaml.safe_dump(params, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def local_registry(tmp_path: Path, prefix: str = "eta") -> tuple[str, str]:
+    """MLflow SQLite trong `tmp_path` và tên model ngẫu nhiên; experiment cùng tên lưu artifact trong `tmp_path`."""
+    import uuid
+
+    import mlflow
+
+    import mlopskit
+
+    uri = mlopskit.mlflow_local(tmp_path)
+    name = f"{prefix}-{uuid.uuid4().hex[:8]}"
+    mlflow.create_experiment(name, artifact_location=(tmp_path / "artifacts" / name).as_uri())
+    return uri, name
