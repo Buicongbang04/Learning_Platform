@@ -125,3 +125,60 @@ def test_verify_rejects_unsafe_paths(tmp_path):
             info.size = len(payload)
             tar.addfile(info, io.BytesIO(payload))
     assert run_verify(tmp_path / "evil.tar").returncode == 1
+
+
+def test_env_example_follows_llm_choice():
+    import fdekit
+
+    small = release.env_example("1.0.0")
+    assert "QUILLO_VERSION=1.0.0\n" in small and "QUILLO_LLM_MODEL=llm-small\n" in small
+    assert f"QUILLO_LLM_FILE={fdekit.MODELS['llm-small'].filename}\n" in small
+    medium = release.env_example("1.1.0", "llm-medium")
+    assert f"QUILLO_LLM_FILE={fdekit.MODELS['llm-medium'].filename}\n" in medium
+    assert "QUILLO_LLM_MODEL=llm-medium\n" in medium and "QUILLO_VERSION=1.1.0\n" in medium
+
+
+def test_verify_rejects_outside_top_folder_and_wrong_version(tmp_path):
+    data = b"services: {}\n"
+    sha = {"compose.yaml": hashlib.sha256(data).hexdigest()}
+    small_bundle(tmp_path / "ok.tar", {"compose.yaml": data}, sha)
+    with tarfile.open(tmp_path / "ok.tar", "a") as tar:
+        info = tarfile.TarInfo("other/install.sh")
+        info.size = 2
+        tar.addfile(info, io.BytesIO(b"hi"))
+    outside = run_verify(tmp_path / "ok.tar")
+    assert outside.returncode == 1 and "ngoài thư mục gốc" in outside.stdout
+    manifest = json.dumps({"version": "1.1.0", "files": sha, "images": []}).encode()
+    with tarfile.open(tmp_path / "renamed.tar", "w") as tar:
+        for name, payload in (("quillo-1.0.0/manifest.json", manifest), ("quillo-1.0.0/compose.yaml", data)):
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+    renamed = run_verify(tmp_path / "renamed.tar")
+    assert renamed.returncode == 1 and "1.1.0" in renamed.stdout
+
+
+def test_build_removes_partial_bundle_on_failure(tmp_path, monkeypatch):
+    import fdekit
+
+    blob = tmp_path / "blob.bin"
+    blob.write_bytes(b"x" * 1024)
+    monkeypatch.setattr(release, "build_api_image", lambda version, work: f"quillo-api:{version}")
+    monkeypatch.setattr(release, "save_images", lambda tag, work: {"images/quillo-api.tar": blob})
+    monkeypatch.setattr(fdekit, "fetch_model", lambda name: blob.with_name(f"{name}.gguf"))
+    for name in ("llm-small", "embed-small"):
+        blob.with_name(f"{name}.gguf").write_bytes(b"gguf")
+    original = tarfile.TarFile.addfile
+    calls = []
+
+    def failing(self, info, fileobj=None, **kwargs):
+        calls.append(info.name)
+        if len(calls) == 3:
+            raise OSError("No space left on device")
+        return original(self, info, fileobj, **kwargs)
+
+    monkeypatch.setattr(tarfile.TarFile, "addfile", failing)
+    out = tmp_path / "out"
+    with pytest.raises(OSError, match="No space"):
+        release.build("1.0.0", out)
+    assert list(out.iterdir()) == []

@@ -92,9 +92,17 @@ def save_images(api_tag: str, work: Path) -> dict[str, Path]:
     return saved
 
 
-def env_example(version: str) -> str:
+def env_example(version: str, llm: str = "llm-small") -> str:
+    """`.env.example` của bundle: bản và model chat khớp đúng thứ có trong bundle."""
+    import fdekit
+
+    values = {"QUILLO_VERSION": version, "QUILLO_LLM_FILE": fdekit.MODELS[llm].filename, "QUILLO_LLM_MODEL": llm}
     text = (PRODUCT / ".env.example").read_text()
-    return re.sub(r"(?m)^QUILLO_VERSION=.*$", f"QUILLO_VERSION={version}", text)
+    for key, value in values.items():
+        text, count = re.subn(rf"(?m)^{key}=.*$", f"{key}={value}", text)
+        if count != 1:
+            raise ValueError(f".env.example phải có đúng một dòng {key}=")
+    return text
 
 
 def build(version: str, out: Path, llm: str = "llm-small") -> Path:
@@ -108,7 +116,7 @@ def build(version: str, out: Path, llm: str = "llm-small") -> Path:
         work = Path(tmp)
         api_tag = build_api_image(version, work)
         sources: dict[str, Path] = save_images(api_tag, work)
-        (work / ".env.example").write_text(env_example(version))
+        (work / ".env.example").write_text(env_example(version, llm))
         sources[".env.example"] = work / ".env.example"
         for name in STATIC_FILES:
             sources[name] = PRODUCT / name
@@ -122,16 +130,20 @@ def build(version: str, out: Path, llm: str = "llm-small") -> Path:
         (work / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         part = bundle.with_name(bundle.name + ".part")
         prefix = f"quillo-{version}"
-        with tarfile.open(part, "w", format=tarfile.PAX_FORMAT) as tar:
-            tar.add(work / "manifest.json", f"{prefix}/manifest.json")
-            for name, path in sorted(sources.items()):
-                info = tar.gettarinfo(path, f"{prefix}/{name}")
-                info.uid = info.gid = 0
-                info.uname = info.gname = ""
-                info.mode = 0o644
-                with open(path, "rb") as handle:
-                    tar.addfile(info, handle)
-        os.replace(part, bundle)
+        try:
+            with tarfile.open(part, "w", format=tarfile.PAX_FORMAT) as tar:
+                tar.add(work / "manifest.json", f"{prefix}/manifest.json")
+                for name, path in sorted(sources.items()):
+                    info = tar.gettarinfo(path, f"{prefix}/{name}")
+                    info.uid = info.gid = 0
+                    info.uname = info.gname = ""
+                    info.mode = 0o644
+                    with open(path, "rb") as handle:
+                        tar.addfile(info, handle)
+            os.replace(part, bundle)
+        except BaseException:
+            part.unlink(missing_ok=True)
+            raise
     print(f"{bundle} ({bundle.stat().st_size / 1024**3:.2f} GiB)")
     return bundle
 
@@ -156,7 +168,12 @@ def verify(bundle: Path) -> list[str]:
             if len(manifests) != 1:
                 return ["không tìm thấy <bundle>/manifest.json"]
             prefix = PurePosixPath(manifests[0]).parent
+            outside = sorted(m.name for m in members if PurePosixPath(m.name).parts[0] != prefix.name)
+            if outside:
+                return [f"tệp nằm ngoài thư mục gốc {prefix}/ của bundle: {name}" for name in outside]
             manifest = json.load(tar.extractfile(manifests[0]))
+            if prefix.name != f"quillo-{manifest['version']}":
+                return [f"manifest.json ghi version {manifest['version']!r} nhưng thư mục gốc là {prefix}/"]
             expected = manifest["files"]
             for name, digest in sorted(expected.items()):
                 member = files.get(str(prefix / name))

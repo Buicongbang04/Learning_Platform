@@ -1,3 +1,4 @@
+import time
 import psycopg
 from fastapi.testclient import TestClient
 
@@ -155,3 +156,66 @@ def test_v1_0_has_no_tags(database_url, fake_llm):
         columns = {r[0] for r in conn.execute(
             "SELECT column_name FROM information_schema.columns WHERE table_name = 'documents'")}
         assert "tags" not in columns
+
+
+def test_session_cookie_expires(client, monkeypatch):
+    from quillo import auth
+
+    now = time.time()
+    login = client.post("/login", data={"token": TOKEN}, follow_redirects=False)
+    issued, _, signature = login.cookies[auth.SESSION_COOKIE].partition(".")
+    assert issued.isdigit() and len(signature) == 64
+    assert client.get("/", follow_redirects=False).status_code == 200
+    monkeypatch.setattr(auth.time, "time", lambda: now + auth.SESSION_MAX_AGE + 5)
+    assert client.get("/", follow_redirects=False).status_code == 303
+    assert client.post("/api/ask", json={"question": "hi"}).status_code == 401
+
+
+def test_session_cookie_cannot_be_forged(client):
+    from quillo import auth
+
+    client.post("/login", data={"token": TOKEN})
+    issued, _, signature = client.cookies[auth.SESSION_COOKIE].partition(".")
+    client.cookies.clear()
+    client.cookies.set(auth.SESSION_COOKIE, f"{int(issued) - 3600}.{signature}")
+    assert client.get("/", follow_redirects=False).status_code == 303
+    client.cookies.clear()
+    client.cookies.set(auth.SESSION_COOKIE, auth.session_value("another-token-0123456789"))
+    assert client.get("/", follow_redirects=False).status_code == 303
+
+
+def test_ui_requests_without_session_get_hx_redirect(client):
+    response = client.post("/ui/ask", data={"question": "hi"}, headers={"HX-Request": "true"})
+    assert response.status_code == 401
+    assert response.headers["hx-redirect"] == "/login"
+    assert "hx-redirect" not in client.post("/ui/ask", data={"question": "hi"}).headers
+
+
+def test_non_upload_post_bodies_are_capped_before_auth(client):
+    big = {"question": "x" * (70 * 1024)}
+    assert client.post("/api/ask", json=big).status_code == 413
+    assert client.post("/login", data={"token": "y" * (70 * 1024)}).status_code == 413
+
+
+def test_tags_are_limited(client):
+    assert upload(client, "a.txt", GOVERNING, tags=",".join(f"t{i}" for i in range(21))).status_code == 422
+    assert upload(client, "a.txt", GOVERNING, tags="x" * 65).status_code == 422
+    assert upload(client, "a.txt", GOVERNING, tags=",".join(["y" * 64] * 20)).status_code == 201
+
+
+def test_healthz_answers_fast_when_llm_hangs(database_url, fake_llm):
+    import socket
+
+    hanging = socket.socket()
+    hanging.bind(("127.0.0.1", 0))
+    hanging.listen(8)
+    try:
+        url = f"http://127.0.0.1:{hanging.getsockname()[1]}"
+        with TestClient(create_app(make_settings(database_url, url, embed_url=fake_llm.url))) as client:
+            started = time.monotonic()
+            response = client.get("/healthz")
+            elapsed = time.monotonic() - started
+    finally:
+        hanging.close()
+    assert response.status_code == 503 and response.json()["checks"]["llm"] is False
+    assert elapsed < 3.0

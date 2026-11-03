@@ -89,8 +89,17 @@ quillo-1.0.0/
 └── models/qwen2.5-0.5b-instruct-q4_k_m.gguf  models/nomic-embed-text-v1.5.Q8_0.gguf
 ```
 
-`verify` thoát 1 khi tệp nào sai sha256, thiếu, thừa (không có trong manifest), tar bị cắt cụt, hoặc có đường dẫn
-tuyệt đối/`..`/symlink. Tar không nén: layer image và GGUF vốn đã nén, gzip chỉ tốn thời gian.
+`verify` thoát 1 khi tệp nào sai sha256, thiếu, thừa (không có trong manifest), tar bị cắt cụt, có đường dẫn
+tuyệt đối/`..`/symlink, tệp nằm ngoài thư mục gốc `quillo-<version>/`, hoặc `manifest.json` ghi version khác tên thư
+mục gốc. Tar không nén: layer image và GGUF vốn đã nén, gzip chỉ tốn thời gian.
+
+Manifest nằm **trong** bundle nên chỉ bắt được hỏng hóc khi chép (tar cắt cụt, bit lỗi, thiếu tệp), không chống được
+người cố ý sửa: kẻ sửa `compose.yaml` cũng sửa luôn sha trong manifest được. Muốn xác thực nguồn gốc, gửi sha256 của
+chính tệp `quillo-<version>.tar` qua kênh khác (email/ticket) cho khách so, hoặc ký bundle (vd. `cosign`/GPG).
+
+Bundle **không tái lập được từng byte**: build lại cùng bản cho ra image `quillo-api` khác digest (dấu thời gian lớp
+image, attestation của buildx) và tar có mtime khác. Thứ cố định là các ref đã ghim, `requirements.lock` có hash và sha
+của model; so hai bundle thì so `manifest.json` → `images`/sha của model, đừng so sha cả tệp tar.
 
 | Thành phần (2026-11-04) | Ghim | Trong bundle |
 | --- | --- | --- |
@@ -112,14 +121,21 @@ release.py verify quillo-1.0.0.tar          # hoặc sha256sum từng tệp theo
 tar xf quillo-1.0.0.tar && cd quillo-1.0.0
 for i in images/*.tar; do docker load -i "$i"; done
 cp .env.example .env && chmod 600 .env       # điền QUILLO_ADMIN_TOKEN, QUILLO_DB_PASSWORD (openssl rand -hex 24)
-mkdir -p inbox
+sudo install -d -o 10001 -g 10001 -m 0750 inbox   # worker chạy uid 10001; không có sudo thì: mkdir inbox && chmod 0777 inbox
 docker compose up -d --wait
 curl -s http://127.0.0.1:18080/healthz
 ```
 
-Cần Docker có plugin `docker compose` (v2). Gói `docker.io` của Ubuntu **không** kèm plugin này (cài thêm
-`docker-compose-v2` hoặc mang theo binary). API chỉ nghe `127.0.0.1` của máy chủ; muốn máy khác truy cập thì đặt
-`QUILLO_BIND` (vd. `0.0.0.0` hoặc IP nội bộ) và đặt reverse proxy TLS phía trước.
+Cần Docker có plugin `docker compose` (v2). Gói `docker.io` của Ubuntu **không** kèm plugin này: máy có mạng thì cài
+`docker-compose-v2`, máy air-gapped thì mang theo binary compose v2 độc lập. API chỉ nghe `127.0.0.1` của máy chủ;
+muốn máy khác truy cập thì đặt `QUILLO_BIND` (vd. `0.0.0.0` hoặc IP nội bộ) và đặt reverse proxy TLS phía trước.
+
+Trong VM lab (QEMU user-mode network), cổng forward của QEMU (`hostfwd`) đi vào card mạng của VM (`10.0.2.15`), không
+vào `127.0.0.1` của VM, nên bài cài đặt/installer đặt `QUILLO_BIND=0.0.0.0` trong VM; cổng đó vẫn chỉ mở trên
+`127.0.0.1` của máy host.
+
+Worker kiểm lúc khởi động rằng `inbox/`, `inbox/done/`, `inbox/failed/` ghi được với uid 10001; không được thì thoát mã
+2 với thông báo rõ (container sẽ restart lặp lại, `docker compose logs worker` cho thấy lý do).
 
 | Biến (`.env`) | Mặc định | Ý nghĩa |
 | --- | --- | --- |
@@ -143,40 +159,59 @@ Cần Docker có plugin `docker compose` (v2). Gói `docker.io` của Ubuntu **k
 | GET | `/`, `/login` | cookie | UI htmx (htmx 2.0.11 vendor trong `static/`, không CDN) |
 
 `doc_id` là 16 ký tự đầu sha256 của nội dung: nạp lại cùng tệp thì thay bản cũ. Worker nạp tệp thả vào `./inbox`
-(chuyển sang `inbox/done/` hoặc `inbox/failed/`); container chạy uid 10001 nên thư mục `inbox` phải ghi được với uid
-đó. Câu trả lời trích `[n]` thì `citations` là các đoạn được trích; model không trích thì trả mọi đoạn đã đưa vào prompt.
+(chuyển sang `inbox/done/` hoặc `inbox/failed/`, trùng tên thì thêm hậu tố `-1`, `-2`…). Tệp sửa đổi chưa quá 2 chu kỳ
+quét (mặc định 10 s) được coi là đang chép dở và chờ lượt sau; symlink, FIFO, thiết bị bị chuyển vào `failed/` mà không
+đọc (mở bằng `O_NOFOLLOW` rồi `fstat` trên chính fd). Lỗi tạm thời (llm/embed hay database không phản hồi) thì để
+nguyên tệp và thử lại, chờ lùi dần tới 60 s. Câu trả lời trích `[n]` thì `citations` là các đoạn được trích; model không trích thì trả mọi đoạn đã đưa vào prompt.
 
 ## Bảo mật (Phase 1)
 
-- Token so sánh bằng `hmac.compare_digest`; cookie phiên là HMAC của token (HttpOnly, SameSite=Strict, 8 giờ), không
-  chứa token. Đổi token = mọi phiên cũ mất hiệu lực; đăng xuất chỉ xoá cookie phía trình duyệt. OIDC thêm ở Phase 2.
-- Upload: kiểm `Content-Length` trước khi đọc body, giới hạn kích thước, chỉ nhận `.pdf .html .htm .txt .md`, tên tệp
-  được làm sạch (bỏ thư mục, ký tự lạ, `-`/`.` đầu tên, tối đa 200 ký tự); không ghi tệp upload ra đĩa theo tên gốc.
+- Token so sánh bằng `hmac.compare_digest`. Cookie phiên `<thời điểm cấp>.<HMAC(token, "v1:<thời điểm cấp>")>`
+  (HttpOnly, SameSite=Strict): không chứa token, server từ chối khi quá 8 giờ kể từ lúc cấp hoặc chữ ký sai. Đổi token
+  = mọi phiên cũ mất hiệu lực. OIDC thêm ở Phase 2.
+- Mọi POST đều phải có `Content-Length` và bị chặn trước khi parse (trước cả kiểm token): upload tối đa
+  `QUILLO_MAX_UPLOAD_MB`, các POST khác 64 KB. Upload chỉ nhận `.pdf .html .htm .txt .md`, tên tệp được làm sạch (bỏ thư
+  mục, ký tự lạ, `-`/`.` đầu tên, tối đa 200 ký tự); không ghi tệp upload ra đĩa theo tên gốc. `tags`: tối đa 20, mỗi tag
+  tối đa 64 ký tự.
+- `/healthz` kiểm db/llm/embed song song, mỗi check ≤ 1,5–2 s, nên luôn trả trong thời hạn 5 s của HEALTHCHECK.
+- UI: request htmx (`HX-Request`) hết phiên nhận 401 kèm `HX-Redirect: /login`.
 - SQL luôn tham số hoá; template Jinja tự escape; CSP `default-src 'self'`, `nosniff`, `frame-ancestors 'none'`.
 - Container `api`/`worker` chạy uid 10001, root filesystem chỉ đọc, `no-new-privileges`; `llm`/`embed` chạy uid 65534,
   model mount chỉ đọc. Chỉ `api` publish cổng, mặc định chỉ `127.0.0.1`.
 - Bundle và image không chứa bí mật: `.env.example` để trống token/mật khẩu, compose từ chối chạy khi thiếu (`:?`),
   app từ chối token ngắn hơn 16 ký tự.
 
+Còn lại (biết rõ, chưa xử lý ở Phase 1):
+
+- `/logout` không cần phiên: nó chỉ xoá cookie ở trình duyệt, không thu hồi phiên phía server (phiên tự hết sau 8 giờ;
+  muốn thu hồi tất cả thì đổi `QUILLO_ADMIN_TOKEN`). Không có giới hạn số lần đăng nhập sai.
+- SameSite tính theo *site* (host), không theo cổng: ứng dụng khác chạy cùng host ở cổng khác vẫn là "same-site" với
+  quillo. Đừng chạy ứng dụng không tin cậy cùng hostname.
+- Cờ `Secure` của cookie chỉ bật khi request là https. Đặt sau reverse proxy TLS thì phải chạy uvicorn với
+  `--proxy-headers --forwarded-allow-ips=<IP proxy>` để app thấy `https`, nếu không cookie đi được qua http thường.
+- Prompt injection: nội dung tài liệu được đưa thẳng vào prompt, tài liệu độc có thể lái câu trả lời. Đây là bề mặt
+  tấn công để dành cho module 09 (đánh giá và an toàn LLM).
+
 ## Số đo (2026-11-04)
 
 Host: laptop của repo (16 core, NVMe, Docker 29.9.2). VM: hồ sơ `lab-open` (Ubuntu 22.04, 2 vCPU, 5120 MB, Docker
-29.1.3 từ kho Ubuntu, `docker-compose-v2` 2.40.3 cài bằng apt).
+29.1.3 và `docker-compose-v2` 2.40.3 từ kho Ubuntu có sẵn trong golden; lần đo sau vòng sửa 1, `inbox` tạo bằng
+`sudo install -o 10001`).
 
 | Việc | Host | VM `lab-open` |
 | --- | --- | --- |
 | `release.py build --version 1.0.0` (image đã cache) | ~6 s | — |
 | `release.py verify` (1,08 GiB) | ~1 s | — |
-| `scp` bundle vào VM | — | 3,4 s |
-| `tar xf` + kiểm sha256 theo manifest | — | 2,8 s |
-| `docker load` 3 image | (đã có sẵn) | 14,0 s |
-| `docker compose up -d --wait` tới khi mọi dịch vụ healthy | 13,1 s | 12,7 s |
-| **load + up** (mục tiêu ≤ 180 s) | — | **26,8 s** |
-| Nạp một hợp đồng CUAD ~15 KB (17–18 chunk) | 4,4–4,7 s | 4,7 s |
-| `/api/ask` "What is the governing law?" (top_k 4, CPU, 2 luồng) | 4,2 s | 4,0 s |
+| `scp` bundle vào VM | — | 3,1 s |
+| `tar xf` + kiểm sha256 theo manifest | — | 1,9 s |
+| `docker load` 3 image | (đã có sẵn) | 14,6 s |
+| `docker compose up -d --wait` tới khi mọi dịch vụ healthy | 13,1 s | 12,6 s |
+| **load + up** (mục tiêu ≤ 180 s) | — | **27,2 s** |
+| Nạp một hợp đồng CUAD ~15 KB (17–18 chunk) | 4,4–4,7 s | 4,8 s |
+| `/api/ask` "What is the governing law?" (top_k 4, CPU, 2 luồng) | 4,2 s | 4,1 s |
 | Nâng cấp tại chỗ 1.0.0 → 1.1.0 (đổi `QUILLO_VERSION`, `up -d --wait`, migration 0002) | 8 s | — |
 
-RAM khi chạy rảnh trong VM: llm ~184 MiB, embed ~94 MiB, api ~48 MiB, worker ~29 MiB, db ~33 MiB (model GGUF được
+RAM khi chạy rảnh trong VM: llm ~173 MiB, embed ~67 MiB, api ~49 MiB, worker ~27 MiB, db ~33 MiB (model GGUF được
 mmap nên phần lớn nằm ở page cache).
 
 Mẫu chất lượng (host, 3 hợp đồng CUAD: PFSFUNDS services — Massachusetts, CENTRACK hosting — Florida, LUCID distributor

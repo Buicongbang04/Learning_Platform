@@ -1,5 +1,6 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,6 +20,10 @@ log = logging.getLogger("quillo.api")
 HERE = Path(__file__).resolve().parent
 UPLOAD_PATHS = {"/api/documents", "/ui/documents"}
 MULTIPART_OVERHEAD = 64 * 1024
+MAX_FORM_BYTES = 64 * 1024
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 64
+HEALTH_TIMEOUT_S = 1.5
 STARTUP_DB_WAIT_S = 60
 SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
@@ -33,21 +38,23 @@ class AskRequest(BaseModel):
     top_k: int = Field(default=4, ge=1, le=20)
 
 
-class UploadLimit:
-    """Từ chối upload thiếu Content-Length hoặc quá giới hạn trước khi Starlette ghi body ra đĩa tạm."""
+class BodyLimit:
+    """Từ chối POST thiếu Content-Length (411) hoặc quá giới hạn (413) trước khi parse body, kể cả trước khi kiểm token:
+    upload tối đa QUILLO_MAX_UPLOAD_MB, mọi POST khác (JSON, form) tối đa 64 KB."""
 
     def __init__(self, app, max_bytes: int) -> None:
         self.app = app
         self.max_bytes = max_bytes
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] == "http" and scope["method"] == "POST" and scope["path"] in UPLOAD_PATHS:
+        if scope["type"] == "http" and scope["method"] == "POST":
+            limit = self.max_bytes + MULTIPART_OVERHEAD if scope["path"] in UPLOAD_PATHS else MAX_FORM_BYTES
             length = dict(scope["headers"]).get(b"content-length", b"")
             if not length.isdigit():
                 await JSONResponse({"detail": "Cần Content-Length"}, status_code=411)(scope, receive, send)
                 return
-            if int(length) > self.max_bytes + MULTIPART_OVERHEAD:
-                await JSONResponse({"detail": "Tệp quá lớn"}, status_code=413)(scope, receive, send)
+            if int(length) > limit:
+                await JSONResponse({"detail": "Body quá lớn"}, status_code=413)(scope, receive, send)
                 return
         await self.app(scope, receive, send)
 
@@ -85,7 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.llm = ModelServer(settings.llm_url, settings.http_timeout_s)
     app.state.embed = ModelServer(settings.embed_url, settings.http_timeout_s)
-    app.add_middleware(UploadLimit, max_bytes=max_bytes)
+    app.add_middleware(BodyLimit, max_bytes=max_bytes)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
     @app.middleware("http")
@@ -111,7 +118,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def store(upload: UploadFile, tags: str | None) -> dict:
         filename = ingest.safe_filename(upload.filename or "")
         data = upload.file.read(max_bytes + 1)
-        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags_enabled and tags else None
+        tag_list = parse_tags(tags) if tags_enabled and tags else None
         try:
             with db.connect(settings.database_url) as conn:
                 result = ingest.ingest_bytes(conn, app.state.embed, filename, data, max_bytes=max_bytes,
@@ -126,18 +133,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             result["tags"] = tag_list or []
         return result
 
+    def parse_tags(raw: str) -> list[str]:
+        tag_list = [t.strip() for t in raw.split(",") if t.strip()]
+        if len(tag_list) > MAX_TAGS or any(len(t) > MAX_TAG_LENGTH for t in tag_list):
+            raise HTTPException(status_code=422,
+                                detail=f"Tối đa {MAX_TAGS} tag, mỗi tag tối đa {MAX_TAG_LENGTH} ký tự")
+        return tag_list
+
     def ask(question: str, top_k: int) -> dict:
         with db.connect(settings.database_url) as conn:
             return rag.answer(conn, app.state.embed, app.state.llm, question, top_k)
 
+    def db_healthy() -> bool:
+        try:
+            with db.connect(settings.database_url, timeout=2) as conn:
+                conn.execute("SET statement_timeout = 1500")
+                return conn.execute("SELECT 1").fetchone()[0] == 1
+        except psycopg.Error:
+            return False
+
     @app.get("/healthz")
     def healthz():
-        try:
-            with db.connect(settings.database_url, timeout=3) as conn:
-                db_ok = conn.execute("SELECT 1").fetchone()[0] == 1
-        except psycopg.Error:
-            db_ok = False
-        checks = {"db": db_ok, "llm": app.state.llm.healthy(), "embed": app.state.embed.healthy()}
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {"db": pool.submit(db_healthy),
+                       "llm": pool.submit(app.state.llm.healthy, HEALTH_TIMEOUT_S),
+                       "embed": pool.submit(app.state.embed.healthy, HEALTH_TIMEOUT_S)}
+            checks = {name: future.result() for name, future in futures.items()}
         healthy = all(checks.values())
         return JSONResponse({"status": "ok" if healthy else "degraded", "version": settings.version,
                              "checks": checks}, status_code=200 if healthy else 503)
@@ -189,7 +210,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def require_session(request: Request) -> None:
         if not auth.has_session(request):
-            raise HTTPException(status_code=401, detail="Phiên đăng nhập hết hạn")
+            headers = {"HX-Redirect": "/login"} if request.headers.get("hx-request") else None
+            raise HTTPException(status_code=401, detail="Phiên đăng nhập hết hạn", headers=headers)
 
     @app.post("/ui/ask", response_class=HTMLResponse, dependencies=[Depends(require_session)])
     def ui_ask(request: Request, question: str = Form(min_length=1, max_length=2000)):

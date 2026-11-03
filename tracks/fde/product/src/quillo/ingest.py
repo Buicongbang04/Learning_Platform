@@ -4,12 +4,18 @@ import argparse
 import hashlib
 import io
 import logging
+import os
 import re
 import signal
+import stat
 import sys
 import threading
+import time
 from html.parser import HTMLParser
 from pathlib import Path
+
+import httpx
+import psycopg
 
 from quillo import db, rag
 from quillo.config import Settings, setup_logging
@@ -20,6 +26,8 @@ log = logging.getLogger("quillo.ingest")
 SUPPORTED = {".txt", ".md", ".html", ".htm", ".pdf"}
 UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9._ -]+")
 MAX_FILENAME = 200
+MAX_BACKOFF_S = 60.0
+TRANSIENT = (httpx.HTTPError, psycopg.OperationalError)
 
 
 class UnsupportedType(ValueError):
@@ -31,6 +39,14 @@ class EmptyDocument(ValueError):
 
 
 class TooLarge(ValueError):
+    pass
+
+
+class NotRegularFile(ValueError):
+    pass
+
+
+class InboxNotWritable(RuntimeError):
     pass
 
 
@@ -121,42 +137,95 @@ def ingest_bytes(conn, embedder: ModelServer, filename: str, data: bytes, *, max
     return {"doc_id": doc_id, "filename": filename, "chunks": len(pieces)}
 
 
-def _move(path: Path, folder: str) -> None:
-    target = path.parent / folder
-    target.mkdir(exist_ok=True)
-    path.replace(target / path.name)
+def read_regular(path: Path, max_bytes: int) -> bytes:
+    """Đọc tệp thường, không theo symlink (O_NOFOLLOW + fstat trên chính fd đã mở, tránh TOCTOU), tối đa max_bytes."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as error:
+        if os.path.islink(path):
+            raise NotRegularFile(f"{path.name}: là symlink, không nạp") from error
+        raise
+    with os.fdopen(fd, "rb") as handle:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise NotRegularFile(f"{path.name}: không phải tệp thường")
+        data = handle.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise TooLarge(f"{path.name}: vượt giới hạn {max_bytes} byte")
+    return data
+
+
+def _move(path: Path, folder: str) -> Path:
+    target_dir = path.parent / folder
+    target = target_dir / path.name
+    n = 1
+    while target.exists() or target.is_symlink():
+        target = target_dir / f"{path.stem}-{n}{path.suffix}"
+        n += 1
+    path.rename(target)
+    return target
+
+
+def check_inbox(inbox: Path) -> None:
+    """Inbox, `done/`, `failed/` phải tồn tại và ghi được với user của worker, nếu không worker nạp lại mãi một tệp."""
+    if not inbox.is_dir():
+        raise InboxNotWritable(f"Inbox {inbox} không tồn tại hoặc không phải thư mục")
+    for folder in (inbox, inbox / "done", inbox / "failed"):
+        try:
+            folder.mkdir(exist_ok=True)
+        except OSError as error:
+            raise InboxNotWritable(f"Không tạo được {folder} ({error.strerror}); worker chạy uid {os.getuid()}") from error
+        if not os.access(folder, os.W_OK | os.X_OK):
+            raise InboxNotWritable(f"{folder} không ghi được với uid {os.getuid()}; "
+                                   f"cấp quyền ghi cho uid này trên thư mục inbox phía host")
+
+
+def _settled(path: Path, settle_s: float) -> bool:
+    try:
+        return time.time() - path.lstat().st_mtime >= settle_s
+    except OSError:
+        return False
 
 
 def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threading.Event | None = None) -> None:
-    """Quét `inbox` định kỳ: tệp nạp xong chuyển vào `done/`, lỗi chuyển vào `failed/` (log ghi lý do)."""
+    """Quét `inbox` định kỳ: nạp xong chuyển vào `done/`, lỗi của chính tệp chuyển vào `failed/`.
+
+    Bỏ qua tệp sửa đổi chưa quá 2 chu kỳ quét (có thể đang được chép vào). Lỗi tạm thời (model server, database)
+    thì để nguyên tệp và chờ lùi dần tới MAX_BACKOFF_S rồi thử lại. Inbox không ghi được thì dừng ngay (InboxNotWritable).
+    """
     stop = stop or threading.Event()
+    check_inbox(inbox)
     embedder = ModelServer(settings.embed_url, settings.http_timeout_s)
     max_bytes = settings.max_upload_mb * 1024 * 1024
+    settle_s = 2 * interval
+    backoff = interval
     log.info("worker bắt đầu theo dõi", extra={"fields": {"inbox": str(inbox), "version": settings.version}})
     while not stop.is_set():
         try:
             files = sorted(p for p in inbox.iterdir()
-                           if p.is_file() and not p.is_symlink() and not p.name.startswith("."))
+                           if not p.name.startswith(".") and not p.is_dir() and _settled(p, settle_s))
         except OSError as error:
             log.error("không đọc được inbox", extra={"fields": {"inbox": str(inbox), "error": str(error)}})
             files = []
+        wait = interval
         for path in files:
             try:
-                if path.stat().st_size > max_bytes:
-                    raise TooLarge(f"{path.name}: {path.stat().st_size} byte, vượt giới hạn {max_bytes} byte")
+                data = read_regular(path, max_bytes)
                 with db.connect(settings.database_url) as conn:
-                    ingest_bytes(conn, embedder, safe_filename(path.name), path.read_bytes(), max_bytes=max_bytes)
+                    ingest_bytes(conn, embedder, safe_filename(path.name), data, max_bytes=max_bytes)
                 _move(path, "done")
+                backoff = interval
+            except TRANSIENT as error:
+                log.warning("lỗi tạm thời, để nguyên tệp và thử lại sau",
+                            extra={"fields": {"file": path.name, "error": repr(error), "retry_s": backoff}})
+                wait, backoff = backoff, min(backoff * 2, MAX_BACKOFF_S)
+                break
             except Exception as error:
                 log.error("nạp tài liệu lỗi", extra={"fields": {"file": path.name, "error": repr(error)}})
-                try:
-                    _move(path, "failed")
-                except OSError as move_error:
-                    log.error("không chuyển được tệp lỗi", extra={"fields": {"file": path.name, "error": str(move_error)}})
-                    stop.wait(interval)
+                _move(path, "failed")
             if stop.is_set():
                 break
-        stop.wait(interval)
+        stop.wait(wait)
     embedder.close()
 
 
@@ -172,15 +241,21 @@ def main(argv: list[str] | None = None) -> int:
         stop = threading.Event()
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda *_: stop.set())
-        watch(settings, args.watch, args.interval, stop)
+        try:
+            watch(settings, args.watch, args.interval, stop)
+        except InboxNotWritable as error:
+            log.error("inbox không dùng được", extra={"fields": {"error": str(error)}})
+            print(f"quillo worker: {error}", file=sys.stderr)
+            return 2
         return 0
     embedder = ModelServer(settings.embed_url, settings.http_timeout_s)
+    max_bytes = settings.max_upload_mb * 1024 * 1024
     failed = 0
     for path in args.files:
         try:
+            data = read_regular(path, max_bytes)
             with db.connect(settings.database_url) as conn:
-                print(ingest_bytes(conn, embedder, safe_filename(path.name), path.read_bytes(),
-                                   max_bytes=settings.max_upload_mb * 1024 * 1024))
+                print(ingest_bytes(conn, embedder, safe_filename(path.name), data, max_bytes=max_bytes))
         except Exception as error:
             failed += 1
             print(f"{path}: {error}", file=sys.stderr)

@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import time
 
 from fastapi import HTTPException, Request
 
@@ -11,8 +12,21 @@ def token_matches(given: str | None, expected: str) -> bool:
     return given is not None and hmac.compare_digest(given.encode(), expected.encode())
 
 
-def session_value(token: str) -> str:
-    return hmac.new(token.encode(), b"quillo-session-v1", hashlib.sha256).hexdigest()
+def _sign(token: str, issued: int) -> str:
+    return hmac.new(token.encode(), f"v1:{issued}".encode(), hashlib.sha256).hexdigest()
+
+
+def session_value(token: str, issued: int | None = None) -> str:
+    """Cookie phiên `<thời điểm cấp>.<HMAC(token, "v1:<thời điểm cấp>")>`: không chứa token, hết hạn sau SESSION_MAX_AGE."""
+    issued = int(time.time()) if issued is None else issued
+    return f"{issued}.{_sign(token, issued)}"
+
+
+def session_valid(value: str | None, token: str) -> bool:
+    issued, _, signature = (value or "").partition(".")
+    if not issued.isdigit() or not token_matches(signature, _sign(token, int(issued))):
+        return False
+    return 0 <= time.time() - int(issued) <= SESSION_MAX_AGE
 
 
 def _bearer(request: Request) -> str | None:
@@ -21,8 +35,7 @@ def _bearer(request: Request) -> str | None:
 
 
 def has_session(request: Request) -> bool:
-    expected = session_value(request.app.state.settings.admin_token)
-    return token_matches(request.cookies.get(SESSION_COOKIE), expected)
+    return session_valid(request.cookies.get(SESSION_COOKIE), request.app.state.settings.admin_token)
 
 
 def authenticated(request: Request) -> bool:
