@@ -1,0 +1,33 @@
+findings:
+  - line: 3
+    severity: high
+    risk: "pull_request_target chạy với secrets và quyền ghi của repo gốc, kể cả khi PR đến từ fork; kết hợp với checkout mã của PR là chạy mã không tin cậy với đặc quyền."
+    fix: "Dùng pull_request (không secrets cho fork), hoặc tách hai workflow: một chạy mã PR không đặc quyền, một chạy đặc quyền chỉ trên nhánh main."
+  - line: 15
+    severity: high
+    risk: "Checkout head.sha của PR trong ngữ cảnh pull_request_target: mã do người ngoài kiểm soát chạy với secrets và token ghi, có thể đánh cắp registry token."
+    fix: "Không checkout head của PR trong workflow có đặc quyền; chỉ checkout nhánh base, hoặc chạy mã PR trong workflow pull_request không có secrets."
+  - line: 7
+    severity: medium
+    risk: "permissions write-all cấp cho GITHUB_TOKEN mọi quyền ghi; token lộ qua một bước xấu có thể sửa repo, release, packages."
+    fix: "Đặt permissions: contents: read ở cấp workflow, chỉ nâng riêng từng job khi cần (least privilege)."
+  - line: 17
+    severity: high
+    risk: "Tiêu đề PR do người ngoài viết được nhúng thẳng vào lệnh shell bằng ${{ }}: script injection, tiêu đề có dấu nháy và lệnh sẽ thực thi."
+    fix: "Truyền giá trị qua env: của bước (TITLE: ${{ github.event.pull_request.title }}) rồi dùng \"$TITLE\" trong script."
+  - line: 19
+    severity: medium
+    risk: "curl | bash chạy mã tải từ Internet không kiểm tra checksum hay chữ ký; nguồn bị chiếm là mã chạy trong runner."
+    fix: "Tải về, kiểm sha256 theo bản đã ghim, rồi mới chạy; hoặc cài từ lockfile có hash qua uv."
+  - line: 27
+    severity: medium
+    risk: "Action bên thứ ba ghim theo nhánh @main là tham chiếu thay đổi được: chủ action đẩy mã mới thì pipeline chạy mã mới mà không ai review."
+    fix: "Ghim theo commit sha đầy đủ (40 ký tự) và dùng Dependabot để nâng có review."
+  - line: 30
+    severity: high
+    risk: "In secret REGISTRY_TOKEN ra log bằng echo; che log chỉ khớp nguyên văn và log thường được đọc rộng hơn quyền của secret."
+    fix: "Không in secret; truyền qua env: của bước cần và để công cụ tự đọc biến môi trường."
+  - line: 35
+    severity: high
+    risk: "Khoá AWS dài hạn lưu thành secrets: không hết hạn, khó xoay vòng, lộ là dùng được từ bất cứ đâu."
+    fix: "Dùng OIDC (aws-actions/configure-aws-credentials với role-to-assume) để lấy token ngắn hạn theo danh tính workflow."

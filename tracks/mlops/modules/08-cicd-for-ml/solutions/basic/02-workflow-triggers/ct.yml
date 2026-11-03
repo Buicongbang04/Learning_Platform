@@ -1,0 +1,28 @@
+name: ct
+on:
+  push:
+    branches: [main]
+    paths:
+      - params.yaml
+      - data.dvc
+  pull_request:
+    paths:
+      - params.yaml
+      - data.dvc
+  schedule:
+    - cron: "30 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Lý do chạy tay
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "train mẫu, kích hoạt bởi ${{ github.event_name }}"

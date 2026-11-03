@@ -1,0 +1,40 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ["alertname", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: oncall
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 1h
+    - matchers:
+        - severity="warning"
+      receiver: ticket
+      group_wait: 5m
+      group_interval: 15m
+      repeat_interval: 24h
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ["service"]
+
+receivers:
+  - name: default
+  - name: oncall
+    webhook_configs:
+      - url: http://oncall-hook:5001/page
+        send_resolved: true
+  - name: ticket
+    webhook_configs:
+      - url: http://ticket-hook:5002/create
+        send_resolved: false
