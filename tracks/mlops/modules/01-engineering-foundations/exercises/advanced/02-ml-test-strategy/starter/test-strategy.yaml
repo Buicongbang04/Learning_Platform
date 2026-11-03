@@ -1,0 +1,14 @@
+service: eta-taxi-nyc
+pr_budget_seconds: 600
+layers: []
+# TODO: ít nhất 6 lớp test. Mỗi lớp có:
+#   name: tên ngắn
+#   kind: unit | data | model-behavior | model-quality | contract | smoke
+#   what: kiểm gì (>= 20 ký tự)
+#   catches: một lỗi thật mà lớp này bắt được và lớp khác bỏ sót (>= 20 ký tự)
+#   runs_on: pr | nightly | release
+#   budget_seconds: số nguyên
+flaky_policy:
+  # TODO: max_retries (0 hoặc 1), quarantine (true/false), owner (ai sửa test flaky), deadline_days
+gaps: []
+# TODO: ít nhất 3 rủi ro ML mà chiến lược này cố ý KHÔNG bắt, mỗi mục có risk và reason (vd. concept drift ở production)
