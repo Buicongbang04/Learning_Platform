@@ -1,0 +1,13 @@
+[Unit]
+Description=beacon (dịch vụ mẫu của bài đóng gói)
+After=network.target
+
+[Service]
+User=beacon
+EnvironmentFile=/etc/beacon/beacon.env
+ExecStart=/usr/bin/python3 /opt/beacon/current/app/beacon.py
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
