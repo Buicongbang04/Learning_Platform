@@ -1,0 +1,9 @@
+name: ct
+on:
+  push:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "train mẫu, kích hoạt bởi ${{ github.event_name }}"

@@ -1,0 +1,6 @@
+S1: { decision: none, reasons: ["Chạy theo lô, không có yêu cầu online nên không cần online store; bảng SQL trong kho đã đủ cho 25 feature và một đội nhỏ"] }
+S2: { decision: none, reasons: ["Feature đến từ chính thân yêu cầu và dùng chung một thư viện cho train và serve, đã không có skew; không có thực thể nào cần tra online"] }
+S3: { decision: feast, reasons: ["Ba model dùng chung 12 feature, cần online dưới 100 ms và point-in-time cho train; Feast tự host vừa sức đội nền tảng 2 người, dữ liệu cập nhật theo giờ nên materialize là đủ"] }
+S4: { decision: managed, reasons: ["Streaming vài giây, SLA 99.9% và kiểm toán là phần Feast tự host không có sẵn; đội 3 người không nên tự vận hành, có ngân sách thì chọn dịch vụ quản lý như Tecton hoặc Hopsworks"] }
+S5: { decision: none, reasons: ["Skew do tính lại một feature ở hai nơi: sửa bằng một hàm dùng chung và test parity; chỉ một model một đội thì feature store là quá cỡ"] }
+S6: { decision: none, reasons: ["Feature theo tháng cho model chạy theo lô: bảng trong kho và dbt đã chia sẻ được, không cần online store hay feature store"] }

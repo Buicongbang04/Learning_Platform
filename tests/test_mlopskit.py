@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 
 import pytest
@@ -277,7 +278,59 @@ def test_promtool_check_config(tmp_path):
     assert ok.returncode == 0, ok.stdout + ok.stderr
     bad = mlopskit.promtool("check", "config", "bad.yml", cwd=tmp_path)
     assert bad.returncode != 0
+    assert "bad.yml" in bad.stdout + bad.stderr or "yaml" in (bad.stdout + bad.stderr).lower()
     assert mlopskit.leftovers("promtool") == []
+
+
+def test_evidently_python_report(tmp_path):
+    _need_docker()
+    import json
+
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    pd.DataFrame({"x": rng.normal(0, 1, 500)}).to_parquet(tmp_path / "ref.parquet")
+    pd.DataFrame({"x": rng.normal(2, 1, 500)}).to_parquet(tmp_path / "cur.parquet")
+    script = (
+        "import json, pandas as pd, evidently\n"
+        "from evidently import Report\n"
+        "from evidently.presets import DataDriftPreset\n"
+        "r = Report([DataDriftPreset()]).run(pd.read_parquet('cur.parquet'), pd.read_parquet('ref.parquet'))\n"
+        "print(json.dumps({'v': evidently.__version__, 'n': len(r.dict()['metrics'])}))\n"
+    )
+    result = mlopskit.evidently_python(tmp_path, script)
+    assert result.returncode == 0, result.stdout + result.stderr
+    out = json.loads(result.stdout.strip().splitlines()[-1])
+    assert out["v"] == "0.7.23" and out["n"] > 0
+    assert mlopskit.leftovers("evidently") == []
+
+
+def test_evidently_not_in_host_env():
+    import importlib.util
+
+    assert importlib.util.find_spec("evidently") is None
+
+
+def test_amtool_check_config(tmp_path):
+    _need_docker()
+    (tmp_path / "ok.yml").write_text("route:\n  receiver: oncall\nreceivers:\n  - name: oncall\n")
+    (tmp_path / "bad.yml").write_text("route:\n  receiver: missing\nreceivers:\n  - name: oncall\n")
+    ok = mlopskit.amtool("check-config", "ok.yml", cwd=tmp_path)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    bad = mlopskit.amtool("check-config", "bad.yml", cwd=tmp_path)
+    assert bad.returncode != 0
+    assert "missing" in bad.stdout + bad.stderr
+    routes = mlopskit.amtool("config", "routes", "test", "--config.file=ok.yml", "severity=critical", cwd=tmp_path)
+    assert routes.returncode == 0 and "oncall" in routes.stdout, routes.stdout + routes.stderr
+    assert mlopskit.leftovers("amtool") == []
+
+
+def test_act_run_rejects_container_options_in_args(tmp_path):
+    if shutil.which("act") is None:
+        pytest.skip("act chưa cài")
+    with pytest.raises(ValueError):
+        mlopskit.act_run(tmp_path, "--container-options", "--user 1:1")
 
 
 def test_feast_run_version(tmp_path):
@@ -303,7 +356,7 @@ def test_feast_image_not_labeled_for_cleanup():
     assert tag not in mlopskit.leftovers()
 
 
-WORKFLOW = """name: ci
+WORKFLOW = """name: mlopskit-selftest
 on: push
 jobs:
   run:
@@ -326,7 +379,7 @@ def test_act_run_offline(tmp_path):
     result = mlopskit.act_run(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "42" in result.stdout + result.stderr
-    assert mlopskit.leftovers() == []
+    assert mlopskit.leftovers("mlopskit-selftest") == []
 
 
 def test_act_run_skips_without_binary(tmp_path, monkeypatch):

@@ -1,0 +1,37 @@
+questions:
+  - id: cache-key-content
+    kind: knowledge
+    type: single
+    prompt: "Task nhận đường dẫn tới một tệp dữ liệu và được cache theo giá trị đối số. Tuần sau tệp ở cùng đường dẫn được thay bằng dữ liệu mới. Điều gì xảy ra?"
+    options:
+      - { id: a, text: "Cache nhận ra tệp đã đổi nhờ so ngày sửa đổi của nó và tự động chạy lại task với dữ liệu mới nhất" }
+      - { id: b, text: "Cache vẫn trúng vì đường dẫn không đổi, kết quả cũ được trả về" }
+      - { id: c, text: "Prefect báo lỗi và dừng flow vì tệp đã thay đổi so với lúc lưu cache trước đó của task này" }
+      - { id: d, text: "Cache bị xoá toàn bộ cho mọi task trong flow khi bất kỳ tệp nào ở đĩa thay đổi nội dung" }
+  - id: cache-hit-side-effects
+    kind: knowledge
+    type: single
+    prompt: "Task train được cache. Ngoài việc trả metrics, thân task còn ghi một tệp model ra đĩa. Lần chạy thứ hai trúng cache. Hệ quả cần lường trước là gì?"
+    options:
+      - { id: a, text: "Thân task không chạy, nên nếu tệp model đã bị xoá thì cache trả metrics cho model không còn" }
+      - { id: b, text: "Prefect tự động ghi lại tệp model từ kết quả cache mỗi lần trúng nên không có hệ quả nào cần lo ngại" }
+      - { id: c, text: "Tệp model bị ghi hai lần liên tiếp, lần thứ hai ghi đè lần đầu với nội dung hoàn toàn giống hệt" }
+      - { id: d, text: "Cache chỉ áp dụng cho task không có tác dụng phụ nên Prefect từ chối chạy flow này" }
+  - id: cache-vs-repro
+    kind: knowledge
+    type: multi
+    prompt: "Chọn các phát biểu đúng về cache task so với tái lập (reproducibility)."
+    options:
+      - { id: a, text: "Cache giúp tiết kiệm tính toán nhưng không thay thế seed và ghim môi trường; kết quả cache có thể che việc code thực ra không tái lập" }
+      - { id: b, text: "Nếu code của task đổi mà đối số không đổi, khoá cache theo đối số vẫn trúng và trả kết quả của code cũ" }
+      - { id: c, text: "Đưa phiên bản code hoặc hash image vào khoá cache giúp tránh trả kết quả của logic cũ" }
+      - { id: d, text: "Cache theo đối số đảm bảo model mới luôn tốt hơn model đã cache trước đó vì dùng cùng dữ liệu" }
+  - id: when-not-cache
+    kind: knowledge
+    type: single
+    prompt: "Bước nào dưới đây KHÔNG nên cache theo đối số?"
+    options:
+      - { id: a, text: "Tính feature từ dữ liệu một tháng đã chốt, đầu ra chỉ phụ thuộc vào đối số và code" }
+      - { id: b, text: "Gọi API trả giá thời gian thực để đưa vào feature, kết quả đổi theo thời điểm gọi" }
+      - { id: c, text: "Train model nhỏ với tham số và seed cố định trên một tệp dữ liệu đã băm nội dung" }
+      - { id: d, text: "Chuyển đổi định dạng một tệp dữ liệu lịch sử không bao giờ thay đổi sang parquet" }

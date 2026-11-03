@@ -1,0 +1,12 @@
+S1:
+  story: "Một model churn chạy theo lô mỗi đêm, một đội 3 người, 25 feature tính bằng SQL từ kho, kết quả ghi vào bảng predictions. Không có yêu cầu online."
+S2:
+  story: "Một model ETA phục vụ online, 40 ms cho mỗi yêu cầu. Mọi feature đến từ chính thân yêu cầu (toạ độ, giờ, loại xe) và được biến đổi bằng một hàm Python nhỏ. Hàm đó đã đóng gói thành thư viện dùng cho cả train."
+S3:
+  story: "Ba model (ETA, giá cước, gian lận) cùng dùng 12 feature theo zone và theo tài xế, hai trong số đó phục vụ online dưới 100 ms. Ba đội tính lại các feature này riêng rẽ và đã lệch nhau. Có đội nền tảng 2 người, dữ liệu cập nhật theo giờ."
+S4:
+  story: "Công ty có 40 model, 6 đội, phần lớn cần feature tính từ luồng sự kiện trong vài giây (Kafka), cần SLA 99.9%, kiểm toán truy xuất feature, và đội nền tảng chỉ có 3 người, ngân sách cho dịch vụ trả phí."
+S5:
+  story: "Một model, một đội. Bạn thấy model tốt offline nhưng kém ở serve. Nguyên nhân tìm ra: serve tính lại một feature bằng code riêng. Đội đề xuất mua feature store để sửa."
+S6:
+  story: "Nhóm phân tích muốn chia sẻ 8 feature tổng hợp theo tháng cho 2 model chạy theo lô; không ai cần dưới một ngày độ trễ. Đã có kho dữ liệu với bảng và dbt."
