@@ -1,6 +1,7 @@
 import hashlib
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -164,13 +165,109 @@ def test_seed_iso_has_cidata_label(tmp_path):
     assert "fde-ex-deadbeef" in files["meta-data"]
 
 
-def test_netdev_args(monkeypatch):
-    arg = fdekit._netdev(ssh_port=2222, forwards={8000: 31000}, guestfwds={"10.0.2.100:3128": 41000}, restrict=True)
+def test_netdev_args(tmp_path):
+    relay = tmp_path / "relay.py"
+    arg = fdekit._netdev(ssh_port=2222, forwards={8000: 31000}, guestfwds={"10.0.2.100:3128": 41000}, restrict=True,
+                         relay=relay)
     assert arg.startswith("user,id=n0,restrict=on,")
     assert "hostfwd=tcp:127.0.0.1:2222-:22" in arg
     assert "hostfwd=tcp:127.0.0.1:31000-:8000" in arg
-    assert "guestfwd=tcp:10.0.2.100:3128-tcp:127.0.0.1:41000" in arg
-    assert "restrict=off" in fdekit._netdev(ssh_port=2222, forwards={}, guestfwds={}, restrict=False)
+    assert f"guestfwd=tcp:10.0.2.100:3128-cmd:{sys.executable} -I {relay} 127.0.0.1 41000" in arg
+    assert "restrict=off" in fdekit._netdev(ssh_port=2222, forwards={}, guestfwds={}, restrict=False, relay=relay)
+
+
+def test_relay_bridges_stdio_to_host_port(tmp_path):
+    relay = fdekit._write_relay(tmp_path)
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        port = server.getsockname()[1]
+        guest, qemu_side = socket.socketpair()
+        child = subprocess.Popen([sys.executable, "-I", str(relay), "127.0.0.1", str(port)], stdin=qemu_side,
+                                 stdout=qemu_side, stderr=subprocess.DEVNULL)
+        qemu_side.close()
+        try:
+            conn, _ = server.accept()
+            with conn:
+                guest.sendall(b"ping")
+                assert conn.recv(4) == b"ping"
+                conn.sendall(b"pong")
+                assert guest.recv(4) == b"pong"
+            assert guest.recv(1) == b""
+            child.wait(timeout=5)
+        finally:
+            guest.close()
+            if child.poll() is None:
+                child.kill()
+
+
+SURVEY_KEYS = {"os_id", "os_version", "kernel_major", "glibc", "cpus", "mem_mb", "disk_free_gb_max", "gpu", "proxy_url",
+               "sudo", "selinux", "runtime", "egress"}
+
+
+def test_profiles_load():
+    assert set(fdekit.PROFILES) >= {"lab-open", "hospital", "bank", "lawfirm-staging"}
+    for name, profile in fdekit.PROFILES.items():
+        assert profile.name == name
+        assert profile.image in fdekit.IMAGES
+        assert profile.egress in ("open", "proxy", "none")
+        assert profile.runtime in ("docker", "podman", "k3s", "none")
+        assert set(profile.services) <= {"proxy", "registry"}
+        assert ("proxy" in profile.services) == (profile.egress == "proxy")
+        assert profile.tls_inspection <= (profile.egress == "proxy")
+    hospital, bank = fdekit.PROFILES["hospital"], fdekit.PROFILES["bank"]
+    assert (hospital.image, hospital.disk_gb, hospital.egress, hospital.tls_inspection) == ("ubuntu-20.04", 8, "proxy", True)
+    assert (bank.image, bank.sudo, bank.egress, bank.selinux, bank.runtime) == ("rocky-8", False, "none", "enforcing", "podman")
+    assert fdekit.PROFILES["lawfirm-staging"].services == ["registry"]
+    assert fdekit.PROFILES["lab-open"].egress == "open"
+
+
+def test_facts_cover_survey_keys():
+    for profile in fdekit.PROFILES.values():
+        assert set(profile.facts) >= SURVEY_KEYS, profile.name
+        facts = profile.facts
+        assert facts["os_id"] == fdekit.IMAGES[profile.image].os_id
+        assert facts["os_version"] == fdekit.IMAGES[profile.image].os_version
+        assert (facts["sudo"], facts["selinux"], facts["runtime"], facts["egress"]) == (
+            profile.sudo, profile.selinux, profile.runtime, profile.egress)
+        assert (facts["cpus"], facts["mem_mb"]) == (fdekit.SITE_CPUS, fdekit.SITE_MEMORY_MB)
+        assert facts["disk_free_gb_max"] < profile.disk_gb
+        assert facts["proxy_url"] == ("http://10.0.2.100:3128" if profile.egress == "proxy" else None)
+
+
+def test_profile_network_defaults():
+    assert fdekit._vm_defaults("lab-open", restrict=None, sudo=None) == (False, True)
+    assert fdekit._vm_defaults("hospital", restrict=None, sudo=None) == (True, True)
+    assert fdekit._vm_defaults("bank", restrict=None, sudo=None) == (True, False)
+    assert fdekit._vm_defaults("lawfirm-staging", restrict=None, sudo=None) == (True, True)
+    assert fdekit._vm_defaults(None, restrict=None, sudo=None) == (False, False)
+    assert fdekit._vm_defaults("bank", restrict=False, sudo=True) == (False, True)
+
+
+def test_site_images_pinned():
+    for image in (fdekit.MITMPROXY_IMAGE, fdekit.REGISTRY_IMAGE):
+        name, digest = image.split("@sha256:")
+        assert ":" in name and not name.endswith((":latest", ":2", ":12"))
+        assert len(digest) == 64
+        int(digest, 16)
+
+
+def test_prepare_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setattr(fdekit, "CACHE", tmp_path)
+    golden = fdekit.golden_path("lab-open")
+    golden.parent.mkdir(parents=True)
+    golden.write_bytes(b"qcow")
+
+    def boom(*args, **kwargs):
+        raise AssertionError("không được boot lại khi golden đã có")
+
+    monkeypatch.setattr(fdekit, "vm", boom)
+    monkeypatch.setattr(fdekit, "fetch_image", boom)
+    assert fdekit.prepare("lab-open") == golden
+
+
+def test_prepare_scripts_exist():
+    for profile in fdekit.PROFILES.values():
+        script = fdekit.prepare_script(profile.name)
+        assert script.is_file() and script.read_text().startswith("#!/bin/bash")
 
 
 def test_clean_rejects_bad_run_id():
@@ -191,10 +288,11 @@ def test_leftovers_reports_run_dir(tmp_path, monkeypatch):
     assert (tmp_path / "fde-ex-12345678").exists()
 
 
-def test_cli_prepare_not_ready(capsys):
-    code = fdekit.main(["prepare", "lab-open"])
+def test_cli_prepare_unknown_profile(capsys):
+    code = fdekit.main(["prepare", "no-such-customer"])
     assert code != 0
-    assert "lab-open" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "no-such-customer" in err and "lab-open" in err
 
 
 def test_capstone_dir_skips_when_unset(monkeypatch):
@@ -366,3 +464,130 @@ def test_snapshot_roundtrip(tmp_path):
     assert '"backing-filename"' not in info.stdout
     with fdekit.vm(None, base=snap, memory_mb=1024) as m:
         assert m.ssh("cat /home/fde/state.txt").stdout.strip() == "milestone-1"
+
+
+def _fails(m, cmd):
+    result = m.ssh(cmd, timeout=90)
+    assert result.returncode != 0, f"{cmd} phải thất bại nhưng chạy được:\n{result.stdout}"
+    return result
+
+
+def test_egress_none_blocks_internet_and_dns():
+    with fdekit.customer_site("lawfirm-staging") as s:
+        _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+        _fails(s.vm, "curl -sS --max-time 10 http://93.184.215.14/")
+        _fails(s.vm, "getent hosts example.com")
+        host_port = s.registry_host.rsplit(":", 1)[1]
+        _fails(s.vm, f"curl -sS --max-time 5 http://10.0.2.2:{host_port}/v2/")
+        _fails(s.vm, "curl -sS --max-time 5 http://10.0.2.2:22/")
+
+
+def test_proxy_profile_only_reaches_proxy():
+    with fdekit.customer_site("hospital") as s:
+        _fails(s.vm, "curl -sS --noproxy '*' --max-time 10 https://pypi.org")
+        _fails(s.vm, "getent hosts pypi.org")
+        untrusted = _fails(s.vm, "curl -sS --max-time 30 -x http://10.0.2.100:3128 https://pypi.org -o /dev/null")
+        assert untrusted.returncode == 60, untrusted.stderr
+        assert s.proxy_ca is not None and "BEGIN CERTIFICATE" in s.proxy_ca.read_text()
+        s.vm.put(s.proxy_ca, "/tmp/proxy-ca.pem")
+        trusted = s.vm.ssh("curl -sS --max-time 30 -x http://10.0.2.100:3128 --cacert /tmp/proxy-ca.pem "
+                           "-o /dev/null -w '%{http_code}' https://pypi.org/simple/pip/", timeout=90)
+        assert trusted.stdout.strip() == "200", trusted.stderr
+        system_store = s.vm.ssh("curl -sS --max-time 30 -o /dev/null https://pypi.org", timeout=90)
+        assert system_store.returncode == 60, "CA của proxy không được trust sẵn trong VM"
+
+
+def test_bank_no_sudo_selinux():
+    with fdekit.customer_site("bank") as s:
+        _fails(s.vm, "sudo -n true")
+        assert s.vm.ssh("getenforce").stdout.strip() == "Enforcing"
+        info = s.vm.ssh("podman info --format '{{.Host.Security.Rootless}}'", timeout=120)
+        assert info.returncode == 0, info.stderr
+        assert info.stdout.strip() == "true"
+        _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+        assert s.proxy_ca is None and s.registry is None
+
+
+def test_registry_reachable_from_vm():
+    with fdekit.customer_site("lawfirm-staging") as s:
+        assert s.registry == "10.0.2.101:5000"
+        assert requests.get(f"http://{s.registry_host}/v2/", timeout=10).status_code == 200
+        out = s.vm.ssh("curl -sS --max-time 10 -o /dev/null -w '%{http_code}' http://10.0.2.101:5000/v2/")
+        assert out.stdout.strip() == "200", out.stderr
+        again = s.vm.ssh("curl -sS --max-time 10 http://10.0.2.101:5000/v2/_catalog")
+        assert '"repositories"' in again.stdout, again.stderr
+
+
+FACT_PROBE = r"""
+. /etc/os-release
+echo "os_id=$ID"
+echo "os_version=$VERSION_ID"
+echo "kernel_major=$(uname -r | cut -d. -f1-2)"
+echo "glibc=$(getconf GNU_LIBC_VERSION | awk '{print $2}')"
+echo "cpus=$(nproc)"
+echo "mem_kb=$(awk '/^MemTotal/ {print $2}' /proc/meminfo)"
+echo "disk_avail_kb=$(df -P -k / | awk 'NR==2 {print $4}')"
+echo "sudo=$(sudo -n true 2>/dev/null && echo yes || echo no)"
+echo "selinux=$(command -v getenforce >/dev/null && getenforce | tr A-Z a-z || echo n/a)"
+echo "docker=$(command -v docker >/dev/null && echo yes || echo no)"
+echo "podman=$(command -v podman >/dev/null && echo yes || echo no)"
+echo "gpu=$(ls /dev/nvidia0 2>/dev/null || echo none)"
+echo "proxy=$(grep -h '^https_proxy=' /etc/environment 2>/dev/null | cut -d= -f2 | tr -d '\"')"
+"""
+
+
+@pytest.mark.parametrize("name", ["lab-open", "hospital", "bank", "lawfirm-staging"])
+def test_facts_match_vm(name):
+    profile = fdekit.PROFILES[name]
+    facts = profile.facts
+    with fdekit.customer_site(name) as s:
+        result = s.vm.ssh(FACT_PROBE, timeout=60)
+    assert result.returncode == 0, result.stderr
+    seen = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    assert seen["os_id"] == facts["os_id"]
+    assert seen["os_version"] == facts["os_version"]
+    assert seen["kernel_major"] == facts["kernel_major"]
+    assert seen["glibc"] == facts["glibc"]
+    assert int(seen["cpus"]) == facts["cpus"]
+    assert 0.8 * facts["mem_mb"] <= int(seen["mem_kb"]) / 1024 <= facts["mem_mb"]
+    avail_gb = int(seen["disk_avail_kb"]) / 1024 / 1024
+    assert facts["disk_free_gb_max"] - 2 <= avail_gb <= facts["disk_free_gb_max"], avail_gb
+    assert (seen["sudo"] == "yes") == facts["sudo"]
+    assert seen["selinux"] == facts["selinux"]
+    assert seen[facts["runtime"]] == "yes"
+    assert seen["gpu"] == "none" and facts["gpu"] is None
+    assert (seen["proxy"] or None) == facts["proxy_url"]
+
+
+SITE_CHILD = """
+import time
+import fdekit
+with fdekit.customer_site("hospital") as s:
+    print(s.vm.run_id, flush=True)
+    time.sleep(600)
+"""
+
+
+def test_site_containers_die_with_parent():
+    fdekit.require_golden("hospital")
+    run_id = ""
+    child = subprocess.Popen(
+        [sys.executable, "-c", SITE_CHILD], cwd=fdekit.ROOT, stdout=subprocess.PIPE, text=True,
+        env={**os.environ, "PYTHONPATH": str(fdekit.ROOT)},
+    )
+    try:
+        run_id = child.stdout.readline().strip()
+        assert len(run_id) == 8, "tiến trình con không mở được customer_site"
+        assert fdekit._qemu_pids(run_id)
+        assert fdekit._containers(f"fde-ex-{run_id}")
+        os.kill(child.pid, signal.SIGKILL)
+        child.wait(timeout=10)
+        deadline = time.monotonic() + 15
+        while fdekit.leftovers(run_id) and time.monotonic() < deadline:
+            time.sleep(0.5)
+        assert fdekit.leftovers(run_id) == []
+    finally:
+        if child.poll() is None:
+            child.kill()
+        if len(run_id) == 8:
+            fdekit.clean(run_id)

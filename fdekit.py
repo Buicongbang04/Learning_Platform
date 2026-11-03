@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -19,9 +20,9 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, Mapping, Sequence
+from typing import Iterator, Literal, Mapping, Sequence
 
 import pytest
 import yaml
@@ -82,6 +83,83 @@ IMAGES: dict[str, CloudImage] = {
         "12",
     ),
 }
+
+
+SETUP = ROOT / "setup" / "fde"
+PROFILE_DIR = SETUP / "profiles"
+SCRIPT_DIR = SETUP / "cloud-init"
+SITE_MEMORY_MB = 2048
+SITE_CPUS = 2
+PROXY_ADDR = "10.0.2.100:3128"
+REGISTRY_ADDR = "10.0.2.101:5000"
+MITMPROXY_IMAGE = "mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f"
+REGISTRY_IMAGE = "registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373"
+
+Egress = Literal["open", "proxy", "none"]
+SELinux = Literal["enforcing", "permissive", "disabled", "n/a"]
+Runtime = Literal["docker", "podman", "k3s", "none"]
+Service = Literal["proxy", "registry"]
+_CHOICES = {
+    "egress": ("open", "proxy", "none"),
+    "selinux": ("enforcing", "permissive", "disabled", "n/a"),
+    "runtime": ("docker", "podman", "k3s", "none"),
+}
+_MEASURED_FACTS = ("kernel_major", "glibc", "disk_free_gb_max", "gpu")
+
+
+@dataclass(frozen=True)
+class Profile:
+    """Hồ sơ khách (setup/fde/profiles/<name>.yaml). `facts` là sự thật để chấm báo cáo survey: kernel_major, glibc,
+    disk_free_gb_max, gpu đo trên golden; cpus/mem_mb là cấu hình `customer_site` mặc định boot; còn lại suy từ hồ sơ."""
+
+    name: str
+    image: str
+    disk_gb: int
+    sudo: bool
+    egress: Egress
+    tls_inspection: bool
+    selinux: SELinux
+    runtime: Runtime
+    services: list[Service] = field(default_factory=list)
+    facts: dict = field(default_factory=dict)
+
+
+def _load_profile(path: Path) -> Profile:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for key, allowed in _CHOICES.items():
+        if data[key] not in allowed:
+            raise ValueError(f"{path}: {key}={data[key]!r} không thuộc {allowed}")
+    if data["image"] not in IMAGES:
+        raise ValueError(f"{path}: image {data['image']!r} không có trong IMAGES")
+    services = list(data.get("services") or [])
+    if not set(services) <= {"proxy", "registry"} or ("proxy" in services) != (data["egress"] == "proxy"):
+        raise ValueError(f"{path}: services {services} không khớp egress {data['egress']}")
+    measured = data.get("facts") or {}
+    missing = [key for key in _MEASURED_FACTS if key not in measured]
+    if missing:
+        raise ValueError(f"{path}: facts thiếu {missing}")
+    image = IMAGES[data["image"]]
+    facts = {
+        "os_id": image.os_id,
+        "os_version": image.os_version,
+        "kernel_major": str(measured["kernel_major"]),
+        "glibc": str(measured["glibc"]),
+        "cpus": SITE_CPUS,
+        "mem_mb": SITE_MEMORY_MB,
+        "disk_free_gb_max": int(measured["disk_free_gb_max"]),
+        "gpu": measured["gpu"],
+        "proxy_url": f"http://{PROXY_ADDR}" if data["egress"] == "proxy" else None,
+        "sudo": bool(data["sudo"]),
+        "selinux": data["selinux"],
+        "runtime": data["runtime"],
+        "egress": data["egress"],
+    }
+    return Profile(name=path.stem, image=data["image"], disk_gb=int(data["disk_gb"]), sudo=bool(data["sudo"]),
+                   egress=data["egress"], tls_inspection=bool(data.get("tls_inspection", False)),
+                   selinux=data["selinux"], runtime=data["runtime"], services=services, facts=facts)
+
+
+PROFILES: dict[str, Profile] = {path.stem: _load_profile(path) for path in sorted(PROFILE_DIR.glob("*.yaml"))}
 
 
 def require_kvm() -> None:
@@ -175,8 +253,44 @@ def require_golden(profile: str) -> Path:
     return path
 
 
+def prepare_script(profile: str) -> Path:
+    return SCRIPT_DIR / f"{profile}.sh"
+
+
+def _profile(name: str) -> Profile:
+    if name not in PROFILES:
+        raise KeyError(f"Không có hồ sơ khách '{name}'. Có: {', '.join(sorted(PROFILES))}")
+    return PROFILES[name]
+
+
 def prepare(profile: str, *, force: bool = False) -> Path:
-    raise NotImplementedError(f"Chưa dựng được golden image '{profile}': danh mục hồ sơ khách chưa được thêm vào fdekit")
+    """Dựng golden image của hồ sơ khách: boot cloud image có mạng (restrict tắt, user `fde` có sudo tạm), chạy
+    setup/fde/cloud-init/<hồ sơ>.sh (cài runtime, cấu hình "tật", gỡ sudo tạm, xoá key), tắt sạch rồi ghi qcow2 độc lập.
+    Golden đã có thì trả luôn, trừ khi `force`."""
+    spec = _profile(profile)
+    golden = golden_path(profile)
+    golden.parent.mkdir(parents=True, exist_ok=True)
+    with (golden.parent / f".{profile}.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if golden.is_file() and not force:
+            return golden
+        base = fetch_image(spec.image)
+        staging = golden.parent / f".{profile}.staging.qcow2"
+        try:
+            subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", _image_format(base), "-b", str(base),
+                            str(staging), f"{spec.disk_gb}G"], check=True, capture_output=True, text=True)
+            with vm(None, base=staging, memory_mb=SITE_MEMORY_MB, cpus=SITE_CPUS, restrict=False, sudo=True) as m:
+                m.ssh("cloud-init status --wait", timeout=600)
+                m.put(SCRIPT_DIR, "/tmp/fde-prepare")
+                result = m.ssh(f"sudo bash /tmp/fde-prepare/{shlex.quote(profile)}.sh", timeout=1800)
+                (golden.parent / f"{profile}.prepare.log").write_text(result.stdout + result.stderr)
+                if result.returncode != 0:
+                    raise RuntimeError(f"Script dựng golden '{profile}' lỗi ({result.returncode}):\n"
+                                       f"{(result.stdout + result.stderr)[-3000:]}")
+                m.snapshot(golden)
+        finally:
+            staging.unlink(missing_ok=True)
+    return golden
 
 
 def capstone_dir() -> Path:
@@ -231,23 +345,58 @@ def write_seed_iso(path: Path, *, instance_id: str, public_key: str, user: str =
     return path
 
 
-def _netdev(*, ssh_port: int, forwards: Mapping[int, int], guestfwds: Mapping[str, int], restrict: bool) -> str:
+def _opt(path: Path | str) -> str:
+    return str(path).replace(",", ",,")
+
+
+_RELAY = r"""
+import os, select, socket, sys
+os.dup2(os.open(os.devnull, os.O_WRONLY), 2)
+upstream = socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=10)
+upstream.settimeout(None)
+while True:
+    ready, _, _ = select.select([0, upstream], [], [])
+    if 0 in ready:
+        data = os.read(0, 65536)
+        if not data:
+            break
+        upstream.sendall(data)
+    if upstream in ready:
+        data = upstream.recv(65536)
+        if not data:
+            break
+        view = memoryview(data)
+        while view:
+            view = view[os.write(1, view):]
+"""
+
+
+def _write_relay(run_dir: Path) -> Path:
+    """Mỗi kết nối guestfwd, QEMU chạy một relay: stdin/stdout là socket phía VM, đầu kia là cổng 127.0.0.1 của host."""
+    path = run_dir / "guestfwd-relay.py"
+    path.write_text(_RELAY)
+    return path
+
+
+def _netdev(*, ssh_port: int, forwards: Mapping[int, int], guestfwds: Mapping[str, int], restrict: bool,
+            relay: Path | None = None) -> str:
     parts = ["user", "id=n0", f"restrict={'on' if restrict else 'off'}", f"hostfwd=tcp:127.0.0.1:{ssh_port}-:22"]
     parts += [f"hostfwd=tcp:127.0.0.1:{host}-:{guest}" for guest, host in forwards.items()]
-    parts += [f"guestfwd=tcp:{target}-tcp:127.0.0.1:{host}" for target, host in guestfwds.items()]
+    if guestfwds and relay is None:
+        raise ValueError("guestfwds cần relay")
+    for target, host in guestfwds.items():
+        command = f"{shlex.quote(sys.executable)} -I {shlex.quote(str(relay))} 127.0.0.1 {int(host)}"
+        parts.append(f"guestfwd=tcp:{target}-cmd:{_opt(command)}")
     return ",".join(parts)
-
-
-def _opt(path: Path) -> str:
-    return str(path).replace(",", ",,")
 
 
 _WRAPPER = r"""
 import ctypes, os, select, shutil, signal, subprocess, sys
 lifeline, run_dir, cmd = int(sys.argv[2]), sys.argv[3], sys.argv[4:]
+needle = os.path.basename(run_dir)
 libc = ctypes.CDLL(None, use_errno=True)
 state = {"proc": None}
-def stop(signum, frame):
+def kill():
     proc = state["proc"]
     if proc is not None:
         try:
@@ -255,7 +404,27 @@ def stop(signum, frame):
             os.waitpid(proc.pid, 0)
         except (ProcessLookupError, ChildProcessError):
             pass
+def docker(*args):
+    try:
+        result = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return result.stdout.split() if result.returncode == 0 else []
+def mine(name):
+    return name == needle or name.startswith(needle + "-")
+def purge():
+    kill()
+    if shutil.which("docker"):
+        names = [n for n in docker("ps", "-a", "--filter", "name=" + needle, "--format", "{{.Names}}") if mine(n)]
+        if names:
+            docker("rm", "-f", *names)
+        networks = [n for n in docker("network", "ls", "--filter", "name=" + needle, "--format", "{{.Name}}") if mine(n)]
+        if networks:
+            docker("network", "rm", *networks)
     shutil.rmtree(run_dir, ignore_errors=True)
+    os._exit(0)
+def stop(signum, frame):
+    kill()
     os._exit(143)
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGHUP, stop)
@@ -264,15 +433,33 @@ def child():
     libc.prctl(1, signal.SIGKILL)
     if os.getppid() != me:
         os._exit(1)
-state["proc"] = proc = subprocess.Popen(cmd, preexec_fn=child, stdin=subprocess.DEVNULL)
+if cmd:
+    state["proc"] = subprocess.Popen(cmd, preexec_fn=child, stdin=subprocess.DEVNULL)
 while True:
     ready, _, _ = select.select([lifeline], [], [], 0.5)
     if ready and not os.read(lifeline, 1):
-        stop(None, None)
-    if proc.poll() is not None:
+        purge()
+    proc = state["proc"]
+    if proc is not None and proc.poll() is not None:
         code = proc.returncode
         sys.exit(128 - code if code < 0 else code)
 """
+
+
+def _spawn_guard(run_dir: Path, args: Sequence[str], log: Path | None = None) -> subprocess.Popen:
+    """Tiến trình canh giữ đầu đọc lifeline: tiến trình gọi chết (kể cả SIGKILL) thì giết QEMU, xoá container/network
+    `fde-ex-<run_id>*` và thư mục lab. SIGTERM (từ `clean`/`_stop`) chỉ giết QEMU, phần dọn do bên gọi làm."""
+    lifeline = _lifeline()
+    output = log.open("wb") if log is not None else subprocess.DEVNULL
+    try:
+        return subprocess.Popen(
+            [sys.executable, "-I", "-c", _WRAPPER, _GUARD, str(lifeline), str(run_dir), *args],
+            stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, start_new_session=True,
+            pass_fds=(lifeline,),
+        )
+    finally:
+        if log is not None:
+            output.close()
 
 
 _LIFELINE: dict[int, tuple[int, int]] = {}
@@ -364,16 +551,7 @@ class VM:
         return self._ports[guest_port]
 
     def _start(self, args: list[str]) -> None:
-        lifeline = _lifeline()
-        log = (self.dir / "qemu.log").open("wb")
-        try:
-            self._guard = subprocess.Popen(
-                [sys.executable, "-I", "-c", _WRAPPER, _GUARD, str(lifeline), str(self.dir), *args],
-                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
-                pass_fds=(lifeline,),
-            )
-        finally:
-            log.close()
+        self._guard = _spawn_guard(self.dir, args, self.dir / "qemu.log")
 
     def _running(self) -> bool:
         return self._guard is not None and self._guard.poll() is None
@@ -480,14 +658,34 @@ def _qemu_args(machine: VM, *, base_seed: Path, memory_mb: int, cpus: int, netde
     ]
 
 
+def _vm_defaults(profile: str | None, *, restrict: bool | None, sudo: bool | None) -> tuple[bool, bool]:
+    spec = PROFILES.get(profile) if profile else None
+    if restrict is None:
+        restrict = spec is not None and spec.egress != "open"
+    if sudo is None:
+        sudo = spec is not None and spec.sudo
+    return restrict, sudo
+
+
+def _new_run_dir(run_id: str) -> Path:
+    run_dir = LAB / f"{PREFIX}{run_id}"
+    if len(str(run_dir / "qmp.sock")) > 100:
+        raise RuntimeError(f"Đường dẫn repo quá dài cho unix socket của QEMU ({run_dir}); clone repo vào thư mục ngắn hơn")
+    run_dir.mkdir(parents=True, mode=0o700)
+    return run_dir
+
+
 @contextmanager
 def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: Sequence[int] = (),
-       guestfwds: Mapping[str, int] | None = None, base: Path | None = None, restrict: bool = False, sudo: bool = False,
-       cloud_config: Mapping | None = None) -> Iterator[VM]:
+       guestfwds: Mapping[str, int] | None = None, base: Path | None = None, restrict: bool | None = None,
+       sudo: bool | None = None, cloud_config: Mapping | None = None, run_id: str | None = None) -> Iterator[VM]:
     """Boot một VM từ overlay qcow2 trên golden của `profile` (hoặc trên `base`), chờ SSH rồi trả `VM`; luôn dọn khi ra.
 
-    `guestfwds` ánh xạ "ip:port" phía VM → cổng 127.0.0.1 phía host; `restrict=True` cắt mọi đường ra ngoài trừ forward.
+    `guestfwds` ánh xạ "ip:port" phía VM → cổng 127.0.0.1 phía host. `restrict`/`sudo` mặc định theo hồ sơ khách:
+    egress `none`/`proxy` ⇒ `restrict=True` (không ra internet, không tới loopback host, trừ forward đã khai báo).
+    `run_id` chỉ dùng khi thư mục lab của run id đó đã được tạo (customer_site dùng chung run id với container).
     """
+    restrict, sudo = _vm_defaults(profile, restrict=restrict, sudo=sudo)
     require_kvm()
     _require_ssh_tools()
     _require_memory(memory_mb)
@@ -498,24 +696,28 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
     base = Path(base).resolve()
     if not base.is_file():
         raise FileNotFoundError(base)
-    run_id = uuid.uuid4().hex[:8]
-    run_dir = LAB / f"{PREFIX}{run_id}"
-    if len(str(run_dir / "qmp.sock")) > 100:
-        raise RuntimeError(f"Đường dẫn repo quá dài cho unix socket của QEMU ({run_dir}); clone repo vào thư mục ngắn hơn")
+    owned = run_id is None
+    run_id = run_id or uuid.uuid4().hex[:8]
+    if not _RUN_ID.match(run_id):
+        raise ValueError(f"run id phải là 8 ký tự hex, nhận {run_id!r}")
     _ACTIVE.add(run_id)
     machine: VM | None = None
     try:
-        run_dir.mkdir(parents=True, mode=0o700)
+        run_dir = _new_run_dir(run_id) if owned else LAB / f"{PREFIX}{run_id}"
+        if not run_dir.is_dir():
+            raise FileNotFoundError(run_dir)
         key = generate_key(run_dir / "id_ed25519")
         seed = write_seed_iso(run_dir / "seed.iso", instance_id=f"{PREFIX}{run_id}",
                               public_key=key.with_name(key.name + ".pub").read_text().strip(), sudo=sudo,
                               cloud_config=cloud_config)
         subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", _image_format(base), "-b", str(base),
                         str(run_dir / "disk.qcow2")], check=True, capture_output=True, text=True)
+        relay = _write_relay(run_dir) if guestfwds else None
         for attempt in range(3):
             ports = {int(guest): testkit.free_port() for guest in forwards}
             machine = VM(run_id, run_dir, testkit.free_port(), ports)
-            netdev = _netdev(ssh_port=machine.ssh_port, forwards=ports, guestfwds=guestfwds or {}, restrict=restrict)
+            netdev = _netdev(ssh_port=machine.ssh_port, forwards=ports, guestfwds=guestfwds or {}, restrict=restrict,
+                             relay=relay)
             machine._start(_qemu_args(machine, base_seed=seed, memory_mb=memory_mb, cpus=cpus, netdev=netdev))
             try:
                 machine._wait_ssh()
@@ -529,6 +731,108 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
         try:
             if machine is not None:
                 machine._stop()
+            clean(run_id)
+        finally:
+            _ACTIVE.discard(run_id)
+
+
+@dataclass
+class Site:
+    """Một "khách hàng" đang chạy: VM theo hồ sơ cùng dịch vụ phía host (proxy, registry) của đúng run id này."""
+
+    vm: VM
+    profile: Profile
+    proxy_ca: Path | None = None
+    registry: str | None = None
+    registry_host: str | None = None
+
+
+class _SiteLab(testkit.DockerLab):
+    def __init__(self, run_id: str) -> None:
+        super().__init__()
+        self.id = run_id
+        self.network = f"{PREFIX}{run_id}"
+
+
+def _require_docker() -> None:
+    if not shutil.which("docker"):
+        pytest.skip("Hồ sơ khách này cần Docker phía host để chạy proxy/registry (testkit.DockerLab)")
+    result = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture_output=True, text=True,
+                            timeout=30)
+    if result.returncode != 0:
+        pytest.skip(f"Docker daemon không chạy: {result.stderr.strip()[:200]}")
+
+
+def _start_proxy(lab: _SiteLab, run_dir: Path, *, tls_inspection: bool) -> Path:
+    command = ["mitmdump", "--listen-host", "0.0.0.0", "--listen-port", "8080"]
+    if not tls_inspection:
+        command += ["--ignore-hosts", ".*"]
+    lab.start("proxy", MITMPROXY_IMAGE, *command, ports=(8080,), env={"PYTHONUNBUFFERED": "1"}, memory="512m")
+    lab.wait_log("proxy", "proxy listening", timeout=60)
+    deadline = time.monotonic() + 30
+    while True:
+        cert = lab.exec("proxy", "cat", "/home/mitmproxy/.mitmproxy/mitmproxy-ca-cert.pem")
+        if cert.returncode == 0 and "END CERTIFICATE" in cert.stdout:
+            break
+        if time.monotonic() > deadline:
+            pytest.fail(f"Không lấy được CA của mitmproxy: {cert.stderr.strip()}")
+        time.sleep(0.3)
+    path = run_dir / "proxy-ca.pem"
+    path.write_text(cert.stdout)
+    return path
+
+
+def _start_registry(lab: _SiteLab) -> int:
+    lab.start("registry", REGISTRY_IMAGE, ports=(5000,))
+    port = lab.port("registry", 5000)
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return port
+        except OSError:
+            time.sleep(0.3)
+    pytest.fail(f"Registry không mở cổng 127.0.0.1:{port} sau 30 s. Log:\n{lab.logs('registry')[-2000:]}")
+
+
+@contextmanager
+def customer_site(profile: str, *, memory_mb: int = SITE_MEMORY_MB, forwards: Sequence[int] = ()) -> Iterator[Site]:
+    """Dựng "khách hàng" theo hồ sơ: container proxy (mitmproxy, TLS inspection, CA riêng mỗi lần chạy) và/hoặc
+    registry nội bộ phía host (chỉ 127.0.0.1, tên `fde-ex-<run_id>-*`), rồi VM với egress theo hồ sơ. Trong VM:
+    proxy ở `10.0.2.100:3128`, registry ở `10.0.2.101:5000`. Mọi thứ bị dọn khi ra, kể cả khi pytest bị SIGKILL."""
+    spec = _profile(profile)
+    require_golden(profile)
+    _require_ssh_tools()
+    _require_memory(memory_mb)
+    if spec.services:
+        _require_docker()
+    run_id = uuid.uuid4().hex[:8]
+    _ACTIVE.add(run_id)
+    guard: subprocess.Popen | None = None
+    try:
+        run_dir = _new_run_dir(run_id)
+        guard = _spawn_guard(run_dir, [])
+        with _SiteLab(run_id) as lab:
+            guestfwds: dict[str, int] = {}
+            proxy_ca = registry = registry_host = None
+            if "proxy" in spec.services:
+                proxy_ca = _start_proxy(lab, run_dir, tls_inspection=spec.tls_inspection)
+                guestfwds[PROXY_ADDR] = lab.port("proxy", 8080)
+            if "registry" in spec.services:
+                host_port = _start_registry(lab)
+                guestfwds[REGISTRY_ADDR] = host_port
+                registry, registry_host = REGISTRY_ADDR, f"127.0.0.1:{host_port}"
+            with vm(profile, memory_mb=memory_mb, cpus=SITE_CPUS, forwards=forwards, guestfwds=guestfwds,
+                    run_id=run_id) as machine:
+                yield Site(machine, spec, proxy_ca, registry, registry_host)
+    finally:
+        try:
+            if guard is not None and guard.poll() is None:
+                guard.terminate()
+                try:
+                    guard.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    guard.kill()
             clean(run_id)
         finally:
             _ACTIVE.discard(run_id)
@@ -561,15 +865,23 @@ def _qemu_pids(run_id: str) -> list[int]:
     return [pid for pid, guard, _ in _processes(f"{PREFIX}{run_id}") if not guard]
 
 
-def _containers(needle: str) -> list[str]:
+def _docker_names(kind: list[str], fmt: str, needle: str) -> list[str]:
     if not shutil.which("docker"):
         return []
     try:
-        result = subprocess.run(["docker", "ps", "-a", "--filter", f"name={needle}", "--format", "{{.Names}}"],
+        result = subprocess.run(["docker", *kind, "--filter", f"name={needle}", "--format", fmt],
                                 capture_output=True, text=True, timeout=15)
-    except subprocess.TimeoutExpired:
+    except (OSError, subprocess.SubprocessError):
         return []
     return [name for name in result.stdout.split() if name.startswith(needle)] if result.returncode == 0 else []
+
+
+def _containers(needle: str) -> list[str]:
+    return _docker_names(["ps", "-a"], "{{.Names}}", needle)
+
+
+def _networks(needle: str) -> list[str]:
+    return _docker_names(["network", "ls"], "{{.Name}}", needle)
 
 
 def leftovers(run_id: str | None = None) -> list[str]:
@@ -579,6 +891,7 @@ def leftovers(run_id: str | None = None) -> list[str]:
     if LAB.is_dir():
         found += sorted(str(path) for path in LAB.iterdir() if path.name.startswith(needle))
     found += [f"container {name}" for name in _containers(needle)]
+    found += [f"network {name}" for name in _networks(needle)]
     return found
 
 
@@ -598,12 +911,12 @@ def clean(run_id: str) -> None:
         while pids and _processes(needle) and time.monotonic() < deadline:
             time.sleep(0.1)
     shutil.rmtree(LAB / needle, ignore_errors=True)
-    names = _containers(needle)
-    if names:
-        try:
-            subprocess.run(["docker", "rm", "-f", *names], capture_output=True, timeout=60)
-        except (OSError, subprocess.SubprocessError) as error:
-            print(f"Không xoá được container {names}: {error}", file=sys.stderr)
+    for command, names in ((["rm", "-f"], _containers(needle)), (["network", "rm"], _networks(needle))):
+        if names:
+            try:
+                subprocess.run(["docker", *command, *names], capture_output=True, timeout=60)
+            except (OSError, subprocess.SubprocessError) as error:
+                print(f"Không xoá được {names}: {error}", file=sys.stderr)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -612,16 +925,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     prep = commands.add_parser("prepare", help="dựng golden image của một hồ sơ khách")
     prep.add_argument("profile")
     prep.add_argument("--force", action="store_true")
-    commands.add_parser("leftovers", help="liệt kê tiến trình QEMU, overlay, container fde-ex-* còn sót")
+    commands.add_parser("leftovers", help="liệt kê tiến trình QEMU, overlay, container/network fde-ex-* còn sót")
     cleaner = commands.add_parser("clean", help="dọn mọi thứ của một run id")
     cleaner.add_argument("run_id")
     args = parser.parse_args(argv)
     if args.command == "prepare":
+        started = time.monotonic()
         try:
-            print(prepare(args.profile, force=args.force))
-        except NotImplementedError as error:
-            print(error, file=sys.stderr)
+            golden = prepare(args.profile, force=args.force)
+        except KeyError as error:
+            print(error.args[0], file=sys.stderr)
             return 2
+        except pytest.skip.Exception as error:
+            print(error.msg, file=sys.stderr)
+            return 2
+        except (RuntimeError, subprocess.SubprocessError, OSError) as error:
+            print(error, file=sys.stderr)
+            return 1
+        size = golden.stat().st_size / 1024 ** 3
+        print(f"{golden} ({size:.2f} GiB, {time.monotonic() - started:.0f} s)")
         return 0
     if args.command == "clean":
         try:

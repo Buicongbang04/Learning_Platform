@@ -36,6 +36,28 @@ thì test skip; nên tải trước:
 uv run python -c "import fdekit; fdekit.fetch_image('ubuntu-22.04')"
 ```
 
+## Hồ sơ khách
+
+Mỗi hồ sơ là một tệp `setup/fde/profiles/<hồ sơ>.yaml`, nạp vào `fdekit.PROFILES` (dataclass `Profile`).
+
+| Hồ sơ | OS | Đĩa | sudo | Egress | Runtime | Dịch vụ phía host |
+| --- | --- | --- | --- | --- | --- | --- |
+| `lab-open` | Ubuntu 22.04 | 20 GB | có | `open` | Docker | — |
+| `hospital` | Ubuntu 20.04 | 8 GB | có | `proxy` (TLS inspection) | Docker | mitmproxy |
+| `bank` | Rocky Linux 8.10, SELinux enforcing | 20 GB | **không** | `none` | Podman rootless | — |
+| `lawfirm-staging` | Ubuntu 22.04 | 30 GB | có | `none` | Docker | registry nội bộ |
+
+`Profile.facts` là "sự thật" để chấm báo cáo survey (13 khoá: `os_id`, `os_version`, `kernel_major`, `glibc`, `cpus`,
+`mem_mb`, `disk_free_gb_max`, `gpu`, `proxy_url`, `sudo`, `selinux`, `runtime`, `egress`):
+
+- `kernel_major` (`uname -r` lấy hai số đầu, vd. `5.15`), `glibc`, `disk_free_gb_max` (dung lượng trống của `/` làm
+  tròn lên, VM mới boot thấy ít hơn hoặc bằng) và `gpu` đo trên golden, ghi trong YAML.
+- `cpus` = 2 và `mem_mb` = 2048 là cấu hình `customer_site()` boot **mặc định** (không phụ thuộc máy host). Gọi
+  `customer_site(..., memory_mb=...)` khác thì `mem_mb` thật khác theo; `MemTotal` trong VM luôn nhỏ hơn RAM cấp một ít.
+- `os_id`/`os_version` lấy từ cloud image; `proxy_url`, `sudo`, `selinux`, `runtime`, `egress` suy từ hồ sơ.
+
+`test_facts_match_vm` boot từng hồ sơ và so các giá trị này với lệnh thật trong VM.
+
 ## Chuẩn bị golden image
 
 Mỗi hồ sơ khách có một golden image (đã cài sẵn runtime và "tật" của khách) ở `data/raw/fde-images/golden/<hồ sơ>.qcow2`.
@@ -43,9 +65,55 @@ Bài nào cần hồ sơ chưa có golden thì test skip kèm đúng lệnh cầ
 
 ```bash
 nice -n 15 uv run python -m fdekit prepare lab-open
+nice -n 15 uv run python -m fdekit prepare hospital
+nice -n 15 uv run python -m fdekit prepare bank
+nice -n 15 uv run python -m fdekit prepare lawfirm-staging
 ```
 
-Lệnh chỉ cần chạy một lần mỗi hồ sơ (thời gian dựng không tính vào ngân sách 300 s của bài).
+Lệnh chỉ cần chạy một lần mỗi hồ sơ (thời gian dựng không tính vào ngân sách 300 s của bài); golden đã có thì lệnh trả
+ngay, dựng lại bằng `--force`. Cách dựng: overlay trên cloud image, phóng to lên `disk_gb`, boot **có mạng** với user
+`fde` có sudo tạm, chạy `setup/fde/cloud-init/<hồ sơ>.sh` (gỡ snapd và apt/dnf timer chạy nền, cài runtime từ kho
+chính thức của distro, cấu hình "tật"), rồi xoá sudo tạm, key SSH, log cloud-init, machine-id, tắt sạch và ghi qcow2
+độc lập. Log cài đặt: `data/raw/fde-images/golden/<hồ sơ>.prepare.log`.
+
+Golden không mang theo mạng hay quyền của lúc dựng: lúc chạy bài, `customer_site()`/`vm(profile)` áp lại egress và
+sudo theo hồ sơ (bank: `fde` không có sudo; SELinux enforcing; Podman rootless chạy được không cần mạng, không có
+image nào được tải sẵn).
+
+Đo ngày 2026-11-04 trên laptop của repo (16 core, NVMe; ba hồ sơ sau dựng song song):
+
+| Hồ sơ | Thời gian dựng | Kích thước golden | Runtime đã cài (kho distro) |
+| --- | --- | --- | --- |
+| `lab-open` | 59 s | 1,72 GiB | `docker.io 29.1.3-0ubuntu3~22.04.2`, `containerd 2.2.1-0ubuntu1~22.04.2`, `runc 1.3.4-0ubuntu1~22.04.1` |
+| `hospital` | 77 s | 1,60 GiB | `docker.io 26.1.3-0ubuntu1~20.04.1`, `containerd 1.7.24-0ubuntu1~20.04.2`, `runc 1.1.12-0ubuntu2~20.04.1` |
+| `bank` | 93 s | 1,53 GiB | `podman 4.9.4-38.module+el8.10.0+40397+5e4f25d4` (AppStream, module `container-tools`) |
+| `lawfirm-staging` | 72 s | 1,73 GiB | như `lab-open` |
+
+Kernel/glibc của golden: Ubuntu 22.04 `5.15.0-198-generic`/2.35, Ubuntu 20.04 `5.4.0-216-generic`/2.31,
+Rocky 8.10 `4.18.0-553.el8_10`/2.28. Gói cài theo trạng thái kho lúc dựng, nên dựng lại về sau có thể ra bản vá mới
+hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
+
+## Mạng lab và dịch vụ phía host
+
+`with fdekit.customer_site("hospital") as s:` dựng "khách hàng" trọn vẹn và trả `Site`:
+
+| Thuộc tính | Ý nghĩa |
+| --- | --- |
+| `s.vm` | `VM` (SSH, put/get, port…) |
+| `s.proxy_ca` | tệp PEM CA của mitmproxy, sinh mới mỗi lần chạy trong thư mục lab; **không** được trust sẵn trong VM |
+| `s.registry` | địa chỉ registry nhìn từ VM: `10.0.2.101:5000` (HTTP) |
+| `s.registry_host` | địa chỉ registry nhìn từ host (`127.0.0.1:<cổng ngẫu nhiên>`) để đẩy image vào |
+
+- Dịch vụ phía host chạy bằng `testkit.DockerLab`, container tên `fde-ex-<run_id>-proxy`/`-registry` trong network
+  `fde-ex-<run_id>`, cổng chỉ publish trên `127.0.0.1`. Image ghim tag + digest:
+  `mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d…` (phát hành 2026-05-12) và `registry:2.8.3@sha256:a3d8aaa6…`
+  (2025-02-14); giá trị đầy đủ ở `fdekit.MITMPROXY_IMAGE`/`REGISTRY_IMAGE`.
+- Trong VM, proxy ở `10.0.2.100:3128`, registry ở `10.0.2.101:5000`, nối bằng `guestfwd` của QEMU: mỗi kết nối từ VM
+  QEMU chạy một relay Python nhỏ (`guestfwd-relay.py` trong thư mục lab) nối sang cổng `127.0.0.1` của container.
+- Egress `none`/`proxy` ⇒ `restrict=on`: không route ra internet, không DNS (resolver `10.0.2.3` của QEMU cũng bị chặn),
+  không tới loopback host qua `10.0.2.2`; chỉ còn SSH/`forwards` và các `guestfwd` ở trên. Egress `open` ⇒ restrict tắt.
+  `vm(profile)` tự suy `restrict` và `sudo` từ hồ sơ.
+- Hồ sơ `hospital`: IT khách đặt `http_proxy`/`https_proxy` trong `/etc/environment`, ngoài ra không cấu hình gì thêm.
 
 ## Một VM của bài tập trông thế nào
 
@@ -56,13 +124,14 @@ Lệnh chỉ cần chạy một lần mỗi hồ sơ (thời gian dựng không 
   loopback của host: mọi dịch vụ đang nghe `127.0.0.1` trên máy (Postgres, MLflow…) đều với tới được từ VM. Hồ sơ
   egress `none`/`proxy` bật `restrict=on`: VM chỉ còn các `hostfwd`/`guestfwd` được khai báo.
 - Tên tiến trình `fde-ex-<run id 8 ký tự>`, thư mục lab `.fde-lab/fde-ex-<run id>/` (overlay, seed, key, log console).
-- QEMU chết theo tiến trình pytest (kể cả khi bị `SIGKILL` do app cắt test sau 300 s, và kể cả VM mở từ luồng phụ):
-  một tiến trình canh nhỏ giữ đầu đọc của pipe "lifeline", thấy EOF thì giết QEMU và xoá thư mục lab.
+- QEMU và container của `customer_site` chết theo tiến trình pytest (kể cả khi bị `SIGKILL` do app cắt test sau 300 s,
+  và kể cả VM mở từ luồng phụ): một tiến trình canh nhỏ giữ đầu đọc của pipe "lifeline", thấy EOF thì giết QEMU, xoá
+  container/network `fde-ex-<run_id>*` và thư mục lab.
 
 ## Dọn dẹp
 
 ```bash
-uv run python -m fdekit leftovers          # liệt kê tiến trình QEMU, thư mục .fde-lab, container fde-ex-* còn sót
+uv run python -m fdekit leftovers          # liệt kê tiến trình QEMU, thư mục .fde-lab, container/network fde-ex-* còn sót
 uv run python -m fdekit clean <run_id>     # dọn đúng một run id (8 ký tự hex)
 ```
 

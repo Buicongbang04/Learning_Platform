@@ -1,0 +1,14 @@
+description: Bệnh viện — Ubuntu 20.04 cũ, đĩa 8 GB, ra internet chỉ qua proxy có TLS inspection; CA nội bộ chưa được trust.
+image: ubuntu-20.04
+disk_gb: 8
+sudo: true
+egress: proxy
+tls_inspection: true
+selinux: n/a
+runtime: docker
+services: [proxy]
+facts:
+  kernel_major: "5.4"
+  glibc: "2.31"
+  disk_free_gb_max: 7
+  gpu: null
