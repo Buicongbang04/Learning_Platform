@@ -31,28 +31,24 @@ def _mine(inventory: list[dict], lab: str) -> list[dict]:
     return [item for item in inventory if item.get("tags", {}).get("lab") == lab]
 
 
+FIELDS = {"n": "name", "r": "region", "g": "resource_group"}
+
+
 def _fields(item: dict) -> dict:
+    if item["type"] not in COMMANDS:
+        raise ValueError(f"loại tài nguyên chưa hỗ trợ: {item['type']}")
     templates = " ".join(COMMANDS[item["type"]])
-    fields = {"n": item.get("name")}
-    if "{r}" in templates:
-        fields["r"] = item.get("region")
-    if "{g}" in templates:
-        fields["g"] = item.get("resource_group")
+    fields = {key: item.get(field) for key, field in FIELDS.items() if "{" + key + "}" in templates}
+    for key, value in fields.items():
+        if not isinstance(value, str) or not SAFE_NAME.fullmatch(value):
+            raise ValueError(f"{FIELDS[key]} không an toàn hoặc thiếu ở {item.get('name')!r}: {value!r}")
     return fields
 
 
 def plan_teardown(inventory: list[dict], lab: str) -> list[dict]:
-    mine = _mine(inventory, lab)
-    labels = {"n": "name", "r": "region", "g": "resource_group"}
-    for item in mine:
-        if item["type"] not in COMMANDS:
-            raise ValueError(f"loại tài nguyên chưa hỗ trợ: {item['type']}")
-        for key, value in _fields(item).items():
-            if not isinstance(value, str) or not SAFE_NAME.fullmatch(value):
-                raise ValueError(f"{labels[key]} không an toàn hoặc thiếu ở {item.get('name')!r}: {value!r}")
+    checked = [(item, _fields(item)) for item in _mine(inventory, lab)]
     steps = []
-    for item in sorted(mine, key=lambda i: ORDER.index(i["type"])):
-        fields = _fields(item)
+    for item, fields in sorted(checked, key=lambda pair: ORDER.index(pair[0]["type"])):
         for template in COMMANDS[item["type"]]:
             steps.append({"resource": item["name"], "type": item["type"], "command": template.format(**fields)})
     return steps

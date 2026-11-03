@@ -42,7 +42,7 @@ def train_and_log(tracking_uri: str, experiment_id: str, workdir: Path, index: d
         "git_commit": "c" * 40,
         "git_dirty": "false",
         "data_version": "synthetic-t3-v1",
-        "lockfile_sha256": hashlib.sha256(lock.encode()).hexdigest(),
+        "lockfile_sha256": hashlib.sha256(lock.encode("utf-8")).hexdigest(),
     }
     run = client.create_run(experiment_id, tags=tags)
     run_id = run.info.run_id
@@ -51,7 +51,7 @@ def train_and_log(tracking_uri: str, experiment_id: str, workdir: Path, index: d
         client.log_param(run_id, "alpha", str(alpha))
         preds = run_trainer(path, workdir, seed, alpha)
         (workdir / "requirements.txt").write_text(REQUIREMENTS, encoding="utf-8")
-        (workdir / "requirements.lock").write_text(lock, encoding="utf-8")
+        (workdir / "requirements.lock").write_bytes(lock.encode("utf-8"))
         client.log_artifact(run_id, str(workdir / "requirements.txt"))
         client.log_artifact(run_id, str(workdir / "requirements.lock"))
         client.log_artifact(run_id, str(workdir / "preds.json"))
