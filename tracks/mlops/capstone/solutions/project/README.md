@@ -151,3 +151,29 @@ nghiệm hỗ trợ quyết định. Quyết định ở `reports/decisions/`, r
 | 2020-03 | `retrain` | 2020-04 | Cả tháng còn trong dải nhưng lát từ 2020-03-12 cho champion 283.6 s, challenger train đầu tháng 3 đạt 240.8 s (-15%); rollback vô nghĩa vì mọi version đều trước COVID |
 
 Chi tiết số, thí nghiệm và rubric ở `../SOLUTION.md`.
+
+## Cloud (M11, tuỳ chọn)
+
+AWS, vùng `us-east-1`, Terraform trong `cloud/`: bucket S3 chứa `models/model.joblib` (chặn public, mã hoá AES256), một
+Lambda 128 MB trả `/healthz` (version model và vị trí artifact, không nạp model), log group giữ 3 ngày, budget 1 USD/tháng
+có hai cảnh báo email. Mọi tài nguyên mang `tags = local.tags` với `project = "eta-mlops"`; IAM role nằm dưới path
+`/eta-mlops/`. Chi phí ước tính 0 USD trong free tier với lưu lượng thử tay.
+
+```bash
+cd cloud
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply
+curl "$(terraform output -raw health_url)"
+terraform destroy
+bash teardown.sh --dry-run
+```
+
+Budget và quy trình dọn ở `cloud/budget.md`.
+
+## Đánh giá M13
+
+`make assessment` dựng `data/assessment/` (tháng lạ 2019-10 và ba tháng thật quanh nó), chạy `prepare`, `validate` (exit 1
+là kết quả mong đợi) và `replay` 2019-09..2019-11 với `params.assessment.yaml`. Chẩn đoán ở
+`reports/assessment/diagnosis.yaml`, báo cáo ở `docs/assessment.md`. Đây là đáp án của bài đánh giá: chỉ đọc sau khi
+đã nộp bài của mình.

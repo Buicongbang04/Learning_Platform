@@ -1,8 +1,15 @@
-"""Helper chung của test capstone ETA: thư mục được chấm, import `eta` an toàn, dữ liệu giả."""
+"""Helper chung của test capstone ETA: thư mục được chấm, import `eta` an toàn, dữ liệu giả, dữ liệu tháng lạ của M13.
+
+Chạy như script để dựng dữ liệu M13: `uv run python tracks/mlops/capstone/project/tests/etakit.py assessment`.
+"""
 
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
+
+if str(Path(__file__).resolve().parents[5]) not in sys.path:
+    sys.path.append(str(Path(__file__).resolve().parents[5]))
 
 import numpy as np
 import pandas as pd
@@ -11,6 +18,7 @@ import pytest
 from testkit import use_solution
 
 CAPSTONE = Path(__file__).resolve().parents[2]
+STRANGE_MONTH_SCRIPT = CAPSTONE / "solutions" / "assessment" / "strange_month.py"
 PROJECT = CAPSTONE / "solutions" / "project" if use_solution() else CAPSTONE / "project"
 COLUMNS = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"]
 
@@ -102,3 +110,61 @@ def local_registry(tmp_path: Path, prefix: str = "eta") -> tuple[str, str]:
     name = f"{prefix}-{uuid.uuid4().hex[:8]}"
     mlflow.create_experiment(name, artifact_location=(tmp_path / "artifacts" / name).as_uri())
     return uri, name
+
+
+def _strange_month():
+    spec = importlib.util.spec_from_file_location("eta_assessment_strange_month", STRANGE_MONTH_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def assessment_month() -> str:
+    """Tháng lạ của M13."""
+    return _strange_month().MONTH
+
+
+def injected_causes() -> set[str]:
+    """Nhãn `cause` của các lỗi cài trong tháng lạ (test M13 dùng; người học đừng in ra)."""
+    return set(_strange_month().FAULTS)
+
+
+def assessment_data(dest: Path) -> Path:
+    """Dựng thư mục dữ liệu M13 trong `dest`: symlink tới các tháng thật xung quanh và tệp tháng lạ sinh từ dữ liệu thật."""
+    import mlopskit
+
+    module = _strange_month()
+    dest = Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    for month, dataset in module.CONTEXT.items():
+        link = dest / f"yellow_tripdata_{month}.parquet"
+        target = mlopskit.real_month(dataset, month)
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(target)
+    module.build(mlopskit.real_month(*module.SOURCE), dest / f"yellow_tripdata_{module.MONTH}.parquet")
+    return dest
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="etakit", description="Tiện ích dữ liệu của capstone ETA")
+    sub = parser.add_subparsers(dest="command", required=True)
+    build = sub.add_parser("assessment", help="M13: dựng thư mục dữ liệu có tháng lạ")
+    build.add_argument("--out", type=Path, default=CAPSTONE / "project" / "data" / "assessment")
+    args = parser.parse_args(argv)
+    try:
+        out = assessment_data(args.out)
+    except BaseException as err:
+        if type(err).__name__ in ("Skipped", "Failed"):
+            print(getattr(err, "msg", str(err)), file=sys.stderr)
+            return 1
+        raise
+    for path in sorted(out.glob("yellow_tripdata_*.parquet")):
+        print(path)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
