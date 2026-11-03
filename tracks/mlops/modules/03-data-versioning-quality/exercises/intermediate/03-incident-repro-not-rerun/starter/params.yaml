@@ -1,0 +1,4 @@
+prepare:
+  min_distance: 0.0
+train:
+  seed: 0

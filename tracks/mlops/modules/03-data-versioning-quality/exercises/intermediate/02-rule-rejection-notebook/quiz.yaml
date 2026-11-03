@@ -1,0 +1,55 @@
+questions:
+  - id: top-rule
+    kind: data
+    type: single
+    prompt: "Trên mẫu 200 000 chuyến của 2019-01, luật nào loại nhiều dòng nhất (tính độc lập)?"
+    options:
+      - { id: a, text: "duration (dropoff không muộn hơn pickup)" }
+      - { id: b, text: "distance (trip_distance không dương)" }
+      - { id: c, text: "pickup_month (pickup ngoài tháng 1/2019)" }
+      - { id: d, text: "zone_unknown (zone 264 hoặc 265)" }
+  - id: rows-kept
+    kind: data
+    type: single
+    prompt: "Bao nhiêu dòng trong mẫu 200 000 không vi phạm luật nào trong 5 luật?"
+    options:
+      - { id: a, text: "194 142" }
+      - { id: b, text: "193 573" }
+      - { id: c, text: "197 584" }
+      - { id: d, text: "199 828" }
+  - id: zero-rule
+    kind: data
+    type: single
+    prompt: "Luật zone_range (zone ngoài 1 đến 265) loại bao nhiêu dòng trong mẫu?"
+    options:
+      - { id: a, text: "0 dòng" }
+      - { id: b, text: "38 dòng" }
+      - { id: c, text: "412 dòng" }
+      - { id: d, text: "1 416 dòng" }
+  - id: distance-rate
+    kind: data
+    type: single
+    prompt: "Tỉ lệ dòng vi phạm luật distance gần nhất với giá trị nào?"
+    options:
+      - { id: a, text: "0,07%" }
+      - { id: b, text: "0,7%" }
+      - { id: c, text: "7%" }
+      - { id: d, text: "14%" }
+  - id: why-union
+    kind: knowledge
+    type: single
+    prompt: "Vì sao tổng số dòng bị loại không bằng tổng của các số đếm theo luật?"
+    options:
+      - { id: a, text: "Một dòng có thể vi phạm nhiều luật, nên cộng bị tính trùng" }
+      - { id: b, text: "Pandas làm tròn từng số đếm trước khi cộng nên bị lệch" }
+      - { id: c, text: "Luật zone_range tính cả những dòng đã bị luật khác loại sẵn" }
+      - { id: d, text: "Mẫu ngẫu nhiên đổi theo mỗi lần chạy nên tổng không cố định" }
+  - id: unknown-zone-decision
+    kind: knowledge
+    type: multi
+    prompt: "Zone 264 và 265 (Unknown) chiếm vài phần trăm. Điều nào đúng khi quyết định xử lý?"
+    options:
+      - { id: a, text: "Đó là mã hợp lệ, nên chặn cả lô sẽ làm hỏng pipeline vì một dữ liệu bình thường" }
+      - { id: b, text: "Nên đo tỉ lệ theo thời gian: tỉ lệ tăng đột ngột là tín hiệu nguồn lỗi" }
+      - { id: c, text: "Loại hoặc giữ phụ thuộc mục đích: model ETA có thể cần giữ để phục vụ cả chuyến thật" }
+      - { id: d, text: "Luôn xoá hết vì mã lạ làm sai mọi thống kê, nên không bao giờ giữ lại" }
