@@ -200,3 +200,11 @@ trong khoảng 30 giây; `gate` từ chối thoát mã 3 và Workflow Failed ở
 là kết quả mong đợi) và `replay` 2019-09..2019-11 với `params.assessment.yaml`. Chẩn đoán ở
 `reports/assessment/diagnosis.yaml`, báo cáo ở `docs/assessment.md`. Đây là đáp án của bài đánh giá: chỉ đọc sau khi
 đã nộp bài của mình.
+
+## Đánh giá M18
+
+Từ gốc repo, `uv run python tracks/mlops/capstone/project/tests/etakit.py incident --out tracks/mlops/capstone/solutions/project/data/incident`
+dựng bằng chứng của sự cố.
+SLO, budget theo market và alert burn rate ở `reports/senior/slo.yaml`; hồ sơ sự cố ở `reports/senior/incident.yaml`; postmortem ở
+`docs/senior/postmortem.md`; design doc nền tảng nhiều market ở `docs/senior/design-doc.md`. Cách tính từng số ở mục M18 của
+`SOLUTION.md`. Đây là đáp án của bài đánh giá: chỉ đọc sau khi đã nộp bài của mình.

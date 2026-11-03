@@ -21,9 +21,10 @@ milestone ở [`../milestones/`](../milestones/), tổng quan ở [README capsto
 | `cloud/` (tuỳ chọn) | [M11](../milestones/m11-cloud-optional.md) | Terraform có tag dự án, `teardown.sh --dry-run`, `budget.md` |
 | `k8s/eta.yaml`, `k8s/Dockerfile.model`, `argo/train-workflow.yaml` | [M12](../milestones/m12-kind-kserve.md) | InferenceService KServe (image model riêng, canary, rollback), Workflow Argo `validate → train → gate` |
 | `params.assessment.yaml`, `reports/assessment/diagnosis.yaml`, `docs/assessment.md` | [M13](../milestones/m13-junior-assessment.md) | Đánh giá độc lập: chẩn đoán tháng dữ liệu lạ, quyết định có số |
+| `reports/senior/slo.yaml`, `reports/senior/incident.yaml`, `docs/senior/postmortem.md`, `docs/senior/design-doc.md` | [M18](../milestones/m18-senior-assessment.md) | Đánh giá senior: SLO và alert burn rate theo market, hồ sơ sự cố, postmortem, design doc nền tảng nhiều market |
 | `tests/` | mọi milestone | Không sửa: test chấm bài. Test của bạn để ở chỗ khác (ví dụ `tests_own/`) |
 
-`.gitignore` ở đây chặn `data/`, `models/`, `reports/` (trừ `reports/decisions/` của M10 và `reports/assessment/diagnosis.yaml` của M13), `metrics.json`, `.ci-deps`,
+`.gitignore` ở đây chặn `data/`, `models/`, `reports/` (trừ `reports/decisions/` của M10, `reports/assessment/diagnosis.yaml` của M13 và `reports/senior/` của M18), `metrics.json`, `.ci-deps`,
 `dist/`: dữ liệu và model đi qua DVC và MLflow, không qua git.
 
 ## Chạy test
@@ -40,8 +41,8 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 
 | Thiếu | Test skip | Cách bật |
 | --- | --- | --- |
-| Bộ `nyc-tlc` | `test_m01_real_data_baseline`, M08 (CT), M10 (phát lại), `test_m13_evidence_matches_recomputed` | `uv run python data/download_dataset.py nyc-tlc` |
-| Docker | M02, `test_m06_online_offline_parity`, `test_m07_loadtest_thresholds`, M08, `test_m09_rules_*` | Cài Docker, user thuộc nhóm `docker` |
+| Bộ `nyc-tlc` | `test_m01_real_data_baseline`, M08 (CT), M10 (phát lại), `test_m13_evidence_matches_recomputed`, `test_m18_*_matches_data`, `test_m18_design_doc_traffic`, `test_m18_rules_on_incident` | `uv run python data/download_dataset.py nyc-tlc` |
+| Docker | M02, `test_m06_online_offline_parity`, `test_m07_loadtest_thresholds`, M08, `test_m09_rules_*`, `test_m18_rules_*` | Cài Docker, user thuộc nhóm `docker` |
 | Stack MLOps | `test_m02_compose_api`, `test_m04_alias_rollback` | `docker compose -f setup/mlops/compose.yaml up -d --wait` |
 | Redis cho Feast | `test_m06_online_offline_parity` | `docker compose -f setup/mlops/compose.yaml --profile feast up -d --wait` |
 | bubblewrap (`bwrap`) | test chạy CLI, DVC, M08 | `sudo apt install bubblewrap` |

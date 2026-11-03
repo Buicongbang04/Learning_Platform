@@ -1,6 +1,8 @@
-"""Helper chung của test capstone ETA: thư mục được chấm, import `eta` an toàn, dữ liệu giả, dữ liệu tháng lạ của M13.
+"""Helper chung của test capstone ETA: thư mục được chấm, import `eta` an toàn, dữ liệu giả, dữ liệu tháng lạ của M13,
+dữ liệu sự cố dựng sẵn của M18.
 
-Chạy như script để dựng dữ liệu M13: `uv run python tracks/mlops/capstone/project/tests/etakit.py assessment`.
+Chạy như script để dựng dữ liệu: `uv run python tracks/mlops/capstone/project/tests/etakit.py assessment` (M13) hoặc
+`... etakit.py incident` (M18).
 """
 
 import importlib
@@ -19,6 +21,7 @@ from testkit import use_solution
 
 CAPSTONE = Path(__file__).resolve().parents[2]
 STRANGE_MONTH_SCRIPT = CAPSTONE / "solutions" / "assessment" / "strange_month.py"
+SENIOR_INCIDENT_SCRIPT = CAPSTONE / "solutions" / "assessment" / "senior_incident.py"
 PROJECT = CAPSTONE / "solutions" / "project" if use_solution() else CAPSTONE / "project"
 COLUMNS = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"]
 
@@ -112,11 +115,19 @@ def local_registry(tmp_path: Path, prefix: str = "eta") -> tuple[str, str]:
     return uri, name
 
 
-def _strange_month():
-    spec = importlib.util.spec_from_file_location("eta_assessment_strange_month", STRANGE_MONTH_SCRIPT)
+def _load_script(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _strange_month():
+    return _load_script("eta_assessment_strange_month", STRANGE_MONTH_SCRIPT)
+
+
+def _senior_incident():
+    return _load_script("eta_assessment_senior_incident", SENIOR_INCIDENT_SCRIPT)
 
 
 def assessment_month() -> str:
@@ -146,6 +157,31 @@ def assessment_data(dest: Path) -> Path:
     return dest
 
 
+def incident_facts() -> dict:
+    """Phần đáp án M18 không tính được từ dữ liệu (test M18 dùng; người học đừng in ra)."""
+    module = _senior_incident()
+    return {"date": module.DAY, "markets": list(module.MARKETS.values()), "causes": set(module.CAUSES),
+            "trigger": module.TRIGGER, "decision": module.DECISION, "detected_at": module.DETECTED,
+            "roles": dict(module.ROLES), "people": list(module.PEOPLE)}
+
+
+def incident_data(dest: Path) -> Path:
+    """Dựng thư mục dữ liệu sự cố M18 trong `dest` từ ngày thật 2019-11-14 và tháng tham chiếu 2019-10 của `nyc-tlc`."""
+    import hashlib
+
+    import mlopskit
+
+    module = _senior_incident()
+    source = mlopskit.real_month(*module.SOURCE)
+    reference = mlopskit.real_month(*module.REFERENCE)
+    lookup = source.parent / module.LOOKUP
+    if not lookup.is_file():
+        pytest.skip(f"Chưa có {module.LOOKUP}. Chạy: uv run python data/download_dataset.py {module.SOURCE[0]}")
+    if hashlib.sha256(lookup.read_bytes()).hexdigest() != module.LOOKUP_SHA256:
+        pytest.fail(f"sha256 của {lookup} không khớp: xoá tệp và tải lại bộ {module.SOURCE[0]}", pytrace=False)
+    return module.build(source, reference, lookup, Path(dest))
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
@@ -153,15 +189,17 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     build = sub.add_parser("assessment", help="M13: dựng thư mục dữ liệu có tháng lạ")
     build.add_argument("--out", type=Path, default=CAPSTONE / "project" / "data" / "assessment")
+    incident = sub.add_parser("incident", help="M18: dựng thư mục dữ liệu sự cố dựng sẵn")
+    incident.add_argument("--out", type=Path, default=CAPSTONE / "project" / "data" / "incident")
     args = parser.parse_args(argv)
     try:
-        out = assessment_data(args.out)
+        out = assessment_data(args.out) if args.command == "assessment" else incident_data(args.out)
     except BaseException as err:
         if type(err).__name__ in ("Skipped", "Failed"):
             print(getattr(err, "msg", str(err)), file=sys.stderr)
             return 1
         raise
-    for path in sorted(out.glob("yellow_tripdata_*.parquet")):
+    for path in sorted(out.glob("yellow_tripdata_*.parquet") if args.command == "assessment" else out.iterdir()):
         print(path)
     return 0
 
