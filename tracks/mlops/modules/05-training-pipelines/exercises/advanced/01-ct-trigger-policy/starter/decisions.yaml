@@ -1,0 +1,8 @@
+# decision là retrain, skip hoặc investigate; reasons là danh sách lý do (ít nhất một).
+C1: { decision: TODO, reasons: [TODO] }
+C2: { decision: TODO, reasons: [TODO] }
+C3: { decision: TODO, reasons: [TODO] }
+C4: { decision: TODO, reasons: [TODO] }
+C5: { decision: TODO, reasons: [TODO] }
+C6: { decision: TODO, reasons: [TODO] }
+C7: { decision: TODO, reasons: [TODO] }

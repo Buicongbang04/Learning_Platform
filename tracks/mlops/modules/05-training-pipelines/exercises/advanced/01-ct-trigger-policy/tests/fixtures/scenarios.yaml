@@ -1,0 +1,30 @@
+policy:
+  alert_slo: "MAE trên nhãn thật tệ hơn baseline quá 10% (đã tính nhãn về muộn)"
+  min_labeled_new_data: "ít nhất 20% dòng mới đã có nhãn"
+  max_model_age_months: 12
+  data_quality: "null rate của một cột đổi quá 10 điểm phần trăm so với tuần trước nghĩa là nghi lỗi dữ liệu, không train"
+  cooldown_hours: 24
+  decisions: "retrain: chạy pipeline train; skip: bỏ lượt này và ghi lý do; investigate: dừng trigger, người kiểm tra nguồn dữ liệu hoặc pipeline trước"
+baseline_mae_seconds: 200
+scenarios:
+  C1:
+    trigger: "lịch hằng tuần"
+    story: "Thứ Hai, lịch train tuần chạy. Dữ liệu mới 0.4% so với tập train hiện tại, toàn bộ đã có nhãn. MAE tuần qua 201 giây, gần baseline."
+  C2:
+    trigger: "cảnh báo drift"
+    story: "Alert PSI của trip_distance lên 0.31 sau kỳ nghỉ lễ (nhiều chuyến sân bay dài). MAE trên nhãn thật tuần qua 203 giây, nhãn đã về đủ."
+  C3:
+    trigger: "dữ liệu mới"
+    story: "Có 30% dữ liệu mới so với tập train, 85% đã có nhãn. MAE tuần qua 228 giây (tệ hơn baseline 14%), vượt SLO. Các cột có null rate như tuần trước."
+  C4:
+    trigger: "cảnh báo hiệu năng"
+    story: "Trong một ngày MAE nhảy từ 205 lên 287 giây. Cùng lúc null rate của cột fare_amount từ 0.5% lên 31% sau khi nhóm ETL đổi nguồn dữ liệu hôm trước."
+  C5:
+    trigger: "lịch hằng tháng"
+    story: "Lịch tháng chạy. MAE ổn định 199 giây, không drift. Nhưng model hiện tại đã 13 tháng tuổi, vượt trần tuổi của chính sách."
+  C6:
+    trigger: "dữ liệu mới"
+    story: "Dữ liệu mới đạt 25% so với tập train nên hash đổi, nhưng nhãn về chậm 14 ngày: chỉ 35% dòng mới có nhãn. MAE trên phần có nhãn là 202 giây."
+  C7:
+    trigger: "cảnh báo hiệu năng"
+    story: "Alert MAE +15% bắn lần thứ ba trong 36 giờ. Lần retrain gần nhất cách đây 20 giờ (cooldown 24 giờ) và MAE sau đó vẫn 230 giây. Dữ liệu đầu vào không đổi theo mọi kiểm tra tự động."
