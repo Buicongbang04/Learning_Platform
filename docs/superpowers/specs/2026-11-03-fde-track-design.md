@@ -311,10 +311,10 @@ chỉ dừng khi cần người học (PC, credential cloud, merge/push).
 6. Sản phẩm dùng Postgres + pgvector + Ollama + FastAPI, có Compose và Helm, hai version để dạy nâng cấp.
 7. Cloud lab nhắm AWS trước (C1), GCP/Azure sau (C2).
 8. DSA ~50 bài trong hai module, học song song từ đầu được.
-12. Capstone làm trong repo riêng của người học; repo học chấm qua `FDE_CAPSTONE_DIR`, lời giải mẫu vẫn ở `capstone/solutions/`.
 9. LLM chạy trong VM khách với model nhỏ đóng trong bundle; VM sản phẩm ≤5 GB, tổng ≤8 GB mỗi bài.
 10. Giữ timeout 5 phút của app; dùng snapshot VM nối tiếp, bài quá dài chạy bằng terminal.
 11. Runtime container do IT khách cài sẵn; cài không container chỉ là bài Advanced module 04.
+12. Capstone làm trong repo riêng của người học; repo học chấm qua `FDE_CAPSTONE_DIR`, lời giải mẫu vẫn ở `capstone/solutions/`.
 
 ## 11. Để builder quyết
 
