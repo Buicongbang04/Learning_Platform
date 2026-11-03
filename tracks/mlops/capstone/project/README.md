@@ -15,10 +15,13 @@ milestone ở [`../milestones/`](../milestones/), tổng quan ở [README capsto
 | `src/eta/clock.py`, `labels.py`, `flows.py`, `PREDICTION_LOG_COLUMNS` trong `logs.py` | [M05](../milestones/m05-prefect-replay.md) | Đồng hồ mô phỏng, nhãn về muộn, flow Prefect train/batch/replay |
 | `src/eta/zone_features.py`, `feature_repo/` | [M06](../milestones/m06-feast-features.md) | Feature tốc độ zone/giờ, point-in-time, Feast online/offline |
 | `src/eta/serve.py` (bản M07), `loadtest/eta.js` | [M07](../milestones/m07-serving-canary.md) | Readiness, canary, shadow, reload/rollback, k6 |
+| `.github/workflows/`, `requirements-ci.txt`, `tests_own/` | [M08](../milestones/m08-cicd-act.md) | CI, CT có cổng promotion, CD theo alias `champion`, chạy bằng `act` |
+| `monitoring/`, `src/eta/serve.py` (bản M09) | [M09](../milestones/m09-monitoring.md) | Metric Prometheus, alert rule có test promtool, dashboard Grafana |
+| `src/eta/drift.py`, `quality.py`, `reports/decisions/`, `docs/` | [M10](../milestones/m10-drift-replay.md) | PSI/KS, chất lượng theo nhãn về muộn, phát lại 2019–2020, quyết định, runbook, postmortem |
 | `tests/` | mọi milestone | Không sửa: test chấm bài. Test của bạn để ở chỗ khác (ví dụ `tests_own/`) |
 
-`.gitignore` ở đây chặn `data/`, `models/`, `reports/`, `metrics.json`: dữ liệu và model đi qua DVC và MLflow, không
-qua git.
+`.gitignore` ở đây chặn `data/`, `models/`, `reports/` (trừ `reports/decisions/` của M10), `metrics.json`, `.ci-deps`,
+`dist/`: dữ liệu và model đi qua DVC và MLflow, không qua git.
 
 ## Chạy test
 
@@ -34,11 +37,14 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 
 | Thiếu | Test skip | Cách bật |
 | --- | --- | --- |
-| Bộ `nyc-tlc` | `test_m01_real_data_baseline` | `uv run python data/download_dataset.py nyc-tlc` |
-| Docker | M02, `test_m06_online_offline_parity`, `test_m07_loadtest_thresholds` | Cài Docker, user thuộc nhóm `docker` |
+| Bộ `nyc-tlc` | `test_m01_real_data_baseline`, M08 (CT), M10 (phát lại) | `uv run python data/download_dataset.py nyc-tlc` |
+| Docker | M02, `test_m06_online_offline_parity`, `test_m07_loadtest_thresholds`, M08, `test_m09_rules_*` | Cài Docker, user thuộc nhóm `docker` |
 | Stack MLOps | `test_m02_compose_api`, `test_m04_alias_rollback` | `docker compose -f setup/mlops/compose.yaml up -d --wait` |
 | Redis cho Feast | `test_m06_online_offline_parity` | `docker compose -f setup/mlops/compose.yaml --profile feast up -d --wait` |
-| bubblewrap (`bwrap`) | test chạy CLI, DVC | `sudo apt install bubblewrap` |
+| bubblewrap (`bwrap`) | test chạy CLI, DVC, M08 | `sudo apt install bubblewrap` |
+| `act` | M08 (trừ `test_m08_workflow_structure`) | Cài theo module 08, mục 0 |
+| Grafana của stack | `test_m09_dashboard_provisioned` | `docker compose -f setup/mlops/compose.yaml --profile monitoring up -d --wait` |
+| Bộ `nyc-tlc-2020` | `test_m10_replay_summary_real`, `test_m10_decision_files_valid` | `uv run python data/download_dataset.py nyc-tlc-2020` |
 
 Skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15` trước `uv run`.
 
@@ -49,4 +55,4 @@ Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và ch�
 
 Mục này là của bạn. Mỗi milestone thêm một phần theo "Kết quả nộp": lệnh train và MAE (M01), container (M02), dữ liệu và
 ngưỡng validation (M03), registry, runbook rollback và model card (M04), orchestration và replay (M05), feature (M06),
-serving và kết quả k6 (M07).
+serving và kết quả k6 (M07), CI/CD (M08), monitoring (M09), drift và sự cố (M10).

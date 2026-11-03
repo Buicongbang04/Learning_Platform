@@ -1,0 +1,9 @@
+data_dir: data/replay
+months:
+  - "2019-06"
+sample_rows: 50000
+seed: 0
+model_params:
+  max_iter: 100
+mlflow_uri: sqlite:///data/replay-mlflow.db
+model_name: eta-replay

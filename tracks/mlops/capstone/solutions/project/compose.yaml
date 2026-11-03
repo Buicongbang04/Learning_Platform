@@ -38,6 +38,35 @@ services:
       retries: 12
       start_period: 10s
 
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+    ports:
+      - "127.0.0.1:${ETA_PROMETHEUS_PORT:-29190}:9090"
+    mem_limit: 256m
+    cpuset: "${DEVOPS_CPUSET:-}"
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${ETA_GRAFANA_PORT:-23100}:3000"
+    mem_limit: 256m
+    cpuset: "${DEVOPS_CPUSET:-}"
+
 networks:
   mlops:
     name: ${MLOPS_NETWORK:-mlops_default}

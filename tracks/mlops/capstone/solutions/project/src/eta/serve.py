@@ -13,7 +13,7 @@ import joblib
 import pandas as pd
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from pydantic import BaseModel, Field
 
 from eta.features import MAX_DISTANCE, MIN_DURATION_S, make_features
@@ -26,8 +26,15 @@ TIMEZONE = "America/New_York"
 WARMUP_TRIP = {"PULocationID": 161, "DOLocationID": 236, "pickup_datetime": datetime(2019, 1, 15, 8, 30), "trip_distance": 2.4}
 logger = get_logger("eta.serve")
 
+LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0, 2.5)
+PREDICTION_BUCKETS = (60, 120, 300, 600, 900, 1200, 1800, 2700, 3600, 5400, 7200)
+
 FALLBACKS = Counter("eta_fallback", "Request canary lỗi, đã trả kết quả của champion")
 SHADOW_ERRORS = Counter("eta_shadow_errors", "Lỗi khi chạy model shadow (không ảnh hưởng response)")
+REQUESTS = Counter("eta_requests", "Request POST /predict theo mã HTTP và nhánh đã trả lời", ["status", "variant"])
+LATENCY = Histogram("eta_request_duration_seconds", "Thời gian xử lý POST /predict", ["variant"], buckets=LATENCY_BUCKETS)
+PREDICTIONS = Histogram("eta_prediction_seconds", "Giá trị ETA dự đoán (giây)", ["variant"], buckets=PREDICTION_BUCKETS)
+MODEL_INFO = Gauge("eta_model_info", "Model đang nạp, giá trị luôn 1", ["version", "variant"])
 
 
 class TripRequest(BaseModel):
@@ -183,6 +190,7 @@ async def lifespan(app: FastAPI):
     state.ready = False
     state.models = None
     state.not_ready = "đang tắt"
+    MODEL_INFO.clear()
     log_event(logger, "shutdown")
 
 
@@ -192,12 +200,36 @@ def install(state) -> dict:
     check_speed(models, speed)
     warm_ms = warmup(models, speed)
     state.models, state.ready, state.not_ready = models, True, None
+    publish_model_info(models)
     info = {"champion": models.champion.version, "challenger": models.challenger.version if models.challenger else None}
     log_event(logger, "ready", **info, canary_weight=state.canary_weight, shadow=state.shadow, warmup_ms=warm_ms)
     return info
 
 
+def publish_model_info(models: Models) -> None:
+    MODEL_INFO.clear()
+    MODEL_INFO.labels(version=models.champion.version, variant="champion").set(1)
+    if models.challenger is not None:
+        MODEL_INFO.labels(version=models.challenger.version, variant="challenger").set(1)
+
+
 app = FastAPI(title="ETA taxi NYC", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def observe_predict(request: Request, call_next):
+    if request.url.path != "/predict":
+        return await call_next(request)
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        variant = getattr(request.state, "variant", "none")
+        REQUESTS.labels(status=str(status), variant=variant).inc()
+        LATENCY.labels(variant=variant).observe(time.perf_counter() - started)
 
 
 def current(request: Request) -> Models | None:
@@ -237,6 +269,7 @@ def run_shadow(state, models: Models, request_id: str, trip: dict, frame: pd.Dat
         SHADOW_ERRORS.inc()
         log_event(logger, "shadow_failed", request_id=request_id, model_version=challenger.version, error=repr(err))
         return
+    PREDICTIONS.labels(variant="shadow").observe(eta_s)
     state.log.write(request_id, challenger.version, "shadow", trip, frame, eta_s)
 
 
@@ -262,6 +295,8 @@ def predict(trip: TripRequest, request: Request, response: Response, background:
             variant = "champion"
     if variant == "champion":
         eta_s = predict_one(models.champion, frame, models.speed)
+    request.state.variant = variant
+    PREDICTIONS.labels(variant=variant).observe(eta_s)
     state.log.write(request_id, served.version, variant, payload, frame, eta_s)
     if state.shadow and models.challenger is not None and variant == "champion":
         background.add_task(run_shadow, state, models, request_id, payload, frame)

@@ -1,0 +1,16 @@
+decision: retrain
+reasons:
+  - "MAE tháng 2020-03 là 207.0 s so với 181.1 s của 2020-02 (+14.3%), p90 sai số 462 s so với 403 s và độ lệch dự đoán (bias) tăng từ +65 s lên +104 s: chất lượng giảm thật, đo trên nhãn đã công bố tại as_of 2020-04"
+  - "PSI trip_distance chỉ 0.0047 (dưới ngưỡng 0.1) nên drift đầu vào không phải bằng chứng; cái đổi là quan hệ khoảng cách sang thời gian (đường vắng sau lệnh phong toả giữa tháng 3), tức concept drift mà PSI feature không bắt được"
+  - "Trên phần cuối tháng 3 (từ 2020-03-12, 20% chuyến cuối theo thời gian), challenger train trên đầu tháng 3 có MAE 240.8 s so với 283.6 s của champion (-15%): train lại có lợi đo được, không chỉ là phỏng đoán"
+  - "Rollback không có ý nghĩa: không có version nào trước đó tốt hơn vì mọi version đều train trước COVID; challenger mới vẫn phải qua cổng promotion của M04 trước khi thành champion"
+evidence:
+  psi_trip_distance: 0.00466
+  mae_before: 181.13
+  mae_after: 207.03
+  as_of: "2020-04"
+  psi_pickup_hour: 0.0147
+  bias_s_before: 65.1
+  bias_s_after: 103.9
+  late_march_mae_champion: 283.6
+  late_march_mae_challenger: 240.8

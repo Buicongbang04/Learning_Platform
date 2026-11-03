@@ -108,6 +108,38 @@ def cmd_promote(args: argparse.Namespace) -> int:
     return 0 if decision.promote else EXIT_REJECTED
 
 
+def cmd_champion(args: argparse.Namespace) -> int:
+    from mlflow import MlflowClient
+    from mlflow.exceptions import MlflowException
+
+    from eta.registry import ALIAS
+
+    config = load_config(args.config)
+    try:
+        version = str(MlflowClient(tracking_uri=config.mlflow_uri).get_model_version_by_alias(config.model_name, ALIAS).version)
+    except MlflowException:
+        version = None
+    ok = version is not None and (args.expect is None or version == str(args.expect))
+    print(json.dumps({"model_name": config.model_name, "champion": version, "expect": args.expect, "ok": ok}))
+    return 0 if ok else 1
+
+
+def cmd_replay(args: argparse.Namespace) -> int:
+    from eta.clock import add_months, months_between
+    from eta.flows import batch_score_flow, replay_flow
+    from eta.quality import replay_summary
+
+    out = Path(args.out)
+    reference = args.reference or add_months(args.start, -1)
+    rows = replay_flow(args.start, args.end, str(args.config), str(out))
+    batch_score_flow(reference, str(args.config), str(out))
+    summary = replay_summary(months_between(args.start, args.end), reference, args.end, load_config(args.config), out)
+    summary.to_parquet(out / "summary.parquet", index=False)
+    log_event(logger, "replayed", start=args.start, end=args.end, reference=reference, months=len(rows), out=str(out))
+    print(summary.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+    return 0
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="eta")
     sub = root.add_subparsers(dest="command", required=True)
@@ -132,6 +164,17 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--config", type=Path, required=True)
     p.add_argument("--version", required=True)
     p.set_defaults(func=cmd_promote)
+    p = sub.add_parser("champion", help="in version đang mang alias champion; --expect: exit 1 khi khác")
+    p.add_argument("--config", type=Path, required=True)
+    p.add_argument("--expect")
+    p.set_defaults(func=cmd_champion)
+    p = sub.add_parser("replay", help="phát lại từng tháng, ghi summary.parquet (drift, chất lượng khi có nhãn)")
+    p.add_argument("--config", type=Path, default=Path("params.yaml"))
+    p.add_argument("--start", required=True)
+    p.add_argument("--end", required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--reference", help="tháng tham chiếu cho drift (mặc định: tháng trước start, tháng train)")
+    p.set_defaults(func=cmd_replay)
     return root
 
 
