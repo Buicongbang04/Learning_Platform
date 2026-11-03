@@ -78,7 +78,7 @@ services:
       AWS_SECRET_ACCESS_KEY: minioadmin
     ports:
       - "127.0.0.1:${MLOPS_MLFLOW_PORT:-25000}:5000"
-    mem_limit: 1g
+    mem_limit: 1536m
     cpuset: "${DEVOPS_CPUSET:-}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:5000/health', timeout=3)"]

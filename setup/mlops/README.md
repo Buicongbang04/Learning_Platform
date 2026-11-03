@@ -11,7 +11,7 @@ Một project Compose riêng (`mlops`), tách khỏi `setup/docker-compose.yml`,
 
 Các cổng mặc định nằm ở dải 2xxxx vì 5432, 9000, 5000, 8000 thường đã bị chiếm. Đổi cổng bằng biến
 `MLOPS_PG_PORT`, `MLOPS_MINIO_PORT`, `MLOPS_MINIO_CONSOLE_PORT`, `MLOPS_MLFLOW_PORT` trong `setup/.env`
-(xem `setup/.env.example`). Mọi cổng chỉ bind `127.0.0.1`.
+(xem `setup/.env.example`). Compose chỉ đọc `.env` cạnh tệp compose (`setup/mlops/`), nên khi đã đổi cổng trong `setup/.env`, mọi lệnh phải thêm `--env-file setup/.env` (xem bên dưới). Mọi cổng chỉ bind `127.0.0.1`.
 
 ## Bật
 
@@ -20,13 +20,19 @@ Các cổng mặc định nằm ở dải 2xxxx vì 5432, 9000, 5000, 8000 thư�
 nice -n 15 docker compose -f setup/mlops/compose.yaml up -d --build --wait
 ```
 
+Đã đổi cổng trong `setup/.env`: thêm `--env-file setup/.env` trước `-f`, để stack và test (đọc `setup/.env`) dùng cùng cổng:
+
+```bash
+docker compose --env-file setup/.env -f setup/mlops/compose.yaml up -d --build --wait
+```
+
 Lần đầu build image MLflow mất vài phút (cài `mlflow`, `psycopg2-binary`, `boto3`). Nếu build đứt giữa
 chừng vì mạng, chạy lại lệnh trên. Muốn giới hạn CPU như stack DevOps, đặt `DEVOPS_CPUSET` (vd. `12-35`).
 
 ## Kiểm
 
 ```bash
-docker compose -f setup/mlops/compose.yaml ps -a       # postgres, minio, mlflow: healthy; minio-init: exited (0)
+docker compose -f setup/mlops/compose.yaml ps -a       # (có đổi cổng: thêm --env-file setup/.env) postgres, minio, mlflow: healthy; minio-init: exited (0)
 curl -s http://127.0.0.1:25000/health                  # OK
 ```
 
@@ -48,12 +54,12 @@ MinIO (ví dụ `boto3`, DVC remote `s3://dvc`).
 ## Tắt và xoá dữ liệu
 
 ```bash
-docker compose -f setup/mlops/compose.yaml down        # giữ dữ liệu (volume mlops_pg, mlops_minio)
+docker compose -f setup/mlops/compose.yaml down        # (có đổi cổng: thêm --env-file setup/.env) giữ dữ liệu (volume mlops_pg, mlops_minio)
 docker compose -f setup/mlops/compose.yaml down -v     # xoá cả run, model và artifact
 ```
 
 ## Lỗi hay gặp
 
-- `port is already allocated`: cổng đã bị chiếm, đổi biến `MLOPS_*_PORT` trong `setup/.env`.
+- `port is already allocated`: cổng đã bị chiếm, đổi biến `MLOPS_*_PORT` trong `setup/.env` rồi chạy lại với `--env-file setup/.env` (không có cờ này, Compose bỏ qua `setup/.env`).
 - `mlflow` chưa healthy: xem `docker compose -f setup/mlops/compose.yaml logs mlflow`; thường do `postgres` hoặc `minio-init` chưa xong.
 - Artifact không lên MinIO: kiểm bucket `mlflow` đã có (`minio-init` exited 0).

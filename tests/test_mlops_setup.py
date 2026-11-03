@@ -22,7 +22,7 @@ def _compose():
 def _mappings():
     for name, svc in _compose()["services"].items():
         for mapping in svc.get("ports", []):
-            host, _, container = str(mapping).rpartition(":")
+            host = str(mapping).rpartition(":")[0]
             yield name, str(mapping), host
 
 
@@ -41,7 +41,9 @@ def test_images_pinned():
 def test_ports_avoid_taken_defaults():
     found = 0
     for name, _, host in _mappings():
-        default = int(re.search(r":-(\d+)\}", host).group(1))
+        found_port = re.search(r":-(\d+)\}", host)
+        assert found_port, f"{name}: cổng sai dạng {host!r}"
+        default = int(found_port.group(1))
         assert default not in TAKEN_PORTS, name
         found += 1
     assert found >= 3
@@ -74,3 +76,8 @@ def test_env_example_lists_mlops_ports():
     text = ENV_EXAMPLE.read_text(encoding="utf-8")
     for var in ("MLOPS_PG_PORT", "MLOPS_MINIO_PORT", "MLOPS_MINIO_CONSOLE_PORT", "MLOPS_MLFLOW_PORT"):
         assert var in text
+
+
+def test_readme_documents_env_file():
+    text = (ROOT / "setup" / "mlops" / "README.md").read_text(encoding="utf-8")
+    assert "--env-file setup/.env" in text
