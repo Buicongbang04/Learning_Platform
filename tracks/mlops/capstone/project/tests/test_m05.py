@@ -45,6 +45,9 @@ def test_m05_labels_not_before_publication(project, setup):
     assert labels.published("2020-03", "2020-02") is False
     assert labels.published("2020-03", "2020-04", delay=2) is False
     assert labels.published("2020-03", "2020-05", delay=2) is True
+    for month, as_of in (("2020-3", "2020-04"), ("2020-03", "2020-13"), ("2020-03", "April"), ("", "2020-04")):
+        with pytest.raises(ValueError):
+            labels.published(month, as_of)
     conf = config.load_config(cfg)
     assert labels.labels_for("2019-02", "2019-02", conf) is None, "trước khi công bố, labels_for phải trả None dù tệp có sẵn"
     assert labels.labels_for("2019-02", "2019-01", conf) is None

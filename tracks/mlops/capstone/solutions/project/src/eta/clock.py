@@ -1,6 +1,11 @@
 from eta.config import MONTH
 
 
+def check_month(month: str) -> str:
+    _parse(month)
+    return month
+
+
 def _parse(month: str) -> tuple[int, int]:
     if not MONTH.match(str(month)):
         raise ValueError(f"tháng phải dạng YYYY-MM, nhận {month!r}")

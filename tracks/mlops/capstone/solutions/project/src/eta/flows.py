@@ -15,7 +15,22 @@ from eta.labels import labels_for, month_trips
 from eta.logs import PREDICTION_LOG_COLUMNS, get_logger, log_event
 
 ALIAS = "champion"
+CODE_FILES = ("data.py", "features.py", "train.py", "labels.py", "zone_features.py", "registry.py", "flows.py")
 logger = get_logger("eta.flows")
+
+
+def code_version() -> str:
+    digest = hashlib.sha256()
+    for name in CODE_FILES:
+        digest.update(name.encode())
+        digest.update((Path(__file__).parent / name).read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def _speed_table(config: Config) -> pd.DataFrame | None:
+    from eta.zone_features import read_speed_table
+
+    return read_speed_table(config.speed_table) if config.speed_table else None
 
 
 def _config(config_path: str, months: list[str] | None = None) -> Config:
@@ -35,6 +50,8 @@ def _train_key(context, parameters: dict) -> str:
         "model_params": config.model_params,
         "mlflow_uri": config.mlflow_uri,
         "model_name": config.model_name,
+        "speed_table": str(config.speed_table) if config.speed_table else None,
+        "code_version": code_version(),
     }
     return "eta-train-" + hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
@@ -44,7 +61,8 @@ def fingerprint(config: Config) -> str:
     from eta.data import month_path
     from eta.lineage import data_version
 
-    return data_version([month_path(config.data_dir, m) for m in config.months])
+    paths = [month_path(config.data_dir, m) for m in config.months]
+    return data_version(paths + ([config.speed_table] if config.speed_table else []))
 
 
 @task(cache_key_fn=_train_key, persist_result=True)
@@ -52,8 +70,12 @@ def train_and_register(config: Config, data_version: str) -> str:
     from eta.features import build_features
     from eta.registry import log_and_register
     from eta.train import evaluate, time_split, train
+    from eta.zone_features import attach_speed
 
     frame = pd.concat([month_trips(m, config) for m in config.months], ignore_index=True)
+    table = _speed_table(config)
+    if table is not None:
+        frame = attach_speed(frame, table)
     train_df, test_df = time_split(frame)
     model = train(*build_features(train_df), {"random_state": config.seed, **config.model_params})
     metrics = evaluate(model, *build_features(test_df))
@@ -85,13 +107,14 @@ def _champion(config: Config) -> tuple[object, str] | None:
 @task(retries=2, retry_delay_seconds=1, cache_policy=NONE)
 def score_month(month: str, config: Config, out_dir: str) -> str:
     from eta.features import MIN_DURATION_S, make_features
+    from eta.zone_features import prepare
 
     champion = _champion(config)
     if champion is None:
         raise RuntimeError(f"{config.model_name} chưa có alias {ALIAS}: chạy train_flow và promote trước khi chấm")
     model, version = champion
     trips = month_trips(month, config)
-    eta = np.maximum(model.predict(make_features(trips)), float(MIN_DURATION_S))
+    eta = np.maximum(model.predict(make_features(prepare(trips, model, _speed_table(config)))), float(MIN_DURATION_S))
     frame = pd.DataFrame({
         "request_id": trips["request_id"],
         "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),

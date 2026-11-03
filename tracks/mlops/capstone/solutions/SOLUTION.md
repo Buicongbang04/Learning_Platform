@@ -118,7 +118,8 @@ Lựa chọn loss: `absolute_error` nghe hợp với MAE nhưng đo ra tệ hơn
   `seed`. Chấm và nhãn đi qua cùng hàm nên join một-một. Ngoài đời `request_id` do API sinh và đi cùng log; ở mô phỏng nó
   phải tái tạo được.
 - **Khoá cache theo nội dung**: `cache_key_fn` băm `data_version` (sha256 tệp) cùng `months`, `sample_rows`, `seed`,
-  `model_params`, `mlflow_uri`, `model_name`. Hash tham số mặc định của Prefect chỉ thấy đường dẫn config, không thấy
+  `model_params`, `mlflow_uri`, `model_name`, `speed_table` và hash mã nguồn (`code_version()`: sha256 các tệp dựng dữ
+  liệu, feature, model). Thiếu hash code thì sửa `clean` xong chạy lại vẫn nhận model cũ. Hash tham số mặc định của Prefect chỉ thấy đường dẫn config, không thấy
   tệp dữ liệu đổi. Đánh đổi: xoá version trong registry thì cache vẫn trả số cũ; xoá thư mục kết quả Prefect hoặc đổi
   khoá khi cần train lại có chủ đích.
 - **Retry ở I/O, không ở train**: `fingerprint` và `score_month` có `retries=2` (đọc tệp, MinIO chập chờn); train lỗi
@@ -138,9 +139,12 @@ Lựa chọn loss: `absolute_error` nghe hợp với MAE nhưng đo ra tệ hơn
   feature view). Lệch TTL giữa hai bên là skew dù code tính feature giống hệt.
 - **Hai entity** vì Feast 0.67 từ chối entity nhiều join key (`An entity may only have a single join key`).
 - **Feature tuỳ chọn theo dữ liệu**: `make_features` thêm `avg_speed_mph` khi cột có mặt; không có cờ config. Test
-  M01–M04 không đổi, và serve biết model cần feature hay không qua `feature_names_in_`. API đọc bảng feature từ
-  `ETA_SPEED_TABLE` (CSV, image serving không có `pyarrow`) qua cùng `attach_speed`; Feast online chỉ dùng trong
-  container Feast ở capstone này.
+  M01–M04 không đổi. **Một đường gắn feature**: `zone_features.prepare(frame, model, table)` (model cần
+  `avg_speed_mph` theo `feature_names_in_` thì `attach_speed`, thiếu bảng thì ném `MissingSpeedTable`) dùng chung cho
+  `flows.score_month` (bảng từ `Config.speed_table`) và `serve.predict_one` (`ETA_SPEED_TABLE`, CSV vì image serving
+  không có `pyarrow`). Bản đầu điền `DEFAULT_SPEED_MPH` cho mọi dòng khi thiếu bảng: model vẫn trả số, chỉ là số sai,
+  và không ai biết. Feast online chỉ dùng trong container Feast ở capstone này; parity của nó với `attach_speed` là thứ
+  test đo.
 
 MAE thật (mẫu 200 000 dòng/tháng, `seed=0`, `HistGradientBoostingRegressor` mặc định của lời giải):
 
@@ -169,6 +173,11 @@ M06 và để M10 đo lại trên 2020. Lệnh đo: train/evaluate của M01 tr�
 - **Shadow trong `BackgroundTasks`**: chạy sau khi response đã gửi, nên shadow chậm không cộng vào độ trễ; mọi exception
   bị bắt và đếm. Canary lỗi thì chấm lại bằng champion trong cùng request (người dùng nhận ETA, `eta_fallback_total` cho
   người trực thấy).
+- **Thiếu bảng feature thì không sẵn sàng**: lifespan bắt `MissingSpeedTable`, app sống (`/healthz` 200) nhưng `/readyz`
+  503 kèm lý do; `/admin/reload` là đường phục hồi. Bảng feature nằm trong bộ `Models` bất biến cùng hai model.
+- **Không có timeout cho canary**: canary lỗi thì fallback, canary chậm thì chậm thật; dừng canary theo p95/p99 tách theo
+  `variant` (M09). Timeout trong endpoint đồng bộ cần thread pool riêng và vẫn không huỷ được predict đang chạy.
+- **`ETA_ADMIN_TOKEN` bắt buộc khi API không chỉ bind localhost**: `/admin/reload` đổi model đang chạy.
 - **Challenger warmup lỗi vẫn sẵn sàng**: readiness chỉ phụ thuộc champion; challenger hỏng hiện ra ở counter, không
   làm sập dịch vụ.
 - **Reload lỗi giữ model cũ** và trả 5xx: rollback không bao giờ được làm mất model đang chạy tốt.

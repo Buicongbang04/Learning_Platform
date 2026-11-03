@@ -39,7 +39,7 @@ def build_models(folder, trips) -> None:
 
 @pytest.fixture
 def serve_env(monkeypatch, models, tmp_path, synthetic_trips):
-    for key in ("ETA_CHALLENGER_PATH", "ETA_CANARY_WEIGHT", "ETA_SHADOW", "ETA_ADMIN_TOKEN"):
+    for key in ("ETA_CHALLENGER_PATH", "ETA_CANARY_WEIGHT", "ETA_SHADOW", "ETA_ADMIN_TOKEN", "ETA_SPEED_TABLE"):
         monkeypatch.delenv(key, raising=False)
     log = tmp_path / "predictions.jsonl"
     env = {"ETA_MODEL_PATH": str(models / "champion.joblib"), "ETA_MODEL_VERSION": "v1",
@@ -81,6 +81,28 @@ def test_m07_readyz_before_load(project, serve_env):
         assert ready.json().get("model_version") == "v1"
         assert api.get("/healthz").status_code == 200
     assert client(serve.app).get("/readyz").status_code == 503, "sau khi tắt (hết lifespan) /readyz phải về 503"
+
+
+def test_m07_readyz_needs_speed_table(project, serve_env, synthetic_trips, tmp_path):
+    serve = need("serve", "app")
+    zf = need("zone_features", "zone_hour_speed", "attach_speed")
+    features = need("features", "build_features")
+    train = need("train", "train")
+    table = zf.zone_hour_speed(synthetic_trips, "2018-12")
+    X, y = features.build_features(zf.attach_speed(synthetic_trips, table))
+    path = tmp_path / "speed-model.joblib"
+    joblib.dump(train.train(X, y, {"max_iter": 10, "random_state": 0}), path)
+    serve_env(ETA_MODEL_PATH=str(path))
+    with client(serve.app) as api:
+        assert api.get("/healthz").status_code == 200
+        assert api.get("/readyz").status_code == 503, "model cần avg_speed_mph mà chưa có ETA_SPEED_TABLE thì không được sẵn sàng"
+        assert api.post("/predict", json=TRIP).status_code == 503, "không âm thầm điền mặc định cho mọi request"
+    table.to_csv(tmp_path / "speed.csv", index=False)
+    serve_env(ETA_SPEED_TABLE=str(tmp_path / "speed.csv"))
+    with client(serve.app) as api:
+        assert api.get("/readyz").status_code == 200
+        reply = api.post("/predict", json=TRIP)
+        assert reply.status_code == 200 and reply.json()["eta_s"] > 0, reply.text
 
 
 def test_m07_canary_split(project, serve_env, models):

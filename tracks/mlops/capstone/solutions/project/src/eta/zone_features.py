@@ -10,6 +10,29 @@ TTL = pd.Timedelta(days=62)
 KEYS = ["PULocationID", "pickup_hour"]
 
 
+class MissingSpeedTable(RuntimeError):
+    pass
+
+
+def needs_speed(model) -> bool:
+    return SPEED_FEATURE in getattr(model, "feature_names_in_", ())
+
+
+def read_speed_table(path) -> pd.DataFrame:
+    path = str(path)
+    table = pd.read_csv(path) if path.endswith(".csv") else pd.read_parquet(path)
+    table["event_timestamp"] = pd.to_datetime(table["event_timestamp"])
+    return table[SPEED_COLUMNS]
+
+
+def prepare(frame: pd.DataFrame, model, table: pd.DataFrame | None) -> pd.DataFrame:
+    if not needs_speed(model):
+        return frame
+    if table is None:
+        raise MissingSpeedTable(f"model cần {SPEED_FEATURE} nhưng chưa cấu hình bảng feature (speed_table / ETA_SPEED_TABLE)")
+    return attach_speed(frame, table)
+
+
 def zone_hour_speed(df: pd.DataFrame, month: str) -> pd.DataFrame:
     speed = df["trip_distance"] / (df["duration_s"] / 3600)
     frame = pd.DataFrame({"PULocationID": df["PULocationID"].astype("int64"),

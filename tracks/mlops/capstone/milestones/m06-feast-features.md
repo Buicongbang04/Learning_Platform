@@ -7,11 +7,19 @@ khoảng 10 lên 15 dặm/giờ (COVID, đường vắng); model chỉ biết zo
 feature: **tốc độ trung vị theo zone đón và giờ, tính từ tháng trước**, và phục vụ nó qua Feast cho cả hai đường:
 
 - **Offline** (train, batch): join point-in-time, mỗi chuyến chỉ thấy feature đã tồn tại **trước** giờ đón.
-- **Online** (API): đọc từ Redis, giá trị phải **giống hệt** offline cho cùng entity và thời điểm.
+- **Online** (Feast + Redis): giá trị phải **giống hệt** offline cho cùng entity và thời điểm; test đo điều này trong
+  container Feast. Image serving của capstone **không** có Feast (xung đột pandas), nên API (M07) không gọi Redis: nó
+  dùng **cùng** `attach_speed` trên bảng feature xuất ra tệp (`ETA_SPEED_TABLE`). Không skew vì cả ba đường (Feast
+  online, Feast offline, `attach_speed`) được test bằng nhau trên cùng bảng.
 
 Hai lỗi kinh điển ở đây: feature từ tương lai lọt vào tập train (model offline đẹp, production tệ), và training-serving
 skew (train và serve tính feature bằng hai đoạn code, hai mặc định khác nhau). Đây là bài tích hợp sau
 [module 06](../../modules/06-feature-stores/README.md).
+
+**Đừng chờ feature này làm MAE 2019 tốt hơn.** Bản tham chiếu đo trên dữ liệu thật: train 2019-02 (feature 2019-01), đánh
+giá 2019-03 (feature 2019-02), MAE **tệ hơn** 2,6 s so với không có feature, vì trung vị tốc độ theo `(zone, giờ)` của
+tháng trước gần như là thứ model đã học từ zone và giờ. Sản phẩm của milestone là **đúng point-in-time** và **parity đo
+được**; giữ hay bỏ feature trong champion quyết định bằng số, và đo lại ở M10 trên 2020 (tháng 4/2020 tốc độ đổi hẳn).
 
 ```mermaid
 flowchart LR
@@ -82,6 +90,24 @@ hai đường là một dạng skew.
 Vì sao theo dữ liệu thay vì cờ trong config: hàm dựng feature là **một**, train và serve gọi chung; cờ config là một chỗ
 nữa có thể lệch giữa hai đường. Muốn train có tốc độ thì gắn cột trước (`attach_speed`), không có cờ ẩn.
 
+**Một đường gắn feature cho train, batch và serve.** Thêm vào `eta.zone_features`:
+
+```python
+needs_speed(model) -> bool                       # "avg_speed_mph" in model.feature_names_in_
+read_speed_table(path) -> pd.DataFrame           # .csv hoặc parquet, đúng 4 cột của zone_hour_speed
+prepare(frame, model, table) -> pd.DataFrame     # model không cần → trả frame; cần mà table None → lỗi; còn lại attach_speed
+```
+
+- `Config` thêm trường `speed_table: Path | None = None` (đường dẫn tương đối tính từ thư mục tệp config như `data_dir`;
+  biến `ETA_SPEED_TABLE` ghi đè).
+- `train_flow` (M05): có `speed_table` thì `attach_speed` chuyến train trước khi dựng feature, và `speed_table` vào khoá
+  cache cùng `data_version` (hash cả tệp bảng).
+- `batch_score_flow`: chấm qua `prepare(trips, model, table)`. Champion cần `avg_speed_mph` mà config không có
+  `speed_table` → flow **lỗi**, thông báo nêu `avg_speed_mph`. **Không bao giờ** điền `DEFAULT_SPEED_MPH` cho mọi dòng
+  chỉ vì quên cấu hình: model vẫn ra số, chỉ là số sai.
+- API (M07): `ETA_SPEED_TABLE` (CSV, image serving không có `pyarrow`) và cùng `prepare`; thiếu bảng thì không sẵn sàng
+  (xem M07).
+
 ### 3. Feature repo `capstone/project/feature_repo/`
 
 `feature_store.yaml`:
@@ -118,6 +144,10 @@ print(mlopskit.feast_run(r, 'apply', network='mlops_default').stdout)"
   feature → giá trị đó; cùng zone nhưng giờ đón 108 ngày sau feature (quá TTL) → mặc định.
 - `test_m06_build_features_optional_speed`: không có cột → 5 feature của M01; có cột → thêm `avg_speed_mph` ở cuối, train
   và `evaluate` chạy được.
+- `test_m06_speed_model_batch_score` (Prefect, MLflow SQLite tạm): config có `speed_table: speed.parquet` (bảng tháng
+  1–2) → `train_flow` trên 2019-02 cho model có `avg_speed_mph` trong `feature_names_in_`; đặt champion; `batch_score_flow`
+  2019-03 cho `eta_s` bằng đúng `model.predict` trên feature test tự dựng bằng `attach_speed` (kẹp 60 s); cùng champion
+  với config **không** có `speed_table` → flow ném lỗi có chữ `avg_speed_mph`.
 - `test_m06_online_offline_parity` (cần Redis, skip kèm lệnh bật nếu chưa có): chép `feature_repo/` sang thư mục tạm, đổi
   `project` thành tên ngẫu nhiên, ghi `data/zone_hour_speed.parquet` từ `zone_hour_speed` của hai tháng giả, `feast apply`,
   `feast materialize 2019-01-01T00:00:00 2019-03-15T00:00:00`, rồi trong container đọc `get_historical_features` và

@@ -5,7 +5,7 @@ import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,11 +18,11 @@ from pydantic import BaseModel, Field
 
 from eta.features import MAX_DISTANCE, MIN_DURATION_S, make_features
 from eta.logs import PREDICTION_LOG_COLUMNS, get_logger, log_event
+from eta.zone_features import MissingSpeedTable, needs_speed, prepare, read_speed_table
 
 ALIAS = "champion"
 CHALLENGER_ALIAS = "challenger"
 TIMEZONE = "America/New_York"
-SPEED_FEATURE = "avg_speed_mph"
 WARMUP_TRIP = {"PULocationID": 161, "DOLocationID": 236, "pickup_datetime": datetime(2019, 1, 15, 8, 30), "trip_distance": 2.4}
 logger = get_logger("eta.serve")
 
@@ -53,6 +53,7 @@ class Loaded:
 class Models:
     champion: Loaded
     challenger: Loaded | None
+    speed: pd.DataFrame | None = None
 
 
 def route(request_id: str, weight: float) -> str:
@@ -100,11 +101,13 @@ def canary_weight() -> float:
 
 def load_speed_table() -> pd.DataFrame | None:
     path = os.environ.get("ETA_SPEED_TABLE")
-    if not path:
-        return None
-    table = pd.read_csv(path)
-    table["event_timestamp"] = pd.to_datetime(table["event_timestamp"])
-    return table
+    return read_speed_table(path) if path else None
+
+
+def check_speed(models: Models, speed: pd.DataFrame | None) -> None:
+    for role, loaded in (("champion", models.champion), ("challenger", models.challenger)):
+        if loaded is not None and needs_speed(loaded.model) and speed is None:
+            raise MissingSpeedTable(f"{role} {loaded.version} cần avg_speed_mph nhưng chưa đặt ETA_SPEED_TABLE")
 
 
 def to_local(value: datetime) -> pd.Timestamp:
@@ -118,11 +121,8 @@ def trip_frame(trip: dict) -> pd.DataFrame:
 
 
 def predict_one(loaded: Loaded, frame: pd.DataFrame, speed: pd.DataFrame | None) -> float:
-    if SPEED_FEATURE in getattr(loaded.model, "feature_names_in_", ()):
-        from eta.zone_features import DEFAULT_SPEED_MPH, attach_speed
-
-        frame = attach_speed(frame, speed) if speed is not None else frame.assign(**{SPEED_FEATURE: DEFAULT_SPEED_MPH})
-    return max(float(loaded.model.predict(make_features(frame))[0]), float(MIN_DURATION_S))
+    features = make_features(prepare(frame, loaded.model, speed))
+    return max(float(loaded.model.predict(features)[0]), float(MIN_DURATION_S))
 
 
 def warmup(models: Models, speed: pd.DataFrame | None) -> float:
@@ -168,21 +168,33 @@ class PredictionLog:
 async def lifespan(app: FastAPI):
     state = app.state
     state.ready = False
+    state.models = None
+    state.not_ready = "đang nạp"
     state.canary_weight = canary_weight()
     state.shadow = os.environ.get("ETA_SHADOW", "0") == "1"
-    state.speed = load_speed_table()
     state.log = PredictionLog(os.environ.get("ETA_PREDICTION_LOG"))
     state.reload_lock = threading.Lock()
-    state.models = load_models()
-    warm_ms = warmup(state.models, state.speed)
-    state.ready = True
-    log_event(logger, "ready", model_version=state.models.champion.version,
-              challenger=state.models.challenger.version if state.models.challenger else None,
-              canary_weight=state.canary_weight, shadow=state.shadow, warmup_ms=warm_ms)
+    try:
+        install(state)
+    except MissingSpeedTable as err:
+        state.not_ready = str(err)
+        log_event(logger, "not_ready", reason=state.not_ready)
     yield
     state.ready = False
     state.models = None
+    state.not_ready = "đang tắt"
     log_event(logger, "shutdown")
+
+
+def install(state) -> dict:
+    speed = load_speed_table()
+    models = replace(load_models(), speed=speed)
+    check_speed(models, speed)
+    warm_ms = warmup(models, speed)
+    state.models, state.ready, state.not_ready = models, True, None
+    info = {"champion": models.champion.version, "challenger": models.challenger.version if models.challenger else None}
+    log_event(logger, "ready", **info, canary_weight=state.canary_weight, shadow=state.shadow, warmup_ms=warm_ms)
+    return info
 
 
 app = FastAPI(title="ETA taxi NYC", lifespan=lifespan)
@@ -204,7 +216,8 @@ def healthz(request: Request) -> dict:
 def readyz(request: Request):
     models = current(request)
     if models is None:
-        return JSONResponse({"status": "loading"}, status_code=503)
+        reason = getattr(request.app.state, "not_ready", None) or "chưa khởi động"
+        return JSONResponse({"status": "not_ready", "reason": reason}, status_code=503)
     state = request.app.state
     return {"status": "ready", "model_version": models.champion.version,
             "challenger": models.challenger.version if models.challenger else None,
@@ -216,9 +229,10 @@ def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-def run_shadow(state, challenger: Loaded, request_id: str, trip: dict, frame: pd.DataFrame) -> None:
+def run_shadow(state, models: Models, request_id: str, trip: dict, frame: pd.DataFrame) -> None:
+    challenger = models.challenger
     try:
-        eta_s = predict_one(challenger, frame, state.speed)
+        eta_s = predict_one(challenger, frame, models.speed)
     except Exception as err:
         SHADOW_ERRORS.inc()
         log_event(logger, "shadow_failed", request_id=request_id, model_version=challenger.version, error=repr(err))
@@ -240,17 +254,17 @@ def predict(trip: TripRequest, request: Request, response: Response, background:
     served = models.champion
     if variant == "canary":
         try:
-            eta_s = predict_one(models.challenger, frame, state.speed)
+            eta_s = predict_one(models.challenger, frame, models.speed)
             served = models.challenger
         except Exception as err:
             FALLBACKS.inc()
             log_event(logger, "canary_fallback", request_id=request_id, model_version=models.challenger.version, error=repr(err))
             variant = "champion"
     if variant == "champion":
-        eta_s = predict_one(models.champion, frame, state.speed)
+        eta_s = predict_one(models.champion, frame, models.speed)
     state.log.write(request_id, served.version, variant, payload, frame, eta_s)
     if state.shadow and models.challenger is not None and variant == "champion":
-        background.add_task(run_shadow, state, models.challenger, request_id, payload, frame)
+        background.add_task(run_shadow, state, models, request_id, payload, frame)
     return Prediction(eta_s=eta_s, model_version=served.version, variant=variant)
 
 
@@ -260,17 +274,14 @@ def reload(request: Request) -> dict:
     if token and request.headers.get("x-admin-token") != token:
         raise HTTPException(status_code=403, detail="sai X-Admin-Token")
     state = request.app.state
-    if current(request) is None:
-        raise HTTPException(status_code=503, detail="model chưa sẵn sàng")
+    if not hasattr(state, "reload_lock"):
+        raise HTTPException(status_code=503, detail="app chưa khởi động")
     with state.reload_lock:
-        try:
-            models = load_models()
-            warm_ms = warmup(models, state.speed)
-        except Exception as err:
-            log_event(logger, "reload_failed", error=repr(err))
-            raise HTTPException(status_code=500, detail=f"nạp lại thất bại, giữ model cũ: {err!r}") from err
         previous = state.models
-        state.models = models
-    log_event(logger, "reloaded", previous=previous.champion.version, model_version=models.champion.version,
-              challenger=models.challenger.version if models.challenger else None, warmup_ms=warm_ms)
-    return {"champion": models.champion.version, "challenger": models.challenger.version if models.challenger else None}
+        try:
+            info = install(state)
+        except Exception as err:
+            log_event(logger, "reload_failed", error=repr(err), kept=previous.champion.version if previous else None)
+            raise HTTPException(status_code=500, detail=f"nạp lại thất bại, giữ bộ model cũ: {err!r}") from err
+    log_event(logger, "reloaded", previous=previous.champion.version if previous else None, **info)
+    return info

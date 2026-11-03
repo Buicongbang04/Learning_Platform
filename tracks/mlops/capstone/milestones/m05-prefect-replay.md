@@ -55,6 +55,9 @@ labels_for(month: str, as_of: str, config: Config) -> pd.DataFrame | None
 
 - `published("2020-03", "2020-03") is False`, `published("2020-03", "2020-04") is True`, với `delay=2` thì phải tới
   `2020-05`. Trả đúng kiểu `bool`.
+- Kiểm cả `month` và `as_of` bằng cùng bộ kiểm của `eta.clock` trước khi so: chuỗi sai dạng (`"2020-3"`, `"2020-13"`,
+  `"April"`, `""`) → `ValueError`. So chuỗi chỉ đúng khi cả hai đều đúng dạng `YYYY-MM`; `"2020-3" >= "2020-04"` là
+  `True` và sẽ âm thầm "công bố" nhãn.
 - `labels_for` trả **`None`** khi `published(month, as_of)` là sai, **kể cả khi tệp dữ liệu có sẵn trên đĩa** (trong
   mô phỏng mọi tệp đều có sẵn; chính hàm này là cổng chặn).
 - Đã công bố: DataFrame đúng hai cột `request_id`, `duration_s`, mỗi chuyến sạch của tháng một dòng (`load_month` với
@@ -89,13 +92,17 @@ Ba hàm là `@flow` của Prefect; việc nặng đặt trong `@task`.
 M01), `log_and_register` (M04) vào `config.mlflow_uri` / `config.model_name`, trả số version. **Không** tự promote.
 
 - **Cache**: task train có `cache_key_fn` tính từ `data_version` (hash nội dung các tệp tháng, hàm `data_version` của M04)
-  cộng các tham số quyết định model: `months`, `sample_rows`, `seed`, `model_params`, `mlflow_uri`, `model_name`. Gọi lại
+  cộng các tham số quyết định model: `months`, `sample_rows`, `seed`, `model_params`, `mlflow_uri`, `model_name`,
+  `speed_table` (M06), cộng **hash mã nguồn train** (nội dung các tệp `eta` dựng dữ liệu, feature và model, ví dụ
+  `data.py`, `features.py`, `train.py`, `labels.py`, `zone_features.py`, `registry.py`, `flows.py`). Gọi lại
   `train_flow` cùng config, cùng tháng → trả lại **đúng version cũ** và **không** tạo run MLflow mới. Đổi tháng (tức
   `data_version` đổi) → train lại. Kết quả task phải lưu được (`persist_result=True`).
 - Vì sao không để Prefect hash tham số mặc định: tham số là đường dẫn config, không đổi khi nội dung tệp dữ liệu đổi.
   Cache phải theo **nội dung**, không theo tên tệp.
-- Hệ quả cần biết: xoá version khỏi registry thì cache vẫn trả số cũ. Ghi cách xoá cache (`PREFECT_LOCAL_STORAGE_PATH`
-  hoặc đổi khoá) vào README.
+- Vì sao có hash mã nguồn: sửa luật `clean` hay cách dựng feature mà dữ liệu và tham số giữ nguyên thì khoá không đổi,
+  cache trả model cũ train bằng code cũ. Hash code làm khoá đổi theo.
+- Hệ quả cần biết: xoá version khỏi registry thì cache vẫn trả số cũ. Ghi cách xoá cache (xoá thư mục
+  `PREFECT_LOCAL_STORAGE_PATH`, hoặc đổi khoá: đổi tham số, đổi code) vào README.
 
 **`batch_score_flow`**: nạp version đang giữ alias `champion` của `config.model_name` (chưa có champion → báo lỗi rõ ràng),
 chấm **mọi chuyến sạch** của `month` (cùng `sample_rows`, `seed` của config), ghi `<out_dir>/predictions_<month>.parquet`
@@ -125,7 +132,7 @@ mkdir -p data/replay && ln -sf "$PWD"/../../../../data/raw/nyc-tlc*/yellow_tripd
 ### 5. Test chấm làm gì
 
 - `test_m05_months_between`: các ví dụ ở mục 1, kể cả qua năm, `n` âm, và `ValueError` khi `start > end`.
-- `test_m05_labels_not_before_publication`: các ca `published` ở mục 2; `labels_for` trả `None` trước công bố dù tệp có
+- `test_m05_labels_not_before_publication`: các ca `published` ở mục 2 (kể cả `ValueError` khi sai dạng); `labels_for` trả `None` trước công bố dù tệp có
   sẵn; sau công bố trả đúng hai cột, đủ số chuyến sạch, `request_id` không trùng, `duration_s >= 60`.
 - `test_m05_train_flow_cached` (`prefect_test_harness`, MLflow SQLite trong thư mục tạm): gọi `train_flow` hai lần cùng
   tham số → cùng version, đúng **1** run trong experiment `model_name`; gọi với tháng khác → run thứ 2.

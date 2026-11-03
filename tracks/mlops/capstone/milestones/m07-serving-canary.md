@@ -53,6 +53,9 @@ Không có challenger thì mọi request do champion trả lời, bỏ qua canar
 - `GET /readyz` (readiness): **503** khi chưa chạy xong `lifespan` (chưa nạp hoặc chưa warmup) và **sau khi tắt**
   (sau `yield` của `lifespan`, đặt lại trạng thái chưa sẵn sàng); **200** sau warmup với JSON có `model_version` của
   champion (nên có thêm `challenger`, `canary_weight`, `shadow`).
+- Model cần `avg_speed_mph` (M06, `needs_speed`) mà không đặt `ETA_SPEED_TABLE`: app vẫn chạy nhưng **không sẵn sàng**
+  (`/readyz` 503 kèm lý do, `/predict` 503, `/healthz` 200), áp cho cả champion lẫn challenger; đặt bảng rồi khởi động lại
+  hoặc `/admin/reload` thì sẵn sàng. Feature dựng qua `eta.zone_features.prepare`, cùng hàm với batch.
 - Warmup: chấm một chuyến mẫu bằng champion (và challenger nếu có) trước khi báo sẵn sàng, để request đầu không trả giá
   cho lần đầu chạy code. Challenger warmup lỗi thì log và vẫn sẵn sàng (readiness chỉ phụ thuộc champion).
 - `POST /predict` khi chưa sẵn sàng: 503.
@@ -93,10 +96,12 @@ chạy endpoint đồng bộ trên nhiều thread. Vẫn giữ log JSON ra stder
 
 ### 6. Reload và rollback
 
-`POST /admin/reload`: nạp lại champion và challenger theo nguồn ở mục 1 (registry: alias `champion`, `challenger` lúc gọi),
-warmup bản mới, rồi **thay một lần** (request đang chạy dùng bộ model cũ tới hết). Trả `{"champion": "<version>",
+`POST /admin/reload`: nạp lại champion, challenger theo nguồn ở mục 1 (registry: alias `champion`, `challenger` lúc gọi) và
+`ETA_SPEED_TABLE`, kiểm như lúc khởi động, warmup bản mới, rồi **thay một lần** (request đang chạy dùng bộ model cũ tới hết). Trả `{"champion": "<version>",
 "challenger": "<version>" | null}`. Nạp lỗi → 5xx và **giữ** model cũ. Đặt `ETA_ADMIN_TOKEN` thì đòi header
-`X-Admin-Token` khớp (403 nếu sai). API **không** tự đọc lại alias ở mỗi request.
+`X-Admin-Token` khớp (403 nếu sai). **Bắt buộc** đặt `ETA_ADMIN_TOKEN` khi cổng API không chỉ bind `127.0.0.1` (Compose
+publish ra `0.0.0.0`, Kubernetes Service, reverse proxy): không có token thì ai gọi được API cũng đổi được model đang
+chạy. API **không** tự đọc lại alias ở mỗi request.
 
 Runbook rollback: `set_registered_model_alias("eta", "champion", "<version cũ>")` → `curl -X POST .../admin/reload` →
 `/readyz` báo version cũ.
@@ -121,6 +126,8 @@ model "hỏng" học trên cột khác nên `predict` ném lỗi).
 
 - `test_m07_readyz_before_load`: `/readyz` 503 khi chưa chạy `lifespan`, 200 với `model_version == ETA_MODEL_VERSION`
   khi đã chạy, 503 lại sau khi tắt; `/healthz` 200.
+- `test_m07_readyz_needs_speed_table`: model joblib học có `avg_speed_mph`, không đặt `ETA_SPEED_TABLE` → `/healthz` 200,
+  `/readyz` 503, `/predict` 503; đặt `ETA_SPEED_TABLE` (CSV từ `zone_hour_speed`) → 200.
 - `test_m07_canary_split`: tỉ lệ và tính ổn định của `route` (mục 3), `weight` 0 và 1; rồi với `ETA_CANARY_WEIGHT=0.5`,
   40 request có `X-Request-ID`: `variant` bằng `route(id, 0.5)`, `model_version` là version challenger khi canary, header
   `X-Request-ID` trả lại đúng; request không có header vẫn nhận header tự sinh.
@@ -149,7 +156,9 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m07
 ## Tiêu chí đạt
 
 - [ ] `uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m07` pass, không skip (Docker sẵn sàng).
-- [ ] Challenger lỗi hay chậm không bao giờ làm request lỗi hoặc đổi kết quả của champion.
+- [ ] Challenger **lỗi** (shadow hay canary) không bao giờ làm request lỗi hoặc đổi kết quả của champion; shadow **chậm**
+      không cộng vào độ trễ (chạy sau response). Canary chậm thì request canary chậm thật: bài này không có timeout
+      cho canary, nên p95/p99 theo `variant` là tiêu chí dừng canary (M09).
 - [ ] Cùng `request_id` luôn cùng nhánh; tỉ lệ canary khớp trọng số.
 - [ ] Rollback bằng đổi alias + reload, không restart; `/readyz` báo đúng version.
 - [ ] Log dự đoán đúng `PREDICTION_LOG_COLUMNS`, có `variant`.

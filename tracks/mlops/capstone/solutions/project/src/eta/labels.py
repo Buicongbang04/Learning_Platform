@@ -1,13 +1,13 @@
 import pandas as pd
 
-from eta.clock import add_months
+from eta.clock import add_months, check_month
 from eta.config import Config
 
 LABEL_DELAY_MONTHS = 1
 
 
 def published(month: str, as_of: str, delay: int = LABEL_DELAY_MONTHS) -> bool:
-    return as_of >= add_months(month, delay)
+    return check_month(as_of) >= add_months(check_month(month), delay)
 
 
 def month_trips(month: str, config: Config) -> pd.DataFrame:

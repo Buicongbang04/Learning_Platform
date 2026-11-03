@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
-from etakit import PROJECT, need, require_file, synthetic_month
+from etakit import PROJECT, local_registry, need, require_file, synthetic_month, write_config, write_months
 
 import mlopskit
 
@@ -158,3 +158,41 @@ def test_m06_online_offline_parity(project, tmp_path):
     assert [row[:2] for row in got["online"]] == keys.astype(int).values.tolist()
     assert np.allclose(online, historical, atol=1e-6), "online (Redis) phải bằng offline (get_historical_features)"
     assert np.allclose(host, historical, atol=1e-6), "attach_speed trên host phải bằng Feast offline: không skew"
+
+
+def model_frame(scored: pd.DataFrame, table: pd.DataFrame, zf) -> pd.DataFrame:
+    pickup = pd.to_datetime(scored["pickup_datetime"]).astype("datetime64[us]")
+    trips = pd.DataFrame({"tpep_pickup_datetime": pickup, "PULocationID": scored["PULocationID"],
+                          "DOLocationID": scored["DOLocationID"], "trip_distance": scored["trip_distance"]})
+    speed = zf.attach_speed(trips, table)["avg_speed_mph"].to_numpy()
+    return pd.DataFrame({"PULocationID": trips["PULocationID"].astype("int64"), "DOLocationID": trips["DOLocationID"].astype("int64"),
+                         "pickup_hour": pickup.dt.hour.astype("int64"), "pickup_dow": pickup.dt.day_of_week.astype("int64"),
+                         "trip_distance": trips["trip_distance"].astype("float64"), "avg_speed_mph": speed})
+
+
+def test_m06_speed_model_batch_score(project, tmp_path, prefect_harness):
+    import mlflow
+    from mlflow import MlflowClient
+
+    zf = need("zone_features", "zone_hour_speed", "attach_speed")
+    data = need("data", "load_month")
+    features = need("features", "clean")
+    flows = need("flows", "train_flow", "batch_score_flow")
+    months = ["2019-01", "2019-02", "2019-03"]
+    raw = write_months(tmp_path / "raw", months)
+    table = pd.concat([zf.zone_hour_speed(features.clean(data.load_month(raw / f"yellow_tripdata_{m}.parquet", 1_200, 0), m), m)
+                       for m in months[:2]], ignore_index=True)
+    table.to_parquet(tmp_path / "speed.parquet", index=False)
+    uri, name = local_registry(tmp_path, "eta-m06")
+    cfg = write_config(tmp_path / "params.yaml", raw, ["2019-02"], uri, name, speed_table="speed.parquet")
+    version = flows.train_flow(str(cfg), ["2019-02"])
+    MlflowClient(tracking_uri=uri).set_registered_model_alias(name, "champion", version)
+    mlflow.set_tracking_uri(uri)
+    model = mlflow.sklearn.load_model(f"models:/{name}/{version}")
+    assert "avg_speed_mph" in list(model.feature_names_in_), "speed_table trong config thì train_flow gắn avg_speed_mph trước khi train"
+    scored = pd.read_parquet(flows.batch_score_flow("2019-03", str(cfg), str(tmp_path / "scores")))
+    expected = np.maximum(model.predict(model_frame(scored, table, zf)), 60.0)
+    assert np.allclose(scored["eta_s"].to_numpy(), expected), "batch phải gắn feature bằng đúng attach_speed như lúc train"
+    plain = write_config(tmp_path / "plain.yaml", raw, ["2019-02"], uri, name)
+    with pytest.raises(Exception, match="avg_speed_mph"):
+        flows.batch_score_flow("2019-03", str(plain), str(tmp_path / "plain"))
