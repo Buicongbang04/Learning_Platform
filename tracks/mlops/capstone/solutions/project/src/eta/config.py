@@ -33,6 +33,13 @@ ENV_PARSERS = {
 }
 
 
+def _resolve_sqlite(uri: str, base: Path) -> str:
+    prefix = "sqlite:///"
+    if not uri.startswith(prefix) or uri.startswith(prefix + "/"):
+        return uri
+    return prefix + str((base / uri[len(prefix):]).resolve())
+
+
 def load_config(path: Path) -> Config:
     path = Path(path)
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -46,6 +53,8 @@ def load_config(path: Path) -> Config:
     if raw.get("speed_table"):
         table = Path(raw["speed_table"])
         raw["speed_table"] = table if table.is_absolute() else (path.parent / table).resolve()
+    if isinstance(raw.get("mlflow_uri"), str):
+        raw["mlflow_uri"] = _resolve_sqlite(raw["mlflow_uri"], path.parent)
     for name, parse in ENV_PARSERS.items():
         value = os.environ.get(f"ETA_{name.upper()}")
         if value is not None:

@@ -79,6 +79,22 @@ def test_m05_train_flow_cached(project, setup, prefect_harness):
     assert other != first and mlflow_runs(uri, name) == 2, "đổi tháng (data_version đổi) phải train lại"
 
 
+def test_m05_train_flow_cache_after_registry_reset(project, setup, prefect_harness):
+    from mlflow import MlflowClient
+
+    _, uri, name, cfg = setup
+    flows = need("flows", "train_flow")
+    first = flows.train_flow(str(cfg), ["2019-03"])
+    client = MlflowClient(tracking_uri=uri)
+    client.delete_registered_model(name)
+    again = flows.train_flow(str(cfg), ["2019-03"])
+    assert isinstance(again, str) and again, "train_flow trả số version dạng chuỗi"
+    versions = {str(v.version) for v in client.search_model_versions(f"name='{name}'")}
+    assert again in versions, (
+        f"cache trả version {first} đã bị xoá khỏi registry: phải đối chiếu cache với registry rồi train lại"
+    )
+
+
 def set_champion(uri: str, name: str, version: str) -> None:
     from mlflow import MlflowClient
 

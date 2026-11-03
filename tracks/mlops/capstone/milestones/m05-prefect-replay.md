@@ -101,8 +101,15 @@ M01), `log_and_register` (M04) vào `config.mlflow_uri` / `config.model_name`, t
   Cache phải theo **nội dung**, không theo tên tệp.
 - Vì sao có hash mã nguồn: sửa luật `clean` hay cách dựng feature mà dữ liệu và tham số giữ nguyên thì khoá không đổi,
   cache trả model cũ train bằng code cũ. Hash code làm khoá đổi theo.
-- Hệ quả cần biết: xoá version khỏi registry thì cache vẫn trả số cũ. Ghi cách xoá cache (xoá thư mục
-  `PREFECT_LOCAL_STORAGE_PATH`, hoặc đổi khoá: đổi tham số, đổi code) vào README.
+- **Cache phải được đối chiếu với registry.** Khoá cache không biết registry: xoá model (hay cả tệp SQLite của MLflow)
+  thì cache vẫn trả số version cũ, trỏ vào thứ không còn tồn tại. Sau khi task train trả version, `train_flow` kiểm tra
+  bằng `MlflowClient.get_model_version(model_name, version)` rằng version đó còn và tag `data_version` khớp; không còn
+  (`MlflowException`) hoặc lệch thì ghi sự kiện `stale_cache` và chạy lại task với
+  `train_and_register.with_options(refresh_cache=True)`. Test `test_m05_train_flow_cache_after_registry_reset` xoá
+  registered model giữa hai lần gọi và đòi version trả về phải có trong registry.
+- `mlflow_uri` dạng `sqlite:///` đường dẫn tương đối được `load_config` tính từ thư mục tệp config (như `data_dir`), để
+  cache và registry không phụ thuộc thư mục đang đứng khi chạy.
+- Ghi cách xoá cache (xoá thư mục `PREFECT_LOCAL_STORAGE_PATH`, hoặc đổi khoá: đổi tham số, đổi code) vào README.
 
 **`batch_score_flow`**: nạp version đang giữ alias `champion` của `config.model_name` (chưa có champion → báo lỗi rõ ràng),
 chấm **mọi chuyến sạch** của `month` (cùng `sample_rows`, `seed` của config), ghi `<out_dir>/predictions_<month>.parquet`
@@ -136,6 +143,8 @@ mkdir -p data/replay && ln -sf "$PWD"/../../../../data/raw/nyc-tlc*/yellow_tripd
   sẵn; sau công bố trả đúng hai cột, đủ số chuyến sạch, `request_id` không trùng, `duration_s >= 60`.
 - `test_m05_train_flow_cached` (`prefect_test_harness`, MLflow SQLite trong thư mục tạm): gọi `train_flow` hai lần cùng
   tham số → cùng version, đúng **1** run trong experiment `model_name`; gọi với tháng khác → run thứ 2.
+- `test_m05_train_flow_cache_after_registry_reset`: `train_flow` một lần, `delete_registered_model`, gọi lại cùng tham
+  số → version trả về phải có trong registry (cache cũ bị phát hiện và train lại).
 - `test_m05_batch_score_columns`: đặt champion, chấm 2019-02, kiểm tên tệp, đúng cột và thứ tự, số dòng bằng số chuyến
   sạch, `request_id` không trùng, `model_version`, `variant == "batch"`, `eta_s > 0`.
 - `test_m05_replay_mae_late`: 4 tháng giả 2019-01..04, `replay_flow("2019-02", "2019-04", ...)`: ba dict đúng thứ tự,
@@ -160,7 +169,7 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m05
 
 - [ ] `uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m05` pass, không skip.
 - [ ] Không có đường nào tính MAE từ nhãn chưa công bố tại `as_of`.
-- [ ] Chạy lại cùng dữ liệu, cùng tham số không train lại; đổi dữ liệu thì train lại.
+- [ ] Chạy lại cùng dữ liệu, cùng tham số không train lại; đổi dữ liệu thì train lại; registry mất version thì train lại.
 - [ ] Log batch và log API (M07) cùng một tập cột, join được với nhãn theo `request_id`.
 - [ ] (Tự đánh giá) Replay thật 5 tháng có bảng kết quả và nhận xét MAE theo tháng.
 - [ ] (Tự đánh giá) Có retry cho bước đọc dữ liệu và ghi tệp, giải thích vì sao bước train không cần retry.

@@ -84,10 +84,26 @@ def train_and_register(config: Config, data_version: str) -> str:
     return version
 
 
+def _registered(config: Config, version: str, data_version: str) -> bool:
+    from mlflow import MlflowClient
+    from mlflow.exceptions import MlflowException
+
+    try:
+        found = MlflowClient(tracking_uri=config.mlflow_uri).get_model_version(config.model_name, version)
+    except MlflowException:
+        return False
+    return found.tags.get("data_version") == data_version
+
+
 @flow(name="eta-train")
 def train_flow(config_path: str, months: list[str]) -> str:
     config = _config(config_path, months)
-    return train_and_register(config, fingerprint(config))
+    data_version = fingerprint(config)
+    version = train_and_register(config, data_version)
+    if _registered(config, version, data_version):
+        return version
+    log_event(logger, "stale_cache", model_name=config.model_name, model_version=version, data_version=data_version)
+    return train_and_register.with_options(refresh_cache=True)(config, data_version)
 
 
 def _champion(config: Config) -> tuple[object, str] | None:

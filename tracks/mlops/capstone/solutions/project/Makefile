@@ -30,7 +30,7 @@ replay-data:
 	done
 
 replay: replay-data
-	cd $(CURDIR) && PREFECT_HOME=$(CURDIR)/data/prefect PYTHONPATH=src uv run --project $(REPO) python -m eta.cli replay --config params.replay.yaml --start 2019-07 --end 2020-06 --out reports/replay
+	cd $(CURDIR) && PYTHONPATH=src uv run --project $(REPO) python -m eta.cli replay --config params.replay.yaml --start 2019-07 --end 2020-06 --out reports/replay
 
 experiments:
 	$(PY) -m eta.cli experiment late-slice --config params.replay.yaml --month 2020-03 --as-of 2020-04
