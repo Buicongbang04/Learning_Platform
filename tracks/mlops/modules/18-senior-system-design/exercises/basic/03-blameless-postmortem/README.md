@@ -40,7 +40,7 @@ trong 30 ngày. SLO khả dụng và độ trễ xanh suốt sự cố.
 | --- | --- |
 | Toàn văn | Không có tên `Khải`, `Quyên`, `Thịnh` (dùng vai trò); không có các cụm `lỗi của`, `cẩu thả`, `bất cẩn`, `đáng lẽ`, `cẩn thận hơn`, `chú ý hơn`, `theo dõi sát hơn` (không hoa thường) |
 | 1. Tóm tắt | Ít nhất 150 ký tự (không tính bảng) |
-| 2. Tác động | Ít nhất 3 con số, trong đó có phần trăm error budget freshness 30 ngày đã tiêu (dạng `NN%`, tự tính) |
+| 2. Tác động | Ít nhất 3 con số, trong đó có phần trăm error budget freshness 30 ngày đã tiêu (dạng `NN%`, tự tính; test nhận 43-45%). Thời gian tính vào budget là từ mốc bắt đầu tác động tới mốc hết tác động trong dòng thời gian (14:05 tới 17:15), không trừ khoảng 15 phút đầu khi feature chưa vượt ngưỡng |
 | 3. Dòng thời gian | Bảng có cột `Thời điểm`, `Sự kiện`; ít nhất 6 mốc dạng `HH:MM`, theo thứ tự tăng dần, có mốc bắt đầu tác động `14:05` và mốc hết tác động `17:15`; mỗi mốc có mô tả |
 | 4. Nguyên nhân gốc và yếu tố góp phần | Ít nhất 3 gạch đầu dòng |
 | 5. Điều đã tốt, điều may mắn | Ít nhất 2 gạch đầu dòng |

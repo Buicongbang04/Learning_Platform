@@ -9,32 +9,34 @@ from testkit import Exercise
 ex = Exercise(__file__)
 FIXTURES = Path(__file__).parent / "fixtures"
 N = 20_000
-CLIENT_TIMEOUT_MS = 1000.0
+EDGE_LIMIT_MS = 1000.0
+EDGE_CODE = 504
+REJECT_CODE = 503
 
 
-def traffic(seed=11, slow_share=0.0, shed_share=0.0):
+def traffic(seed=11, share_a=0.0, share_b=0.0):
     rng = np.random.default_rng(seed)
     traces, seen = [], []
     for i in range(N):
         roll = rng.random()
-        fetch = float(rng.lognormal(np.log(30), 0.3))
-        if roll < slow_share:
-            fetch = float(rng.lognormal(np.log(900), 0.5))
-        infer = float(rng.lognormal(np.log(25), 0.2))
+        part_a = float(rng.lognormal(np.log(30), 0.3))
+        if roll < share_a:
+            part_a = float(rng.lognormal(np.log(900), 0.5))
+        part_b = float(rng.lognormal(np.log(25), 0.2))
         failed = rng.random() < 0.0005
-        handler = fetch + infer + 3.0
+        handler = part_a + part_b + 3.0
         outer = handler + 5.0
         status = 500 if failed else 200
-        if shed_share and slow_share <= roll < slow_share + shed_share:
-            traces.append({"id": f"r{i}", "spans": [{"name": "gateway", "parent": None, "status": 503, "duration_ms": 2.0}]})
-            seen.append((503, 2.0))
+        if share_b and share_a <= roll < share_a + share_b:
+            traces.append({"id": f"r{i}", "spans": [{"name": "gateway", "parent": None, "status": REJECT_CODE, "duration_ms": 2.0}]})
+            seen.append((REJECT_CODE, 2.0))
             continue
-        edge_status, edge_ms = (504, CLIENT_TIMEOUT_MS) if outer > CLIENT_TIMEOUT_MS else (status, outer)
+        edge_status, edge_ms = (EDGE_CODE, EDGE_LIMIT_MS) if outer > EDGE_LIMIT_MS else (status, outer)
         traces.append({"id": f"r{i}", "spans": [
             {"name": "gateway", "parent": None, "status": edge_status, "duration_ms": edge_ms},
             {"name": "handler", "parent": "gateway", "status": status, "duration_ms": handler},
-            {"name": "features", "parent": "handler", "status": 200, "duration_ms": fetch},
-            {"name": "predict", "parent": "handler", "status": status, "duration_ms": infer},
+            {"name": "features", "parent": "handler", "status": 200, "duration_ms": part_a},
+            {"name": "predict", "parent": "handler", "status": status, "duration_ms": part_b},
         ]})
         seen.append((edge_status, edge_ms))
     rng.shuffle(order := np.arange(N))
@@ -55,7 +57,7 @@ def load(path):
 
 @pytest.fixture(scope="module")
 def bad_day():
-    return traffic(slow_share=0.08, shed_share=0.01)
+    return traffic(share_a=0.08, share_b=0.01)
 
 
 @pytest.fixture(scope="module")

@@ -118,6 +118,14 @@ def test_moderate_quality_loss_only_burns_slowly(tmp_path, rules_text):
     ])
 
 
+def test_quality_just_under_fast_threshold_does_not_page(tmp_path, rules_text):
+    promtool_scenario(tmp_path, rules_text, "5m", quality([(89, 432)], [(11, 432)]), [
+        ("ETAQualityBudgetFastBurn", "12h", False),
+        ("ETAQualityBudgetFastBurn", "30h", False),
+        ("ETAQualityBudgetSlowBurn", "30h", True),
+    ])
+
+
 def test_quality_within_budget_stays_quiet(tmp_path, rules_text):
     promtool_scenario(tmp_path, rules_text, "5m", quality([(197, 432)], [(3, 432)]), [
         ("ETAQualityBudgetFastBurn", "30h", False),
@@ -163,6 +171,13 @@ def test_short_feature_stall_does_not_page(tmp_path, rules_text):
     promtool_scenario(tmp_path, rules_text, "1m", freshness(timestamps(60, 78)), [
         ("ETAFeatureFreshnessFastBurn", "78m", False),
         ("ETAFeatureFreshnessFastBurn", "85m", False),
+    ])
+
+
+def test_stall_below_hourly_threshold_does_not_page(tmp_path, rules_text):
+    promtool_scenario(tmp_path, rules_text, "1m", freshness(timestamps(60, 84)), [
+        ("ETAFeatureFreshnessFastBurn", "86m", False),
+        ("ETAFeatureFreshnessFastBurn", "89m", False),
     ])
 
 
