@@ -81,14 +81,14 @@ def test_regression_original_reproduces_the_symptom(world):
     assert not verifies(again, world)
 
 
-def test_first_release_on_a_node(release, world):
+def test_deploy_serves_signed_release(release, world):
     served = stage(release, world)
     assert served.is_dir() and served.resolve().is_relative_to(world["cache"].resolve())
     assert served.resolve() != world["bundle"].resolve()
     assert verifies(served, world) and same_tree(served, world["pristine"])
 
 
-def test_second_release_reuses_local_copy(release, world):
+def test_repeat_deploy_unchanged_node_is_cheap(release, world):
     served = stage(release, world)
     before = (served / "model.safetensors").stat()
     again = stage(release, world)
@@ -98,7 +98,7 @@ def test_second_release_reuses_local_copy(release, world):
 
 
 @pytest.mark.parametrize("case", list(SWAPS))
-def test_second_release_matches_signed_content(release, world, case):
+def test_repeat_deploy_matches_signed_release(release, world, case):
     served = stage(release, world)
     SWAPS[case](served)
     again = stage(release, world)
@@ -115,7 +115,7 @@ def test_changed_registry_bundle_is_rejected(release, world, case):
     assert leftover == [], f"ca {case}"
 
 
-def test_warm_node_with_changed_registry_bundle(release, world):
+def test_repeat_deploy_with_changed_registry_bundle(release, world):
     stage(release, world)
     flip_byte(world["bundle"])
     try:

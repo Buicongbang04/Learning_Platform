@@ -13,6 +13,7 @@ import seckit
 from testkit import Exercise
 
 ex = Exercise(__file__)
+MEASURED = "hành vi đo trên modelscan 0.8.8; xem README module mục 5"
 
 
 @pytest.fixture(scope="module")
@@ -117,9 +118,17 @@ def test_scanner_alone_misses_a_payload_that_the_allowlist_stops(mio, tmp_path, 
     folder = model_dir(tmp_path)
     (folder / "preprocess.pkl").write_bytes(seckit.stealth_pickle(marker))
     raw = mlopskit.modelscan_run(folder)
-    assert raw.returncode == 0 and json.loads(raw.stdout)["issues"] == []
+    assert raw.returncode == 0 and json.loads(raw.stdout)["issues"] == [], MEASURED
     decision = mio.gate(folder, mlopskit.modelscan_run)
     assert decision == {"allowed": False, "reasons": ["format:preprocess.pkl"]}
+    assert not marker.exists()
+
+
+def test_known_residual_risk_of_the_pickle_path(mio, tmp_path, marker):
+    folder = model_dir(tmp_path)
+    (folder / "preprocess.pkl").write_bytes(seckit.stealth_pickle(marker))
+    decision = mio.gate(folder, mlopskit.modelscan_run, allow_pickle=True)
+    assert decision == {"allowed": True, "reasons": []}, MEASURED
     assert not marker.exists()
 
 
@@ -127,7 +136,7 @@ def test_disguised_pickle_blocked(mio, tmp_path, marker):
     folder = model_dir(tmp_path)
     (folder / "model.safetensors").write_bytes(seckit.marker_pickle(marker))
     raw = mlopskit.modelscan_run(folder)
-    assert raw.returncode == 3
+    assert raw.returncode == 3, MEASURED
     decision = mio.gate(folder, mlopskit.modelscan_run, allow_pickle=True)
     assert decision["allowed"] is False
     assert decision["reasons"] == ["unscanned:model.safetensors"]
@@ -140,7 +149,7 @@ def test_legacy_plain_pickle_allowed_only_when_scanned(mio, tmp_path):
     assert mio.gate(folder, mlopskit.modelscan_run, allow_pickle=True) == {"allowed": True, "reasons": []}
     (folder / "legacy.pkl").rename(folder / "legacy.bin")
     decision = mio.gate(folder, mlopskit.modelscan_run, allow_pickle=True)
-    assert decision == {"allowed": False, "reasons": ["unscanned:legacy.bin"]}
+    assert decision == {"allowed": False, "reasons": ["unscanned:legacy.bin"]}, MEASURED
 
 
 def test_gate_scans_the_model_directory(mio, tmp_path):

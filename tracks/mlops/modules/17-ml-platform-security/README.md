@@ -31,7 +31,9 @@ phiên bản `rich`/`tomlkit` với môi trường mặc định (CONTENT_SPEC m
 Cần Docker cho các bài dùng modelscan. Build trước để lần chạy test đầu không chờ:
 
 ```bash
-uv run python -c "import mlopskit, pathlib, tempfile; p = pathlib.Path(tempfile.mkdtemp()) / 'x.json'; p.write_text('{}'); print(mlopskit.modelscan_run(p).returncode)"
+uv run python -c "import mlopskit, pathlib, tempfile
+with tempfile.TemporaryDirectory() as d:
+    p = pathlib.Path(d) / 'x.json'; p.write_text('{}'); print(mlopskit.modelscan_run(p).returncode)"
 ```
 
 In `3` (không có gì để quét) là image đã sẵn sàng. Gỡ: `docker image rm mlops-modelscan:0.8.8`. Các gói Python gỡ cùng group `mlops-senior`
@@ -132,7 +134,7 @@ Tính theo **request**, không theo mức dùng thật: scheduler giữ chỗ th
 chỉ số đơn vị để đội tự tối ưu: chi phí trên 1 000 dự đoán, chi phí mỗi lần retrain so với mức cải thiện metric, tỉ lệ dùng trên request.
 Đòn bẩy giảm chi phí thường theo thứ tự: rightsizing request, scale-to-zero cho model ít lưu lượng (KEDA, module 14), hàng đợi cho GPU
 huấn luyện thay vì giữ node (Kueue, module 15), rồi mới tới đổi loại máy hay mua cam kết dài hạn. Ở nơi làm việc, dữ liệu chi phí theo
-pod đến từ OpenCost hay Kubecost, phần ngoài cluster từ hoá đơn cloud có tag. Bài Basic 03.
+pod đến từ OpenCost hay Kubecost (OpenCost phân bổ theo max(request, usage), nên pod dùng vượt request cũng bị tính phần vượt), phần ngoài cluster từ hoá đơn cloud có tag. Bài Basic 03.
 
 ## 4. Build vs buy: Databricks, SageMaker, Vertex AI hay open source
 
@@ -165,12 +167,15 @@ bản sao trên node. Mỗi chặng là một chỗ có thể bị thay. Nguy hi
   nhanh (mmap) và an toàn theo thiết kế. Model cây dùng định dạng gốc của thư viện (văn bản hay JSON của LightGBM, XGBoost); mạng nơ-ron dùng
   safetensors hoặc ONNX. Keras `.h5` cũ có lớp `Lambda` chứa code, cũng cần coi chừng.
 - **Máy quét model** như **modelscan** (Protect AI) đọc opcode pickle mà không nạp, báo khi thấy tham chiếu tới module/hàm nguy hiểm
-  (`builtins.exec` mức CRITICAL). Giới hạn đã thấy trong bài Intermediate 01: quét theo **danh sách chặn** (payload gọi
-  `pathlib.Path.write_text` qua được), chọn scanner theo **đuôi tệp** (pickle đặt tên `.safetensors` thì "không có gì để quét", đuôi `.bin`
-  bị bỏ qua), và có lúc không parse được (pickle `joblib` có mảng numpy báo lỗi parse).
+  (`builtins.exec` mức CRITICAL). Giới hạn đo được trên **modelscan 0.8.8** (bản ghim của module; bản khác có thể khác): quét theo **danh
+  sách chặn** (payload gọi `pathlib.Path.write_text` qua được), chọn scanner theo **đuôi tệp** (pickle đặt tên `.safetensors` thì "không có
+  gì để quét", đuôi `.bin` bị bỏ qua); ba điều này có test trong bài Intermediate 01. Khi viết bài còn đo được: tệp `joblib` có mảng numpy
+  báo lỗi parse trong `errors` (không có test riêng).
 
 Vì vậy cổng nhận model có hai lớp độc lập: **allowlist theo nội dung** (nhận diện định dạng bằng byte đầu, chỉ nhận định dạng không chứa
-code) là lớp chính; **máy quét** là lớp phụ cho đường chuyển tiếp còn nhận pickle, và chỉ tin khi máy quét **đã đọc** đúng tệp đó. Mọi
+code) là lớp chính; **máy quét** là lớp phụ cho đường chuyển tiếp còn nhận pickle, và chỉ tin khi máy quét **đã đọc** đúng tệp đó. Ngay cả
+khi đó, quét sạch **không phải bằng chứng an toàn** (payload `pathlib` ở trên qua được): pickle theo đường chuyển tiếp chỉ được nạp hay chuyển
+sang safetensors trong sandbox cô lập (không mạng, không secret), và đường này có hạn chót bỏ. Mọi
 trường hợp không chắc (máy quét lỗi, định dạng lạ, symlink) đều **fail closed**. Máy quét chạy trong sandbox không mạng, mount chỉ đọc,
 như `mlopskit.modelscan_run`, vì chính nó cũng là phần mềm đọc dữ liệu không tin cậy.
 
@@ -220,7 +225,7 @@ Ba bài học của chuỗi này, mỗi bài một bài tập:
 - **Quản lý khoá**: khoá riêng chỉ trong hệ thống ký của CI; cổng chỉ có khoá công khai; có quy trình thu hồi, xoay khoá, ký lại.
 
 **SBOM** (software bill of materials) liệt kê mọi gói và phiên bản trong image serving, để khi có CVE trả lời được "service nào đang chạy
-bản đó" mà không vào từng container. CycloneDX 1.6 có thêm **ML-BOM**: thành phần `machine-learning-model` và `data` (model gốc kèm hash,
+bản đó" mà không vào từng container. Từ CycloneDX 1.5 (bài dùng 1.6) có thêm **ML-BOM**: thành phần `machine-learning-model` và `data` (model gốc kèm hash,
 dataset, tham số). SBOM sinh từ **môi trường đã build** (`cyclonedx-py environment`, Syft cho image), không chỉ từ requirements; thành phần
 không có phiên bản là lỗi. So SBOM của bản mới với bản đang chạy là một phần của review phát hành. Bài Intermediate 03.
 
@@ -241,7 +246,7 @@ ký, build chạy trên hạ tầng cô lập.
 - Protect AI, modelscan: https://github.com/protectai/modelscan
 - OpenSSF model-transparency (model-signing): https://github.com/sigstore/model-transparency
 - Sigstore (Fulcio, Rekor, keyless signing): https://docs.sigstore.dev/
-- CycloneDX 1.6 và ML-BOM: https://cyclonedx.org/capabilities/mlbom/ ; cyclonedx-python: https://cyclonedx-bom-tool.readthedocs.io/
+- CycloneDX (ML-BOM từ 1.5, bài dùng 1.6): https://cyclonedx.org/capabilities/mlbom/ ; cyclonedx-python: https://cyclonedx-bom-tool.readthedocs.io/
 - SLSA: https://slsa.dev/spec/v1.0/
 - OWASP Machine Learning Security Top 10 (ML06 AI Supply Chain Attacks): https://owasp.org/www-project-machine-learning-security-top-10/
 - Module 12 mục 2-4 (governance, chi phí, dịch vụ cloud), module 14-15 (KEDA, Kueue) của track này.

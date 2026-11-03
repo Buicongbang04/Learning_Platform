@@ -34,7 +34,8 @@ Sigstore, không OIDC, không mạng. Test tạo thư mục model gồm `model.s
 3. `deploy_gate(model_dir, signature, public_key, scan)`: trả `{"allowed": bool, "reasons": [...]}` với:
    - `"signature"` khi `verify` trả `False`;
    - `"scan"` khi kết quả `scan(model_dir)` không sạch: `returncode` không phải 0 hay 3, `stdout` không phải JSON object, có `issues`
-     hoặc có `errors`.
+     hoặc có `errors`. Khác bài 01 (cho qua issue `LOW`): đây là cổng cuối trước production, không có lớp allowlist đứng trước, nên mọi
+     issue đều chặn và người duyệt quyết định ngoại lệ, thay vì để code cổng tự đánh giá mức độ.
 
    `reasons` theo đúng thứ tự `signature` rồi `scan`; gọi `scan` **đúng một lần** trên chính `model_dir`, kể cả khi chữ ký đã sai (để
    báo đủ mọi lý do). Test truyền `mlopskit.modelscan_run` (container không mạng) hoặc bản giả.

@@ -134,6 +134,8 @@ def test_required_answer_has_no_default(tmp_path, missing):
 
 
 def test_template_runs_without_trust(tmp_path):
-    config = yaml.safe_load((ex.path("template") / "copier.yml").read_text(encoding="utf-8"))
+    found = sorted(ex.path("template").glob("copier.y*ml"))
+    assert len(found) == 1
+    config = yaml.safe_load(found[0].read_text(encoding="utf-8"))
     unsafe = {"_tasks", "_migrations", "_jinja_extensions"} & set(config)
     assert not unsafe

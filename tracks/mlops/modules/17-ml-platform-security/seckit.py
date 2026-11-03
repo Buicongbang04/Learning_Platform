@@ -8,6 +8,7 @@ Quy tắc an toàn của module:
 - Quét model chỉ qua `mlopskit.modelscan_run` (container `--network none`, mount chỉ đọc).
 """
 
+import os
 import pickle
 from pathlib import Path
 
@@ -22,9 +23,10 @@ def ec_keypair(folder: Path, name: str = "signer") -> tuple[Path, Path]:
     key = ec.generate_private_key(ec.SECP256R1())
     private = folder / f"{name}.pem"
     public = folder / f"{name}.pub"
-    private.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                          serialization.NoEncryption()))
-    private.chmod(0o600)
+    data = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    fd = os.open(private, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
     public.write_bytes(key.public_key().public_bytes(serialization.Encoding.PEM,
                                                      serialization.PublicFormat.SubjectPublicKeyInfo))
     return private, public

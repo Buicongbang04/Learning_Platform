@@ -55,7 +55,7 @@ Câu trả lời sai hoặc thiếu thì `copier copy` phải dừng với lỗi
   trong ba tag bắt buộc. Tức là template sinh ra cả test canh quy ước, không chỉ test model.
 
 Test chạy `copier copy` và test của dự án sinh ra trong sandbox `bwrap`, **không** có `--trust`: template không được dùng tính năng
-mà Copier coi là không an toàn (`_tasks`, `_migrations`, `_jinja_extensions`). Test cũng đọc `copier.yml` để kiểm điều này.
+mà Copier coi là không an toàn (`_tasks`, `_migrations`, `_jinja_extensions`). Test cũng đọc tệp cấu hình (`copier.yml` hoặc `copier.yaml`, đúng một tệp) để kiểm điều này.
 
 Tệp Python trong template đặt tên đuôi `.py.jinja` (kể cả khi không có biến), để pytest của repo không thu thập test của template.
 

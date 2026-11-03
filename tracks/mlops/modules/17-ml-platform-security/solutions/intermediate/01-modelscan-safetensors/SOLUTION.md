@@ -24,6 +24,11 @@ Vì vậy cổng có hai lớp độc lập: **allowlist theo nội dung** (nh�
 lớp chính, **máy quét** là lớp phụ cho đường chuyển tiếp còn nhận pickle. Khi nhận pickle, đòi bằng chứng là máy quét **đã đọc** tệp
 (`scanned_files`), không chỉ "không thấy gì".
 
+**Đường chuyển tiếp vẫn là rủi ro.** Với `allow_pickle=True`, payload `pathlib` được quét, sạch, và lọt qua cổng (test
+`test_known_residual_risk_of_the_pickle_path` ghi lại điều này). Kết quả quét sạch không phải bằng chứng an toàn. Vì vậy pickle nhận theo
+đường này chỉ được nạp hoặc chuyển sang safetensors trong sandbox cô lập (container không mạng, không mount secret, không quyền ghi
+registry), mỗi model có người chịu trách nhiệm, và cả đường chuyển tiếp có hạn chót bỏ (vd. hai quý), sau đó cổng chỉ còn allowlist.
+
 **Fail closed.** Máy quét lỗi, không hỗ trợ định dạng, báo cáo hỏng, báo có issue mà danh sách rỗng, hay có `errors` (vd. modelscan không
 parse được tệp `joblib` có mảng numpy): mọi trường hợp "không chắc" đều là chặn. Một cổng cho qua khi máy quét lỗi sẽ cho qua đúng những
 tệp mà kẻ tấn công cố tình làm hỏng để máy quét lỗi.

@@ -4,7 +4,7 @@
 khác nhau:
 
 1. Hôm thứ Ba (canary), `node-4` chép version 7 vào `cache_root/<khoá>`.
-2. Tuần trước, người "thử sửa nóng" sửa `model.safetensors` ngay trong thư mục đó trên node.
+2. Hôm qua (thứ Tư), sau đợt rollback, người "thử sửa nóng" sửa `model.safetensors` ngay trong thư mục đó trên node.
 3. Hôm nay, deploy lại version 7: `_check` verify bản trong registry (vẫn nguyên vẹn, nên log `signature OK` là thật), thấy thư mục cache đã
    có thì không chép lại, trả thư mục đã bị sửa. Serving nạp model bị sửa.
 

@@ -53,8 +53,10 @@ tệp đánh dấu trong thư mục tạm của test, không gọi lệnh hệ t
 | `unscanned:<tệp>` | chỉ khi `allow_pickle=True` và quét không lỗi: tệp loại `pickle` không có trong `summary.scanned.scanned_files` của báo cáo |
 
 Mã thoát của modelscan: 0 sạch, 1 có issue, 2 lỗi, 3 không có gì để quét (thư mục chỉ có safetensors và JSON trả 3: hợp lệ), 4 không hỗ
-trợ. `allow_pickle=True` là đường cho model cũ đang chuyển dần sang safetensors: pickle được nhận **chỉ khi** modelscan thật sự đã đọc nó
-và không thấy gì.
+trợ. `allow_pickle=True` là đường chuyển tiếp cho model cũ đang chuyển dần sang safetensors: pickle được nhận **chỉ khi** modelscan thật
+sự đã đọc nó và không thấy gì. Đây là **rủi ro còn lại đã biết**, không phải sự an toàn: test `test_known_residual_risk_of_the_pickle_path`
+cho thấy payload `pathlib` qua được cổng ở chế độ này, vì kết quả quét sạch không phải bằng chứng an toàn. Pickle nhận theo đường này chỉ
+được nạp (hay chuyển sang safetensors) trong sandbox cô lập không mạng, không secret, và đường này phải có hạn chót bỏ.
 
 ## Tiêu chí đạt
 
