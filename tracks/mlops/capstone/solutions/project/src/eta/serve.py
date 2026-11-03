@@ -1,12 +1,9 @@
-import ipaddress
 import os
-import socket
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
 import joblib
 import pandas as pd
@@ -33,20 +30,6 @@ class Prediction(BaseModel):
     model_version: str
 
 
-def pin_tracking_host(uri: str) -> str:
-    parts = urlsplit(uri)
-    host = parts.hostname
-    if not host or host == "localhost":
-        return uri
-    try:
-        ipaddress.ip_address(host)
-        return uri
-    except ValueError:
-        pass
-    netloc = socket.gethostbyname(host) + (f":{parts.port}" if parts.port else "")
-    return urlunsplit(parts._replace(netloc=netloc))
-
-
 def load_model() -> tuple[object, str]:
     path = os.environ.get("ETA_MODEL_PATH")
     if path:
@@ -55,8 +38,6 @@ def load_model() -> tuple[object, str]:
     import mlflow
     from mlflow import MlflowClient
 
-    if os.environ.get("ETA_MLFLOW_PIN_IP") == "1" and os.environ.get("MLFLOW_TRACKING_URI"):
-        mlflow.set_tracking_uri(pin_tracking_host(os.environ["MLFLOW_TRACKING_URI"]))
     name = os.environ.get("ETA_MODEL_NAME", "eta")
     version = MlflowClient().get_model_version_by_alias(name, ALIAS).version
     return mlflow.sklearn.load_model(f"models:/{name}/{version}"), str(version)

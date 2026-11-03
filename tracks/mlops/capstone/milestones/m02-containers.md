@@ -35,7 +35,8 @@ cổng ngẫu nhiên trên `127.0.0.1`).
 - Nạp model **một lần** lúc khởi động (`lifespan`), không nạp mỗi request.
 - Nguồn model: có biến `ETA_MODEL_PATH` (không rỗng) thì `joblib.load` tệp đó (Pipeline lưu bằng `--model-out` ở M01),
   `model_version` lấy từ `ETA_MODEL_VERSION` hoặc tên tệp. Không có thì nạp `models:/<ETA_MODEL_NAME, mặc định eta>@champion`
-  từ MLflow (`MLFLOW_TRACKING_URI`); phần này được chấm ở M04.
+  từ MLflow (`MLFLOW_TRACKING_URI`), theo số version của alias lúc khởi động; `model_version` là số version đó. Đặt
+  `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false` trước khi tải (xem M04, mục 1), nếu không client treo khi tải artifact.
 - Feature dựng bằng **đúng hàm** của M01 (`pickup_datetime` đổi thành cột pickup rồi gọi hàm dựng feature chung).
 - Log mỗi dự đoán một dòng JSON ra stderr: request id (nhận từ header `X-Request-ID` hoặc tự sinh, trả lại trong
   header), version model, feature, `eta_s`, độ trễ. M07 và M09 dựa vào log này.
@@ -45,7 +46,8 @@ cổng ngẫu nhiên trên `127.0.0.1`).
 - Base `python:3.12-slim` ghim bản vá (ví dụ `python:3.12.11-slim`). Multi-stage: stage đầu cài dependency vào một venv,
   stage cuối chỉ chép venv và `src/`.
 - Cài **chỉ** thứ API cần: `fastapi`, `uvicorn`, `scikit-learn`, `pandas`, `numpy`, `joblib`, `mlflow-skinny` (nạp model
-  từ registry, nhẹ hơn nhiều so với `mlflow` đủ), `pyyaml`. Ghim **toàn bộ** cây dependency trong một tệp
+  từ registry, nhẹ hơn nhiều so với `mlflow` đủ), `skops` (MLflow 3.17 lưu model sklearn bằng skops; thiếu nó thì nạp
+  `models:/...` chết lúc khởi động dù nạp tệp joblib vẫn chạy), `pyyaml`. Ghim **toàn bộ** cây dependency trong một tệp
   `requirements-serve.txt`, cùng phiên bản với `uv.lock` của repo: model được pickle bằng scikit-learn 1.9.1 trên máy
   bạn, image chạy bản khác thì `joblib.load` có thể lỗi hoặc âm thầm đoán sai. Cách sinh tệp ghim:
 
@@ -72,7 +74,7 @@ bằng `eta.train.train` rồi `joblib.dump`), giới hạn 512 MB RAM; chờ `/
 ### 3. `Dockerfile.train`
 
 - Cùng cách làm: multi-stage, `requirements-train.txt` ghim đủ (`pandas`, `pyarrow`, `scikit-learn`, `pandera`, `pyyaml`,
-  `mlflow-skinny`), user không phải root, không torch.
+  `mlflow-skinny`, `skops` cho `train --register` ở M04), user không phải root, không torch.
 - `python -m eta.cli ...` chạy được trong container (`PYTHONPATH` hoặc cài package vào venv). Gợi ý:
   `ENTRYPOINT ["python", "-m", "eta.cli"]`, `CMD ["train", "--config", "/app/params.yaml"]`, `ENV ETA_DATA_DIR=/data`.
 - Commit được ghi vào image bằng `ARG GIT_COMMIT` → `ENV GIT_COMMIT` (M04 dùng làm lineage). Đặt `ARG` **sau** bước cài
@@ -107,15 +109,16 @@ docker compose -f setup/mlops/compose.yaml up -d --wait
 - Có `healthcheck` (hoặc kế thừa `HEALTHCHECK` của image) để `docker compose up --wait` biết lúc nào API sẵn sàng.
 - Nên thêm: `read_only: true` + `tmpfs: /tmp`, `cap_drop: [ALL]`, `no-new-privileges`, `mem_limit`.
 
-Test (skip nếu stack chưa bật): `docker compose up --wait` project tạm với `ETA_MODEL_DIR=<thư mục model test>`,
-`ETA_MODEL_PATH=/models/model.joblib`, gọi `/healthz`, `/predict` qua cổng host, rồi `exec` vào `api` gọi
-`$MLFLOW_TRACKING_URI/health` phải thành công.
+Test (skip nếu stack chưa bật): train một model nhỏ bằng `eta.train.train`, đăng ký vào MLflow của stack bằng
+`mlflow.sklearn.log_model` (định dạng skops mặc định) dưới một tên ngẫu nhiên và đặt alias `champion`; rồi
+`docker compose up --wait` project tạm với `ETA_MODEL_NAME=<tên đó>`, `ETA_MODEL_PATH=` (rỗng), `ETA_MODEL_DIR=<thư mục
+rỗng>`, gọi `/healthz`, `/predict` qua cổng host và đòi `model_version` đúng số version vừa đăng ký. Tức là API trong
+container phải tự tải model từ `http://mlflow:5000` qua network của stack. Cuối test xoá registered model và experiment.
 
-**Lỗi hay gặp: 403 `Invalid Host header`.** MLflow 3 chặn request có Host header lạ (chống DNS rebinding); mặc định chỉ
-nhận `localhost` và IP. `http://mlflow:5000/health` vẫn 200 nhưng mọi API registry trả 403. Hai cách sửa: thêm
-`--allowed-hosts mlflow,mlflow:5000,...` vào lệnh server của stack (đúng nhất, nhưng đó là hạ tầng chung), hoặc phía
-client đổi tên host thành IP trước khi gọi (bản tham chiếu làm vậy khi có `ETA_MLFLOW_PIN_IP=1`). Ghi lựa chọn của bạn
-vào README.
+**Lỗi hay gặp: 403 `Invalid Host header`.** MLflow 3 chặn request có Host header lạ (chống DNS rebinding). Stack chung
+đã khai `--allowed-hosts=mlflow,mlflow:*,localhost,...` nên `http://mlflow:5000` dùng được. Nếu bạn tự dựng MLflow mà
+thiếu cờ này, `http://mlflow:5000/health` vẫn 200 nhưng mọi API registry trả 403: luôn kiểm bằng một API thật (ví dụ
+nạp model), đừng chỉ bằng `/health`.
 
 Chạy test:
 
@@ -123,8 +126,16 @@ Chạy test:
 uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m02
 ```
 
-Lần build đầu tải khoảng 300 MB wheel (vài phút tuỳ mạng); các lần sau dùng cache. Trên máy dùng chung, thêm
-`nice -n 15` trước `uv run`.
+Lần build đầu tải khoảng 300 MB wheel: vài phút, có hôm mạng chậm tới 20 phút. Hãy làm ấm cache một lần trước khi chạy
+test (từ `capstone/project/`):
+
+```bash
+docker build -f Dockerfile.train . && docker build -f Dockerfile.serve .
+```
+
+Các lần sau, kể cả trong test, chỉ build lại layer `COPY src/`. Test cho mỗi lần build tối đa `MLOPS_BUILD_TIMEOUT` giây
+(mặc định 1800); mạng rất chậm thì đặt cao hơn, ví dụ `MLOPS_BUILD_TIMEOUT=3600 uv run pytest ...`. Trên máy dùng chung,
+thêm `nice -n 15` trước `uv run`.
 
 ## Kết quả nộp
 
@@ -141,6 +152,7 @@ Lần build đầu tải khoảng 300 MB wheel (vài phút tuỳ mạng); các l
 - [ ] Hai image multi-stage, base ghim bản vá, dependency ghim đủ cây, khớp `uv.lock`; không torch.
 - [ ] Image training dưới 1,5 GB; cả hai chạy bằng user không phải root.
 - [ ] API nạp model một lần, kiểm input (422), dựng feature bằng hàm chung của M01, log JSON mỗi dự đoán.
-- [ ] Compose: API join network stack, cổng chỉ bind `127.0.0.1`, có healthcheck, `up --wait` thành công.
+- [ ] Compose: API join network stack, nạp `models:/<tên>@champion` qua `http://mlflow:5000`, cổng chỉ bind `127.0.0.1`,
+      có healthcheck, `up --wait` thành công.
 - [ ] (Tự đánh giá) Sửa một dòng trong `src/` rồi build lại: chỉ layer `COPY src/` chạy lại (xem log `CACHED`).
 - [ ] (Tự đánh giá) `trivy image` cho hai image, ghi số lỗ hổng HIGH/CRITICAL vào README.

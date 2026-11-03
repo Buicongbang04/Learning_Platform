@@ -1,6 +1,7 @@
 """M02: image serving, image training, stack Compose. Đề ở capstone/milestones/m02-containers.md."""
 
 import json
+import uuid
 
 import httpx
 import joblib
@@ -77,15 +78,58 @@ def test_m02_train_image_small(project, tmp_path):
         assert uid.stdout.strip() != "0", "container training phải chạy bằng user không phải root"
 
 
-def test_m02_compose_api(project, tmp_path, synthetic_trips):
+def register_champion(uri: str, name: str, model) -> str:
+    import mlflow
+    import skops.io
+    from mlflow import MlflowClient
+
+    mlflow.set_tracking_uri(uri)
+    mlflow.set_experiment(name)
+    trusted = skops.io.get_untrusted_types(data=skops.io.dumps(model))
+    with mlflow.start_run():
+        info = mlflow.sklearn.log_model(model, name="model", registered_model_name=name, skops_trusted_types=trusted,
+                                        pip_requirements=["scikit-learn"])
+    version = str(info.registered_model_version)
+    MlflowClient(tracking_uri=uri).set_registered_model_alias(name, "champion", version)
+    return version
+
+
+def drop_registered(uri: str, name: str) -> None:
+    from mlflow import MlflowClient
+
+    client = MlflowClient(tracking_uri=uri)
+    try:
+        client.delete_registered_model(name)
+    except Exception:
+        pass
+    try:
+        experiment = client.get_experiment_by_name(name)
+        if experiment is not None:
+            client.delete_experiment(experiment.experiment_id)
+    except Exception:
+        pass
+
+
+def test_m02_compose_api(project, tmp_path, synthetic_trips, monkeypatch):
     compose = require_file("compose.yaml")
     mlopskit.require_stack("mlflow")
-    models = saved_model(tmp_path, synthetic_trips)
-    env = {"ETA_MODEL_DIR": str(models), "ETA_MODEL_PATH": "/models/model.joblib", "ETA_API_PORT": "0"}
-    with mlopskit.compose_project(compose, env=env) as stack:
-        check_api(f"http://127.0.0.1:{stack.port('api', 8000)}")
-        probe = stack.exec(
-            "api", "python", "-c",
-            "import os, urllib.request; urllib.request.urlopen(os.environ['MLFLOW_TRACKING_URI'] + '/health', timeout=5)",
-        )
-        assert probe.returncode == 0, f"API không gọi được MLflow của stack qua MLFLOW_TRACKING_URI:\n{probe.stderr[-1500:]}"
+    features = need("features", "build_features")
+    train = need("train", "train")
+    X, y = features.build_features(synthetic_trips)
+    model = train.train(X, y, {"max_iter": 30, "random_state": 0})
+    uri = f"http://127.0.0.1:{mlopskit.stack_port('mlflow')}"
+    name = f"eta-compose-{uuid.uuid4().hex[:8]}"
+    monkeypatch.setenv("MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD", "false")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    empty.chmod(0o755)
+    try:
+        version = register_champion(uri, name, model)
+        env = {"ETA_MODEL_NAME": name, "ETA_MODEL_PATH": "", "ETA_MODEL_DIR": str(empty), "ETA_API_PORT": "0"}
+        with mlopskit.compose_project(compose, env=env) as stack:
+            base = f"http://127.0.0.1:{stack.port('api', 8000)}"
+            check_api(base)
+            reported = httpx.get(f"{base}/healthz", timeout=10).json().get("model_version")
+            assert reported == version, f"API phải nạp models:/{name}@champion (version {version}) từ MLflow của stack, báo {reported}"
+    finally:
+        drop_registered(uri, name)

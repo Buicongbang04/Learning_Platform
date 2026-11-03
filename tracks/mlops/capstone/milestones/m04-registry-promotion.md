@@ -81,6 +81,7 @@ decide(challenger: dict, champion: dict | None, policy: Policy) -> Decision   # 
 | Tình huống | Kết quả |
 | --- | --- |
 | `champion is None` (chưa có champion) | promote |
+| Champion có nhưng thiếu `mae` hoặc `mae` là `nan` | không promote, `reasons` có chữ `mae` |
 | `challenger["mae"] > champion["mae"] * (1 + max_mae_regression)` | không promote, `reasons` có chữ `mae` |
 | `challenger["mae_airport"] > champion["mae_airport"] * (1 + max_airport_regression)` | không promote, `reasons` có chữ `airport` |
 | Còn lại (kể cả bằng nhau đúng ngưỡng) | promote |
@@ -90,8 +91,11 @@ decide(challenger: dict, champion: dict | None, policy: Policy) -> Decision   # 
 - `p90_abs_err` không chặn promotion ở M04 (chỉ log). Thêm tiêu chí là quyết định có chủ đích, không phải mặc định.
 - Ví dụ: champion `mae=150, mae_airport=300`; challenger `mae=140, mae_airport=330` (tệ hơn 10% ở sân bay) → **không**
   promote dù MAE tổng tốt hơn; `mae_airport=309` (tệ hơn 3%, trong 5%) → promote.
-- Metric thiếu hoặc `nan` ở challenger thì không promote; champion không có `mae_airport` (không có chuyến sân bay) thì
-  bỏ qua tiêu chí đó và ghi vào `reasons`.
+- Metric thiếu hoặc `nan` ở challenger thì không promote.
+- Champion thiếu `mae` hoặc `mae` là `nan`: **không** promote, `reasons` có chữ `mae`. Champion không có số đo chính là
+  dấu hiệu registry hỏng (run bị xoá, log metric lỗi); cổng không được mở chỉ vì không so được.
+- Champion không có `mae_airport` (không có chuyến sân bay trong tập test của nó) thì bỏ qua tiêu chí đó và ghi vào
+  `reasons`.
 
 ```python
 promote_if_better(name: str, version: str, policy: Policy) -> Decision
@@ -126,7 +130,8 @@ Viết thành runbook ngắn trong README: lệnh, thời gian thực đo đư�
 ### 6. Test chấm làm gì
 
 - `test_m04_promotion_rules`: bảng các ca ở mục 3 (tốt hơn, sân bay tệ hơn 10%, sân bay tệ hơn 3%, MAE tệ hơn, bằng
-  nhau, MAE tệ hơn 1,3% với `max_mae_regression=0.02`, chưa có champion), dùng `Policy()` mặc định trừ ca có ghi
+  nhau, MAE tệ hơn 1,3% với `max_mae_regression=0.02`, chưa có champion, champion thiếu `mae`, champion có
+  `mae` là `nan`), dùng `Policy()` mặc định trừ ca có ghi
   ngưỡng. Không cần stack.
 - `test_m04_alias_rollback` (cần stack MLflow, skip kèm lệnh bật nếu chưa có): tạo `Config` với `model_name` ngẫu nhiên,
   đăng ký v1 (model yếu), promote (chưa có champion); đăng ký v2 (tốt hơn), kiểm tag `git_commit`, `data_version` của

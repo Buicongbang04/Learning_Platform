@@ -6,23 +6,24 @@ from pathlib import Path
 import pandas as pd
 
 from eta.config import Config, load_config
-from eta.data import load_month, month_path
-from eta.features import build_features, clean
-from eta.lineage import data_version
 from eta.logs import get_logger, log_event
-from eta.train import evaluate, time_split, train
 
 EXIT_REJECTED = 3
 logger = get_logger("eta.cli")
 
 
 def _sources(config: Config, input_dir: Path | None) -> dict[str, Path]:
+    from eta.data import month_path
+
     if input_dir is None:
         return {m: month_path(config.data_dir, m) for m in config.months}
     return {m: Path(input_dir) / f"{m}.parquet" for m in config.months}
 
 
 def load_training_frame(config: Config, input_dir: Path | None = None) -> tuple[pd.DataFrame, list[Path]]:
+    from eta.data import load_month
+    from eta.features import clean
+
     frames = []
     sources = _sources(config, input_dir)
     for month, path in sources.items():
@@ -35,6 +36,10 @@ def load_training_frame(config: Config, input_dir: Path | None = None) -> tuple[
 
 def cmd_train(args: argparse.Namespace) -> int:
     import joblib
+
+    from eta.features import build_features
+    from eta.lineage import data_version
+    from eta.train import evaluate, time_split, train
 
     config = load_config(args.config)
     df, paths = load_training_frame(config, args.input)
@@ -59,6 +64,8 @@ def cmd_train(args: argparse.Namespace) -> int:
 
 
 def cmd_prepare(args: argparse.Namespace) -> int:
+    from eta.data import load_month, month_path
+
     config = load_config(args.config)
     df = load_month(month_path(config.data_dir, args.month), config.sample_rows, config.seed)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

@@ -28,6 +28,7 @@ opentelemetry-semantic-conventions==0.66b1
 packaging==26.3
 pandas==3.1.0
 pandera==0.35.0
+prettytable==3.18.0
 protobuf==6.33.6
 pyarrow==25.0.1
 pyasn1==0.6.5
@@ -42,6 +43,7 @@ requests==2.34.2
 scikit-learn==1.9.1
 scipy==1.18.1
 six==1.17.0
+skops==0.16.0
 smmap==5.0.3
 sqlparse==0.6.0
 starlette==1.10.0
@@ -53,4 +55,5 @@ typing-inspection==0.4.4
 tzdata==2026.5
 urllib3==2.8.0
 uvicorn==0.54.0
+wcwidth==0.9.4
 zipp==4.1.2

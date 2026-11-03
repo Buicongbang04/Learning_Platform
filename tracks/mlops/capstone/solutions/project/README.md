@@ -28,5 +28,5 @@ Rollback: `MlflowClient().set_registered_model_alias("eta", "champion", "<versio
 `docker compose restart api`; kiểm bằng `curl -s 127.0.0.1:28080/healthz`.
 
 Compose: `ETA_MODEL_DIR=$PWD/models ETA_MODEL_PATH=/models/model.joblib docker compose up -d --build --wait` (chạy bằng
-tệp) hoặc bỏ hai biến để nạp `models:/eta@champion`. API join network `mlops_default` của stack và đổi `mlflow` thành
-IP trước khi gọi (`ETA_MLFLOW_PIN_IP=1`) vì MLflow 3 trả 403 cho Host header lạ.
+tệp) hoặc bỏ hai biến để nạp `models:/eta@champion`. API join network `mlops_default` của stack và gọi
+`http://mlflow:5000` (stack khai `--allowed-hosts` cho tên `mlflow`).

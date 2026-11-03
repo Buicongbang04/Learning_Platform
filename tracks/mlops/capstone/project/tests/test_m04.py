@@ -21,8 +21,11 @@ BASE = {"mae": 150.0, "p90_abs_err": 320.0, "mae_airport": 300.0}
         ({"mae": 150.0, "p90_abs_err": 330.0, "mae_airport": 300.0}, BASE, {}, True, None),
         ({"mae": 152.0, "p90_abs_err": 300.0, "mae_airport": 300.0}, BASE, {"max_mae_regression": 0.02}, True, None),
         ({"mae": 140.0, "p90_abs_err": 300.0, "mae_airport": 290.0}, None, {}, True, None),
+        ({"mae": 140.0, "p90_abs_err": 300.0, "mae_airport": 290.0}, {"p90_abs_err": 320.0, "mae_airport": 300.0}, {}, False, "mae"),
+        ({"mae": 140.0, "p90_abs_err": 300.0, "mae_airport": 290.0}, {**BASE, "mae": float("nan")}, {}, False, "mae"),
     ],
-    ids=["better", "airport-10pct-worse", "airport-3pct-worse", "mae-worse", "equal", "mae-within-policy", "no-champion"],
+    ids=["better", "airport-10pct-worse", "airport-3pct-worse", "mae-worse", "equal", "mae-within-policy", "no-champion",
+         "champion-mae-missing", "champion-mae-nan"],
 )
 def test_m04_promotion_rules(project, challenger, champion, policy, promote, mention):
     promotion = need("promotion", "Policy", "decide")
@@ -83,10 +86,9 @@ def test_m04_alias_rollback(project, tmp_path, synthetic_trips, monkeypatch):
                                               "pickup_datetime": "2019-01-15T08:30:00", "trip_distance": 2.4}).json()
             assert body["model_version"] == str(v1) and body["eta_s"] > 0
     finally:
-        try:
-            client.delete_registered_model(name)
-        except Exception:
-            pass
-        experiment = client.get_experiment_by_name(name)
-        if experiment is not None:
-            client.delete_experiment(experiment.experiment_id)
+        for cleanup in (lambda: client.delete_registered_model(name),
+                        lambda: client.delete_experiment(client.get_experiment_by_name(name).experiment_id)):
+            try:
+                cleanup()
+            except Exception:
+                pass

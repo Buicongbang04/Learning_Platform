@@ -59,9 +59,13 @@ Lựa chọn loss: `absolute_error` nghe hợp với MAE nhưng đo ra tệ hơn
 - **Compose:** `read_only`, `tmpfs /tmp`, `cap_drop: ALL`, `no-new-privileges`, `mem_limit`, cổng chỉ `127.0.0.1`. Join
   network `mlops_default` của stack thay vì gọi MLflow qua cổng host (stack chỉ bind `127.0.0.1`, container không tới
   được).
-- **Host header của MLflow:** server MLflow 3 trả 403 cho Host `mlflow:5000`. Bản này chọn đổi tên host thành IP phía
-  client (`ETA_MLFLOW_PIN_IP=1` trong `serve.py`) vì không được sửa stack chung. Cách đúng lâu dài là thêm
-  `--allowed-hosts` vào lệnh server; ghi vào README như một việc nợ.
+- **Host header của MLflow:** MLflow 3 chặn Host header lạ (chống DNS rebinding). Stack chung khai
+  `--allowed-hosts=mlflow,mlflow:*,localhost,...`, nên container gọi thẳng `http://mlflow:5000`. Nếu bạn dựng MLflow
+  riêng mà quên cờ này, `/health` vẫn 200 nhưng mọi API registry trả 403 `Invalid Host header`: kiểm bằng một API thật,
+  đừng chỉ bằng `/health`.
+- **Model từ registry chạy được trong image:** MLflow 3.17 lưu sklearn bằng skops, nên image serving (và image training,
+  vì `train --register` ghi model) phải có `skops`; thiếu nó thì API nạp `models:/eta@champion` chết lúc khởi động dù
+  nạp tệp joblib vẫn chạy.
 
 ## M03: DVC và validation
 
@@ -69,15 +73,24 @@ Lựa chọn loss: `absolute_error` nghe hợp với MAE nhưng đo ra tệ hơn
   stage có hash riêng, tháng cũ không chạy lại.
 - **`train` phụ thuộc thư mục báo cáo `reports/validation`**, không chỉ dữ liệu. Đó là cạnh duy nhất buộc thứ tự
   `validate → train`; thiếu nó, DVC không biết `train` phải chờ `validate`, có thể chạy `train` trước, và tháng hỏng vẫn vào model.
+- **Dependency code đúng thứ stage import:** `cli.py` chỉ import `config`, `logs` ở đầu tệp, phần còn lại import trong
+  từng lệnh. Nhờ vậy `prepare` chỉ phụ thuộc `cli`, `config`, `logs`, `data`; `validate` thêm `validate`, `features`
+  (và `data` mà `features` import); `train` phụ thuộc `cli`, `config`, `logs`, `data`, `features`, `train`, `lineage`.
+  Sửa `train.py` không đọc lại parquet; sửa `data.py` chạy lại cả ba (đúng, vì cách lấy mẫu đổi). Khai cả `src/eta`
+  thì đúng nhưng chạy lại thừa; khai thiếu (lỗi hay gặp: quên `cli.py`, `config.py`) thì sửa CLI mà DVC
+  báo "didn't change" và giữ kết quả cũ.
 - **Params đúng chỗ:** `prepare` chỉ phụ thuộc `sample_rows`, `seed`; `train` phụ thuộc `model_params`, `months`, `seed`.
   Khai cả `params.yaml` làm dependency của mọi stage là lỗi hay gặp: sửa learning rate thì đọc lại 110 MB parquet.
 - **Validation trên dữ liệu thô đã lấy mẫu, trước `clean`.** Sau `clean` thì mọi tháng đều "sạch" và validation không
   thấy gì. Ngưỡng 1% cho tỷ lệ thời lượng âm, khoảng cách âm, pickup ngoài tháng: mọi tháng 2019 đều dưới 0,1% (cao nhất
   là khoảng cách âm 0,09% ở 2019-11), nên 1% cách xa nhiễu bình thường hơn 10 lần mà vẫn chặn được sự cố kiểu 5%.
   Zone cho phép tới 265 vì 264/265 là mã hợp lệ của TLC (Unknown); `clean` loại chúng, validation không coi là hỏng.
-- **Dữ liệu thô nằm ngoài repo DVC** (`../../../../data/raw/nyc-tlc`): DVC hash nó như dependency ngoài, đủ để biết
-  khi nào tệp đổi. Muốn người khác `dvc pull` được cả dữ liệu thô thì phải `dvc add` nó vào repo; capstone không làm vì
-  dữ liệu đã có lệnh tải riêng.
+- **Dữ liệu thô nằm ngoài repo DVC.** `data_dir` trong `params.yaml` tương đối với thư mục chứa tệp: ở
+  `capstone/project/` là `../../../../data/raw/nyc-tlc` (bốn cấp lên gốc repo), ở bản tham chiếu
+  `capstone/solutions/project/` là `../../../../../data/raw/nyc-tlc` (năm cấp). Chép `params.yaml` của lời giải sang
+  `project/` thì phải bớt một `../`. DVC hash tệp ngoài repo như dependency ngoài, đủ để biết khi nào tệp đổi. Muốn
+  người khác `dvc pull` được cả dữ liệu thô thì phải `dvc add` nó vào repo; capstone không làm vì dữ liệu đã có lệnh
+  tải riêng.
 
 ## M04: registry và cổng
 
