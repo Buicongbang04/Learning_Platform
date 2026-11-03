@@ -11,7 +11,8 @@ Vì sao audit không thấy: `lockfile_sha256` là hash của `requirements.txt`
 ## Cách sửa
 
 - **Ghi phiên bản đã phân giải lúc train**: hỏi chính tiến trình đã chạy (`scalekit.__version__`) chứ không suy từ spec, ghi thành artifact `requirements.lock` (`scalekit==1.4.0`) và hash **tệp đó** vào `lockfile_sha256`.
-- **Dựng lại từ lock, không từ spec**: `replay` đọc `requirements.lock`, dùng đúng bản đó; không có trong kho thì `LookupError` nêu `scalekit==1.4.0` thay vì lặng lẽ dùng bản khác.
+- **Dựng lại từ lock, không từ spec**: `replay` đọc `requirements.lock`, dùng đúng bản đó; không có trong kho thì `LookupError` nêu `scalekit==1.4.0` thay vì lặng lẽ dùng bản khác. Run cũ (ghi trước khi sửa) không có `requirements.lock`: `LookupError` nêu đúng tên artifact thiếu, không quay về "bản mới nhất".
+- **Kiểm lock với `lockfile_sha256`** trước khi dùng: hash lại tệp đã tải, lệch tag thì `LookupError`. Đó là lúc tag hash thật sự có nghĩa: nó chứng minh tệp đọc lúc dựng lại đúng là tệp đã ghi lúc train. (Test chấm không ép bước này vì cách ghi bản đã chạy là lựa chọn của bạn; nếu bạn ghi lock khác cách, hãy kiểm tương đương.)
 - Trong thực tế thay "kho" bằng `uv lock` / `pip freeze` / hash của image đã build (digest, không phải tag). Ghim cả dependency gián tiếp (numpy, scikit-learn) và phiên bản Python, không chỉ gói bạn tự khai báo.
 
 ## Điều đáng nhớ

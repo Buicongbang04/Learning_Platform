@@ -2,6 +2,8 @@ import os
 
 os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
 
+import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -38,8 +40,6 @@ def env(tmp_path, pipe):
 
     def original(run_id):
         path = client.download_artifacts(run_id, "preds.json", str(tmp_path / "dl"))
-        import json
-
         return json.loads(Path(path).read_text(encoding="utf-8"))
 
     return client, train, replay, original
@@ -94,6 +94,25 @@ def test_replay_fails_loudly_when_it_cannot_rebuild(env):
     run_id = train(index_of("1.4.0"))
     with pytest.raises(LookupError, match=r"scalekit.*1\.4\.0|1\.4\.0.*scalekit"):
         replay(run_id, index_of("1.5.0", "1.6.0"))
+
+
+def test_replay_refuses_a_run_logged_before_the_fix(env, tmp_path):
+    client, _, replay, _ = env
+    exp = client.search_experiments(filter_string="name LIKE 'mlops-ex-%'")[0]
+    tags = {"git_commit": "c" * 40, "git_dirty": "false", "data_version": "synthetic-t3-v1",
+            "lockfile_sha256": hashlib.sha256(b"scalekit>=1.4\n").hexdigest()}
+    run_id = client.create_run(exp.experiment_id, tags=tags).info.run_id
+    client.log_param(run_id, "seed", "7")
+    client.log_param(run_id, "alpha", "1.0")
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    (legacy / "requirements.txt").write_text("scalekit>=1.4\n", encoding="utf-8")
+    (legacy / "preds.json").write_text(json.dumps([0.0] * 5), encoding="utf-8")
+    client.log_artifact(run_id, str(legacy / "requirements.txt"))
+    client.log_artifact(run_id, str(legacy / "preds.json"))
+    client.set_terminated(run_id, status="FINISHED")
+    with pytest.raises(LookupError):
+        replay(run_id, index_of("1.4.0", "1.5.0", "1.6.0"))
 
 
 def test_replay_does_not_modify_the_original_run(env):

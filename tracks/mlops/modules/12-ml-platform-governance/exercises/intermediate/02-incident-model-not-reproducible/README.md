@@ -33,7 +33,7 @@ Sửa `starter/pipeline.py` để `replay` cho ra đúng dự đoán đã sinh r
 - `train_and_log(tracking_uri, experiment_id, workdir, index, seed=7, alpha=1.0) -> run_id`: train, ghi run `FINISHED` lên MLflow (artifact `preds.json` là dự đoán gốc). Lỗi giữa chừng thì run phải là `FAILED`.
 - `replay(tracking_uri, run_id, workdir, index) -> list[float]`: dựng lại từ **những gì run ghi** và trả dự đoán trên tập giữ lại. Không sửa run gốc (tag, param, metric, artifact giữ nguyên).
 - `index` là tham số do test cấp cho tiến trình con (mỗi test dựng một `index` riêng); chỉ sửa `pipeline.py`, không sửa `trainer.py`, test hay fixture.
-- Không dựng lại được từ những gì đã ghi thì `LookupError` có tên thứ bị thiếu, không im lặng dùng thứ khác.
+- Không dựng lại được từ những gì đã ghi thì `LookupError` có tên thứ bị thiếu, không im lặng dùng thứ khác. Điều này áp dụng cả cho run cũ ghi bằng `pipeline.py` **trước** khi bạn sửa (cùng tag, param và artifact như starter đang ghi): `replay` trên run đó phải `LookupError`, không đoán.
 
 ## Tiêu chí đạt
 

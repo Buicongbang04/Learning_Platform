@@ -177,13 +177,17 @@ def teardown_env(tmp_path):
     log = tmp_path / "cli.log"
     for name in FAKE_CLIS:
         cli = fake / name
-        cli.write_text(f'#!/bin/sh\necho "{name} $*" >> "{log}"\n', encoding="utf-8")
+        cli.write_text(f'#!/bin/sh\necho "{name} $*" >> "{log}"\n'
+                       'if [ -n "${FAIL_ON:-}" ]; then case "$*" in *"$FAIL_ON"*) exit 3 ;; esac; fi\n', encoding="utf-8")
         cli.chmod(0o755)
     py = os.path.dirname(sys.executable)
 
-    def run(*args: str):
+    def run(*args: str, fail_on: str = ""):
+        env = {"PATH": f"{fake}:{py}:/usr/local/bin:/usr/bin:/bin"}
+        if fail_on:
+            env["FAIL_ON"] = fail_on
         result = run_sandboxed(["bash", str(script), *args, "--inventory", str(inventory)], writable=[tmp_path],
-                               cwd=tmp_path, env={"PATH": f"{fake}:{py}:/usr/local/bin:/usr/bin:/bin"}, timeout=60)
+                               cwd=tmp_path, env=env, timeout=60)
         calls = log.read_text(encoding="utf-8") if log.is_file() else ""
         log.unlink(missing_ok=True)
         return result, calls
@@ -215,6 +219,17 @@ def test_m11_teardown_deletes_only_tagged(project, teardown_env):
         assert resource["name"] in calls, f"không thấy lệnh xoá {resource['type']} {resource['name']}:\n{calls}"
     for resource in KEPT:
         assert resource["name"] not in calls, f"teardown.sh đã đụng tới {resource['name']} (không có tag dự án):\n{calls}"
+
+
+def test_m11_teardown_continues_after_a_failed_delete(project, teardown_env):
+    broken = SELECTED[0]["name"]
+    result, calls = teardown_env("--yes", fail_on=broken)
+    assert result.returncode != 0, f"một lệnh xoá lỗi thì teardown.sh --yes phải exit khác 0:\n{result.stdout}\n{result.stderr}"
+    for resource in SELECTED[1:]:
+        assert resource["name"] in calls, \
+            f"lệnh xoá {broken} lỗi nhưng {resource['type']} {resource['name']} phải vẫn được xoá tiếp:\n{calls}"
+    failed = [line for line in result.stderr.splitlines() if "FAILED" in line and broken in line]
+    assert failed, f"stderr cần một dòng FAILED nêu tài nguyên xoá lỗi ({broken}):\n{result.stderr}"
 
 
 def test_m11_budget_doc(project):

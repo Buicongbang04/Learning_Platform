@@ -1,6 +1,9 @@
 import math
 import re
+import unicodedata
 from pathlib import Path
+
+import pytest
 
 from testkit import Exercise
 
@@ -15,7 +18,7 @@ def section(doc: str, number: int) -> str:
 
 
 def table(text: str) -> tuple[list[str], list[list[str]]]:
-    rows = [[c.strip() for c in line.strip().strip("|").split("|")] for line in text.splitlines() if line.strip().startswith("|")]
+    rows = [[c.strip() for c in line.strip().strip("|").split("|")] for line in text.split("\n") if line.strip().startswith("|")]
     if len(rows) < 2:
         return [], []
     return [c.lower() for c in rows[0]], rows[2:]
@@ -27,7 +30,7 @@ def bullets(text: str) -> list[str]:
 
 def prose(text: str) -> str:
     kept, fenced = [], False
-    for line in text.splitlines():
+    for line in text.split("\n"):
         if line.strip().startswith("```"):
             fenced = not fenced
         elif not fenced and not line.strip().startswith("|"):
@@ -35,8 +38,20 @@ def prose(text: str) -> str:
     return "\n".join(kept).strip()
 
 
-def number(cell: str):
-    cleaned = re.sub(r"[^\d.\-]", "", cell.replace(",", ""))
+def number(cell: str, money: bool = False):
+    cleaned = re.sub(r"[^\d.,\-]", "", cell)
+    seps = [c for c in cleaned if c in ".,"]
+    if len(set(seps)) == 2:
+        decimal = cleaned[max(cleaned.rfind("."), cleaned.rfind(","))]
+        cleaned = cleaned.replace("." if decimal == "," else ",", "").replace(decimal, ".")
+    elif len(seps) > 1:
+        if not money or not re.fullmatch(r"-?\d{1,3}(?:[.,]\d{3})+", cleaned):
+            return None
+        cleaned = cleaned.replace(seps[0], "")
+    elif seps:
+        whole, _, tail = cleaned.partition(seps[0])
+        thousands = money and len(tail) == 3 and whole.lstrip("-") not in ("", "0")
+        cleaned = whole + tail if thousands else f"{whole}.{tail}"
     try:
         return float(cleaned)
     except ValueError:
@@ -55,6 +70,7 @@ def weighted_totals(doc: str) -> list[float] | None:
 
 
 def problems(doc: str) -> list[str]:
+    doc = unicodedata.normalize("NFC", doc)
     found = []
     if "TODO" in doc:
         found.append("Còn TODO")
@@ -100,7 +116,7 @@ def problems(doc: str) -> list[str]:
         found.append("Phần 3: cần bảng Hạng mục/Tự dựng/Cloud/Lai với ba dòng Chi phí một lần, Chi phí mỗi tháng, Tổng 24 tháng")
     else:
         once, month, tot = (
-            [number(c) for c in by_name[k][1:4]] for k in ("chi phí một lần", "chi phí mỗi tháng", "tổng 24 tháng")
+            [number(c, money=True) for c in by_name[k][1:4]] for k in ("chi phí một lần", "chi phí mỗi tháng", "tổng 24 tháng")
         )
         if None in once + month + tot:
             found.append("Phần 3: chi phí phải là số")
@@ -108,13 +124,13 @@ def problems(doc: str) -> list[str]:
             columns = (once, month)
             if any(abs(t - (o + 24 * m)) > 0.5 for o, m, t in zip(once, month, tot)):
                 found.append("Phần 3: Tổng 24 tháng phải bằng một lần + 24 × mỗi tháng")
-    match = re.search(r"hoà vốn[^\n]*", prose(section(doc, 3)), re.I)
+    match = re.search(r"ho[àa]\s*vốn[^\n]*|hòa\s*vốn[^\n]*", prose(section(doc, 3)), re.I)
     if not match:
         found.append("Phần 3: thiếu dòng Điểm hoà vốn")
     elif columns:
         (o_self, o_cloud), (m_self, m_cloud) = (columns[0][0], columns[0][1]), (columns[1][0], columns[1][1])
         crossing = m_cloud > m_self and o_self > o_cloud
-        stated = re.search(r"tháng\s*(\d+)", match.group(0), re.I)
+        stated = re.search(r"tháng\s*(?:thứ\s*)?(\d+)", match.group(0), re.I)
         if crossing:
             expected = math.ceil((o_self - o_cloud) / (m_cloud - m_self))
             if not stated or abs(int(stated.group(1)) - expected) > 1:
@@ -163,3 +179,49 @@ def test_checker_catches_an_arithmetic_slip():
     doc = (FIXTURES / "DECISION.bad.md").read_text(encoding="utf-8")
     fixed = doc.replace("| Tốc độ | 50 | 5 | 2 | 9 |", "| Tốc độ | 70 | 5 | 2 | 3 |")
     assert any("không khớp tính toán" in f for f in problems(fixed))
+
+
+@pytest.mark.parametrize("cell,value", [
+    ("63600", 63600), ("63600 USD", 63600), ("63.600", 63600), ("63,600", 63600), ("63 600 USD", 63600),
+    ("1.234.567", 1234567), ("1,234,567", 1234567), ("1.234,5", 1234.5), ("1,234.5", 1234.5),
+    ("18.000", 18000), ("1.125", 1125), ("1125,5", 1125.5), ("0.125", 0.125), ("0,5", 0.5), ("2,40", 2.4),
+])
+def test_money_reads_vietnamese_and_english_formats(cell, value):
+    assert number(cell, money=True) == pytest.approx(value)
+
+
+@pytest.mark.parametrize("cell,value", [
+    ("3.65", 3.65), ("3,65", 3.65), ("3,35", 3.35), ("3.650", 3.65), ("3,650", 3.65), ("1.125", 1.125), ("4", 4),
+])
+def test_score_separator_is_always_decimal(cell, value):
+    assert number(cell) == pytest.approx(value)
+
+
+def test_ambiguous_numbers_are_rejected_not_guessed():
+    assert number("1.2.3") is None and number("1.23.456", money=True) is None
+
+
+SECTION3 = """## 3. Chi phí 24 tháng
+
+| Hạng mục | Tự dựng | Cloud | Lai |
+| --- | --- | --- | --- |
+| Chi phí một lần | 18.000 | 6.000 | 12.000 |
+| Chi phí mỗi tháng | 1.900 | 3.100 | 2.400 |
+| Tổng 24 tháng | 63.600 | 80.400 | 69.600 |
+
+{line}
+"""
+
+
+@pytest.mark.parametrize("line", [
+    "Điểm hoà vốn: tháng 10.", "Điểm hòa vốn: tháng 10.", "Điểm hoà vốn rơi vào tháng thứ 10.",
+    unicodedata.normalize("NFD", "Điểm hòa vốn: tháng thứ 11."),
+])
+def test_breakeven_line_spelling_variants_are_accepted(line):
+    doc = "# Q\n\n" + SECTION3.format(line=line)
+    assert not [f for f in problems(doc) if f.startswith("Phần 3")]
+
+
+def test_breakeven_month_still_checked_with_variants():
+    doc = "# Q\n\n" + SECTION3.format(line="Điểm hòa vốn: tháng thứ 3.")
+    assert any("xấp xỉ tháng 10" in f for f in problems(doc))

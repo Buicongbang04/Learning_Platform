@@ -14,6 +14,7 @@ COMMANDS = {
     "sagemaker-model": ["aws sagemaker delete-model --model-name {n} --region {r}"],
     "sagemaker-notebook": [
         "aws sagemaker stop-notebook-instance --notebook-instance-name {n} --region {r}",
+        "aws sagemaker wait notebook-instance-stopped --notebook-instance-name {n} --region {r}",
         "aws sagemaker delete-notebook-instance --notebook-instance-name {n} --region {r}",
     ],
     "nat-gateway": ["aws ec2 delete-nat-gateway --nat-gateway-id {n} --region {r}"],
@@ -27,23 +28,29 @@ COMMANDS = {
 
 
 def _mine(inventory: list[dict], lab: str) -> list[dict]:
-    return [item for item in inventory if item.get("tags", {}).get("lab") == lab]
+    return [item for item in inventory if (item.get("tags") or {}).get("lab") == lab]
+
+
+FIELDS = {"n": "name", "r": "region", "g": "resource_group"}
+
+
+def _fields(item: dict) -> dict:
+    if item["type"] not in COMMANDS:
+        raise ValueError(f"loại tài nguyên chưa hỗ trợ: {item['type']}")
+    templates = " ".join(COMMANDS[item["type"]])
+    fields = {key: item.get(field) for key, field in FIELDS.items() if "{" + key + "}" in templates}
+    for key, value in fields.items():
+        if not isinstance(value, str) or not SAFE_NAME.fullmatch(value):
+            raise ValueError(f"{FIELDS[key]} không an toàn hoặc thiếu ở {item.get('name')!r}: {value!r}")
+    return fields
 
 
 def plan_teardown(inventory: list[dict], lab: str) -> list[dict]:
-    mine = _mine(inventory, lab)
-    for item in mine:
-        if item["type"] not in COMMANDS:
-            raise ValueError(f"loại tài nguyên chưa hỗ trợ: {item['type']}")
-        if not SAFE_NAME.fullmatch(item["name"]):
-            raise ValueError(f"tên không an toàn: {item['name']!r}")
-        if item["type"] == "azureml-endpoint" and not item.get("resource_group"):
-            raise ValueError(f"thiếu resource_group cho {item['name']}")
+    checked = [(item, _fields(item)) for item in _mine(inventory, lab)]
     steps = []
-    for item in sorted(mine, key=lambda i: ORDER.index(i["type"])):
+    for item, fields in sorted(checked, key=lambda pair: ORDER.index(pair[0]["type"])):
         for template in COMMANDS[item["type"]]:
-            command = template.format(n=item["name"], r=item.get("region", ""), g=item.get("resource_group", ""))
-            steps.append({"resource": item["name"], "type": item["type"], "command": command})
+            steps.append({"resource": item["name"], "type": item["type"], "command": template.format(**fields)})
     return steps
 
 
@@ -67,6 +74,6 @@ def render_script(steps: list[dict]) -> str:
 def leftover_warnings(inventory: list[dict], lab: str) -> list[dict]:
     warnings = []
     for item in inventory:
-        if item.get("tags", {}).get("lab") != lab and item["name"].startswith(lab):
+        if (item.get("tags") or {}).get("lab") != lab and (item["name"] == lab or item["name"].startswith(lab + "-")):
             warnings.append({"resource": item["name"], "why": "tên giống lab nhưng không có tag lab đúng, kế hoạch không động tới, tự kiểm"})
     return warnings
