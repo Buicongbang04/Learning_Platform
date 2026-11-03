@@ -9,7 +9,7 @@ Ví dụ xuyên suốt là service ETA taxi NYC của capstone (đo MAE theo gi�
 Bài tập Basic chạy hoàn toàn trên MLflow cục bộ (SQLite); bài Intermediate cần stack `setup/mlops`:
 
 ```bash
-nice -n 15 docker compose -f setup/mlops/compose.yaml up -d --build --wait
+nice -n 15 docker compose -f setup/mlops/compose.yaml up -d --wait
 ```
 
 Sau module này bạn sẽ:

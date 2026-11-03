@@ -129,7 +129,7 @@ Track DevOps không phải điều kiện: module 13–14 ghi rõ phần nào k�
 | --- | --- | --- |
 | Code Python | Điền hàm/lớp có tên cố định trong `starter/` | Chạy trên dữ liệu nhỏ sinh trong test |
 | File cấu hình | Sửa Dockerfile, `compose.yaml`, `dvc.yaml`, workflow, `prometheus.yml`, manifest K8s | Chạy thật: build image, `dvc repro`, `act`, `promtool`, gọi HTTP |
-| Sự cố cố ý (từ module 07) | Đề chỉ tả triệu chứng; bạn chẩn đoán và sửa | Hành vi đúng sau khi sửa; nguyên nhân gốc chỉ nằm trong `solutions/` |
+| Sự cố cố ý (bắt buộc từ module 07; module 01–04 đã có) | Đề chỉ tả triệu chứng; bạn chẩn đoán và sửa | Hành vi đúng sau khi sửa; nguyên nhân gốc chỉ nằm trong `solutions/` |
 | Bài quyết định (module 10, capstone) | Nộp quyết định và lý do trong tệp YAML (`decision`, `reasons`) | Test kiểm phần `decision`; rubric chấm phần lý do |
 | Chọn công cụ | Trắc nghiệm theo tình huống | `quiz-answers.yaml` |
 | Advanced | Thiết kế, runbook, postmortem, review kiến trúc | Tự chấm theo rubric trong `SOLUTION.md` |
@@ -148,14 +148,14 @@ mặc định nằm ở dải 2xxxx để không đụng stack khác trên máy 
 MLflow `25000`), đổi được qua `setup/.env`.
 
 ```bash
-docker compose -f setup/mlops/compose.yaml up -d
+docker compose -f setup/mlops/compose.yaml up -d --wait
 docker compose -f setup/mlops/compose.yaml down
 ```
 
 Đã đổi cổng trong `setup/.env`: thêm `--env-file setup/.env` trước `-f` (`docker compose --env-file setup/.env -f setup/mlops/compose.yaml ...`), vì Compose chỉ tự đọc `.env` cạnh tệp compose.
 
 Test cần stack mà chưa bật sẽ `skip` kèm đúng lệnh trên. Bài dùng được MLflow file store (cục bộ) thì **không**
-đòi stack. Bật stack trước khi làm module 04 trở đi; tắt khi xong để nhường RAM. Công cụ mới (dvc, act, kind,
+đòi stack. Bật stack từ module 03 (bài remote DVC dùng MinIO), rồi module 04 trở đi và capstone M02; tắt khi xong để nhường RAM. Công cụ mới (dvc, act, kind,
 promtool…) được dạy cài ở module dùng nó lần đầu, trong phần `## 0. Cài đặt`, có kiểm checksum.
 
 ## Nguyên tắc model nhẹ, việc thật

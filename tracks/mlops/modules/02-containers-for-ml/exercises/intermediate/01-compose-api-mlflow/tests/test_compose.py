@@ -79,9 +79,12 @@ def command_text(spec: dict) -> str:
 
 def host_port_is_fixed(port) -> bool:
     if isinstance(port, dict):
-        return bool(port.get("published"))
-    text = str(port)
-    return text.count(":") > 0 and not text.startswith("127.0.0.1::")
+        return str(port.get("published") or "") not in ("", "0")
+    parts = str(port).split("/")[0].split(":")
+    if len(parts) < 2:
+        return False  # "8000": chỉ cổng container, Docker chọn cổng host
+    host_port = parts[-2]  # "H:C" hoặc "ip:H:C"; "ip::C" và ":C" để trống = Docker chọn
+    return host_port.strip() not in ("", "0")
 
 
 def container_port(port) -> int:

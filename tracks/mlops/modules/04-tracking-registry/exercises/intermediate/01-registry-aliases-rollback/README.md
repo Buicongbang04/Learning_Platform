@@ -10,7 +10,7 @@ files:
   - path: quiz.yaml
     note: Trắc nghiệm chọn công cụ và registry
 run:
-  - docker compose -f setup/mlops/compose.yaml up -d --build --wait
+  - docker compose -f setup/mlops/compose.yaml up -d --wait
   - uv run pytest tracks/mlops/modules/04-tracking-registry/exercises/intermediate/01-registry-aliases-rollback -q
 ---
 

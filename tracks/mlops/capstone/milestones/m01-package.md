@@ -25,7 +25,7 @@ hàm phụ tuỳ ý.
 
 - `COLUMNS = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"]`.
 - `load_month(path: Path, sample_rows: int | None, seed: int) -> pd.DataFrame`:
-  - Chỉ đọc 5 cột trong `COLUMNS` (tệp thật có 19 cột, 7,7 triệu dòng; đọc cả tệp vào pandas tốn vài GB). Đọc bằng
+  - Chỉ đọc 5 cột trong `COLUMNS`: test theo dõi `pyarrow.parquet.read_table`, `ParquetFile.read` và `pandas.read_parquet`, và đòi mọi lần đọc truyền `columns` là tập con của `COLUMNS` (đọc cả tệp rồi cắt cột là không đạt). Tệp thật có 19 cột, 7,7 triệu dòng; đọc cả tệp vào pandas tốn vài GB. Đọc bằng
     `pyarrow.parquet.read_table(path, columns=COLUMNS)` rồi lấy mẫu trên bảng Arrow là cách gọn.
   - Trả DataFrame có **đúng** các cột `COLUMNS`, đúng thứ tự.
   - Lấy mẫu `sample_rows` dòng **xác định theo `seed`**: gọi hai lần cùng tham số thì `df.equals(...)` là `True`;

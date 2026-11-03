@@ -84,7 +84,7 @@ Track DevOps **đang được làm trên máy khác**, nên MLOps **đứng đ�
   12 GB là tuỳ chọn (chỉ để benchmark thêm), test không bao giờ cần PC.
 - **Không đụng hạ tầng dùng chung DevOps đang sửa.** `testkit.py`, `CONTENT_SPEC.md` (mục DevOps),
   `setup/docker-compose.yml`, `setup/DEVOPS-TOOLS.md` đang được Phase 2 DevOps sửa song song. Vì vậy:
-  - Stack MLOps ở **`setup/mlops/docker-compose.yml`** riêng (giống cách `setup/airflow/` làm), cổng riêng
+  - Stack MLOps ở **`setup/mlops/compose.yaml`** riêng (giống cách `setup/airflow/` làm), cổng riêng
     không trùng stack DE/DevOps/Airflow, remap được qua `setup/.env`.
   - Helper test riêng của MLOps ở **module mới** (vd. `mlopskit.py` ở gốc repo, có test riêng trong `tests/`),
     không thêm vào `testkit.py`. Được **dùng** helper sẵn có của `testkit.py` (`DockerLab`, `require_tool`,

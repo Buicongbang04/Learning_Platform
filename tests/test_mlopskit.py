@@ -44,7 +44,7 @@ def test_require_stack_down_skips(monkeypatch):
     monkeypatch.setenv("MLOPS_MLFLOW_PORT", str(testkit.free_port()))
     with pytest.raises(pytest.skip.Exception) as info:
         mlopskit.require_stack("mlflow")
-    assert "docker compose -f setup/mlops/compose.yaml up -d" in str(info.value)
+    assert "docker compose -f setup/mlops/compose.yaml up -d --wait" in str(info.value)
     assert "mlflow" in str(info.value)
 
 

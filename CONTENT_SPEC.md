@@ -361,11 +361,13 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 | Test cần | Dùng | Đảm bảo |
 | --- | --- | --- |
 | Biết cổng của dịch vụ trong stack | `mlopskit.stack_port("mlflow")` (`postgres`, `minio`, `mlflow`) | Đọc biến `MLOPS_*_PORT` từ môi trường hoặc `setup/.env`, mặc định dải 2xxxx |
-| Cần MLflow server, MinIO hoặc Postgres của stack | `mlopskit.require_stack("mlflow", "minio")` | Skip với đúng lệnh `docker compose -f setup/mlops/compose.yaml up -d` khi cổng chưa mở |
+| Cần MLflow server, MinIO hoặc Postgres của stack | `mlopskit.require_stack("mlflow", "minio")` | Skip với đúng lệnh `docker compose -f setup/mlops/compose.yaml up -d --wait` khi cổng chưa mở |
 | Cần MLflow nhưng không cần server | `mlopskit.mlflow_local(tmp_path)` | Tracking URI SQLite trong `tmp_path`, experiment riêng; **không** đòi stack |
 | Build image từ Dockerfile của người học | `with mlopskit.built_image(context) as tag:` | Tên `mlops-ex-<uuid8>:test`, nhãn `mlops-ex=1`, timeout, xoá image trong `finally` kể cả khi lỗi |
 | Dựng stack Compose tạm của người học | `with mlopskit.compose_project(file, env) as project:` | Project tên `mlops-ex-<uuid8>`, `up --wait`, `project.port/logs/exec`, `down -v --rmi local` trong `finally` |
-| Kiểm tra không còn rác | `mlopskit.leftovers()` | Liệt kê container, network, image có nhãn `mlops-ex=1` hoặc tiền tố `mlops-ex-` |
+| Kiểm tra không còn rác | `mlopskit.leftovers(needle)` | Liệt kê container, network, image có nhãn `mlops-ex=1` hoặc tiền tố `mlops-ex-`; `needle` (tuỳ chọn) lọc theo chuỗi con trong tên |
+| Xem image đã build | `mlopskit.image_inspect(tag, fmt)`, `image_size_bytes(tag)`, `image_has_healthcheck(tag)` | `docker image inspect --format` theo Go template; kích thước theo byte; có `Healthcheck` hay không |
+| Timeout build | `mlopskit.build_timeout()` | Giây, đọc `MLOPS_BUILD_TIMEOUT` lúc gọi; mặc định 1800 |
 
 - Script của người học chạy qua `testkit.run_sandboxed`, như track DevOps.
 - Timeout build của `built_image` và `compose_project` mặc định 1800 giây, chỉnh bằng biến môi trường `MLOPS_BUILD_TIMEOUT` (giây, đọc lúc gọi). Quá hạn thì test fail kèm gợi ý build trước (cache) rồi chạy lại hoặc tăng biến này.
@@ -374,7 +376,7 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 
 ### Stack và cổng
 
-Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d`. Đã đổi cổng trong `setup/.env` thì thêm `--env-file setup/.env` trước `-f` (Compose chỉ tự đọc `.env` cạnh tệp compose). Cổng ở dải 2xxxx vì
+Định nghĩa ở `setup/mlops/compose.yaml`, bật bằng `docker compose -f setup/mlops/compose.yaml up -d --wait`. Đã đổi cổng trong `setup/.env` thì thêm `--env-file setup/.env` trước `-f` (Compose chỉ tự đọc `.env` cạnh tệp compose). Cổng ở dải 2xxxx vì
 máy đã dùng 5432, 9000, 8000; mọi cổng remap được qua `setup/.env`.
 
 | Dịch vụ | Cổng host mặc định | Biến `.env` | Ghi chú |
@@ -411,7 +413,7 @@ Test cần stack mà chưa bật phải `skip` kèm lệnh bật (`require_stack
 
 ### Bài sự cố cố ý
 
-Từ module 07 trở đi, ≥1 bài mỗi module. `README.md` chỉ tả triệu chứng; nguyên nhân chỉ nằm trong `solutions/`. Test
+Bắt buộc từ module 07 trở đi, ≥1 bài mỗi module; module 01–04 đã có sẵn. `README.md` chỉ tả triệu chứng; nguyên nhân chỉ nằm trong `solutions/`. Test
 chứng minh hành vi đúng sau khi sửa, và có một ca hồi quy chứng minh starter tái hiện đúng triệu chứng. Ví dụ:
 training-serving skew do tiền xử lý lệch, model sai version sau deploy, alert không bắn do rule sai, drift giả do
 pipeline đổi đơn vị, OOM GPU do batch size.

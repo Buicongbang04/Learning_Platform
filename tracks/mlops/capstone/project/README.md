@@ -33,7 +33,7 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 | --- | --- | --- |
 | Bộ `nyc-tlc` | `test_m01_real_data_baseline` | `uv run python data/download_dataset.py nyc-tlc` |
 | Docker | M02 | Cài Docker, user thuộc nhóm `docker` |
-| Stack MLOps | `test_m02_compose_api`, `test_m04_alias_rollback` | `docker compose -f setup/mlops/compose.yaml up -d` |
+| Stack MLOps | `test_m02_compose_api`, `test_m04_alias_rollback` | `docker compose -f setup/mlops/compose.yaml up -d --wait` |
 | bubblewrap (`bwrap`) | test chạy CLI, DVC | `sudo apt install bubblewrap` |
 
 Skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15` trước `uv run`.

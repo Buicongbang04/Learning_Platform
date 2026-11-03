@@ -17,7 +17,7 @@ ROOT = testkit.ROOT
 LABEL = "mlops-ex=1"
 PREFIX = "mlops-ex-"
 BUILD_TIMEOUT_DEFAULT = 1800
-STACK_HINT = "docker compose -f setup/mlops/compose.yaml up -d"
+STACK_HINT = "docker compose -f setup/mlops/compose.yaml up -d --wait"
 
 STACK_SERVICES: dict[str, tuple[str, int]] = {
     "postgres": ("MLOPS_PG_PORT", 25433),

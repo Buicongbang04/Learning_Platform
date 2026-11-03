@@ -8,7 +8,7 @@ files:
   - path: tests/test_remote.py
     note: Không sửa
 run:
-  - docker compose -f setup/mlops/compose.yaml up -d
+  - docker compose -f setup/mlops/compose.yaml up -d --wait
   - uv run pytest tracks/mlops/modules/03-data-versioning-quality/exercises/intermediate/04-dvc-remote-minio -q
 ---
 

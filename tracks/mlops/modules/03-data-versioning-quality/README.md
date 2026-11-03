@@ -24,7 +24,7 @@ uv run python -c "import pandera; print(pandera.__version__)"
 ```
 
 Gỡ: xoá khỏi `pyproject.toml` rồi `uv sync`. Dữ liệu cache của DVC nằm trong `.dvc/cache` của từng repo và `~/.cache/dvc`, xoá thủ công.
-Bài remote cần stack MinIO của `setup/mlops` (`docker compose -f setup/mlops/compose.yaml up -d`), bucket `dvc` đã được tạo sẵn.
+Bài remote cần stack MinIO của `setup/mlops` (`docker compose -f setup/mlops/compose.yaml up -d --wait`), bucket `dvc` đã được tạo sẵn.
 
 ## 1. Vì sao phải version dữ liệu
 

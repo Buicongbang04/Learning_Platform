@@ -8,7 +8,7 @@ files:
   - path: tests/test_gate.py
     note: Không sửa
 run:
-  - docker compose -f setup/mlops/compose.yaml up -d --build --wait
+  - docker compose -f setup/mlops/compose.yaml up -d --wait
   - uv run pytest tracks/mlops/modules/04-tracking-registry/exercises/intermediate/03-promotion-gate -q
 ---
 

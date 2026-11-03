@@ -27,8 +27,38 @@ def zone_pair_median_mae(train_df: pd.DataFrame, test_df: pd.DataFrame) -> float
     return float(np.abs(test_df["duration_s"] - pred).mean())
 
 
-def test_m01_load_month_columns_and_sample(project, tiny_parquet):
+def _spy_column_reads(monkeypatch) -> list[tuple[str, object]]:
+    """Ghi lại mọi lần đọc parquet qua pyarrow/pandas cùng đối số `columns` được truyền."""
+    import pyarrow.parquet as pq
+
+    calls: list[tuple[str, object]] = []
+
+    def wrap(label, original, positional_index=None):
+        def spy(*args, **kwargs):
+            columns = kwargs.get("columns")
+            if columns is None and positional_index is not None and len(args) > positional_index:
+                columns = args[positional_index]
+            calls.append((label, columns))
+            return original(*args, **kwargs)
+
+        return spy
+
+    monkeypatch.setattr(pq, "read_table", wrap("pyarrow.parquet.read_table", pq.read_table, 1))
+    monkeypatch.setattr(pq.ParquetFile, "read", wrap("ParquetFile.read", pq.ParquetFile.read, 1))
+    monkeypatch.setattr(pq.ParquetFile, "read_row_group", wrap("ParquetFile.read_row_group", pq.ParquetFile.read_row_group, 2))
+    monkeypatch.setattr(pq.ParquetFile, "read_row_groups", wrap("ParquetFile.read_row_groups", pq.ParquetFile.read_row_groups, 2))
+    monkeypatch.setattr(pd, "read_parquet", wrap("pandas.read_parquet", pd.read_parquet, 2))
+    return calls
+
+
+def test_m01_load_month_columns_and_sample(project, tiny_parquet, monkeypatch):
     data = need("data", "COLUMNS", "load_month")
+    calls = _spy_column_reads(monkeypatch)
+    data.load_month(tiny_parquet, 100, 0)
+    assert calls, "load_month phải đọc tệp bằng pyarrow.parquet.read_table, ParquetFile.read hoặc pandas.read_parquet"
+    for label, columns in calls:
+        assert columns is not None, f"{label} đọc cả tệp: phải truyền columns=COLUMNS (tệp thật có 19 cột, 7,7 triệu dòng)"
+        assert set(columns) <= set(COLUMNS), f"{label} đọc cột ngoài COLUMNS: {sorted(set(columns) - set(COLUMNS))}"
     assert data.COLUMNS == COLUMNS
     df = data.load_month(tiny_parquet, 100, 0)
     assert list(df.columns) == COLUMNS
