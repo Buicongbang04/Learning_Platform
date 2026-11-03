@@ -250,19 +250,21 @@ nguồn tải, license và sha256, thêm entry vào `data/download_dataset.py`.
 | m15 | 18 | Design doc: mở rộng cho 5 công ty con (multi-site, cập nhật air-gapped, GPU dùng chung) |
 | m16 | 20 | Đánh giá độc lập mức senior: khách mới với hồ sơ máy lạ, người học tự đi trọn vòng (survey → cài → sự cố → bàn giao) theo rubric; repo capstone hoàn chỉnh làm portfolio |
 
-**Repo portfolio tách riêng (người học chốt):** capstone phải xuất được thành **một dự án độc lập**, đẩy lên GitHub
-public được và tự chạy được, không cần repo học này:
-- Có lệnh export (vd. `make export-portfolio` hoặc script trong `fdekit`) sinh ra một thư mục repo sạch từ bài làm
-  của người học: code, bundle/installer, Helm chart, tài liệu (scoping, ROI, runbook, design doc, postmortem),
-  README giới thiệu dự án như một case study FDE, sơ đồ kiến trúc.
-- Repo xuất ra **tự chứa**: phần tối thiểu của helper lab (dựng VM, hồ sơ khách) và sản phẩm được vendor vào, có
-  `Makefile`/`justfile` để người xem tự dựng lab và chạy demo; có CI tối thiểu chạy được trên GitHub Actions (phần
-  không cần KVM).
-- **License:** sản phẩm hư cấu và helper phát hành MIT (builder ghi license); CUAD **không đưa vào repo**, chỉ có
-  script tải kèm ghi công đúng yêu cầu CC BY 4.0. Không chứa secret, key lab, đường dẫn máy người học.
-- Test kiểm repo xuất ra: chạy được test của chính nó khi tách khỏi repo học, không import `testkit`/`fdekit` từ repo
-  gốc, không lọt tệp ngoài danh sách cho phép.
-- Việc đẩy lên GitHub là người học tự làm (track chỉ hướng dẫn).
+**Capstone là một dự án riêng ngoài repo học (người học chốt):** repo học này **chỉ chứa đề và hướng dẫn** của
+capstone. Người học làm capstone trong **một repo Git riêng** do chính họ tạo (vd. `~/projects/<tên-dự-án>`), như một
+dự án setup thật, đẩy lên GitHub public để làm portfolio.
+- Milestone đầu tiên (m00, trước m01) hướng dẫn tạo repo riêng: cấu trúc thư mục đề xuất, `Makefile`/`justfile`,
+  README case study, license, `.gitignore` chặn secret/key lab/dữ liệu. Repo riêng **tự chứa**: phần lab nó cần (dựng
+  VM, hồ sơ khách) và bản phát hành của sản phẩm được lấy về theo hướng dẫn (bundle phát hành từ repo học, có
+  checksum), không import code từ repo học khi chạy.
+- **Bộ chấm ở repo học** trỏ vào repo riêng qua biến môi trường (vd. `FDE_CAPSTONE_DIR`), tự skip khi chưa đặt.
+  Test kiểm hành vi thật (VM, dịch vụ, tài liệu có frontmatter) như mục 8, cộng kiểm repo riêng không phụ thuộc repo
+  học và không lọt secret.
+- **Lời giải tham chiếu** vẫn cần để builder kiểm bộ chấm (`SOLUTION=1`). Nó nằm ở `capstone/solutions/` như các track
+  khác, dạng hướng dẫn và dự án mẫu; người học không copy nó sang repo riêng.
+- **License:** sản phẩm hư cấu phát hành MIT để người học được đưa bundle vào repo public; CUAD **không đưa vào repo**,
+  chỉ có script tải kèm ghi công đúng yêu cầu CC BY 4.0.
+- Đẩy lên GitHub là người học tự làm (track chỉ hướng dẫn).
 
 Thứ tự milestone tuần tự theo hợp đồng thật. Builder có thể đổi thứ tự trụ 2 (11–14) lên trước nếu thấy hợp lý
 hơn về sư phạm (discovery thường xảy ra trước khi cài), miễn ghi lý do.
@@ -291,7 +293,7 @@ hơn về sư phạm (discovery thường xảy ra trước khi cài), miễn gh
 
 - **Phase 1:** hạ tầng (`fdekit.py` + VM lab, sản phẩm v1.0 + v1.1, `setup/fde/`, entry dữ liệu CUAD và cloud image,
   thay đổi app cho mục Cloud lab, `track.json` với `status: active`, README track, mục "Track FDE" trong
-  `CONTENT_SPEC.md`, validator, khung lệnh export portfolio), module 00–03, m01–m03.
+  `CONTENT_SPEC.md`, validator), module 00–03, m00–m03.
 - **Phase 2:** module 04–10, m04–m10.
 - **Phase 3:** module 11–14 (trụ 2), m11–m14.
 - **Phase 4:** module 15–20, Cloud lab C1–C3, m15–m16.
@@ -309,6 +311,7 @@ chỉ dừng khi cần người học (PC, credential cloud, merge/push).
 6. Sản phẩm dùng Postgres + pgvector + Ollama + FastAPI, có Compose và Helm, hai version để dạy nâng cấp.
 7. Cloud lab nhắm AWS trước (C1), GCP/Azure sau (C2).
 8. DSA ~50 bài trong hai module, học song song từ đầu được.
+12. Capstone làm trong repo riêng của người học; repo học chấm qua `FDE_CAPSTONE_DIR`, lời giải mẫu vẫn ở `capstone/solutions/`.
 9. LLM chạy trong VM khách với model nhỏ đóng trong bundle; VM sản phẩm ≤5 GB, tổng ≤8 GB mỗi bài.
 10. Giữ timeout 5 phút của app; dùng snapshot VM nối tiếp, bài quá dài chạy bằng terminal.
 11. Runtime container do IT khách cài sẵn; cài không container chỉ là bài Advanced module 04.
