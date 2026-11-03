@@ -1,0 +1,25 @@
+groups:
+  - name: eta-service
+    rules:
+      - alert: ETAHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="eta-service",route="/predict",status=~"5.."}[5m]))
+            /
+          sum(rate(http_requests_total{job="eta-service",route="/predict"}[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: eta
+        annotations:
+          summary: "Hơn 5% yêu cầu /predict trả lỗi 5xx trong 5 phút"
+          runbook_url: "https://runbooks.example.com/eta/high-error-rate"
+      - alert: ETAMetricsAbsent
+        expr: absent(http_requests_total{job="eta-service"})
+        for: 5m
+        labels:
+          severity: warning
+          service: eta
+        annotations:
+          summary: "Không còn thấy metric của eta-service: service chết hoặc Prometheus không scrape được"
+          runbook_url: "https://runbooks.example.com/eta/metrics-absent"
