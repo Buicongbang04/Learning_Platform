@@ -1,0 +1,8 @@
+idle-cost: [a, c, e]
+biggest-idle: [b]
+preview-destroy: [c]
+what-is-managed: [d]
+bucket-not-empty: [a]
+manual-leftovers: [c]
+budget-effect: [d]
+ttl-tag: [b]

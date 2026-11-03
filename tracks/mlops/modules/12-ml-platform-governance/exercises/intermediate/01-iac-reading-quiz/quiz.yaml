@@ -1,0 +1,75 @@
+questions:
+  - id: idle-cost
+    kind: knowledge
+    type: multi
+    prompt: "Không ai gửi request nào trong cả tuần. Trong `main.tf`, những resource nào vẫn làm hoá đơn tăng (chọn mọi đáp án đúng)?"
+    options:
+      - { id: a, text: "aws_sagemaker_endpoint.eta, vì mỗi instance của endpoint tính tiền theo giờ khi còn chạy" }
+      - { id: b, text: "aws_sagemaker_model.eta, vì mỗi model đã khai báo đều bị tính phí lưu trữ hằng giờ" }
+      - { id: c, text: "aws_nat_gateway.private, vì NAT gateway tính theo giờ tồn tại, kể cả khi không có lưu lượng" }
+      - { id: d, text: "aws_iam_role.sagemaker, vì mỗi role gắn với dịch vụ tính phí theo số ngày sử dụng" }
+      - { id: e, text: "aws_sagemaker_notebook_instance.dev, vì notebook ở trạng thái chạy tính theo giờ" }
+      - { id: f, text: "aws_sagemaker_endpoint_configuration.eta, vì cấu hình khai báo sẵn số instance và bị tính theo đó" }
+  - id: biggest-idle
+    kind: knowledge
+    type: single
+    prompt: "Trong các resource tính theo giờ ở trên, cái nào có khả năng chiếm phần lớn hoá đơn khi để chạy cả tháng?"
+    options:
+      - { id: a, text: "aws_sagemaker_notebook_instance.dev vì ml.t3.medium là loại máy đắt nhất trong tệp, nên để notebook chạy cả tháng chắc chắn là khoản cao nhất" }
+      - { id: b, text: "aws_sagemaker_endpoint.eta qua cấu hình ml.m5.xlarge với initial_instance_count = 2" }
+      - { id: c, text: "aws_s3_bucket.artifacts vì bucket tính tiền theo số lần đọc ghi mỗi ngày" }
+      - { id: d, text: "aws_budgets_budget.lab vì mỗi budget có phí duy trì theo tháng và theo ngưỡng, cộng dồn qua từng ngưỡng cảnh báo được đặt" }
+  - id: preview-destroy
+    kind: knowledge
+    type: single
+    prompt: "Trước khi dọn lab, muốn xem Terraform sẽ xoá những gì mà chưa xoá gì cả. Lệnh nào?"
+    options:
+      - { id: a, text: "terraform destroy -auto-approve" }
+      - { id: b, text: "terraform apply -refresh-only" }
+      - { id: c, text: "terraform plan -destroy" }
+      - { id: d, text: "terraform state rm aws_sagemaker_endpoint.eta" }
+  - id: what-is-managed
+    kind: knowledge
+    type: single
+    prompt: "Lệnh nào liệt kê các resource mà Terraform đang quản lý trong state hiện tại?"
+    options:
+      - { id: a, text: "terraform providers" }
+      - { id: b, text: "terraform fmt -check" }
+      - { id: c, text: "terraform workspace show" }
+      - { id: d, text: "terraform state list" }
+  - id: bucket-not-empty
+    kind: knowledge
+    type: single
+    prompt: "`terraform destroy` lỗi ở aws_s3_bucket.artifacts khi bucket còn chứa file model. Cách xử lý hợp lý trong tệp này?"
+    options:
+      - { id: a, text: "Đặt force_destroy = true cho bucket (hoặc làm rỗng bucket trước), rồi chạy lại destroy" }
+      - { id: b, text: "Xoá tệp terraform.tfstate đi để Terraform quên bucket và bỏ qua lỗi này, sau đó terraform destroy chạy lại sẽ không còn báo lỗi nào" }
+      - { id: c, text: "Đổi tên bucket trong tệp rồi apply lại để Terraform tạo ra một bucket mới, cách này giữ nguyên toàn bộ file model cũ trong bucket cũ" }
+      - { id: d, text: "Chạy terraform init -upgrade để provider tự bỏ qua bucket không rỗng, vì cờ này làm provider tự xoá mọi object bên trong bucket" }
+  - id: manual-leftovers
+    kind: knowledge
+    type: single
+    prompt: "Bạn từng bấm tạo thêm một endpoint thử trong console, không qua Terraform. Sau `terraform destroy` thành công, endpoint đó còn không?"
+    options:
+      - { id: a, text: "Mất, vì destroy xoá mọi resource cùng loại trong cùng region của tài khoản, kể cả những thứ tạo ngoài Terraform và không có trong state" }
+      - { id: b, text: "Mất, vì destroy xoá mọi resource mang tag project giống nhau trong tài khoản, kể cả những thứ tạo ngoài Terraform và không có trong state" }
+      - { id: c, text: "Còn, vì Terraform chỉ xoá resource có trong state của nó và vẫn tiếp tục tính tiền" }
+      - { id: d, text: "Còn, nhưng được tự động chuyển về trạng thái tạm dừng nên không còn tính tiền nữa, nên không còn phát sinh chi phí nào cho endpoint đó nữa" }
+  - id: budget-effect
+    kind: knowledge
+    type: single
+    prompt: "aws_budgets_budget.lab đặt ngưỡng 80% của 20 USD. Khi chi phí vượt ngưỡng, điều gì xảy ra theo đúng khai báo trong tệp?"
+    options:
+      - { id: a, text: "AWS tự dừng mọi endpoint và notebook để chi phí không vượt quá 20 USD, nhờ đó tổng chi phí cả tháng của tài khoản không vượt quá hạn mức" }
+      - { id: b, text: "AWS chặn tạo resource mới nhưng vẫn giữ các resource đang chạy ở trạng thái cũ, việc tạo mới bị từ chối cho tới đầu tháng sau theo chu kỳ tính tiền" }
+      - { id: c, text: "AWS tự xoá toàn bộ resource có tag project = ml-lab sau 24 giờ tính từ lúc vượt, toàn bộ dữ liệu trong các resource đó biến mất cùng lúc" }
+      - { id: d, text: "Gửi email thông báo; tài nguyên vẫn chạy và tiếp tục tính tiền cho tới khi có người dọn" }
+  - id: ttl-tag
+    kind: knowledge
+    type: single
+    prompt: "Vì sao mọi resource dùng `tags = local.tags` với `ttl` và `owner`?"
+    options:
+      - { id: a, text: "Để AWS tự xoá resource khi tới ngày ghi ở tag ttl mà không cần ai chạy lệnh nào, nên không cần chạy thêm lệnh hay script dọn nào sau ngày đó cả" }
+      - { id: b, text: "Để tìm, quy chi phí theo dự án và dọn những thứ quá hạn; một script dọn chỉ nên động vào resource mang tag của lab" }
+      - { id: c, text: "Để giảm giá theo giờ của resource, vì AWS chiết khấu cho resource có đủ tag chuẩn, mức giảm áp dụng ngay từ giờ đầu tiên của resource được gắn tag" }
+      - { id: d, text: "Để Terraform xác định thứ tự tạo resource, tag quyết định resource nào tạo trước, tag là thứ duy nhất Terraform dùng để sắp xếp đồ thị phụ thuộc" }

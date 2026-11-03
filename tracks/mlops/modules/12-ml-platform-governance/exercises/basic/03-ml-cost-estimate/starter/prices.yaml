@@ -1,0 +1,11 @@
+currency: USD
+note: "Giá minh hoạ cho bài tập, không phải bảng giá hiện hành của nhà cung cấp nào"
+hours_per_month: 730
+compute_hourly:
+  cpu.m5.xlarge: 0.23
+  gpu.g5.xlarge: 1.01
+  gpu.a100: 4.10
+spot_multiplier: 0.35
+committed_multiplier: 0.62
+storage_gb_month: 0.023
+egress_gb: 0.09

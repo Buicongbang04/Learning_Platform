@@ -18,9 +18,11 @@ milestone ở [`../milestones/`](../milestones/), tổng quan ở [README capsto
 | `.github/workflows/`, `requirements-ci.txt`, `tests_own/` | [M08](../milestones/m08-cicd-act.md) | CI, CT có cổng promotion, CD theo alias `champion`, chạy bằng `act` |
 | `monitoring/`, `src/eta/serve.py` (bản M09) | [M09](../milestones/m09-monitoring.md) | Metric Prometheus, alert rule có test promtool, dashboard Grafana |
 | `src/eta/drift.py`, `quality.py`, `reports/decisions/`, `docs/` | [M10](../milestones/m10-drift-replay.md) | PSI/KS, chất lượng theo nhãn về muộn, phát lại 2019–2020, quyết định, runbook, postmortem |
+| `cloud/` (tuỳ chọn) | [M11](../milestones/m11-cloud-optional.md) | Terraform có tag dự án, `teardown.sh --dry-run`, `budget.md` |
+| `params.assessment.yaml`, `reports/assessment/diagnosis.yaml`, `docs/assessment.md` | [M13](../milestones/m13-junior-assessment.md) | Đánh giá độc lập: chẩn đoán tháng dữ liệu lạ, quyết định có số |
 | `tests/` | mọi milestone | Không sửa: test chấm bài. Test của bạn để ở chỗ khác (ví dụ `tests_own/`) |
 
-`.gitignore` ở đây chặn `data/`, `models/`, `reports/` (trừ `reports/decisions/` của M10), `metrics.json`, `.ci-deps`,
+`.gitignore` ở đây chặn `data/`, `models/`, `reports/` (trừ `reports/decisions/` của M10 và `reports/assessment/diagnosis.yaml` của M13), `metrics.json`, `.ci-deps`,
 `dist/`: dữ liệu và model đi qua DVC và MLflow, không qua git.
 
 ## Chạy test
@@ -37,7 +39,7 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 
 | Thiếu | Test skip | Cách bật |
 | --- | --- | --- |
-| Bộ `nyc-tlc` | `test_m01_real_data_baseline`, M08 (CT), M10 (phát lại) | `uv run python data/download_dataset.py nyc-tlc` |
+| Bộ `nyc-tlc` | `test_m01_real_data_baseline`, M08 (CT), M10 (phát lại), `test_m13_evidence_matches_recomputed` | `uv run python data/download_dataset.py nyc-tlc` |
 | Docker | M02, `test_m06_online_offline_parity`, `test_m07_loadtest_thresholds`, M08, `test_m09_rules_*` | Cài Docker, user thuộc nhóm `docker` |
 | Stack MLOps | `test_m02_compose_api`, `test_m04_alias_rollback` | `docker compose -f setup/mlops/compose.yaml up -d --wait` |
 | Redis cho Feast | `test_m06_online_offline_parity` | `docker compose -f setup/mlops/compose.yaml --profile feast up -d --wait` |
@@ -46,7 +48,7 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 | Grafana của stack | `test_m09_dashboard_provisioned` | `docker compose -f setup/mlops/compose.yaml --profile monitoring up -d --wait` |
 | Bộ `nyc-tlc-2020` | `test_m10_replay_summary_real`, `test_m10_decision_files_valid` | `uv run python data/download_dataset.py nyc-tlc-2020` |
 
-Skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15` trước `uv run`.
+M11 là milestone tuỳ chọn: chưa có thư mục `cloud/` thì test `test_m11_*` skip và không tính vào phần lõi; `test_m11_cloud_live` chỉ chạy khi đặt `ETA_CLOUD_LIVE=1`. Ngoài M11, skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15` trước `uv run`.
 
 Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và chạy được bằng
 `SOLUTION=1 uv run pytest tracks/mlops/capstone/project/tests -q -rs`. Chỉ mở sau khi đã tự làm.
