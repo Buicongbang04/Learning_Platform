@@ -347,11 +347,13 @@ việc của manifest.
 - **Workflow:** DAG ba task; `validate` là `script` Python: kiểm `month` bằng regex, rồi chạy `prepare` và `validate` dạng
   mảng (`subprocess.run([...])`, không shell, parameter đi qua `env`), xuất `sample` (parquet đã lấy mẫu) làm artifact cho
   `train`, nên `train` đọc đúng dữ liệu đã kiểm. Bản đầu ghép `{{workflow.parameters.month}}` vào `sh -c`: ai submit được
-  Workflow là chạy được lệnh tuỳ ý trong container. `gate` là `script` Python gọi `decide` + `Policy()`
+  Workflow là chạy được lệnh tuỳ ý trong container. `train` cũng là `script` kiểm lại `month` (template có thể bị tái dùng
+  không có `validate` phía trước), nhận artifact ở đường dẫn cố định rồi symlink thành `<month>.parquet` cho `--input`;
+  tiến trình con chết vì signal (OOM) thoát `128 + signal` kèm thông báo, không phải mã âm khó đọc. `gate` là `script` Python gọi `decide` + `Policy()`
   của M04, thoát `EXIT_REJECTED`. Input artifact `metrics` để `archive: none` (đọc được trên MinIO) nên cần `mode: 0444`:
   không có thì user 10001 gặp `PermissionError`. `retryStrategy` `OnError` chỉ ở `validate`, `train`; `gate` không retry.
 - **Số đo** (laptop 16 nhân, image đã cache): `-k m12` 6 test khoảng 2 phút; Workflow thành công khoảng 30 giây, Workflow
-  dừng ở `validate` khoảng 12 giây; bốn release canary cộng 120 request khoảng 26 giây.
+  dừng ở `validate` khoảng 12 giây; bốn release canary cộng 160 request khoảng 26 giây.
 
 Rubric M12:
 

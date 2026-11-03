@@ -67,6 +67,9 @@ spec:
               ["python", "-m", "eta.cli", "validate", sample, "--month", month],
           ):
               code = subprocess.run(command).returncode
+              if code < 0:
+                  print(f"{command[3]} bị signal {-code} giết (OOM thì xem limits.memory)", file=sys.stderr)
+                  sys.exit(128 - code)
               if code != 0:
                   sys.exit(code)
         volumeMounts:
@@ -90,15 +93,32 @@ spec:
       inputs:
         artifacts:
           - name: sample
-            path: "/tmp/in/{{workflow.parameters.month}}.parquet"
-      container:
+            path: /tmp/in/sample.parquet
+      script:
         image: ${ETA_TRAIN_IMAGE}
         imagePullPolicy: IfNotPresent
-        command: [python, -m, eta.cli]
-        args: [train, --config, /app/params.yaml, --input, /tmp/in, --model-out, /tmp/out/model.joblib, --metrics-out, /tmp/out/metrics.json]
+        command: [python]
         env:
-          - name: ETA_MONTHS
+          - name: MONTH
             value: "{{workflow.parameters.month}}"
+        source: |
+          import os
+          import re
+          import subprocess
+          import sys
+
+          month = os.environ["MONTH"]
+          if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+              sys.exit(f"month phải dạng YYYY-MM, nhận {month!r}")
+          os.makedirs("/tmp/work", exist_ok=True)
+          os.symlink("/tmp/in/sample.parquet", f"/tmp/work/{month}.parquet")
+          command = ["python", "-m", "eta.cli", "train", "--config", "/app/params.yaml", "--input", "/tmp/work",
+                     "--model-out", "/tmp/out/model.joblib", "--metrics-out", "/tmp/out/metrics.json"]
+          code = subprocess.run(command, env={**os.environ, "ETA_MONTHS": month}).returncode
+          if code < 0:
+              print(f"train bị signal {-code} giết (OOM thì xem limits.memory)", file=sys.stderr)
+              sys.exit(128 - code)
+          sys.exit(code)
         resources:
           requests: {cpu: 500m, memory: 512Mi}
           limits: {cpu: "2", memory: 1Gi}

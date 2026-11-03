@@ -187,7 +187,7 @@ kubectl --context kind-mlops -n eta rollout status deployment/eta-predictor
 ```
 
 Rollout đo được (laptop, image đã nạp): apply tới `/readyz` báo version mới khoảng 5–7 giây; bốn release của test (ổn định,
-25%, 50%, rollback) cộng 120 request mất khoảng 26 giây. Rollback là apply lại bộ biến cũ.
+25%, 50%, rollback) cộng 160 request mất khoảng 26 giây. Rollback là apply lại bộ biến cũ.
 
 Training: `argo/train-workflow.yaml` (DAG `validate → train → gate`, parameter `month`, `champion-metrics`, dữ liệu từ
 ConfigMap `eta-train-data`, artifact `sample`, `model`, `metrics` qua MinIO của Argo). Một Workflow trên 1 500 chuyến xong

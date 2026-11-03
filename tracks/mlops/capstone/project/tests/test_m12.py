@@ -16,6 +16,7 @@ import yaml
 from etakit import need, require_file, synthetic_month
 
 import mlopskit
+import testkit
 
 TRIP = {"PULocationID": 161, "DOLocationID": 236, "pickup_datetime": "2019-01-15T08:30:00", "trip_distance": 2.4}
 SERVE_VARS = ("ETA_SERVE_IMAGE", "ETA_CHAMPION_IMAGE", "ETA_CHAMPION_VERSION", "ETA_CHALLENGER_IMAGE",
@@ -28,6 +29,9 @@ DATA_CONFIGMAP = "eta-train-data"
 MONTH = "2019-03"
 ROLLOUT_TIMEOUT = 240
 ETA_REL = 1e-4
+ETA_ABS = 1.0
+MIN_ETA_S = 60.0
+SPLIT_IDS = 40
 WORKFLOW_TIMEOUT = 360
 
 
@@ -100,15 +104,23 @@ def models(synthetic_trips, tmp_path_factory):
     def get():
         if built:
             return built
-        features = need("features", "build_features")
+        features = need("features", "build_features", "make_features")
         train = need("train", "train")
         serve = need("serve", "app", "route")
         folder = tmp_path_factory.mktemp("m12-models")
         X, y = features.build_features(synthetic_trips)
+        trip = pd.DataFrame([{"tpep_pickup_datetime": pd.Timestamp(TRIP["pickup_datetime"]),
+                              "PULocationID": TRIP["PULocationID"], "DOLocationID": TRIP["DOLocationID"],
+                              "trip_distance": TRIP["trip_distance"]}])
         for name, rounds in (("a", 30), ("b", 3)):
             model = train.train(X, y, {"max_iter": rounds, "random_state": 0})
             joblib.dump(model, folder / f"{name}.joblib")
-            built[name] = (model, local_eta(serve, folder / f"{name}.joblib", name))
+            eta = local_eta(serve, folder / f"{name}.joblib", name)
+            raw = max(float(model.predict(features.make_features(trip))[0]), MIN_ETA_S)
+            assert abs(eta - raw) <= ETA_ABS, (
+                f"eta.serve trên máy trả {eta:.3f} cho model {name}, model.predict(make_features) cho {raw:.3f} "
+                f"(đã kẹp {MIN_ETA_S:.0f} s): /predict phải trả đúng dự đoán của model, lệch tối đa {ETA_ABS} s do làm tròn")
+            built[name] = (model, eta)
         assert abs(built["a"][1] - built["b"][1]) > 1, "hai model test phải cho ETA khác nhau"
         built["route"] = serve.route
         return built
@@ -122,7 +134,7 @@ def render(path, **values: str) -> str:
     except KeyError as err:
         pytest.fail(f"{path.name} dùng biến {err} không có trong danh sách biến của đề", pytrace=False)
     except ValueError as err:
-        pytest.fail(f"{path.name}: placeholder sai cú pháp ({err}); viết $$ cho ký tự $ thật", pytrace=False)
+        pytest.fail(f"{path.name}: placeholder sai cú pháp ({err}); đừng dùng ký tự $ ngoài bảy biến release", pytrace=False)
 
 
 def documents(text: str) -> list[dict]:
@@ -155,12 +167,27 @@ def deploy(ns: str, manifest, values: dict) -> None:
     mlopskit.wait_for("inferenceservice", ISVC, "Ready", ns, ROLLOUT_TIMEOUT)
 
 
-def serving(ns: str, champion: str, challenger: str, weight: float, timeout: float = 90) -> None:
-    """Chờ pod sau Service báo đúng release (pod cũ có thể còn vài giây trong lúc thay).
+def release_matches(body, champion: str, challenger: str, weight: float) -> bool:
+    """`/readyz` khớp release: champion đúng; `challenger`, `canary_weight` nếu có thì cũng khớp.
 
-    `/readyz` phải báo `model_version` là champion; nếu nó có thêm `challenger`, `canary_weight` (M07 khuyên có) thì hai
-    trường đó cũng phải khớp release vừa apply.
+    Release không có challenger riêng (challenger trùng champion) thì `challenger: null` cũng được (M07 mục 1).
     """
+    if not isinstance(body, dict) or body.get("model_version") != champion:
+        return False
+    if "challenger" in body:
+        allowed = {challenger, None} if challenger == champion else {challenger}
+        if body["challenger"] not in allowed:
+            return False
+    if "canary_weight" in body:
+        try:
+            return float(body["canary_weight"]) == pytest.approx(weight)
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
+def serving(ns: str, champion: str, challenger: str, weight: float, timeout: float = 90) -> None:
+    """Chờ pod sau Service báo đúng release (pod cũ có thể còn vài giây trong lúc thay)."""
     deadline = time.monotonic() + timeout
     seen = None
     while time.monotonic() < deadline:
@@ -168,9 +195,7 @@ def serving(ns: str, champion: str, challenger: str, weight: float, timeout: flo
             with mlopskit.port_forward(ns, SERVICE, 80) as port:
                 reply = httpx.get(f"http://127.0.0.1:{port}/readyz", timeout=10)
             seen = (reply.status_code, reply.text[:300])
-            body = reply.json() if reply.status_code == 200 else {}
-            if (body.get("model_version") == champion and body.get("challenger", challenger) == challenger
-                    and float(body.get("canary_weight", weight)) == pytest.approx(weight)):
+            if reply.status_code == 200 and release_matches(reply.json(), champion, challenger, weight):
                 return
         except (httpx.HTTPError, ValueError, pytest.fail.Exception) as err:
             seen = repr(err)[:300]
@@ -181,8 +206,9 @@ def serving(ns: str, champion: str, challenger: str, weight: float, timeout: flo
 
 
 def check_split(ns: str, route, weight: float, champion: tuple[str, float], challenger: tuple[str, float],
-                n: int = 30) -> None:
-    ids = [f"m12-{weight}-{i}-{uuid.uuid4().hex[:6]}" for i in range(n)]
+                n: int = SPLIT_IDS) -> None:
+    ids = [f"m12-split-{i}" for i in range(n)]
+    canary = 0
     with mlopskit.port_forward(ns, SERVICE, 80) as port, httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=10) as api:
         for request_id in ids:
             reply = api.post("/predict", json=TRIP, headers={"X-Request-ID": request_id})
@@ -192,10 +218,21 @@ def check_split(ns: str, route, weight: float, champion: tuple[str, float], chal
             assert body.get("variant") == expected, (
                 f"{request_id}: với ETA_CANARY_WEIGHT={weight}, route() chọn {expected}, pod trả {body.get('variant')}. "
                 "Pod có thật sự chạy với cấu hình mới không (đổi ConfigMap không khởi động lại pod)?")
+            canary += expected == "canary"
             version, eta = challenger if expected == "canary" else champion
             assert body.get("model_version") == version, f"nhánh {expected} phải báo version {version}: {body}"
             assert body.get("eta_s", 0) > 0 and body["eta_s"] == pytest.approx(eta, rel=ETA_REL), (
                 f"nhánh {expected} báo {version} nhưng eta_s {body.get('eta_s')} không phải của model {version} ({eta:.3f})")
+    low, high = split_bounds(weight, n)
+    assert low <= canary <= high, (
+        f"ETA_CANARY_WEIGHT={weight}: {canary}/{n} request vào canary, cần trong [{low}, {high}]; route() phải chia theo trọng số")
+
+
+def split_bounds(weight: float, n: int) -> tuple[int, int]:
+    """Khoảng chấp nhận số request canary trên `n` id cố định; rộng để mọi cách băm sha256 hợp lý đều qua."""
+    if weight <= 0:
+        return 0, 0
+    return max(1, int(0.4 * weight * n)), min(n - 1, int(1.6 * weight * n) + 2)
 
 
 def test_m12_manifests_contract(project):
@@ -243,6 +280,8 @@ def test_m12_isvc_serves_champion(project, images, models):
     require_file("k8s", "Dockerfile.model")
     require_file("Dockerfile.serve")
     mlopskit.require_kind()
+    if not testkit.docker_ready():
+        pytest.skip("Docker chưa sẵn sàng")
     model, eta = models()["a"]
     version = f"v-{uuid.uuid4().hex[:6]}"
     token = uuid.uuid4().hex
@@ -268,6 +307,8 @@ def test_m12_canary_rollout_and_rollback(project, images, models):
     require_file("k8s", "Dockerfile.model")
     require_file("Dockerfile.serve")
     mlopskit.require_kind()
+    if not testkit.docker_ready():
+        pytest.skip("Docker chưa sẵn sàng")
     built = models()
     run = uuid.uuid4().hex[:6]
     v1, v2 = f"v1-{run}", f"v2-{run}"
@@ -335,6 +376,8 @@ def test_m12_workflow_trains(project, images, tmp_path):
     workflow = require_file("argo", "train-workflow.yaml")
     require_file("Dockerfile.train")
     mlopskit.require_kind()
+    if not testkit.docker_ready():
+        pytest.skip("Docker chưa sẵn sàng")
     image = images.train()
     with mlopskit.k8s_namespace() as ns:
         month_data(ns, tmp_path, synthetic_month(1_500, month=MONTH, seed=5))
@@ -356,6 +399,8 @@ def test_m12_gate_rejects_worse_model(project, images, tmp_path):
     workflow = require_file("argo", "train-workflow.yaml")
     require_file("Dockerfile.train")
     mlopskit.require_kind()
+    if not testkit.docker_ready():
+        pytest.skip("Docker chưa sẵn sàng")
     image = images.train()
     with mlopskit.k8s_namespace() as ns:
         month_data(ns, tmp_path, synthetic_month(1_500, month=MONTH, seed=5))
@@ -373,6 +418,8 @@ def test_m12_bad_month_stops_at_validate(project, images, tmp_path):
     workflow = require_file("argo", "train-workflow.yaml")
     require_file("Dockerfile.train")
     mlopskit.require_kind()
+    if not testkit.docker_ready():
+        pytest.skip("Docker chưa sẵn sàng")
     image = images.train()
     frame = synthetic_month(1_500, month=MONTH, seed=6)
     broken = frame.index[::10]
