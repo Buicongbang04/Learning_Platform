@@ -76,7 +76,8 @@ flowchart LR
   `workflow_dispatch`.
 - Job **`validate`**: với mỗi tháng trong config, `eta.cli prepare` rồi `eta.cli validate` (M03); tháng hỏng làm job đỏ.
 - Job **`train`** `needs: validate`: `python -m eta.cli train --config params.yaml --register` (M04: đăng ký version có tag
-  `data_version` dạng `sha256:...`), lấy `model_version` từ JSON in ra và xuất thành **output của job**
+  `data_version` dạng `sha256:...`; config có `speed_table` (M06) thì `eta.cli train` gắn feature tốc độ y như
+  `train_flow` và đưa bảng vào `data_version`, để model CT và model của flow dùng cùng một đường feature), lấy `model_version` từ JSON in ra và xuất thành **output của job**
   (`echo "model_version=..." >> "$GITHUB_OUTPUT"`, khai báo `outputs:`). Đừng chuyển version qua tệp giữa các job: trên
   GitHub thật mỗi job một máy.
 - Job **`gate`** `needs: train`: `python -m eta.cli promote --config params.yaml --version "$MODEL_VERSION"`. Cổng qua thì

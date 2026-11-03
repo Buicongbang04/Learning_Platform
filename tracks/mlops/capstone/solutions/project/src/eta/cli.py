@@ -43,6 +43,11 @@ def cmd_train(args: argparse.Namespace) -> int:
 
     config = load_config(args.config)
     df, paths = load_training_frame(config, args.input)
+    if config.speed_table:
+        from eta.zone_features import attach_speed, read_speed_table
+
+        df = attach_speed(df, read_speed_table(config.speed_table))
+        paths = [*paths, config.speed_table]
     train_df, test_df = time_split(df)
     X, y = build_features(train_df)
     model = train(X, y, {"random_state": config.seed, **config.model_params})
