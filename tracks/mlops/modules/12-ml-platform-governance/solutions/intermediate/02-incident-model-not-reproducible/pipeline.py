@@ -69,11 +69,18 @@ def replay(tracking_uri: str, run_id: str, workdir: Path, index: dict) -> list[f
     seed, alpha = int(run.data.params["seed"]), float(run.data.params["alpha"])
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
+    if "requirements.lock" not in {a.path for a in client.list_artifacts(run_id)}:
+        raise LookupError(f"run {run_id} không có artifact requirements.lock: không biết bản thư viện đã chạy lúc train")
     lock_path = client.download_artifacts(run_id, "requirements.lock", str(workdir))
+    lock = Path(lock_path).read_bytes()
+    if hashlib.sha256(lock).hexdigest() != run.data.tags.get("lockfile_sha256"):
+        raise LookupError(f"requirements.lock của run {run_id} không khớp tag lockfile_sha256: không tin được bản ghim")
     pinned = {}
-    for line in Path(lock_path).read_text(encoding="utf-8").split():
+    for line in lock.decode("utf-8").split():
         name, _, version = line.partition("==")
         pinned[name] = version
+    if "scalekit" not in pinned:
+        raise LookupError("requirements.lock không ghim scalekit")
     for name, version in pinned.items():
         if version not in index.get(name, {}):
             raise LookupError(f"không còn {name}=={version} trong index")
