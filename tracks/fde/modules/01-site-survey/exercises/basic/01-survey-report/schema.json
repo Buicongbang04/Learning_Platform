@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "site-survey",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "os_id", "os_version", "kernel_major", "glibc", "cpus", "mem_mb", "disk_free_gb_max",
+    "gpu", "proxy_url", "sudo", "selinux", "runtime", "egress"
+  ],
+  "properties": {
+    "os_id": {"type": "string", "pattern": "^[a-z0-9._-]+$"},
+    "os_version": {"type": "string", "minLength": 1},
+    "kernel_major": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+    "glibc": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+    "cpus": {"type": "integer", "minimum": 1},
+    "mem_mb": {"type": "integer", "minimum": 1},
+    "disk_free_gb_max": {"type": "number", "minimum": 0},
+    "gpu": {"type": ["string", "null"], "minLength": 1},
+    "proxy_url": {"type": ["string", "null"], "pattern": "^https?://"},
+    "sudo": {"type": "boolean"},
+    "selinux": {"enum": ["enforcing", "permissive", "disabled", "n/a"]},
+    "runtime": {"enum": ["docker", "podman", null]},
+    "egress": {"enum": ["open", "proxy", "none"]}
+  }
+}
