@@ -59,6 +59,10 @@ monthly_quality(joined: pd.DataFrame) -> dict[str, float]   # khoá mae, p90_abs
 
 - `join_labels`: inner join theo `request_id`; giữ các cột của log dự đoán (`PREDICTION_LOG_COLUMNS`) và thêm
   `duration_s`. Request chưa có nhãn và nhãn không khớp request nào đều bị loại.
+- Log của API (M07) có thể chứa **hai dòng cùng `request_id`** khi bật shadow: dòng champion/canary và dòng
+  `variant = "shadow"`. Join nhiều-một (`validate="many_to_one"`) vẫn chạy nhưng nhân đôi request và trộn sai số của
+  challenger vào MAE của model đang phục vụ. Trước khi join log API, lọc `predictions[predictions["variant"] != "shadow"]`;
+  muốn đo challenger thì join riêng phần shadow. Log batch (M05) chỉ có `variant = "batch"` nên không bị ảnh hưởng.
 - `monthly_quality`: sai số tuyệt đối `|eta_s - duration_s|`; `mae` là trung bình, `p90_abs_err` là `np.quantile(..., 0.9)`,
   `mae_airport` là MAE của chuyến có `PULocationID` hoặc `DOLocationID` thuộc sân bay (132, 138; NaN nếu không có), `n` là
   số dòng. Nên thêm `bias_s` (trung bình `eta_s - duration_s`): dấu của nó cho biết model đoán dài hay ngắn.
@@ -179,7 +183,7 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m10
 
 ## Tiêu chí đạt
 
-- [ ] `uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m10` pass, không skip (hai bộ dữ liệu đã tải).
+- [ ] `uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m10` pass, không skip ngoài bài tuỳ chọn 4b (`test_m10_experiments_use_published_labels`); hai bộ dữ liệu đã tải.
 - [ ] MAE của một tháng chỉ dùng nhãn đã công bố tại `as_of`; tháng cuối không có MAE.
 - [ ] Quyết định 2020-03 và tháng còn lại có số khớp summary, lý do dựa trên chất lượng đo được, không chỉ trên drift.
 - [ ] Runbook phủ mọi alert của M09; postmortem không đổ lỗi, có dòng thời gian và việc cần làm có người/khi nào.
