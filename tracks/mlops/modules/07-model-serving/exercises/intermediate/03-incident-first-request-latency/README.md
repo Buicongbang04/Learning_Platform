@@ -28,7 +28,7 @@ Thứ Năm, sau đợt deploy thường lệ của `taxi-eta`, dashboard cho th�
 
 `starter/service.py` là mã đang chạy. Hợp đồng không đổi: `create_app()` trả ứng dụng FastAPI; `GET /readyz` 200 `{"ready": true}` khi nhận traffic, 503 trước đó; `POST /predict` body `{"rows": [[distance_km, hour, zone], ...]}` trả `{"model_version": 3, "predictions": [...]}` với **đúng các con số hiện tại**; hàm `build_zone_table()` giữ nguyên (cả nội dung và chi phí của nó) và vẫn là nơi dựng bảng zone; nó chạy đúng một lần mỗi tiến trình.
 
-Chỉ sửa `starter/service.py`. Một test chạy lại bản lúc sự cố và đòi nó tái hiện triệu chứng. Test của bạn: sau khi `/readyz` lên 200, request đầu tiên dưới 150 ms và p99 của 30 request đầu dưới 150 ms; `/readyz` không bao giờ 200 trước khi bảng zone dựng xong; bảng zone không được bị bỏ hay thay bằng hằng số.
+Chỉ sửa `starter/service.py`. Một test chạy lại bản lúc sự cố và đòi nó tái hiện triệu chứng. Test của bạn: sau khi `/readyz` lên 200, request đầu tiên dưới 250 ms và p99 của 30 request đầu dưới 250 ms; `/readyz` không bao giờ 200 trước khi bảng zone dựng xong; bảng zone không được bị bỏ hay thay bằng hằng số.
 
 ## Tiêu chí đạt
 

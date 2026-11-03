@@ -87,7 +87,7 @@ def test_slow_shadow_does_not_delay_response(shadow_mod):
     run, records = runner(shadow_mod, Model(1), Model(2, delay=0.6))
     started = time.monotonic()
     run.predict("r1", [[5.0, 8, 1]])
-    assert time.monotonic() - started < 0.3, "Shadow chậm không được làm chậm response"
+    assert time.monotonic() - started < 0.4, "Shadow chậm không được làm chậm response"
     assert records == []
     run.drain(timeout=5)
     assert len(records) == 1

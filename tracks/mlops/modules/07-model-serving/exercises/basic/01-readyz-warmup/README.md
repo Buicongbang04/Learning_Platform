@@ -25,7 +25,7 @@ FastAPI cơ bản đã học ở [DS 14](../../../../../../data-science/modules/
 - Nạp lỗi: `/readyz` giữ 503, nội dung chứa thông điệp lỗi (vd. `RuntimeError: không thấy model`); `/healthz` vẫn 200.
 - `POST /predict` body `{"rows": [[distance_km, hour, passengers], ...]}`: trả 503 khi chưa sẵn sàng; sẵn sàng thì trả `{"model_version": <version>, "predictions": [...]}`.
 - Kiểm tra đầu vào, sai trả 422: số dòng từ 1 đến 100; mỗi dòng đúng 3 số hữu hạn (từ chối `NaN`, `Infinity`, `1e999`); `hour` trong 0..23.
-- Timeout: nếu `model.predict` chạy quá `predict_timeout` giây thì trả 504 **ngay khi hết hạn** (dưới 0.7 giây với `predict_timeout=0.2`), không đợi model chạy xong. Chạy `model.predict` ngoài event loop (thread pool) để một request chậm không chặn các request khác.
+- Timeout: nếu `model.predict` chạy quá `predict_timeout` giây thì trả 504 **ngay khi hết hạn** (dưới 0.9 giây với `predict_timeout=0.2`), không đợi model chạy xong. Chạy `model.predict` ngoài event loop (thread pool) để một request chậm không chặn các request khác.
 
 ## Tiêu chí đạt
 

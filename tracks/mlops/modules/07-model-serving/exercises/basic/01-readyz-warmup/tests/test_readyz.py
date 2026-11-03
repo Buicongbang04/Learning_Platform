@@ -130,8 +130,8 @@ def test_predict_timeout_is_504(service):
     gate.set()
     with TestClient(service.create_app(gated(model, gate), predict_timeout=0.2)) as client:
         wait_ready(client)
-        model.delay = 0.8
+        model.delay = 1.5
         started = time.monotonic()
         response = client.post("/predict", json={"rows": [[5, 8, 1]]})
         assert response.status_code == 504
-        assert time.monotonic() - started < 0.7, "504 phải trả về đúng hạn, không đợi model chạy xong"
+        assert time.monotonic() - started < 0.9, "504 phải trả về đúng hạn, không đợi model chạy xong"

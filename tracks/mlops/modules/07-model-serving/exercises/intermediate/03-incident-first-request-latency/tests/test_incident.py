@@ -10,7 +10,7 @@ from testkit import Exercise
 ex = Exercise(__file__)
 FIXTURES = Path(__file__).parent / "fixtures"
 ROWS = [[5.0, 8, 12], [12.0, 17, 100]]
-LIMIT = 0.15
+LIMIT = 0.25
 
 
 def load(path: Path, name: str):

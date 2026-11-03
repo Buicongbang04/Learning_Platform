@@ -49,7 +49,7 @@ Bảy việc phân biệt "demo" với "service". Mỗi dòng có một câu h�
 | --- | --- | --- |
 | Nạp model theo **alias** | `models:/<tên>@champion` phân giải ra số version lúc khởi động, ghi vào log | Restart lúc 3 giờ sáng nạp model nào? |
 | `/healthz` khác `/readyz` | liveness: tiến trình còn sống; readiness: nhận được traffic | Nạp model xong chưa mà đã nhận request? |
-| Warmup | vài dự đoán mẫu qua đúng đường mã của request thật trước khi báo ready | Request đầu tiên của người dùng có chậm hơn request thứ 100 không? |
+| Warmup | vài dự đoán mẫu qua đúng đường mã của request thật trước khi báo ready | Service báo ready khi nào: lúc tiến trình lên, hay lúc mọi việc tốn kém một lần đã xong? |
 | Timeout | giới hạn thời gian mỗi dự đoán, trả 504 thay vì treo | Một request chậm có giữ cả hàng đợi không? |
 | Kiểm tra đầu vào | số cột, kiểu, NaN/Inf, miền giá trị, số dòng tối đa; sai thì 422 | Input rác sinh ra dự đoán rác hay lỗi rõ ràng? |
 | `model_version` trong response và log | số nguyên version, không phải tên alias | Người điều tra thấy ngay model nào trả lời? |
@@ -188,7 +188,7 @@ Quyết định khi viết kịch bản:
   chậm thì tải tự giảm và che mất vấn đề ("coordinated omission"). Open model (`constant-arrival-rate`) giữ nhịp
   đến cố định; đây là mô hình đúng cho dịch vụ có người dùng độc lập.
 - **Tách warmup khỏi đo.** Chạy một scenario ngắn trước, và đặt ngưỡng **chỉ trên scenario đo** bằng tag
-  (`http_req_duration{scenario:measure}`). Nếu không, đuôi lúc khởi động làm hỏng p95 hoặc, tệ hơn, bạn học cách tăng ngưỡng để
+  (`http_req_duration{scenario:measure}`). Nếu không, giai đoạn làm nóng làm lệch p95 hoặc, tệ hơn, bạn học cách tăng ngưỡng để
   xanh.
 - **Ngưỡng đặt từ SLO, không từ lần đo đầu.** Ngưỡng ra từ con số bạn cam kết với người dùng; k6 thoát mã 99 khi vi phạm nên
   gắn được vào CI.

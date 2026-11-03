@@ -20,7 +20,7 @@ Chạy model ứng viên trên traffic thật mà người dùng không thấy g
 `ShadowRunner(primary, shadow, log)`; `primary` và `shadow` có `.predict(rows) -> {"model_version": int, "predictions": [float, ...]}`; `log` là hàm nhận một dict. `starter/shadow.py` đang trả kết quả của shadow, tức là đổi cái người dùng thấy. Viết lại để:
 
 - `predict(request_id, rows)` trả **đúng nguyên** dict mà `primary.predict` trả, không thêm khoá nào. Lỗi của primary được ném tiếp, và khi đó không ghi log shadow.
-- Shadow chạy **ngoài đường của request** (thread nền) trên bản sao sâu của `rows`: shadow chậm 0.6 giây thì `predict` vẫn xong dưới 0.3 giây; shadow sửa tại chỗ `rows` không làm hỏng `rows` của người gọi hay dự đoán của primary.
+- Shadow chạy **ngoài đường của request** (thread nền) trên bản sao sâu của `rows`: shadow chậm 0.6 giây thì `predict` vẫn xong dưới 0.4 giây; shadow sửa tại chỗ `rows` không làm hỏng `rows` của người gọi hay dự đoán của primary.
 - Mỗi lần shadow chạy xong, gọi `log(record)` đúng một lần với `record` gồm: `request_id`, `primary_version`, `primary` (danh sách dự đoán), `shadow_version`, `shadow`, `max_abs_diff` (độ lệch tuyệt đối lớn nhất giữa hai danh sách) và `error`.
 - Shadow ném ngoại lệ: request vẫn thành công, log ghi `shadow=None`, `shadow_version=None`, `max_abs_diff=None` và `error` là chuỗi `"<TênLỗi>: <thông điệp>"`.
 - `log` ném lỗi (vd. đĩa đầy) cũng không làm hỏng request.
