@@ -134,3 +134,78 @@ def test_readme_documents_profiles():
 def test_helper_dockerfiles_present():
     assert "feast[redis]==0.67.0" in (ROOT / "setup" / "mlops" / "feast" / "Dockerfile").read_text(encoding="utf-8")
     assert (ROOT / "setup" / "mlops" / "act-runner" / "Dockerfile").is_file()
+
+
+KIND_DIR = ROOT / "setup" / "mlops" / "kind"
+ADDED_ON = "2026-11-03"
+LATEST_RELEASE = "2026-10-20"
+
+
+def _versions() -> dict[str, str]:
+    values = {}
+    for line in (KIND_DIR / "versions.env").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, _, value = line.partition("=")
+        values[key] = value
+    return values
+
+
+def test_kind_files_present():
+    for name in ("cluster.yaml", "up.sh", "down.sh", "versions.env", "README.md", "argo-artifacts.yaml"):
+        assert (KIND_DIR / name).is_file(), name
+
+
+def test_versions_env_dates():
+    values = _versions()
+    components = sorted(k.removesuffix("_VERSION") for k in values if k.endswith("_VERSION"))
+    assert {"KIND", "KUBECTL", "KUBERNETES", "CERT_MANAGER", "KSERVE", "ARGO", "ARGO_MINIO"} <= set(components)
+    for component in components:
+        released = values.get(f"{component}_RELEASED")
+        assert released and re.fullmatch(r"\d{4}-\d{2}-\d{2}", released), component
+        assert released <= LATEST_RELEASE, f"{component} phát hành {released}, chưa đủ 2 tuần trước {ADDED_ON}"
+    for key, value in values.items():
+        if key.endswith("_SHA256"):
+            assert re.fullmatch(r"[0-9a-f]{64}", value), key
+
+
+def test_cluster_yaml_pinned_and_local():
+    cluster = yaml.safe_load((KIND_DIR / "cluster.yaml").read_text(encoding="utf-8"))
+    assert cluster["name"] == mlopskit.KIND_CLUSTER
+    assert len(cluster["nodes"]) == 1
+    node = cluster["nodes"][0]
+    assert node["image"] == _versions()["KIND_NODE_IMAGE"]
+    assert re.fullmatch(r"kindest/node:v[\d.]+@sha256:[0-9a-f]{64}", node["image"])
+    assert node["image"].startswith(f"kindest/node:{_versions()['KUBERNETES_VERSION']}@")
+    ports = {m["hostPort"]: m for m in node["extraPortMappings"]}
+    assert set(ports) == {28081, 28444}
+    for mapping in ports.values():
+        assert mapping["listenAddress"] == "127.0.0.1"
+        assert mapping["hostPort"] not in TAKEN_PORTS
+
+
+def test_up_sh_verifies_checksums_and_installs_locally():
+    text = (KIND_DIR / "up.sh").read_text(encoding="utf-8")
+    assert "sha256sum" in text and ".local/bin" in text
+    assert "sudo" not in text and not re.search(r"curl[^\n]*\|\s*(ba)?sh", text)
+    assert "MLOPS_KIND_HTTP_PORT" in text and "MLOPS_KIND_HTTPS_PORT" in text
+    assert "RawDeployment" in text
+    for key in ("KIND_SHA256", "KUBECTL_SHA256", "CERT_MANAGER_SHA256", "KSERVE_SHA256", "ARGO_SHA256"):
+        assert key in text, key
+    down = (KIND_DIR / "down.sh").read_text(encoding="utf-8")
+    assert "delete cluster" in down and "mlops" in down
+
+
+def test_env_example_lists_kind_ports():
+    lines = ENV_EXAMPLE.read_text(encoding="utf-8").splitlines()
+    assert "# MLOPS_KIND_HTTP_PORT=28081" in lines
+    assert "# MLOPS_KIND_HTTPS_PORT=28444" in lines
+
+
+def test_gpu_project_has_onnxruntime_gpu():
+    text = (ROOT / "setup" / "gpu" / "pyproject.toml").read_text(encoding="utf-8")
+    assert re.search(r'"onnxruntime-gpu==1\.\d+\.\d+"', text)
+    lock = (ROOT / "setup" / "gpu" / "uv.lock").read_text(encoding="utf-8")
+    assert 'name = "onnxruntime-gpu"' in lock
+    assert '{ name = "onnxruntime", marker = "sys_platform == \'never\'" }' in lock
