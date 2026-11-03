@@ -32,7 +32,9 @@ phải đến từ registry nội bộ `10.0.2.101:5000`. Sản phẩm, cách c�
 USB. Test chạy nó trong sandbox (`testkit.run_sandboxed`, chỉ ghi được trong thư mục tạm chứa thư mục USB, ≤120 s) với
 bundle `tracks/fde/product/dist/quillo-1.0.0.tar` và thư mục công cụ `data/raw/fde-tools/`: mọi công cụ bạn cần mang theo
 phải được tải sẵn vào đó **trước** (phần `0. Cài đặt` của README module có sẵn một binary đã ghim; cần thêm thì tự tải,
-ghim phiên bản và sha256 như vậy). USB phải có `quillo-1.0.0.tar` và `install.sh` ở thư mục gốc.
+ghim phiên bản và sha256 như vậy). Ở thư mục gốc của USB phải có `quillo-1.0.0.tar` (giữ nguyên byte của bản phát
+hành), `install.sh`, và `SHA256SUMS` theo định dạng của `sha256sum` (mỗi dòng `<64 ký tự hex>  <đường dẫn tương đối từ gốc
+USB>`) có ít nhất dòng của `quillo-1.0.0.tar`.
 
 **`starter/install.sh`** nằm trên USB. Test chép **cả thư mục USB** vào `/home/fde/usb/` của máy staging (đây là "cắm
 USB": bản chép do cổng chuyển tệp của khách thực hiện), rồi chạy từ `/tmp`:
@@ -44,7 +46,9 @@ sudo bash /home/fde/usb/install.sh
 Thứ tự test làm:
 
 1. Đổi **một byte** ở giữa `quillo-1.0.0.tar` trên USB (chép hỏng), chạy `install.sh`.
-2. Trả byte đó về như cũ, chạy lại `install.sh`.
+2. Giữ byte hỏng đó (nằm trong một tệp của bundle), đồng thời viết lại dòng của `quillo-1.0.0.tar` trong `SHA256SUMS` cho
+   khớp với tệp đã hỏng (ai đó sửa cả USB lẫn danh sách checksum), chạy `install.sh`.
+3. Trả byte và `SHA256SUMS` về như cũ, chạy lại `install.sh`.
 
 Test boot VM 5120 MB. Lần chạy có bundle hỏng và lần cài thật mỗi lần ≤240 s. Đo trên máy của repo: cả bài 94–146 s (tuỳ tải máy).
 Tự boot máy để điều tra: `with fdekit.customer_site("lawfirm-staging", memory_mb=5120, forwards=(18080,)) as s:`.
@@ -53,9 +57,11 @@ Tự boot máy để điều tra: `with fdekit.customer_site("lawfirm-staging", 
 
 `test_install_quillo_from_usb_on_lawfirm_staging`:
 
-- `pack_usb.sh` thoát `0`; USB có `quillo-1.0.0.tar` và `install.sh` ở gốc.
+- `pack_usb.sh` thoát `0`; USB có `quillo-1.0.0.tar`, `install.sh` và `SHA256SUMS` (có dòng cho `quillo-1.0.0.tar`) ở gốc.
 - Bundle hỏng một byte: `install.sh` thoát khác `0`, và **chưa** làm gì với Docker hay registry: registry nội bộ không có
   repository nào, `docker images -q` và `docker ps -aq` trong VM rỗng.
+- Bundle có một tệp bị sửa nhưng `SHA256SUMS` đã bị viết lại cho khớp (bước 2): `install.sh` cũng thoát khác `0` với cùng
+  điều kiện "chưa làm gì": registry rỗng, không image, không container.
 - Bundle đúng: `install.sh` thoát `0`; trong 60 s, `GET /healthz` qua cổng 18080 của VM (forward ra host) trả 200 với
   `"version": "1.0.0"`.
 - Project compose tên `quillo` có đủ các dịch vụ `db`, `llm`, `embed`, `api`, `worker` đang chạy; image của **mỗi** dịch

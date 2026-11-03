@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shlex
 import subprocess
 import tarfile
 import tempfile
@@ -50,6 +51,30 @@ def flip(m, offset: int) -> None:
     m.ssh(f"python3 -c \"{code}\"", timeout=30, check=True)
 
 
+def forge_sums(m) -> None:
+    code = ("import hashlib, re; t = 'quillo-" + VERSION + ".tar'; d = hashlib.sha256(); "
+            "f = open('/home/fde/usb/' + t, 'rb'); [d.update(c) for c in iter(lambda: f.read(1 << 20), b'')]; "
+            "p = '/home/fde/usb/SHA256SUMS'; s = open(p).read(); "
+            "n = re.sub(r'^[0-9a-f]{64}( +\\*?)' + re.escape(t) + '$', lambda x: d.hexdigest() + x.group(1) + t, s, "
+            "flags=re.M); assert n != s, 'SHA256SUMS không có dòng cho ' + t; open(p, 'w').write(n)")
+    forged = sh(m, f"cp /home/fde/usb/SHA256SUMS /home/fde/SHA256SUMS.orig && python3 -c {shlex.quote(code)}", 60)
+    assert forged.returncode == 0, f"Test không viết lại được SHA256SUMS trên USB:\n{forged.stderr[-800:]}"
+
+
+def sh(m, cmd: str, timeout: float) -> subprocess.CompletedProcess:
+    try:
+        return m.ssh(cmd, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"Lệnh trong VM chạy quá {timeout:.0f} s: {cmd[:150]}")
+
+
+def untouched(m, site, case: str) -> None:
+    assert not registry(site, "/v2/_catalog").get("repositories"), (
+        f"{case}: install.sh vẫn đẩy image lên registry nội bộ")
+    left = sh(m, "docker images -q; docker ps -aq", 30).stdout.strip()
+    assert not left, f"{case}: install.sh vẫn nạp image hoặc tạo container"
+
+
 def install(m) -> subprocess.CompletedProcess:
     try:
         return m.ssh("cd /tmp && sudo -n bash /home/fde/usb/install.sh", timeout=INSTALL_TIMEOUT)
@@ -91,7 +116,7 @@ def test_install_quillo_from_usb_on_lawfirm_staging():
         except subprocess.TimeoutExpired:
             pytest.fail(f"pack_usb.sh chạy quá {PACK_TIMEOUT} s")
         assert packed.returncode == 0, f"pack_usb.sh thoát mã {packed.returncode}\nstderr:\n{packed.stderr[-2000:]}"
-        for name in (f"quillo-{VERSION}.tar", "install.sh"):
+        for name in (f"quillo-{VERSION}.tar", "install.sh", "SHA256SUMS"):
             assert (usb / name).is_file(), f"USB phải có {name} ở thư mục gốc"
         offset = flip_offset(usb / f"quillo-{VERSION}.tar")
         timings["pack"] = time.monotonic() - started
@@ -108,11 +133,19 @@ def test_install_quillo_from_usb_on_lawfirm_staging():
             broken = install(m)
             timings["tampered"] = time.monotonic() - mark
             assert broken.returncode != 0, "Bundle trên USB bị hỏng một byte mà install.sh vẫn thoát 0"
-            assert not registry(s, "/v2/_catalog").get("repositories"), (
-                "Bundle hỏng mà install.sh vẫn đẩy image lên registry nội bộ")
-            left = m.ssh("docker images -q; docker ps -aq", timeout=30).stdout.strip()
-            assert not left, "Bundle hỏng mà install.sh vẫn nạp image hoặc tạo container"
+            untouched(m, s, "Bundle hỏng (SHA256SUMS không khớp)")
+
+            forge_sums(m)
+            mark = time.monotonic()
+            forged = install(m)
+            timings["forged"] = time.monotonic() - mark
+            assert forged.returncode != 0, (
+                "Một tệp trong bundle bị sửa và SHA256SUMS được viết lại cho khớp, mà install.sh vẫn thoát 0: "
+                "manifest.json bên trong bundle chưa được kiểm")
+            untouched(m, s, "Bundle bị sửa (SHA256SUMS khớp, manifest không khớp)")
             flip(m, offset)
+            restored = sh(m, "cp /home/fde/SHA256SUMS.orig /home/fde/usb/SHA256SUMS", 30)
+            assert restored.returncode == 0
 
             mark = time.monotonic()
             done = install(m)

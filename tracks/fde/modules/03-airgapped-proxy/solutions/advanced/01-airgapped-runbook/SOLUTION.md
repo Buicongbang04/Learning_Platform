@@ -27,8 +27,8 @@ nhập và tài khoản đẩy khác tài khoản kéo.
 | R5 | Mục 4: G1 08:30, G2 09:30, G3 10:15, tiêu chí đo được (mã HTTP, tên/Id image, trạng thái dịch vụ) |
 | R6 | Mục 5: bảng hoàn tác theo bước, 10:30 là mốc cứng, ~15 phút; chưa có dữ liệu khách nên `down -v` không mất gì của khách |
 | R7 | Mục 3: CA vào `/etc/docker/certs.d/registry.minhan.internal/ca.crt` (không restart, không `insecure-registries`), đọc fingerprint với chị Lan qua điện thoại |
-| R8 | Mục 6: mật khẩu DB/token sinh tại chỗ trong `/etc/quillo/quillo.env` 0600 root; token do chị Hạnh tự đọc trên máy; mật khẩu robot Harbor gõ qua `--password-stdin`, logout tài khoản đẩy |
-| R9 | Mục 6: danh sách bằng chứng, loại trừ `.env`, `docker inspect`, `config.json`; anh Tuấn và chị Hạnh ký biên bản |
+| R8 | Mục 6: mật khẩu DB/token sinh tại chỗ trong `/etc/quillo/quillo.env` 0600 root; token do chị Hạnh tự đọc trên máy khi đã tạm dừng chia sẻ màn hình; mật khẩu robot Harbor gõ qua `--password-stdin`, logout tài khoản đẩy |
+| R9 | Mục 6: danh sách bằng chứng (log, `sha256sum -c`, `Id`/`RepoDigests` so với biên bản diễn tập, `/healthz`), loại trừ `.env`, `docker inspect`, `config.json`; anh Tuấn và chị Hạnh ký biên bản |
 | R10 | Mục 7: 5 điều không làm, 4 câu hỏi còn mở |
 
 Kiểm tổng thời gian: thời lượng các bước trong cửa sổ cộng dồn 80 phút (dự kiến xong ~10:00 nếu không trục trặc, mốc
@@ -142,8 +142,9 @@ Bí mật:
 
 - `QUILLO_ADMIN_TOKEN`, `QUILLO_DB_PASSWORD` do `install.sh` sinh tại chỗ (`openssl rand -hex 24`) vào
   `/etc/quillo/quillo.env`, chủ root, quyền `0600`. Không có trên USB, trong runbook, trong log cài đặt.
-- Token quản trị: chị Hạnh tự đọc trên máy (`sudo cat` do anh Tuấn chạy, chị Hạnh nhìn màn hình của anh Tuấn, **không**
-  chia sẻ cho FDE), lưu vào kho mật khẩu của công ty; FDE không giữ bản nào.
+- Token quản trị: anh Tuấn **tạm dừng chia sẻ màn hình** (FDE xác nhận không còn thấy màn hình), chạy
+  `sudo grep QUILLO_ADMIN_TOKEN /etc/quillo/quillo.env` để chị Hạnh đọc tại chỗ, `clear`, rồi mới chia sẻ lại; chị Hạnh lưu
+  token vào kho mật khẩu của công ty. FDE không thấy và không giữ bản nào.
 - Mật khẩu robot Harbor: do anh Tuấn nhập qua `--password-stdin`; robot đẩy bị vô hiệu sau cửa sổ; robot kéo lưu trong
   `/root/.docker/config.json` (base64, không mã hoá: quyền `0600`, nêu trong câu hỏi mở).
 

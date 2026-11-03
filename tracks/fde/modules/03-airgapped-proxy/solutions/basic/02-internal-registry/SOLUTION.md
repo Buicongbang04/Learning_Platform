@@ -29,10 +29,12 @@ production; khi đó chỉ cần chép `ca.crt`, không phải restart Docker �
 1. Kiểm đầu vào (root, tệp đọc được, `host:port`, `repo:tag`).
 2. Đọc `daemon.json` bằng `python3` (có sẵn trên Ubuntu, máy không có mạng để cài `jq`), thêm registry vào danh sách đang có
    nếu chưa có, giữ mọi khoá khác. So **nội dung JSON** (không so byte) với bản cũ: giống thì không ghi, không restart.
-   Khác thì lưu bản `.bak` có dấu thời gian, ghi bản mới, restart Docker. IT đã bật `live-restore`, nên container đang
-   chạy sống qua lần restart daemon; không có `live-restore` thì restart Docker là downtime, phải xin cửa sổ bảo trì.
+   Khác thì lưu bản `.bak` có dấu thời gian, ghi bản mới vào tệp tạm rồi `mv` (không bao giờ để `daemon.json` ghi dở), restart
+   Docker. Restart lỗi ⇒ tự chép `.bak` về, restart lại, báo lỗi rõ. IT đã bật `live-restore`, nên container đang chạy sống
+   qua lần restart daemon; không có `live-restore` thì restart Docker là downtime (script in cảnh báo), phải xin cửa sổ bảo
+   trì.
 3. Kiểm daemon đã nhận registry (`docker info` → `IndexConfigs`) và registry trả lời `/v2/` trước khi load/push.
-4. `docker load`, lấy tên image từ dòng `Loaded image:` (không đoán từ tên tệp), `docker tag` sang
+4. `docker load` (lỗi ⇒ in nguyên văn output của Docker rồi dừng), lấy tên image từ dòng `Loaded image:` (không đoán từ tên tệp), `docker tag` sang
    `10.0.2.101:5000/<repo:tag>`, `docker push`. Lần chạy thứ hai: load/tag/push lại cùng nội dung, registry đã có các blob nên
    push chỉ xác nhận digest.
 

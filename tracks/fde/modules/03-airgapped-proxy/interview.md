@@ -52,8 +52,9 @@ máy" chỉ giải quyết dòng đầu tiên.
 
 Không. `verify=False` (hay `curl -k`, `pip --trusted-host`, `insecure-registries` cho registry công cộng) tắt chính thứ phân
 biệt proxy của khách với một kẻ đứng giữa bất kỳ, và dòng đó sẽ sống lâu hơn buổi demo: nó đi vào repo, vào image, sang
-khách sau. Thay vào đó: lấy CA của khách (đọc fingerprint với An ninh), trỏ đúng biến (`REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`)
-vào bundle hệ thống đã có CA, mất mười phút. Nếu công cụ thật sự không cấu hình được CA (ghim chứng chỉ) thì xin An ninh
+khách sau. Thay vào đó: lấy CA của khách (đọc fingerprint với An ninh), gộp vào trust store hệ thống, rồi chỉ cho từng thư viện
+dùng bundle đã gộp đó: `REQUESTS_CA_BUNDLE` cho `requests` (nó bỏ qua `SSL_CERT_FILE`), `SSL_CERT_FILE` cho `ssl`/`urllib`.
+Các biến này **thay** cả bundle, nên trỏ vào bundle hệ thống đã gộp, không vào tệp chỉ chứa CA của khách. Mất mười phút. Nếu công cụ thật sự không cấu hình được CA (ghim chứng chỉ) thì xin An ninh
 bypass đúng tên miền đó bằng văn bản; quyết định đó là của họ.
 
 ## 8. Khách nói: "Máy đã tin chứng chỉ của chúng tôi rồi, sao app của các anh vẫn lỗi chứng chỉ?" Bạn làm gì?

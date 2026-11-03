@@ -60,12 +60,8 @@ curl -q -fsS --noproxy '*' -m 10 "http://$registry/v2/" >/dev/null || die "khôn
 
 say "3/7 giải nén và kiểm manifest của bundle $version"
 release=$prefix/releases/$version
-if [ ! -d "$release" ]; then
-    stage=$prefix/releases/.$version.partial
-    rm -rf "$stage"
-    mkdir -p "$stage"
-    tar -xf "$bundle" -C "$stage" --strip-components=1 --no-same-owner || die "giải nén $bundle lỗi"
-    if ! (cd "$stage" && python3 - <<'PY'
+verify_tree() {
+    (cd "$1" && python3 - <<'PY'
 import hashlib, json, os, sys
 expected = json.load(open("manifest.json"))["files"]
 found = set()
@@ -86,7 +82,16 @@ for rel in sorted(set(expected) & found):
 if problems:
     sys.exit("manifest: " + "; ".join(problems))
 PY
-    ); then
+    )
+}
+if [ -d "$release" ]; then
+    verify_tree "$release" || die "$release đã có nhưng không còn khớp manifest.json (bị sửa?); kiểm tay trước khi cài lại"
+else
+    stage=$prefix/releases/.$version.partial
+    rm -rf "$stage"
+    mkdir -p "$stage"
+    tar -xf "$bundle" -C "$stage" --strip-components=1 --no-same-owner || { rm -rf "$stage"; die "giải nén $bundle lỗi"; }
+    if ! verify_tree "$stage"; then
         rm -rf "$stage"
         die "bundle không khớp manifest.json bên trong"
     fi
@@ -102,7 +107,7 @@ docker compose version >/dev/null || die "docker compose không chạy được 
 say "5/7 khai registry nội bộ cho Docker daemon"
 rc=0
 python3 - "$registry" <<'PY' || rc=$?
-import json, os, sys
+import json, os, shutil, sys, tempfile
 path, registry = "/etc/docker/daemon.json", sys.argv[1]
 config = {}
 if os.path.exists(path) and open(path).read().strip():
@@ -112,13 +117,21 @@ if registry in current:
     sys.exit(0)
 config["insecure-registries"] = [*current, registry]
 if os.path.exists(path):
-    os.replace(path, path + ".bak")
-with open(path, "w") as handle:
+    shutil.copy2(path, path + ".bak")
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".daemon.json.")
+with os.fdopen(fd, "w") as handle:
     json.dump(config, handle, indent=2)
     handle.write("\n")
-sys.exit(10)
+os.chmod(tmp, 0o644)
+os.replace(tmp, path)
+sys.exit(11 if config.get("live-restore") else 10)
 PY
-if [ "$rc" -eq 10 ]; then
+if [ "$rc" -eq 10 ] || [ "$rc" -eq 11 ]; then
+    if [ "$rc" -eq 10 ]; then
+        echo "install: CẢNH BÁO: restart Docker để nhận registry; live-restore tắt nên MỌI container trên máy sẽ dừng rồi chạy lại" >&2
+        record "warning docker restart without live-restore"
+        logged=0
+    fi
     systemctl restart docker || die "restart docker lỗi sau khi sửa daemon.json (bản cũ: daemon.json.bak)"
 elif [ "$rc" -ne 0 ]; then
     die "không đọc/ghi được /etc/docker/daemon.json"
@@ -152,9 +165,13 @@ fi
 sed -i "s/^QUILLO_VERSION=.*/QUILLO_VERSION=$version/" "$config"
 port=$(sed -n 's/^QUILLO_PORT=//p' "$config")
 
+site=$prefix/site/$version
+data=$prefix/data
+install -d -m 0755 "$site"
+install -d -o 10001 -g 10001 -m 0750 "$data/inbox"
 base=(docker compose -p "$project" --project-directory "$release" --env-file "$config" -f "$release/compose.yaml")
 "${base[@]}" config --format json > "$work/config.json" || die "compose.yaml của bundle không hợp lệ với $config"
-python3 - "$work/config.json" "$work/images" "$release/compose.site.yaml" <<'PY' || die "không dựng được compose.site.yaml"
+python3 - "$work/config.json" "$work/images" "$site/compose.site.yaml" "$data/inbox" <<'PY' || die "không dựng được compose.site.yaml"
 import json, sys
 services = json.load(open(sys.argv[1]))["services"]
 mapping = dict(line.split() for line in open(sys.argv[2]) if line.strip())
@@ -164,14 +181,15 @@ for name, service in sorted(services.items()):
     if image not in mapping:
         sys.exit(f"bundle không có image {image!r} mà dịch vụ {name} cần")
     lines.append(f"  {name}:\n    image: {mapping[image]}")
+    if any(v.get("target") == "/data/inbox" for v in service.get("volumes", [])):
+        lines.append(f"    volumes:\n      - {sys.argv[4]}:/data/inbox")
 open(sys.argv[3], "w").write("\n".join(lines) + "\n")
 PY
-install -d -o 10001 -g 10001 -m 0750 "$release/inbox"
 ln -sfn "$release" "$prefix/current.tmp"
 mv -T "$prefix/current.tmp" "$prefix/current"
 
 say "7/7 compose up"
-compose=("${base[@]}" -f "$release/compose.site.yaml")
+compose=("${base[@]}" -f "$site/compose.site.yaml")
 if ! "${compose[@]}" up -d --wait --wait-timeout 240; then
     "${compose[@]}" ps -a >&2 || true
     die "compose up không khoẻ; xem: docker compose -p $project logs"

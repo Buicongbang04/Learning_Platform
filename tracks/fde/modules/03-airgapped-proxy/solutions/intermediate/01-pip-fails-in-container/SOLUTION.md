@@ -32,8 +32,9 @@ ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
 ```
 
 - `update-ca-certificates` gộp CA bệnh viện vào bundle hệ thống của image (vẫn giữ các CA công cộng).
-- `REQUESTS_CA_BUNDLE` bắt `requests` dùng bundle đó thay cho `certifi`; `SSL_CERT_FILE` cho `ssl`/`urllib`/`httpx`
-  của Python; `PIP_CERT` để pip không phụ thuộc việc `truststore` có bật hay không ở bản pip khác.
+- `REQUESTS_CA_BUNDLE` bắt `requests` dùng bundle đó thay cho `certifi`; `SSL_CERT_FILE` cho `ssl`/`urllib` của Python
+  (`requests` bỏ qua biến này); `PIP_CERT` để pip không phụ thuộc việc `truststore` có bật hay không ở bản pip khác. Cả ba
+  biến **thay** danh sách CA mặc định, nên đều trỏ vào bundle hệ thống của image đã gộp CA, không vào tệp chỉ có CA bệnh viện.
 - Ở `lab-open` thư mục `site-ca/` rỗng: `COPY` không chép gì, image dùng đúng các CA công cộng. Không có gì riêng của
   bệnh viện viết cứng trong tệp.
 - Kiểm chứng chỉ vẫn bật: test chạy `requests` trong image tới một server chứng chỉ tự ký, phải bị từ chối.

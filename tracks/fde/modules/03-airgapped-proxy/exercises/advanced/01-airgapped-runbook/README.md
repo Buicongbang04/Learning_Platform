@@ -44,7 +44,7 @@ cài của bạn. Viết `starter/runbook.md`. Bài không có test; tự chấm
 | R6 | Quay về: theo từng bước, hoàn tác cái gì; quyết định quay về dựa trên mốc giờ của cửa sổ; nói rõ dữ liệu nào bị mất (hoặc không) |
 | R7 | Chứng chỉ: Docker tin CA nội bộ để kéo/đẩy với Harbor bằng cách đúng (không `insecure-registries`, không tắt kiểm chứng chỉ), cách kiểm fingerprint CA với chị Lan |
 | R8 | Bí mật: sinh tại chỗ, không nằm trên USB hay trong runbook/log, lưu ở đâu với quyền gì, giao token quản trị cho ai bằng cách nào |
-| R9 | Bằng chứng bàn giao: những gì thu lại (log, kết quả kiểm, digest image so với manifest, `/healthz`), không chứa bí mật; ai ký nhận |
+| R9 | Bằng chứng bàn giao: những gì thu lại (log, kết quả kiểm, `Id`/`RepoDigests` của image so với bản đã kiểm (manifest/biên bản diễn tập), `/healthz`), không chứa bí mật; ai ký nhận |
 | R10 | Mục "Không làm" (vd. không cắm điện thoại phát mạng, không mang laptop cá nhân vào mạng khách, không tắt TLS) và mục "Câu hỏi còn mở" có ít nhất 3 câu khách phải trả lời trước CAB |
 
 ## Tiêu chí đạt

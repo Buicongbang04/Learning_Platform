@@ -74,6 +74,9 @@ fi
 
 running_proxy() { docker info --format '{{.HTTPSProxy}}' 2>/dev/null || true; }
 if [ "$changed_docker" -eq 1 ] || [ "$changed_ca" -eq 1 ] || [ "$(running_proxy)" != "$proxy" ]; then
+    if [ "$(docker info --format '{{.LiveRestoreEnabled}}' 2>/dev/null || true)" != "true" ]; then
+        echo "configure_proxy: CẢNH BÁO: live-restore tắt, restart Docker sẽ dừng rồi chạy lại MỌI container trên máy" >&2
+    fi
     systemctl daemon-reload || die "systemctl daemon-reload lỗi"
     systemctl restart docker || die "restart docker lỗi; xem journalctl -u docker"
     say "đã restart docker"

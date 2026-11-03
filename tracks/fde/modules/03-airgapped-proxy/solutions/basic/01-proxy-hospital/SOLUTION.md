@@ -23,6 +23,9 @@ Idempotent: mỗi tệp dựng sẵn vào thư mục tạm, so `cmp -s` với t�
 drop-in hoặc CA đổi. `/etc/environment` được viết lại bằng cách bỏ mọi dòng của 6 khoá rồi thêm đúng 6 dòng, giữ nguyên
 `PATH` và các dòng khác của IT.
 
+Restart Docker là downtime: không có `live-restore` thì **mọi** container trên máy dừng rồi chạy lại. Script in cảnh báo
+khi `docker info` báo `LiveRestoreEnabled` khác `true`; trên máy production, chạy nó trong cửa sổ bảo trì đã thoả thuận.
+
 Kiểm đầu vào: CA phải là PEM đọc được bằng `openssl x509`; script in subject + fingerprint SHA-256 để bạn **đọc lại với IT**
 qua kênh khác (một tệp `.pem` gửi qua email có thể bị thay). Proxy chứa `user:pass@` thì từ chối: mật khẩu cá nhân nằm
 trong `/etc/environment` thì mọi user và mọi log `env` đều thấy; xin IT tài khoản dịch vụ hoặc cho máy chủ đi proxy

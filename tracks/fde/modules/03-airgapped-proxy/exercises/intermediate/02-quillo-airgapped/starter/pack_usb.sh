@@ -12,5 +12,5 @@ here=$(cd "$(dirname "$0")" && pwd)
 
 # TODO 1: kiểm bundle và mọi công cụ bạn mang theo (phiên bản + sha256 đã ghim) trước khi chép.
 # TODO 2: chép vào $usb: bundle (giữ tên quillo-X.Y.Z.tar), công cụ, và $here/install.sh.
-# TODO 3: ghi tệp checksum cho toàn bộ USB để phía khách kiểm trước khi cài.
+# TODO 3: ghi $usb/SHA256SUMS (định dạng của sha256sum) cho toàn bộ USB để phía khách kiểm trước khi cài.
 die "chưa viết"

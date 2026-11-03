@@ -29,7 +29,7 @@ Việc của bạn trong 3 tháng tới:
 | Việc | Cần gì |
 | --- | --- |
 | Cài và nâng cấp `quillo` (mỗi tháng một bản, ~1,1 GB) lên `bv-app-01` trong vùng bệnh án | Bundle offline, qua USB/MFT như bài intermediate 02 |
-| Team dữ liệu của bệnh viện dựng image connector trên `bv-build-01` (bài intermediate 01): `FROM python:3.12-slim`, `pip install` từ PyPI | Docker Hub, PyPI |
+| Team dữ liệu của bệnh viện dựng image connector trên `bv-build-01`: `FROM python:3.12-slim`, `pip install` từ PyPI | Docker Hub, PyPI |
 | Thử model lớn hơn (`llm-medium`, ~1,1 GB, Hugging Face) trước khi đóng vào bundle | Hugging Face |
 | Bạn hỗ trợ từ xa khi có sự cố | Chưa rõ: bệnh viện chưa có kênh nào |
 
@@ -41,7 +41,7 @@ Viết `starter/network-request.md` gửi chị Hoa và anh Phong (quản trị 
 | P1 | Tóm tắt ≤ 6 dòng: xin gì, cho máy nào, không xin gì, cần duyệt trước ngày nào |
 | P2 | Bảng đích: tên miền **cụ thể** (không wildcard rộng kiểu `*.com`), cổng, máy nguồn, mục đích, tần suất, dung lượng ước tính, thời hạn; đủ cho các việc trong đề (kể cả tên miền phụ thật sự được dùng khi kéo image và tải gói) |
 | P3 | Với mỗi đích: đề nghị **soi + tin CA** hay **bypass** hay **không cần mạng (offline)**, có lý do; mặc định là soi, bypass chỉ khi có lý do kỹ thuật cụ thể |
-| P4 | Danh sách chỗ phải tin CA trên `bv-build-01` và trong image, nêu đúng cơ chế từng chỗ (trust store hệ thống, Docker daemon, trust store trong image, Python `requests`/`certifi`, pip), ai làm, kiểm thế nào |
+| P4 | Danh sách mọi chỗ phải tin CA trên `bv-build-01` và trong những gì chạy trên nó, nêu đúng cơ chế từng chỗ, ai làm, kiểm thế nào |
 | P5 | Cam kết không tắt kiểm chứng chỉ ở đâu, kèm cách An ninh tự kiểm được cam kết đó |
 | P6 | `bv-app-01` (vùng bệnh án) không cần ra internet: luồng cài/nâng cấp offline được mô tả, kể cả cách kiểm toàn vẹn |
 | P7 | Hỗ trợ từ xa: đề xuất có kiểm soát (ai bật, ghi lại, thời hạn) hoặc lý do không cần; không đề xuất đường hầm tự dựng |

@@ -28,7 +28,8 @@ TARGETS = [
      "requests-2.34.2-py3-none-any.whl", "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"),
 ]
 FORBIDDEN = re.compile(r"verify\s*=\s*False|trusted[-_]host|PYTHONHTTPSVERIFY|--insecure|CERT_NONE|"
-                       r"check_hostname\s*=\s*False|(?:REQUESTS|CURL)_CA_BUNDLE\s*=\s*[\"']?[\"']?\s*$", re.I | re.M)
+                       r"check_hostname\s*=\s*False|(?:REQUESTS|CURL)_CA_BUNDLE(?:\s*=\s*|\s+)(?:\"\"|''|(?=\s|$))",
+                       re.I | re.M)
 IT_SETUP = f"""set -e
 sudo -n install -m 0644 /home/fde/proxy-ca.pem /usr/local/share/ca-certificates/benhvien-proxy-ca.crt
 sudo -n update-ca-certificates >/dev/null

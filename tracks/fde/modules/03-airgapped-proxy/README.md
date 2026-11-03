@@ -187,7 +187,7 @@ là binary lớn không có chữ ký, phát hiện vào sáng ngày cài.
 | Container (lúc build và lúc chạy) | Không thừa hưởng gì; `--build-arg`, `-e`, hoặc khoá `proxies` trong `~/.docker/config.json` để CLI tự truyền | `ENV http_proxy` trong Dockerfile mang proxy của khách này tới mọi nơi chạy image |
 | curl | `http_proxy` (chỉ chữ thường), `HTTPS_PROXY`/`https_proxy`, `NO_PROXY`/`no_proxy` | CIDR trong `no_proxy` chỉ từ curl 7.86 (Ubuntu 20.04 có 7.68) |
 | Python `urllib` | Cả hai dạng chữ | `no_proxy` so hậu tố tên, không hiểu CIDR |
-| Python `requests` | Như `urllib`, thêm CIDR cho địa chỉ IP | Proxy đúng mà vẫn lỗi chứng chỉ: xem phần 6, `requests` có trust store riêng |
+| Python `requests` | Như `urllib`, thêm CIDR cho địa chỉ IP | Cấu hình proxy không đụng gì tới CA; lỗi chứng chỉ là chuyện của phần 6 |
 | Go (Docker CLI, kubectl, Terraform) | Cả hai dạng chữ, CIDR được | — |
 | Java | Bỏ qua biến môi trường; `-Dhttps.proxyHost`, `-Dhttp.nonProxyHosts="localhost\|*.noi-bo"` | Cú pháp `nonProxyHosts` khác hẳn |
 
@@ -219,9 +219,9 @@ CA của công ty. Câu hỏi chẩn đoán là "chương trình này đọc tru
 | Ubuntu/Debian | `/etc/ssl/certs/ca-certificates.crt` | Tệp `.crt` (PEM) vào `/usr/local/share/ca-certificates/`, `update-ca-certificates` |
 | Rocky/RHEL | `/etc/pki/ca-trust/extracted/…` | Tệp vào `/etc/pki/ca-trust/source/anchors/`, `update-ca-trust` |
 | curl, `ssl`/`urllib` của Python, apt HTTPS | Trust store hệ thống (OpenSSL) | Như trên; `SSL_CERT_FILE` để chỉ định tệp khác |
-| Python `requests` | Gói `certifi` (bundle Mozilla đóng kèm), **không** đọc trust store hệ thống | `REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt` (gói `python3-certifi` của Debian/Ubuntu trỏ sẵn về bundle hệ thống; `certifi` cài bằng pip thì không) |
-| pip ≥ 24.2 trên Python ≥ 3.10 | Trust store hệ thống qua `truststore` | Bản cũ hơn: `PIP_CERT`/`--cert` |
-| httpx | `certifi` mặc định | `SSL_CERT_FILE` hoặc truyền `verify=` một tệp CA (không phải `False`) |
+| Python `requests` | Gói `certifi` (bundle Mozilla đóng kèm), **không** đọc trust store hệ thống và **bỏ qua** `SSL_CERT_FILE` | `REQUESTS_CA_BUNDLE` (hoặc `CURL_CA_BUNDLE`). Giá trị này **thay** cả bundle, nên trỏ vào bundle hệ thống đã gộp CA (`/etc/ssl/certs/ca-certificates.crt`), không vào tệp chỉ có CA của khách. Gói `python3-certifi` của Debian/Ubuntu trỏ sẵn về bundle hệ thống; `certifi` cài bằng pip thì không |
+| pip ≥ 24.2 trên Python ≥ 3.10 | Trust store hệ thống qua `truststore`, cộng `certifi` | Bản cũ hơn: `PIP_CERT`/`--cert`; cũng **thay** bundle ⇒ trỏ vào bundle hệ thống đã gộp |
+| httpx | `certifi` mặc định | `verify=ssl.create_default_context(cafile="/etc/ssl/certs/ca-certificates.crt")` (bundle hệ thống đã gộp; `cafile=` thay danh sách mặc định) |
 | Go (dockerd, kubectl) | Trust store hệ thống, nạp **một lần** lúc khởi động | Thêm vào hệ thống rồi restart tiến trình |
 | Docker kéo/đẩy registry | Hệ thống + `/etc/docker/certs.d/<host:port>/ca.crt` | Thư mục `certs.d` không cần restart |
 | Container | Trust store **của image**, không phải của máy | Chép CA vào image + `update-ca-certificates`, hoặc mount bundle của máy lúc chạy |

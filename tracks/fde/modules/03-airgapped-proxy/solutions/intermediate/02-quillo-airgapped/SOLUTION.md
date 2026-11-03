@@ -32,14 +32,22 @@ nó; một chuỗi 64 ký tự đọc qua điện thoại thì không.
 2. Preflight: lệnh cần có, Docker đang chạy, chỗ trống ở `/opt` và `/var/lib/docker` (≈3× kích thước bundle), registry
    trả lời `/v2/`.
 3. Giải nén vào `/opt/quillo/releases/.1.0.0.partial`, kiểm **mọi** tệp theo `manifest.json` (thiếu, thừa, sai sha) bằng
-   Python tương thích 3.10, rồi `mv -T` thành `releases/1.0.0`. Lớp này bắt bundle khác bản phát hành dù USB "khớp".
+   Python tương thích 3.10, rồi `mv -T` thành `releases/1.0.0`. Lớp này bắt bundle khác bản phát hành dù USB "khớp": test
+   viết lại `SHA256SUMS` cho khớp một bundle đã bị sửa, installer vẫn dừng ở đây (đo 8,2–11,4 s), xoá `.partial`, registry rỗng.
+   Chạy lại khi `releases/1.0.0` đã có: kiểm lại cây đó theo manifest (ai đó có thể đã sửa tay), không tin "đã có là đúng".
+   Vì vậy cây release chỉ chứa đúng các tệp của bundle: tệp riêng của site (`compose.site.yaml`) nằm ở
+   `/opt/quillo/site/1.0.0/`, thư mục `inbox` ở `/opt/quillo/data/inbox` (chồng `volumes:` của `worker` trong
+   `compose.site.yaml`).
 4. Cài compose vào `/usr/local/lib/docker/cli-plugins/docker-compose` (chỉ khi sha khác), `docker compose version`.
-5. Thêm `10.0.2.101:5000` vào `insecure-registries`, giữ mọi khoá khác, restart Docker chỉ khi đổi.
+5. Thêm `10.0.2.101:5000` vào `insecure-registries`, giữ mọi khoá khác, ghi nguyên tử (tệp tạm cùng thư mục + `os.replace`,
+   giữ bản `.bak`), restart Docker chỉ khi đổi. Không có `live-restore` thì restart dừng **mọi** container trên máy:
+   installer in cảnh báo và ghi một dòng `warning` vào log; ở máy đang chạy dịch vụ khác, làm bước này trong cửa sổ bảo trì.
 6. `docker load` từng `images/*.tar`, đọc tên từ `Loaded image:`, bỏ tên registry gốc (`ghcr.io/…` → `ggml-org/…`),
    `docker tag` + `docker push` vào `10.0.2.101:5000/…`.
 7. Cấu hình ở `/etc/quillo/quillo.env` (0600, sinh một lần: `QUILLO_ADMIN_TOKEN`, `QUILLO_DB_PASSWORD` bằng
-   `openssl rand -hex 24`, `QUILLO_BIND=0.0.0.0`); `compose.site.yaml` đặt `image:` của từng dịch vụ sang registry nội bộ,
-   chồng lên `compose.yaml` gốc bằng `-f compose.yaml -f compose.site.yaml` (không sửa tệp có trong manifest);
+   `openssl rand -hex 24`, `QUILLO_BIND=0.0.0.0`); `compose.site.yaml` (sinh từ `docker compose config --format json`) đặt
+   `image:` của từng dịch vụ sang registry nội bộ và chuyển `inbox` ra ngoài cây release, chồng lên `compose.yaml` gốc bằng
+   `-f compose.yaml -f compose.site.yaml` (không sửa tệp có trong manifest);
    `docker compose -p quillo up -d --wait`, `curl /healthz`, ghi một dòng log.
 
 Bí mật **không** đi trên USB: USB qua tay nhiều người và máy quét; mật khẩu sinh tại chỗ, chỉ nằm trên máy khách.
@@ -51,7 +59,8 @@ Bí mật **không** đi trên USB: USB qua tay nhiều người và máy quét;
 | `pack_usb.sh` (chép 1,1 GB trong `/var/tmp`) | 1,7 s |
 | Boot `customer_site("lawfirm-staging")` + registry | 15,8 s |
 | "Cắm USB" (`scp` 1,16 GB vào VM) | 4,9 s |
-| `install.sh` với bundle hỏng (dừng ở bước 1) | 8,1 s |
+| `install.sh` với bundle hỏng (dừng ở bước 1) | 5,6–8,1 s |
+| `install.sh` với bundle bị sửa + `SHA256SUMS` viết lại (dừng ở bước 3) | 8,2–11,4 s |
 | `install.sh` thật (kiểm, giải nén, kiểm manifest, load 3 image, push qua registry nội bộ, compose up, healthz) | 63,8–79,6 s |
 | **Cả bài** (ba lần đo, máy đang chạy việc khác) | **94,2–146,3 s** |
 | Chạy lại `install.sh` lần hai (ngoài test): release đã có, compose không đổi gì | 16,1 s, thoát 0 |
