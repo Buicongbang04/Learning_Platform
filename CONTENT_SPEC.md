@@ -370,6 +370,8 @@ Test của bài tập và capstone gọi Docker **chỉ** qua helper này hoặc
 | Timeout build | `mlopskit.build_timeout()` | Giây, đọc `MLOPS_BUILD_TIMEOUT` lúc gọi; mặc định 1800 |
 
 - Script của người học chạy qua `testkit.run_sandboxed`, như track DevOps.
+  Ngoại lệ: test cloud thật tuỳ chọn (`ETA_CLOUD_LIVE=1`, capstone M11) chạy `teardown.sh --dry-run` của người học ngoài `run_sandboxed`, vì cần mạng và thông tin đăng nhập cloud; chỉ `--dry-run`, mặc định skip.
+- Helper riêng của một module hay capstone nằm cạnh bài, tên `<topic>kit.py` (`cikit.py` ở module 08, `segkit.py` ở module 11, `k8skit.py` ở module 13, `etakit.py` ở `capstone/project/tests/`), được import qua `sys.path.insert` trong `conftest.py` của module/capstone. Chỉ dùng cho thứ riêng một module/capstone; thứ dùng chung nhiều module thuộc `mlopskit.py`. Helper này **không** gọi `docker`, `kubectl`, `kind` trần: mọi lệnh đi qua `mlopskit`.
 - Timeout build của `built_image` và `compose_project` mặc định 1800 giây, chỉnh bằng biến môi trường `MLOPS_BUILD_TIMEOUT` (giây, đọc lúc gọi). Quá hạn thì test fail kèm gợi ý build trước (cache) rồi chạy lại hoặc tăng biến này.
 - Mọi tài nguyên do `mlopskit` tạo có nhãn `mlops-ex=1` và tiền tố `mlops-ex-`; lỗi hay Ctrl-C giữa chừng vẫn dọn hết.
 - Helper mới được thêm vào `mlopskit.py` kèm test ở task dùng chúng, không trước (kind và GPU: Giai đoạn 3, bảng bên dưới).

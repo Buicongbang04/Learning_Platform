@@ -161,7 +161,7 @@ spec:
 | Canary `canaryTrafficPercent` | Có, chia theo revision | **Bị bỏ qua**: rolling update thẳng sang bản mới |
 | Hợp với | Nhiều model ít traffic, cần scale về 0 | Ít model, traffic đều, muốn đơn giản để vận hành |
 
-KServe 0.21 gọi RawDeployment là "Standard"; đọc `kubectl get cm -n kserve inferenceservice-config -o yaml` (khoá `deploy`) để biết cluster đang ở chế độ nào **trước khi** tin vào một trường trong spec. Cluster không có metrics-server, nên mọi InferenceService trong bài đặt `serving.kserve.io/autoscalerClass: none` và `minReplicas == maxReplicas` (không có HPA báo `<unknown>`).
+KServe 0.21 gọi RawDeployment là "Standard"; đọc `kubectl get cm -n kserve inferenceservice-config -o yaml` (khoá `deploy`) để biết cluster đang ở chế độ nào **trước khi** tin vào một trường trong spec. Cluster không có metrics-server, nên mọi InferenceService trong bài tắt autoscaler: `serving.kserve.io/autoscalerClass: none` hoặc `minReplicas == maxReplicas` (một trong hai là đủ, cùng luật với capstone M12; không thì HPA báo `<unknown>`).
 
 ### Ready chưa đủ: kiểm bằng request
 

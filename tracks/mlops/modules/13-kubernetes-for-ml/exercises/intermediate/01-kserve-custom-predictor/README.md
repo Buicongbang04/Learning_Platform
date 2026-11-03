@@ -24,7 +24,8 @@ Luật mà test kiểm:
 
 1. Dùng **custom container** (`spec.predictor.containers`), không dùng `spec.predictor.model`; đúng một container tên `kserve-container`, giữ `image: eta-serve:dev` (test thay bằng image vừa build).
 2. Có `readinessProbe` `httpGet` vào `/v1/models/eta` (đường này chỉ trả 200 khi model đã nạp). Không để KServe tự đặt probe TCP.
-3. Giữ annotation `serving.kserve.io/autoscalerClass: none` và `minReplicas == maxReplicas` (cluster không có metrics-server).
+3. Tắt autoscaler vì cluster không có metrics-server: giữ annotation `serving.kserve.io/autoscalerClass: none` **hoặc** đặt `minReplicas == maxReplicas` (một trong hai là đủ, cùng luật với capstone M12).
+Ngoài luật test: image nạp bằng `kind load` chỉ nằm trong node: tag khác `:latest` (mặc định `imagePullPolicy: IfNotPresent`) hoặc đặt rõ `imagePullPolicy: IfNotPresent`/`Never`; `:latest` làm kubelet đi kéo từ registry và pod kẹt `ErrImagePull`.
 
 Service lab nghe cổng 8080, đọc `MODEL_PATH` và `MODEL_NAME` (mặc định `eta`), trả lời giao thức KServe v1: `GET /v1/models/eta` và `POST /v1/models/eta:predict` với body `{"instances": [[distance_km, hour, passengers], ...]}`; mọi phản hồi có `model_version`.
 

@@ -31,7 +31,7 @@ def eta_image() -> str:
 
 def etaml():
     if "etaml" not in _CACHE:
-        spec = importlib.util.spec_from_file_location("k8slab_etaml", LAB / "app" / "etaml.py")
+        spec = importlib.util.spec_from_file_location("k8skit_etaml", LAB / "app" / "etaml.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         _CACHE["etaml"] = module

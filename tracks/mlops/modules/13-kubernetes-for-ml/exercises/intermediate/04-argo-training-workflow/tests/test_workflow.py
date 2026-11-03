@@ -1,6 +1,6 @@
 import json
 
-import k8slab
+import k8skit
 import mlopskit
 import pytest
 
@@ -11,7 +11,7 @@ SEED, ROWS = 7, 4000
 
 
 def workflow() -> dict:
-    return k8slab.find(k8slab.load_docs(ex.path("workflow.yaml")), "Workflow", "eta-train")
+    return k8skit.find(k8skit.load_docs(ex.path("workflow.yaml")), "Workflow", "eta-train")
 
 
 def templates(spec: dict) -> dict[str, dict]:
@@ -42,12 +42,12 @@ def node_by_task(status: dict, task: str) -> dict:
 def test_workflow_succeeds_and_evaluate_reads_the_trained_model():
     spec = workflow()
     spec["spec"]["arguments"]["parameters"] = [{"name": "seed", "value": str(SEED)}, {"name": "rows", "value": str(ROWS)}]
-    docs = k8slab.with_image([spec], k8slab.eta_image())
+    docs = k8skit.with_image([spec], k8skit.eta_image())
     with mlopskit.k8s_namespace() as ns:
-        mlopskit.apply_manifest(k8slab.dump(docs), ns)
+        mlopskit.apply_manifest(k8skit.dump(docs), ns)
         mlopskit.wait_for("workflow", "eta-train", "jsonpath={.status.phase}=Succeeded", ns, 300,
                           fail_on=("Failed", "Error"))
-        status = k8slab.get_json("workflow", "eta-train", ns)["status"]
+        status = k8skit.get_json("workflow", "eta-train", ns)["status"]
     prepare = node_by_task(status, "prepare")
     produced = {a["name"] for a in prepare.get("outputs", {}).get("artifacts") or []}
     assert {"train", "test"} <= produced, f"prepare phải xuất artifact train và test, đang có {produced}"
@@ -57,7 +57,7 @@ def test_workflow_succeeds_and_evaluate_reads_the_trained_model():
     outputs = {p["name"]: p.get("value") for p in evaluate.get("outputs", {}).get("parameters") or []}
     assert "metrics" in outputs, "evaluate phải xuất output parameter metrics"
     metrics = json.loads(outputs["metrics"])
-    lab = k8slab.etaml()
+    lab = k8skit.etaml()
     x, y = lab.make_trips(SEED, ROWS)
     cut = int(ROWS * 0.8)
     expected = lab.mae(lab.train(x[:cut], y[:cut]), x[cut:], y[cut:])

@@ -29,7 +29,7 @@ Sửa `starter/eta-api.yaml` để:
 
 Giữ `image: eta-serve:dev`: test build image từ `lab/service`, nạp vào cluster kind bằng `mlopskit.kind_load` rồi thay tên image này bằng tag vừa build. Test tạo namespace tạm `mlops-ex-<uuid8>`, apply manifest, chờ đủ 2 pod Ready, `port_forward` vào `svc/eta-api` cổng 80, gọi `/healthz` và `/predict`.
 
-Muốn tự thử bằng tay: `docker build -t eta-serve:dev tracks/mlops/modules/13-kubernetes-for-ml/lab/service`, `kind load docker-image eta-serve:dev --name mlops`, rồi `kubectl --context kind-mlops create ns eta-try` và `kubectl --context kind-mlops -n eta-try apply -f ...`; xong thì xoá namespace đó.
+Muốn tự thử bằng tay: `docker build -t eta-serve:dev tracks/mlops/modules/13-kubernetes-for-ml/lab/service`, `docker save --platform linux/amd64 -o eta-serve.tar eta-serve:dev` (đổi `amd64` cho khớp máy) và `kind load image-archive eta-serve.tar --name mlops` (không dùng `kind load docker-image`: lỗi `content digest ... not found` với image đa nền tảng khi Docker dùng containerd image store; xoá tệp tar sau khi nạp), rồi `kubectl --context kind-mlops create ns eta-try` và `kubectl --context kind-mlops -n eta-try apply -f ...`; xong thì xoá namespace đó.
 
 ## Tiêu chí đạt
 

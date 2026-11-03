@@ -1,7 +1,7 @@
 import time
 from pathlib import Path
 
-import k8slab
+import k8skit
 import mlopskit
 import pytest
 
@@ -13,17 +13,17 @@ WATCH_SECONDS = 30
 
 
 def deploy(ns: str, path: Path) -> None:
-    mlopskit.apply_manifest(k8slab.dump(k8slab.with_image(k8slab.load_docs(path), k8slab.eta_image())), ns)
+    mlopskit.apply_manifest(k8skit.dump(k8skit.with_image(k8skit.load_docs(path), k8skit.eta_image())), ns)
 
 
 def api() -> dict:
-    return k8slab.containers(k8slab.find(k8slab.load_docs(ex.path("eta-api.yaml")), "Deployment", "eta-api"))[0]
+    return k8skit.containers(k8skit.find(k8skit.load_docs(ex.path("eta-api.yaml")), "Deployment", "eta-api"))[0]
 
 
 def test_incident_manifest_reproduces_the_symptom():
     with mlopskit.k8s_namespace() as ns:
         deploy(ns, INCIDENT)
-        count = k8slab.wait_restarts(ns, "app=eta-api", 2, 150)
+        count = k8skit.wait_restarts(ns, "app=eta-api", 2, 150)
         assert count >= 2, "Bản lúc sự cố phải tái hiện triệu chứng: pod khởi động lại nhiều lần"
 
 
@@ -39,20 +39,20 @@ def test_contract_kept():
         for key in ("cpu", "memory"):
             assert key in (resources.get(part) or {}), f"Phải khai báo resources.{part}.{key}"
     limits, requests = resources["limits"], resources["requests"]
-    assert k8slab.quantity(limits["cpu"]) <= 2 and k8slab.quantity(limits["memory"]) <= 2**30, (
+    assert k8skit.quantity(limits["cpu"]) <= 2 and k8skit.quantity(limits["memory"]) <= 2**30, (
         "Vượt ngân sách namespace: limits tối đa 2 CPU và 1Gi"
     )
     for key in ("cpu", "memory"):
-        assert k8slab.quantity(requests[key]) <= k8slab.quantity(limits[key]), f"requests.{key} lớn hơn limits.{key}"
+        assert k8skit.quantity(requests[key]) <= k8skit.quantity(limits[key]), f"requests.{key} lớn hơn limits.{key}"
 
 
 def test_v3_serves_without_restarts():
     with mlopskit.k8s_namespace() as ns:
         deploy(ns, ex.path("eta-api.yaml"))
-        k8slab.wait_available(ns, "eta-api", "app=eta-api", 180)
+        k8skit.wait_available(ns, "eta-api", "app=eta-api", 180)
         time.sleep(WATCH_SECONDS)
-        assert k8slab.restarts(ns, "app=eta-api") == 0, f"Pod vẫn khởi động lại trong {WATCH_SECONDS} giây theo dõi"
+        assert k8skit.restarts(ns, "app=eta-api") == 0, f"Pod vẫn khởi động lại trong {WATCH_SECONDS} giây theo dõi"
         with mlopskit.port_forward(ns, "svc/eta-api", 80) as port:
-            body = k8slab.call(port, "/predict", {"rows": k8slab.ROWS})
+            body = k8skit.call(port, "/predict", {"rows": k8skit.ROWS})
         assert body["model_version"] == "v3"
-        assert body["predictions"] == pytest.approx(k8slab.expected_predictions("v3"), abs=1e-3)
+        assert body["predictions"] == pytest.approx(k8skit.expected_predictions("v3"), abs=1e-3)
