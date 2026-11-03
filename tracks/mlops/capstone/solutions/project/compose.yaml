@@ -1,0 +1,40 @@
+name: eta
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.serve
+    environment:
+      MLFLOW_TRACKING_URI: ${ETA_MLFLOW_URI:-http://mlflow:5000}
+      ETA_MLFLOW_PIN_IP: "1"
+      MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD: "false"
+      ETA_MODEL_NAME: ${ETA_MODEL_NAME:-eta}
+      ETA_MODEL_PATH: ${ETA_MODEL_PATH:-}
+    volumes:
+      - ${ETA_MODEL_DIR:-./models}:/models:ro
+    ports:
+      - "127.0.0.1:${ETA_API_PORT:-28080}:8000"
+    networks:
+      - default
+      - mlops
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpuset: "${DEVOPS_CPUSET:-}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+networks:
+  mlops:
+    name: ${MLOPS_NETWORK:-mlops_default}
+    external: true
