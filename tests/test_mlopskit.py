@@ -1,3 +1,4 @@
+import hashlib
 import shutil
 import subprocess
 
@@ -192,6 +193,39 @@ def test_build_timeout_message(monkeypatch, tmp_path):
         assert "MLOPS_BUILD_TIMEOUT" in str(exc.value) and "7 giây" in str(exc.value)
         assert "cache" in str(exc.value)
         assert seen["timeout"] == 7
+
+
+def test_ensure_image_rebuilds_on_dockerfile_change(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit, "docker_ready", lambda: True)
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    sha = hashlib.sha256(b"FROM scratch\n").hexdigest()
+    labels = {"img:1": sha}
+    builds = []
+
+    def fake_run(cmd, **kw):
+        if cmd[1:3] == ["image", "inspect"]:
+            tag = cmd[-1]
+            if tag not in labels:
+                return subprocess.CompletedProcess(cmd, 1, "", "No such image")
+            return subprocess.CompletedProcess(cmd, 0, labels[tag] + "\n", "")
+        if cmd[1] == "build":
+            builds.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert mlopskit._ensure_image("img:1", tmp_path) == "img:1"
+    assert builds == [], "nhãn khớp sha Dockerfile thì không build lại"
+    (tmp_path / "Dockerfile").write_text("FROM busybox\n")
+    mlopskit._ensure_image("img:1", tmp_path)
+    new_sha = hashlib.sha256(b"FROM busybox\n").hexdigest()
+    assert len(builds) == 1 and f"mlops-dockerfile-sha={new_sha}" in builds[0], builds
+    assert not any("mlops-ex=1" in part for part in builds[0])
+    labels["img:1"] = "<no value>"
+    mlopskit._ensure_image("img:1", tmp_path)
+    assert len(builds) == 2, "image cũ không có nhãn thì build lại"
+    mlopskit._ensure_image("img:2", tmp_path)
+    assert len(builds) == 3 and builds[-1][-2:] == ["img:2", str(tmp_path)]
 
 
 def test_stack_port_new_services(monkeypatch):

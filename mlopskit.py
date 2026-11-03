@@ -184,14 +184,20 @@ def _run_container(image: str, args: list[str], *, tag: str, mounts: list[str] =
         _docker("rm", "-f", name)
 
 
+DOCKERFILE_SHA_LABEL = "mlops-dockerfile-sha"
+
+
 def _ensure_image(tag: str, context: Path) -> str:
+    """Build `tag` từ `context` khi chưa có, hoặc khi nhãn sha256 của Dockerfile trong image lệch với tệp hiện tại."""
     if not testkit.docker_ready():
         pytest.skip("Docker chưa sẵn sàng")
-    if _docker("image", "inspect", tag).returncode == 0:
+    sha = hashlib.sha256((Path(context) / "Dockerfile").read_bytes()).hexdigest()
+    found = _docker("image", "inspect", "--format", f'{{{{ index .Config.Labels "{DOCKERFILE_SHA_LABEL}" }}}}', tag)
+    if found.returncode == 0 and found.stdout.strip() == sha:
         return tag
     seconds = build_timeout()
     try:
-        result = _docker("build", "-t", tag, str(context), timeout=seconds)
+        result = _docker("build", "--label", f"{DOCKERFILE_SHA_LABEL}={sha}", "-t", tag, str(context), timeout=seconds)
     except subprocess.TimeoutExpired:
         pytest.fail(_timeout_message(f"docker build {tag}", seconds), pytrace=False)
     if result.returncode != 0:

@@ -46,7 +46,9 @@ docker compose -f setup/mlops/compose.yaml --profile monitoring --profile feast 
 
 Feast không cài trong môi trường Python mặc định (nó kéo `pandas` xuống 2.3.3); mọi lệnh Feast chạy trong image
 `mlops-feast:0.67.0` (build từ `setup/mlops/feast/Dockerfile`) qua `mlopskit.feast_run`. Image runner cho `act`
-(`mlops-act-runner:1`, build từ `setup/mlops/act-runner/Dockerfile`) cũng do `mlopskit` build tại chỗ.
+(`mlops-act-runner:1`, build từ `setup/mlops/act-runner/Dockerfile`) cũng do `mlopskit` build tại chỗ. Mỗi image này
+mang nhãn `mlops-dockerfile-sha=<sha256 của Dockerfile>`; sửa Dockerfile thì lần gọi sau tự build lại cùng tag, không cần
+`docker rmi`.
 
 ## Kiểm
 
