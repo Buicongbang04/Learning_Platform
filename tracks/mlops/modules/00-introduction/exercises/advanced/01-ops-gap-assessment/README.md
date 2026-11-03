@@ -22,7 +22,7 @@ nên làm gì trước, cố ý chưa làm gì, và vì sao.
 
 Đọc `tests/fixtures/project-brief.md` (đội 6 người, model ETA đang chạy, một sự cố mất 5 ngày). Điền `starter/ASSESSMENT.md`:
 
-1. **Tóm tắt và mức trưởng thành**: mức theo Google, điều quyết định mức đó, rủi ro lớn nhất.
+1. **Tóm tắt và mức trưởng thành**: mức theo Google (test kiểm bạn kết luận hệ thống này đang ở mức 0, viết dạng "mức 0" hoặc "level 0"), điều quyết định mức đó, rủi ro lớn nhất.
 2. **Bảng khoảng cách**: ít nhất 7 dòng, phủ ít nhất 6 khu vực (`data, training, versioning, serving, monitoring, ci-cd,
    security, rollback`). Mỗi dòng có hiện trạng kèm bằng chứng lấy từ đề, rủi ro, ưu tiên P0/P1/P2, việc đầu tiên, công cụ.
    Chỉ **1 tới 3** dòng được là P0.

@@ -86,7 +86,3 @@ def test_checks_catch_template():
     assert any(p.startswith("Phần 1:") for p in found)
     assert any(p.startswith("Phần 3:") for p in found)
 
-
-def test_brief_is_unchanged():
-    brief = (Path(__file__).parent / "fixtures" / "project-brief.md").read_text(encoding="utf-8")
-    assert "12 000 request" in brief

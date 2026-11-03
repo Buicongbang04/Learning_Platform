@@ -16,7 +16,7 @@ SEEDED_CALLS = (
     "GradientBoostingClassifier",
     "GradientBoostingRegressor",
 )
-ABSOLUTE_PATH = re.compile(r"((?<![\w.:/])(/home/|/Users/)|[A-Za-z]:\\)")
+ABSOLUTE_PATH = re.compile(r"((?<![\w.:/])(/home/|/Users/)|(?<![A-Za-z0-9_])[A-Za-z]:\\{1,2}[A-Za-z0-9_$.])")
 
 
 def model_artifact_in_git(files: dict[str, str]) -> list[str]:
@@ -56,13 +56,13 @@ def unpinned_dependency(files: dict[str, str]) -> list[str]:
 
 
 def no_tests(files: dict[str, str]) -> list[str]:
-    """`["."]` nếu repo không có tệp dưới `tests/` và không có tệp tên `test_*.py`; ngược lại `[]`."""
+    """`["."]` nếu repo không có tệp nào nằm dưới một thư mục tên `tests` (ở bất kỳ cấp nào) và không có tệp tên `test_*.py`; ngược lại `[]`."""
     # TODO
     raise NotImplementedError
 
 
 def notebook_only_code(files: dict[str, str]) -> list[str]:
-    """Danh sách .ipynb nếu repo có notebook nhưng không có tệp .py nào ngoài `tests/`; ngược lại `[]`."""
+    """Danh sách .ipynb nếu repo có notebook nhưng không có tệp .py nào nằm ngoài thư mục tên `tests`; ngược lại `[]`."""
     # TODO
     raise NotImplementedError
 

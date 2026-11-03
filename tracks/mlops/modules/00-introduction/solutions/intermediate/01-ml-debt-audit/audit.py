@@ -16,12 +16,16 @@ SEEDED_CALLS = (
     "GradientBoostingClassifier",
     "GradientBoostingRegressor",
 )
-ABSOLUTE_PATH = re.compile(r"((?<![\w.:/])(/home/|/Users/)|[A-Za-z]:\\)")
+ABSOLUTE_PATH = re.compile(r"((?<![\w.:/])(/home/|/Users/)|(?<![A-Za-z0-9_])[A-Za-z]:\\{1,2}[A-Za-z0-9_$.])")
 BLOCKING = ("model-artifact-in-git", "data-in-git", "hardcoded-path")
 
 
 def _name(path: str) -> str:
     return path.rsplit("/", 1)[-1]
+
+
+def _in_tests(path: str) -> bool:
+    return "tests" in path.split("/")[:-1]
 
 
 def model_artifact_in_git(files: dict[str, str]) -> list[str]:
@@ -71,13 +75,13 @@ def unpinned_dependency(files: dict[str, str]) -> list[str]:
 
 
 def no_tests(files: dict[str, str]) -> list[str]:
-    has = any(p.startswith("tests/") or (_name(p).startswith("test_") and p.endswith(".py")) for p in files)
+    has = any(_in_tests(p) or (_name(p).startswith("test_") and p.endswith(".py")) for p in files)
     return [] if has else ["."]
 
 
 def notebook_only_code(files: dict[str, str]) -> list[str]:
     notebooks = sorted(p for p in files if p.endswith(".ipynb"))
-    code = [p for p in files if p.endswith(".py") and not p.startswith("tests/")]
+    code = [p for p in files if p.endswith(".py") and not _in_tests(p)]
     return notebooks if notebooks and not code else []
 
 

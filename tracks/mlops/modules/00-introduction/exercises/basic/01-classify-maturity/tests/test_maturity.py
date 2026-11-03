@@ -67,7 +67,7 @@ def test_blockers():
         assert answers[s["id"]].get("blocker") == want, f"{s['id']}: blocker phải là {want}"
 
 
-def test_rationale_cites_facts():
+def test_rationale_min_length():
     answers = load_answers()
     for s in SYSTEMS:
         text = str(answers[s["id"]].get("rationale") or "")

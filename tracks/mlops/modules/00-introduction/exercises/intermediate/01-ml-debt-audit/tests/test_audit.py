@@ -70,6 +70,8 @@ def test_data_dir_named_like_tests_but_not(audit):
         ("# /home/bang/old.csv", False),
         ('DATA = Path(os.environ["DATA_DIR"])', False),
         ("url = 'https://example.com/home/'", False),
+        ('msg = "Note:\\nnext line"', False),
+        ('p = "D:\\\\models\\\\m.bin"', True),
     ],
 )
 def test_hardcoded_path(audit, line, hit):
@@ -119,6 +121,12 @@ def test_no_tests_variants(audit):
     assert audit.no_tests({"tests/conftest.py": ""}) == []
     assert audit.no_tests({"pkg/test_a.py": ""}) == []
     assert audit.no_tests({"src/contest.py": ""}) == ["."]
+    assert audit.no_tests({"pkg/tests/conftest.py": ""}) == []
+    assert audit.no_tests({"pkg/latests/conftest.py": ""}) == ["."]
+
+
+def test_notebook_only_nested_tests(audit):
+    assert audit.notebook_only_code({"a.ipynb": "", "pkg/tests/helpers.py": ""}) == ["a.ipynb"]
 
 
 def test_notebook_only(audit):

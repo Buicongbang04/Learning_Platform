@@ -11,8 +11,8 @@ recsys-ranking:
   blocker: pipeline_cicd
   rationale: >
     Training tự động theo lịch, có data validation và cổng so baseline nên đã qua mức 0 của
-    Google; nhưng pipeline được cập nhật bằng tay (không CI/CD cho pipeline) và deploy model
-    còn thủ công nên dừng ở mức 1 Google, mức 2 Microsoft.
+    Google; nhưng pipeline_cicd là false (pipeline được cập nhật bằng ssh) nên dừng ở mức 1
+    Google. Deploy model còn thủ công nên Microsoft dừng ở mức 2.
 fraud-scoring:
   google_level: 2
   microsoft_level: 4

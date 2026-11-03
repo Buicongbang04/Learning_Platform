@@ -22,7 +22,7 @@ DS, MLOps, DE và backend nơi sự cố hay rơi vào khoảng trống.
 
 Ràng buộc test kiểm: mỗi hoạt động đúng **một** A và ít nhất một R; `ds`, `mlops`, `de`, `backend` mỗi vai trò là A của ít
 nhất một hoạt động và không vai trò nào là A của quá nửa; người A của `promotion-gate` không được là người R của `train-model`;
-`de` là A của `data-contract-change` và `ds` không được để `-`; `model-quality-oncall` có cả `ds` và `mlops`.
+`de` là A của `data-contract-change` và `ds` không được để `-`; `model-quality-oncall` có cả `ds` và `mlops`; `backend` không được là A của `define-problem-label`.
 
 Sau đó viết ba đoạn lý do (`decisions`, mỗi đoạn tối thiểu 80 ký tự) cho `promotion-gate`, `model-quality-oncall` và
 `retrain-vs-rollback-decision`: vì sao phân công vậy và đánh đổi nào bạn chấp nhận. Rubric trong `SOLUTION.md`.
