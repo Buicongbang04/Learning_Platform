@@ -38,36 +38,36 @@ def test_symptom_is_reproduced_on_the_raw_logs():
     assert mod.drift_scores(reference, current)["trip_distance"] < 0.05
 
 
-def test_first_shift_day_finds_the_day_it_started():
+def test_change_point_day_finds_the_day_it_started():
     mod = ex.module("monitor_pipeline.py")
     _, shown = logs()
-    assert mod.first_shift_day(shown, "trip_time") == CUTOVER
-    assert mod.first_shift_day(shown, "fare_amount") is None
-    assert mod.first_shift_day(shown, "trip_distance") is None
+    assert mod.change_point_day(shown, "trip_time") == CUTOVER
+    assert mod.change_point_day(shown, "fare_amount") is None
+    assert mod.change_point_day(shown, "trip_distance") is None
 
 
-def test_shift_ratio_is_a_whole_number():
+def test_median_ratio_is_a_whole_number():
     mod = ex.module("monitor_pipeline.py")
     _, shown = logs()
-    ratio = mod.shift_ratio(shown, "trip_time", CUTOVER)
+    ratio = mod.median_ratio(shown, "trip_time", CUTOVER)
     assert isinstance(ratio, float) and ratio == float(int(ratio))
     assert ratio == 60.0
 
 
-def test_harmonize_restores_values_without_touching_anything_else():
+def test_adjust_from_restores_values_without_touching_anything_else():
     mod = ex.module("monitor_pipeline.py")
     truth, shown = logs()
-    fixed = mod.harmonize(shown, "trip_time", CUTOVER, 60.0)
+    fixed = mod.adjust_from(shown, "trip_time", CUTOVER, 60.0)
     assert len(fixed) == len(shown)
     np.testing.assert_allclose(fixed["trip_time"].to_numpy(), truth["trip_time"].to_numpy(), rtol=1e-9)
     pd.testing.assert_frame_equal(fixed.drop(columns="trip_time"), shown.drop(columns="trip_time"))
     assert shown["trip_time"].iloc[-1] < 60
 
 
-def test_after_harmonize_no_column_drifts():
+def test_after_adjust_from_no_column_drifts():
     mod = ex.module("monitor_pipeline.py")
     _, shown = logs()
-    fixed = mod.harmonize(shown, "trip_time", CUTOVER, mod.shift_ratio(shown, "trip_time", CUTOVER))
+    fixed = mod.adjust_from(shown, "trip_time", CUTOVER, mod.median_ratio(shown, "trip_time", CUTOVER))
     reference, current = split(fixed)
     assert mod.drifted_columns(reference, current) == []
     assert max(mod.drift_scores(reference, current).values()) < 0.1
@@ -79,7 +79,7 @@ def test_range_guard_stops_the_bad_batch_before_monitoring_sees_it():
     reference, current = split(shown)
     assert mod.range_guard(reference, "trip_time", 30, 7200) is True
     assert mod.range_guard(current, "trip_time", 30, 7200) is False
-    healed = mod.harmonize(shown, "trip_time", CUTOVER, 60.0)
+    healed = mod.adjust_from(shown, "trip_time", CUTOVER, 60.0)
     assert mod.range_guard(split(healed)[1], "trip_time", 30, 7200) is True
 
 

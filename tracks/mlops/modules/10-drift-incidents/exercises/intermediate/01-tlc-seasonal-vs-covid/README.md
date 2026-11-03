@@ -32,8 +32,7 @@ Làm việc trong `starter/tlc_drift.ipynb`. Hằng `MONTHS`, `SAMPLE_N=100_000`
 - `eta_mae(reference, current, seed=SEED)`: `train_test_split(reference, test_size=0.2, random_state=seed)`; `HistGradientBoostingRegressor(random_state=seed, max_iter=100)` học `duration_min` từ
   `MODEL_FEATURES` trên 80%; trả `(MAE trên 20% holdout của reference, MAE trên toàn bộ current)`.
 
-Chạy các cell `explore`: chúng tải dữ liệu nếu thiếu, in bảng PSI hai cặp tháng, MAE, đối chiếu PSI với Evidently và vẽ biểu đồ (tạo `psi_seasonal_vs_covid.png`). Cell Evidently có dòng vá tương thích
-`pandas` 3 (xem phần 0 của lý thuyết). Sau đó làm phần trắc nghiệm trong app. Test chạy mẫu thật của cả bốn tháng (mỗi tháng đọc có kiểm sha256; tự skip nếu chưa tải).
+Chạy các cell `explore`: chúng tải dữ liệu nếu thiếu, in bảng PSI hai cặp tháng, MAE và vẽ biểu đồ (tạo `psi_seasonal_vs_covid.png`). Notebook không nhập Evidently (nó chạy trong container, xem phần 0 của lý thuyết). Sau đó làm phần trắc nghiệm trong app. Test chạy mẫu thật của cả bốn tháng (mỗi tháng đọc có kiểm sha256; tự skip nếu chưa tải).
 
 ## Tiêu chí đạt
 

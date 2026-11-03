@@ -24,7 +24,7 @@ def drifted_columns(reference, current, columns=FEATURES):
     return [c for c in columns if scores[c] >= PSI_ALERT]
 
 
-def first_shift_day(df, column):
+def change_point_day(df, column):
     daily = df.groupby("day")[column].median()
     previous = daily.shift(1)
     ratio = np.maximum(daily, previous) / np.minimum(daily, previous)
@@ -32,16 +32,16 @@ def first_shift_day(df, column):
     return None if hits.empty else hits.index[0]
 
 
-def shift_ratio(df, column, day):
+def median_ratio(df, column, day):
     before = df.loc[df["day"] < day, column].median()
     after = df.loc[df["day"] >= day, column].median()
     return float(round(before / after))
 
 
-def harmonize(df, column, day, ratio):
+def adjust_from(df, column, day, factor):
     out = df.copy()
     mask = out["day"] >= day
-    out.loc[mask, column] = out.loc[mask, column] * ratio
+    out.loc[mask, column] = out.loc[mask, column] * factor
     return out
 
 

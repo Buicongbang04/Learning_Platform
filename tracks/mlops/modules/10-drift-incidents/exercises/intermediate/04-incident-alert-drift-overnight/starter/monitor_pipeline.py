@@ -24,18 +24,18 @@ def drifted_columns(reference, current, columns=FEATURES):
     return [c for c in columns if scores[c] >= PSI_ALERT]
 
 
-def first_shift_day(df, column):
+def change_point_day(df, column):
     # TODO: ngày đầu tiên có trung vị khác ngày liền trước quá 2 lần (luật trong README); None nếu không có
     raise NotImplementedError
 
 
-def shift_ratio(df, column, day):
+def median_ratio(df, column, day):
     # TODO: trung vị trước `day` chia trung vị từ `day` trở đi, làm tròn về số nguyên gần nhất (float)
     raise NotImplementedError
 
 
-def harmonize(df, column, day, ratio):
-    # TODO: bản sao df, nhân cột với ratio ở các dòng từ `day` trở đi
+def adjust_from(df, column, day, factor):
+    # TODO: bản sao df, nhân cột với factor ở các dòng từ `day` trở đi
     raise NotImplementedError
 
 

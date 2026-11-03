@@ -18,7 +18,7 @@ tính, kiểm bằng cách so từng số với Evidently chạy thật, rồi t
 
 ## Đề bài
 
-Điền 4 hàm trong `starter/drift_metrics.py`. Test chạy `Report([DataDriftPreset(method=...)])` của Evidently (bản 0.7) trên cùng dữ liệu và yêu cầu
+Điền 4 hàm trong `starter/drift_metrics.py`. Test ghi hai khung dữ liệu ra Parquet rồi chạy `Report([DataDriftPreset(method=...)])` của Evidently (bản 0.7) trong container qua `mlopskit.evidently_python` (cần Docker; xem phần 0 của lý thuyết; thiếu Docker thì skip) trên cùng dữ liệu và yêu cầu
 khớp tới sai số tương đối $$10^{-9}$$. Các luật dưới đây là toàn bộ những gì test ép; bạn không cần đọc mã Evidently.
 
 - `psi(reference, current)`, hai đối số là Series hoặc mảng:

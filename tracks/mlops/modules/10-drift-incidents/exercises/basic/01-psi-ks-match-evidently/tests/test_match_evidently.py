@@ -1,25 +1,28 @@
+import json
+
 import numpy as np
 import pandas as pd
-import pandas.core.dtypes.common as pandas_common
 import pytest
-from pandas.api.types import pandas_dtype
 
 import mlopskit
 from testkit import Exercise
 
 ex = Exercise(__file__)
 
-if not hasattr(pandas_common, "infer_dtype_from_object"):
-    pandas_common.infer_dtype_from_object = lambda x: pandas_dtype(x).type
 
-
-def evidently_scores(reference, current, method):
-    from evidently import Dataset, Report
-    from evidently.presets import DataDriftPreset
-
-    report = Report([DataDriftPreset(method=method)])
-    result = report.run(Dataset.from_pandas(current), Dataset.from_pandas(reference)).dict()
-    return {m["config"]["column"]: m["value"] for m in result["metrics"] if "column" in m["config"]}
+def evidently_scores(reference, current, method, tmp_path):
+    reference.to_parquet(tmp_path / "ref.parquet")
+    current.to_parquet(tmp_path / "cur.parquet")
+    script = (
+        "import json, pandas as pd\n"
+        "from evidently import Report\n"
+        "from evidently.presets import DataDriftPreset\n"
+        f"r = Report([DataDriftPreset(method='{method}')]).run(pd.read_parquet('cur.parquet'), pd.read_parquet('ref.parquet')).dict()\n"
+        "print(json.dumps({m['config']['column']: float(m['value']) for m in r['metrics'] if 'column' in m['config']}))\n"
+    )
+    result = mlopskit.evidently_python(tmp_path, script)
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout.strip().splitlines()[-1])
 
 
 def frames(seed=0):
@@ -45,19 +48,19 @@ def frames(seed=0):
     return ref, cur
 
 
-def test_psi_matches_evidently_per_column():
+def test_psi_matches_evidently_per_column(tmp_path):
     mod = ex.module("drift_metrics.py")
     ref, cur = frames()
-    expected = evidently_scores(ref, cur, "psi")
+    expected = evidently_scores(ref, cur, "psi", tmp_path)
     for col in ref.columns:
         assert mod.psi(ref[col], cur[col]) == pytest.approx(expected[col], rel=1e-9, abs=1e-12), col
 
 
-def test_ks_pvalue_matches_evidently_on_numeric_columns():
+def test_ks_pvalue_matches_evidently_on_numeric_columns(tmp_path):
     mod = ex.module("drift_metrics.py")
     ref, cur = frames()
     numeric = ["gauss", "skew", "tail", "small"]
-    expected = evidently_scores(ref[numeric], cur[numeric], "ks")
+    expected = evidently_scores(ref[numeric], cur[numeric], "ks", tmp_path)
     for col in numeric:
         assert mod.ks_pvalue(ref[col], cur[col]) == pytest.approx(expected[col], rel=1e-9, abs=1e-300), col
 
@@ -94,11 +97,11 @@ def test_large_shift_is_flagged_by_both():
     assert flags["psi_drift"] is True and flags["ks_drift"] is True
 
 
-def test_real_month_trip_distance_matches_evidently():
+def test_real_month_trip_distance_matches_evidently(tmp_path):
     mod = ex.module("drift_metrics.py")
     cols = ["trip_distance"]
     jul = pd.read_parquet(mlopskit.real_month("nyc-tlc", "2019-07"), columns=cols).sample(n=50_000, random_state=0)
     dec = pd.read_parquet(mlopskit.real_month("nyc-tlc", "2019-12"), columns=cols).sample(n=50_000, random_state=0)
-    expected = evidently_scores(jul, dec, "psi")["trip_distance"]
+    expected = evidently_scores(jul, dec, "psi", tmp_path)["trip_distance"]
     assert mod.psi(jul["trip_distance"], dec["trip_distance"]) == pytest.approx(expected, rel=1e-9, abs=1e-12)
     assert mod.ks_pvalue(jul["trip_distance"], dec["trip_distance"]) < 0.05

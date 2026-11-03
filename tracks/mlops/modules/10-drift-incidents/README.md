@@ -6,35 +6,42 @@ classifier phân biệt hai tập), cách sống với nhãn về muộn, và qu
 
 ## 0. Cài đặt
 
-Evidently nằm trong môi trường mặc định của `pyproject.toml`, cài qua `uv`, không cần `sudo` hay script tải ngoài.
+Evidently 0.7.23 **không** nằm trong môi trường mặc định: nó nạp `pandas.core.dtypes.common.infer_dtype_from_object` (đã bị `pandas` 3 gỡ) nên không import được cùng `pandas` 3.1, và yêu cầu `plotly<6`
+(kéo `plotly` của cả repo xuống). Vì vậy nó chạy trong image `mlops-evidently:0.7.23` (`pandas` 2.3.3, build tại chỗ lần đầu, nhãn `mlops-ex=1`), gọi qua helper `mlopskit.evidently_python`:
 
-| Công cụ | Phiên bản đã kiểm | Mức tối thiểu cho bài tập |
+| Công cụ | Phiên bản đã kiểm | Chạy ở đâu |
 | --- | --- | --- |
-| `evidently` | 0.7.23 | 0.7.0 (API `Report`, `Dataset`, `presets` của dòng 0.7) |
-| `scikit-learn` | 1.9.1 | 1.5 |
-| `scipy` | 1.18.1 | 1.13 |
-| `plotly` | 5.24.1 (Evidently yêu cầu `plotly<6`) | không cần gọi trực tiếp |
+| `evidently` | 0.7.23 | image `mlops-evidently:0.7.23` |
+| `scikit-learn` | 1.9.1 | môi trường mặc định |
+| `scipy` | 1.18.1 | môi trường mặc định |
 
-`uv sync --frozen` kiểm hash từng gói theo `uv.lock` trước khi cài, đó là bước kiểm checksum:
+```python
+import mlopskit
+
+pd.DataFrame(reference).to_parquet(workdir / "ref.parquet")
+pd.DataFrame(current).to_parquet(workdir / "cur.parquet")
+script = """
+import json, pandas as pd
+from evidently import Report
+from evidently.presets import DataDriftPreset
+r = Report([DataDriftPreset(method="psi")]).run(pd.read_parquet("cur.parquet"), pd.read_parquet("ref.parquet")).dict()
+print(json.dumps({m["config"]["column"]: float(m["value"]) for m in r["metrics"] if "column" in m["config"]}))
+"""
+result = mlopskit.evidently_python(workdir, script)
+scores = json.loads(result.stdout.strip().splitlines()[-1])
+```
+
+`evidently_python(workdir, script)` chạy `python -c script` với `workdir` mount ghi được tại `/work`, người dùng không root, `--rm`; script đọc tệp Parquet bạn ghi vào `workdir` và in JSON ở dòng cuối `stdout`.
+Cần Docker chạy; thiếu thì test đối chiếu Evidently skip. Image được kiểm phiên bản khi build (không `curl | sudo`); gỡ bằng `docker rmi` image đó.
+`uv sync --frozen` vẫn kiểm hash các gói còn lại theo `uv.lock`:
 
 ```bash
 uv sync --frozen
-uv run python -c "import evidently; print(evidently.__version__)"   # 0.7.23 (xem lưu ý bên dưới)
-```
-
-**Lưu ý tương thích.** Evidently 0.7.23 nạp `pandas.core.dtypes.common.infer_dtype_from_object`, hàm đã bị `pandas` 3 gỡ khỏi đường dẫn này; `import evidently` trần sẽ báo `ImportError` trên môi trường `pandas` 3.1.
-Các bài và test trong module vá bằng bốn dòng chạy **trước** khi nhập Evidently (một vá tương thích, không đổi hành vi tính toán; nếu bản Evidently sau này tự xử lý, đoạn vá không còn tác dụng):
-
-```python
-import pandas.core.dtypes.common as pandas_common
-from pandas.api.types import pandas_dtype
-
-if not hasattr(pandas_common, "infer_dtype_from_object"):
-    pandas_common.infer_dtype_from_object = lambda x: pandas_dtype(x).type
+uv run python -c "import sklearn, scipy; print(sklearn.__version__, scipy.__version__)"
 ```
 
 Dữ liệu: `uv run python data/download_dataset.py nyc-tlc` và `... nyc-tlc-2020` (đã có thì bỏ qua). Test đọc dữ liệu qua `mlopskit.real_month`, có kiểm sha256.
-Gỡ: xoá `evidently` khỏi `pyproject.toml` rồi `uv sync`.
+Gỡ image: `docker rmi mlops-evidently:0.7.23`.
 
 ## 1. Các loại drift và vì sao drift không bằng chất lượng giảm
 
@@ -78,7 +85,7 @@ kiểm cho biến phân loại dùng chi-square hoặc Jensen-Shannon.
 
 ## 3. Evidently 0.7: report, preset và test
 
-Evidently 0.7 chia việc thành `Dataset` (dữ liệu kèm định nghĩa kiểu cột), `Report` (danh sách metric hoặc preset) và `Snapshot` (kết quả của `Report.run`). Thứ tự đối số của `run` là **hiện tại trước, tham chiếu sau**.
+Các đoạn mã bên dưới chạy **trong container** (đặt vào `script` của `evidently_python`, dữ liệu đọc từ Parquet trong `workdir`). Evidently 0.7 chia việc thành `Dataset` (dữ liệu kèm định nghĩa kiểu cột), `Report` (danh sách metric hoặc preset) và `Snapshot` (kết quả của `Report.run`). Thứ tự đối số của `run` là **hiện tại trước, tham chiếu sau**.
 
 ```python
 from evidently import Dataset, Report

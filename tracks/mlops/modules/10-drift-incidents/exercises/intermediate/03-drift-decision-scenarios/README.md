@@ -23,7 +23,7 @@ là quen với thứ tự detect, verify, impact, decide: drift không tự nó 
 ## Đề bài
 
 Đọc `starter/scenarios.json`: ba tình huống `holiday-week`, `bad-release`, `covid-lockdown`, mỗi tình huống có `context`, `metrics` (dict tên số đo sang số) và `quality_keys` (những số đo đến từ nhãn).
-Số đo của `covid-lockdown` là số đo thật từ bài notebook `01-tlc-seasonal-vs-covid`; hai tình huống còn lại là tình huống mô phỏng.
+Số đo của `covid-lockdown` là số đo thật (PSI, MAE, tỉ lệ thiếu) từ bài notebook `01-tlc-seasonal-vs-covid` trên NYC TLC. `holiday-week` và `bad-release` là tình huống **dựng sẵn** (constructed): số liệu của chúng không phải số đo từ NYC TLC.
 
 Điền `starter/decisions.yaml`. Mỗi tình huống có ba khoá:
 
