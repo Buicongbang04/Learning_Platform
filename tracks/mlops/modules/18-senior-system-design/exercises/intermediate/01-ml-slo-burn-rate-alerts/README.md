@@ -50,12 +50,12 @@ Luật mà test kiểm:
 - File qua `promtool check rules`. Mỗi alert có `annotations.summary` không rỗng, `annotations.runbook_url` bắt đầu bằng `https://`,
   `labels.severity` và `for` như bảng. Ba alert burn rate có biểu thức chứa `and` (hai cửa sổ).
 - Promtool đánh giá rule mỗi phút (`evaluation_interval: 1m`).
-- Chất lượng: 20% dự đoán tệ kéo dài thì `FastBurn` bắn ở giờ 12 và `SlowBurn` bắn ở giờ 30; 8% tệ chỉ `SlowBurn` bắn; 1.5% tệ không
+- Chất lượng: 20% dự đoán tệ kéo dài thì `FastBurn` bắn ở giờ 12 và `SlowBurn` bắn ở giờ 30; 8% tệ chỉ `SlowBurn` bắn; 11% tệ thì `FastBurn` không bắn ở giờ 12 lẫn giờ 30, chỉ `SlowBurn` bắn ở giờ 30; 1.5% tệ không
   alert nào bắn. 20% tệ trong 12 giờ rồi về 0%: `FastBurn` bắn ở giờ 11 và **đã tắt** ở giờ 13.
 - Nhãn ngừng về (counter đứng yên, hoặc series biến mất): `LabelsMissing` chưa bắn ở giờ 3, bắn ở giờ 14; hai alert burn rate chất
   lượng không bắn.
 - Freshness: `trip_stats` ngừng cập nhật từ phút 60 tới phút 100 thì alert chưa bắn ở phút 70, bắn ở phút 97, tắt ở phút 120;
-  ngừng từ phút 60 tới phút 78 (chỉ cũ quá 900 giây trong vài phút) thì không bắn; luôn tươi thì không bắn.
+  ngừng từ phút 60 tới phút 78 (chỉ cũ quá 900 giây trong vài phút) thì không bắn; ngừng từ phút 60 tới phút 84 (cũ quá 900 giây khoảng 8 phút trong giờ) thì không bắn ở phút 86 và 89; luôn tươi thì không bắn.
 
 ## Tiêu chí đạt
 
