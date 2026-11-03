@@ -49,7 +49,10 @@ public làm portfolio.
   manifest sha256), không chép mã nguồn sản phẩm.
 - **Không lọt secret:** `.gitignore` chặn khoá SSH của lab, `*.pem`, `*.key`, `.env`, dữ liệu CUAD và bundle. Bộ chấm
   m00 kiểm `git ls-files` của repo bạn.
-- **License:** quillo phát hành MIT nên bạn được đưa bundle (hoặc script lấy bundle) vào repo public; CUAD thì không.
+- **License:** quillo phát hành MIT nên bạn được phân phối lại bundle, nhưng repo public chỉ chứa **script lấy và
+  kiểm bundle** (dựng hoặc tải `quillo-<version>.tar` rồi kiểm `manifest.json`), không chứa tệp tar: bundle ~1,1 GB vượt
+  giới hạn 100 MB mỗi tệp của GitHub và đã bị `.gitignore` chặn. Muốn người khác tải sẵn thì đính bundle vào một GitHub
+  Release. CUAD thì không đưa lên dưới dạng nào.
 
 Milestone **M00** hướng dẫn tạo repo: cấu trúc thư mục, `Makefile`, README dạng case study, license, `.gitignore`.
 
@@ -72,7 +75,8 @@ SOLUTION=1 uv run pytest tracks/fde/capstone -q      # chấm lời giải tham 
 
 - Test nằm ở `tracks/fde/capstone/tests/`, tên bắt đầu bằng `test_mNN_`; `-k mNN` chọn một milestone.
 - Test kiểm **hành vi thật**: dựng VM khách bằng `fdekit`, chạy script/installer của bạn qua SSH, gọi dịch vụ qua cổng
-  forward, đọc tài liệu có frontmatter YAML. Không có test nào chỉ grep chuỗi trong code của bạn.
+  forward, đọc tài liệu có frontmatter YAML. Test không chấm chỉ bằng việc tìm chuỗi trong code của bạn; vài kiểm tra
+  tĩnh (vd. không import `testkit`/`fdekit`, không lọt secret) chỉ là phần phụ bên cạnh hành vi thật.
 - Mỗi test nhắm ≤300 s kể cả boot VM (golden image chuẩn bị trước bằng `uv run python -m fdekit prepare <hồ sơ>`,
   không tính); capstone dùng tối đa 3 VM cùng lúc. Test nào vượt thì đề milestone ghi rõ chạy bằng terminal.
 - Thiếu KVM, golden image, dữ liệu hay `FDE_CAPSTONE_DIR` thì test skip kèm lệnh cần chạy. Skip **không** tính là đạt.

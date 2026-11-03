@@ -120,6 +120,7 @@ flowchart LR
     subgraph interview[Trụ 3: DSA & System Design]
         M15[15 DSA I] --> M16[16 DSA II]
         M17[17 System Design I] --> M18[18 System Design cho khách]
+        M20[20 Phỏng vấn FDE]
     end
     subgraph cloud[Trụ 4: Cloud & IaC]
         M19[19 Cloud & IaC] -.tuỳ chọn.-> CL[Cloud lab C1–C3]
@@ -127,7 +128,7 @@ flowchart LR
     M10 --> M11
     M14 --> M17
     M18 --> M19
-    M19 --> M20[20 Phỏng vấn FDE]
+    M19 --> M20
     M16 --> M20
     M00 -.học song song.-> M15
 ```

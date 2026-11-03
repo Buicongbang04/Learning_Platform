@@ -214,6 +214,8 @@ Track cấp sẵn một sản phẩm AI hư cấu (tên: builder đặt, không 
 - **Data pipeline:** worker nạp tài liệu (PDF/DOCX/HTML) và dữ liệu có cấu trúc từ nguồn của khách, chunk, embed.
 - **LLM/RAG:** Postgres + pgvector, LLM và embedding qua **Ollama** (model nhỏ mặc định, model lớn khi có GPU),
   trả lời có trích dẫn, có eval harness và metric.
+  *Quyết định của plan:* runtime LLM đóng trong bundle là **llama.cpp server** (API tương thích OpenAI, model GGUF
+  ghim trong `fdekit.MODELS`); Ollama vẫn dùng được cho các bài GPU.
 - **Vận hành:** healthcheck, metrics, log có cấu trúc, script backup/restore, support bundle.
 - Có cả Compose bundle và Helm chart. Kích thước bundle offline giữ ở mức hợp lý cho laptop (builder đo và ghi).
 
