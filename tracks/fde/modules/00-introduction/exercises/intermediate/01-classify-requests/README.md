@@ -38,17 +38,20 @@ Sáu câu dưới đây là nguyên văn khách gửi trong tuần đầu của 
 - `module`: id module (đúng như trong `tracks/fde/track.json`, vd. `05-gpu-field`) dạy việc chính đó; phải thuộc trụ bạn chọn.
 - `looks_like`: trụ mà câu này **nghe giống** nhất nếu chỉ đọc từ khoá bề mặt (cùng bốn giá trị như `pillar`). Với câu mà
   từ khoá và việc thật trùng nhau, `looks_like` bằng `pillar`; với câu "nghe một đằng, việc một nẻo", hai trường khác nhau.
-- `decides`: ai **phía khách** ra quyết định mà việc của bạn phục vụ, một trong:
+- `decides`: **người có quyền chốt việc này phía khách**, tức người mà câu trả lời "có" hay "không" của họ quyết định việc
+  của bạn đi tiếp hay dừng (không nhất thiết là người gửi câu hỏi). Một trong:
 
-  | Giá trị | Là ai |
-  | --- | --- |
-  | `it` | IT hạ tầng của khách (máy, mạng, proxy, change window) |
-  | `security` | An ninh thông tin / tuân thủ (duyệt dữ liệu, chính sách) |
-  | `business-owner` | Trưởng bộ phận nghiệp vụ sở hữu hệ thống và người dùng (trưởng phòng, giám đốc khối) |
-  | `exec` | Lãnh đạo ký ngân sách, mở rộng hợp đồng (COO, CEO) |
-  | `cto` | CTO / kiến trúc sư trưởng, quyết định kiến trúc toàn tập đoàn |
-  | `cloud-team` | Đội cloud / platform quản lý tài khoản cloud của khách |
+  | Giá trị | Là ai | Ví dụ chức danh |
+  | --- | --- | --- |
+  | `it` | IT hạ tầng: chốt thay đổi trên máy, mạng, proxy, trust store, change window | Trưởng IT, kỹ sư hạ tầng |
+  | `security` | An ninh thông tin và tuân thủ: chốt chính sách, rủi ro dữ liệu, cấp và thu hồi quyền | CISO, phòng ATTT, pháp chế/tuân thủ **khi đóng vai người duyệt rủi ro** |
+  | `business-owner` | Chủ nghiệp vụ: sở hữu quy trình và người dùng, chốt scope và việc đưa người dùng vào | Trưởng phòng nghiệp vụ, giám đốc khối, trưởng phòng pháp chế **khi phòng pháp chế là người dùng hệ thống** |
+  | `exec` | Lãnh đạo ký ngân sách, hợp đồng, mở rộng | COO, CEO, HĐQT |
+  | `cto` | Kiến trúc toàn tổ chức | CTO, kiến trúc sư trưởng |
+  | `cloud-team` | Quản lý tài khoản và nền tảng cloud | Trưởng phòng cloud, đội platform |
 
+  Có yêu cầu chấp nhận **hơn một** giá trị `decides` (và `looks_like`) vì ở công ty thật quyền chốt có thể nằm ở hai chỗ;
+  khi đó chọn một và **giải thích lựa chọn trong `why`**.
 - `why`: vì sao đây là việc chính, không phải việc khác nghe có vẻ giống (ít nhất 30 ký tự).
 - `first_step`: việc **đầu tiên, cụ thể** bạn làm trong 24 giờ tới (ít nhất 30 ký tự, khác `why`, mỗi yêu cầu một câu riêng).
 
@@ -63,7 +66,8 @@ trong câu.
 - `why` và `first_step` mỗi trường ít nhất 30 ký tự, không còn `TODO`, khác nhau trong cùng mục; sáu `first_step` khác nhau.
 - `pillar` của từng yêu cầu đúng với đáp án; `module` là một trong các module dạy việc chính đó (có yêu cầu chấp nhận hơn
   một module, vd. vừa thuộc module chuyên đề vừa thuộc module xử lý sự cố).
-- `looks_like` và `decides` của từng yêu cầu đúng với đáp án.
+- `looks_like` và `decides` của từng yêu cầu thuộc tập đáp án chấp nhận của yêu cầu đó (có yêu cầu chấp nhận hơn một giá
+  trị; lý do chọn viết trong `why`).
 
 ## Gợi ý
 

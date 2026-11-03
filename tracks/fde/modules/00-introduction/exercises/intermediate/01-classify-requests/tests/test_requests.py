@@ -22,8 +22,22 @@ EXPECTED = {
     "r6": ("cloud", {"19-cloud-iac", "c1-aws-byoc"}),
 }
 DECIDERS = {"it", "security", "business-owner", "exec", "cto", "cloud-team"}
-LOOKS_LIKE = {"r1": "field", "r2": "customer", "r3": "customer", "r4": "field", "r5": "design", "r6": "cloud"}
-DECIDES = {"r1": "it", "r2": "exec", "r3": "business-owner", "r4": "business-owner", "r5": "cto", "r6": "cloud-team"}
+LOOKS_LIKE = {
+    "r1": {"field"},
+    "r2": {"customer"},
+    "r3": {"customer"},
+    "r4": {"field"},
+    "r5": {"design"},
+    "r6": {"cloud", "field"},
+}
+DECIDES = {
+    "r1": {"it", "security"},
+    "r2": {"exec"},
+    "r3": {"business-owner", "security"},
+    "r4": {"business-owner", "exec"},
+    "r5": {"cto"},
+    "r6": {"cloud-team", "security"},
+}
 TEXT_FIELDS = ("why", "first_step")
 MIN_CHARS = 30
 
@@ -75,5 +89,5 @@ def test_pillar_and_module(answers, rid):
 @pytest.mark.parametrize("rid", sorted(EXPECTED))
 def test_sounds_like_and_decider(answers, rid):
     item = answers.get(rid) or {}
-    assert item.get("looks_like") == LOOKS_LIKE[rid], f"{rid}: looks_like chưa đúng; nếu chỉ đọc từ khoá, câu này nghe giống trụ nào?"
-    assert item.get("decides") == DECIDES[rid], f"{rid}: decides chưa đúng; ai phía khách ra quyết định mà việc của bạn phục vụ?"
+    assert item.get("looks_like") in LOOKS_LIKE[rid], f"{rid}: looks_like chưa hợp lý; nếu chỉ đọc từ khoá, câu này nghe giống trụ nào?"
+    assert item.get("decides") in DECIDES[rid], f"{rid}: decides chưa hợp lý; ai phía khách có quyền chốt việc này?"

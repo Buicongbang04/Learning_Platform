@@ -39,9 +39,9 @@ thay đổi máy trước cửa sổ thứ Năm; hạn chót đặt theo ngày v
 
 | Việc | Người phụ trách | Hạn | Vì sao |
 | --- | --- | --- | --- |
-| Đặt cửa sổ thứ Năm 20:00–22:00 tuần 1 cho pilot và mở change request: mở rộng đĩa VM lên ≥ 40 GB (hoặc gắn ổ dữ liệu), trust CA proxy, cài quillo | anh Tuấn | change request vào hàng chờ thứ Hai, duyệt trước thứ Tư | 8 GB (≈7 GB trống) dưới mức tối thiểu 10 GB của quillo; mọi thay đổi máy chỉ được làm trong cửa sổ |
+| Đặt cửa sổ thứ Năm 20:00–22:00 tuần 1 cho pilot và mở change request: mở rộng đĩa VM lên ≥ 40 GB (hoặc gắn ổ dữ liệu), trust CA proxy, cài quillo | anh Tuấn (bạn gửi kèm tài liệu này thứ Sáu trước khi đến) | anh Tuấn đưa vào hàng chờ change thứ Hai, duyệt trước thứ Tư | 8 GB (≈7 GB trống) dưới mức tối thiểu 10 GB của quillo; mọi thay đổi máy chỉ được làm trong cửa sổ |
 | Xác nhận định nghĩa "chạy thử được" (mục tiêu 1–2) | Phó giám đốc vận hành | buổi kick-off sáng thứ Hai | Tránh hiểu lệch lời hứa của sales |
-| Cho biết quy trình mang bundle vào (USB quét virus, kho nội bộ) và ai duyệt | anh Tuấn, ATTT | thứ Ba | Không phụ thuộc proxy để kéo image; bundle phải có trên máy trước tối thứ Năm |
+| Cho biết quy trình mang bundle vào (USB quét virus, kho nội bộ) và ai duyệt | anh Tuấn, ATTT | thứ Ba | Không phụ thuộc proxy để kéo image; bundle mang vào qua kênh đã duyệt, chỉ đặt lên máy trong cửa sổ thứ Năm |
 | Gửi tệp CA của proxy (PEM), chỉ đọc, chưa cài | anh Tuấn | thứ Ba | Để diễn tập trust CA trên lab thứ Tư trước khi làm thật thứ Năm |
 | Duyệt tập 300 tài liệu khoa Nội cho pilot | Pháp chế, ATTT | thứ Tư | Dữ liệu không rời viện; nạp ngay sau khi cài tối thứ Năm |
 | 30 câu hỏi thật kèm tài liệu đúng | chị Lan | thứ Ba | Bộ đánh giá dựng thứ Tư cho mục tiêu 2 |
@@ -53,15 +53,15 @@ thay đổi máy trước cửa sổ thứ Năm; hạn chót đặt theo ngày v
 | Thứ Hai | Khảo sát máy không đổi gì (OS, đĩa, mạng, proxy, quyền), kiểm bundle theo manifest, ngồi cùng chị Lan xem cách tra quy trình hiện tại | chị Lan | Báo cáo khảo sát, ghi chú workflow, status cuối ngày |
 | Thứ Ba | Chiều: với anh Tuấn rà kế hoạch thay đổi cho tối thứ Năm (đĩa, plugin compose hay cách chạy thay thế, CA), diễn tập trên VM lab cùng hồ sơ | anh Tuấn | Change plan được duyệt, kế hoạch rollback |
 | Thứ Tư | Diễn tập cài đầy đủ trên lab có cùng ràng buộc; chuẩn bị bộ eval từ 30 câu của chị Lan | (một mình) | Bộ eval, log cài thử |
-| Thứ Năm | Chiều: kiểm lần cuối với anh Tuấn. Cửa sổ 20:00–22:00: mở rộng đĩa (20:00–20:30), trust CA, cài quillo từ bundle, xác minh; quá 21:30 chưa xong thì rollback theo kế hoạch | anh Tuấn | Dịch vụ lên, nạp 300 tài liệu chạy qua đêm |
+| Thứ Năm | Chiều: kiểm lần cuối với anh Tuấn. Cửa sổ 20:00–22:00: mở rộng đĩa (20:00–20:30), trust CA, đặt bundle (mang vào qua kênh đã duyệt) lên máy, cài quillo, xác minh; quá 21:30 chưa xong thì rollback theo kế hoạch | anh Tuấn | Dịch vụ lên, nạp 300 tài liệu chạy qua đêm |
 | Thứ Sáu | Chạy eval, chị Lan hỏi thử, demo ngắn cho sponsor, thống nhất bước tiếp | chị Lan, sponsor | Kết quả eval, status tuần, danh sách khoảng cách |
 
 **Rủi ro** (ví dụ): change request mở rộng đĩa chưa được duyệt hoặc không làm kịp trong cửa sổ (dấu hiệu: thứ Tư chưa
 có phê duyệt; tối thứ Năm 20:30 đĩa chưa lớn hơn → phương án đã diễn tập trên lab đĩa 8 GB thứ Tư: nạp image thẳng từ
 USB, không chép tar ra đĩa, chỉ model nhỏ, pilot thu nhỏ 50 tài liệu; vẫn không đủ chỗ thì mục tiêu 1 lùi sang cửa sổ kế
 tiếp, báo sponsor ngay tối thứ Năm); bản scan không có lớp text (dấu hiệu: tỉ lệ trang rỗng khi nạp →
-tách ra danh sách cần OCR, không tính vào mục tiêu 2); cửa sổ thứ Năm bị huỷ vì sự cố của viện (→ xin cửa sổ dự phòng
-thứ Hai tuần sau ngay từ đầu, mục tiêu 1 lùi, mục tiêu 2 làm trên lab bằng tài liệu công khai); ATTT chưa duyệt dữ liệu
+tách ra danh sách cần OCR, không tính vào mục tiêu 2); cửa sổ thứ Năm bị huỷ vì sự cố của viện (→ ngay từ đầu đặt
+luôn cửa sổ thứ Năm tuần 2 làm dự phòng, mục tiêu 1 lùi, mục tiêu 2 làm trên lab bằng tài liệu công khai); ATTT chưa duyệt dữ liệu
 (→ không nạp gì, eval trên tài liệu công khai của Bộ Y tế để chứng minh luồng); proxy chặn một bước bắt buộc (→ chỉ
 dùng bundle offline, ghi lại để xử lý trust CA trong tuần 2).
 

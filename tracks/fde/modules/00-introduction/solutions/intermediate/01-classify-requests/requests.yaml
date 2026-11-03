@@ -6,7 +6,8 @@ requests:
     decides: it
     why: >-
       Lỗi chỉ xuất hiện ở máy của viện, không ở máy test: proxy công ty soi HTTPS bằng CA nội bộ mà container chưa
-      trust. Đây là việc cài đặt tại hiện trường, không phải câu hỏi về scope hay giá trị.
+      trust. Đây là việc cài đặt tại hiện trường, không phải câu hỏi về scope hay giá trị. Người chốt là IT: họ đổi
+      trust store và cấu hình proxy trong cửa sổ bảo trì.
     first_step: >-
       Xin khách output đầy đủ của lệnh lỗi và chạy cùng lệnh pip với curl -v trên host lẫn trong container để xem ai
       ký chứng chỉ mà client nhận được.
@@ -28,7 +29,8 @@ requests:
     decides: business-owner
     why: >-
       Nghe như chuyện giao tiếp nhưng thực chất khách cần bằng chứng kỹ thuật: bộ eval trên tài liệu của chính họ,
-      đo groundedness và citation, cộng tiêu chí nghiệm thu trước khi mở cho 40 người.
+      đo groundedness và citation, cộng tiêu chí nghiệm thu trước khi mở cho 40 người. Trưởng phòng pháp chế chốt vì
+      phòng của chị là chủ nghiệp vụ và người dùng của hệ thống.
     first_step: >-
       Xin 30–50 câu hỏi thật kèm đáp án do chính luật sư viết, dựng bộ eval chạy trên dữ liệu của khách và thống nhất
       ngưỡng đạt trước khi mở rộng.
@@ -39,7 +41,8 @@ requests:
     decides: business-owner
     why: >-
       Ba tính năng, một hạn chót cứng và một buổi demo quan trọng: việc của FDE là tách cái khách thật sự cần cho buổi
-      demo, sắp thứ tự và nói "không" hoặc "để sau" có lý do, chưa phải viết code ngay.
+      demo, sắp thứ tự và nói "không" hoặc "để sau" có lý do, chưa phải viết code ngay. Giám đốc khối chốt scope vì
+      ông là người đứng trước HĐQT với kết quả.
     first_step: >-
       Hỏi lại khách HĐQT cần thấy điều gì để ra quyết định, rồi gửi lại một đề xuất scope cho thứ Sáu có must, should
       và won't kèm rủi ro của từng mục.
@@ -61,7 +64,7 @@ requests:
     decides: cloud-team
     why: >-
       Khách muốn mô hình BYOC: hạ tầng nằm trong tài khoản AWS của họ, vendor chỉ có quyền qua role được cấp và thu
-      hồi được, mọi thứ dựng bằng IaC để IT khách kiểm và tái lập.
+      hồi được, mọi thứ dựng bằng IaC để IT khách kiểm và tái lập. Đội cloud chốt vì họ sở hữu tài khoản và cấp role.
     first_step: >-
       Viết danh sách quyền tối thiểu mà bản cài cần và gửi đội cloud của khách một bản nháp cross-account role kèm
       external ID để họ duyệt trước.
