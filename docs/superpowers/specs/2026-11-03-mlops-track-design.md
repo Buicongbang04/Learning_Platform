@@ -8,9 +8,14 @@ Người học đã làm tốt phần **xây** model (track AI & Data Scientist,
 notebook. Track này lấp phần **sau** đó.
 
 **Đầu ra:** nhận một model đã train và tự đưa nó vào vận hành: đóng gói, deploy, kiểm thử, theo dõi,
-quản lý version, xử lý sự cố. Chứng minh bằng **một dự án portfolio end-to-end**. Mức nhắm: đủ ứng tuyển
-**Junior/Fresher MLOps** hoặc **AI Engineer thiên về deployment**. Không nhắm Senior (cần kinh nghiệm
-vận hành production thật).
+quản lý version, xử lý sự cố. Chứng minh bằng **một dự án portfolio end-to-end**.
+
+Track có hai tầng:
+- **Lõi (module 00–13):** đủ ứng tuyển **Junior/Fresher MLOps** hoặc **AI Engineer thiên về deployment**.
+- **Tầng senior (module 14–18):** phủ **kiến thức** một Senior MLOps cần: K8s cho ML production, distributed
+  training, streaming/real-time ML, nền tảng ML nhiều đội và bảo mật model, system design và dẫn dắt vận hành.
+  Track nói thẳng với người học: kiến thức senior không thay được kinh nghiệm production thật; tầng này giúp
+  trả lời phỏng vấn và làm việc ở mức senior, chức danh vẫn cần kinh nghiệm bảo chứng.
 
 Người học đọc tiếng Việt, giữ thuật ngữ tiếng Anh. Đã xong các track DE, DA, DS, AI Engineer.
 Track DevOps **đang được làm trên máy khác**, nên MLOps **đứng độc lập**, không lấy DevOps làm điều kiện.
@@ -21,7 +26,7 @@ Track DevOps **đang được làm trên máy khác**, nên MLOps **đứng đ�
 - Lấp placeholder `tracks/mlops` (đang `status: soon`) thành track `active` đúng `CONTENT_SPEC.md`.
 - Phủ mọi mục của PDF roadmap MLOps (bảng đối chiếu ở mục 4.2).
 - Nền tảng chính chạy local: **Docker, Docker Compose, FastAPI, MLflow, DVC, GitHub Actions,
-  Prometheus, Grafana**. Kubernetes chỉ ở **module cuối**, là bước nâng cao, không phải rào cản đầu vào.
+  Prometheus, Grafana**. Kubernetes chỉ bắt đầu ở **module 13** (cuối lõi) và đi sâu ở tầng senior (module 14), không phải rào cản đầu vào của lõi.
 - Năm năng lực cốt lõi, mỗi năng lực có bài thực hành và milestone capstone:
   1. Serving (realtime và batch).
   2. Pipeline training tái lập được.
@@ -41,8 +46,8 @@ Track DevOps **đang được làm trên máy khác**, nên MLOps **đứng đ�
   deploy, monitoring, rollback, tái lập.
 
 **Ngoài phạm vi**
-- Kubernetes chuyên sâu, IaC chuyên sâu, service mesh: thuộc track DevOps. Module cuối chỉ ghi rõ phần nào
-  kế thừa từ DevOps.
+- K8s tổng quát (kiến trúc, RBAC, NetworkPolicy, Helm, vận hành cluster), IaC chuyên sâu, service mesh: thuộc
+  track DevOps. Module 13–14 chỉ dạy phần K8s đặc thù ML và ghi rõ phần nào kế thừa từ DevOps.
 - LLMOps đặc thù (serving LLM, eval bằng judge): đã có ở AE 20, chỉ nhắc và trỏ về.
 - Cloud trả phí bắt buộc. Cloud chỉ là phần mở rộng tuỳ chọn.
 - Huấn luyện model mới làm trọng tâm. Model chỉ cần "đủ tốt"; giá trị nằm ở quy trình quanh nó.
@@ -120,6 +125,15 @@ Track DevOps **đang được làm trên máy khác**, nên MLOps **đứng đ�
 | 11 | `11-deep-learning-serving` | Deploy model Deep Learning | **SegFormer** trên Oxford-IIIT Pets: export ONNX, ONNX Runtime CPU vs CUDA, kiểm sai số sau export, dynamic batching, benchmark throughput/latency, quản lý bộ nhớ GPU 4 GB (batch size, FP16, OOM), quantization INT8 cơ bản; Triton/TensorRT so sánh; SAM 2 chỉ trong bảng so sánh (quá nặng cho 4 GB) |
 | 12 | `12-ml-platform-governance` | Nền tảng ML, governance & cloud | Reproducibility audit; model governance (approval, audit log, model card, quyền truy cập registry); chi phí; IaC cho ML ở mức đọc hiểu (ôn DE 08); **Cloud ML services** (SageMaker, Vertex AI, Azure ML) so sánh; lab cloud tuỳ chọn có hướng dẫn free tier, budget alarm, lệnh dọn; data engineering cho ML ôn nhanh (Spark/Kafka/Flink từ DE) |
 | 13 | `13-kubernetes-for-ml` | Kubernetes cho ML (nâng cao) | Bảng "kế thừa từ track DevOps" (phần nào học ở DevOps 10–12, không dạy lại); kind; **chuyển service ETA từ Compose sang K8s** (Deployment, Service, ConfigMap, probes, resources); **KServe** InferenceService; **Argo Workflows** cho pipeline training (Argo CD giới thiệu cho GitOps); GPU trên K8s ở mức khái niệm |
+
+| 14 | `14-kubernetes-ml-production` ★ | K8s cho ML production | Autoscaling inference (HPA theo custom metric, KEDA, KServe scale-to-zero, cold start); **Triton trên K8s dưới tải**; GPU scheduling (device plugin, time-slicing, MIG ở mức khái niệm); hàng đợi batch job (**Kueue**); multi-tenant: namespace, quota, priority, preemption; K8s chung (RBAC, NetworkPolicy, Helm) chỉ ôn và trỏ về DevOps 10–12 |
+| 15 | `15-distributed-training` ★ | Distributed training & GPU compute | Data/model parallel, DDP, FSDP, ZeRO ở mức hiểu và đo; **torchrun nhiều tiến trình trên CPU (gloo)** để thực hành không cần nhiều GPU; **Ray** (Train, Tune); checkpoint và resume khi bị preempt (spot); throughput data loading; ước tính chi phí GPU; Horovod/DeepSpeed so sánh |
+| 16 | `16-streaming-realtime-ml` ★ | Streaming feature & real-time ML | Kafka (ôn DE 07) → tính feature theo cửa sổ thời gian → **Feast push** vào online store; freshness và độ trễ end-to-end; online learning (**River**) và khi nào không nên; feedback loop và thiên lệch do chính model gây ra; Flink/Spark Structured Streaming/Bytewax so sánh |
+| 17 | `17-ml-platform-security` ★ | Nền tảng ML nhiều đội & bảo mật model | Nền tảng cho nhiều đội: golden path, template dự án (Copier), self-service đăng ký và deploy model, chuẩn hoá registry; **FinOps cho ML** (cost attribution theo đội/model); build vs buy (Databricks, SageMaker, Vertex vs open source); **supply chain của model**: rủi ro pickle, safetensors, quét model (modelscan), ký model (sigstore / model-transparency), SBOM, phân quyền registry |
+| 18 | `18-senior-system-design` ★ | ML system design & dẫn dắt vận hành | SLO/SLI và error budget riêng cho ML (chất lượng, freshness, latency); incident command, dẫn postmortem không đổ lỗi; design review và design doc; đánh đổi chi phí / độ trễ / chất lượng ở quy mô lớn; **bộ đề ML system design mức senior** (recommendation, fraud realtime, ETA, search ranking, LLM platform) có rubric |
+
+★ = tầng senior. Phần cứng: laptop 4 GB, nên multi-GPU, MIG, cluster nhiều node chỉ ở mức khái niệm, đo và
+mô phỏng (nhiều tiến trình CPU, kind nhiều node); PC 3060 là tuỳ chọn để đo thêm, test không cần.
 
 Topic con và tên bài: builder quyết, miễn phủ đủ nội dung trên.
 
@@ -214,7 +228,12 @@ phân phối zone đổi). Người học phải phân biệt drift không làm 
 | m10 | 10 | Phát lại 2019 → 2020: phát hiện, xác minh, quyết định retrain/rollback/giữ có số liệu; runbook + postmortem sự cố COVID |
 | m11 | 12 | (Tuỳ chọn) Đưa một phần lên cloud free tier, có lệnh dọn |
 | m12 | 13 | Chuyển service ETA sang kind + KServe; pipeline training trên Argo Workflows |
-| m13 | 13 | Đánh giá độc lập: tình huống mới (vd. tháng dữ liệu lạ), người học tự chẩn đoán và vận hành theo rubric |
+| m13 | 13 | Đánh giá độc lập mức junior: tình huống mới (vd. tháng dữ liệu lạ), người học tự chẩn đoán và vận hành theo rubric |
+| m14 | 14 | ETA trên K8s chịu tải: autoscale theo custom metric, Kueue cho job retrain, quota tách serving và training |
+| m15 | 15 | Retrain bằng Ray nhiều worker, checkpoint, chịu được worker bị kill giữa chừng |
+| m16 | 16 | Feature real-time cho ETA (tốc độ theo zone 15 phút gần nhất) từ stream phát lại qua Kafka, đo freshness |
+| m17 | 17 | Onboard model thứ hai (vd. dự đoán tiền tip) qua template nền tảng trong vài bước; model được ký và quét trước khi deploy; báo cáo chi phí theo model |
+| m18 | 18 | Đánh giá độc lập mức senior: design doc cho nền tảng ETA nhiều thành phố, SLO và error budget, dẫn xử lý một sự cố dựng sẵn, postmortem; chấm theo rubric |
 
 **Model SegFormer cho module 11:** không có checkpoint công khai cho trimap Pets, nên module cấp sẵn script
 fine-tune `segformer-b0` (khởi từ checkpoint ImageNet/ADE20K công khai trên HF) mà người học **chạy một lần
@@ -230,7 +249,8 @@ có benchmark CPU/GPU) vì bài toán ETA không phải DL.
 - **Giai đoạn 1:** hạ tầng (`setup/mlops`, `mlopskit.py`, entry dữ liệu mới, `track.json`, README track, mục
   "Track MLOps" trong `CONTENT_SPEC.md`), module 00–04, capstone m01–m04.
 - **Giai đoạn 2:** module 05–10, capstone m05–m10.
-- **Giai đoạn 3:** module 11–13, capstone m11–m13, đổi `status` sang `active`.
+- **Giai đoạn 3:** module 11–13, capstone m11–m13, đổi `status` sang `active` (lõi junior đã dùng được).
+- **Giai đoạn 4 (senior):** module 14–18, capstone m14–m18.
 
 Mỗi task có implementer và reviewer độc lập; cuối mỗi giai đoạn review toàn nhánh. Làm liên tục hết track
 (subagent-driven), chỉ dừng khi cần người học: tài khoản/khoá, PC, merge/push.
@@ -246,7 +266,11 @@ Mỗi task có implementer và reviewer độc lập; cuối mỗi giai đoạn 
 4. Nhãn về muộn mô phỏng bằng độ trễ công bố (mặc định một tháng).
 5. Module DL dùng SegFormer + Oxford-IIIT Pets kèm trimap tải riêng; SAM 2 chỉ so sánh.
 6. Hạ tầng MLOps để ở tệp/thư mục riêng để tránh conflict với Phase 2 DevOps.
-7. 14 module (00–13), khoảng 90 bài, 13 milestone.
+7. 19 module (00–13 lõi, 14–18 senior), khoảng 125 bài, 18 milestone.
+11. Tầng senior: Kueue cho hàng đợi job, Ray cho distributed, River cho online learning, Copier cho template,
+    modelscan + sigstore/model-transparency cho bảo mật model. Thực hành distributed bằng nhiều tiến trình CPU.
+12. Stack Kafka cho module 16 đặt trong `setup/mlops` (không dùng service `kafka` của compose dùng chung, để
+    không phụ thuộc file DevOps đang sửa).
 8. `mlopskit.py` tự viết helper Docker/act/kind tối thiểu thay vì chờ DevOps Phase 2; hợp nhất sau khi cả
    hai vào `main`.
 9. Dependency MLOps vào môi trường mặc định để nút "Run tests" chạy được; xung đột thì chạy công cụ trong
