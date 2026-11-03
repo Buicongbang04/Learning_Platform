@@ -76,6 +76,18 @@ ngay, dựng lại bằng `--force`. Cách dựng: overlay trên cloud image, ph
 chính thức của distro, cấu hình "tật"), rồi xoá sudo tạm, key SSH, log cloud-init, machine-id, tắt sạch và ghi qcow2
 độc lập. Log cài đặt: `data/raw/fde-images/golden/<hồ sơ>.prepare.log`.
 
+`prepare` cũng `docker pull` image phía host mà hồ sơ cần (`hospital`: mitmproxy, `lawfirm-staging`: registry), để
+bài không phải tải image trong ngân sách 300 s. Thiếu image thì test skip kèm đúng lệnh, tự pull trước được:
+
+```bash
+docker pull mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f
+docker pull registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+```
+
+**Lưu ý an toàn:** lúc dựng golden VM chạy với `restrict` tắt, tức là trong vài phút dựng, VM vừa ra internet vừa
+với tới mọi dịch vụ đang nghe `127.0.0.1` trên host qua `10.0.2.2`. Chỉ chạy các script trong `setup/fde/cloud-init/`
+của repo này (đọc trước nếu bạn sửa), không dựng golden từ image lạ.
+
 Golden không mang theo mạng hay quyền của lúc dựng: lúc chạy bài, `customer_site()`/`vm(profile)` áp lại egress và
 sudo theo hồ sơ (bank: `fde` không có sudo; SELinux enforcing; Podman rootless chạy được không cần mạng, không có
 image nào được tải sẵn).
@@ -88,6 +100,8 @@ image nào được tải sẵn).
 | `hospital` | 77 s | 1,60 GiB | `docker.io 26.1.3-0ubuntu1~20.04.1`, `containerd 1.7.24-0ubuntu1~20.04.2`, `runc 1.1.12-0ubuntu2~20.04.1` |
 | `bank` | 93 s | 1,53 GiB | `podman 4.9.4-38.module+el8.10.0+40397+5e4f25d4` (AppStream, module `container-tools`) |
 | `lawfirm-staging` | 72 s | 1,73 GiB | như `lab-open` |
+
+Dựng lại cả bốn cùng lúc (`--force`, 2026-11-04) mất 89–323 s mỗi golden (bank chậm nhất do mirror Rocky), kích thước như trên.
 
 Kernel/glibc của golden: Ubuntu 22.04 `5.15.0-198-generic`/2.35, Ubuntu 20.04 `5.4.0-216-generic`/2.31,
 Rocky 8.10 `4.18.0-553.el8_10`/2.28. Gói cài theo trạng thái kho lúc dựng, nên dựng lại về sau có thể ra bản vá mới
@@ -104,6 +118,8 @@ hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
 | `s.registry` | địa chỉ registry nhìn từ VM: `10.0.2.101:5000` (HTTP) |
 | `s.registry_host` | địa chỉ registry nhìn từ host (`127.0.0.1:<cổng ngẫu nhiên>`) để đẩy image vào |
 
+- Mỗi run id có **một** tiến trình canh: nó chạy QEMU và khi tiến trình pytest chết thì dọn cả QEMU, container,
+  network lẫn thư mục lab (chỉ gọi `docker` khi run đó có dựng container).
 - Dịch vụ phía host chạy bằng `testkit.DockerLab`, container tên `fde-ex-<run_id>-proxy`/`-registry` trong network
   `fde-ex-<run_id>`, cổng chỉ publish trên `127.0.0.1`. Image ghim tag + digest:
   `mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d…` (phát hành 2026-05-12) và `registry:2.8.3@sha256:a3d8aaa6…`
@@ -113,7 +129,13 @@ hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
 - Egress `none`/`proxy` ⇒ `restrict=on`: không route ra internet, không DNS (resolver `10.0.2.3` của QEMU cũng bị chặn),
   không tới loopback host qua `10.0.2.2`; chỉ còn SSH/`forwards` và các `guestfwd` ở trên. Egress `open` ⇒ restrict tắt.
   `vm(profile)` tự suy `restrict` và `sudo` từ hồ sơ.
-- Hồ sơ `hospital`: IT khách đặt `http_proxy`/`https_proxy` trong `/etc/environment`, ngoài ra không cấu hình gì thêm.
+
+### "Tật" của khách (cố ý, không phải lỗi của lab)
+
+- `hospital`: IT khách đặt `http_proxy`/`https_proxy` trong `/etc/environment`, ngoài ra không cấu hình gì thêm
+  (CA của proxy chưa được trust, Docker daemon và apt không được cấu hình proxy).
+- `lawfirm-staging`: registry nội bộ chạy HTTP thường ở `10.0.2.101:5000`; Docker trong VM chưa khai báo registry này
+  trong `insecure-registries`.
 
 ## Một VM của bài tập trông thế nào
 

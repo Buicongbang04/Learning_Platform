@@ -1,5 +1,6 @@
 import hashlib
 import os
+import shlex
 import signal
 import socket
 import subprocess
@@ -11,6 +12,7 @@ from io import BytesIO
 import pycdlib
 import pytest
 import requests
+import yaml
 
 import fdekit
 
@@ -172,7 +174,8 @@ def test_netdev_args(tmp_path):
     assert arg.startswith("user,id=n0,restrict=on,")
     assert "hostfwd=tcp:127.0.0.1:2222-:22" in arg
     assert "hostfwd=tcp:127.0.0.1:31000-:8000" in arg
-    assert f"guestfwd=tcp:10.0.2.100:3128-cmd:{sys.executable} -I {relay} 127.0.0.1 41000" in arg
+    command = f"{shlex.quote(sys.executable)} -I {shlex.quote(str(relay))} 127.0.0.1 41000"
+    assert f"guestfwd=tcp:10.0.2.100:3128-cmd:{command.replace(',', ',,')}" in arg
     assert "restrict=off" in fdekit._netdev(ssh_port=2222, forwards={}, guestfwds={}, restrict=False, relay=relay)
 
 
@@ -197,6 +200,69 @@ def test_relay_bridges_stdio_to_host_port(tmp_path):
             guest.close()
             if child.poll() is None:
                 child.kill()
+
+
+def test_relay_half_close(tmp_path):
+    relay = fdekit._write_relay(tmp_path)
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        port = server.getsockname()[1]
+        guest, qemu_side = socket.socketpair()
+        child = subprocess.Popen([sys.executable, "-I", str(relay), "127.0.0.1", str(port)], stdin=qemu_side,
+                                 stdout=qemu_side, stderr=subprocess.DEVNULL)
+        qemu_side.close()
+        try:
+            conn, _ = server.accept()
+            with conn:
+                guest.sendall(b"request")
+                guest.shutdown(socket.SHUT_WR)
+                received = b""
+                while chunk := conn.recv(64):
+                    received += chunk
+                assert received == b"request"
+                conn.sendall(b"response")
+            reply = b""
+            while chunk := guest.recv(64):
+                reply += chunk
+            assert reply == b"response"
+            child.wait(timeout=5)
+        finally:
+            guest.close()
+            if child.poll() is None:
+                child.kill()
+
+
+def _profile_yaml(tmp_path, **overrides):
+    data = {"image": "ubuntu-22.04", "disk_gb": 20, "sudo": True, "egress": "open", "tls_inspection": False,
+            "selinux": "n/a", "runtime": "docker", "services": [],
+            "facts": {"kernel_major": "5.15", "glibc": "2.35", "disk_free_gb_max": 18, "gpu": None}}
+    facts = overrides.pop("facts", {})
+    data.update(overrides)
+    data["facts"] = {**data["facts"], **facts}
+    path = tmp_path / "x.yaml"
+    path.write_text(yaml.safe_dump(data))
+    return path
+
+
+def test_profile_loader_validates(tmp_path):
+    assert fdekit._load_profile(_profile_yaml(tmp_path)).facts["glibc"] == "2.35"
+    for overrides, message in (
+        ({"facts": {"glibc": 2.3}}, "glibc"),
+        ({"facts": {"kernel_major": 5.10}}, "kernel_major"),
+        ({"tls_inspection": True}, "tls_inspection"),
+        ({"facts": {"disk_free_gb_max": 20}}, "disk_free_gb_max"),
+        ({"egress": "proxy"}, "services"),
+        ({"image": "windows-11"}, "image"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            fdekit._load_profile(_profile_yaml(tmp_path, **overrides))
+
+
+def test_vm_rejects_unknown_profile_and_foreign_run_id():
+    with pytest.raises(KeyError, match="no-such-customer"):
+        fdekit._vm_defaults("no-such-customer", restrict=None, sudo=None)
+    with pytest.raises(ValueError, match="run id"):
+        with fdekit.vm(None, base=fdekit.__file__, run_id="deadbeef"):
+            pass
 
 
 SURVEY_KEYS = {"os_id", "os_version", "kernel_major", "glibc", "cpus", "mem_mb", "disk_free_gb_max", "gpu", "proxy_url",
@@ -281,6 +347,7 @@ def test_leftovers_reports_run_dir(tmp_path, monkeypatch):
     (tmp_path / "fde-ex-0badc0de").mkdir()
     (tmp_path / "fde-ex-12345678").mkdir()
     monkeypatch.setattr(fdekit, "_containers", lambda needle: [])
+    monkeypatch.setattr(fdekit, "_networks", lambda needle: [])
     assert fdekit.leftovers("0badc0de") == [str(tmp_path / "fde-ex-0badc0de")]
     assert len(fdekit.leftovers()) == 2
     fdekit.clean("0badc0de")
@@ -580,6 +647,8 @@ def test_site_containers_die_with_parent():
         assert len(run_id) == 8, "tiến trình con không mở được customer_site"
         assert fdekit._qemu_pids(run_id)
         assert fdekit._containers(f"fde-ex-{run_id}")
+        kinds = [kind for _, kind, _ in fdekit._processes(f"fde-ex-{run_id}")]
+        assert kinds.count("guard") == 1 and kinds.count("qemu") == 1
         os.kill(child.pid, signal.SIGKILL)
         child.wait(timeout=10)
         deadline = time.monotonic() + 15

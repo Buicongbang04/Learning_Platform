@@ -39,6 +39,7 @@ finalize() {
     rm -f /etc/sudoers.d/90-cloud-init-users
     : > "/home/$LAB_USER/.ssh/authorized_keys"
     rm -f /home/$LAB_USER/.bash_history /root/.bash_history
+    rm -rf /tmp/fde-prepare
     cloud-init clean --logs
     truncate -s 0 /etc/machine-id
     rm -f /var/lib/dbus/machine-id

@@ -94,6 +94,7 @@ PROXY_ADDR = "10.0.2.100:3128"
 REGISTRY_ADDR = "10.0.2.101:5000"
 MITMPROXY_IMAGE = "mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f"
 REGISTRY_IMAGE = "registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373"
+SITE_IMAGES = {"proxy": MITMPROXY_IMAGE, "registry": REGISTRY_IMAGE}
 
 Egress = Literal["open", "proxy", "none"]
 SELinux = Literal["enforcing", "permissive", "disabled", "n/a"]
@@ -134,16 +135,23 @@ def _load_profile(path: Path) -> Profile:
     services = list(data.get("services") or [])
     if not set(services) <= {"proxy", "registry"} or ("proxy" in services) != (data["egress"] == "proxy"):
         raise ValueError(f"{path}: services {services} không khớp egress {data['egress']}")
+    if data.get("tls_inspection", False) and data["egress"] != "proxy":
+        raise ValueError(f"{path}: tls_inspection chỉ dùng với egress proxy")
     measured = data.get("facts") or {}
     missing = [key for key in _MEASURED_FACTS if key not in measured]
     if missing:
         raise ValueError(f"{path}: facts thiếu {missing}")
+    for key in ("kernel_major", "glibc"):
+        if not isinstance(measured[key], str):
+            raise ValueError(f"{path}: facts.{key} phải là chuỗi có ngoặc kép (vd. \"5.10\"), nhận {measured[key]!r}")
+    if not int(measured["disk_free_gb_max"]) < int(data["disk_gb"]):
+        raise ValueError(f"{path}: facts.disk_free_gb_max phải nhỏ hơn disk_gb")
     image = IMAGES[data["image"]]
     facts = {
         "os_id": image.os_id,
         "os_version": image.os_version,
-        "kernel_major": str(measured["kernel_major"]),
-        "glibc": str(measured["glibc"]),
+        "kernel_major": measured["kernel_major"],
+        "glibc": measured["glibc"],
         "cpus": SITE_CPUS,
         "mem_mb": SITE_MEMORY_MB,
         "disk_free_gb_max": int(measured["disk_free_gb_max"]),
@@ -257,18 +265,50 @@ def prepare_script(profile: str) -> Path:
     return SCRIPT_DIR / f"{profile}.sh"
 
 
+class UnknownProfile(KeyError):
+    pass
+
+
 def _profile(name: str) -> Profile:
     if name not in PROFILES:
-        raise KeyError(f"Không có hồ sơ khách '{name}'. Có: {', '.join(sorted(PROFILES))}")
+        raise UnknownProfile(f"Không có hồ sơ khách '{name}'. Có: {', '.join(sorted(PROFILES))}")
     return PROFILES[name]
+
+
+def _pull_site_images(spec: Profile) -> None:
+    for service in spec.services:
+        image = SITE_IMAGES[service]
+        if not shutil.which("docker"):
+            print(f"Chưa có docker: cài Docker rồi chạy docker pull {image}", file=sys.stderr)
+            continue
+        if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode == 0:
+            continue
+        print(f"docker pull {image}", file=sys.stderr, flush=True)
+        if subprocess.run(["docker", "pull", "-q", image], capture_output=True, text=True).returncode != 0:
+            print(f"Không pull được {image}; chạy lại: docker pull {image}", file=sys.stderr)
 
 
 def prepare(profile: str, *, force: bool = False) -> Path:
     """Dựng golden image của hồ sơ khách: boot cloud image có mạng (restrict tắt, user `fde` có sudo tạm), chạy
     setup/fde/cloud-init/<hồ sơ>.sh (cài runtime, cấu hình "tật", gỡ sudo tạm, xoá key), tắt sạch rồi ghi qcow2 độc lập.
-    Golden đã có thì trả luôn, trừ khi `force`."""
+    Golden đã có thì trả luôn, trừ khi `force`. Kèm theo pull image proxy/registry phía host mà hồ sơ cần."""
     spec = _profile(profile)
+    golden = _build_golden(spec, force=force)
+    _pull_site_images(spec)
+    return golden
+
+
+def _build_golden(spec: Profile, *, force: bool) -> Path:
+    profile = spec.name
     golden = golden_path(profile)
+    if golden.is_file() and not force:
+        return golden
+    script = prepare_script(profile)
+    if not script.is_file():
+        raise FileNotFoundError(f"Thiếu script dựng golden {script}")
+    require_kvm()
+    _require_ssh_tools()
+    _require_memory(SITE_MEMORY_MB)
     golden.parent.mkdir(parents=True, exist_ok=True)
     with (golden.parent / f".{profile}.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -280,7 +320,10 @@ def prepare(profile: str, *, force: bool = False) -> Path:
             subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", _image_format(base), "-b", str(base),
                             str(staging), f"{spec.disk_gb}G"], check=True, capture_output=True, text=True)
             with vm(None, base=staging, memory_mb=SITE_MEMORY_MB, cpus=SITE_CPUS, restrict=False, sudo=True) as m:
-                m.ssh("cloud-init status --wait", timeout=600)
+                status = m.ssh("cloud-init status --wait --long", timeout=600)
+                if status.returncode != 0 or "status: done" not in status.stdout:
+                    raise RuntimeError(f"cloud-init của VM dựng golden '{profile}' không xong sạch "
+                                       f"(mã {status.returncode}):\n{status.stdout}{status.stderr}")
                 m.put(SCRIPT_DIR, "/tmp/fde-prepare")
                 result = m.ssh(f"sudo bash /tmp/fde-prepare/{shlex.quote(profile)}.sh", timeout=1800)
                 (golden.parent / f"{profile}.prepare.log").write_text(result.stdout + result.stderr)
@@ -354,13 +397,16 @@ import os, select, socket, sys
 os.dup2(os.open(os.devnull, os.O_WRONLY), 2)
 upstream = socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=10)
 upstream.settimeout(None)
+sources = [0, upstream]
 while True:
-    ready, _, _ = select.select([0, upstream], [], [])
+    ready, _, _ = select.select(sources, [], [])
     if 0 in ready:
         data = os.read(0, 65536)
-        if not data:
-            break
-        upstream.sendall(data)
+        if data:
+            upstream.sendall(data)
+        else:
+            upstream.shutdown(socket.SHUT_WR)
+            sources.remove(0)
     if upstream in ready:
         data = upstream.recv(65536)
         if not data:
@@ -373,7 +419,7 @@ while True:
 
 def _write_relay(run_dir: Path) -> Path:
     """Mỗi kết nối guestfwd, QEMU chạy một relay: stdin/stdout là socket phía VM, đầu kia là cổng 127.0.0.1 của host."""
-    path = run_dir / "guestfwd-relay.py"
+    path = run_dir / _RELAY_NAME
     path.write_text(_RELAY)
     return path
 
@@ -391,19 +437,32 @@ def _netdev(*, ssh_port: int, forwards: Mapping[int, int], guestfwds: Mapping[st
 
 
 _WRAPPER = r"""
-import ctypes, os, select, shutil, signal, subprocess, sys
-lifeline, run_dir, cmd = int(sys.argv[2]), sys.argv[3], sys.argv[4:]
+import ctypes, json, os, select, shutil, signal, subprocess, sys, time
+lifeline, run_dir = int(sys.argv[2]), sys.argv[3]
 needle = os.path.basename(run_dir)
 libc = ctypes.CDLL(None, use_errno=True)
-state = {"proc": None}
+state = {"proc": None, "halt": False}
+def path(name):
+    return os.path.join(run_dir, name)
 def kill():
     proc = state["proc"]
-    if proc is not None:
-        try:
-            os.kill(proc.pid, signal.SIGKILL)
-            os.waitpid(proc.pid, 0)
-        except (ProcessLookupError, ChildProcessError):
-            pass
+    if proc is None:
+        return
+    try:
+        os.kill(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+    finished(proc)
+def finished(proc):
+    state["proc"] = None
+    code = proc.returncode
+    try:
+        with open(path("qemu.exit.tmp"), "w") as handle:
+            handle.write(str(code))
+        os.replace(path("qemu.exit.tmp"), path("qemu.exit"))
+    except OSError:
+        pass
 def docker(*args):
     try:
         result = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=60)
@@ -412,54 +471,90 @@ def docker(*args):
     return result.stdout.split() if result.returncode == 0 else []
 def mine(name):
     return name == needle or name.startswith(needle + "-")
-def purge():
-    kill()
-    if shutil.which("docker"):
+def purge_docker():
+    started = time.monotonic()
+    while True:
         names = [n for n in docker("ps", "-a", "--filter", "name=" + needle, "--format", "{{.Names}}") if mine(n)]
         if names:
             docker("rm", "-f", *names)
         networks = [n for n in docker("network", "ls", "--filter", "name=" + needle, "--format", "{{.Name}}") if mine(n)]
         if networks:
             docker("network", "rm", *networks)
+        elapsed = time.monotonic() - started
+        if elapsed > 10 or (not names and not networks and elapsed > 4):
+            return
+        time.sleep(2)
+def purge():
+    kill()
+    if os.path.exists(path("containers")) and shutil.which("docker"):
+        purge_docker()
     shutil.rmtree(run_dir, ignore_errors=True)
     os._exit(0)
 def stop(signum, frame):
     kill()
     os._exit(143)
+def halt(signum, frame):
+    state["halt"] = True
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGHUP, stop)
+signal.signal(signal.SIGUSR1, halt)
 me = os.getpid()
 def child():
     libc.prctl(1, signal.SIGKILL)
     if os.getppid() != me:
         os._exit(1)
-if cmd:
-    state["proc"] = subprocess.Popen(cmd, preexec_fn=child, stdin=subprocess.DEVNULL)
+def launch():
+    try:
+        with open(path("qemu.start")) as handle:
+            argv = json.load(handle)
+        os.unlink(path("qemu.start"))
+    except (OSError, ValueError):
+        return
+    with open(path("qemu.log"), "wb") as log:
+        try:
+            state["proc"] = subprocess.Popen(argv, preexec_fn=child, stdin=subprocess.DEVNULL, stdout=log,
+                                             stderr=subprocess.STDOUT)
+        except OSError as error:
+            log.write(str(error).encode())
+            state["proc"] = None
+            with open(path("qemu.exit"), "w") as handle:
+                handle.write("127")
 while True:
-    ready, _, _ = select.select([lifeline], [], [], 0.5)
+    ready, _, _ = select.select([lifeline], [], [], 0.1)
     if ready and not os.read(lifeline, 1):
         purge()
+    if state["halt"]:
+        state["halt"] = False
+        kill()
     proc = state["proc"]
     if proc is not None and proc.poll() is not None:
-        code = proc.returncode
-        sys.exit(128 - code if code < 0 else code)
+        finished(proc)
+    if state["proc"] is None and os.path.exists(path("qemu.start")):
+        launch()
 """
 
 
-def _spawn_guard(run_dir: Path, args: Sequence[str], log: Path | None = None) -> subprocess.Popen:
-    """Tiến trình canh giữ đầu đọc lifeline: tiến trình gọi chết (kể cả SIGKILL) thì giết QEMU, xoá container/network
-    `fde-ex-<run_id>*` và thư mục lab. SIGTERM (từ `clean`/`_stop`) chỉ giết QEMU, phần dọn do bên gọi làm."""
+def _spawn_guard(run_dir: Path) -> subprocess.Popen:
+    """Một tiến trình canh cho mỗi run id, giữ đầu đọc lifeline. Nó chạy QEMU (`VM._start` ghi `qemu.start`, QEMU thoát
+    thì nó ghi `qemu.exit`), SIGUSR1 giết QEMU. Tiến trình gọi chết (kể cả SIGKILL) thì nó giết QEMU, xoá container/network
+    `fde-ex-<run_id>*` (chỉ khi run có tệp đánh dấu `containers`, lặp tới ~10 s để bắt container đang tạo dở) và thư mục
+    lab. SIGTERM (từ `clean`) chỉ giết QEMU rồi thoát; phần dọn do bên gọi làm."""
     lifeline = _lifeline()
-    output = log.open("wb") if log is not None else subprocess.DEVNULL
-    try:
-        return subprocess.Popen(
-            [sys.executable, "-I", "-c", _WRAPPER, _GUARD, str(lifeline), str(run_dir), *args],
-            stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, start_new_session=True,
-            pass_fds=(lifeline,),
-        )
-    finally:
-        if log is not None:
-            output.close()
+    return subprocess.Popen(
+        [sys.executable, "-I", "-c", _WRAPPER, _GUARD, str(lifeline), str(run_dir)],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+        pass_fds=(lifeline,),
+    )
+
+
+def _stop_guard(guard: subprocess.Popen) -> None:
+    if guard.poll() is None:
+        guard.terminate()
+        try:
+            guard.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            guard.kill()
+            guard.wait()
 
 
 _LIFELINE: dict[int, tuple[int, int]] = {}
@@ -504,7 +599,8 @@ def _tail(path: Path, lines: int = 30) -> str:
 class VM:
     """VM đang chạy của một lần chạy. Chỉ lấy qua `with fdekit.vm(...) as m:`."""
 
-    def __init__(self, run_id: str, run_dir: Path, ssh_port: int, ports: Mapping[int, int]) -> None:
+    def __init__(self, run_id: str, run_dir: Path, ssh_port: int, ports: Mapping[int, int],
+                 guard: subprocess.Popen) -> None:
         self.run_id = run_id
         self.name = PREFIX + run_id
         self.dir = run_dir
@@ -512,7 +608,8 @@ class VM:
         self.overlay = run_dir / "disk.qcow2"
         self.ssh_port = ssh_port
         self._ports = dict(ports)
-        self._guard: subprocess.Popen | None = None
+        self._guard = guard
+        self._started = False
 
     def _options(self) -> list[str]:
         return [
@@ -551,10 +648,20 @@ class VM:
         return self._ports[guest_port]
 
     def _start(self, args: list[str]) -> None:
-        self._guard = _spawn_guard(self.dir, args, self.dir / "qemu.log")
+        (self.dir / "qemu.exit").unlink(missing_ok=True)
+        part = self.dir / "qemu.start.tmp"
+        part.write_text(json.dumps(args))
+        os.replace(part, self.dir / "qemu.start")
+        self._started = True
 
     def _running(self) -> bool:
-        return self._guard is not None and self._guard.poll() is None
+        return self._started and self._guard.poll() is None and not (self.dir / "qemu.exit").exists()
+
+    def _wait_exit(self, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while self._running() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        return not self._running()
 
     def _wait_ssh(self, timeout: float = SSH_WAIT) -> None:
         deadline = time.monotonic() + timeout
@@ -597,10 +704,7 @@ class VM:
                 self._qmp("system_powerdown")
             except (OSError, ValueError):
                 pass
-            try:
-                self._guard.wait(timeout=min(20, max(1, deadline - time.monotonic())))
-            except subprocess.TimeoutExpired:
-                pass
+            self._wait_exit(min(20, max(1, deadline - time.monotonic())))
         if self._running():
             raise RuntimeError(f"VM {self.name} không tắt sau {timeout:.0f} s")
 
@@ -619,15 +723,19 @@ class VM:
 
     def _stop(self) -> None:
         if self._running():
-            self._guard.terminate()
-            try:
-                self._guard.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                self._guard.kill()
-                self._guard.wait()
+            self._guard.send_signal(signal.SIGUSR1)
+            if not self._wait_exit(15):
+                for pid in _qemu_pids(self.run_id):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                self._wait_exit(10)
+        self._started = False
 
 
 _ACTIVE: set[str] = set()
+_GUARDS: dict[str, subprocess.Popen] = {}
 
 
 def _cleanup_active() -> None:
@@ -659,7 +767,7 @@ def _qemu_args(machine: VM, *, base_seed: Path, memory_mb: int, cpus: int, netde
 
 
 def _vm_defaults(profile: str | None, *, restrict: bool | None, sudo: bool | None) -> tuple[bool, bool]:
-    spec = PROFILES.get(profile) if profile else None
+    spec = _profile(profile) if profile is not None else None
     if restrict is None:
         restrict = spec is not None and spec.egress != "open"
     if sudo is None:
@@ -697,15 +805,19 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
     if not base.is_file():
         raise FileNotFoundError(base)
     owned = run_id is None
+    if not owned and run_id not in _GUARDS:
+        raise ValueError(f"run id {run_id!r} không có tiến trình canh; chỉ customer_site truyền run_id")
     run_id = run_id or uuid.uuid4().hex[:8]
-    if not _RUN_ID.match(run_id):
-        raise ValueError(f"run id phải là 8 ký tự hex, nhận {run_id!r}")
-    _ACTIVE.add(run_id)
+    if owned:
+        _ACTIVE.add(run_id)
     machine: VM | None = None
+    guard: subprocess.Popen | None = None
     try:
-        run_dir = _new_run_dir(run_id) if owned else LAB / f"{PREFIX}{run_id}"
-        if not run_dir.is_dir():
-            raise FileNotFoundError(run_dir)
+        if owned:
+            run_dir = _new_run_dir(run_id)
+            guard = _spawn_guard(run_dir)
+        else:
+            run_dir, guard = LAB / f"{PREFIX}{run_id}", _GUARDS[run_id]
         key = generate_key(run_dir / "id_ed25519")
         seed = write_seed_iso(run_dir / "seed.iso", instance_id=f"{PREFIX}{run_id}",
                               public_key=key.with_name(key.name + ".pub").read_text().strip(), sudo=sudo,
@@ -715,7 +827,7 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
         relay = _write_relay(run_dir) if guestfwds else None
         for attempt in range(3):
             ports = {int(guest): testkit.free_port() for guest in forwards}
-            machine = VM(run_id, run_dir, testkit.free_port(), ports)
+            machine = VM(run_id, run_dir, testkit.free_port(), ports, guard)
             netdev = _netdev(ssh_port=machine.ssh_port, forwards=ports, guestfwds=guestfwds or {}, restrict=restrict,
                              relay=relay)
             machine._start(_qemu_args(machine, base_seed=seed, memory_mb=memory_mb, cpus=cpus, netdev=netdev))
@@ -728,12 +840,15 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
                     raise RuntimeError(f"Không tìm được cổng trống cho {machine.name} sau 3 lần thử")
         yield machine
     finally:
-        try:
-            if machine is not None:
-                machine._stop()
-            clean(run_id)
-        finally:
-            _ACTIVE.discard(run_id)
+        if machine is not None:
+            machine._stop()
+        if owned:
+            try:
+                if guard is not None:
+                    _stop_guard(guard)
+                clean(run_id)
+            finally:
+                _ACTIVE.discard(run_id)
 
 
 @dataclass
@@ -754,13 +869,11 @@ class _SiteLab(testkit.DockerLab):
         self.network = f"{PREFIX}{run_id}"
 
 
-def _require_docker() -> None:
-    if not shutil.which("docker"):
-        pytest.skip("Hồ sơ khách này cần Docker phía host để chạy proxy/registry (testkit.DockerLab)")
-    result = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture_output=True, text=True,
-                            timeout=30)
-    if result.returncode != 0:
-        pytest.skip(f"Docker daemon không chạy: {result.stderr.strip()[:200]}")
+def _require_site_images(spec: Profile) -> None:
+    if not testkit.docker_ready():
+        pytest.skip("Hồ sơ khách này cần Docker phía host (daemon đang chạy) cho proxy/registry (testkit.DockerLab)")
+    for service in spec.services:
+        testkit.Exercise.require_image(SITE_IMAGES[service])
 
 
 def _start_proxy(lab: _SiteLab, run_dir: Path, *, tls_inspection: bool) -> Path:
@@ -768,7 +881,7 @@ def _start_proxy(lab: _SiteLab, run_dir: Path, *, tls_inspection: bool) -> Path:
     if not tls_inspection:
         command += ["--ignore-hosts", ".*"]
     lab.start("proxy", MITMPROXY_IMAGE, *command, ports=(8080,), env={"PYTHONUNBUFFERED": "1"}, memory="512m")
-    lab.wait_log("proxy", "proxy listening", timeout=60)
+    lab.wait_http("proxy", f"http://127.0.0.1:{lab.port('proxy', 8080)}/", timeout=60)
     deadline = time.monotonic() + 30
     while True:
         cert = lab.exec("proxy", "cat", "/home/mitmproxy/.mitmproxy/mitmproxy-ca-cert.pem")
@@ -785,33 +898,29 @@ def _start_proxy(lab: _SiteLab, run_dir: Path, *, tls_inspection: bool) -> Path:
 def _start_registry(lab: _SiteLab) -> int:
     lab.start("registry", REGISTRY_IMAGE, ports=(5000,))
     port = lab.port("registry", 5000)
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=1):
-                return port
-        except OSError:
-            time.sleep(0.3)
-    pytest.fail(f"Registry không mở cổng 127.0.0.1:{port} sau 30 s. Log:\n{lab.logs('registry')[-2000:]}")
+    lab.wait_http("registry", f"http://127.0.0.1:{port}/v2/", timeout=60)
+    return port
 
 
 @contextmanager
 def customer_site(profile: str, *, memory_mb: int = SITE_MEMORY_MB, forwards: Sequence[int] = ()) -> Iterator[Site]:
     """Dựng "khách hàng" theo hồ sơ: container proxy (mitmproxy, TLS inspection, CA riêng mỗi lần chạy) và/hoặc
     registry nội bộ phía host (chỉ 127.0.0.1, tên `fde-ex-<run_id>-*`), rồi VM với egress theo hồ sơ. Trong VM:
-    proxy ở `10.0.2.100:3128`, registry ở `10.0.2.101:5000`. Mọi thứ bị dọn khi ra, kể cả khi pytest bị SIGKILL."""
+    proxy ở `10.0.2.100:3128`, registry ở `10.0.2.101:5000`. Một tiến trình canh cho cả run id: mọi thứ bị dọn khi ra,
+    kể cả khi pytest bị SIGKILL."""
     spec = _profile(profile)
     require_golden(profile)
     _require_ssh_tools()
     _require_memory(memory_mb)
     if spec.services:
-        _require_docker()
+        _require_site_images(spec)
     run_id = uuid.uuid4().hex[:8]
     _ACTIVE.add(run_id)
-    guard: subprocess.Popen | None = None
     try:
         run_dir = _new_run_dir(run_id)
-        guard = _spawn_guard(run_dir, [])
+        _GUARDS[run_id] = _spawn_guard(run_dir)
+        if spec.services:
+            (run_dir / "containers").touch()
         with _SiteLab(run_id) as lab:
             guestfwds: dict[str, int] = {}
             proxy_ca = registry = registry_host = None
@@ -827,18 +936,19 @@ def customer_site(profile: str, *, memory_mb: int = SITE_MEMORY_MB, forwards: Se
                 yield Site(machine, spec, proxy_ca, registry, registry_host)
     finally:
         try:
-            if guard is not None and guard.poll() is None:
-                guard.terminate()
-                try:
-                    guard.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    guard.kill()
+            guard = _GUARDS.pop(run_id, None)
+            if guard is not None:
+                _stop_guard(guard)
             clean(run_id)
         finally:
             _ACTIVE.discard(run_id)
 
 
-def _processes(needle: str) -> list[tuple[int, bool, str]]:
+_RELAY_NAME = "guestfwd-relay.py"
+
+
+def _processes(needle: str) -> list[tuple[int, str, str]]:
+    """(pid, loại, dòng lệnh) của tiến trình thuộc `needle`; loại là "qemu", "guard" hoặc "relay"."""
     found = []
     uid = os.getuid()
     me = os.getpid()
@@ -855,14 +965,16 @@ def _processes(needle: str) -> list[tuple[int, bool, str]]:
         if not args or not any(needle in a for a in args):
             continue
         if Path(args[0]).name.startswith("qemu-system"):
-            found.append((int(entry.name), False, " ".join(args)[:160]))
+            found.append((int(entry.name), "qemu", " ".join(args)[:160]))
         elif _GUARD in args:
-            found.append((int(entry.name), True, " ".join(args[args.index(_GUARD):])[:160]))
+            found.append((int(entry.name), "guard", " ".join(args[args.index(_GUARD):])[:160]))
+        elif any(a.endswith(_RELAY_NAME) and needle in a for a in args):
+            found.append((int(entry.name), "relay", " ".join(args)[:160]))
     return found
 
 
 def _qemu_pids(run_id: str) -> list[int]:
-    return [pid for pid, guard, _ in _processes(f"{PREFIX}{run_id}") if not guard]
+    return [pid for pid, kind, _ in _processes(f"{PREFIX}{run_id}") if kind == "qemu"]
 
 
 def _docker_names(kind: list[str], fmt: str, needle: str) -> list[str]:
@@ -933,7 +1045,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         started = time.monotonic()
         try:
             golden = prepare(args.profile, force=args.force)
-        except KeyError as error:
+        except UnknownProfile as error:
             print(error.args[0], file=sys.stderr)
             return 2
         except pytest.skip.Exception as error:
