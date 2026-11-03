@@ -6,6 +6,12 @@ metadata:
     serving.kserve.io/autoscalerClass: none
 spec:
   predictor:
+    automountServiceAccountToken: false
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
     minReplicas: 3
     maxReplicas: 3
     labels:
@@ -13,6 +19,11 @@ spec:
     containers:
       - name: kserve-container
         image: eta-serve:dev
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
         env:
           - name: MODEL_PATH
             value: /models/eta-v1.joblib
@@ -32,6 +43,12 @@ metadata:
     serving.kserve.io/autoscalerClass: none
 spec:
   predictor:
+    automountServiceAccountToken: false
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
     minReplicas: 1
     maxReplicas: 1
     labels:
@@ -39,6 +56,11 @@ spec:
     containers:
       - name: kserve-container
         image: eta-serve:dev
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
         env:
           - name: MODEL_PATH
             value: /models/eta-v2.joblib

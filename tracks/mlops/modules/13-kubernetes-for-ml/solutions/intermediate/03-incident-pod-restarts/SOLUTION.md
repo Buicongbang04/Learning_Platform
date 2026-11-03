@@ -26,6 +26,8 @@ resources:
 - Requests nâng theo: node cần có chỗ cho đỉnh lúc nạp; requests quá thấp làm scheduler xếp nhiều pod vào một node rồi cùng nạp model lúc rollout.
 - Cách sửa gốc rễ hơn (ngoài phạm vi test): nạp kiểu stream thay vì đọc cả tệp vào RAM, và không đóng dữ liệu tham chiếu vào bundle serving (lưu thống kê đã tính sẵn).
 
+Bản lời giải còn thêm `securityContext` và `automountServiceAccountToken: false` (cứng hoá như bài cơ bản 01); test không đòi.
+
 ## Bài học vận hành
 
 - Model mới = profile tài nguyên mới. Đưa "đỉnh bộ nhớ lúc khởi động" vào checklist release của model, như latency và accuracy.

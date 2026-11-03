@@ -24,7 +24,7 @@ Hoàn thiện `starter/workflow.yaml` (Workflow tên **`eta-train`**, giữ `ima
 
 1. `spec.arguments.parameters` có `seed` và `rows`. Test đặt `seed=7`, `rows=4000`.
 2. Template entrypoint là DAG đúng ba task `prepare`, `train`, `evaluate`; `train` phụ thuộc `prepare`; `evaluate` phụ thuộc cả `prepare` và `train`.
-3. `prepare` sinh dữ liệu bằng `make_trips(seed, rows)`, 80% đầu là train, 20% cuối là test (`cut = int(rows * 0.8)`), xuất **artifact** `train` và `test`.
+3. `prepare` nhận `seed`, `rows` qua biến môi trường của container (`env` với giá trị `{{inputs.parameters.seed}}`), đọc bằng `int(os.environ[...])`, không dán parameter thẳng vào mã Python (giá trị lạ trở thành code chạy trong pod; test không kiểm điều này nhưng lời giải làm vậy); rồi sinh dữ liệu bằng `make_trips(seed, rows)`, 80% đầu là train, 20% cuối là test (`cut = int(rows * 0.8)`), xuất **artifact** `train` và `test`.
 4. `train` nhận artifact `train`, huấn luyện bằng `app.etaml.train`, xuất artifact `model`; template `train` có `retryStrategy.limit` ≥ 1.
 5. `evaluate` nhận artifact `model` và `test` (không train lại), tính `mae` và xuất **output parameter** `metrics` là JSON `{"mae": <số>, "n_test": <số dòng test>}`.
 

@@ -14,6 +14,13 @@ def manifest() -> list[dict]:
 def test_custom_predictor_shape():
     isvc = k8slab.find(manifest(), "InferenceService", "eta")
     predictor = isvc["spec"]["predictor"]
+    annotations = isvc.get("metadata", {}).get("annotations") or {}
+    assert annotations.get("serving.kserve.io/autoscalerClass") == "none", (
+        "Giữ annotation serving.kserve.io/autoscalerClass: none (cluster không có metrics-server)"
+    )
+    assert predictor.get("minReplicas") is not None and predictor.get("minReplicas") == predictor.get("maxReplicas"), (
+        "minReplicas phải bằng maxReplicas"
+    )
     assert "model" not in predictor, "Bài này dùng custom container, không dùng predictor.model (runtime có sẵn)"
     containers = predictor.get("containers") or []
     assert len(containers) == 1 and containers[0].get("name") == "kserve-container", (

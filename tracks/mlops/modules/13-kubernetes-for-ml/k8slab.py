@@ -5,6 +5,7 @@ Mọi lệnh tới Docker và cluster đi qua `mlopskit` (context `kind-mlops`, 
 
 import importlib.util
 import json
+import re
 import time
 from pathlib import Path
 
@@ -88,14 +89,19 @@ def dump(docs: list[dict]) -> str:
     return yaml.safe_dump_all(docs, sort_keys=False)
 
 
+QUANTITY = re.compile(r"^([+-]?(?:\d+\.?\d*|\.\d+))(?:([eE][+-]?\d+)|(Ki|Mi|Gi|Ti|Pi|Ei|n|u|m|k|M|G|T|P|E))?$")
+BINARY = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "Pi": 2**50, "Ei": 2**60}
+DECIMAL = {"n": 1e-9, "u": 1e-6, "m": 1e-3, "k": 1e3, "M": 1e6, "G": 1e9, "T": 1e12, "P": 1e15, "E": 1e18}
+
+
 def quantity(value) -> float:
-    """Đổi quantity K8s (`500m`, `256Mi`, `1Gi`, `2`) ra số (CPU theo nhân, bộ nhớ theo byte)."""
-    text = str(value).strip()
-    units = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "k": 1e3, "M": 1e6, "G": 1e9, "m": 1e-3}
-    for suffix, factor in units.items():
-        if text.endswith(suffix):
-            return float(text[: -len(suffix)]) * factor
-    return float(text)
+    """Đổi quantity K8s (`500m`, `256Mi`, `1Gi`, `2`, `1.5e3`, `2P`...) ra số (CPU theo nhân, bộ nhớ theo byte)."""
+    match = QUANTITY.match(str(value).strip())
+    assert match, f"{value!r} không phải quantity Kubernetes hợp lệ (vd. 500m, 256Mi, 1Gi, 2)"
+    number, exponent, suffix = match.groups()
+    if exponent:
+        return float(number + exponent)
+    return float(number) * (BINARY.get(suffix) or DECIMAL.get(suffix) or 1)
 
 
 def pods(namespace: str, selector: str) -> list[dict]:
@@ -168,7 +174,7 @@ def call(port: int, path: str, payload: dict | None = None) -> dict:
 
 CLIENT = """
 import collections, json, urllib.request
-counts = collections.Counter()
+counts, errors = collections.Counter(), []
 for _ in range({n}):
     request = urllib.request.Request("{url}", data=json.dumps({{"instances": [[3.2, 8, 1]]}}).encode(),
                                      headers={{"Content-Type": "application/json", "Connection": "close"}})
@@ -177,12 +183,20 @@ for _ in range({n}):
             counts[json.load(response)["model_version"]] += 1
     except Exception as error:
         counts["error"] += 1
-print(json.dumps(counts))
+        if len(errors) < 3:
+            errors.append(f"{{type(error).__name__}}: {{error}}")
+print(json.dumps({{"counts": counts, "errors": errors}}))
 """
 
+HARDENED_POD = {
+    "automountServiceAccountToken": False,
+    "securityContext": {"runAsNonRoot": True, "runAsUser": 10001, "seccompProfile": {"type": "RuntimeDefault"}},
+}
+HARDENED_CONTAINER = {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}}
 
-def in_cluster_versions(namespace: str, url: str, n: int, timeout: int = 180) -> dict[str, int]:
-    """Gửi `n` request từ một pod trong namespace tới `url` (DNS Service), đếm theo `model_version`.
+
+def in_cluster_versions(namespace: str, url: str, n: int, timeout: int = 180) -> tuple[dict[str, int], list[str]]:
+    """Gửi `n` request từ một pod trong namespace tới `url` (DNS Service); trả (số request theo `model_version`, mẫu lỗi).
 
     `port_forward` chỉ nối tới một pod, nên tỉ lệ chia traffic giữa nhiều pod phải đo từ trong cluster.
     """
@@ -192,11 +206,13 @@ def in_cluster_versions(namespace: str, url: str, n: int, timeout: int = 180) ->
         "kind": "Pod",
         "metadata": {"name": name},
         "spec": {
+            **HARDENED_POD,
             "restartPolicy": "Never",
             "containers": [{
                 "name": "client",
                 "image": eta_image(),
                 "command": ["python", "-c", CLIENT.format(n=n, url=url)],
+                "securityContext": HARDENED_CONTAINER,
                 "resources": {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"cpu": "1", "memory": "256Mi"}},
             }],
         },
@@ -205,4 +221,12 @@ def in_cluster_versions(namespace: str, url: str, n: int, timeout: int = 180) ->
     mlopskit.wait_for("pod", name, "jsonpath={.status.phase}=Succeeded", namespace, timeout, fail_on=("Failed",))
     logs = mlopskit.kubectl("logs", name, namespace=namespace)
     mlopskit.kubectl("delete", "pod", name, "--wait=false", namespace=namespace)
-    return json.loads(logs.stdout.strip().splitlines()[-1])
+    lines = logs.stdout.strip().splitlines()
+    if logs.returncode != 0 or not lines:
+        pytest.fail(f"Không đọc được kết quả của pod client {name} (rc={logs.returncode}): {logs.stderr[-500:]}",
+                    pytrace=False)
+    try:
+        result = json.loads(lines[-1])
+    except json.JSONDecodeError:
+        pytest.fail(f"Pod client {name} in kết quả không phải JSON: {lines[-1][:300]}", pytrace=False)
+    return dict(result["counts"]), result["errors"]

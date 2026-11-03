@@ -24,7 +24,7 @@ Bài này không có code. Làm 6 câu trắc nghiệm trong app (card **Trắc 
 
 ### Gợi ý 1
 
-Đọc lại mục 4 (KServe) và mục 6 (GPU) của lý thuyết module.
+Đọc lại mục 1 (kế thừa, kind), mục 3 (KServe), mục 4 (Argo) và mục 5 (GPU) của lý thuyết module.
 
 ### Gợi ý 2
 

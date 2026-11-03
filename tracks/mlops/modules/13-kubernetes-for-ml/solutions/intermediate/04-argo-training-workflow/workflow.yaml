@@ -10,6 +10,11 @@ spec:
         value: "0"
       - name: rows
         value: "5000"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
   templates:
     - name: pipeline
       dag:
@@ -47,10 +52,20 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        env:
+          - name: SEED
+            value: "{{inputs.parameters.seed}}"
+          - name: ROWS
+            value: "{{inputs.parameters.rows}}"
         source: |
+          import os
           import numpy as np
           from app.etaml import make_trips
-          x, y = make_trips({{inputs.parameters.seed}}, {{inputs.parameters.rows}})
+          x, y = make_trips(int(os.environ["SEED"]), int(os.environ["ROWS"]))
           cut = int(len(y) * 0.8)
           np.savez("/tmp/train.npz", x=x[:cut], y=y[:cut])
           np.savez("/tmp/test.npz", x=x[cut:], y=y[cut:])
@@ -73,6 +88,10 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         source: |
           import joblib
           import numpy as np
@@ -94,6 +113,10 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         source: |
           import json
           import joblib

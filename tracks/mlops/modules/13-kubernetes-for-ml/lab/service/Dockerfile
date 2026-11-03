@@ -10,6 +10,6 @@ RUN useradd --system --uid 10001 app
 WORKDIR /srv
 COPY app ./app
 RUN python -m app.models /models
-USER app
+USER 10001
 EXPOSE 8080
 CMD ["python", "-m", "app.serve"]

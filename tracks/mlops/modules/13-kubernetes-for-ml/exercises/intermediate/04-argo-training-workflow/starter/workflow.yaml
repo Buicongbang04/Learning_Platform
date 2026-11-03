@@ -10,6 +10,11 @@ spec:
         value: "0"
       - name: rows
         value: "5000"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
   templates:
     - name: pipeline
       dag:
@@ -41,10 +46,20 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        env:
+          - name: SEED
+            value: "{{inputs.parameters.seed}}"
+          - name: ROWS
+            value: "{{inputs.parameters.rows}}"
         source: |
+          import os
           import numpy as np
           from app.etaml import make_trips
-          x, y = make_trips({{inputs.parameters.seed}}, {{inputs.parameters.rows}})
+          x, y = make_trips(int(os.environ["SEED"]), int(os.environ["ROWS"]))
           cut = int(len(y) * 0.8)
           np.savez("/tmp/train.npz", x=x[:cut], y=y[:cut])
           np.savez("/tmp/test.npz", x=x[cut:], y=y[cut:])
@@ -64,6 +79,10 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         source: |
           raise NotImplementedError("TODO: huấn luyện bằng app.etaml.train, lưu /tmp/model.joblib")
 
@@ -71,5 +90,9 @@ spec:
       script:
         image: eta-serve:dev
         command: [python]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         source: |
           raise NotImplementedError("TODO: đọc model và tập test, ghi /tmp/metrics.json")

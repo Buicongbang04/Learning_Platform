@@ -4,7 +4,7 @@ metadata:
   name: eta-api-config
 data:
   MODEL_NAME: eta
-  MODEL_PATH: /models/eta-v1.joblib
+  MODEL_PATH: /models/eta-v2.joblib
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -22,6 +22,12 @@ spec:
       labels:
         app: eta-api
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: api
           image: eta-serve:dev
@@ -38,6 +44,11 @@ spec:
               port: http
             periodSeconds: 5
             failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           resources:
             requests:
               cpu: 100m

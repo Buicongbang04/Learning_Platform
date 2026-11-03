@@ -7,6 +7,12 @@ metadata:
     serving.kserve.io/stop: "true"
 spec:
   predictor:
+    automountServiceAccountToken: false
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
     minReplicas: 1
     maxReplicas: 1
     labels:
@@ -14,6 +20,11 @@ spec:
     containers:
       - name: kserve-container
         image: eta-serve:dev
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
         env:
           - name: MODEL_PATH
             value: /models/eta-v2.joblib

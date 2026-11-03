@@ -22,9 +22,10 @@ Service ETA (code và `Dockerfile` ở `tracks/mlops/modules/13-kubernetes-for-m
 
 Sửa `starter/eta-api.yaml` để:
 
-1. ConfigMap `eta-api-config` có `MODEL_PATH: /models/eta-v1.joblib`; container đọc nó qua `envFrom` (hoặc `configMapKeyRef`), **không** ghi cứng `MODEL_PATH` trong `env`.
+1. ConfigMap `eta-api-config` có `MODEL_PATH: /models/eta-v2.joblib`; container đọc nó qua `envFrom` (không đặt `prefix`) hoặc `configMapKeyRef`, **không** ghi cứng `MODEL_PATH` trong `env`. Service mặc định nạp v1 khi thiếu biến, nên chỉ thấy v2 khi biến thật sự tới container.
 2. Deployment `eta-api`: **2 replica**, container cổng 8080, `readinessProbe` kiểu `httpGet`, `resources.requests` và `resources.limits` có cả `cpu` lẫn `memory`.
 3. Service `eta-api` mở **cổng 80** chuyển tới cổng 8080 của pod.
+4. Cứng hoá pod (service không gọi API Kubernetes và không cần quyền gì): ở mức pod `automountServiceAccountToken: false` và `securityContext.runAsNonRoot: true`; ở container `securityContext.allowPrivilegeEscalation: false` và `capabilities.drop: [ALL]`. Image đã chạy bằng user `10001`; nên thêm `seccompProfile: RuntimeDefault` và `readOnlyRootFilesystem: true` (service không ghi đĩa), test không bắt.
 
 Giữ `image: eta-serve:dev`: test build image từ `lab/service`, nạp vào cluster kind bằng `mlopskit.kind_load` rồi thay tên image này bằng tag vừa build. Test tạo namespace tạm `mlops-ex-<uuid8>`, apply manifest, chờ đủ 2 pod Ready, `port_forward` vào `svc/eta-api` cổng 80, gọi `/healthz` và `/predict`.
 
@@ -32,9 +33,10 @@ Muốn tự thử bằng tay: `docker build -t eta-serve:dev tracks/mlops/module
 
 ## Tiêu chí đạt
 
-- ConfigMap có `MODEL_PATH` của model v1 và container lấy biến từ ConfigMap.
+- ConfigMap có `MODEL_PATH` của model v2 và container lấy biến từ ConfigMap.
 - Deployment 2 replica, có `readinessProbe` `httpGet`, có requests và limits cho cpu và memory; Service cổng 80.
-- Qua Service, `/predict` trả `model_version == "v1"` và dự đoán khớp model v1 (sai số 0,001).
+- Pod có bốn trường cứng hoá ở mục 4.
+- Qua Service, `/healthz` và `/predict` trả `model_version == "v2"`, dự đoán khớp model v2 (sai số 0,001).
 
 ## Gợi ý
 

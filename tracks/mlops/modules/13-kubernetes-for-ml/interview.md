@@ -8,7 +8,7 @@ Một model, traffic đều, một đội nhỏ: Compose trên một VM hoặc d
 
 ## Giải thích startupProbe, readinessProbe và livenessProbe cho một service phải nạp model 60 giây.
 
-- **startupProbe**: "đã khởi động xong chưa". Ngân sách `periodSeconds × failureThreshold` (+ `initialDelaySeconds`) nên gấp khoảng hai lần thời gian nạp đo được, ví dụ 10 × 12 = 120 giây. Trong lúc nó chưa thành công, kubelet không chạy hai probe kia.
+- **startupProbe**: "đã khởi động xong chưa". Ngân sách `initialDelaySeconds + periodSeconds × failureThreshold` nên gấp khoảng hai lần thời gian nạp đo được, ví dụ 10 × 12 = 120 giây. Trong lúc nó chưa thành công, kubelet không chạy hai probe kia.
 - **readinessProbe**: "nhận traffic được chưa". Kiểm model đã nạp (endpoint trả version), không chỉ cổng TCP. Thất bại chỉ bỏ pod khỏi Endpoints.
 - **livenessProbe**: "có bị treo không". Chặt (phát hiện trong vài chục giây), không kiểm phụ thuộc ngoài (database, feature store), vì phụ thuộc chậm sẽ làm mọi pod bị giết cùng lúc.
 

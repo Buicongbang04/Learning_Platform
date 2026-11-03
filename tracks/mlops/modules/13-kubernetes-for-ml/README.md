@@ -1,6 +1,6 @@
 # Kubernetes cho ML
 
-Đến module 12, service ETA chạy bằng Docker Compose trên một máy. Module này đưa nó lên Kubernetes, nhưng chỉ dạy phần **riêng của ML**: service phải nạp model mới nhận request được, model phải được kiểm đúng version sau mỗi lần deploy, canary giữa hai model, pipeline training chạy thành DAG các pod, và GPU là một tài nguyên được lập lịch. Phần Kubernetes chung (RBAC, NetworkPolicy, Helm, vận hành cluster) đã có ở track DevOps; ở đây chỉ trỏ về.
+Đến module 12, service ETA chạy bằng Docker Compose trên một máy. Module này đưa nó lên Kubernetes, nhưng chỉ dạy phần **riêng của ML**: service phải nạp model mới nhận request được, model phải được kiểm đúng version sau mỗi lần deploy, canary giữa hai model, pipeline training chạy thành DAG các pod, và GPU là một tài nguyên được lập lịch. Phần Kubernetes chung (RBAC, NetworkPolicy, Helm, vận hành cluster) thuộc track DevOps (module 10-12, đang xây); ở đây chỉ trỏ về.
 
 Mọi bài chạy trên một cluster kind duy nhất tên `mlops` có sẵn KServe và Argo Workflows. Test chấm bằng cluster thật: apply manifest, chờ trạng thái, gọi HTTP vào service trong cluster.
 
@@ -46,7 +46,7 @@ Không dùng thì `docker stop mlops-control-plane` (cluster ăn ~2,3 GB RAM); b
 
 ## 1. Kế thừa từ DevOps và vì sao dùng kind
 
-Module này giả định bạn đã biết các object cơ bản. Nếu chưa, học ở track DevOps rồi quay lại; các phần sau **không dạy lại**:
+Module này giả định bạn đã biết các object cơ bản. Nếu chưa, học ở track DevOps rồi quay lại (module 10-12 của track DevOps **đang xây**; trong lúc chờ, dùng tài liệu chính thức ở mục 7); các phần sau **không dạy lại**:
 
 | Chủ đề | Học ở | Module 13 dùng thế nào |
 | --- | --- | --- |
@@ -95,7 +95,7 @@ Service ML thường mất từ vài giây tới vài phút để sẵn sàng: t
 
 | Probe | Câu hỏi | Thất bại thì | Lỗi hay gặp với ML |
 | --- | --- | --- | --- |
-| `startupProbe` | Đã khởi động xong chưa? | Hết ngân sách (`periodSeconds × failureThreshold`) thì giết container | Không có, nên liveness giết pod giữa lúc nạp model |
+| `startupProbe` | Đã khởi động xong chưa? | Hết ngân sách (`initialDelaySeconds + periodSeconds × failureThreshold`) thì giết container | Không có, nên liveness giết pod giữa lúc nạp model |
 | `readinessProbe` | Nhận traffic được chưa? | Bỏ pod khỏi Endpoints của Service, không giết | Kiểm cổng TCP thay vì "model đã nạp" |
 | `livenessProbe` | Có bị treo không? | Giết container | Kiểm cả database/feature store: phụ thuộc chậm làm mọi pod bị giết cùng lúc |
 
@@ -213,7 +213,7 @@ Cluster của module đặt kho artifact mặc định là MinIO trong namespace
 
 Argo Workflows hay Prefect/Airflow? Argo mạnh khi mọi bước đã là container và cần tài nguyên K8s (GPU, node riêng); đổi lại viết DAG bằng YAML, debug qua pod. Prefect/Airflow mạnh khi logic Python phức tạp, nhiều tích hợp; có thể chạy từng task thành pod (KubernetesExecutor, Prefect worker K8s). Kubeflow Pipelines dựng trên Argo, thêm SDK Python và theo dõi artifact ML.
 
-**Argo CD** là dự án khác cùng tổ chức Argo: một controller so trạng thái cluster với manifest trong Git và đồng bộ (GitOps). Với ML, nó trả lời "model nào đang chạy production" bằng một commit: pipeline training ghi version model mới vào manifest (PR), người duyệt merge, Argo CD rollout; rollback là revert commit. Cài đặt, ApplicationSet, quản lý secret với GitOps học ở DevOps `12-gitops-secrets`; module này không lab Argo CD.
+**Argo CD** là dự án khác cùng tổ chức Argo: một controller so trạng thái cluster với manifest trong Git và đồng bộ (GitOps). Với ML, nó trả lời "model nào đang chạy production" bằng một commit: pipeline training ghi version model mới vào manifest (PR), người duyệt merge, Argo CD rollout; rollback là revert commit. Cài đặt, ApplicationSet, quản lý secret với GitOps học ở DevOps `12-gitops-secrets` (track DevOps, đang xây); module này không lab Argo CD.
 
 ## 5. GPU trên Kubernetes ở mức khái niệm
 
@@ -234,6 +234,7 @@ Quyết định thực tế: node GPU đắt, nên hai lỗi tốn tiền nhất
 
 - **Chấm bằng cluster thật, kiểm bằng request.** Ready, Available, Succeeded là điều kiện cần. Điều kiện đủ là `model_version` và dự đoán đúng qua Service, output của evaluate khớp tính lại, tỉ lệ canary đo từ trong cluster.
 - **Namespace riêng cho mỗi lần chạy**, xoá trong `finally`; không bao giờ dọn theo nhãn chung (người khác cũng dùng cluster). Kiểm rác bằng `mlopskit.leftovers()`.
+- **Cứng hoá pod serving**: `automountServiceAccountToken: false` (service không gọi API Kubernetes; ServiceAccount `default` có thể đã được gắn quyền), non-root, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, seccomp `RuntimeDefault`, root filesystem chỉ đọc. Chi tiết SecurityContext và Pod Security Standards ở track DevOps; bài cơ bản 01 bắt bốn trường đầu.
 - **Ghim image theo tag cụ thể**, production theo digest; `:latest` đổi `imagePullPolicy` và làm rollback mơ hồ.
 - **Mỗi bản model mới là một bản release**: đi qua cùng cổng staging như thay đổi code (deploy thật, smoke test, latency, version) chứ không chỉ so accuracy.
 - **Chẩn đoán từ trạng thái, không đoán**: `describe` (Events, `Last State`), `logs --previous`, `get events`; với InferenceService và Workflow, xem object con mà controller sinh ra (`get deploy`, `status.nodes`).

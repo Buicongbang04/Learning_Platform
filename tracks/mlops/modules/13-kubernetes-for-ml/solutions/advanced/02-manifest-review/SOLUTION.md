@@ -11,7 +11,7 @@
 | 5 | `securityContext.privileged: true` | Service suy luận không cần quyền host | Bị khai thác là chiếm node | Chặn |
 | 6 | `livenessProbe` gọi `/readyz?check=mlflow`, `failureThreshold: 1` | Liveness phụ thuộc MLflow, một lần trượt là giết | MLflow chậm 5 giây là mọi pod bị restart cùng lúc; model nạp lại, sự cố lan rộng | Chặn |
 | 7 | `requests: nvidia.com/gpu: 1` | Service CPU xin GPU; extended resource phải nằm ở `limits` | Manifest bị từ chối, hoặc nếu sửa vào limits thì giữ một GPU vô ích | Chặn |
-| 8 | `limits.cpu: 100m`, không có requests cpu/memory | CPU bị throttle ở 0,1 nhân; không requests nên QoS `BestEffort` | Latency predict tăng mạnh; pod bị đuổi đầu tiên khi node thiếu bộ nhớ | Nên sửa |
+| 8 | `limits.cpu: 100m`, không có requests cpu/memory, không limit memory | CPU bị throttle ở 0,1 nhân (requests cpu tự lấy bằng limits = 100m); không có requests/limits memory nên pod là QoS `Burstable` mà bộ nhớ không được giữ chỗ | Latency predict tăng mạnh; scheduler xếp pod vào node không đủ bộ nhớ, pod nằm trong nhóm bị đuổi trước `Guaranteed` khi node thiếu bộ nhớ | Nên sửa |
 | 9 | `hostPath: /mnt/models` | Model nằm trên đĩa một node | Pod chuyển node là mất model; `current` là đường dẫn đổi được, không biết đang chạy version nào | Nên sửa |
 | 10 | Thiếu `startupProbe`/`readinessProbe` | Không có tín hiệu "đã nạp model" | Service nhận request khi model chưa nạp | Nên sửa |
 | 11 | `replicas: 1`, namespace `default` | Không chịu được một pod chết; trộn với tài nguyên khác | Downtime khi rollout/node drain; RBAC, quota khó tách | Nên sửa |
@@ -20,11 +20,18 @@
 ## Bản sửa (rút gọn)
 
 ```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eta-api-config
+data:
+  MODEL_PATH: /models/eta-v7.joblib
+  MLFLOW_TRACKING_URI: http://mlflow.mlops:5000
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: eta-api
-  namespace: eta
 spec:
   replicas: 2
   selector:
@@ -33,7 +40,11 @@ spec:
     metadata:
       labels: {app: eta-api, tier: serving}
     spec:
-      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
       containers:
         - name: api
           image: registry.example.com/eta-serve@sha256:<digest>
@@ -59,20 +70,22 @@ spec:
           resources:
             requests: {cpu: 250m, memory: 512Mi}
             limits: {cpu: "1", memory: 1Gi}
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: eta-api
-  namespace: eta
 spec:
   selector: {app: eta-api}
   ports:
     - {name: http, port: 80, targetPort: http}
 ```
 
-Số requests/limits ở trên là chỗ giữ; con số thật phải lấy từ đo đạc ở staging.
+Không ghi `namespace` trong manifest: chọn bằng `-n` lúc apply (hoặc Kustomize), nên cùng tệp chạy được ở staging và production và kiểm được bằng `kubectl --context kind-mlops apply --dry-run=server -n <namespace của bạn> -f ...`. Model đóng vào image (đường dẫn có version) thay cho hostPath. Secret `mlflow-credentials` tạo riêng (External Secrets, Sealed Secrets), không nằm trong tệp này; dry-run không kiểm tham chiếu tới Secret. Số requests/limits ở trên là chỗ giữ; con số thật phải lấy từ đo đạc ở staging.
 
 ## Câu hỏi cho tác giả
 
