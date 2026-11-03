@@ -7,7 +7,7 @@ GPU (RTX 3050 4 GB, vài phút):
     uv run --project setup/gpu python <tệp này> --device cuda
 CPU (lâu hơn, nên giảm --train và --size):
     uv run python <tệp này> --device cpu --train 300 --size 192
-Export ONNX (nếu chưa có) và ghi vào MLflow, chạy trong môi trường chính (setup/gpu không có onnx, mlflow):
+Export ONNX (nếu chưa có) và ghi vào MLflow, chạy trong môi trường chính (setup/gpu có onnx nhưng không có mlflow):
     uv run python <tệp này> --log-only
 """
 

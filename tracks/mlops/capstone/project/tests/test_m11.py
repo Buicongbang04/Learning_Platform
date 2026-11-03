@@ -121,6 +121,7 @@ TAGGED = re.compile(r"\b(tags|labels)\s*=\s*(merge\(\s*)?local\.tags\b")
 
 
 def test_m11_iac_resources_tagged(project):
+    """Phân tích HCL tĩnh, không chạy terraform: `terraform validate/plan` cần tải provider qua mạng nên không chạy được offline."""
     folder = cloud_dir()
     blocks = terraform_blocks(folder)
     resources = [(labels[0], labels[1], body) for kind, labels, body in blocks if kind == "resource" and len(labels) == 2]

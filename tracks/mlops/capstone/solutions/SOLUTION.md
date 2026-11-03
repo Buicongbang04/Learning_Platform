@@ -345,7 +345,9 @@ việc của manifest.
   node ở network Docker khác); `storageUri: s3://` cần kéo image `kserve/storage-initializer` và Secret S3 mỗi namespace.
   Image `busybox:1.37` + `model.joblib` nặng khoảng 3 MB, `kind_load` mất vài giây, trong khi image serve 820 MB và image
   train 1,04 GB chỉ nạp một lần mỗi phiên test (khoảng 6 giây mỗi image, nhờ cache layer). Modelcar (`storageUri: oci://`)
-  là cùng ý tưởng nhưng chỉ nhận một model; canary của ETA cần hai.
+  là cùng ý tưởng nhưng chỉ nhận một model; canary của ETA cần hai. Phía người build còn một lý do: image model là đơn vị phát hành
+  bất biến (tag = version, rollback là đổi tag), build ra từ `model.joblib` đã chốt nên pod không phụ thuộc MLflow còn sống hay
+  registry còn nguyên lúc pod khởi động lại.
 - **Canary trong app, không ở KServe.** Đã thử `canaryTrafficPercent: 20` trên cluster: KServe RawDeployment nhận trường,
   InferenceService vẫn Ready, nhưng chỉ có một Deployment và không chia gì. Port-forward cũng chỉ vào một pod. Dùng lại
   `route()` của M07 cho kết quả xác định, test tính trước từng request.

@@ -76,6 +76,7 @@ Python (cùng cú pháp `${TÊN}` với `envsubst`), rồi `kubectl apply` vào 
 | `${ETA_CANARY_WEIGHT}` | Tỉ lệ canary, chuỗi số thực trong [0, 1] |
 | `${ETA_ADMIN_TOKEN}` | Token cho `POST /admin/reload` (M07 mục 6) |
 
+- Khác module 13 (test thay nguyên văn `eta-serve:dev` vì bài chỉ có một image), manifest này dùng `${...}` vì phải render nhiều bản (champion, challenger, canary, image mỗi lần build) từ một tệp.
 - Dùng **cả bảy** biến; biến nào khác dạng `${...}` hay `$TÊN` làm test fail. Đừng dùng ký tự `$` cho việc khác trong
   tệp: `string.Template` hiểu `$$` là một `$`, còn `envsubst` để nguyên `$$`, nên hai cách render sẽ ra hai manifest khác nhau.
 - **Không có challenger** được biểu diễn bằng challenger trùng champion (cùng image, cùng version) và

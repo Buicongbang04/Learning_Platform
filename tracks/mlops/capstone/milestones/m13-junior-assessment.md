@@ -15,7 +15,7 @@ và lỗi gì). Mọi lỗi đều lộ ra bằng các công cụ bạn đã d�
 
 **Đừng mở `capstone/solutions/`** (nhất là `solutions/assessment/`) và đừng so tệp tháng lạ với tệp gốc của TLC từng dòng
 một: cả hai đều cho đáp án mà không luyện được gì, và trong sự cố thật không có "tệp đúng" để so. Test chỉ kiểm được kết
-quả; phần lập luận chấm bằng rubric trong `SOLUTION.md` sau khi bạn nộp.
+quả (script sinh tháng lạ nằm trong `solutions/assessment/` theo thiết kế, `tests/etakit.py` chỉ gọi nó để dựng tệp cho test; bạn không cần và không nên đọc nó); phần lập luận chấm bằng rubric trong `SOLUTION.md` sau khi bạn nộp.
 
 Bài này dùng mọi thứ từ M01 tới M10 và module 10 (khung phát hiện → xác minh → tác động → quyết định).
 
