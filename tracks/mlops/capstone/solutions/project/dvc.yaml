@@ -1,0 +1,52 @@
+stages:
+  prepare:
+    foreach: ${months}
+    do:
+      cmd: PYTHONPATH=src python -m eta.cli prepare --config params.yaml --month ${item} --out data/interim/${item}.parquet
+      deps:
+        - ${data_dir}/yellow_tripdata_${item}.parquet
+        - src/eta/cli.py
+        - src/eta/config.py
+        - src/eta/logs.py
+        - src/eta/data.py
+      params:
+        - sample_rows
+        - seed
+      outs:
+        - data/interim/${item}.parquet
+  validate:
+    foreach: ${months}
+    do:
+      cmd: PYTHONPATH=src python -m eta.cli validate data/interim/${item}.parquet --month ${item} --report reports/validation/${item}.json
+      deps:
+        - data/interim/${item}.parquet
+        - src/eta/cli.py
+        - src/eta/config.py
+        - src/eta/logs.py
+        - src/eta/validate.py
+        - src/eta/features.py
+        - src/eta/data.py
+      outs:
+        - reports/validation/${item}.json:
+            cache: false
+  train:
+    cmd: PYTHONPATH=src python -m eta.cli train --config params.yaml --input data/interim --model-out models/model.joblib --metrics-out metrics.json
+    deps:
+      - data/interim
+      - reports/validation
+      - src/eta/cli.py
+      - src/eta/config.py
+      - src/eta/logs.py
+      - src/eta/data.py
+      - src/eta/features.py
+      - src/eta/train.py
+      - src/eta/lineage.py
+    params:
+      - months
+      - model_params
+      - seed
+    outs:
+      - models/model.joblib
+    metrics:
+      - metrics.json:
+          cache: false

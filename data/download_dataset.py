@@ -301,7 +301,7 @@ DATASETS: dict[str, Dataset] = {
         license="CC BY-SA 4.0 (Parkhi, Vedaldi, Zisserman, Jawahar 2012, VGG Oxford)",
         homepage="https://www.robots.ox.ac.uk/~vgg/data/pets/",
         about="Trimap (annotations/trimaps/*.png), xml và list/split của Oxford-IIIT Pet (~19 MB). Dùng cùng oxford-pets: "
-        "ảnh lấy từ mirror HF, trimap lấy từ đây, ghép theo image_id. Nguồn: mirror HF xingslong/oxford-iiit-pet vì "
+        "ảnh lấy từ mirror HF, trimap lấy từ đây, ghép theo image_id. Thư mục giải nén có cả tệp AppleDouble của macOS `._*.png`, cần bỏ qua. Nguồn: mirror HF xingslong/oxford-iiit-pet vì "
         "thor.robots.ox.ac.uk và www.robots.ox.ac.uk không phản hồi (connect timeout 300 s, curl 25 s) lúc tải thử",
         extract=True,
     ),

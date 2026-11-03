@@ -1,0 +1,3 @@
+stages:
+  # TODO: stage prepare (cmd, deps, params, outs)
+  # TODO: stage split (cmd, deps, params, outs)

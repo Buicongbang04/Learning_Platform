@@ -1,0 +1,74 @@
+questions:
+  - id: tracking-single-user
+    kind: knowledge
+    type: single
+    prompt: Bạn là DS duy nhất của một startup, train vài chục run mỗi tuần trên laptop, chưa có server nào. Cách ghi thí nghiệm hợp lý nhất bây giờ là gì?
+    options:
+      - { id: a, text: "Ghi kết quả vào file Excel đặt tên theo ngày, vì đội một người chưa cần công cụ nào cả" }
+      - { id: b, text: "Dựng ngay MLflow server với Postgres và MinIO trên Kubernetes để sau này khỏi phải migrate dữ liệu thí nghiệm" }
+      - { id: c, text: "MLflow Tracking với SQLite và artifact local; chuyển sang server khi người thứ hai cần xem chung" }
+      - { id: d, text: "Mua gói Weights & Biases enterprise để có đủ mọi tính năng ngay từ đầu" }
+  - id: data-versioning-bigfiles
+    kind: knowledge
+    type: single
+    prompt: Tập train 40 GB nằm trên S3, mỗi tuần đổi vài phần trăm. Bạn muốn mỗi commit Git trỏ tới đúng phiên bản dữ liệu và `git checkout` + một lệnh là dựng lại được. Chọn gì?
+    options:
+      - { id: a, text: "Git LFS cho toàn bộ 40 GB vì nó cũng là một công cụ của Git, không cần học gì thêm" }
+      - { id: b, text: "DVC: Git giữ tệp .dvc và dvc.lock, dữ liệu ở remote S3 theo hash" }
+      - { id: c, text: "Đặt tên thư mục theo ngày trên S3 rồi ghi ngày đó vào README của dự án" }
+      - { id: d, text: "Feast, vì nó quản lý phiên bản dữ liệu cho model" }
+  - id: orchestrator-existing-airflow
+    kind: knowledge
+    type: single
+    prompt: Công ty đã vận hành Airflow ổn định cho đội Data Engineering từ ba năm. Đội ML cần pipeline retrain hằng đêm gồm 6 bước. Quyết định hợp lý nhất?
+    options:
+      - { id: a, text: "Chuyển cả công ty sang Prefect để hai đội dùng chung một công cụ mới hoàn toàn" }
+      - { id: b, text: "Dựng Kubeflow Pipelines riêng vì đây mới là công cụ được coi là chuẩn cho ML" }
+      - { id: c, text: "Viết cron trên một VM, đơn giản hơn mọi orchestrator" }
+      - { id: d, text: "Chạy trên Airflow hiện có, DAG ML ở repo riêng; xét công cụ khác khi đau thật" }
+  - id: serving-realtime-small
+    kind: knowledge
+    type: single
+    prompt: Model sklearn nhỏ, 200 request/giây, độ trễ yêu cầu dưới 100 ms, đội đã quen Python. Lựa chọn serving khởi đầu tốt nhất?
+    options:
+      - { id: a, text: "FastAPI trong container, load model theo alias, có /healthz, scale bằng replica" }
+      - { id: b, text: "NVIDIA Triton với TensorRT, vì đây là lựa chọn có độ trễ thấp nhất trên thị trường" }
+      - { id: c, text: "Ray Serve trên cụm 10 node để sẵn sàng cho mức tải của vài năm tới" }
+      - { id: d, text: "Chấm điểm batch mỗi đêm rồi tra bảng, bỏ hẳn API" }
+  - id: monitoring-stack
+    kind: knowledge
+    type: single
+    prompt: Service ETA đã chạy, bạn cần biết tỉ lệ lỗi, độ trễ p95 và phân phối giá trị dự đoán theo thời gian, kèm cảnh báo. Bộ công cụ phổ biến và gọn nhất cho việc này?
+    options:
+      - { id: a, text: "MLflow Tracking, vì đã có sẵn trong stack" }
+      - { id: b, text: "Prometheus thu metric từ service, Grafana vẽ dashboard, Alertmanager gửi cảnh báo" }
+      - { id: c, text: "In log ra stdout và grep khi có người phàn nàn" }
+      - { id: d, text: "Chỉ dùng Evidently chạy hằng tuần, nó thay được monitoring service" }
+  - id: feature-skew
+    kind: knowledge
+    type: single
+    prompt: Offline AUC 0.91, online chỉ 0.78. Điều tra thấy feature `avg_speed_zone` tính bằng SQL trong training nhưng viết lại bằng Python trong API. Công cụ/khái niệm nào nhắm đúng vấn đề này?
+    options:
+      - { id: a, text: "Dùng DVC để version riêng phần mã sinh feature và dữ liệu đầu vào của nó" }
+      - { id: b, text: "Tăng số cây của model lên gấp đôi để bù lại phần chất lượng bị mất khi chạy online" }
+      - { id: c, text: "Chuyển sang GPU cho API để tính nhanh hơn" }
+      - { id: d, text: "Feature store như Feast: một định nghĩa feature dùng cho cả offline và online" }
+  - id: ci-for-ml
+    kind: knowledge
+    type: multi
+    prompt: Chọn mọi việc thuộc CI cho **code** ML chạy trên mỗi pull request (khác với CT, continuous training).
+    options:
+      - { id: a, text: "Lint và unit test cho hàm tiền xử lý" }
+      - { id: b, text: "Build image và smoke test bằng một request mẫu" }
+      - { id: c, text: "Train lại toàn bộ model trên 3 năm dữ liệu" }
+      - { id: d, text: "Test hành vi model trên mẫu nhỏ có seed cố định" }
+      - { id: e, text: "Gỡ model cũ khỏi production" }
+  - id: infra-cost-aware
+    kind: knowledge
+    type: single
+    prompt: Một đội 3 người, 2 model, chưa có Kubernetes. Có người đề xuất dựng Kubeflow + Istio + Kafka "cho đúng chuẩn MLOps". Bạn trả lời thế nào?
+    options:
+      - { id: a, text: "Từ chối mọi công cụ mới, giữ nguyên quy trình thủ công" }
+      - { id: b, text: "Đồng ý, vì làm đúng từ đầu rẻ hơn sửa sau" }
+      - { id: c, text: "Bắt đầu bằng Docker Compose + MLflow + một orchestrator nhẹ; thêm thành phần khi có vấn đề đo được mà công cụ hiện tại không giải quyết" }
+      - { id: d, text: "Mua dịch vụ managed đắt nhất để khỏi phải quyết định" }

@@ -121,13 +121,50 @@ def test_compose_roundtrip_and_down(tmp_path):
         assert project.name.startswith("mlops-ex-")
         assert project.exec("app", "echo", "hi").stdout.strip() == "hi"
         assert isinstance(project.logs("app"), str)
-    assert mlopskit.leftovers() == []
+        name = project.name
+        assert mlopskit.leftovers(name)
+    assert mlopskit.leftovers(name) == []
 
 
 def test_compose_down_on_error(tmp_path):
     _busybox()
     (tmp_path / "compose.yaml").write_text(COMPOSE)
     with pytest.raises(RuntimeError):
-        with mlopskit.compose_project(tmp_path / "compose.yaml"):
+        with mlopskit.compose_project(tmp_path / "compose.yaml") as project:
+            name = project.name
             raise RuntimeError("boom")
-    assert mlopskit.leftovers() == []
+    assert mlopskit.leftovers(name) == []
+
+
+def test_build_timeout_env(monkeypatch):
+    monkeypatch.delenv("MLOPS_BUILD_TIMEOUT", raising=False)
+    assert mlopskit.build_timeout() == 1800
+    monkeypatch.setenv("MLOPS_BUILD_TIMEOUT", "42")
+    assert mlopskit.build_timeout() == 42
+    for bad in ("abc", "0", "-5", ""):
+        monkeypatch.setenv("MLOPS_BUILD_TIMEOUT", bad)
+        assert mlopskit.build_timeout() == 1800
+
+
+def test_build_timeout_message(monkeypatch, tmp_path):
+    monkeypatch.setattr(testkit, "docker_ready", lambda: True)
+    monkeypatch.setenv("MLOPS_BUILD_TIMEOUT", "7")
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        if "build" not in cmd and "up" not in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        seen["timeout"] = kw["timeout"]
+        raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    for ctx in (
+        lambda: mlopskit.built_image(tmp_path),
+        lambda: mlopskit.compose_project(tmp_path / "c.yaml"),
+    ):
+        with pytest.raises(pytest.fail.Exception) as exc:
+            with ctx():
+                pass
+        assert "MLOPS_BUILD_TIMEOUT" in str(exc.value) and "7 giây" in str(exc.value)
+        assert "cache" in str(exc.value)
+        assert seen["timeout"] == 7
