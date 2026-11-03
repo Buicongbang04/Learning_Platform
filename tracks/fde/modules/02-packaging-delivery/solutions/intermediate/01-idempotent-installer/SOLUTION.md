@@ -44,6 +44,10 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/02-packaging-delivery/exe
    `systemctl reset-failed` trước khi restart (sau một vòng crash, systemd có thể đã chạm `StartLimitBurst` và từ chối
    khởi động). Lần cài **đầu** thất bại thì không có gì để quay về: `disable --now`, xoá unit, `current`, release vừa giải
    nén, `daemon-reload`, log `failed`; giữ user `beacon` và `/etc/beacon/beacon.env` (vô hại, lần cài sau dùng lại).
+   Phân biệt với ca **chạy lại đúng bản đang cài** mà nó không lên (thường do cấu hình khách sửa sai): "bản trước" chính
+   là bản lỗi, nên `restore_same` chỉ trả unit, `daemon-reload`, `reset-failed`, thử restart, log `failed`, thoát 1, và
+   **không** xoá `current`, release hay unit: máy giữ nguyên để người sửa cấu hình rồi khởi động lại. Ca "lần đầu" được
+   nhận ra bằng việc **không có `current` trước lần chạy này**, không phải bằng "không quay về được".
 6. **Log**: mọi thông báo vào stderr và log; dòng cuối mỗi lần chạy do `finish` ghi, kể cả khi `die`.
 
 ## Những chi tiết hay sai

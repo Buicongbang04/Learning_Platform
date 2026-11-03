@@ -226,11 +226,28 @@ clean_failed_first_install() {
     die "lần cài đầu không lên: đã gỡ unit, current và bản vừa giải nén; máy trở về như trước khi cài"
 }
 
+restore_same() {
+    local release=$1
+    if [ -f "$WORK/beacon.service.previous" ]; then
+        cp -p "$WORK/beacon.service.previous" "$UNIT" || die "không trả lại được unit cũ"
+    else
+        install -m 0644 "$PREFIX/$release/systemd/beacon.service" "$UNIT" || die "không trả lại được unit của $release"
+    fi
+    systemctl daemon-reload || die "daemon-reload lỗi"
+    systemctl reset-failed beacon 2>/dev/null || true
+    systemctl restart beacon || true
+    die "${release#releases/} đã cài nhưng không lên khi chạy lại: giữ nguyên bản cài, unit và current; kiểm cấu hình $CONF và journalctl -u beacon"
+}
+
 rollback() {
     local previous=$1 failed=$2
-    if [ -z "$previous" ] || [ "$previous" = "$failed" ] || [ ! -d "$PREFIX/$previous" ]; then
+    if [ -z "$previous" ]; then
         clean_failed_first_install "$failed"
     fi
+    if [ "$previous" = "$failed" ]; then
+        restore_same "$failed"
+    fi
+    [ -d "$PREFIX/$previous" ] || die "bản trước $previous không còn trên đĩa: không quay về được, không gỡ gì"
     if [ -f "$WORK/beacon.service.previous" ]; then
         cp -p "$WORK/beacon.service.previous" "$UNIT" || die "không trả lại được unit cũ"
     else

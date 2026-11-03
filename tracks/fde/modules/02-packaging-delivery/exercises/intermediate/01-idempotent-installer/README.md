@@ -48,6 +48,9 @@ mỗi lần ≤180 s. Installer phải:
    unit systemd của nó**, xoá bản lỗi vừa giải nén khỏi `/opt/beacon`, thoát khác `0`. Nếu đó là lần cài **đầu tiên**
    (chưa có bản trước) thì gỡ sạch thứ vừa tạo: `disable --now` dịch vụ, xoá unit, `current` và bản vừa giải nén, ghi log
    `failed`, thoát khác `0` (user `beacon` và `/etc/beacon/beacon.env` được giữ lại).
+   Nếu đang chạy lại **đúng bản đã cài** mà nó không lên (vd. cấu hình của khách sai) thì không có gì để quay về và
+   **không được gỡ gì**: giữ `current`, release, unit, dịch vụ vẫn `enabled`; thử khởi động lại, ghi log `failed`, thoát
+   khác `0`.
 4. Chạy lại đúng bundle đang chạy ⇒ thoát `0` và **không đổi gì**: không tệp/symlink nào trong `/opt/beacon`,
    `/etc/beacon`, `/etc/systemd/system/beacon.service` bị tạo, xoá, ghi lại (inode, kích thước, mtime giữ nguyên),
    dịch vụ không bị restart.
@@ -70,6 +73,7 @@ là `--broken-app`, bản có unit systemd hỏng là `--broken-unit`). Bạn ch
 | Cài 1.2.0 sai sha256 | Thoát khác `0`, log `1.2.0 failed`, trạng thái không đổi, vẫn phục vụ 1.1.0 |
 | Cài 1.3.0 không khởi động được | Thoát khác `0`, log `1.3.0 rolled-back`, `/healthz` lại trả `1.1.0`, dịch vụ `active` |
 | Cài 1.4.0 có unit hỏng (`systemctl restart` lỗi) | Thoát khác `0`, log `1.4.0 rolled-back`, `/healthz` trả `1.1.0`, unit trên máy giống hệt unit trước khi cài 1.3.0, không còn gì mang tên `1.4.0` trong `/opt/beacon`, dịch vụ `active` |
+| Khách sửa `BEACON_PORT` thành giá trị sai; chạy lại 1.1.0 | Thoát khác `0`, log `1.1.0 failed`, `/opt/beacon/current/app/VERSION` vẫn là `1.1.0`, unit không đổi, dịch vụ vẫn `enabled`; sửa lại cấu hình + restart thì phục vụ `1.1.0` |
 
 ## Gợi ý
 

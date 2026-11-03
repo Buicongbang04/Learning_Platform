@@ -137,3 +137,16 @@ def test_install_rerun_upgrade_and_rollback():
         assert m.ssh("systemctl is-active beacon", timeout=30).stdout.strip() == "active"
         assert "1.4.0" not in m.ssh("sudo -n find /opt/beacon", timeout=30).stdout, (
             "Bản lỗi vừa giải nén phải bị xoá sau khi quay về (máy khách có thể có đĩa nhỏ)")
+
+        broken_env = "sudo -n sed -i 's/^BEACON_PORT=.*/BEACON_PORT=tam-thoi-sai/' /etc/beacon/beacon.env"
+        assert m.ssh(broken_env, timeout=30).returncode == 0
+        check_run(m, install(m, "1.1.0"), "1.1.0", "failed", ok=False)
+        kept = m.ssh("cat /opt/beacon/current/app/VERSION; systemctl is-enabled beacon; "
+                     "cat /etc/systemd/system/beacon.service", timeout=30).stdout
+        assert kept == "1.1.0\nenabled\n" + good_unit, (
+            "Chạy lại bản đang cài mà nó không lên vì cấu hình: không được gỡ gì "
+            "(current vẫn là 1.1.0, unit giữ nguyên, dịch vụ vẫn enabled)")
+        fixed = ("sudo -n sed -i 's/^BEACON_PORT=.*/BEACON_PORT=8088/' /etc/beacon/beacon.env && "
+                 "sudo -n systemctl reset-failed beacon; sudo -n systemctl restart beacon")
+        assert m.ssh(fixed, timeout=60).returncode == 0
+        serving(m, "1.1.0", "chao khoa noi")
