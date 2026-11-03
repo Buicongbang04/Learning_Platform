@@ -1,0 +1,73 @@
+questions:
+  - id: trimap-count
+    kind: data
+    type: single
+    prompt: "Sau khi bỏ các tệp AppleDouble `._*.png`, thư mục `annotations/trimaps` còn bao nhiêu trimap?"
+    options:
+      - { id: a, text: "14 780" }
+      - { id: b, text: "7 390" }
+      - { id: c, text: "7 349" }
+      - { id: d, text: "3 680" }
+  - id: unmatched
+    kind: data
+    type: single
+    prompt: "Ghép trimap với ảnh của mirror HF theo `image_id`: bao nhiêu trimap không có ảnh?"
+    options:
+      - { id: a, text: "0" }
+      - { id: b, text: "23" }
+      - { id: c, text: "41" }
+      - { id: d, text: "3 669" }
+  - id: pet-share
+    kind: data
+    type: single
+    prompt: "Tính trung bình trên các trimap, pixel thú cưng (giá trị 1) chiếm khoảng bao nhiêu phần ảnh?"
+    options:
+      - { id: a, text: "Khoảng 12%" }
+      - { id: b, text: "Khoảng 30%" }
+      - { id: c, text: "Khoảng 58%" }
+      - { id: d, text: "Khoảng 75%" }
+  - id: over-500
+    kind: data
+    type: single
+    prompt: "Tỉ lệ ảnh có cạnh dài nhất lớn hơn 500 px là bao nhiêu?"
+    options:
+      - { id: a, text: "Khoảng 0.3%" }
+      - { id: b, text: "Khoảng 1.9%" }
+      - { id: c, text: "Khoảng 25%" }
+      - { id: d, text: "Khoảng 50%" }
+  - id: non-rgb
+    kind: data
+    type: single
+    prompt: "Bao nhiêu ảnh trong mirror HF không ở mode RGB (service phải `convert(\"RGB\")` trước khi chuẩn hoá)?"
+    options:
+      - { id: a, text: "3" }
+      - { id: b, text: "0" }
+      - { id: c, text: "23" }
+      - { id: d, text: "41" }
+  - id: appledouble
+    kind: knowledge
+    type: single
+    prompt: "Vì sao phải bỏ các tệp `._*.png` thay vì để PIL tự báo lỗi rồi bỏ qua?"
+    options:
+      - { id: a, text: "Chúng là metadata macOS, không phải ảnh; lọc theo tên rõ ràng hơn nuốt mọi lỗi đọc" }
+      - { id: b, text: "Chúng là trimap của tập test, dùng sẽ làm rò rỉ nhãn sang tập train" }
+      - { id: c, text: "Chúng là bản trimap độ phân giải thấp, đọc vào sẽ làm lệch kích thước" }
+      - { id: d, text: "PIL đọc được chúng nhưng mọi pixel đều bằng 0, làm sai tỉ lệ lớp nền" }
+  - id: mask-resize
+    kind: knowledge
+    type: single
+    prompt: "Service suy luận ở 64×64 rồi phóng mask về kích thước ảnh gốc. Nên dùng phép nội suy nào cho mask?"
+    options:
+      - { id: a, text: "Bilinear, để biên mask mượt hơn khi phóng to" }
+      - { id: b, text: "Nearest, vì giá trị pixel là mã lớp, không được trộn" }
+      - { id: c, text: "Bicubic, vì cho chất lượng cao nhất với ảnh tự nhiên" }
+      - { id: d, text: "Lanczos, vì giảm răng cưa tốt nhất ở viền thú cưng" }
+  - id: metric
+    kind: knowledge
+    type: multi
+    prompt: "Lớp viền chỉ chiếm khoảng 12% pixel. Metric nào cho thấy model làm tệ ở viền? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "IoU riêng của lớp viền" }
+      - { id: b, text: "mIoU (trung bình IoU từng lớp)" }
+      - { id: c, text: "Pixel accuracy trên toàn ảnh" }
+      - { id: d, text: "Tỉ lệ request trả HTTP 200" }
