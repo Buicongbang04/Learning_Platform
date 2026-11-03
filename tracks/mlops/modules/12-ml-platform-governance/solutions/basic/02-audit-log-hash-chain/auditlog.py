@@ -17,11 +17,13 @@ class AuditLog:
     def __init__(self, path) -> None:
         self.path = Path(path)
 
-    def entries(self) -> list[dict]:
+    def _lines(self) -> list[str]:
         if not self.path.exists():
             return []
-        lines = self.path.read_text(encoding="utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
+        return [line for line in self.path.read_text(encoding="utf-8").split("\n") if line.strip()]
+
+    def entries(self) -> list[dict]:
+        return [json.loads(line) for line in self._lines()]
 
     def head(self) -> str:
         entries = self.entries()
@@ -51,8 +53,7 @@ class AuditLog:
         return record
 
     def verify(self, anchor=None):
-        lines = self.path.read_text(encoding="utf-8").splitlines() if self.path.exists() else []
-        lines = [line for line in lines if line.strip()]
+        lines = self._lines()
         prev = GENESIS
         for index, line in enumerate(lines):
             try:
