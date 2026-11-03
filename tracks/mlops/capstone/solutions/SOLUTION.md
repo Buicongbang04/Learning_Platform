@@ -310,7 +310,14 @@ Không test nào chạm cloud; bản này chưa được `apply` trong lúc vi�
   và một lỗi đảo nhánh `if` là xoá thật; test thay `aws` bằng script ghi log để chứng minh không có lời gọi nào.
 - **Không cờ thì từ chối.** Lệnh xoá cần `--yes`; gặp loại tài nguyên chưa biết thì dừng trước khi xoá bất cứ gì, để
   không bao giờ dọn dở dang. Thứ tự: Lambda, log group, bucket (`rb --force`), role (gỡ policy trước), budget cuối.
-- **Lambda URL `NONE`** cho tiện thử, kèm hai `aws_lambda_permission` công khai (`InvokeFunctionUrl` và `InvokeFunction`, AWS đòi cả hai từ cuối 2025); `budget.md` ghi rủi ro và cách chuyển sang
+- **Một lệnh xoá lỗi không dừng cả lượt.** Không dùng `set -e` cho vòng xoá: dừng ở bucket lỗi thì role và budget còn đó;
+  chạy hết, in `FAILED: <type> <id>` ra stderr, exit 1 (cùng bài học với bài kế hoạch dọn của module 12).
+- **Đọc output `aws` bằng Python, theo vùng.** Mỗi lệnh đọc (`get-resources` có phân trang, `list-roles`, `list-role-tags`)
+  gọi với `--output json` và `json.loads` cả output (JSON của CLI nhiều dòng, không ghép tay thành JSON Lines được).
+  Tagging API theo vùng: `--region` (mặc định `us-east-1` như `var.region`, đổi bằng `--region` hay `ETA_AWS_REGION`),
+  không dựa vào vùng mặc định của CLI, nếu không dry-run in 0 dòng trong khi Lambda vẫn chạy ở vùng khác. Đường này kiểm
+  bằng `aws` giả trong `tests/test_mlops_capstone_cloud.py` ở gốc repo.
+- **Lambda URL `NONE`** cho tiện thử, kèm hai `aws_lambda_permission` công khai (`InvokeFunctionUrl` và `InvokeFunction`, AWS đòi cả hai từ cuối 2025). Quyền `InvokeFunction` cho `"*"` **phải** có `invoked_via_function_url = true` (điều kiện `lambda:InvokedViaFunctionUrl`, provider AWS từ 6.28): thiếu nó thì bất kỳ tài khoản AWS nào cũng gọi thẳng `Invoke` được, không qua URL. `budget.md` ghi rủi ro và cách chuyển sang
   `AWS_IAM`.
 
 Rubric M11 (tuỳ chọn, không tính vào mức junior):

@@ -169,7 +169,8 @@ terraform destroy
 bash teardown.sh --dry-run
 ```
 
-Budget và quy trình dọn ở `cloud/budget.md`.
+Đổi `region` trong `terraform.tfvars` thì dọn bằng `bash teardown.sh --dry-run --region <vùng>` (hoặc đặt
+`ETA_AWS_REGION`). Budget và quy trình dọn ở `cloud/budget.md`.
 
 ## Đánh giá M13
 

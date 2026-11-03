@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Dọn mọi tài nguyên AWS mang tag project=eta-mlops (đúng từng ký tự); lưới an toàn sau terraform destroy.
-set -euo pipefail
+set -uo pipefail
 
 TAG_KEY=project
 TAG_VALUE=eta-mlops
 ROLE_PATH=/eta-mlops/
+REGION="${ETA_AWS_REGION:-us-east-1}"
 DRY_RUN=0
 YES=0
 INVENTORY=""
 
 usage() {
-    echo "usage: teardown.sh (--dry-run | --yes) [--inventory FILE]" >&2
+    echo "usage: teardown.sh (--dry-run | --yes) [--inventory FILE] [--region REGION]" >&2
     exit 2
 }
 
@@ -19,6 +20,7 @@ while [ $# -gt 0 ]; do
         --dry-run) DRY_RUN=1 ;;
         --yes) YES=1 ;;
         --inventory) [ $# -ge 2 ] || usage; INVENTORY="$2"; shift ;;
+        --region) [ $# -ge 2 ] || usage; REGION="$2"; shift ;;
         -h|--help) usage ;;
         *) echo "tham số lạ: $1" >&2; usage ;;
     esac
@@ -35,20 +37,34 @@ trap 'rm -rf "$WORK"' EXIT
 
 collect_inventory() {
     command -v aws >/dev/null || { echo "không có aws CLI trong PATH" >&2; exit 2; }
-    aws resourcegroupstaggingapi get-resources --tag-filters "Key=$TAG_KEY,Values=$TAG_VALUE" --output json > "$WORK/tagged.json"
-    : > "$WORK/roles.jsonl"
-    for role in $(aws iam list-roles --path-prefix "$ROLE_PATH" --query 'Roles[].RoleName' --output text); do
-        arn=$(aws iam get-role --role-name "$role" --query 'Role.Arn' --output text)
-        tags=$(aws iam list-role-tags --role-name "$role" --query 'Tags' --output json)
-        printf '{"ResourceARN": "%s", "Tags": %s}\n' "$arn" "$tags" >> "$WORK/roles.jsonl"
-    done
-    python3 - "$WORK/tagged.json" "$WORK/roles.jsonl" > "$WORK/inventory.json" <<'PY'
-import json, sys
+    python3 - "$REGION" "$TAG_KEY" "$TAG_VALUE" "$ROLE_PATH" > "$WORK/inventory.json" <<'PY' || exit 2
+import json, subprocess, sys
 
+region, key, value, role_path = sys.argv[1:5]
 TYPES = {"s3": "aws_s3_bucket", "lambda": "aws_lambda_function", "logs": "aws_cloudwatch_log_group",
          "iam": "aws_iam_role", "budgets": "aws_budgets_budget"}
-mappings = json.load(open(sys.argv[1])).get("ResourceTagMappingList", [])
-mappings += [json.loads(line) for line in open(sys.argv[2]) if line.strip()]
+
+
+def aws(*args):
+    done = subprocess.run(["aws", *args, "--output", "json"], capture_output=True, text=True)
+    if done.returncode != 0:
+        sys.exit(f"aws {' '.join(args)} lỗi:\n{done.stderr}")
+    return json.loads(done.stdout or "{}")
+
+
+mappings = []
+token = None
+while True:
+    page = aws("resourcegroupstaggingapi", "get-resources", "--region", region,
+               "--tag-filters", f"Key={key},Values={value}", *(["--pagination-token", token] if token else []))
+    mappings += page.get("ResourceTagMappingList", [])
+    token = page.get("PaginationToken")
+    if not token:
+        break
+for role in aws("iam", "list-roles", "--path-prefix", role_path).get("Roles", []):
+    tags = aws("iam", "list-role-tags", "--role-name", role["RoleName"]).get("Tags", [])
+    mappings.append({"ResourceARN": role["Arn"], "Tags": tags})
+
 seen, resources = set(), []
 for item in mappings:
     arn = item["ResourceARN"]
@@ -71,7 +87,7 @@ PY
 
 [ -n "$INVENTORY" ] || collect_inventory
 
-python3 - "$INVENTORY" "$TAG_KEY" "$TAG_VALUE" > "$WORK/plan.tsv" <<'PY'
+python3 - "$INVENTORY" "$TAG_KEY" "$TAG_VALUE" > "$WORK/plan.tsv" <<'PY' || exit 2
 import json, sys
 
 ORDER = ["aws_lambda_function", "aws_cloudwatch_log_group", "aws_s3_bucket", "aws_iam_role", "aws_budgets_budget"]
@@ -82,21 +98,29 @@ for r in chosen:
     print("\t".join([r["type"], r["id"], r.get("name") or r["id"]]))
 PY
 
+delete_role() {
+    local name="$1" rc=0 policies policy
+    policies=$(aws iam list-role-policies --role-name "$name" --query 'PolicyNames' --output text) || rc=1
+    for policy in $policies; do
+        [ "$policy" = "None" ] && continue
+        aws iam delete-role-policy --role-name "$name" --policy-name "$policy" || rc=1
+    done
+    policies=$(aws iam list-attached-role-policies --role-name "$name" --query 'AttachedPolicies[].PolicyArn' --output text) || rc=1
+    for policy in $policies; do
+        [ "$policy" = "None" ] && continue
+        aws iam detach-role-policy --role-name "$name" --policy-arn "$policy" || rc=1
+    done
+    aws iam delete-role --role-name "$name" || rc=1
+    return "$rc"
+}
+
 delete_one() {
     local type="$1" id="$2" name="$3"
     case "$type" in
-        aws_lambda_function) aws lambda delete-function --function-name "$name" ;;
-        aws_cloudwatch_log_group) aws logs delete-log-group --log-group-name "$name" ;;
+        aws_lambda_function) aws lambda delete-function --region "$REGION" --function-name "$name" ;;
+        aws_cloudwatch_log_group) aws logs delete-log-group --region "$REGION" --log-group-name "$name" ;;
         aws_s3_bucket) aws s3 rb "s3://$name" --force ;;
-        aws_iam_role)
-            for policy in $(aws iam list-role-policies --role-name "$name" --query 'PolicyNames' --output text); do
-                aws iam delete-role-policy --role-name "$name" --policy-name "$policy"
-            done
-            for policy in $(aws iam list-attached-role-policies --role-name "$name" --query 'AttachedPolicies[].PolicyArn' --output text); do
-                aws iam detach-role-policy --role-name "$name" --policy-arn "$policy"
-            done
-            aws iam delete-role --role-name "$name"
-            ;;
+        aws_iam_role) delete_role "$name" ;;
         aws_budgets_budget) aws budgets delete-budget --account-id "$(echo "$id" | cut -d: -f5)" --budget-name "$name" ;;
         *) echo "không biết cách xoá $type ($id): xoá tay trên console" >&2; return 1 ;;
     esac
@@ -110,7 +134,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
         echo "WOULD DELETE $type $id"
     done < "$WORK/plan.tsv"
     [ -z "$unknown" ] || echo "Cảnh báo, loại chưa có lệnh xoá (phải xoá tay): $unknown" >&2
-    echo "Tổng: $count tài nguyên mang tag $TAG_KEY=$TAG_VALUE (dry-run, không xoá gì)" >&2
+    echo "Tổng: $count tài nguyên mang tag $TAG_KEY=$TAG_VALUE ở vùng $REGION, cộng IAM và budget toàn cục (dry-run, không xoá gì)" >&2
     exit 0
 fi
 
@@ -120,8 +144,17 @@ if [ -n "$unknown" ]; then
     exit 3
 fi
 
+failed=()
 while IFS=$'\t' read -r type id name; do
     echo "DELETE $type $id"
-    delete_one "$type" "$id" "$name" < /dev/null
+    delete_one "$type" "$id" "$name" < /dev/null || failed+=("$type $id")
 done < "$WORK/plan.tsv"
+
+if [ "${#failed[@]}" -gt 0 ]; then
+    for item in "${failed[@]}"; do
+        echo "FAILED: $item" >&2
+    done
+    echo "Xoá lỗi ${#failed[@]}/$count tài nguyên, phần còn lại vẫn được xoá. Sửa lỗi rồi chạy lại --dry-run." >&2
+    exit 1
+fi
 echo "Đã xoá $count tài nguyên. Kiểm lại: bash teardown.sh --dry-run phải in 0 dòng WOULD DELETE." >&2

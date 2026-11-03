@@ -59,7 +59,8 @@ Run (scale về 0). Luật test kiểm:
 
 Không bị test kiểm nhưng hay vấp: Lambda function URL công khai (`authorization_type = "NONE"`) từ cuối 2025 cần cả hai
 quyền `lambda:InvokeFunctionUrl` và `lambda:InvokeFunction` cho principal `"*"` (hai `aws_lambda_permission`); thiếu một
-trong hai thì URL trả 403.
+trong hai thì URL trả 403. Quyền `lambda:InvokeFunction` cho `"*"` phải kèm `invoked_via_function_url = true` (cần provider
+`hashicorp/aws` từ 6.28): thiếu điều kiện này thì ai có tài khoản AWS cũng gọi thẳng API `Invoke` được, không cần URL.
 
 ### 3. `cloud/teardown.sh`: dọn theo tag, có `--dry-run`
 
@@ -73,7 +74,10 @@ bash cloud/teardown.sh --yes     [--inventory FILE]
 
 - Không có `--inventory`: hỏi cloud (AWS: `aws resourcegroupstaggingapi get-resources --tag-filters Key=project,Values=eta-mlops`;
   IAM role không luôn hiện ở API này, nên đặt role dưới một `path` riêng và liệt kê thêm bằng `aws iam list-roles
-  --path-prefix`).
+  --path-prefix`). Không bị test kiểm nhưng hay vấp khi chạy thật: Tagging API theo **vùng**, nên truyền `--region` bằng
+  vùng trong Terraform (cho người chạy đổi được, ví dụ cờ `--region` của script), không dựa vào vùng mặc định của CLI; và
+  output `--output json` của CLI là JSON **nhiều dòng**, đọc cả output bằng một trình phân tích JSON, đừng ghép tay thành
+  JSON Lines.
 - Có `--inventory FILE`: đọc danh sách từ tệp JSON thay vì hỏi cloud, định dạng:
 
   ```json
@@ -89,6 +93,9 @@ bash cloud/teardown.sh --yes     [--inventory FILE]
   `--inventory`); exit 0.
 - `--yes`: gọi lệnh xoá của CLI cloud cho từng tài nguyên được chọn, lệnh có chứa `name` của nó; không lệnh nào nhắc tới
   tài nguyên không được chọn; exit 0 khi xong.
+- `--yes` mà một lệnh xoá lỗi: **không dừng**, vẫn xoá tiếp mọi tài nguyên còn lại; cuối lượt in ra stderr một dòng chứa
+  `FAILED` và `name` (hoặc `id`) của mỗi tài nguyên xoá lỗi, rồi exit khác 0. Dừng giữa chừng để lại phần đắt nhất còn
+  chạy; `set -e` cho cả vòng xoá là cách hay gặp để vấp luật này.
 - Không có `--dry-run` lẫn `--yes`: từ chối, exit khác 0, không gọi CLI nào.
 - Gặp `type` chưa biết cách xoá khi chạy `--yes`: dừng **trước khi** xoá bất cứ thứ gì và báo loại đó (dry-run vẫn liệt
   kê nó, kèm cảnh báo ra stderr).
@@ -112,6 +119,9 @@ không còn `TODO`. Budget nên nằm trong IaC (AWS `aws_budgets_budget` nhận
   nguyên được chọn có lệnh chứa `name` của nó, không lệnh nào chứa `name` của tài nguyên bẫy. Inventory dùng `type` của
   AWS (`aws_s3_bucket`, `aws_lambda_function`, `aws_cloudwatch_log_group`, `aws_iam_role`, `aws_budgets_budget`); chọn
   GCP hay Azure thì script của bạn vẫn phải xoá được năm loại này qua `aws` (CLI giả nên không cần cài).
+- `test_m11_teardown_continues_after_a_failed_delete`: cùng inventory, `--yes` với `aws` giả trả lỗi cho mọi lệnh chứa
+  `name` của tài nguyên được chọn đầu tiên (bucket `eta-mlops-models-7f3a`) → exit khác 0, mọi tài nguyên được chọn khác vẫn
+  có lệnh xoá, stderr có dòng `FAILED` nêu tên bucket.
 - `test_m11_budget_doc`: các luật ở mục 4.
 - `test_m11_cloud_live`: **skip mặc định**. Đặt `ETA_CLOUD_LIVE=1` (CLI cloud đã đăng nhập) thì chạy `teardown.sh --dry-run`
   thật trên tài khoản của bạn (chỉ đọc) và đòi exit 0. Test này chạy ngoài sandbox vì cần mạng và thông tin đăng nhập

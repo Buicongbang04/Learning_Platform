@@ -17,13 +17,18 @@ Tiền chỉ phát sinh khi quên dọn, khi URL công khai bị gọi hàng lo�
 
 Alarm của AWS Budgets gửi email tới `alert_email` trong `terraform.tfvars` (không commit tệp này). Budget chỉ cập nhật
 vài lần mỗi ngày, nên nó là lưới cuối cùng, không phải công cụ theo dõi thời gian thực. Lambda URL dùng
-`authorization_type = "NONE"` cho tiện thử; nếu muốn chặn lạm dụng, chuyển sang `AWS_IAM` và gọi bằng request đã ký.
+`authorization_type = "NONE"` cho tiện thử; quyền `lambda:InvokeFunction` công khai bị giới hạn bằng
+`invoked_via_function_url = true`, nên chỉ gọi được qua URL, không gọi thẳng API `Invoke`. Nếu muốn chặn lạm dụng URL,
+chuyển sang `AWS_IAM` và gọi bằng request đã ký.
 
 ## Dọn
 
 1. `terraform destroy`: đường chính, xoá đúng những gì state biết.
-2. `bash teardown.sh --dry-run`: lưới an toàn, liệt kê mọi thứ còn mang tag `project=eta-mlops`.
-3. `bash teardown.sh --yes`: xoá phần còn sót (ví dụ khi mất state).
+2. `bash teardown.sh --dry-run`: lưới an toàn, liệt kê mọi thứ còn mang tag `project=eta-mlops`. Tagging API theo vùng:
+   script hỏi `us-east-1` (giống `var.region`); đổi vùng trong `terraform.tfvars` thì thêm `--region <vùng>` hoặc đặt
+   `ETA_AWS_REGION`, không thì dry-run in 0 dòng dù tài nguyên còn chạy.
+3. `bash teardown.sh --yes`: xoá phần còn sót (ví dụ khi mất state). Một lệnh xoá lỗi không dừng các lệnh sau; cuối lượt
+   script in `FAILED: ...` cho từng tài nguyên lỗi và exit 1.
 4. `bash teardown.sh --dry-run` lần nữa: phải in 0 dòng `WOULD DELETE`.
 
 `teardown.sh` chỉ chọn tài nguyên có tag `project` bằng đúng `eta-mlops` (phân biệt hoa thường, không khớp tiền tố):
