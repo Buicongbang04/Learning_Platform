@@ -53,6 +53,5 @@ trả `True` nếu nên thử lại; lấy ngoại lệ đã xảy ra bằng `st
 
 ### Gợi ý 2
 
-MLflow 3 mặc định lưu model sklearn bằng định dạng `skops` và từ chối cây quyết định chưa được tin cậy. Với bài này truyền
-`serialization_format="cloudpickle"` vào `mlflow.sklearn.log_model` (đánh đổi: pickle cho phép chạy mã khi nạp, chỉ dùng với
-artifact của chính bạn). Đăng ký bằng `client.create_model_version(name, info.model_uri, run_id, model_id=info.model_id)`.
+MLflow 3 lưu model sklearn bằng định dạng `skops` và từ chối kiểu chưa được tin cậy; với random forest kiểu đó là
+`sklearn.tree._tree.Tree`. Truyền `skops_trusted_types=["sklearn.tree._tree.Tree"]` vào `mlflow.sklearn.log_model`. Đăng ký bằng `client.create_model_version(name, info.model_uri, run_id, model_id=info.model_id)`.

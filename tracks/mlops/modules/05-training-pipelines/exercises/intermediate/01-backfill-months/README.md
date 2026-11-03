@@ -27,7 +27,7 @@ thật). Không cần Prefect server (xem `tests/conftest.py`). Trong `starter/b
    (`"2026-3"`, tháng 13) hoặc `start` sau `end` thì `ValueError`.
 2. `train_month(month, data_dir, out_dir, seed=0)`: đọc tệp của tháng đó, fit `LinearRegression(distance_km -> duration_s)`,
    ghi `out_dir/model-<month>.joblib` và `out_dir/model-<month>.json` với `{"month", "rows", "mae", "data_sha256"}`
-   (`mae` tính trên chính dữ liệu tháng đó, `data_sha256` là sha256 của tệp CSV). Trả dict metadata. Tệp CSV rỗng (chỉ có
+   (`mae` tính trên chính dữ liệu tháng đó, `data_sha256` là sha256 của tệp CSV). Tệp `.joblib` phải là model đã fit, nạp bằng `joblib.load` và `predict` được trên DataFrame có cột `distance_km`. Trả dict metadata. Tệp CSV rỗng (chỉ có
    header) là lỗi; một tháng lỗi **không** được để lại tệp đầu ra dở dang. Tạo `out_dir` nếu chưa có.
 3. `backfill(start, end, data_dir, out_dir, overwrite=False)`: flow Prefect chạy từng tháng, trả
    `{"done": [...], "skipped": [...], "failed": {tháng: thông báo}}`. Tháng đã có **cả hai** tệp đầu ra thì vào `skipped` và không

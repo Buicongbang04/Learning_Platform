@@ -22,7 +22,7 @@ danh sách cấm: lỗi lạ coi là vĩnh viễn cho tới khi có bằng chứ
   Cái giá là `validate_parameters=False` và flow không còn tham số JSON thuần cho UI/deployment; ở bản thật loader được tạo từ
   tham số đơn giản bên trong flow.
 - **Đăng ký "tạo nếu chưa có".** Hai flow chạy song song có thể cùng tạo registered model; bắt lỗi `already exists` và đi tiếp.
-- **Cloudpickle cho model sklearn** vì `skops` từ chối `Tree` chưa tin cậy; đây là điểm bảo mật cần ghi lại trong model card.
+- **Giữ định dạng `skops`, khai báo kiểu tin cậy.** `skops` từ chối `sklearn.tree._tree.Tree` (nút của cây) cho tới khi bạn liệt kê nó trong `skops_trusted_types`. Cách này giống mẫu `SKOPS_TRUSTED_TYPES` của capstone, và an toàn hơn pickle vì chỉ những kiểu được duyệt mới nạp được.
 
 ## Lỗi hay gặp
 

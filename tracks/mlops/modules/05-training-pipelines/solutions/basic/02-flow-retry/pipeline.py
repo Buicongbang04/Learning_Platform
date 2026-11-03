@@ -9,6 +9,7 @@ from sklearn.model_selection import train_test_split
 
 FEATURES = ["distance_km", "hour"]
 TARGET = "duration_s"
+SKOPS_TRUSTED_TYPES = ["sklearn.tree._tree.Tree"]
 TRANSIENT = (ConnectionError, TimeoutError)
 
 
@@ -45,7 +46,7 @@ def register_model(model, r2: float, tracking_uri: str, model_name: str, min_r2:
         mlflow.log_param("seed", seed)
         mlflow.log_metric("r2", r2)
         info = mlflow.sklearn.log_model(
-            model, name="model", serialization_format="cloudpickle",
+            model, name="model", skops_trusted_types=SKOPS_TRUSTED_TYPES,
             input_example=pd.DataFrame({"distance_km": [1.0], "hour": [8.0]}),
         )
     client = MlflowClient(tracking_uri)
