@@ -88,3 +88,49 @@ def test_mlflow_allows_container_host_header():
     flag = next(c for c in cmd if str(c).startswith("--allowed-hosts="))
     hosts = flag.split("=", 1)[1].split(",")
     assert {"mlflow", "mlflow:*", "localhost:*", "127.0.0.1:*"} <= set(hosts)
+
+
+def test_profiles_declared():
+    services = _compose()["services"]
+    for name in ("prometheus", "alertmanager", "grafana"):
+        assert services[name]["profiles"] == ["monitoring"], name
+    assert services["redis"]["profiles"] == ["feast"]
+    for name in ("postgres", "minio", "minio-init", "mlflow"):
+        assert "profiles" not in services[name], name
+
+
+def test_new_ports_avoid_taken_and_localhost():
+    services = _compose()["services"]
+    for name in ("prometheus", "alertmanager", "grafana", "redis"):
+        for mapping in services[name]["ports"]:
+            assert str(mapping).startswith("127.0.0.1:"), name
+            default = int(re.search(r":-(\d+)\}", str(mapping)).group(1))
+            assert default not in TAKEN_PORTS | {6379, 25000, 29000, 29001, 25433}, name
+            assert default >= 20000, name
+
+
+def test_new_services_pinned_and_provisioned():
+    services = _compose()["services"]
+    assert services["prometheus"]["image"] == "prom/prometheus:v3.5.0"
+    assert services["grafana"]["image"] == "grafana/grafana:12.1.0"
+    assert services["redis"]["image"] == "redis:7.4.5"
+    datasource = (ROOT / "setup" / "mlops" / "monitoring" / "grafana" / "provisioning" / "datasources" / "prometheus.yml")
+    assert "http://prometheus:9090" in datasource.read_text(encoding="utf-8")
+    for name in ("prometheus.yml", "alertmanager.yml"):
+        assert (ROOT / "setup" / "mlops" / "monitoring" / name).is_file()
+
+
+def test_env_example_lists_phase2_ports():
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    for var in ("MLOPS_PROMETHEUS_PORT", "MLOPS_ALERTMANAGER_PORT", "MLOPS_GRAFANA_PORT", "MLOPS_REDIS_PORT"):
+        assert var in text
+
+
+def test_readme_documents_profiles():
+    text = (ROOT / "setup" / "mlops" / "README.md").read_text(encoding="utf-8")
+    assert "--profile monitoring --profile feast up -d --wait" in text
+
+
+def test_helper_dockerfiles_present():
+    assert "feast[redis]==0.67.0" in (ROOT / "setup" / "mlops" / "feast" / "Dockerfile").read_text(encoding="utf-8")
+    assert (ROOT / "setup" / "mlops" / "act-runner" / "Dockerfile").is_file()
