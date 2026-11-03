@@ -304,7 +304,7 @@ def test_feast_image_not_labeled_for_cleanup():
     assert tag not in mlopskit.leftovers()
 
 
-WORKFLOW = """name: ci
+WORKFLOW = """name: mlopskit-selftest
 on: push
 jobs:
   run:
@@ -327,7 +327,7 @@ def test_act_run_offline(tmp_path):
     result = mlopskit.act_run(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "42" in result.stdout + result.stderr
-    assert mlopskit.leftovers() == []
+    assert mlopskit.leftovers("mlopskit-selftest") == []
 
 
 def test_act_run_skips_without_binary(tmp_path, monkeypatch):
