@@ -282,7 +282,11 @@ def test_guard_halt_cancels_pending_qemu_start(tmp_path):
         (run_dir / "qemu.start").write_text(f'["touch", "{marker}"]')
         os.kill(guard.pid, signal.SIGUSR1)
         os.kill(guard.pid, signal.SIGCONT)
-        time.sleep(1.5)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not (run_dir / "qemu.exit").exists():
+            time.sleep(0.05)
+        time.sleep(0.5)
+        assert (run_dir / "qemu.exit").read_text() == "143"
         assert not marker.exists()
         assert not (run_dir / "qemu.start").exists()
     finally:

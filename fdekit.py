@@ -607,6 +607,9 @@ while True:
         kill()
         try:
             os.unlink(path("qemu.start"))
+            with open(path("qemu.exit.tmp"), "w") as handle:
+                handle.write("143")
+            os.replace(path("qemu.exit.tmp"), path("qemu.exit"))
         except OSError:
             pass
     proc = state["proc"]
