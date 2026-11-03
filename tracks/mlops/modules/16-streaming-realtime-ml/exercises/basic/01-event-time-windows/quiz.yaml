@@ -29,12 +29,12 @@ questions:
   - id: duplicates
     kind: knowledge
     type: multi
-    prompt: "Producer bật retry, consumer xử lý at-least-once. Những cách nào chống đếm trùng trong feature cửa sổ?"
+    prompt: "Client Kafka của producer tự retry khi không nhận được ack, nên cùng một sự kiện có thể nằm hai lần trong partition (hai offset). Cách nào ngăn bản sao này bị đếm hai lần trong `trips` của cửa sổ?"
     options:
-      - { id: a, text: "Gắn `event_id` ở nguồn và bỏ qua id đã gặp trong khoảng giữ trạng thái" }
-      - { id: b, text: "Producer idempotent và transaction Kafka (exactly-once trong Kafka)" }
-      - { id: c, text: "Ghi feature theo khoá (zone, cửa sổ) bằng upsert để ghi lại không cộng dồn" }
-      - { id: d, text: "Tăng số partition của topic để mỗi sự kiện chỉ nằm trong một partition" }
+      - { id: a, text: "Gắn `event_id` ở nguồn, consumer bỏ id đã gặp trong khoảng giữ trạng thái" }
+      - { id: b, text: "Bật producer idempotent (`enable.idempotence`) để retry không ghi thêm bản sao" }
+      - { id: c, text: "Ghi feature vào store bằng upsert theo khoá (zone, cửa sổ) thay cho insert" }
+      - { id: d, text: "Tăng số partition để mỗi sự kiện chỉ nằm trong đúng một partition của topic" }
   - id: watermark-source
     kind: knowledge
     type: single

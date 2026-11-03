@@ -161,7 +161,7 @@ def make_repo(root):
         "avg_fare": pd.Series([], dtype="float64"), "event_timestamp": pd.Series([], dtype="datetime64[ns, UTC]"),
     })
     empty.to_parquet(root / "data" / "zone_window.parquet")
-    return mlopskit.feast_run(root, "apply")
+    return mlopskit.feast_run(root, "apply", network="none")
 
 
 def output(cp):
@@ -184,7 +184,7 @@ def replay(tmp_path_factory):
     (root / "data" / "batches.json").write_text(json.dumps(micro_batches(windows)), encoding="utf-8")
     queries = [[w["zone_id"], w["window_end"] + 60] for w in windows]
     (root / "data" / "queries.json").write_text(json.dumps(queries), encoding="utf-8")
-    result = mlopskit.feast_python(root, REPLAY_SCRIPT.format(zones=zones))
+    result = mlopskit.feast_python(root, REPLAY_SCRIPT.format(zones=zones), network="none")
     return {"apply": applied, "run": result, "windows": windows, "zones": zones}
 
 
@@ -196,7 +196,7 @@ def live(tmp_path_factory):
         return {"apply": applied}
     (root / "data" / "live.json").write_text(json.dumps(live_plan()), encoding="utf-8")
     script = LIVE_SCRIPT.format(window=LIVE_WINDOW, lateness=LIVE_LATENESS)
-    return {"apply": applied, "run": mlopskit.feast_python(root, script, timeout=180)}
+    return {"apply": applied, "run": mlopskit.feast_python(root, script, network="none", timeout=180)}
 
 
 def replayed(replay):
@@ -289,7 +289,8 @@ def test_live_freshness_p50_p95(live, fresh):
     assert live["apply"].returncode == 0, "feast apply lỗi:\n" + output(live["apply"])
     got = last_json(live["run"])
     records = got["records"]
-    assert len(records) >= 100 and got["dropped"] >= 1
+    assert len(records) >= 100, f"chỉ {len(records)}/150 bản ghi đọc được trong online store sau khi push"
+    assert got["dropped"] >= 1
     lag = np.array([r["visible_at"] - r["event_time"] for r in records])
     report = fresh.freshness(records)
     assert report["n"] == len(records)

@@ -37,8 +37,8 @@ offline store, tạo sẵn `data/zone_window.parquet` rỗng (cột `zone_id`, `
    - `to_push_frame(windows)`: nhận list dòng cửa sổ như đầu ra bài Intermediate 01 (`zone_id`, `window_start`, `window_end`,
      `trips`, `avg_fare`, thời điểm là giây epoch) và trả `DataFrame` đúng bốn cột theo thứ tự `zone_id` (int64), `trips` (int64),
      `avg_fare` (float64), `event_timestamp` (datetime UTC), sắp tăng dần theo `event_timestamp`. **Một cửa sổ chỉ biết đủ giá trị
-     khi nó đóng**: chọn `event_timestamp` sao cho dòng huấn luyện lấy point-in-time tại một thời điểm bất kỳ chỉ thấy cửa sổ đã
-     đóng trước thời điểm đó.
+     khi nó đóng**: `event_timestamp` là thời điểm **sớm nhất** mà giá trị cửa sổ đã đủ, để dòng huấn luyện lấy point-in-time tại
+     một thời điểm bất kỳ chỉ thấy cửa sổ đã đóng trước thời điểm đó (test so đúng giá trị này).
    - `push(store, frame) -> int`: ghi **mọi** dòng vào offline store qua push source; với online store, chỉ ghi dòng có
      `event_timestamp` lớn nhất của mỗi zone, và chỉ khi nó **không cũ hơn** giá trị online hiện có của zone đó. Trả số dòng đã
      ghi online. Lưu ý: online store SQLite của Feast ghi đè theo thứ tự ghi, **không** so `event_timestamp`; đọc timestamp hiện có

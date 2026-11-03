@@ -101,6 +101,20 @@ def test_small_stream_on_real_topic(consumer):
     assert all(r["window_end"] == r["window_start"] + WINDOW for r in got["windows"])
     order = [(r["window_end"], r["zone_id"]) for r in got["windows"]]
     assert order[:2] == [(t0 + 900, 1), (t0 + 900, 2)]
+    assert order == sorted(order)
+
+
+def test_rows_closed_together_keep_window_order(consumer):
+    t0 = 1_551_772_800
+    events = [
+        {"event_id": "p", "zone_id": 2, "pickup_at": iso(t0 + 10), "fare": 5.0},
+        {"event_id": "q", "zone_id": 1, "pickup_at": iso(t0 + 950), "fare": 7.0},
+        {"event_id": "r", "zone_id": 2, "pickup_at": iso(t0 + 960), "fare": 9.0},
+        {"event_id": "s", "zone_id": 1, "pickup_at": iso(t0 + 3_000), "fare": 1.0},
+    ]
+    got = run_topic(consumer, events)
+    order = [(r["window_end"], r["zone_id"]) for r in got["windows"]]
+    assert order == [(t0 + 900, 2), (t0 + 1_800, 1), (t0 + 1_800, 2), (t0 + 3_600, 1)]
 
 
 def test_real_trips_replayed_out_of_order(consumer):
@@ -117,3 +131,5 @@ def test_real_trips_replayed_out_of_order(consumer):
         assert row["trips"] == trips
         assert row["avg_fare"] == pytest.approx(total / trips)
     assert set(rows[next(iter(rows))]) == {"zone_id", "window_start", "window_end", "trips", "avg_fare"}
+    order = [(r["window_end"], r["zone_id"]) for r in got["windows"]]
+    assert order == sorted(order), "các cửa sổ không được xuất theo thứ tự đóng"

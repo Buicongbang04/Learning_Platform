@@ -20,7 +20,8 @@
 - `event-vs-processing` b: theo processing time, sự kiện của 20 phút chết dồn vào cửa sổ lúc đọc lại.
 - `lateness-tradeoff` a: đánh đổi độ đầy đủ lấy độ trễ.
 - `window-kind` c: "10 phút gần nhất, cập nhật mỗi phút" là sliding.
-- `duplicates` a, b, c: tăng partition không liên quan tới trùng.
+- `duplicates` a, b: chống trùng ở consumer theo `event_id`, hoặc chặn bản sao từ đầu bằng producer idempotent. Upsert (c) chỉ làm
+  việc ghi lại cùng một kết quả không cộng dồn; bản sao đã được đếm trong `trips` trước khi ghi. Tăng partition (d) không liên quan.
 - `watermark-source` a: một sự kiện tương lai kéo watermark lên và làm mọi sự kiện sau thành trễ (đúng sự cố ở Intermediate 03).
 - `engine-choice` b: đội nhỏ, Python, tải vừa: chọn thứ vận hành được; Flink khi cần quy mô, state lớn và độ trễ thấp.
 - `flink-vs-spark` a: micro-batch của Spark.

@@ -53,4 +53,7 @@ Prequential là cách đánh giá công bằng duy nhất cho model học liên 
 ### Gợi ý 2
 
 Nếu model online của bạn thích nghi chậm sau drift, tăng learning rate (`optim.SGD(0.05)`), hoặc thử
-`tree.HoeffdingAdaptiveTreeClassifier`, model có bộ phát hiện drift sẵn. Đừng chỉnh để thắng luồng ổn định: ở đó hoà là đúng.
+`forest.ARFClassifier(seed=0)` (Adaptive Random Forest, mỗi cây có bộ phát hiện drift và được thay khi drift; chậm hơn hồi quy
+logistic khoảng 20 lần nhưng vẫn vài giây). Cả hai đã kiểm qua mọi seed của test. Không phải model online nào cũng đủ:
+`tree.HoeffdingAdaptiveTreeClassifier` mặc định chỉ hơn batch khoảng 0.1 ở một seed. Đừng chỉnh để thắng luồng ổn định: ở đó hoà
+là đúng.

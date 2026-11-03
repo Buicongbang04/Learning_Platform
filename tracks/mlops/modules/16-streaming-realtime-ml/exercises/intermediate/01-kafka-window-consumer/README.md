@@ -38,11 +38,13 @@ Viết `consume_windows(bootstrap, topic, *, window_s=900, lateness_s=180, idle_
 - Trả dict `{"windows": [...], "late": int, "duplicates": int, "consumed": int}` (`consumed` là số message đã đọc, kể cả bản trùng).
   Mỗi dòng trong `windows` có đúng năm khoá `zone_id`, `window_start`, `window_end` (giây epoch, int), `trips`, `avg_fare`
   (trung bình `fare` của các chuyến được nhận). Dòng xuất theo thứ tự cửa sổ đóng; cửa sổ đóng cùng lúc thì theo
-  `(window_end, zone_id)`.
+  `(window_end, zone_id)`. Vì watermark chỉ tăng, cả list `windows` (kể cả phần `flush`) khi đó tăng dần theo
+  `(window_end, zone_id)`: test kiểm điều này trên mọi ca.
 
-Test có hai ca trên topic thật tạo bằng `mlopskit.kafka_topic()` (xoá sau khi chạy): một luồng 8 sự kiện viết tay có đáp án cố định,
-và luồng chuyến thật so với bản tham chiếu tính lại trong test trên đúng thứ tự đã gửi. Kafka (profile `streaming`) chưa bật hoặc
-chưa tải dữ liệu thì test skip kèm lệnh cần chạy.
+Test có ba ca trên topic thật tạo bằng `mlopskit.kafka_topic()` (xoá sau khi chạy): một luồng 8 sự kiện viết tay có đáp án
+cố định, một luồng 4 sự kiện trong đó một lần đóng nhiều cửa sổ có `window_end` khác nhau, và luồng chuyến thật so với bản tham
+chiếu tính lại trong test trên đúng thứ tự đã gửi. Kafka (profile `streaming`) chưa bật hoặc chưa tải dữ liệu thì test skip kèm
+lệnh cần chạy.
 
 ## Tiêu chí đạt
 
