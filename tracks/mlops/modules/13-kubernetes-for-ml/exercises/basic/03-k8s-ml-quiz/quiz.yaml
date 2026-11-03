@@ -1,0 +1,56 @@
+questions:
+  - id: devops-inherited
+    kind: knowledge
+    type: multi
+    prompt: "Module 13 kế thừa phần K8s chung từ track DevOps (module 10-12). Những chủ đề nào nên học ở track DevOps thay vì tìm trong module này?"
+    options:
+      - { id: a, text: "RBAC: Role, ClusterRole, RoleBinding cho người và ServiceAccount" }
+      - { id: b, text: "NetworkPolicy chặn traffic giữa các namespace" }
+      - { id: c, text: "startupProbe cho service phải nạp model mất vài chục giây" }
+      - { id: d, text: "Đóng gói và phát hành chart bằng Helm" }
+      - { id: e, text: "InferenceService của KServe với custom predictor" }
+  - id: raw-canary
+    kind: knowledge
+    type: single
+    prompt: "Cluster chạy KServe ở chế độ RawDeployment (không Knative). Bạn sửa InferenceService eta sang model v2 và đặt canaryTrafficPercent: 20. Chuyện gì xảy ra?"
+    options:
+      - { id: a, text: "KServe tạo Deployment thứ hai cho v2 và Service chia 20% request sang nó" }
+      - { id: b, text: "Webhook của KServe từ chối manifest vì trường này chỉ hợp lệ ở Serverless" }
+      - { id: c, text: "Trường bị bỏ qua: Deployment rolling update và toàn bộ traffic sang v2" }
+      - { id: d, text: "KServe giữ v1 và chờ bạn đặt canaryTrafficPercent: 100 mới chuyển v2" }
+  - id: ready-not-enough
+    kind: knowledge
+    type: single
+    prompt: "InferenceService eta báo READY=True sau khi bạn deploy v2. Bằng chứng nào cho thấy nó đang phục vụ đúng model v2?"
+    options:
+      - { id: a, text: "Condition PredictorReady=True và ReplicaSet mới đã Available" }
+      - { id: b, text: "Gọi /v1/models/eta:predict qua Service, kiểm model_version và dự đoán" }
+      - { id: c, text: "Image tag trong spec của Deployment predictor trùng tag vừa build" }
+      - { id: d, text: "Không còn pod nào của ReplicaSet cũ trong namespace" }
+  - id: gpu-request
+    kind: knowledge
+    type: single
+    prompt: "Pod training cần một GPU NVIDIA trên K8s. Khai báo nào đúng?"
+    options:
+      - { id: a, text: "resources.limits nvidia.com/gpu: 1, node có NVIDIA device plugin chạy" }
+      - { id: b, text: "resources.requests nvidia.com/gpu: 0.5 để hai pod dùng chung một card" }
+      - { id: c, text: "nodeSelector gpu=true là đủ, container tự thấy card qua /dev/nvidia0" }
+      - { id: d, text: "Biến NVIDIA_VISIBLE_DEVICES=all trong env, không cần khai resources" }
+  - id: argo-vs-argocd
+    kind: knowledge
+    type: single
+    prompt: "Đội muốn (1) chạy pipeline prepare → train → evaluate hằng đêm và (2) mọi thay đổi manifest production đi qua Git. Ghép công cụ nào?"
+    options:
+      - { id: a, text: "Argo CD cho (1) vì nó chạy được Job theo lịch; Argo Workflows cho (2)" }
+      - { id: b, text: "Argo Workflows (CronWorkflow) cho (1); Argo CD đồng bộ Git cho (2)" }
+      - { id: c, text: "Argo Workflows cho cả hai, vì Workflow cũng apply được manifest" }
+      - { id: d, text: "Argo CD cho cả hai, vì Application cũng định nghĩa được DAG" }
+  - id: kind-scope
+    kind: knowledge
+    type: single
+    prompt: "kind (Kubernetes in Docker) phù hợp nhất cho việc nào?"
+    options:
+      - { id: a, text: "Chạy production nhỏ một node để tiết kiệm chi phí cloud" }
+      - { id: b, text: "Đo hiệu năng GPU của model trước khi lên cluster thật" }
+      - { id: c, text: "Dev local và CI: thử manifest, operator, KServe, Argo" }
+      - { id: d, text: "Kiểm Service type LoadBalancer giống hệt trên cloud" }

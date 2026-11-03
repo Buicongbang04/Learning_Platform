@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eta-api
+  labels:
+    app: eta-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eta-api
+  template:
+    metadata:
+      labels:
+        app: eta-api
+    spec:
+      containers:
+        - name: api
+          image: eta-serve:dev
+          env:
+            - name: MODEL_PATH
+              value: /models/eta-v3.joblib
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eta-api
+spec:
+  selector:
+    app: eta-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

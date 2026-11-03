@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eta-api
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eta-api
+  template:
+    metadata:
+      labels:
+        app: eta-api
+        tier: serving
+    spec:
+      containers:
+        - name: api
+          image: registry.example.com/eta-serve:latest
+          imagePullPolicy: Always
+          env:
+            - name: MODEL_PATH
+              value: /data/models/current/model.joblib
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow.mlops:5000
+            - name: MLFLOW_TRACKING_PASSWORD
+              value: s3cr3t-prod-password
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /readyz?check=mlflow
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 1
+          resources:
+            requests:
+              nvidia.com/gpu: 1
+            limits:
+              cpu: 100m
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: models
+              mountPath: /data/models
+      volumes:
+        - name: models
+          hostPath:
+            path: /mnt/models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eta-api
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: eta
+  ports:
+    - port: 80
+      targetPort: 8000
