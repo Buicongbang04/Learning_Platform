@@ -201,12 +201,18 @@ def generate_key(path: Path) -> Path:
     return path
 
 
+_RESERVED_CLOUD_CONFIG = frozenset({"users", "user", "ssh_pwauth", "disable_root", "ssh_authorized_keys", "chpasswd", "password"})
+
+
 def write_seed_iso(path: Path, *, instance_id: str, public_key: str, user: str = "fde", sudo: bool = False,
                    cloud_config: Mapping | None = None) -> Path:
     """Seed NoCloud (ISO nhãn `cidata`): tạo user với key công khai của lần chạy; không chứa khoá riêng hay mật khẩu."""
     account = {"name": user, "shell": "/bin/bash", "lock_passwd": True, "ssh_authorized_keys": [public_key]}
     if sudo:
         account["sudo"] = "ALL=(ALL) NOPASSWD:ALL"
+    reserved = sorted(set(cloud_config or {}) & _RESERVED_CLOUD_CONFIG)
+    if reserved:
+        raise ValueError(f"cloud_config không được ghi đè {', '.join(reserved)} (user fde và key SSH của lần chạy do fdekit đặt)")
     config = {"users": [account], "ssh_pwauth": False, "disable_root": True, **(cloud_config or {})}
     files = {
         "user-data": "#cloud-config\n" + yaml.safe_dump(config, sort_keys=False, width=1 << 16),
@@ -264,7 +270,8 @@ while True:
     if ready and not os.read(lifeline, 1):
         stop(None, None)
     if proc.poll() is not None:
-        sys.exit(proc.returncode)
+        code = proc.returncode
+        sys.exit(128 - code if code < 0 else code)
 """
 
 
@@ -277,9 +284,23 @@ def _lifeline() -> int:
     with _LIFELINE_LOCK:
         pid = os.getpid()
         if pid not in _LIFELINE:
-            _LIFELINE.clear()
             _LIFELINE[pid] = os.pipe()
         return _LIFELINE[pid][0]
+
+
+def _drop_lifeline_after_fork() -> None:
+    global _LIFELINE_LOCK
+    _LIFELINE_LOCK = threading.Lock()
+    for fds in _LIFELINE.values():
+        for fd in fds:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+    _LIFELINE.clear()
+
+
+os.register_at_fork(after_in_child=_drop_lifeline_after_fork)
 
 
 class _PortTaken(Exception):
@@ -344,7 +365,7 @@ class VM:
 
     def _start(self, args: list[str]) -> None:
         lifeline = _lifeline()
-        log = (self.dir / "qemu.log").open("ab")
+        log = (self.dir / "qemu.log").open("wb")
         try:
             self._guard = subprocess.Popen(
                 [sys.executable, "-I", "-c", _WRAPPER, _GUARD, str(lifeline), str(self.dir), *args],
@@ -396,7 +417,7 @@ class VM:
         while self._running() and time.monotonic() < deadline:
             try:
                 self._qmp("system_powerdown")
-            except OSError:
+            except (OSError, ValueError):
                 pass
             try:
                 self._guard.wait(timeout=min(20, max(1, deadline - time.monotonic())))
@@ -461,7 +482,7 @@ def _qemu_args(machine: VM, *, base_seed: Path, memory_mb: int, cpus: int, netde
 
 @contextmanager
 def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: Sequence[int] = (),
-       guestfwds: Mapping[str, int] = {}, base: Path | None = None, restrict: bool = False, sudo: bool = False,
+       guestfwds: Mapping[str, int] | None = None, base: Path | None = None, restrict: bool = False, sudo: bool = False,
        cloud_config: Mapping | None = None) -> Iterator[VM]:
     """Boot một VM từ overlay qcow2 trên golden của `profile` (hoặc trên `base`), chờ SSH rồi trả `VM`; luôn dọn khi ra.
 
@@ -494,7 +515,7 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
         for attempt in range(3):
             ports = {int(guest): testkit.free_port() for guest in forwards}
             machine = VM(run_id, run_dir, testkit.free_port(), ports)
-            netdev = _netdev(ssh_port=machine.ssh_port, forwards=ports, guestfwds=guestfwds, restrict=restrict)
+            netdev = _netdev(ssh_port=machine.ssh_port, forwards=ports, guestfwds=guestfwds or {}, restrict=restrict)
             machine._start(_qemu_args(machine, base_seed=seed, memory_mb=memory_mb, cpus=cpus, netdev=netdev))
             try:
                 machine._wait_ssh()

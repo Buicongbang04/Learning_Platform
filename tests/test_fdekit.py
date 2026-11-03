@@ -93,6 +93,44 @@ def test_ubuntu_helper_skips_when_offline(monkeypatch):
     assert "fdekit.fetch_image('ubuntu-22.04')" in str(info.value)
 
 
+def test_ubuntu_helper_skips_on_sha_mismatch(monkeypatch):
+    monkeypatch.setattr(fdekit, "require_kvm", lambda: None)
+
+    def tampered(name):
+        raise RuntimeError("sha256 của x không khớp")
+
+    monkeypatch.setattr(fdekit, "fetch_image", tampered)
+    with pytest.raises(pytest.skip.Exception) as info:
+        _ubuntu()
+    assert "sha256 không khớp" in str(info.value) and "fdekit.fetch_image('ubuntu-22.04')" in str(info.value)
+
+
+def test_seed_rejects_reserved_cloud_config(tmp_path):
+    for key in ("users", "ssh_pwauth", "disable_root"):
+        with pytest.raises(ValueError, match=key):
+            fdekit.write_seed_iso(tmp_path / "seed.iso", instance_id="fde-ex-deadbeef", public_key="ssh-ed25519 AAAA x",
+                                  cloud_config={key: []})
+    fdekit.write_seed_iso(tmp_path / "seed.iso", instance_id="fde-ex-deadbeef", public_key="ssh-ed25519 AAAA x",
+                          cloud_config={"runcmd": ["true"]})
+
+
+def test_forked_child_drops_lifeline():
+    read_fd = fdekit._lifeline()
+    write_fd = fdekit._LIFELINE[os.getpid()][1]
+    pid = os.fork()
+    if pid == 0:
+        closed = 0
+        for fd in (read_fd, write_fd):
+            try:
+                os.fstat(fd)
+            except OSError:
+                closed += 1
+        os._exit(0 if closed == 2 and not fdekit._LIFELINE else 1)
+    _, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 0
+    os.fstat(write_fd)
+
+
 def test_fetch_image_rejects_bad_download(tmp_path, monkeypatch):
     image = fdekit.CloudImage(url="https://example.invalid/r/1/x.img", sha256="0" * 64, os_id="x", os_version="1")
     monkeypatch.setattr(fdekit, "CACHE", tmp_path)
@@ -181,15 +219,18 @@ def test_capstone_dir_solution(monkeypatch):
     assert path.is_relative_to(fdekit.ROOT / "tracks" / "fde")
 
 
+FETCH = "uv run python -c \"import fdekit; fdekit.fetch_image('ubuntu-22.04')\""
+
+
 def _ubuntu():
     fdekit.require_kvm()
     try:
         return fdekit.fetch_image("ubuntu-22.04")
     except (OSError, requests.RequestException) as error:
-        pytest.skip(
-            f"Chưa có cloud image ubuntu-22.04 và tải không được ({error}). Tải trước (~730 MB): "
-            "uv run python -c \"import fdekit; fdekit.fetch_image('ubuntu-22.04')\""
-        )
+        pytest.skip(f"Chưa có cloud image ubuntu-22.04 và tải không được ({error}). Tải trước (~730 MB): {FETCH}")
+    except RuntimeError as error:
+        pytest.skip(f"Tải cloud image ubuntu-22.04 nhưng sha256 không khớp (tệp hỏng hoặc mạng chặn/đổi nội dung): {error}. "
+                    f"Kiểm tra mạng rồi tải lại: {FETCH}")
 
 
 def test_vm_boots_and_ssh():
@@ -268,6 +309,49 @@ def test_qemu_dies_with_parent(tmp_path):
     finally:
         if child.poll() is None:
             child.kill()
+        if len(run_id) == 8:
+            fdekit.clean(run_id)
+
+
+FORK_CHILD = """
+import os, time
+import fdekit
+with fdekit.vm(None, base=fdekit.fetch_image("ubuntu-22.04"), memory_mb=1024) as m:
+    worker = os.fork()
+    if worker == 0:
+        time.sleep(600)
+        os._exit(0)
+    print(m.run_id, worker, flush=True)
+    time.sleep(600)
+"""
+
+
+def test_qemu_dies_with_parent_despite_forked_worker():
+    _ubuntu()
+    run_id, worker = "", 0
+    child = subprocess.Popen(
+        [sys.executable, "-c", FORK_CHILD], cwd=fdekit.ROOT, stdout=subprocess.PIPE, text=True,
+        env={**os.environ, "PYTHONPATH": str(fdekit.ROOT)},
+    )
+    try:
+        run_id, worker = child.stdout.readline().split()
+        worker = int(worker)
+        assert fdekit._qemu_pids(run_id)
+        os.kill(child.pid, signal.SIGKILL)
+        child.wait(timeout=10)
+        deadline = time.monotonic() + 10
+        while fdekit._qemu_pids(run_id) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        assert fdekit._qemu_pids(run_id) == []
+        os.kill(worker, 0)
+    finally:
+        if child.poll() is None:
+            child.kill()
+        if worker:
+            try:
+                os.kill(worker, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         if len(run_id) == 8:
             fdekit.clean(run_id)
 
