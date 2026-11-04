@@ -287,8 +287,16 @@ def modules_on_disk() -> list[Path]:
     return sorted(d for d in MODULES_DIR.iterdir() if d.is_dir())
 
 
+CAPSTONE_PROJECT = TRACK / "capstone" / "solutions" / "project"
+
+
 def track_test_files() -> list[Path]:
-    return sorted(p for p in TRACK.rglob("*.py") if "tests" in p.relative_to(TRACK).parts and not IGNORED_PARTS & set(p.parts))
+    """Test của bài tập, capstone, sản phẩm; trừ repo capstone tham chiếu (repo đứng riêng, có test riêng của nó)."""
+    return sorted(
+        p
+        for p in TRACK.rglob("*.py")
+        if "tests" in p.relative_to(TRACK).parts and not IGNORED_PARTS & set(p.parts) and not p.is_relative_to(CAPSTONE_PROJECT)
+    )
 
 
 def assert_clean(errors: list[str]) -> None:
@@ -597,6 +605,12 @@ def test_pipe_sudo_detection(tmp_path):
         assert check_no_pipe_sudo(write(tmp_path / f"{i}.md", f"```bash\n{line}\n```\n")), line
     good = "curl -fLO https://x/tool.tar.gz\nsha256sum -c tool.sha256\ncurl -s localhost | jq .\nsudo bash install.sh\necho x | sudo tee /etc/x\n"
     assert check_no_pipe_sudo(write(tmp_path / "ok.md", good)) == []
+
+
+def test_track_test_files_skip_reference_project():
+    files = track_test_files()
+    assert not [p for p in files if p.is_relative_to(CAPSTONE_PROJECT)]
+    assert any(p.is_relative_to(TRACK / "capstone" / "tests") for p in files) or not (TRACK / "capstone" / "tests").is_dir()
 
 
 def test_milestone_doc_sections(tmp_path):

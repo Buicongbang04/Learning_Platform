@@ -1,0 +1,3 @@
+# Bản quillo giao cho khách này. Team product gửi sha256 của tệp tar qua kênh riêng (ticket), không đi cùng tệp.
+QUILLO_VERSION=1.0.0
+QUILLO_SHA256=78581ec60dd3502e665c96c287576cc07ca1afbce4057987ce64baf14a12eea7

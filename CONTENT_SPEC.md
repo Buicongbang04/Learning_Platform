@@ -609,6 +609,12 @@ nhận, cách gỡ. Không bao giờ `... | sudo bash` hay `... | sudo sh` (vali
   chính, **không** gắn vào module Cloud lab. `m00`…`m14` sau module cùng số, `m15` sau `18-system-design-fde`, `m16` sau
   `20-fde-interview`.
 - Capstone dùng tối đa 3 VM cùng lúc, cùng ngân sách RAM và 300 s mỗi test như bài tập.
+- Bộ chấm ở `capstone/tests/` (helper chung `capstonekit.py`, fixture `capstone` trong `conftest.py`). Lệnh `make` của
+  repo người học chạy trên host qua `testkit.run_sandboxed` (repo chỉ đọc, chỉ thư mục tạm ghi được), tới máy khách qua
+  biến `SSH=<lệnh ssh của fdekit>`; bundle lớn đặt ở `/var/tmp`, không ở tmpfs `/tmp`.
+- Repo tham chiếu `capstone/solutions/project/` là một repo đứng riêng, có thể có test riêng: `capstone/conftest.py` bỏ
+  qua nó khi chạy `uv run pytest tracks/fde/capstone` (gọi thẳng đường dẫn thì vẫn chạy), và quy tắc "test không gọi
+  `docker`/`qemu-system` trần" của validator không quét nó (test của repo người học không dùng `testkit`/`fdekit`).
 
 ### Biến `setup/.env`
 
