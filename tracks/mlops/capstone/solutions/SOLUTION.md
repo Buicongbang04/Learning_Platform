@@ -1,4 +1,4 @@
-# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M10)
+# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M13)
 
 Bản tham chiếu cho phần chấm được bằng test, cùng cây thư mục với `capstone/project/`:
 
@@ -291,6 +291,149 @@ Rubric cho quyết định và tài liệu (test chỉ kiểm cấu trúc, số 
 | Runbook | Mỗi alert đủ bốn phần | Lệnh kiểm tra chạy được, nhánh hành động theo kết quả kiểm, tiêu chí leo thang bằng số/thời gian |
 | Postmortem | Đủ năm phần, có số | Không đổ lỗi, dòng thời gian theo `as_of`, việc cần làm đo được (feature giao thông gần đây, alert bias, CT theo chất lượng) |
 
+## M11: cloud tuỳ chọn, dọn theo tag
+
+Bản tham chiếu chọn AWS (`project/cloud/`): bucket S3 cho model, Lambda 128 MB trả `/healthz` (đọc `head_object`, không nạp
+model nên không cần sklearn trong Lambda), log group 3 ngày, budget 1 USD có cảnh báo `ACTUAL > 50%` và `FORECASTED > 100%`.
+Không test nào chạm cloud; bản này chưa được `apply` trong lúc viết (không có tài khoản trong môi trường dựng bài), nên
+`main.tf` chỉ được kiểm bằng test tĩnh. Lần chạy thật đầu tiên nên `terraform validate` và `terraform plan` trước.
+
+- **Tag ở từng resource, không dùng `default_tags`.** Cả hai đều qua test; viết tường minh để người đọc thấy ngay tài
+  nguyên nào mang tag, và để test chỉ ra đúng resource quên tag. Tài nguyên con (`public_access_block`, `role_policy`,
+  `function_url`, `lambda_permission`) không nhận tag và bị xoá theo cha.
+- **Dọn theo tag, không theo tiền tố tên.** Tên `eta-mlops-...` có thể do người khác hay chính bạn tạo tay (bucket thử
+  nghiệm có dữ liệu); tag do IaC gắn nên là bằng chứng "Terraform của bài này tạo ra nó". So sánh đúng từng ký tự:
+  `Project` hay `eta-mlops-staging` không khớp. Inventory giả của test có đủ năm bẫy đó.
+- **IAM role dưới path `/eta-mlops/`.** API Resource Groups Tagging không luôn trả IAM role, nên `teardown.sh` liệt kê thêm
+  bằng `aws iam list-roles --path-prefix /eta-mlops/` rồi lấy tag của từng role; role vẫn chỉ bị chọn khi có tag đúng.
+- **`--dry-run` không gọi CLI khi đã có inventory, kể cả lệnh đọc.** "Dry-run" mà vẫn gọi cloud thì không chạy được ở CI,
+  và một lỗi đảo nhánh `if` là xoá thật; test thay `aws` bằng script ghi log để chứng minh không có lời gọi nào.
+- **Không cờ thì từ chối.** Lệnh xoá cần `--yes`; gặp loại tài nguyên chưa biết thì dừng trước khi xoá bất cứ gì, để
+  không bao giờ dọn dở dang. Thứ tự: Lambda, log group, bucket (`rb --force`), role (gỡ policy trước), budget cuối.
+- **Một lệnh xoá lỗi không dừng cả lượt.** Không dùng `set -e` cho vòng xoá: dừng ở bucket lỗi thì role và budget còn đó;
+  chạy hết, in `FAILED: <type> <id>` ra stderr, exit 1 (cùng bài học với bài kế hoạch dọn của module 12).
+- **Đọc output `aws` bằng Python, theo vùng.** Mỗi lệnh đọc gọi với `--output json` và `json.loads` cả output (JSON của
+  CLI nhiều dòng, không ghép tay thành JSON Lines được). `get-resources` là thao tác có paginator trong botocore nên CLI
+  tự gộp mọi trang; tự truyền `--pagination-token` lại tắt việc đó, nên script không tự phân trang.
+  Tagging API theo vùng: `--region` (mặc định `us-east-1` như `var.region`, đổi bằng `--region` hay `ETA_AWS_REGION`),
+  không dựa vào vùng mặc định của CLI, nếu không dry-run in 0 dòng trong khi Lambda vẫn chạy ở vùng khác. IAM role và
+  budget là toàn cục nên liệt kê riêng: `iam list-roles --path-prefix` + `list-role-tags`, và `sts get-caller-identity`
+  → `budgets describe-budgets --account-id` + `budgets list-tags-for-resource`. Lệnh xoá Lambda và log group lấy vùng
+  từ ARN của chính tài nguyên (inventory có thể trộn vùng), `--region` chỉ là dự phòng. Đường này kiểm bằng `aws` giả
+  trong `tests/test_mlops_capstone_cloud.py` ở gốc repo.
+- **Không tin chuỗi trong inventory.** Trước khi xoá, mỗi tài nguyên được kiểm: `name` không bắt đầu bằng `-` (sẽ bị
+  CLI đọc thành cờ) và chỉ gồm ký tự an toàn, vùng trong ARN dạng `us-east-1`, account của budget đủ 12 chữ số; sai thì
+  `WARN: bỏ qua` và `--yes` exit khác 0 vì tài nguyên vẫn còn. Danh sách policy của role đọc bằng `read -a`, không để
+  shell glob.
+- **Lambda URL `NONE`** cho tiện thử, kèm hai `aws_lambda_permission` công khai (`InvokeFunctionUrl` và `InvokeFunction`, AWS đòi cả hai từ cuối 2025). Quyền `InvokeFunction` cho `"*"` **phải** có `invoked_via_function_url = true` (điều kiện `lambda:InvokedViaFunctionUrl`, provider AWS từ 6.28): thiếu nó thì bất kỳ tài khoản AWS nào cũng gọi thẳng `Invoke` được, không qua URL. `budget.md` ghi rủi ro và cách chuyển sang
+  `AWS_IAM`.
+
+Rubric M11 (tuỳ chọn, không tính vào mức junior):
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| IaC | Mọi resource có tag, không khoá trong repo | `plan` sạch, giải thích từng tài nguyên con không nhận tag bị xoá theo đâu |
+| Dọn | `--dry-run` đúng danh sách | Giải thích vì sao tag an toàn hơn tiền tố; thứ tự xoá theo phụ thuộc; chạy thật rồi dry-run in 0 dòng |
+| Chi phí | Có ngưỡng USD và alarm | Bảng free tier từng dịch vụ, rủi ro URL công khai, budget tạo trước tài nguyên đầu tiên |
+
+## M12: kind, KServe, Argo Workflows
+
+Bản tham chiếu ở `project/k8s/` và `project/argo/`. Không đổi dòng nào của `src/eta` hay hai Dockerfile: chuyển sang K8s là
+việc của manifest.
+
+- **Nguồn model: image model riêng + init container.** Cluster kind không tới được MLflow trên máy (stack bind `127.0.0.1`,
+  node ở network Docker khác); `storageUri: s3://` cần kéo image `kserve/storage-initializer` và Secret S3 mỗi namespace.
+  Image `busybox:1.37` + `model.joblib` nặng khoảng 3 MB, `kind_load` mất vài giây, trong khi image serve 820 MB và image
+  train 1,04 GB chỉ nạp một lần mỗi phiên test (khoảng 6 giây mỗi image, nhờ cache layer). Modelcar (`storageUri: oci://`)
+  là cùng ý tưởng nhưng chỉ nhận một model; canary của ETA cần hai. Phía người build còn một lý do: image model là đơn vị phát hành
+  bất biến (tag = version, rollback là đổi tag), build ra từ `model.joblib` đã chốt nên pod không phụ thuộc MLflow còn sống hay
+  registry còn nguyên lúc pod khởi động lại.
+- **Canary trong app, không ở KServe.** Đã thử `canaryTrafficPercent: 20` trên cluster: KServe RawDeployment nhận trường,
+  InferenceService vẫn Ready, nhưng chỉ có một Deployment và không chia gì. Port-forward cũng chỉ vào một pod. Dùng lại
+  `route()` của M07 cho kết quả xác định, test tính trước từng request.
+- **Biến release trong `env` của pod template**, không trong ConfigMap. Bản thử đặt `ETA_CANARY_WEIGHT` trong ConfigMap:
+  bước 0.25 → 0.5 không sinh pod mới, test báo đúng request lệch nhánh. Đổi champion sang image của challenger (version vẫn
+  ghi v1) cũng bị bắt: pod Ready, `model_version` đúng chữ, nhưng `eta_s` là của model kia.
+- **Không có challenger = challenger trùng champion, weight 0.** Template không có điều kiện (`envsubst`), nên mọi release cùng
+  một hình dạng pod; chi phí là nạp model hai lần (vài trăm KB).
+- **Bảo mật pod:** `runAsNonRoot`, `readOnlyRootFilesystem` (thêm `emptyDir` cho `/tmp`), `drop: [ALL]`, `seccompProfile:
+  RuntimeDefault`, `automountServiceAccountToken: false` (SA `default` của namespace test có quyền executor Argo); init
+  container có limits riêng nhỏ. Các bước Workflow cũng `runAsNonRoot`, `seccompProfile: RuntimeDefault`,
+  `allowPrivilegeEscalation: false`, `drop: [ALL]` (không `readOnlyRootFilesystem` vì CLI ghi ra `/tmp/out`). Liveness gọi `/healthz`, readiness `/readyz`, startupProbe cho
+  tới 120 giây nạp model.
+- **Workflow:** DAG ba task; `validate` là `script` Python: kiểm `month` bằng regex, rồi chạy `prepare` và `validate` dạng
+  mảng (`subprocess.run([...])`, không shell, parameter đi qua `env`), xuất `sample` (parquet đã lấy mẫu) làm artifact cho
+  `train`, nên `train` đọc đúng dữ liệu đã kiểm. Bản đầu ghép `{{workflow.parameters.month}}` vào `sh -c`: ai submit được
+  Workflow là chạy được lệnh tuỳ ý trong container. `train` cũng là `script` kiểm lại `month` (template có thể bị tái dùng
+  không có `validate` phía trước), nhận artifact ở đường dẫn cố định rồi symlink thành `<month>.parquet` cho `--input`;
+  tiến trình con chết vì signal (OOM) thoát `128 + signal` kèm thông báo, không phải mã âm khó đọc. `gate` là `script` Python gọi `decide` + `Policy()`
+  của M04, thoát `EXIT_REJECTED`. Input artifact `metrics` để `archive: none` (đọc được trên MinIO) nên cần `mode: 0444`:
+  không có thì user 10001 gặp `PermissionError`. `retryStrategy` `OnError` chỉ ở `validate`, `train`; `gate` không retry.
+- **Số đo** (laptop 16 nhân, image đã cache): `-k m12` 6 test khoảng 2 phút; Workflow thành công khoảng 30 giây, Workflow
+  dừng ở `validate` khoảng 12 giây; bốn release canary cộng 160 request khoảng 26 giây.
+
+Rubric M12:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Nguồn model | Chạy được, nêu vì sao chọn | So ít nhất ba cách (bảng mục 1), nêu điều kiện chuyển sang `storageUri` + object storage |
+| Release | Bảng bốn bước với thời gian rollout | Tiêu chí dừng canary bằng số (M09: tỉ lệ fallback, p95 theo `variant`), rollback bằng manifest trong git |
+| Canary hạ tầng | Biết `canaryTrafficPercent` cần Serverless | Phác kế hoạch Knative hoặc Gateway API, cách đo tỉ lệ khi không còn `route()` trong app |
+
+## M13: đánh giá junior, tháng lạ 2019-10
+
+Tháng lạ sinh bằng `solutions/assessment/strange_month.py` (người học nhận tệp qua `etakit.py assessment`): mẫu 400 000
+chuyến của 2019-10 thật (`SEED = 1313`), cài **ba** lỗi:
+
+| `cause` | Cách cài | Công cụ lộ ra | Số đo (mẫu 50 000, `seed=0`) | Tháng 2019-09 |
+| --- | --- | --- | --- | --- |
+| `clock_error` | `VendorID == 1`, pickup 15–17/10: đảo pickup và dropoff | `eta.cli validate` exit 1, `negative_duration_share > 1%` | 3.59% dòng thời lượng âm | 0% |
+| `unit_change` | `trip_distance` × 1.609344 (km) cả tháng | PSI/KS `trip_distance` của M10 | PSI 0.265, KS 0.223, median 2.67 | PSI 0.0016, median 1.68 |
+| `timezone_shift` | Hai cột thời gian + 4 giờ (UTC thay cho EDT) cả tháng | PSI giờ đón của M10 | PSI 0.331, giờ đông nhất 22 | PSI 0.0005, giờ 18 |
+
+Phát lại `2019-09..2019-11` (champion train trên 2019-08, `as_of = 2019-11`): MAE 2019-10 là 308.0 s (2019-09: 204.0 s),
+bias +163.2 s (2019-09: -72.2 s), PSI `eta_s` 0.136. Đối chứng với tệp 2019-10 thật cùng pipeline: mọi PSI dưới 0.005,
+MAE 197.8 s, validate qua. Chạy test khoảng 30 giây (dựng dữ liệu 2 s, phát lại 15–20 s).
+
+Tác động từng lỗi (đảo ngược lỗi trên bản sao rồi phát lại):
+
+| Bản sao | MAE (s) | bias (s) |
+| --- | --- | --- |
+| Nguyên trạng | 308.0 | +163.2 |
+| Chỉ sửa khoảng cách | 261.9 | -134.2 |
+| Chỉ sửa giờ | 318.4 | +242.0 |
+| Sửa cả hai | 198.9 | -75.1 |
+
+Hai lỗi kéo bias ngược chiều nhau và che bớt nhau. `clock_error` gần như không đổi MAE vì `clean` loại dòng thời lượng âm;
+tác động của nó là chặn pipeline (đúng việc của validation).
+
+Bẫy có chủ ý trong tập nhãn: `outside_month` (0.67% chuyến rơi sang 1/11, dưới ngưỡng 1% của validate; đó là hệ quả của
+lệch giờ, không phải chuyến của tháng khác), `concept_drift` (MAE và bias tăng thật, nhưng do dữ liệu), `duplicate_rows`
+(0.004%, như nhiễu thường). Quyết định đúng là `keep` champion và `quarantine: true`: luật test ép "lỗi dữ liệu thì không
+`retrain`", và `rollback` vô nghĩa vì champion không đổi.
+
+Vì sao chọn ba lỗi này: mỗi lỗi lộ ra ở một công cụ khác nhau (validate, PSI khoảng cách, PSI giờ), nên người học phải chạy
+đủ pipeline; một người chỉ chạy validate thấy một lỗi và dừng là bài học chính. Lỗi `missing_zone` bị loại khi thiết kế vì
+không công cụ nào của M03/M10 đo theo zone, chỉ đoán được.
+
+Giới hạn đã biết: người học có thể dò đáp án bằng cách chạy test nhiều lần với từng nhãn (test chỉ báo **số** nhãn còn thiếu và
+số nhãn thừa, không báo tên, nên dò từng nhãn tốn nhiều lần chạy), hoặc so với tệp gốc của TLC. Không ép được; rubric dưới đây là nơi chấm thật.
+
+Rubric M13 (chấm `diagnosis.yaml` và `docs/assessment.md`; test chỉ kiểm nhãn, số và luật nhất quán):
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Quy trình | Chạy validate và replay, có bảng summary | Validate trước, phát lại có tháng đối chứng trước và sau, xác minh từng giả thuyết trên mẫu thô |
+| `clock_error` | Trích `negative_duration_share` từ validate | Khoanh được hãng (`VendorID 1`) và ba ngày; không tự đảo cột khi chưa có xác nhận của nguồn |
+| `unit_change` | PSI `trip_distance` cao, median tăng | Thấy tỉ lệ median ≈ 1.609 nên kết luận km; nêu PSI `eta_s` tăng là hệ quả, không phải nguyên nhân |
+| `timezone_shift` | PSI giờ đón cao, giờ đông nhất dời | Độ lệch đúng 4 giờ khớp UTC−4 (EDT); chuyến sớm nhất ngày 1 gần 4 giờ sáng; giải thích 0.67% chuyến sang 1/11 là hệ quả |
+| Loại trừ | Không có nhãn thừa | Nêu rõ đã loại `outside_month`, `concept_drift`, `seasonal_drift` bằng số nào |
+| Tác động | MAE và bias trước/sau | Đo tác động từng lỗi bằng bản sao đảo ngược; thấy hai lỗi bù trừ bias |
+| Quyết định | `keep` + `quarantine: true` | Tách quyết định cho model và cho dữ liệu; nói batch tháng đó hoãn, realtime không ảnh hưởng |
+| Phòng ngừa | Có đề xuất check | Check mới có ngưỡng bằng số (median khoảng cách, PSI giờ đón, tỉ lệ theo hãng) và chỗ đặt trong DVC/runbook |
+
+Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô cột Tốt.
+
 ## Rubric phần tự đánh giá
 
 | Mục | Đạt | Tốt |
@@ -307,3 +450,6 @@ Rubric cho quyết định và tài liệu (test chỉ kiểm cấu trúc, số 
 | CI/CD (M08) | Ba workflow xanh/đỏ đúng chỗ | Thời gian từng workflow, giải thích ranh giới CI/CT/CD và vì sao CD đọc registry |
 | Monitoring (M09) | Dashboard và bảng alert | Giải thích 0/0, chọn `absent` trên metric luôn có, ảnh dashboard khi chạy k6 |
 | Drift và sự cố (M10) | Bảng summary 12 tháng | Xem rubric riêng ở mục M10 |
+| Cloud (M11, tuỳ chọn) | `--dry-run` đúng, có budget | Xem rubric riêng ở mục M11 |
+| Kubernetes (M12) | Test xanh, README có lệnh và bảng release | Xem rubric riêng ở mục M12 |
+| Đánh giá junior (M13) | Ba nhãn đúng, `keep` + cách ly | Xem rubric riêng ở mục M13 |

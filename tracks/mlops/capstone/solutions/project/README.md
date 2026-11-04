@@ -151,3 +151,52 @@ nghiệm hỗ trợ quyết định. Quyết định ở `reports/decisions/`, r
 | 2020-03 | `retrain` | 2020-04 | Cả tháng còn trong dải nhưng lát từ 2020-03-12 cho champion 283.6 s, challenger train đầu tháng 3 đạt 240.8 s (-15%); rollback vô nghĩa vì mọi version đều trước COVID |
 
 Chi tiết số, thí nghiệm và rubric ở `../SOLUTION.md`.
+
+## Cloud (M11, tuỳ chọn)
+
+AWS, vùng `us-east-1`, Terraform trong `cloud/`: bucket S3 chứa `models/model.joblib` (chặn public, mã hoá AES256), một
+Lambda 128 MB trả `/healthz` (version model và vị trí artifact, không nạp model), log group giữ 3 ngày, budget 1 USD/tháng
+có hai cảnh báo email. Mọi tài nguyên mang `tags = local.tags` với `project = "eta-mlops"`; IAM role nằm dưới path
+`/eta-mlops/`. Chi phí ước tính 0 USD trong free tier với lưu lượng thử tay.
+
+```bash
+cd cloud
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply
+curl "$(terraform output -raw health_url)"
+terraform destroy
+bash teardown.sh --dry-run
+```
+
+Đổi `region` trong `terraform.tfvars` thì dọn bằng `bash teardown.sh --dry-run --region <vùng>` (hoặc đặt
+`ETA_AWS_REGION`). Budget và quy trình dọn ở `cloud/budget.md`.
+
+## Kubernetes (M12)
+
+Cluster kind `mlops` (`bash setup/mlops/kind/up.sh`). Serving là InferenceService `eta` (KServe RawDeployment, predictor
+custom container chạy image `Dockerfile.serve` không sửa); model vào pod bằng image `k8s/Dockerfile.model` (busybox +
+`model.joblib`, khoảng 3 MB) qua hai init container `model-champion`, `model-challenger` chép vào `emptyDir`. Biến release
+(`ETA_MODEL_VERSION`, `ETA_CHALLENGER_VERSION`, `ETA_CANARY_WEIGHT`) nằm trong `env` của container nên đổi biến nào cũng
+sinh pod mới; ConfigMap `eta-config` chỉ giữ đường dẫn cố định, Secret `eta-admin` giữ token.
+
+```bash
+export ETA_SERVE_IMAGE=eta-serve:dev ETA_CHAMPION_IMAGE=eta-model:v1 ETA_CHAMPION_VERSION=v1 \
+       ETA_CHALLENGER_IMAGE=eta-model:v2 ETA_CHALLENGER_VERSION=v2 ETA_CANARY_WEIGHT=0.25 ETA_ADMIN_TOKEN=$(openssl rand -hex 16)
+envsubst < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
+kubectl --context kind-mlops -n eta rollout status deployment/eta-predictor
+```
+
+Rollout đo được (laptop, image đã nạp): apply tới `/readyz` báo version mới khoảng 5–7 giây; bốn release của test (ổn định,
+25%, 50%, rollback) cộng 160 request mất khoảng 26 giây. Rollback là apply lại bộ biến cũ.
+
+Training: `argo/train-workflow.yaml` (DAG `validate → train → gate`, parameter `month`, `champion-metrics`, dữ liệu từ
+ConfigMap `eta-train-data`, artifact `sample`, `model`, `metrics` qua MinIO của Argo). Một Workflow trên 1 500 chuyến xong
+trong khoảng 30 giây; `gate` từ chối thoát mã 3 và Workflow Failed ở đúng bước đó.
+
+## Đánh giá M13
+
+`make assessment` dựng `data/assessment/` (tháng lạ 2019-10 và ba tháng thật quanh nó), chạy `prepare`, `validate` (exit 1
+là kết quả mong đợi) và `replay` 2019-09..2019-11 với `params.assessment.yaml`. Chẩn đoán ở
+`reports/assessment/diagnosis.yaml`, báo cáo ở `docs/assessment.md`. Đây là đáp án của bài đánh giá: chỉ đọc sau khi
+đã nộp bài của mình.

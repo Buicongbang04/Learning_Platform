@@ -1,6 +1,8 @@
 import hashlib
 import shutil
 import subprocess
+import time
+from pathlib import Path
 
 import pytest
 
@@ -464,3 +466,496 @@ def test_dvc_sh_runs_in_repo(tmp_path):
     with pytest.raises(AssertionError):
         mlopskit.dvc_sh(tmp_path, "exit 3")
     assert mlopskit.dvc_sh(tmp_path, "exit 3", ok=False).returncode == 3
+
+
+def test_kind_constants():
+    assert mlopskit.KIND_CLUSTER == "mlops"
+    assert mlopskit.KUBE_CONTEXT == "kind-mlops"
+
+
+def test_require_kind_skips_without_cluster(monkeypatch):
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: None)
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_kind()
+    assert "bash setup/mlops/kind/up.sh" in str(info.value)
+    assert "13-kubernetes-for-ml" in str(info.value)
+
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda: ["other"])
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_kind()
+    assert "bash setup/mlops/kind/up.sh" in str(info.value)
+    assert "mlops" in str(info.value)
+
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda: ["mlops"])
+    monkeypatch.setattr(mlopskit, "_kube_ready", lambda: False)
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_kind()
+    assert "bash setup/mlops/kind/up.sh" in str(info.value)
+
+
+class _FakeRun:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.calls = []
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def __call__(self, command, **kwargs):
+        self.calls.append((list(command), kwargs))
+        return subprocess.CompletedProcess(command, self.returncode, self.stdout, self.stderr)
+
+
+def test_kubectl_uses_context(monkeypatch):
+    fake = _FakeRun(stdout="ok")
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit.subprocess, "run", fake)
+    result = mlopskit.kubectl("get", "pods", namespace="mlops-ex-abc", input="data", timeout=7)
+    assert result.stdout == "ok"
+    command, kwargs = fake.calls[0]
+    assert command[0] == "/fake/kubectl"
+    assert command[command.index("--context") + 1] == "kind-mlops"
+    assert command[command.index("-n") + 1] == "mlops-ex-abc"
+    assert command[-2:] == ["get", "pods"]
+    assert kwargs["input"] == "data" and kwargs["timeout"] == 7
+    mlopskit.kubectl("get", "ns")
+    assert "-n" not in fake.calls[1][0]
+    assert "--context" in fake.calls[1][0]
+
+
+def test_k8s_namespace_removed_on_error(monkeypatch):
+    fake = _FakeRun()
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit.subprocess, "run", fake)
+    holder = []
+    with pytest.raises(RuntimeError):
+        with mlopskit.k8s_namespace() as ns:
+            holder.append(ns)
+            raise RuntimeError("boom")
+    ns = holder[0]
+    assert ns.startswith("mlops-ex-") and len(ns) == len("mlops-ex-") + 8
+    created = fake.calls[0]
+    assert f"name: {ns}" in created[1]["input"]
+    assert '"mlops-ex": "1"' in created[1]["input"]
+    assert f'"mlops-ex-run": "{ns.removeprefix("mlops-ex-")}"' in created[1]["input"]
+    deletes = [c for c, _ in fake.calls if "delete" in c]
+    assert len(deletes) == 1
+    assert deletes[0][deletes[0].index("delete") + 1:] == ["namespace", ns, "--wait=false", "--ignore-not-found"]
+
+
+class _FakePortForward:
+    started: list = []
+
+    def __init__(self, command, **kwargs):
+        self.command = command
+        self.kwargs = kwargs
+        self.killed = False
+        _FakePortForward.started.append(self)
+        local = command[-1].split(":")[0]
+        kwargs["stdout"].write(f"Forwarding from 127.0.0.1:{local} -> 8080\n")
+        kwargs["stdout"].flush()
+
+    def poll(self):
+        return None
+
+    def terminate(self):
+        self.killed = True
+
+    def wait(self, timeout=None):
+        return 0
+
+    def kill(self):
+        self.killed = True
+
+
+def test_port_forward_cleans_process(monkeypatch):
+    _FakePortForward.started = []
+
+    def no_probe(*args, **kwargs):
+        raise AssertionError("port_forward không được kết nối thử vào cổng")
+
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit.subprocess, "Popen", _FakePortForward)
+    monkeypatch.setattr(mlopskit, "_port_open", no_probe)
+    with mlopskit.port_forward("mlops-ex-abc", "svc/api", 8080) as local:
+        process = _FakePortForward.started[0]
+        command = process.command
+        assert command[command.index("--context") + 1] == "kind-mlops"
+        assert "svc/api" in command and f"{local}:8080" in command
+        assert command[command.index("--address") + 1] == "127.0.0.1"
+    assert process.killed
+    assert process.kwargs["stdout"] is not subprocess.PIPE
+    assert process.kwargs["stderr"] is not subprocess.PIPE
+
+
+def test_port_forward_fails_when_kubectl_exits(monkeypatch):
+    class Dead(_FakePortForward):
+        def __init__(self, command, **kwargs):
+            self.command, self.kwargs, self.killed = command, kwargs, False
+            kwargs["stderr"].write("error: services \"api\" not found\n")
+            kwargs["stderr"].flush()
+
+        def poll(self):
+            return 1
+
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit.subprocess, "Popen", Dead)
+    with pytest.raises(pytest.fail.Exception) as info:
+        with mlopskit.port_forward("mlops-ex-abc", "svc/api", 8080):
+            pass
+    assert "not found" in str(info.value)
+
+
+def _fake_kubectl_factory(calls, *, create_rc=0, wait_rc=1, phase="", describe=None, wait_error=""):
+    def fake_kubectl(*args, namespace=None, input=None, timeout=120):
+        calls.append(args)
+        if args[0] == "wait":
+            if args[1] == "--for=create":
+                return subprocess.CompletedProcess(args, create_rc, "", "" if create_rc == 0 else "timed out waiting")
+            if wait_rc and wait_error:
+                return subprocess.CompletedProcess(args, wait_rc, "", wait_error)
+            return subprocess.CompletedProcess(args, wait_rc, "", "timed out waiting for the condition")
+        if args[0] == "describe":
+            if describe is not None:
+                return describe(args)
+            return subprocess.CompletedProcess(args, 0, "DESCRIBE-OUT", "")
+        if args[:2] == ("get", "pods"):
+            return subprocess.CompletedProcess(args, 0, "pod-a", "")
+        if args[0] == "logs":
+            return subprocess.CompletedProcess(args, 0, "LOG-OUT", "")
+        if args[0] == "get" and "jsonpath={.status.phase}" in args:
+            return subprocess.CompletedProcess(args, 0, phase, "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+    return fake_kubectl
+
+
+def test_wait_for_timeout_reports_describe_and_logs(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_kubectl_factory(calls))
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.wait_for("deployment", "api", "Available", "mlops-ex-abc", timeout=2)
+    text = str(info.value)
+    assert "DESCRIBE-OUT" in text and "LOG-OUT" in text and "Available" in text
+    assert calls[0][:2] == ("wait", "--for=create") and "deployment/api" in calls[0]
+    waits = [c for c in calls if c[0] == "wait" and c[1] != "--for=create"]
+    assert "--for=condition=Available" in waits[0] and "deployment/api" in waits[0]
+
+
+def test_wait_for_waits_for_creation_first(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_kubectl_factory(calls, wait_rc=0))
+    mlopskit.wait_for("workflow", "wf", "jsonpath={.status.phase}=Succeeded", "mlops-ex-abc", timeout=30)
+    assert calls[0][:2] == ("wait", "--for=create")
+    assert calls[1][1] == "--for=jsonpath={.status.phase}=Succeeded"
+
+    calls.clear()
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_kubectl_factory(calls, create_rc=1))
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.wait_for("workflow", "wf", "Ready", "mlops-ex-abc", timeout=3)
+    assert "không xuất hiện" in str(info.value)
+
+
+def test_wait_for_delete_skips_create(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_kubectl_factory(calls, wait_rc=0))
+    mlopskit.wait_for("pod", "gone", "delete", "mlops-ex-abc", timeout=10)
+    assert [c[1] for c in calls if c[0] == "wait"] == ["--for=delete"]
+
+
+def test_wait_for_non_timeout_error_fails_fast(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "kubectl",
+                        _fake_kubectl_factory(calls, wait_error='error: unrecognized condition: "bogus"'))
+    started = time.monotonic()
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.wait_for("pod", "p", "jsonpath={bad", "mlops-ex-abc", timeout=60)
+    assert time.monotonic() - started < 5
+    assert "unrecognized condition" in str(info.value)
+    assert len([c for c in calls if c[0] == "wait" and c[1] != "--for=create"]) == 1
+
+
+def test_wait_for_fail_on_phase_fails_fast(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_kubectl_factory(calls, phase="Failed"))
+    started = time.monotonic()
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.wait_for("workflow", "wf", "jsonpath={.status.phase}=Succeeded", "mlops-ex-abc", timeout=300,
+                          fail_on=("Failed", "Error"))
+    assert time.monotonic() - started < 10
+    assert "phase Failed" in str(info.value)
+
+
+def test_wait_for_diagnose_errors_do_not_hide_reason(monkeypatch):
+    calls = []
+
+    def describe(args):
+        pytest.fail("kubectl describe quá 15 giây", pytrace=False)
+
+    monkeypatch.setattr(mlopskit, "kubectl", _fake_kubectl_factory(calls, describe=describe))
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.wait_for("deployment", "api", "Available", "mlops-ex-abc", timeout=2)
+    assert "không đạt condition=Available" in str(info.value)
+
+
+def test_kind_roundtrip():
+    mlopskit.require_kind()
+    with mlopskit.k8s_namespace() as ns:
+        labels = mlopskit.kubectl("get", "namespace", ns, "-o", "jsonpath={.metadata.labels}").stdout
+        assert '"mlops-ex":"1"' in labels and f'"mlops-ex-run":"{ns.removeprefix("mlops-ex-")}"' in labels
+        manifest = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: probe\ndata:\n  answer: \"42\"\n"
+        assert mlopskit.apply_manifest(manifest, ns).returncode == 0
+        got = mlopskit.kubectl("get", "configmap", "probe", "-o", "jsonpath={.data.answer}", namespace=ns)
+        assert got.stdout == "42"
+        assert mlopskit.leftovers(ns) == [ns]
+    phase = mlopskit.kubectl("get", "namespace", ns, "-o", "jsonpath={.status.phase}", "--ignore-not-found").stdout
+    assert phase in ("", "Terminating")
+    assert mlopskit.leftovers(ns) == []
+
+
+def test_kserve_and_argo_installed():
+    mlopskit.require_kind()
+    for crd in ("inferenceservices.serving.kserve.io", "workflows.argoproj.io", "certificates.cert-manager.io"):
+        assert mlopskit.kubectl("get", "crd", crd).returncode == 0, crd
+    deploy = mlopskit.kubectl("get", "configmap", "inferenceservice-config", "-o", "jsonpath={.data.deploy}",
+                              namespace="kserve").stdout
+    assert "RawDeployment" in deploy
+    for namespace, name in (("cert-manager", "cert-manager-webhook"), ("kserve", "kserve-controller-manager"),
+                            ("argo", "workflow-controller"), ("argo", "argo-artifacts")):
+        status = mlopskit.kubectl("get", "deployment", name, "-o", "jsonpath={.status.availableReplicas}",
+                                  namespace=namespace)
+        assert status.stdout == "1", f"{namespace}/{name}: {status.stdout}{status.stderr}"
+
+
+ARGO_ARTIFACT_WORKFLOW = """
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: artifact-probe
+spec:
+  entrypoint: main
+  templates:
+    - name: main
+      steps:
+        - - name: write
+            template: write
+        - - name: read
+            template: read
+            arguments:
+              artifacts:
+                - name: msg
+                  from: "{{steps.write.outputs.artifacts.msg}}"
+    - name: write
+      container:
+        image: busybox:1.37
+        imagePullPolicy: IfNotPresent
+        command: [sh, -c, "echo mlops-artifact > /tmp/msg.txt"]
+      outputs:
+        artifacts:
+          - name: msg
+            path: /tmp/msg.txt
+    - name: read
+      inputs:
+        artifacts:
+          - name: msg
+            path: /tmp/in.txt
+      container:
+        image: busybox:1.37
+        imagePullPolicy: IfNotPresent
+        command: [sh, -c, "grep -q mlops-artifact /tmp/in.txt"]
+"""
+
+
+def test_argo_workflow_artifact_and_kind_load():
+    mlopskit.require_kind()
+    _busybox()
+    mlopskit.kind_load("busybox:1.37")
+    with mlopskit.k8s_namespace() as ns:
+        mlopskit.apply_manifest(ARGO_ARTIFACT_WORKFLOW, ns)
+        mlopskit.wait_for("workflow", "artifact-probe", "jsonpath={.status.phase}=Succeeded", ns, timeout=300,
+                          fail_on=("Failed", "Error"))
+
+
+def test_require_cuda_skips_without_gpu(monkeypatch):
+    monkeypatch.setattr(mlopskit.shutil, "which", lambda name: None)
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.require_cuda()
+    assert "Không có CUDA" in str(info.value)
+
+
+def test_gpu_python_command(monkeypatch, tmp_path):
+    fake = _FakeRun(stdout="{}")
+    monkeypatch.setattr(mlopskit.subprocess, "run", fake)
+    monkeypatch.setattr(mlopskit, "_gpu_env_ready", lambda: True)
+    monkeypatch.setenv("VIRTUAL_ENV", "/somewhere/.venv")
+    mlopskit.gpu_python("print(1)", tmp_path, timeout=9)
+    command, kwargs = fake.calls[0]
+    assert command[command.index("--project") + 1] == str(mlopskit.ROOT / "setup" / "gpu")
+    assert "--no-sync" in command and "--frozen" not in command
+    assert command[-4:] == ["python", "-I", "-c", "print(1)"]
+    assert kwargs["cwd"] == tmp_path and kwargs["timeout"] == 9
+    assert "VIRTUAL_ENV" not in kwargs["env"]
+
+
+def test_gpu_python_skip_or_run(tmp_path):
+    import json
+
+    mlopskit.require_cuda()
+    script = (
+        "import json, onnxruntime as ort\n"
+        "from onnx import helper, TensorProto\n"
+        "ort.preload_dlls()\n"
+        "x = helper.make_tensor_value_info('x', TensorProto.FLOAT, [2, 2])\n"
+        "y = helper.make_tensor_value_info('y', TensorProto.FLOAT, [2, 2])\n"
+        "g = helper.make_graph([helper.make_node('Relu', ['x'], ['y'])], 'g', [x], [y])\n"
+        "m = helper.make_model(g, opset_imports=[helper.make_opsetid('', 17)])\n"
+        "m.ir_version = 9\n"
+        "s = ort.InferenceSession(m.SerializeToString(), providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])\n"
+        "import numpy as np\n"
+        "out = s.run(None, {'x': np.array([[-1, 2], [3, -4]], dtype=np.float32)})[0]\n"
+        "print(json.dumps({'providers': s.get_providers(), 'out': out.tolist()}))\n"
+    )
+    result = mlopskit.gpu_python(script, tmp_path)
+    assert result.returncode == 0, result.stderr[-3000:]
+    data = json.loads(result.stdout.strip().splitlines()[-1])
+    assert data["providers"][0] == "CUDAExecutionProvider", data
+    assert data["out"] == [[0.0, 2.0], [3.0, 0.0]]
+
+
+def test_k8s_namespace_delete_failure_does_not_mask_error(monkeypatch, capsys):
+    calls = []
+
+    def fake_kubectl(*args, namespace=None, input=None, timeout=120):
+        calls.append((args, timeout))
+        if args[0] == "delete":
+            pytest.fail("kubectl delete quá 30 giây", pytrace=False)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "kubectl", fake_kubectl)
+    with pytest.raises(RuntimeError, match="boom"):
+        with mlopskit.k8s_namespace():
+            raise RuntimeError("boom")
+    delete = [c for c in calls if c[0][0] == "delete"]
+    assert delete and delete[0][1] <= 30
+    assert "không xoá được namespace" in capsys.readouterr().err
+
+
+def test_leftovers_reports_stuck_terminating(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    old = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fresh = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    listing = (f"default Active \nmlops-ex-aaaa1111 Active \nmlops-ex-bbbb2222 Terminating {old}\n"
+               f"mlops-ex-cccc3333 Terminating {fresh}\n")
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda **k: ["mlops"])
+    monkeypatch.setattr(mlopskit, "kubectl",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, listing, ""))
+    assert mlopskit._leftover_namespaces() == ["mlops-ex-aaaa1111", "mlops-ex-bbbb2222"]
+
+
+def test_leftover_namespaces_best_effort(monkeypatch):
+    def hang(*args, **kwargs):
+        pytest.fail("kubectl get namespaces quá 10 giây", pytrace=False)
+
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda **k: ["mlops"])
+    monkeypatch.setattr(mlopskit, "kubectl", hang)
+    assert mlopskit._leftover_namespaces() == []
+    monkeypatch.setattr(mlopskit, "_kind_clusters", lambda **k: [])
+    assert mlopskit._leftover_namespaces() == []
+
+
+def test_bin_prefers_pinned_local_copy(monkeypatch, tmp_path):
+    pinned = tmp_path / "kubectl"
+    pinned.write_text("#!/bin/sh\n")
+    pinned.chmod(0o755)
+    monkeypatch.setattr(mlopskit, "LOCAL_BIN", tmp_path)
+    monkeypatch.setattr(mlopskit.shutil, "which", lambda name: f"/usr/bin/{name}")
+    assert mlopskit._bin("kubectl") == str(pinned)
+    assert mlopskit._bin("kind") == "/usr/bin/kind"
+
+
+def test_kind_load_uses_disk_cache_and_cleans(monkeypatch, tmp_path):
+    assert mlopskit.KIND_LOAD_DIR.is_absolute()
+    assert mlopskit.KIND_LOAD_DIR.is_relative_to(mlopskit.CACHE_ROOT)
+    seen = {}
+
+    def fake_docker(*args, timeout=60, env=None):
+        if args[0] == "save":
+            archive = Path(args[args.index("-o") + 1])
+            archive.write_bytes(b"tar")
+            seen["archive"] = archive
+            seen["mode"] = oct(archive.parent.parent.stat().st_mode & 0o777)
+        return subprocess.CompletedProcess(args, 0, "amd64\n", "")
+
+    monkeypatch.setattr(mlopskit, "require_kind", lambda: None)
+    monkeypatch.setattr(mlopskit, "_bin", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(mlopskit, "_docker", fake_docker)
+    monkeypatch.setattr(mlopskit, "KIND_LOAD_DIR", tmp_path / "load")
+    monkeypatch.setattr(mlopskit.subprocess, "run", _FakeRun())
+    mlopskit.kind_load("img:1")
+    assert seen["archive"].is_relative_to(tmp_path / "load")
+    assert seen["mode"] == "0o700"
+    assert not seen["archive"].exists() and list((tmp_path / "load").iterdir()) == []
+
+
+def test_gpu_env_problem_reports_missing_env(monkeypatch, tmp_path):
+    monkeypatch.setattr(mlopskit, "GPU_PROJECT", tmp_path)
+    monkeypatch.setattr(mlopskit, "_GPU_ENV_STATE", {})
+    assert "Chưa có môi trường setup/gpu" in mlopskit._gpu_env_problem()
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.gpu_python("print(1)", tmp_path)
+    assert "uv sync --project setup/gpu" in str(info.value)
+
+
+PROBE_POD = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {name}
+  labels: {labels}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: probe
+      image: busybox:1.37
+      imagePullPolicy: IfNotPresent
+      command: [sh, -c, "wget -q -T 5 -O /dev/null http://argo-artifacts.argo.svc.cluster.local:9000/minio/health/live"]
+"""
+
+
+def test_argo_artifacts_network_policy_blocks_unlabeled_pods():
+    """Pod không có nhãn workflow bị chặn; chỉ chống truy cập vô tình, pod tự gắn nhãn vẫn vào được."""
+    mlopskit.require_kind()
+    _busybox()
+    mlopskit.kind_load("busybox:1.37")
+    with mlopskit.k8s_namespace() as ns:
+        mlopskit.apply_manifest(PROBE_POD.format(name="outsider", labels="{}"), ns)
+        mlopskit.apply_manifest(PROBE_POD.format(name="workflow-pod", labels='{"workflows.argoproj.io/workflow": "x"}'), ns)
+        mlopskit.wait_for("pod", "workflow-pod", "jsonpath={.status.phase}=Succeeded", ns, timeout=120, fail_on=("Failed",))
+        mlopskit.wait_for("pod", "outsider", "jsonpath={.status.phase}=Failed", ns, timeout=120, fail_on=("Succeeded",))
+
+
+def test_cache_root_ignores_empty_or_relative_xdg(monkeypatch):
+    import importlib
+
+    for value in ("", "relative/cache"):
+        monkeypatch.setenv("XDG_CACHE_HOME", value)
+        reloaded = importlib.reload(mlopskit)
+        assert reloaded.CACHE_ROOT == Path.home() / ".cache"
+    monkeypatch.delenv("XDG_CACHE_HOME")
+    importlib.reload(mlopskit)
+
+
+def test_gpu_env_problem_detects_cpu_onnxruntime(monkeypatch, tmp_path):
+    import sys
+
+    (tmp_path / ".venv" / "bin").mkdir(parents=True)
+    wrapper = tmp_path / ".venv" / "bin" / "python"
+    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    wrapper.chmod(0o755)
+    monkeypatch.setattr(mlopskit, "GPU_PROJECT", tmp_path)
+    monkeypatch.setattr(mlopskit, "_GPU_ENV_STATE", {})
+    assert "onnxruntime (CPU)" in mlopskit._gpu_env_problem()

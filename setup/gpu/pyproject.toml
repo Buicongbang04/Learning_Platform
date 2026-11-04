@@ -23,6 +23,8 @@ dependencies = [
     "gymnasium[classic-control,box2d]==1.4.0",
     "ale-py==0.12.1",
     "imageio[ffmpeg]==2.38.1",
+    "onnxruntime-gpu==1.29.0",
+    "onnx==1.23.2",
     "kagglehub>=0.3",
     "ipykernel>=6.29",
 ]
@@ -38,13 +40,28 @@ constraint-dependencies = [
     "ctranslate2<=4.8.3",
     "fonttools<=4.67.0",
     "importlib-metadata<=9.0.1",
-    "onnxruntime<=1.31.0",
     "polars<=2.0.0",
     "polars-runtime-32<=2.0.0",
     "ultralytics-platform<=0.1.89",
     "ultralytics-thop<=2.2.2",
     "zipp<=4.1.1",
 ]
+
+# onnxruntime-gpu trên PyPI từ 1.28 build cho CUDA 13 (cần driver >= 580); laptop driver 550 nên lấy bản CUDA 12
+# từ feed chính thức của ONNX Runtime. Bản CUDA 12 mới nhất ở feed là 1.29.0 (env gốc dùng onnxruntime CPU 1.31.0).
+# onnxruntime (CPU, kéo theo bởi faster-whisper) bị gỡ bằng override vì hai gói cùng ghi thư mục `onnxruntime/`.
+# onnxruntime-gpu 1.29.0 (CUDA 12) build bằng CUDA 12.8+, cần `cudaLibraryGetKernel` của libcudart 12.8+, còn torch cu126
+# ghim nvidia-cuda-runtime-cu12==12.6.77: nâng riêng cudart lên 12.9.79 (cùng major, torch cu126 vẫn chạy, driver 550
+# chạy được nhờ CUDA minor version compatibility). Đã kiểm: check_gpu.py và ORT CUDAExecutionProvider cùng chạy.
+override-dependencies = [
+    "onnxruntime; sys_platform == 'never'",
+    "nvidia-cuda-runtime-cu12==12.9.79; sys_platform == 'linux'",
+]
+
+[[tool.uv.index]]
+name = "onnxruntime-cuda-12"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/"
+explicit = true
 
 # CUDA 12.6 (cu126): chạy tốt trên driver >= 525 (laptop đang driver 550 = CUDA 12.4 tối đa,
 # cu130 cần driver >= 580 nên không dùng). RTX 30xx = Ampere sm_86, cu126 hỗ trợ đầy đủ.
@@ -56,3 +73,4 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }
 torchvision = { index = "pytorch-cu126" }
+onnxruntime-gpu = { index = "onnxruntime-cuda-12" }

@@ -55,6 +55,8 @@ PHASE1_MODULES = MODULE_IDS[:5]
 PHASE1_MILESTONES = ["m01", "m02", "m03", "m04"]
 PHASE2_MODULES = MODULE_IDS[5:11]
 PHASE2_MILESTONES = ["m05", "m06", "m07", "m08", "m09", "m10"]
+PHASE3_MODULES = MODULE_IDS[11:14]
+PHASE3_MILESTONES = ["m11", "m12", "m13"]
 NO_BASIC_MINIMUM = {"00-introduction"}
 
 LEVELS = ("basic", "intermediate", "advanced")
@@ -353,6 +355,13 @@ def test_phase2_present():
     docs = {m["id"]: TRACK / m["doc"] for m in load_track()["capstone"]["milestones"]}
     missing += [docs[m].relative_to(ROOT).as_posix() for m in PHASE2_MILESTONES if not docs[m].is_file()]
     assert not missing, f"Phase 2 còn thiếu: {missing}"
+
+
+def test_phase3_present():
+    missing = [m for m in PHASE3_MODULES if not (MODULES_DIR / m).is_dir()]
+    docs = {m["id"]: TRACK / m["doc"] for m in load_track()["capstone"]["milestones"]}
+    missing += [docs[m].relative_to(ROOT).as_posix() for m in PHASE3_MILESTONES if not docs[m].is_file()]
+    assert not missing, f"Phase 3 còn thiếu: {missing}"
 
 
 CIKIT_SHARED = ["RUFF_VERSION", "git", "commit_all", "log", "load_workflow", "events", "triggers"]
