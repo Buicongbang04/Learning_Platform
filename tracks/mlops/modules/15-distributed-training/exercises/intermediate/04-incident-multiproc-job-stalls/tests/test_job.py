@@ -1,3 +1,8 @@
+"""Ca hồi quy dựa vào việc gloo chờ mãi khi hai rank đứng ở hai collective khác nhau (đã kiểm trên torch 2.14.1+cpu).
+
+Bản torch sau mà biến tình huống đó thành lỗi ngay thì bản gốc thoát lỗi thay vì treo và ca hồi quy cần sửa.
+"""
+
 import json
 
 import distkit

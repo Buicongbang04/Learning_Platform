@@ -53,6 +53,21 @@ diệt mọi tiến trình của lần chạy. Lý do cần helper: `torchrun` �
 `kill -9`) **không** giết worker đang treo trong collective; worker mồ côi giữ cổng và CPU tới khi hết timeout của gloo (30 phút). Tự
 chạy tay mà job treo thì `Ctrl-C` một lần, chờ vài giây, rồi `pkill -f script.py` nếu còn tiến trình.
 
+**Socket của job.** `GLOO_SOCKET_IFNAME=lo` chỉ ép gloo về loopback. Chính `torchrun` (TCPStore của rendezvous c10d và store của
+agent) vẫn nghe `*:<cổng>` trên mọi interface, IPv4 lẫn IPv6, không xác thực; torch 2.14.1 không có cờ nào đổi điều đó (đã kiểm bằng
+`ss -tlnp` lúc job chạy: hai dòng `*:<cổng>` của tiến trình `pt_elastic`). Vì vậy `distkit` chạy cả job trong **network namespace
+riêng** không cần root, chỉ có `lo`, từ ngoài máy không kết nối được (test `tests/test_distkit.py` kiểm). Tự chạy tay thì làm giống vậy:
+
+```bash
+unshare --user --map-root-user --net -- sh -c 'ip link set lo up && exec "$@"' sh \
+  uv run python -m torch.distributed.run --nproc_per_node=2 \
+  --rdzv-backend=c10d --rdzv-endpoint=127.0.0.1:0 --local-addr=127.0.0.1 script.py --out /tmp/mlops-15/x
+```
+
+Máy chặn user namespace không cần root (vd. Ubuntu 24.04 với `kernel.apparmor_restrict_unprivileged_userns=1`) thì `unshare` báo lỗi;
+khi đó test chạy không cô lập (test cô lập skip kèm lý do), và bạn chỉ nên chạy job trên mạng tin cậy hoặc sau firewall chặn cổng vào.
+Job nhiều node thật cần store nghe trên mạng; ở đó bảo vệ bằng mạng riêng của cụm, không bằng loopback.
+
 **Chạy Ray.** Tự chạy script Ray bằng `uv run` thì đặt hai biến (test đặt sẵn qua `mlopskit.ray_local`):
 
 ```bash

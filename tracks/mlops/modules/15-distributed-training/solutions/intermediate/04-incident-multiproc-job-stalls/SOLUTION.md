@@ -10,7 +10,7 @@
 - Rank 0 vào `all_reduce` của metric và chờ rank 1.
 - Rank 1 bỏ qua, ghi trace bước 0, sang bước 1 và vào collective của DDP (đồng bộ bucket/gradient) và chờ rank 0.
 
-Hai rank đứng ở hai collective khác nhau, không bên nào tới được điểm hẹn của bên kia. Gloo chờ trong lời gọi mạng chặn nên CPU 0% và
+Hai rank đứng ở hai collective khác nhau, không bên nào tới được điểm hẹn của bên kia. (Đã kiểm trên torch 2.14.1 với gloo: chờ mãi, không báo lỗi khớp sai collective.) Gloo chờ trong lời gọi mạng chặn nên CPU 0% và
 không có lỗi, tới khi hết timeout mặc định của process group (30 phút với gloo, 10 phút với NCCL). Một tiến trình thì world size 1,
 `all_reduce` trả về ngay: lỗi chỉ lộ ra khi có từ hai rank. Đó cũng là lý do `rank0.jsonl` trống (rank 0 kẹt trước khi ghi trace bước
 0) còn `rank1.jsonl` có đúng một dòng.

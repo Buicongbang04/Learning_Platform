@@ -1,4 +1,5 @@
 import math
+import signal
 
 import distkit
 import mlopskit
@@ -9,6 +10,17 @@ from testkit import Exercise
 
 ex = Exercise(__file__)
 SAMPLES = 12
+TUNE_TIMEOUT = 180
+EXPIRED = {"hit": False}
+
+
+class TuneTimeout(BaseException):
+    pass
+
+
+def expire(signum, frame):
+    EXPIRED["hit"] = True
+    raise TuneTimeout
 
 
 @pytest.fixture(scope="module")
@@ -16,14 +28,21 @@ def outcome():
     mod = ex.module("tune_search.py")
     distkit.pickle_by_value(mod)
     with mlopskit.ray_local(num_cpus=2) as storage:
+        previous = signal.signal(signal.SIGALRM, expire)
+        signal.alarm(TUNE_TIMEOUT)
         try:
             grid = mod.search(str(storage), num_samples=SAMPLES)
             trials = [{"config": dict(r.config), "iterations": r.metrics.get("training_iteration"),
                        "loss": r.metrics.get("loss"), "error": r.error is not None} for r in grid]
             chosen = mod.best(grid)
             written = sorted(p.name for p in storage.iterdir())
-        except Exception as error:
+        except (TuneTimeout, Exception) as error:
+            if EXPIRED["hit"]:
+                return {"failed": f"Tìm kiếm chưa xong sau {TUNE_TIMEOUT} giây (trial chờ tài nguyên mãi hoặc quá chậm)"}
             return {"failed": f"{type(error).__name__}: {error}"}
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, previous)
     return {"trials": trials, "best": chosen, "written": written}
 
 

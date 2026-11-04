@@ -38,7 +38,9 @@ cùng lúc), gọi `search(storage, num_samples=12)` rồi kiểm:
 - Mọi config có đúng hai khoá, nằm trong không gian tìm kiếm; 12 giá trị `lr` khác nhau.
 - `best(...)` trả đúng trial có loss cuối nhỏ nhất, và loss đó nhỏ hơn một nửa phương sai của nhãn validation (model học thật).
 
-Cả bài mất khoảng 30-60 giây (khởi động Ray chiếm phần lớn). Tự chạy script bằng `uv run` thì đặt hai biến môi trường ở mục 0 của
+Cả bài mất khoảng 30-60 giây (khởi động Ray chiếm phần lớn). Test có giới hạn cứng **180 giây** cho cả lần tìm kiếm: quá hạn
+(vd. trial xin nhiều CPU hơn 2 CPU của Ray cục bộ nên nằm `PENDING` mãi) thì mọi test của bài fail với thông báo hết giờ,
+Ray vẫn được tắt và dọn sạch. Tự chạy script bằng `uv run` thì đặt hai biến môi trường ở mục 0 của
 README module.
 
 ## Tiêu chí đạt
