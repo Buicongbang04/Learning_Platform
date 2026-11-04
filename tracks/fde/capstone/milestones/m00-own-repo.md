@@ -61,11 +61,12 @@ uv run pytest tracks/fde/capstone -k m00 -q
   môi trường dựng lại từ đầu (`HOME` là thư mục repo), nên `Makefile` không được dựa vào biến môi trường riêng của bạn.
 - [ ] `test_m00_standalone`: không tệp văn bản nào được `git ls-files` liệt kê chứa dòng bắt đầu bằng `import testkit`,
   `import fdekit`, `from testkit`, `from fdekit`, chuỗi `-m testkit`/`-m fdekit`, tên tệp `testkit.py`/`fdekit.py`,
-  chuỗi `/DataScience`, hay đường dẫn tuyệt đối của repo học.
+  đường dẫn tuyệt đối của repo học (`str(ROOT)` của bộ chấm), hay đường dẫn dạng `/DataScience…/tracks`,
+  `/DataScience…/setup`, `/DataScience…/testkit`, `/DataScience…/fdekit` (nhắc tên repo học thì không sao).
 - [ ] `test_m00_no_secrets_committed`: `git ls-files` không có tệp tên `*.pem`, `*.key`, `id_*`, `.env` hay `.env.*`
   (trừ `.env.example`) ở bất kỳ thư mục nào; không tệp nào chứa dòng `-----BEGIN ... PRIVATE KEY-----`, hay
   `QUILLO_ADMIN_TOKEN=`/`QUILLO_DB_PASSWORD=` theo sau là một giá trị ≥16 ký tự; `git check-ignore --no-index` xác nhận
-  `.gitignore` chặn đủ bảy đường dẫn `lab.pem`, `keys/id_ed25519`, `tls/server.key`, `.env`, `delivery/.env`,
-  `quillo-1.0.0.tar`, `dist/bundle/quillo-1.0.0.tar`.
+  `.gitignore` chặn đủ tám đường dẫn `lab.pem`, `keys/id_ed25519`, `tls/server.key`, `.env`, `delivery/.env`,
+  `quillo-1.0.0.tar`, `dist/bundle/quillo-1.0.0.tar`, `data/cuad/contract.pdf` (dữ liệu CUAD).
 - [ ] Repo trống, chưa đặt `FDE_CAPSTONE_DIR` hay chưa `git init` thì test skip hoặc fail kèm lời nhắc, không bao giờ
   tính là đạt.

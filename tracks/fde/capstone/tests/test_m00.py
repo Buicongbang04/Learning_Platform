@@ -12,12 +12,13 @@ ROOT_FILES = ("README.md", "LICENSE", ".gitignore", "Makefile")
 TARGETS = ("survey", "bundle", "install", "verify")
 SECRET_NAMES = re.compile(r"(^|/)(id_[^/]*|[^/]*\.pem|[^/]*\.key|\.env|\.env\.(?!example$)[^/]+)$")
 MUST_IGNORE = ("lab.pem", "keys/id_ed25519", "tls/server.key", ".env", "delivery/.env", "quillo-1.0.0.tar",
-               "dist/bundle/quillo-1.0.0.tar")
+               "dist/bundle/quillo-1.0.0.tar", "data/cuad/contract.pdf")
 IMPORTS = re.compile(r"^\s*(?:import|from)\s+(?:testkit|fdekit)\b|-m\s+(?:testkit|fdekit)\b|\b(?:testkit|fdekit)\.py\b",
                      re.M)
 PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
 REAL_SECRET = re.compile(r"\b(QUILLO_ADMIN_TOKEN|QUILLO_DB_PASSWORD)\s*[=:]\s*['\"]?[A-Za-z0-9+/_-]{16,}")
 FENCE = re.compile(r"^(```|~~~)")
+LEARNING_REPO_PATH = re.compile(r"/DataScience[^/\s]*/(?:tracks|testkit|fdekit|setup)\b")
 
 
 def git(repo: Path, *args: str) -> subprocess.CompletedProcess:
@@ -88,9 +89,9 @@ def test_m00_standalone(repo):
         text = data.decode("utf-8", errors="replace")
         if IMPORTS.search(text):
             problems.append(f"{name}: import/gọi testkit hoặc fdekit")
-        for needle in ("/DataScience", str(ROOT)):
-            if needle in text:
-                problems.append(f"{name}: chứa đường dẫn vào repo học ({needle})")
+        found = LEARNING_REPO_PATH.search(text)
+        if str(ROOT) in text or found:
+            problems.append(f"{name}: chứa đường dẫn vào repo học ({found.group(0) if found else ROOT})")
     assert not problems, "Repo capstone phải tự chứa:\n" + "\n".join(problems)
 
 
