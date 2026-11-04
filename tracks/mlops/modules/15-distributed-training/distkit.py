@@ -25,6 +25,7 @@ import subprocess
 import sys
 import time
 import uuid
+import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -115,13 +116,16 @@ def kill_marked(run_id: str, rounds: int = 50) -> list[int]:
 
 @functools.cache
 def _netns_prefix() -> tuple[str, ...]:
-    if not (shutil.which("unshare") and shutil.which("ip")):
-        return ()
-    try:
-        probe = subprocess.run([*NETNS, "true"], capture_output=True, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
-        return ()
-    return tuple(NETNS) if probe.returncode == 0 else ()
+    ok = False
+    if shutil.which("unshare") and shutil.which("ip"):
+        try:
+            ok = subprocess.run([*NETNS, "true"], capture_output=True, timeout=10).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            ok = False
+    if not ok:
+        warnings.warn("Không tạo được network namespace riêng (unshare/user namespace bị chặn): job torchrun chạy "
+                      "không cô lập, TCPStore nghe mọi interface. Xem README mục 0.", RuntimeWarning, stacklevel=2)
+    return tuple(NETNS) if ok else ()
 
 
 def isolated() -> bool:

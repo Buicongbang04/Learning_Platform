@@ -64,7 +64,7 @@ unshare --user --map-root-user --net -- sh -c 'ip link set lo up && exec "$@"' s
   --rdzv-backend=c10d --rdzv-endpoint=127.0.0.1:0 --local-addr=127.0.0.1 script.py --out /tmp/mlops-15/x
 ```
 
-Máy chặn user namespace không cần root (vd. Ubuntu 24.04 với `kernel.apparmor_restrict_unprivileged_userns=1`) thì `unshare` báo lỗi;
+Namespace mới không có mạng ngoài, nên chạy `uv sync` trước (để `uv run` không phải tải gì). Máy chặn user namespace không cần root (vd. Ubuntu 24.04 với `kernel.apparmor_restrict_unprivileged_userns=1`) thì `unshare` báo lỗi;
 khi đó test chạy không cô lập (test cô lập skip kèm lý do), và bạn chỉ nên chạy job trên mạng tin cậy hoặc sau firewall chặn cổng vào.
 Job nhiều node thật cần store nghe trên mạng; ở đó bảo vệ bằng mạng riêng của cụm, không bằng loopback.
 
