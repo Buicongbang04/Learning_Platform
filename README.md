@@ -14,7 +14,7 @@ Bike Sharing, MovieLens…) và mọi bài tập đều **tự chấm bằng `py
 | [Data Analyst](tracks/data-analyst/README.md) | Đầy đủ | 15 module từ tư duy phân tích, Excel, SQL, Python tới trực quan hoá và đọc biểu đồ, BI (Metabase, Superset, Streamlit), experimentation, product/business analytics và storytelling; 108 bài; capstone [dunnhumby Complete Journey](tracks/data-analyst/capstone/README.md) 7 milestone | [data-analyst](https://roadmap.sh/data-analyst) |
 | [DevOps](tracks/devops/README.md) | Đang viết (6/17 module) | Linux, scripting, Git, mạng, Nginx; sắp tới container, CI/CD, OpenTofu, Ansible, Kubernetes, GitOps, observability, SRE; capstone vận hành [Olist Shop](tracks/devops/sample-app/README.md) như production trên máy local | [devops](https://roadmap.sh/devops) |
 | AI Engineer | Đang viết (nhánh `ai-engineer`) | Neural network từ đầu, PyTorch, CV, NLP, LLM, RAG, agent, fine-tune, serving; sẽ gộp vào `main` khi xong | [ai-engineer](https://roadmap.sh/ai-engineer) |
-| MLOps | Sắp có | Đã có chỗ trong app | [mlops](https://roadmap.sh/mlops) |
+| [MLOps](tracks/mlops/README.md) | Đầy đủ | 19 module (00–18): lõi junior 00–13 (container, DVC, MLflow, Prefect, Feast, serving, CI/CD bằng act, Prometheus/Grafana, drift, deploy DL, Kubernetes cho ML) và tầng senior 14–18 (K8s production, distributed training, streaming, bảo mật model, system design); 155 bài; capstone [dịch vụ ETA cho taxi NYC](tracks/mlops/capstone/README.md) 18 milestone | [mlops](https://roadmap.sh/mlops) |
 
 Mỗi module gồm:
 

@@ -48,8 +48,8 @@ data), **xử lý sự cố** (phát hiện, xác minh, đánh giá tác động
 | 17 | [`17-ml-platform-security`](modules/17-ml-platform-security/README.md) Nền tảng nhiều đội & bảo mật model (senior) | Golden path, FinOps, safetensors, modelscan, ký model |
 | 18 | [`18-senior-system-design`](modules/18-senior-system-design/README.md) System design & dẫn dắt vận hành (senior) | SLO, error budget, incident command, design doc |
 
-Module được phát hành theo giai đoạn (00–04 trước, rồi 05–10, 11–13, cuối cùng là tầng senior 14–18). Link tới
-module chưa có sẽ hoạt động khi module đó được thêm.
+Đủ 19 module, cả lõi junior 00–13 và tầng senior 14–18. Tầng senior cần thêm vài thứ ngoài stack lõi, xem
+[Setup cho tầng senior](#setup-cho-tầng-senior).
 
 ```mermaid
 flowchart LR
@@ -97,7 +97,13 @@ flowchart LR
     M12[Module 12] -.-> C11[m11 Cloud tuỳ chọn]
     M13[Module 13] -.-> C12[m12 kind + KServe]
     M13 -.-> C13[m13 Đánh giá junior]
+    M14[Module 14] -.-> C14[m14 K8s chịu tải]
+    M15[Module 15] -.-> C15[m15 Ray retrain]
+    M16[Module 16] -.-> C16[m16 Feature streaming]
+    M17[Module 17] -.-> C17[m17 Onboard + ký, quét]
+    M18[Module 18] -.-> C18[m18 Đánh giá senior]
     C1 --> C2 --> C3 --> C4 --> C5 --> C6 --> C7 --> C8 --> C9 --> C10 --> C11 --> C12 --> C13
+    C13 --> C14 --> C15 --> C16 --> C17 --> C18
 ```
 
 Từ m14 trở đi (tầng senior): K8s chịu tải, Ray retrain, feature streaming, onboard model thứ hai, và m18 đánh
@@ -157,6 +163,24 @@ docker compose -f setup/mlops/compose.yaml down
 Test cần stack mà chưa bật sẽ `skip` kèm đúng lệnh trên. Bài dùng được MLflow file store (cục bộ) thì **không**
 đòi stack. Bật stack từ module 03 (bài remote DVC dùng MinIO), rồi module 04 trở đi và capstone M02; tắt khi xong để nhường RAM. Công cụ mới (dvc, act, kind,
 promtool…) được dạy cài ở module dùng nó lần đầu, trong phần `## 0. Cài đặt`, có kiểm checksum.
+
+## Setup cho tầng senior
+
+Module 14–18 và milestone m14–m18 cần thêm các thành phần dưới đây, bật khi tới module dùng chúng (test thiếu thứ nào
+thì `skip` kèm đúng lệnh bật). Nhắc lại: tầng senior cho bạn **kiến thức** và cách đo, mô phỏng trên một máy; nó
+không thay kinh nghiệm vận hành production thật.
+
+| Cần cho | Thành phần | Bật bằng |
+| --- | --- | --- |
+| 14, m14 | Cluster kind `mlops` của module 13 (KServe, Argo) cộng add-on metrics-server, KEDA, Kueue | `bash setup/mlops/kind/up.sh --senior` ([chi tiết](../../setup/mlops/kind/README.md#add-on-senior---senior)) |
+| 16, m16 | Kafka (`apache/kafka:4.3.1`, cổng `29092`) | `docker compose -f setup/mlops/compose.yaml --profile streaming up -d --wait` |
+| 16, m16 | Image `mlops-feast:0.67.0` (bài push dùng online store SQLite trong thư mục tạm, không cần Redis) | Tự build lần đầu khi test gọi `mlopskit.feast_run`; profile `feast` (Redis, cổng `26390`) chỉ cần cho module 06 và m06: `docker compose -f setup/mlops/compose.yaml --profile feast up -d --wait` |
+| 17, m17 | Image `mlops-modelscan:0.8.8` (modelscan không vào môi trường Python mặc định) | Tự build lần đầu khi test gọi `mlopskit.modelscan_run`, từ [`setup/mlops/modelscan/Dockerfile`](../../setup/mlops/modelscan/Dockerfile) |
+| 15, 17 | Ray, River, Copier, model-signing, CycloneDX | Có sẵn trong `uv sync` (group `mlops-senior`) |
+
+Chi tiết cổng, phiên bản và số đo ở [`setup/mlops/README.md`](../../setup/mlops/README.md). Bài Triton của module 14
+mặc định skip (image ~9 GB, chỉ chạy khi đặt `MLOPS_TRITON=1`). Distributed training chạy nhiều tiến trình CPU; GPU
+không bắt buộc ở bài nào.
 
 ## Nguyên tắc model nhẹ, việc thật
 
