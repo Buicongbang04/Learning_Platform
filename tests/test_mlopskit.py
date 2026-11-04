@@ -1439,7 +1439,7 @@ def test_modelscan_run_missing_image_says_build(monkeypatch, tmp_path):
     (tmp_path / "m.pkl").write_bytes(b"x")
     missing = subprocess.CompletedProcess([], 125, "", "docker: Error response from daemon: No such image: x")
     _fake_modelscan(monkeypatch, missing)
-    with pytest.raises(pytest.fail.Exception, match="build trước"):
+    with pytest.raises(pytest.fail.Exception, match="chưa có image.*tự build"):
         mlopskit.modelscan_run(tmp_path / "m.pkl")
 
 
