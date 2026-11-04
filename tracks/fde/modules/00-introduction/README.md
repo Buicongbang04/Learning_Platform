@@ -77,9 +77,10 @@ golden, nên golden không bao giờ bị ghi và mỗi lần chạy là một m
 nice -n 15 uv run python -m fdekit prepare lab-open
 ```
 
-Lần đầu mất khoảng 1–5 phút (tải image Ubuntu 22.04 ~730 MB, cài Docker); golden đã có thì lệnh trả ngay, dựng lại bằng
-`--force`. Module 00 chỉ cần `lab-open`; module 01–03 cần thêm `hospital`, `bank`, `lawfirm-staging` (cùng lệnh, đổi tên
-hồ sơ). Đĩa cần khoảng 25 GB cho cả bốn hồ sơ.
+Mất khoảng 1–6 phút (đo được 64–93 s khi dựng riêng một hồ sơ, tới 323 s khi dựng nhiều hồ sơ cùng lúc; lần đầu cộng
+thêm thời gian tải image Ubuntu 22.04 ~730 MB); golden đã có thì lệnh trả ngay, dựng lại bằng `--force`. Module 00 chỉ
+cần `lab-open`; module 01–03 cần thêm `hospital`, `bank`, `lawfirm-staging` (cùng lệnh, đổi tên hồ sơ). Đĩa cần khoảng
+25 GB cho cả bốn hồ sơ.
 
 Sau mỗi lần chạy test, kiểm không còn VM hay thư mục lab sót lại (lệnh chỉ báo cáo, không xoá gì):
 

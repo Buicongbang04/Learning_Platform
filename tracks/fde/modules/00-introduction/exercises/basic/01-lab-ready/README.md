@@ -27,7 +27,8 @@ dựng golden image một lần:
 nice -n 15 uv run python -m fdekit prepare lab-open
 ```
 
-Lệnh in đường dẫn golden, kích thước và thời gian dựng (khoảng 1–5 phút lần đầu, chạy lại thì trả ngay).
+Lệnh in đường dẫn golden, kích thước và thời gian dựng (khoảng 1–6 phút, đo được 64–93 s khi dựng riêng một hồ sơ;
+chạy lại thì trả ngay).
 
 Sau đó viết `starter/lab_ready.sh`. Test boot một VM `lab-open` mới (overlay trên golden, xoá khi xong), chép script vào
 `/home/fde/lab_ready.sh` và chạy bằng `sh /home/fde/lab_ready.sh` với user `fde` qua SSH. Script phải in ra stdout

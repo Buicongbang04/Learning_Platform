@@ -60,8 +60,9 @@ lại; bạn phải chẩn đoán rồi mới qua được.
 | Đĩa | `df -h data/raw` | ~25 GB cho cloud image và golden image (`data/raw/fde-images/`), cộng ~1,1 GB mỗi bundle quillo |
 | RAM | `free -m` | VM chạy sản phẩm ≤5 GB, tổng RAM VM mỗi bài ≤8 GB; `fdekit` skip khi RAM trống không đủ |
 
-Mỗi hồ sơ khách cần một **golden image** dựng một lần (có mạng, khoảng 1–6 phút mỗi hồ sơ, không tính vào ngân sách 300 s
-của bài). Bài nào cần hồ sơ chưa dựng thì test skip kèm đúng lệnh:
+Mỗi hồ sơ khách cần một **golden image** dựng một lần (có mạng, khoảng 1–6 phút mỗi hồ sơ: đo được 64–93 s khi dựng
+riêng từng hồ sơ, 89–323 s khi dựng cả bốn cùng lúc; không tính vào ngân sách 300 s của bài). Bài nào cần hồ sơ chưa
+dựng thì test skip kèm đúng lệnh:
 
 ```bash
 nice -n 15 uv run python -m fdekit prepare lab-open

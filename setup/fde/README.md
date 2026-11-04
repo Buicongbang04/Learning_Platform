@@ -70,11 +70,12 @@ nice -n 15 uv run python -m fdekit prepare bank
 nice -n 15 uv run python -m fdekit prepare lawfirm-staging
 ```
 
-Lệnh chỉ cần chạy một lần mỗi hồ sơ (thời gian dựng không tính vào ngân sách 300 s của bài); golden đã có thì lệnh trả
-ngay, dựng lại bằng `--force`. Cách dựng: overlay trên cloud image, phóng to lên `disk_gb`, boot **có mạng** với user
-`fde` có sudo tạm, chạy `setup/fde/cloud-init/<hồ sơ>.sh` (gỡ snapd và apt/dnf timer chạy nền, cài runtime từ kho
-chính thức của distro, cấu hình "tật"), rồi xoá sudo tạm, key SSH, log cloud-init, machine-id, tắt sạch và ghi qcow2
-độc lập. Log cài đặt: `data/raw/fde-images/golden/<hồ sơ>.prepare.log`.
+Lệnh chỉ cần chạy một lần mỗi hồ sơ (khoảng 1–6 phút mỗi hồ sơ: đo được 64–93 s khi dựng riêng từng hồ sơ, 89–323 s khi
+dựng cả bốn cùng lúc, chưa tính lần đầu tải cloud image; không tính vào ngân sách 300 s của bài); golden đã có thì lệnh
+trả ngay, dựng lại bằng `--force`. Cách dựng: overlay trên cloud image, phóng to lên `disk_gb`, boot **có mạng** với
+user `fde` có sudo tạm, chạy `setup/fde/cloud-init/<hồ sơ>.sh` (gỡ snapd và apt/dnf timer chạy nền, cài runtime từ kho
+chính thức của distro, cấu hình "tật"), rồi xoá sudo tạm, key SSH, log cloud-init, machine-id, tắt sạch và ghi qcow2 độc
+lập. Log cài đặt: `data/raw/fde-images/golden/<hồ sơ>.prepare.log`.
 
 `prepare` cũng `docker pull` image phía host mà hồ sơ cần (`hospital`: mitmproxy, `lawfirm-staging`: registry), để
 bài không phải tải image trong ngân sách 300 s. Thiếu image thì test skip kèm đúng lệnh, tự pull trước được:
