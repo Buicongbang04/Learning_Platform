@@ -48,8 +48,9 @@ có preflight và log; và báo cáo M01 của bạn (preflight của installer 
    Truy hết đường lỗi: lỗi ở bước nào thì dừng ở đó, nói rõ, ghi log; không thoát im lặng bằng `set -e` sau khi đã đổi
    máy.
 5. **`delivery/verify.sh`** (chép vào bundle thành `verify.sh`), chạy bằng user `fde` trên máy đích: `/healthz` trả 200
-   đúng version, đủ năm dịch vụ `db`, `llm`, `embed`, `api`, `worker` đang chạy; thoát `0` khi tất cả đạt, khác `0` khi
-   có gì sai.
+   đúng version, đủ năm dịch vụ `db`, `llm`, `embed`, `api`, `worker` đang chạy (trạng thái `running` theo `docker
+   inspect`: container đang `Restarting` vẫn hiện trong `docker ps` nhưng không tính là chạy, kể cả `worker` không có
+   healthcheck); thoát `0` khi tất cả đạt, khác `0` khi có gì sai.
 6. **`make install`** và **`make verify`** chạy hai script đó trên máy đích qua biến `SSH` (một tiền tố lệnh ssh đầy đủ,
    vd. `ssh -p 2222 fde@staging`; rỗng thì chạy tại máy hiện tại), bundle ở thư mục `REMOTE_BUNDLE` trên máy đích:
 

@@ -28,18 +28,24 @@ if ! docker info >/dev/null 2>&1; then
     bad "không gọi được Docker (user cần quyền docker hoặc chạy bằng sudo)"
 else
     for service in $services; do
-        line=$(docker ps --filter "label=com.docker.compose.project=$project" \
-            --filter "label=com.docker.compose.service=$service" --format '{{.Image}} {{.Status}}' | head -n 1)
-        image=${line%% *}
-        status=${line#* }
-        if [ -z "$line" ]; then
-            bad "dịch vụ $service không chạy"
-        elif printf '%s' "$status" | grep -q unhealthy; then
-            bad "dịch vụ $service unhealthy ($status)"
+        id=$(docker ps -aq --filter "label=com.docker.compose.project=$project" \
+            --filter "label=com.docker.compose.service=$service" | head -n 1)
+        if [ -z "$id" ]; then
+            bad "dịch vụ $service không có container"
+            continue
+        fi
+        # .State.Status (không phải cột Status của `docker ps`): container đang Restarting vẫn hiện trong `docker ps`.
+        line=$(docker inspect -f '{{.Config.Image}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}-{{end}}' "$id")
+        set -- $line
+        image=$1 state=$2 health=$3
+        if [ "$state" != running ]; then
+            bad "dịch vụ $service đang $state, không phải running"
+        elif [ "$health" = unhealthy ]; then
+            bad "dịch vụ $service unhealthy"
         elif [ -n "$registry" ] && [ "${image#"$registry"/}" = "$image" ]; then
             bad "dịch vụ $service chạy image $image, không phải từ registry nội bộ $registry"
         else
-            ok "dịch vụ $service: $image ($status)"
+            ok "dịch vụ $service: $image ($state, health $health)"
         fi
     done
 fi

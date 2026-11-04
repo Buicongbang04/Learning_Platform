@@ -109,3 +109,5 @@ Ba VM boot nối tiếp (không bao giờ hai VM cùng lúc), mỗi VM 5120 MB. 
 - Cài plugin compose vào `/usr/local/lib/docker/cli-plugins`: đổi hành vi `docker` của mọi người dùng khác trên máy IT quản.
 - `make bundle` ghi thẳng vào `BUNDLE_DIR` rồi lỗi giữa chừng: còn lại một bundle thiếu tệp mà vẫn có tên hợp lệ.
 - `verify.sh` chỉ `curl /healthz`: báo đạt khi `worker` đã chết (không ai nạp tài liệu mới).
+- `verify.sh` đọc cột Status của `docker ps`: container `Restarting` vẫn nằm trong `docker ps`, `worker` không có
+  healthcheck nên không bao giờ `unhealthy`; lời giải kiểm `.State.Status == running` bằng `docker inspect` cho từng dịch vụ.

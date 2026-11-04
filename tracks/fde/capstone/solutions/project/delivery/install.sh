@@ -280,7 +280,7 @@ mv -T "$prefix/current.tmp" "$prefix/current"
 
 say "9/9 compose up và /healthz"
 compose=("${base[@]}" -f "$site/compose.site.yaml")
-if ! "${compose[@]}" up -d --wait --wait-timeout 200; then
+if ! "${compose[@]}" up -d --wait --wait-timeout 120; then
     "${compose[@]}" ps -a >&2 || true
     die "compose up không khoẻ; xem: $compose_bin -p $project logs"
 fi
