@@ -434,6 +434,74 @@ Rubric M13 (chấm `diagnosis.yaml` và `docs/assessment.md`; test chỉ kiểm 
 
 Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô cột Tốt.
 
+## M14: K8s chịu tải, Kueue, quota tách serving và training
+
+Bản tham chiếu ở `project/k8s/` (`cluster.yaml`, `serving.yaml`, `training.yaml`, `retrain-job.yaml`, `eta.yaml` cập
+nhật) và một gauge mới trong `project/src/eta/serve.py`. Số đo ở mục "Chịu tải trên K8s (M14)" của `project/README.md`.
+
+- **Metric: số request đang xử lý.** CPU cần metrics-server (cluster không có), RPS và p95 cần Prometheus trong cluster
+  để tính `rate()`/quantile. `eta_requests_in_flight` đọc thẳng từ `/metrics` bằng trigger `metrics-api`
+  (`format: prometheus`), không label (luật M09). KEDA đọc qua Service nên mỗi lần chỉ thấy một pod: `metricType: Value`
+  (`AverageValue` sẽ chia số đọc được cho số replica như thể đó là tổng). `targetValue: "1"` theo định luật Little (60
+  req/s × 15 ms ≈ 1); bản thử `"2"` có lần dừng ở 2 replica.
+- **`autoscalerClass: external`.** Đã thử: với `none`, `kubectl scale --replicas=2` bị KServe kéo về `minReplicas` ngay;
+  với `external` số replica giữ nguyên kể cả khi apply lại InferenceService. Test M12 nhận cả hai, nên M12 vẫn xanh.
+- **Readiness dưới tải.** Bản thử `limits.cpu: 500m`: pod bão hoà trả `/readyz` chậm hơn `timeoutSeconds` mặc định 1
+  giây, bị rút khỏi Service, KEDA không đọc được metric qua Service rỗng và HPA không bao giờ scale (p95 4–6 giây, lỗi
+  3%). Bản cuối giữ `limits.cpu: "1"` và nới readiness (`timeoutSeconds: 3`, `failureThreshold: 3`): readiness là "phục
+  vụ được", không phải "đang bận".
+- **Scale down chậm, scale up nhanh.** `scaleUp` không chờ, tối đa +4 pod mỗi 15 giây; `scaleDown` chờ 120 giây, bớt một
+  pod mỗi 30 giây, vì mẫu in-flight của pod mới Ready thường là 0. Không scale về 0: cold start 10–25 giây trên laptop.
+- **Quota.** Serving đủ cho `maxReplicaCount + 1` pod (rolling update) theo request/limit hiệu lực của pod
+  (max(tổng container chính, init lớn nhất)); `count/jobs.batch: "0"`. Training bằng đúng quota ClusterQueue: nhỏ hơn
+  thì Workload được admit mà pod bị `exceeded quota` (bản thử 500m: Job kẹt, test giờ fail ngay khi thấy event này).
+- **Kueue.** ClusterQueue 1500m/1536Mi, Job 1 CPU/768Mi: đúng một Job một lúc; `StrictFIFO`. Job qua nhãn
+  `kueue.x-k8s.io/queue-name` (cluster chỉ quản lý `batch/v1` Job, `manageJobsWithoutQueueName: false`). PriorityClass
+  `eta-training` `preemptionPolicy: Never`: retrain chờ, không đẩy ai.
+- **Kiểm bộ chấm (mutation):** valueLocation sai tên → fail ở kiểm `/metrics`; valueLocation `eta_model_info` (hằng 1) →
+  1 replica; quota serving 300m → 2 replica và event `exceeded quota`; `autoscalerClass: none` → 1 replica, p95 2,8 giây;
+  Job thiếu nhãn hàng đợi → không có Workload; ClusterQueue đủ hai Job → 2 Job admit cùng lúc; serving thiếu
+  `count/jobs.batch` → Job lạc được nhận; quota training 500m → fail ngay vì `exceeded quota`; Job `sleep` thay vì train
+  → không có `"mae"` trong log. Bản đúng viết khác (`minReplicaCount: 2`, `maxReplicaCount: 6`, quota tương ứng, URL
+  `eta-predictor.<ns>`) qua contract.
+
+Rubric M14:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Chọn metric | Nêu metric và vì sao không dùng CPU | So bốn metric (bảng mục 1), tính `targetValue` từ sức chịu một pod đo được |
+| Kết quả tải | Bảng replica theo thời gian, p95 hai pha | Giải thích độ trễ scale (chu kỳ HPA, cold start), nêu khi nào cần `minReplicaCount` > 1 |
+| Quota và ưu tiên | Phép tính quota hai namespace | Nêu điều gì xảy ra khi node hết chỗ (ai bị đẩy, ai chờ), và giới hạn của cách lấy mẫu một pod |
+
+## M15: retrain bằng Ray Tune, checkpoint, chịu worker bị kill
+
+Bản tham chiếu ở `project/src/eta/distributed.py`; số đo ở mục "Retrain phân tán (M15)" của `project/README.md`.
+
+- **Ray Tune theo cấu hình, không data-parallel.** GBDT dựng cây tuần tự; data-parallel GBDT (LightGBM/XGBoost
+  distributed, allreduce histogram) chỉ đáng khi dữ liệu vượt RAM một worker và kéo theo đổi model, đổi serve. Các trial
+  độc lập nên Tune chạy chúng song song, mỗi trial 1 CPU (`OMP_NUM_THREADS=1` do Ray đặt).
+- **Checkpoint theo đợt cây.** `HistGradientBoostingRegressor(warm_start=True, early_stopping=False)`, mỗi đợt
+  `set_params(model__max_iter=k)` rồi `fit`; checkpoint là thư mục tạm chứa `model.joblib`, `tune.report` chép nó vào
+  `storage_path`. Trial mở đầu bằng `tune.get_checkpoint()`. Model cuối tắt `warm_start` trước khi trả về để lần `fit`
+  sau (nếu có) không cộng dồn cây.
+- **Worker phải import được `eta`.** Lần đầu thiếu `PYTHONPATH`: cả 4 trial `ActorDiedError` với
+  `ModuleNotFoundError: No module named 'eta'`. Test đặt `PYTHONPATH=<project>/src` trước `ray_local`; image train đã có
+  `PYTHONPATH=/app/src`.
+- **Đo ở test:** kill ở 60 cây (sau 3 report), chạy lại từ 80 cây trên `pid` mới, 7 report sau khi chạy lại; cả lần
+  retrain 25–30 giây; `mae` 33,8 so với 34,5 của model một tiến trình.
+- **Kiểm bộ chấm (mutation):** bỏ đọc checkpoint → chạy lại từ 20 cây, fail; `max_failures=0` → retrain raise, mọi test
+  fail; `max_concurrent_trials=1` → không có hai trial chồng nhau; checkpoint chỉ ở cuối → không kill được ai, fail;
+  `metrics` đo trên `train` → lệch `evaluate` trên `valid`; đăng ký thẳng bằng MLflow không qua `log_and_register` → thiếu
+  tag lineage. Bản đúng viết khác (tìm ngẫu nhiên 3 mẫu, checkpoint mỗi hai đợt, `num_to_keep=1`) pass cả bốn test.
+
+Rubric M15:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Lý do kiến trúc | Nêu vì sao không data-parallel GBDT | Ngưỡng dữ liệu/RAM để chuyển sang LightGBM distributed, kèm cái giá (serve, cổng M04) |
+| Chịu lỗi | Log một lần kill và số cây trước/sau | Nêu nơi đặt checkpoint khi node chết thật (object storage), và `max_failures` khác gì retry của Job K8s |
+| Hiệu năng | Thời gian `workers=2` | So `workers=1` và `workers=2` trên máy mình, giải thích vì sao không gấp đôi đúng |
+
 ## M18: đánh giá senior, sự cố queens 2019-11-14
 
 Sự cố sinh bằng `solutions/assessment/senior_incident.py` (người học nhận tệp qua `etakit.py incident`): mọi chuyến thật của
@@ -528,4 +596,6 @@ Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô c
 | Cloud (M11, tuỳ chọn) | `--dry-run` đúng, có budget | Xem rubric riêng ở mục M11 |
 | Kubernetes (M12) | Test xanh, README có lệnh và bảng release | Xem rubric riêng ở mục M12 |
 | Đánh giá junior (M13) | Ba nhãn đúng, `keep` + cách ly | Xem rubric riêng ở mục M13 |
+| K8s chịu tải (M14) | Test xanh, README có metric, bảng replica, quota | Xem rubric riêng ở mục M14 |
+| Retrain phân tán (M15) | Test xanh, README có lý do và log kill | Xem rubric riêng ở mục M15 |
 | Đánh giá senior (M18) | Bốn nhãn đúng, SEV1, alert theo market | Xem rubric riêng ở mục M18 |

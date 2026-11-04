@@ -194,6 +194,56 @@ Training: `argo/train-workflow.yaml` (DAG `validate → train → gate`, paramet
 ConfigMap `eta-train-data`, artifact `sample`, `model`, `metrics` qua MinIO của Argo). Một Workflow trên 1 500 chuyến xong
 trong khoảng 30 giây; `gate` từ chối thoát mã 3 và Workflow Failed ở đúng bước đó.
 
+## Chịu tải trên K8s (M14)
+
+Metric scale là `eta_requests_in_flight`: gauge trong middleware `/predict` của `eta.serve`, tăng khi request vào, giảm
+trong `finally`. Cluster không có metrics-server (CPU không đọc được) và không có Prometheus trong cluster (không tính được
+`rate()` hay p95), còn in-flight đọc thẳng được từ `/metrics` bằng trigger `metrics-api` (`format: prometheus`) và theo
+định luật Little tăng vọt đúng lúc pod bắt đầu xếp hàng. KEDA đọc qua Service nên mỗi lần chỉ thấy một pod:
+`metricType: Value`, `targetValue: "1"` (một pod nên nhận khoảng 60 req/s ở 15 ms, in-flight khoảng 1). Với `"2"` có lần
+dừng ở 2 replica khi hai pod gánh 150 req/s ở khoảng 88% sức.
+
+```bash
+ETA_RUN=dev1 envsubst '$ETA_RUN' < k8s/cluster.yaml | kubectl --context kind-mlops apply -f -
+ETA_NAMESPACE=eta envsubst '$ETA_NAMESPACE' < k8s/serving.yaml | kubectl --context kind-mlops -n eta apply -f -
+ETA_PRIORITY_CLASS=eta-serving-dev1 envsubst < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
+ETA_RUN=dev1 envsubst '$ETA_RUN' < k8s/training.yaml | kubectl --context kind-mlops -n eta-training apply -f -
+ETA_RUN=dev1 ETA_TRAIN_IMAGE=eta-train:dev ETA_MONTH=2019-03 envsubst '$ETA_RUN $ETA_TRAIN_IMAGE $ETA_MONTH' \
+  < k8s/retrain-job.yaml | kubectl --context kind-mlops -n eta-training create -f -
+```
+
+Đo trên laptop 16 nhân đang chạy việc khác, 150 req/s không keep-alive:
+
+| t (giây từ lúc k6 bắt đầu) | 0 | 13 | 19 | 25 | 80 |
+| --- | --- | --- | --- | --- | --- |
+| replicas / Ready | 1/1 | 1/1 | 4/1 | 4/4 | 4/4 |
+
+Pha steady (20 giây, 3 000 request): p95 14–39 ms qua sáu lần chạy, không lỗi. Một pod một mình ở 150 req/s: p95 từ
+khoảng 50 ms (máy rảnh) tới 2,4 giây (máy bận). HPA đồng bộ mỗi 15 giây, nên thời điểm scale lệch
+tới 15 giây giữa các lần chạy.
+
+Quota serving: pod predictor xin 100m CPU, 256Mi, giới hạn 1 CPU, 512Mi; `maxReplicaCount: 4` + 1 pod rolling update = 5
+pod → `requests.cpu: 1` (cần 500m), `requests.memory: 2Gi` (cần 1,25Gi), `limits.cpu: 6` (cần 5), `limits.memory: 3Gi`
+(cần 2,5Gi), `pods: 8`, `count/jobs.batch: 0`. Training: Job retrain xin 1 CPU, 768Mi; ClusterQueue và ResourceQuota
+1500m, 1536Mi nên đúng một Job chạy một lúc. PriorityClass `eta-serving` 100 000 (`PreemptLowerPriority`),
+`eta-training` 1 000 (`Never`).
+
+## Retrain phân tán (M15)
+
+`eta.distributed.retrain` chạy Ray Tune: lưới `learning_rate` 0,05/0,1 × `max_leaf_nodes` 31/63, mỗi trial 1 CPU, tối đa
+`workers` trial cùng lúc; mỗi trial `warm_start` thêm 20 cây một đợt, report `trees` và checkpoint `model.joblib` sau mỗi
+đợt, đọc `tune.get_checkpoint()` khi bắt đầu. `FailureConfig(max_failures=2)`, `CheckpointConfig(num_to_keep=2)`.
+Không chia dữ liệu: GBDT dựng cây tuần tự, mẫu 200 000 dòng vừa RAM một worker; các trial độc lập nên song song theo cấu hình
+không cần đồng bộ gì giữa worker, và giữ nguyên model M01 và cổng M04.
+
+| Lần chạy | Thời gian | Kết quả |
+| --- | --- | --- |
+| Test, 40 000 chuyến giả, 2 worker, 4 trial, kill một worker | 25–30 giây | Kill ở 60 cây, chạy lại từ 80 cây trên worker mới; `mae` 33,8 so với 34,5 của model một tiến trình |
+| 2019-01 thật, mẫu 200 000, 2 worker | khoảng 45 giây | Tốt nhất `learning_rate` 0,1, `max_leaf_nodes` 63; `mae` 147 giây trên 20% cuối tháng |
+
+`register` gọi `log_and_register` của M04 với `model_params` của trial tốt nhất (tag `git_commit`, `data_version`) và thêm
+tag `trainer=ray-tune`, `trials`.
+
 ## Đánh giá M13
 
 `make assessment` dựng `data/assessment/` (tháng lạ 2019-10 và ba tháng thật quanh nó), chạy `prepare`, `validate` (exit 1

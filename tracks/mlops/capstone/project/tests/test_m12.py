@@ -147,7 +147,7 @@ def documents(text: str) -> list[dict]:
 def release_values(images, champion: tuple[str, str], challenger: tuple[str, str], weight: float, token: str) -> dict:
     return {"ETA_SERVE_IMAGE": images.serve(), "ETA_CHAMPION_IMAGE": champion[0], "ETA_CHAMPION_VERSION": champion[1],
             "ETA_CHALLENGER_IMAGE": challenger[0], "ETA_CHALLENGER_VERSION": challenger[1],
-            "ETA_CANARY_WEIGHT": str(weight), "ETA_ADMIN_TOKEN": token}
+            "ETA_CANARY_WEIGHT": str(weight), "ETA_ADMIN_TOKEN": token, "ETA_PRIORITY_CLASS": ""}
 
 
 def deploy(ns: str, manifest, values: dict) -> None:
@@ -238,7 +238,8 @@ def split_bounds(weight: float, n: int) -> tuple[int, int]:
 def test_m12_manifests_contract(project):
     manifest = require_file("k8s", "eta.yaml")
     require_file("k8s", "Dockerfile.model")
-    values = {key: f"value-{key.lower()}" for key in SERVE_VARS} | {"ETA_CANARY_WEIGHT": "0", "ETA_ADMIN_TOKEN": "tok-m12"}
+    values = {key: f"value-{key.lower()}" for key in SERVE_VARS} | {"ETA_CANARY_WEIGHT": "0", "ETA_ADMIN_TOKEN": "tok-m12",
+                                                                   "ETA_PRIORITY_CLASS": ""}
     docs = documents(render(manifest, **values))
     raw = manifest.read_text(encoding="utf-8")
     missing = [key for key in SERVE_VARS if f"${{{key}}}" not in raw and f"${key}" not in raw]
@@ -252,8 +253,8 @@ def test_m12_manifests_contract(project):
     assert annotations.get("serving.kserve.io/deploymentMode") in ("RawDeployment", "Standard"), \
         "đặt annotation serving.kserve.io/deploymentMode: RawDeployment (cluster không có Knative)"
     fixed = predictor.get("minReplicas") is not None and predictor.get("minReplicas") == predictor.get("maxReplicas")
-    assert annotations.get("serving.kserve.io/autoscalerClass") == "none" or fixed, \
-        "cluster không có metrics-server: autoscalerClass none hoặc minReplicas == maxReplicas"
+    assert annotations.get("serving.kserve.io/autoscalerClass") in ("none", "external") or fixed, \
+        "cluster không có metrics-server: autoscalerClass none (external từ M14) hoặc minReplicas == maxReplicas"
     containers = predictor.get("containers") or []
     assert len(containers) == 1, "predictor custom: đúng một container (image Dockerfile.serve)"
     main = containers[0]
