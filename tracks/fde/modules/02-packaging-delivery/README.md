@@ -37,18 +37,21 @@ mkdir -p ~/.cache/fde-tools && cd ~/.cache/fde-tools
 curl -fLO https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
 curl -fLO https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign_checksums.txt
 grep ' cosign-linux-amd64$' cosign_checksums.txt | sha256sum -c -
+echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  cosign-linux-amd64" | sha256sum -c -
 install -m 0755 cosign-linux-amd64 ~/.local/bin/cosign
 
 curl -fLO https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_linux_amd64.tar.gz
 curl -fLO https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_checksums.txt
 grep ' syft_1.55.0_linux_amd64.tar.gz$' syft_1.55.0_checksums.txt | sha256sum -c -
+echo "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d  syft_1.55.0_linux_amd64.tar.gz" | sha256sum -c -
 tar -xzf syft_1.55.0_linux_amd64.tar.gz syft && install -m 0755 syft ~/.local/bin/syft
 
 cosign version | grep GitVersion && syft version | grep '^Version'
 ```
 
-`sha256sum -c` phải in `OK`; sai thì xoá tệp và tải lại, **không** chạy. Tệp checksum tải cùng chỗ với binary chỉ chống
-tải hỏng, không chống kẻ chiếm được trang phát hành; cosign còn ký chính tệp checksum của nó (`cosign_checksums.txt-keyless.sigstore.json`
+Mỗi dòng `sha256sum -c` phải in `OK`; sai thì xoá tệp và tải lại, **không** chạy. Dòng thứ hai của mỗi công cụ so với
+giá trị ghim trong bảng trên: tệp checksum tải cùng chỗ với binary chỉ chống tải hỏng, không chống kẻ chiếm được trang
+phát hành; cosign còn ký chính tệp checksum của nó (`cosign_checksums.txt-keyless.sigstore.json`
 cùng trang), xem tài liệu cosign nếu cần mức đó. Gỡ: `rm ~/.local/bin/cosign ~/.local/bin/syft && rm -r ~/.cache/fde-tools`.
 
 ## 1. Bundle cài được ở mọi nơi bắt đầu từ máy đích
