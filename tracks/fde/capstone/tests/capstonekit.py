@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import fdekit
 from testkit import ROOT, run_sandboxed
 
 VERSION = "1.0.0"
@@ -33,8 +34,11 @@ MEMORY_MB = 5120
 REMOTE_BUNDLE = "/home/fde/bundle"
 SERVICES = {"db", "llm", "embed", "api", "worker"}
 BUNDLE_TIMEOUT = 120
-INSTALL_TIMEOUT = 250
+INSTALL_TIMEOUT = 150
+REINSTALL_TIMEOUT = 60
+TAMPER_TIMEOUT = 60
 VERIFY_TIMEOUT = 60
+TEST_BUDGET = 270
 FRONTMATTER = re.compile(r"^---\n([\s\S]*?)\n---\n")
 BUILD_RELEASE = (f"nice -n 15 uv run python tracks/fde/product/release.py build --version {VERSION} "
                  "--out tracks/fde/product/dist")
@@ -76,8 +80,24 @@ def release_member(rel: str) -> bytes:
 
 
 def big_tmp() -> tempfile.TemporaryDirectory:
-    """Thư mục tạm trên đĩa (không phải tmpfs /tmp): bundle ~1,1 GB."""
-    return tempfile.TemporaryDirectory(dir="/var/tmp", prefix="fde-capstone-", ignore_cleanup_errors=True)
+    """Thư mục tạm trên đĩa (không phải tmpfs /tmp): bundle ~1,1 GB. Sót lại khi pytest bị SIGKILL thì
+    `python -m fdekit leftovers` báo và `python -m fdekit clean-tmp` dọn."""
+    return fdekit.capstone_tmp()
+
+
+class Budget:
+    """Hạn chung của một test: mỗi bước dùng `min(giới hạn của bước, thời gian còn lại)`, nên installer treo làm test
+    FAIL kèm thông báo rõ trước mốc 300 s app cắt test (SIGKILL không để lại thông báo nào)."""
+
+    def __init__(self, seconds: float = TEST_BUDGET) -> None:
+        self.seconds = seconds
+        self.deadline = time.monotonic() + seconds
+
+    def cap(self, limit: float, step: str) -> float:
+        left = self.deadline - time.monotonic()
+        if left < 5:
+            pytest.fail(f"Test đã dùng hết ngân sách {self.seconds:.0f} s trước bước {step}")
+        return min(limit, left)
 
 
 def output(result: subprocess.CompletedProcess, limit: int = 2500) -> str:
@@ -91,7 +111,8 @@ def make(repo: Path, *args: str, writable: list[Path] | tuple = (), timeout: flo
         return run_sandboxed(cmd, writable=list(writable), cwd=repo, env={}, timeout=timeout, input="")
     except subprocess.TimeoutExpired:
         targets = " ".join(a for a in args if "=" not in a)
-        pytest.fail(f"`make {targets}` chạy quá {timeout:.0f} s")
+        pytest.fail(f"`make {targets}` chạy quá {timeout:.0f} s (giới hạn của bước này hoặc phần còn lại của ngân sách "
+                    f"{TEST_BUDGET} s mỗi test; xem tiêu chí đạt của milestone)")
 
 
 def bundle_vars(site: str, dest: Path, sha: str | None = None) -> list[str]:
@@ -99,8 +120,8 @@ def bundle_vars(site: str, dest: Path, sha: str | None = None) -> list[str]:
             f"QUILLO_RELEASE_SHA256={sha or release().sha256}", f"COMPOSE_BIN={COMPOSE_BIN}"]
 
 
-def build_bundle(repo: Path, site: str, dest: Path) -> subprocess.CompletedProcess:
-    result = make(repo, "bundle", *bundle_vars(site, dest), writable=[dest.parent], timeout=BUNDLE_TIMEOUT)
+def build_bundle(repo: Path, site: str, dest: Path, timeout: float = BUNDLE_TIMEOUT) -> subprocess.CompletedProcess:
+    result = make(repo, "bundle", *bundle_vars(site, dest), writable=[dest.parent], timeout=timeout)
     assert result.returncode == 0, f"make bundle SITE={site} thoát mã {result.returncode}\n{output(result)}"
     assert (dest / "SHA256SUMS").is_file(), f"make bundle không tạo {dest}/SHA256SUMS"
     return result

@@ -9,6 +9,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
+from pathlib import Path
 
 import pycdlib
 import pytest
@@ -394,6 +395,7 @@ def test_clean_rejects_bad_run_id():
 
 def test_leftovers_reports_run_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(fdekit, "LAB", tmp_path)
+    monkeypatch.setattr(fdekit, "CAPSTONE_TMP", tmp_path / "var-tmp")
     (tmp_path / "fde-ex-0badc0de").mkdir()
     (tmp_path / "fde-ex-12345678").mkdir()
     monkeypatch.setattr(fdekit, "_containers", lambda needle: [])
@@ -403,6 +405,41 @@ def test_leftovers_reports_run_dir(tmp_path, monkeypatch):
     fdekit.clean("0badc0de")
     assert fdekit.leftovers("0badc0de") == []
     assert (tmp_path / "fde-ex-12345678").exists()
+
+
+def _dead_pid() -> int:
+    proc = subprocess.Popen(["true"])
+    proc.wait()
+    return proc.pid
+
+
+def test_capstone_tmp_reported_and_cleaned_only_when_owner_dead(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "var-tmp"
+    root.mkdir()
+    monkeypatch.setattr(fdekit, "CAPSTONE_TMP", root)
+    monkeypatch.setattr(fdekit, "LAB", tmp_path / "lab")
+    monkeypatch.setattr(fdekit, "_containers", lambda needle: [])
+    monkeypatch.setattr(fdekit, "_networks", lambda needle: [])
+    with fdekit.capstone_tmp() as live:
+        assert Path(live).name.startswith(f"fde-capstone-{os.getpid()}-")
+        stale = root / f"fde-capstone-{_dead_pid()}-abc123"
+        (stale / "bundle").mkdir(parents=True)
+        unknown = root / "fde-capstone-xyz"
+        unknown.mkdir()
+        target = tmp_path / "not-mine"
+        target.mkdir()
+        (root / f"fde-capstone-{_dead_pid()}-link").symlink_to(target)
+
+        report = fdekit.leftovers()
+        assert any(str(stale) in line for line in report)
+        assert any(str(unknown) in line for line in report)
+        assert not any(str(live) in line for line in report)
+        assert fdekit.leftovers("0badc0de") == []
+
+        assert fdekit.main(["clean-tmp"]) == 0
+        assert f"đã xoá {stale}" in capsys.readouterr().out
+        assert not stale.exists()
+        assert Path(live).is_dir() and unknown.is_dir() and target.is_dir()
 
 
 def test_cli_prepare_unknown_profile(capsys):

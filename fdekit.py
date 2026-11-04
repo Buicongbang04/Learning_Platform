@@ -14,8 +14,10 @@ import shlex
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -42,6 +44,9 @@ CAPSTONE_SKIP = "Đặt FDE_CAPSTONE_DIR=<đường dẫn repo capstone của b�
 _RUN_ID = re.compile(r"^[0-9a-f]{8}$")
 _GUARD = "--fdekit-guard"
 _PORT_TAKEN = "Could not set up host forwarding rule"
+CAPSTONE_TMP = Path("/var/tmp")
+CAPSTONE_TMP_PREFIX = "fde-capstone-"
+_CAPSTONE_TMP_NAME = re.compile(rf"^{CAPSTONE_TMP_PREFIX}(\d+)-")
 
 testkit._load_env_file(ROOT / "setup" / ".env")
 
@@ -212,8 +217,8 @@ def _sha256(path: Path) -> str:
 
 
 def _stamp(path: Path, sha256: str) -> str:
-    stat = path.stat()
-    return f"{sha256} {stat.st_size} {stat.st_mtime_ns}"
+    info = path.stat()
+    return f"{sha256} {info.st_size} {info.st_mtime_ns}"
 
 
 def _verified(path: Path, sha256: str) -> bool:
@@ -1082,14 +1087,73 @@ def _networks(needle: str) -> list[str]:
     return _docker_names(["network", "ls"], "{{.Name}}", needle)
 
 
+def capstone_tmp() -> tempfile.TemporaryDirectory:
+    """Thư mục tạm lớn của bộ chấm capstone (bundle ~1,1 GB) ở `/var/tmp`, không phải tmpfs `/tmp`. Tên
+    `fde-capstone-<pid>-<ngẫu nhiên>`: pytest bị SIGKILL thì thư mục còn lại, `clean_capstone_tmp` nhận ra qua pid đã chết."""
+    return tempfile.TemporaryDirectory(dir=CAPSTONE_TMP, prefix=f"{CAPSTONE_TMP_PREFIX}{os.getpid()}-",
+                                       ignore_cleanup_errors=True)
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _capstone_tmps() -> list[tuple[Path, int | None]]:
+    """Thư mục `fde-capstone-*` là thư mục thật (không phải symlink) của user hiện tại, kèm pid chủ nếu đọc được từ tên."""
+    found = []
+    uid = os.getuid()
+    try:
+        entries = sorted(CAPSTONE_TMP.glob(f"{CAPSTONE_TMP_PREFIX}*"))
+    except OSError:
+        return []
+    for path in entries:
+        try:
+            info = path.lstat()
+        except OSError:
+            continue
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != uid:
+            continue
+        match = _CAPSTONE_TMP_NAME.match(path.name)
+        found.append((path, int(match.group(1)) if match else None))
+    return found
+
+
+def stale_capstone_tmps() -> list[Path]:
+    """Thư mục tạm capstone mà tiến trình tạo ra nó đã chết (vd. pytest bị app SIGKILL sau 300 s)."""
+    return [path for path, pid in _capstone_tmps() if pid is not None and not _alive(pid)]
+
+
+def clean_capstone_tmp() -> list[Path]:
+    """Xoá thư mục tạm capstone sót lại của user hiện tại; không đụng thư mục của tiến trình còn sống."""
+    removed = []
+    for path in stale_capstone_tmps():
+        shutil.rmtree(path, ignore_errors=True)
+        if not path.exists():
+            removed.append(path)
+    return removed
+
+
 def leftovers(run_id: str | None = None) -> list[str]:
-    """Tiến trình QEMU, thư mục lab (overlay, seed, key) và container còn sót. `run_id=None` chỉ để báo cáo."""
+    """Tiến trình QEMU, thư mục lab (overlay, seed, key) và container còn sót. `run_id=None` chỉ để báo cáo, và báo thêm
+    thư mục tạm capstone `/var/tmp/fde-capstone-*` sót lại (pid chủ đã chết hoặc không đọc được từ tên)."""
     needle = f"{PREFIX}{run_id}" if run_id else PREFIX
     found = [f"process {pid}: {line}" for pid, _, line in _processes(needle)]
     if LAB.is_dir():
         found += sorted(str(path) for path in LAB.iterdir() if path.name.startswith(needle))
     found += [f"container {name}" for name in _containers(needle)]
     found += [f"network {name}" for name in _networks(needle)]
+    if run_id is None:
+        for path, pid in _capstone_tmps():
+            if pid is None:
+                found.append(f"capstone tmp {path} (tên không có pid; xoá tay khi chắc không phiên nào đang dùng)")
+            elif not _alive(pid):
+                found.append(f"capstone tmp {path} (tiến trình {pid} đã chết; dọn: python -m fdekit clean-tmp)")
     return found
 
 
@@ -1126,6 +1190,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands.add_parser("leftovers", help="liệt kê tiến trình QEMU, overlay, container/network fde-ex-* còn sót")
     cleaner = commands.add_parser("clean", help="dọn mọi thứ của một run id")
     cleaner.add_argument("run_id")
+    commands.add_parser("clean-tmp", help="xoá /var/tmp/fde-capstone-* của bạn mà tiến trình tạo ra nó đã chết")
     args = parser.parse_args(argv)
     if args.command == "prepare":
         started = time.monotonic()
@@ -1143,6 +1208,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         size = golden.stat().st_size / 1024 ** 3
         print(f"{golden} ({size:.2f} GiB, {time.monotonic() - started:.0f} s)")
         return 0
+    if args.command == "clean-tmp":
+        for path in clean_capstone_tmp():
+            print(f"đã xoá {path}")
     if args.command == "clean":
         try:
             clean(args.run_id)

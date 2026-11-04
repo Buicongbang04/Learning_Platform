@@ -157,9 +157,13 @@ hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
 ```bash
 uv run python -m fdekit leftovers          # liệt kê tiến trình QEMU, thư mục .fde-lab, container/network fde-ex-* còn sót
 uv run python -m fdekit clean <run_id>     # dọn đúng một run id (8 ký tự hex)
+uv run python -m fdekit clean-tmp          # xoá /var/tmp/fde-capstone-* của bạn mà tiến trình tạo ra đã chết
 ```
 
 `leftovers` không có `run_id` chỉ để xem; không có lệnh xoá hàng loạt vì nhiều phiên có thể chạy song song trên cùng máy.
+`leftovers` báo thêm thư mục tạm của bộ chấm capstone (`/var/tmp/fde-capstone-<pid>-*`, bundle ~1,1 GB) còn sót khi
+pytest bị `SIGKILL`: tên mang pid của tiến trình pytest, nên `clean-tmp` chỉ xoá thư mục thuộc user của bạn mà pid đó đã
+chết, không đụng thư mục của phiên đang chạy.
 
 ## Biến trong `setup/.env`
 

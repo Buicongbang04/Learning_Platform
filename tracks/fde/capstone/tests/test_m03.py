@@ -10,14 +10,17 @@ import pytest
 
 import fdekit
 from capstonekit import (
+    BUNDLE_TIMEOUT,
     INSTALL_TIMEOUT,
     MEMORY_MB,
     PORT,
     RELEASE_NAME,
     REMOTE_BUNDLE,
     SERVICES,
+    TAMPER_TIMEOUT,
     VERIFY_TIMEOUT,
     VERSION,
+    Budget,
     big_tmp,
     build_bundle,
     healthz,
@@ -31,7 +34,6 @@ from capstonekit import (
 
 DELIVERY = ("Makefile", "delivery/fetch_release.sh", "delivery/install.sh", "delivery/verify.sh")
 REMOTE_TAR = f"{REMOTE_BUNDLE}/{RELEASE_NAME}"
-TAMPER_TIMEOUT = 120
 STATE = ("docker images -q | sort; echo ---; docker ps -aq | sort; echo ---; "
          "sudo -n sha256sum /etc/docker/daemon.json 2>/dev/null || echo 'no daemon.json'; echo ---; "
          "systemctl show docker -p ActiveEnterTimestamp")
@@ -49,14 +51,14 @@ class Staging:
         self.member = ""
         self.timings: dict[str, float] = {}
 
-    def ready(self) -> "Staging":
+    def ready(self, budget: Budget) -> "Staging":
         if self.site is not None:
             return self
         need_files(self.repo, *DELIVERY)
         release()
         started = time.monotonic()
         bundle = Path(self.stack.enter_context(big_tmp())) / "bundle"
-        build_bundle(self.repo, "lawfirm-staging", bundle)
+        build_bundle(self.repo, "lawfirm-staging", bundle, budget.cap(BUNDLE_TIMEOUT, "make bundle"))
         self.offset, self.member = largest_member(bundle / RELEASE_NAME)
         self.timings["bundle"] = time.monotonic() - started
         site = self.stack.enter_context(fdekit.customer_site("lawfirm-staging", memory_mb=MEMORY_MB, forwards=(PORT,)))
@@ -101,9 +103,9 @@ def registry(site, path: str) -> dict:
         return json.load(response)
 
 
-def rejected(st: Staging, case: str, must_name: str, before: str) -> None:
+def rejected(st: Staging, budget: Budget, case: str, must_name: str, before: str) -> None:
     started = time.monotonic()
-    result = make_on(st.repo, st.site.vm, "install", TAMPER_TIMEOUT)
+    result = make_on(st.repo, st.site.vm, "install", budget.cap(TAMPER_TIMEOUT, f"make install ({case})"))
     st.timings[case] = time.monotonic() - started
     assert result.returncode != 0, f"{case}: make install vẫn thoát 0"
     text = result.stdout + result.stderr
@@ -116,14 +118,15 @@ def rejected(st: Staging, case: str, must_name: str, before: str) -> None:
 
 def test_m03_rejects_tampered_bundle(capstone, staging):
     need_files(capstone, *DELIVERY)
-    staging.ready()
+    budget = Budget()
+    staging.ready(budget)
     m = staging.site.vm
     before = vm_sh(m, STATE, 30).stdout
     flip(m, staging.offset)
     try:
-        rejected(staging, "tệp bundle hỏng một byte", RELEASE_NAME, before)
+        rejected(staging, budget, "tệp bundle hỏng một byte", RELEASE_NAME, before)
         forge_sums(m)
-        rejected(staging, "bundle bị sửa và SHA256SUMS viết lại cho khớp", staging.member, before)
+        rejected(staging, budget, "bundle bị sửa và SHA256SUMS viết lại cho khớp", staging.member, before)
     finally:
         flip(m, staging.offset)
         vm_sh(m, f"[ ! -f /home/fde/SHA256SUMS.orig ] || cp /home/fde/SHA256SUMS.orig {REMOTE_BUNDLE}/SHA256SUMS", 30)
@@ -131,12 +134,13 @@ def test_m03_rejects_tampered_bundle(capstone, staging):
 
 def test_m03_airgapped_install(capstone, staging):
     need_files(capstone, *DELIVERY)
-    s, m = staging.ready().site, staging.site.vm
+    budget = Budget()
+    s, m = staging.ready(budget).site, staging.site.vm
     started = time.monotonic()
-    done = make_on(capstone, m, "install", INSTALL_TIMEOUT)
+    done = make_on(capstone, m, "install", budget.cap(INSTALL_TIMEOUT, "make install"))
     staging.timings["install"] = time.monotonic() - started
     assert done.returncode == 0, f"make install thoát mã {done.returncode}\n{output(done)}"
-    body = healthz(f"http://127.0.0.1:{m.port(PORT)}/healthz")
+    body = healthz(f"http://127.0.0.1:{m.port(PORT)}/healthz", budget.cap(60, "/healthz"))
     assert body.get("version") == VERSION, f"/healthz trả {body}, cần version {VERSION}"
 
     running = quillo_containers(m)
@@ -149,9 +153,9 @@ def test_m03_airgapped_install(capstone, staging):
         tags = registry(s, f"/v2/{repo}/tags/list").get("tags") or []
         assert tag in tags, f"Registry nội bộ không có {repo}:{tag} mà {service} đang chạy"
 
-    verify = make_on(capstone, m, "verify", VERIFY_TIMEOUT)
+    verify = make_on(capstone, m, "verify", budget.cap(VERIFY_TIMEOUT, "make verify"))
     assert verify.returncode == 0, f"make verify thoát mã {verify.returncode}\n{output(verify)}"
     stopped = vm_sh(m, f"docker stop {running['api']['id']}", 60)
     assert stopped.returncode == 0, stopped.stderr
-    broken = make_on(capstone, m, "verify", VERIFY_TIMEOUT)
+    broken = make_on(capstone, m, "verify", budget.cap(VERIFY_TIMEOUT, "make verify khi api dừng"))
     assert broken.returncode != 0, "Dịch vụ api đã dừng mà make verify vẫn thoát 0"

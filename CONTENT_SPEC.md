@@ -528,7 +528,7 @@ seed cloud-init, SSH bằng key sinh riêng mỗi lần chạy), không phải c
 | "Sự thật" để chấm báo cáo survey | `fdekit.PROFILES["bank"].facts` | 13 khoá: `os_id`, `os_version`, `kernel_major`, `glibc`, `cpus`, `mem_mb`, `disk_free_gb_max`, `gpu`, `proxy_url`, `sudo`, `selinux`, `runtime`, `egress`; `cpus`/`mem_mb` là cấu hình `customer_site()` boot mặc định (2 CPU, 2048 MB) |
 | Model GGUF đã ghim | `fdekit.fetch_model("llm-small")` (khoá trong `fdekit.MODELS`: `llm-small`, `llm-medium`, `embed-small`) | Tải một lần vào `data/raw/fde-models/`, kiểm sha256 trước khi đặt tên chính thức |
 | Repo capstone của người học | `fdekit.capstone_dir()` | `SOLUTION=1` ⇒ `tracks/fde/capstone/solutions/project/`; ngược lại đọc `FDE_CAPSTONE_DIR`, chưa đặt hay không phải thư mục thì skip |
-| Kiểm tra không còn rác | `fdekit.leftovers(run_id)`, `fdekit.clean(run_id)`; CLI `python -m fdekit leftovers`, `python -m fdekit clean <run_id>` | `leftovers` chỉ **báo cáo**: không có run id (`leftovers()`, CLI `leftovers`) thì liệt kê mọi tiến trình QEMU, thư mục `.fde-lab/fde-ex-*`, container và network `fde-ex-*` còn sót, không xoá gì. Chỉ `clean <run_id>` xoá, và chỉ xoá của **đúng** một run id (`fde-ex-<run_id>*`). Không có lệnh xoá hàng loạt |
+| Kiểm tra không còn rác | `fdekit.leftovers(run_id)`, `fdekit.clean(run_id)`, `fdekit.clean_capstone_tmp()`; CLI `python -m fdekit leftovers`, `python -m fdekit clean <run_id>`, `python -m fdekit clean-tmp` | `leftovers` chỉ **báo cáo**: không có run id (`leftovers()`, CLI `leftovers`) thì liệt kê mọi tiến trình QEMU, thư mục `.fde-lab/fde-ex-*`, container và network `fde-ex-*` còn sót, cùng thư mục tạm capstone `/var/tmp/fde-capstone-<pid>-*` mà pid đã chết, không xoá gì. Chỉ `clean <run_id>` xoá, và chỉ xoá của **đúng** một run id (`fde-ex-<run_id>*`); `clean-tmp` chỉ xoá `/var/tmp/fde-capstone-*` thuộc user hiện tại mà pid trong tên đã chết. Không có lệnh xoá hàng loạt |
 
 - Mọi tài nguyên lab mang tên chứa run id riêng (`fde-ex-<uuid8>`); dọn theo run id, **không bao giờ** theo nhãn hay tiền
   tố chung (nhiều phiên chạy song song trên cùng máy). QEMU và container của một run chết theo tiến trình pytest kể cả
@@ -637,7 +637,9 @@ nhận, cách gỡ. Không bao giờ `... | sudo bash` hay `... | sudo sh` (vali
 - Capstone dùng tối đa 3 VM cùng lúc, cùng ngân sách RAM và 300 s mỗi test như bài tập.
 - Bộ chấm ở `capstone/tests/` (helper chung `capstonekit.py`, fixture `capstone` trong `conftest.py`). Lệnh `make` của
   repo người học chạy trên host qua `testkit.run_sandboxed` (repo chỉ đọc, chỉ thư mục tạm ghi được), tới máy khách qua
-  biến `SSH=<lệnh ssh của fdekit>`; bundle lớn đặt ở `/var/tmp`, không ở tmpfs `/tmp`.
+  biến `SSH=<lệnh ssh của fdekit>`; bundle lớn đặt ở `/var/tmp` (`fdekit.capstone_tmp()`, tên mang pid để `clean-tmp`
+  dọn khi pytest bị SIGKILL), không ở tmpfs `/tmp`. Mỗi bước có giới hạn riêng và mỗi test có ngân sách chung 270 s
+  (`capstonekit.Budget`) để installer treo làm test FAIL kèm thông báo trước mốc 300 s; đề milestone ghi các giới hạn.
 - Repo tham chiếu `capstone/solutions/project/` là một repo đứng riêng, có thể có test riêng: `capstone/conftest.py` bỏ
   qua nó khi chạy `uv run pytest tracks/fde/capstone` (gọi thẳng đường dẫn thì vẫn chạy), và quy tắc "test không gọi
   `docker`/`qemu-system` trần" của validator không quét nó (test của repo người học không dùng `testkit`/`fdekit`).

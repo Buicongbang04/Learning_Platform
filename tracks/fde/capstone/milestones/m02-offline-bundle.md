@@ -74,7 +74,9 @@ uv run pytest tracks/fde/capstone -k m02 -q      # ~2 phút, boot một VM lab-o
 Mọi lệnh `make` của test chạy trên máy bạn trong sandbox bubblewrap (repo chỉ đọc, môi trường dựng lại từ đầu, chỉ
 thư mục tạm của test ghi được) với `make -C <repo> <target> BIẾN=giá trị…`; test đặt `QUILLO_RELEASE_DIR` là
 `tracks/fde/product/dist`, `QUILLO_RELEASE_SHA256` là sha256 của `quillo-1.0.0.tar` trong đó, `COMPOSE_BIN` là
-`data/raw/fde-tools/docker-compose-v5.6.1/docker-compose-linux-x86_64`.
+`data/raw/fde-tools/docker-compose-v5.6.1/docker-compose-linux-x86_64`. Mỗi bước có giới hạn riêng (ghi dưới đây) và
+cả test có ngân sách chung 270 s (mỗi bước được `min(giới hạn, thời gian còn lại)`): installer treo thì test FAIL kèm
+tên bước, trước mốc 300 s app cắt test.
 
 - [ ] `test_m02_bundle_reproducible`:
   - `make bundle SITE=lawfirm-staging BUNDLE_DIR=<tạm>/bundle …` thoát `0` trong 120 s; chạy lần hai cùng
@@ -85,9 +87,10 @@ thư mục tạm của test ghi được) với `make -C <repo> <target> BIẾN=
     `install.sh`, `verify.sh`, `tools/docker-compose` (sha bằng bản ghim);
   - `QUILLO_RELEASE_SHA256` sai (64 số 0) thì `make bundle` thoát khác `0` và `BUNDLE_DIR` không có `SHA256SUMS`.
 - [ ] `test_m02_installer_idempotent`: bundle `SITE=lab` chép vào `/home/fde/bundle` của một VM `lab-open` 5120 MB:
-  - `make install SSH=<lệnh ssh của test> REMOTE_BUNDLE=/home/fde/bundle` thoát `0` trong 250 s;
+  - `make install SSH=<lệnh ssh của test> REMOTE_BUNDLE=/home/fde/bundle` thoát `0` trong 150 s (lời giải tham
+    chiếu ~65 s);
   - `/healthz` qua cổng 18080 forward ra máy bạn trả 200 với `version` `1.0.0`;
   - project compose `quillo` có đủ `db`, `llm`, `embed`, `api`, `worker`, tất cả đang chạy;
-  - chạy `make install` lần hai thoát `0`, mọi container giữ nguyên ID và `StartedAt`;
+  - chạy `make install` lần hai thoát `0` trong 60 s (tham chiếu ~15 s), mọi container giữ nguyên ID và `StartedAt`;
   - `make verify SSH=… REMOTE_BUNDLE=/home/fde/bundle` thoát `0` trong 60 s.
 - [ ] Chưa có bản phát hành hoặc binary compose đã ghim thì test skip kèm lệnh cần chạy.

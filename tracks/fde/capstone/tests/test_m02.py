@@ -3,15 +3,18 @@ from pathlib import Path
 
 import fdekit
 from capstonekit import (
+    BUNDLE_TIMEOUT,
     COMPOSE_SHA256,
     INSTALL_TIMEOUT,
     MEMORY_MB,
     PORT,
+    REINSTALL_TIMEOUT,
     RELEASE_NAME,
     REMOTE_BUNDLE,
     SERVICES,
     VERIFY_TIMEOUT,
     VERSION,
+    Budget,
     big_tmp,
     build_bundle,
     bundle_vars,
@@ -38,12 +41,13 @@ def bundle_files(folder: Path) -> set[str]:
 def test_m02_bundle_reproducible(capstone):
     need_files(capstone, *DELIVERY)
     rel = release()
+    budget = Budget()
     with big_tmp() as tmp:
         work = Path(tmp)
         bundle = work / "bundle"
-        build_bundle(capstone, "lawfirm-staging", bundle)
+        build_bundle(capstone, "lawfirm-staging", bundle, budget.cap(BUNDLE_TIMEOUT, "make bundle"))
         first = (bundle / "SHA256SUMS").read_bytes()
-        build_bundle(capstone, "lawfirm-staging", bundle)
+        build_bundle(capstone, "lawfirm-staging", bundle, budget.cap(BUNDLE_TIMEOUT, "make bundle lần hai"))
         second = (bundle / "SHA256SUMS").read_bytes()
         assert first == second, "Dựng lại bundle cùng đầu vào mà SHA256SUMS khác: bundle chưa tái lập được"
 
@@ -63,7 +67,7 @@ def test_m02_bundle_reproducible(capstone):
 
         rejected = work / "rejected"
         bad = make(capstone, "bundle", *bundle_vars("lawfirm-staging", rejected, sha="0" * 64), writable=[work],
-                   timeout=120)
+                   timeout=budget.cap(BUNDLE_TIMEOUT, "make bundle với sha sai"))
         assert bad.returncode != 0, "QUILLO_RELEASE_SHA256 sai mà make bundle vẫn thoát 0"
         assert not (rejected / "SHA256SUMS").exists(), "sha bản phát hành sai mà vẫn để lại một bundle trông như hoàn chỉnh"
 
@@ -71,20 +75,21 @@ def test_m02_bundle_reproducible(capstone):
 def test_m02_installer_idempotent(capstone):
     need_files(capstone, *DELIVERY)
     release()
+    budget = Budget()
     timings = {}
     started = time.monotonic()
     with big_tmp() as tmp:
         bundle = Path(tmp) / "bundle"
-        build_bundle(capstone, "lab", bundle)
+        build_bundle(capstone, "lab", bundle, budget.cap(BUNDLE_TIMEOUT, "make bundle"))
         timings["bundle"] = time.monotonic() - started
         with fdekit.vm("lab-open", memory_mb=MEMORY_MB, forwards=(PORT,)) as m:
             m.put(bundle, REMOTE_BUNDLE)
             timings["boot+copy"] = time.monotonic() - started - timings["bundle"]
             mark = time.monotonic()
-            first = make_on(capstone, m, "install", INSTALL_TIMEOUT)
+            first = make_on(capstone, m, "install", budget.cap(INSTALL_TIMEOUT, "make install"))
             timings["install"] = time.monotonic() - mark
             assert first.returncode == 0, f"make install lần 1 thoát mã {first.returncode}\n{output(first)}"
-            body = healthz(f"http://127.0.0.1:{m.port(PORT)}/healthz")
+            body = healthz(f"http://127.0.0.1:{m.port(PORT)}/healthz", budget.cap(60, "/healthz"))
             assert body.get("version") == VERSION, f"/healthz trả {body}, cần version {VERSION}"
             before = quillo_containers(m)
             assert SERVICES <= set(before), f"Project compose 'quillo' thiếu dịch vụ: {sorted(SERVICES - set(before))}"
@@ -92,7 +97,7 @@ def test_m02_installer_idempotent(capstone):
             assert not down, f"Dịch vụ không chạy sau khi cài: {down}"
 
             mark = time.monotonic()
-            again = make_on(capstone, m, "install", INSTALL_TIMEOUT)
+            again = make_on(capstone, m, "install", budget.cap(REINSTALL_TIMEOUT, "make install lần hai"))
             timings["install again"] = time.monotonic() - mark
             assert again.returncode == 0, f"make install lần 2 thoát mã {again.returncode}\n{output(again)}"
             after = quillo_containers(m)
@@ -100,7 +105,7 @@ def test_m02_installer_idempotent(capstone):
                              if (before[name]["id"], before[name]["started"]) != (after.get(name, {}).get("id"),
                                                                                   after.get(name, {}).get("started")))
             assert not changed, f"Cài lại cùng bản mà container bị tạo lại hoặc restart: {changed}"
-            verify = make_on(capstone, m, "verify", VERIFY_TIMEOUT)
+            verify = make_on(capstone, m, "verify", budget.cap(VERIFY_TIMEOUT, "make verify"))
             assert verify.returncode == 0, f"make verify thoát mã {verify.returncode}\n{output(verify)}"
     timings["total"] = time.monotonic() - started
     print("thời gian (s): " + ", ".join(f"{k} {v:.1f}" for k, v in timings.items()))
