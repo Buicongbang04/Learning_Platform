@@ -1,0 +1,73 @@
+questions:
+  - id: fits-one-gpu
+    kind: knowledge
+    type: single
+    prompt: "Model 300 triệu tham số huấn luyện vừa một GPU 24 GB, một epoch mất 20 giờ. Đội có 8 GPU cùng loại trong một node. Chọn cách song song nào trước?"
+    options:
+      - { id: a, text: "DDP: mỗi GPU giữ cả model, chia dữ liệu, all-reduce gradient" }
+      - { id: b, text: "Pipeline parallel: chia 300 triệu tham số thành 8 stage nối tiếp" }
+      - { id: c, text: "Tensor parallel: chia từng ma trận trọng số cho 8 GPU cùng tính" }
+      - { id: d, text: "FSDP full shard kèm offload optimizer state ra RAM của máy" }
+  - id: seven-b-memory
+    kind: knowledge
+    type: single
+    prompt: "Huấn luyện model 7B bằng Adam mixed precision trên GPU 80 GB. Vì sao DDP thuần không chạy được dù inference model này chỉ cần 14 GB?"
+    options:
+      - { id: a, text: "DDP không hỗ trợ bf16 nên mọi tham số, gradient và activation phải giữ ở fp32, gấp đôi bộ nhớ" }
+      - { id: b, text: "Mỗi GPU giữ đủ tham số, gradient, bản fp32 và hai moment Adam, khoảng 16 byte mỗi tham số" }
+      - { id: c, text: "All-reduce theo vòng cần bộ đệm bằng mười lần kích thước model trên mỗi GPU tham gia" }
+      - { id: d, text: "GPU 80 GB luôn để dành một nửa bộ nhớ cho CUDA context, driver và cache của allocator" }
+  - id: zero-stages
+    kind: knowledge
+    type: single
+    prompt: "ZeRO-1, ZeRO-2, ZeRO-3 lần lượt chia đều thêm thứ gì giữa các GPU?"
+    options:
+      - { id: a, text: "Activation; rồi gradient; rồi dữ liệu huấn luyện của từng batch" }
+      - { id: b, text: "Tham số; rồi gradient; rồi optimizer state cho từng tham số" }
+      - { id: c, text: "Optimizer state; rồi thêm gradient; rồi thêm cả tham số" }
+      - { id: d, text: "Layer đầu; rồi layer giữa; rồi layer cuối của model" }
+  - id: fsdp-numel
+    kind: knowledge
+    type: single
+    prompt: "Sau fully_shard trên 2 rank, đội đo bộ nhớ bằng sum(p.numel() for p in model.parameters()) và thấy mỗi rank vẫn giữ 100% tham số. Kết luận nào đúng?"
+    options:
+      - { id: a, text: "FSDP không shard được trên CPU với gloo nên đã âm thầm quay về chế độ DDP thường" }
+      - { id: b, text: "Phải gọi fully_shard hai lần cho model gốc thì tham số mới thật sự được chia ra" }
+      - { id: c, text: "numel() của DTensor là kích thước toàn cục; phần trên rank là to_local()" }
+      - { id: d, text: "Tham số chỉ được chia sau optimizer.step() đầu tiên của vòng lặp" }
+  - id: elastic-meaning
+    kind: knowledge
+    type: single
+    prompt: "Job torchrun dùng rendezvous c10d, --nnodes=2:4, --max-restarts=3. Một node bị thu hồi giữa chừng. Điều gì xảy ra?"
+    options:
+      - { id: a, text: "Các worker còn lại chạy tiếp từ đúng bước đang dở, tham số của node mất được chia lại cho node còn sống" }
+      - { id: b, text: "torchrun dừng mọi worker, rendezvous lại với số node còn đủ, chạy lại script; script tự resume" }
+      - { id: c, text: "Job dừng hẳn và báo lỗi vì elastic chỉ cho phép thêm node vào khi đang chạy, không cho phép bớt node" }
+      - { id: d, text: "torchrun giữ trạng thái của node bị mất trong TCPStore và chuyển sang node mới khi node đó tham gia" }
+  - id: asha-vs-search
+    kind: knowledge
+    type: single
+    prompt: "Trong Ray Tune, ASHA làm việc gì?"
+    options:
+      - { id: a, text: "Chọn bộ siêu tham số tiếp theo theo mô hình Bayes dựng từ kết quả của các trial đã chạy xong" }
+      - { id: b, text: "Chia mỗi trial thành nhiều worker DDP để chạy nhanh hơn" }
+      - { id: c, text: "Lưu checkpoint của mọi trial lên S3 sau mỗi epoch" }
+      - { id: d, text: "Dừng sớm trial có metric kém ở các mốc 1, 2, 4... vòng lặp, không chờ cả đợt" }
+  - id: data-bound
+    kind: knowledge
+    type: multi
+    prompt: "GPU utilization dao động 20-40%, tăng batch size không làm job nhanh hơn. Những bước nào hợp lý?"
+    options:
+      - { id: a, text: "Đo riêng thời gian chờ batch tiếp theo và thời gian bước huấn luyện" }
+      - { id: b, text: "Tăng num_workers của DataLoader trong giới hạn số core" }
+      - { id: c, text: "Gộp triệu tệp ảnh nhỏ thành shard lớn để đọc tuần tự" }
+      - { id: d, text: "Thuê GPU nhanh hơn gấp đôi để bước huấn luyện ngắn lại" }
+  - id: tool-choice
+    kind: knowledge
+    type: single
+    prompt: "Đội đã có cụm Ray chạy tiền xử lý (Ray Data) và serving (Ray Serve), cần thêm huấn luyện PyTorch nhiều worker và tìm siêu tham số. Chọn gì?"
+    options:
+      - { id: a, text: "Horovod trên MPI, vì nó độc lập với framework huấn luyện" }
+      - { id: b, text: "Ray Train với TorchTrainer và Ray Tune trên cùng cụm" }
+      - { id: c, text: "Tự viết vòng gửi gradient qua HTTP giữa các pod trong cụm" }
+      - { id: d, text: "Megatron-LM với tensor parallel trong mỗi node" }
