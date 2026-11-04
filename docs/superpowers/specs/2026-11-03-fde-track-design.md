@@ -2,6 +2,9 @@
 
 Ngày: 2026-11-03. Nguồn: roadmap.sh/forward-deployed-engineer (bản PDF ở `roadmap/forward-deployed-engineer.pdf`).
 
+> Phase 1 đã dựng khác thiết kế ở vài điểm (runtime LLM, phần lab của repo capstone, nơi để bundle): xem
+> **§12 As built (Phase 1)**; các chỗ nhắc Ollama ở §§6, 8–10 đọc theo §12.
+
 ## 1. Mục đích và lý do
 
 FDE là kỹ sư được "cử ra hiện trường": ngồi cạnh khách hàng, hiểu bài toán của họ, rồi **tự mang sản phẩm
@@ -326,3 +329,23 @@ chỉ dừng khi cần người học (PC, credential cloud, merge/push).
 - Cổng của `setup/fde/`, model Ollama mặc định cho judge và simulator.
 - Cách hiện mục Cloud lab trong app (miễn tách riêng, có nhãn có phí, không phá track khác).
 - Tên và số lượng bài trong từng module, miễn đủ nội dung mục 4.
+
+## 12. As built (Phase 1)
+
+Ghi lại chỗ bản dựng Phase 1 (module 00–03, capstone m00–m03) khác thiết kế ở trên. Khi mâu thuẫn, mục này thắng.
+
+- **Runtime LLM là llama.cpp, không phải Ollama.** Sản phẩm `quillo` chạy LLM và embedding bằng **llama.cpp server**
+  (API tương thích OpenAI), model GGUF ghim sha256 trong `fdekit.MODELS`, đóng trong bundle offline. Mọi chỗ nhắc
+  Ollama cho sản phẩm (§6, §10 mục 6 "Postgres + pgvector + Ollama + FastAPI") đọc là llama.cpp. Ollama ở §8 (LLM-judge
+  qua `llmkit`) và §10 mục 4–5 (judge, stakeholder simulator) chưa dùng ở Phase 1; khi dựng thì là công cụ phía host của
+  bộ chấm, không phải runtime trong VM khách. §3 "LLM chạy ngay trong VM khách" vẫn đúng, chỉ khác runtime.
+- **Repo capstone mang script và bước lấy bản phát hành, phần lab ở lại repo học.** Repo riêng của người học chứa
+  `Makefile`, `survey/`, `delivery/` (`release.lock` ghim version + sha256, `fetch_release.sh`, `fetch_compose.sh`,
+  `build_bundle.sh`, `install.sh`, `verify.sh`) và tài liệu; nó **không** chứa phần dựng VM hay hồ sơ khách như §7 dự
+  kiến. Lab (`fdekit`: VM QEMU, `customer_site`, proxy, registry) ở lại repo học và chỉ bộ chấm dùng; repo riêng chạy
+  `make install/verify` tới máy đích qua biến `SSH`, nên tự chứa mà không cần copy lab.
+- **Bundle tar không nằm trong repo public.** `quillo-X.Y.Z.tar` (~1,1 GB, vượt giới hạn 100 MB/tệp của GitHub) không
+  commit vào repo học hay repo capstone. Repo học dựng nó bằng `tracks/fde/product/release.py build` (hoặc sau này đưa
+  lên GitHub Release); repo capstone lấy qua `fetch_release.sh` từ `QUILLO_RELEASE_DIR` và kiểm sha256 đã ghim trong
+  `release.lock`. `.gitignore` của repo capstone chặn `*.tar`. Câu "đưa bundle vào repo public" ở §7 đọc là "phát hành
+  bundle công khai (Release), không commit".
