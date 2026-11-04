@@ -202,15 +202,18 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m14
 ```
 
 - `test_m14_manifests_contract` (không cần cluster): các luật tĩnh của mục 2–6 trên các tệp đã render.
-- `test_m14_scales_under_load`: test bỏ qua (skip kèm lệnh `up.sh --senior`) nếu controller add-on chưa có
-  PriorityClass `mlops-system`. Tạo bộ cluster-scoped, hai namespace (serving, training), một Service NodePort của test
+- `test_m14_scales_under_load`: test bỏ qua (skip kèm lệnh `up.sh --senior`) nếu Deployment controller add-on chưa có
+  PriorityClass từ 1 000 000 trở lên (`mlops-system`). Tạo bộ cluster-scoped, hai namespace (serving, training), một Service NodePort của test
   (selector `serving.kserve.io/inferenceservice: eta`, cổng 8000), quota serving, release M12 với một model. Mọi k6 chạy
   trong mạng Docker `kind`, gọi NodePort với `K6_NO_CONNECTION_REUSE=true` (mỗi request một kết nối, kube-proxy chia đều
   cho mọi pod; giữ keep-alive thì k6 dính vào pod đầu tiên).
   1. **Đo sức một pod** (chưa có ScaledObject, 1 replica): bậc thang 50, 75, 100, 125, 150, 175, 200, 250, 300 req/s,
-     mỗi bậc 5 giây. Sức một pod **C** là bậc cao nhất, liên tục từ bậc đầu, có p95 ≤ 300 ms và lỗi dưới 1%. Test in C
-     và từng bậc: dùng số này cho bảng README và để chọn `targetValue`.
-  2. **Tải chấm** = `ceil(2,2 × C)` kẹp trong [150, 400] req/s: hai pod không gánh nổi, nên HPA phải lên từ 3 replica.
+     mỗi bậc 5 giây; k6 dừng ngay ở bậc đầu tiên trượt (không đẩy tiếp tải vào pod đã bão hoà). Sức một pod **C** là
+     bậc cao nhất, liên tục từ bậc đầu, có p95 ≤ 300 ms và lỗi dưới 1%. Test in C và từng bậc: dùng số này cho bảng
+     README và để chọn `targetValue`. C là bậc cuối còn đạt, nên sức thật có thể cao hơn tới một bậc (khoảng 15–25%).
+  2. **Tải chấm** = `ceil(2,2 × C)` kẹp trong [150, 400] req/s: đủ để một pod quá tải hẳn và hai pod chạy gần bão hoà
+     (mỗi pod khoảng 1,1 × C, tức 0,9–1 lần sức thật), nên hàng đợi dài ra và metric hợp lý phải đưa HPA lên từ 3
+     replica.
   3. Training (quota, LocalQueue, ConfigMap dữ liệu, một Job retrain chạy song song với tải), rồi ScaledObject (chờ
      `Ready`); kiểm luật metric ở mục 1 (`valueLocation` có trong `/metrics` và là gauge).
   4. Tải chấm trong 60 giây (pha `warm`) rồi thêm 20 giây (pha `steady`); test hỏi số replica mỗi 2 giây. 10 giây sau khi
@@ -218,7 +221,7 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m14
 
   Đạt khi:
   - trước tải Deployment có tối đa 2 replica; dưới tải số replica tăng và đạt **ít nhất 3** (và ít nhất 3 pod Ready).
-    Nếu `2,2 × C` vượt 400 (máy quá nhanh, test không tạo đủ tải để hai pod quá tải) thì chỉ đòi **ít nhất 2**;
+    Nếu `2,2 × C` vượt 400 (máy quá nhanh, test không tạo đủ tải để hai pod gần bão hoà) thì chỉ đòi **ít nhất 2**;
   - metric của trigger trên mọi pod về không quá `targetValue` sau khi hết tải;
   - pha `steady`: **p95 ≤ 300 ms** (cùng ngưỡng alert latency của M09), lỗi dưới 1%;
   - không có event `exceeded quota` trong namespace serving;

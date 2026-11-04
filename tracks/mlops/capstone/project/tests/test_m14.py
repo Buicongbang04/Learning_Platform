@@ -110,8 +110,8 @@ STAIRS.forEach((rate, i) => {
   scenarios[`r${rate}`] = { executor: "constant-arrival-rate", rate: rate, timeUnit: "1s", duration: "%(step)ds",
                             startTime: `${%(warmup)d + i * %(step)d}s`, preAllocatedVUs: 50, maxVUs: 600,
                             gracefulStop: "2s" };
-  thresholds[`http_req_duration{scenario:r${rate}}`] = ["p(95)<%(p95)d"];
-  thresholds[`http_req_failed{scenario:r${rate}}`] = ["rate<%(failed)s"];
+  thresholds[`http_req_duration{scenario:r${rate}}`] = [{ threshold: "p(95)<%(p95)d", abortOnFail: true, delayAbortEval: "3s" }];
+  thresholds[`http_req_failed{scenario:r${rate}}`] = [{ threshold: "rate<%(failed)s", abortOnFail: true, delayAbortEval: "3s" }];
   thresholds[`http_reqs{scenario:r${rate}}`] = ["count>0"];
 });
 
@@ -405,8 +405,10 @@ def require_cluster() -> None:
     mlopskit.require_senior_addons()
     if not testkit.docker_ready():
         pytest.skip("Docker chưa sẵn sàng")
-    low = [f"{p['metadata']['namespace']}/{p['metadata']['name']}" for p in get_json("pods", "-A")["items"]
-           if p["metadata"]["namespace"] in ADDON_NAMESPACES and (p["spec"].get("priority") or 0) < ADDON_PRIORITY]
+    values = {c["metadata"]["name"]: c.get("value", 0) for c in get_json("priorityclasses")["items"]}
+    low = [f"{d['metadata']['namespace']}/{d['metadata']['name']}" for d in get_json("deployments", "-A")["items"]
+           if d["metadata"]["namespace"] in ADDON_NAMESPACES
+           and values.get(d["spec"]["template"]["spec"].get("priorityClassName"), 0) < ADDON_PRIORITY]
     if low:
         pytest.skip(f"controller add-on chưa có PriorityClass mlops-system ({low[:3]}): pod serving của bài có thể đẩy "
                     "chúng ra. Chạy: bash setup/mlops/kind/up.sh --senior")
@@ -551,7 +553,10 @@ def k6_summary(script: Path, target: str, timeout: int) -> dict:
 
 
 def capacity(script: Path, target: str) -> tuple[int, list[str]]:
-    """Bậc tải cao nhất (liên tục từ bậc đầu) mà một pod giữ được p95 ≤ P95_MS và lỗi < MAX_FAILED; 0 nếu bậc đầu đã trượt."""
+    """Bậc tải cao nhất (liên tục từ bậc đầu) mà một pod giữ được p95 ≤ P95_MS và lỗi < MAX_FAILED; 0 nếu bậc đầu đã trượt.
+
+    k6 dừng ngay ở bậc trượt đầu tiên (`abortOnFail`), không đẩy tiếp tải vào pod đã bão hoà; bậc không chạy coi như trượt.
+    """
     metrics = k6_summary(script, target, STAIR_WARMUP_S + len(STAIRS) * STAIR_S + 120)
     best, log = 0, []
     for rate in STAIRS:
