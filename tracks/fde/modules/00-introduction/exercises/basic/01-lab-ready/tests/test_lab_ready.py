@@ -1,5 +1,6 @@
 import subprocess
 import time
+import urllib.request
 
 import pytest
 
@@ -10,6 +11,7 @@ ex = Exercise(__file__)
 PROFILE = "lab-open"
 KEYS = ["os", "user", "docker", "compose", "egress"]
 BUDGET_SECONDS = 30
+PROBE = "https://pypi.org/simple/"
 
 
 def parse(stdout: str) -> dict[str, str]:
@@ -43,9 +45,20 @@ def run_script(m) -> dict[str, str]:
     return report
 
 
+def host_online() -> bool:
+    try:
+        with urllib.request.urlopen(urllib.request.Request(PROBE, method="HEAD"), timeout=8):
+            return True
+    except OSError:
+        return False
+
+
 def test_lab_ready_reports_the_customer_machine():
     script = ex.path("lab_ready.sh")
     facts = fdekit.PROFILES[PROFILE].facts
+    if facts["egress"] == "open" and not host_online():
+        pytest.skip(f"Máy bạn không tới được {PROBE}, nên VM {PROFILE} (NAT qua máy bạn) cũng không có egress=open; "
+                    "chạy lại khi có mạng")
     with fdekit.vm(PROFILE, memory_mb=1024) as m:
         m.put(script, "/home/fde/lab_ready.sh")
         report = run_script(m)

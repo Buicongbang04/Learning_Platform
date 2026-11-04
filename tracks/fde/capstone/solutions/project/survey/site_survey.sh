@@ -82,9 +82,9 @@ if [ "$runtime" = docker ]; then
 fi
 
 egress=none
-if curl -fsS --noproxy '*' --max-time 5 -o /dev/null https://pypi.org/simple/ 2>/dev/null; then
+if curl -fsSI --noproxy '*' --max-time 5 -o /dev/null https://pypi.org/simple/ 2>/dev/null; then
     egress=open
-elif [ -n "$proxy_url" ] && curl -sS --max-time 5 -o /dev/null --proxy "$proxy_url" http://pypi.org/simple/ 2>/dev/null; then
+elif [ -n "$proxy_url" ] && curl -sSI --max-time 5 -o /dev/null --proxy "$proxy_url" http://pypi.org/simple/ 2>/dev/null; then
     egress=proxy
 fi
 

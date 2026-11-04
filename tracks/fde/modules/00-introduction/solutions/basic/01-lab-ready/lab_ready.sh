@@ -18,9 +18,9 @@ fi
 
 probe=https://pypi.org/simple/
 proxy=${HTTPS_PROXY:-${https_proxy:-}}
-if curl -fsS --noproxy '*' --max-time 8 -o /dev/null "$probe" 2>/dev/null; then
+if curl -fsSI --noproxy '*' --max-time 8 -o /dev/null "$probe" 2>/dev/null; then
     echo "egress=open"
-elif [ -n "$proxy" ] && curl -sS --max-time 8 -o /dev/null --proxy "$proxy" http://pypi.org/simple/ 2>/dev/null; then
+elif [ -n "$proxy" ] && curl -sSI --max-time 8 -o /dev/null --proxy "$proxy" http://pypi.org/simple/ 2>/dev/null; then
     echo "egress=proxy"
 else
     echo "egress=none"

@@ -20,7 +20,8 @@ SOLUTION=1 uv run pytest tracks/fde/modules/00-introduction/exercises/basic/01-l
   version` không cần daemon, nên khi daemon dừng vẫn là `compose=yes`.
 - **`egress`**: thử đường thẳng với `--noproxy '*'` trước; thất bại mà có `HTTPS_PROXY` thì thử qua proxy bằng URL
   `http://`, vì proxy TLS inspection làm HTTPS lỗi chứng chỉ dù đường vẫn thông. Mọi lệnh mạng có `--max-time` để máy
-  air-gapped không treo tới khi hết 30 s.
+  air-gapped không treo tới khi hết 30 s, và dùng `curl -I` (HEAD): trang `https://pypi.org/simple/` nặng ~48 MB, tải cả
+  trang qua mạng NAT của VM không xong trong 8 s và bị tính nhầm là `egress=none`.
 
 ## Chạy thử trên các hồ sơ khác (đo 2026-11-04)
 

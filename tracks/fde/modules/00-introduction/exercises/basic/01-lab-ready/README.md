@@ -66,7 +66,8 @@ uv run python -m fdekit leftovers      # phải in "Không còn gì sót lại"
   tự trên; script treo quá 60 s thì test fail kèm thông báo.
 - `os` khớp `ID`/`VERSION_ID` của VM, `user` là `fde`.
 - `docker` bằng đúng phiên bản server mà `docker version --format '{{.Server.Version}}'` trả trong VM.
-- `compose` khớp việc `docker compose version` chạy được hay không trong VM; `egress` là `open` trên `lab-open`.
+- `compose` khớp việc `docker compose version` chạy được hay không trong VM; `egress` là `open` trên `lab-open`
+  (máy bạn không tới được `https://pypi.org/simple/` thì test skip kèm lý do, vì VM ra mạng qua máy bạn).
 - Sau khi dừng daemon: `docker=missing`, `compose=yes`, `os`/`user`/`egress` như lần đầu.
 - `uv run python -m fdekit leftovers` in "Không còn gì sót lại" sau khi chạy test.
 
@@ -84,6 +85,7 @@ có quyền socket. Phiên bản server chỉ có khi client nói chuyện đư�
 
 ### Gợi ý 3
 
-Với `egress`, `curl --noproxy '*' --max-time 8` thử đường thẳng; đường qua proxy thì lấy proxy từ `HTTPS_PROXY`/`https_proxy`.
+Với `egress`, `curl -I --noproxy '*' --max-time 8` thử đường thẳng (`-I` chỉ gửi HEAD: trang `/simple/` của PyPI nặng
+~48 MB, bạn chỉ cần biết có tới được không); đường qua proxy thì lấy proxy từ `HTTPS_PROXY`/`https_proxy`.
 Proxy có TLS inspection sẽ làm HTTPS lỗi chứng chỉ dù mạng vẫn đi được: thử qua proxy bằng URL `http://` để tách "có
 đường" khỏi "có trust CA" (chuyện CA là của module 03).
