@@ -173,11 +173,11 @@ def _remove_labeled_containers(label: str) -> None:
 
 def _run_container(image: str, args: list[str], *, tag: str, mounts: list[str] = (), env: dict[str, str] | None = None,
                    network: str | None = None, workdir: str | None = None, entrypoint: str | None = None,
-                   user: bool = False, timeout: int = 300) -> subprocess.CompletedProcess:
+                   user: bool = False, extra: tuple[str, ...] = (), timeout: int = 300) -> subprocess.CompletedProcess:
     if not testkit.docker_ready():
         pytest.skip("Docker chưa sẵn sàng")
     name = f"{PREFIX}{uuid.uuid4().hex[:8]}-{tag}"
-    command = ["run", "--rm", "--name", name, "--label", LABEL, *testkit.docker_cpu_args()]
+    command = ["run", "--rm", "--name", name, "--label", LABEL, *testkit.docker_cpu_args(), *extra]
     if user:
         command += ["--user", f"{os.getuid()}:{os.getgid()}"]
     if network:
@@ -255,24 +255,36 @@ def evidently_python(workdir: Path, script: str, *, timeout: int = 300) -> subpr
                           mounts=[f"{Path(workdir).resolve()}:/work"], workdir="/work", user=True, timeout=timeout)
 
 
+MODELSCAN_HARDENING = ("--pull", "never", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--read-only")
+
+
 def modelscan_run(target: Path, *, timeout: int = 300) -> subprocess.CompletedProcess:
     """Quét `target` (tệp hoặc thư mục) bằng `modelscan` trong image `mlops-modelscan:0.8.8`, không mạng, chỉ đọc.
 
     `.returncode` là mã thoát của modelscan (0 sạch, 1 có vấn đề, 2 lỗi, 3 không có gì để quét, 4 định dạng không hỗ
     trợ); `.stdout` là báo cáo JSON (rỗng khi modelscan không ghi báo cáo), `.stderr` gộp log của modelscan.
-    modelscan chỉ đọc byte, không bao giờ nạp model; container vẫn chạy `--network none`, cùng uid:gid với người chạy
-    (thư mục báo cáo tạm giữ quyền 0700 của `mkdtemp`); `report.json` là symlink thì fail, không đọc.
+    Chỉ đúng `target` được mount (read-only, tại `/scan/<tên>`), không mount thư mục cha. modelscan chỉ đọc byte, không
+    bao giờ nạp model; container vẫn chạy `--network none`, `--cap-drop ALL`, `no-new-privileges`, rootfs read-only,
+    `--pull never`, cùng uid:gid với người chạy (thư mục báo cáo tạm giữ quyền 0700 của `mkdtemp`); `report.json` là
+    symlink thì fail, không đọc.
     """
     target = Path(target).resolve()
     if not target.exists():
         pytest.fail(f"modelscan_run: không có {target}", pytrace=False)
+    if not target.name or ":" in str(target) or "," in str(target):
+        pytest.fail(f"modelscan_run: đường dẫn {target} không mount được (gốc, hoặc chứa ':' / ',')", pytrace=False)
     image = _ensure_image(MODELSCAN_IMAGE, ROOT / "setup" / "mlops" / "modelscan")
     out = Path(tempfile.mkdtemp(prefix=f"{PREFIX}modelscan-"))
+    scan = f"/scan/{target.name}"
     try:
         result = _run_container(
-            image, ["modelscan", "-p", f"/scan/{target.name}", "-r", "json", "-o", "/out/report.json"], tag="modelscan",
-            mounts=[f"{target.parent}:/scan:ro", f"{out}:/out"], network="none", user=True, timeout=timeout,
+            image, ["modelscan", "-p", scan, "-r", "json", "-o", "/out/report.json"], tag="modelscan",
+            mounts=[f"{target}:{scan}:ro", f"{out}:/out"], network="none", user=True, extra=MODELSCAN_HARDENING,
+            timeout=timeout,
         )
+        if result.returncode == 125 and "No such image" in result.stderr:
+            pytest.fail(f"modelscan_run: chưa có image {image}; build trước: "
+                        f"docker build -t {image} setup/mlops/modelscan", pytrace=False)
         report = out / "report.json"
         if report.is_symlink():
             pytest.fail("modelscan_run: report.json là symlink, không đọc", pytrace=False)

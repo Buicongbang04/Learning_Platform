@@ -1396,6 +1396,67 @@ def test_modelscan_run_rejects_symlinked_report(monkeypatch, tmp_path):
     assert seen == {"mode": "0o700", "network": "none", "user": True}
 
 
+def _fake_modelscan(monkeypatch, result=None):
+    seen = {}
+
+    def fake_run(image, args, *, tag, mounts=(), network=None, user=False, extra=(), timeout=300, **kw):
+        seen.update(args=args, mounts=list(mounts), extra=tuple(extra))
+        return result or subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(mlopskit, "_ensure_image", lambda tag, context: tag)
+    monkeypatch.setattr(mlopskit, "_run_container", fake_run)
+    return seen
+
+
+@pytest.mark.parametrize("kind", ["file", "dir"])
+def test_modelscan_run_mounts_only_target(monkeypatch, tmp_path, kind):
+    target = tmp_path / ("m.pkl" if kind == "file" else "model")
+    if kind == "file":
+        target.write_bytes(b"x")
+    else:
+        target.mkdir()
+    seen = _fake_modelscan(monkeypatch)
+    mlopskit.modelscan_run(target)
+    scan = [m for m in seen["mounts"] if not m.endswith(":/out")]
+    assert scan == [f"{target.resolve()}:/scan/{target.name}:ro"]
+    assert seen["args"][seen["args"].index("-p") + 1] == f"/scan/{target.name}"
+    for flag in ("--read-only", "no-new-privileges"):
+        assert flag in seen["extra"]
+    extra = list(seen["extra"])
+    assert extra[extra.index("--pull") + 1] == "never"
+    assert extra[extra.index("--cap-drop") + 1] == "ALL"
+
+
+@pytest.mark.parametrize("name", ["a:b.pkl", "a,b.pkl"])
+def test_modelscan_run_rejects_unmountable_path(monkeypatch, tmp_path, name):
+    (tmp_path / name).write_bytes(b"x")
+    _fake_modelscan(monkeypatch)
+    with pytest.raises(pytest.fail.Exception, match="không mount được"):
+        mlopskit.modelscan_run(tmp_path / name)
+
+
+def test_modelscan_run_missing_image_says_build(monkeypatch, tmp_path):
+    (tmp_path / "m.pkl").write_bytes(b"x")
+    missing = subprocess.CompletedProcess([], 125, "", "docker: Error response from daemon: No such image: x")
+    _fake_modelscan(monkeypatch, missing)
+    with pytest.raises(pytest.fail.Exception, match="build trước"):
+        mlopskit.modelscan_run(tmp_path / "m.pkl")
+
+
+def test_modelscan_hardened_scans_directory(tmp_path):
+    import json
+
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "bad.pkl").write_bytes(b"cbuiltins\neval\n(S'1+1'\ntR.")
+    (tmp_path / "sibling.pkl").write_bytes(b"cbuiltins\nexec\n(S'1'\ntR.")
+    result = mlopskit.modelscan_run(model)
+    assert result.returncode == 1, result.stdout + result.stderr[-2000:]
+    report = json.loads(result.stdout)
+    assert report["summary"]["scanned"]["scanned_files"] == ["bad.pkl"]
+    assert [i["operator"] for i in report["issues"]] == ["eval"]
+
+
 def _listening_sockets(pids: list[int]) -> list[str]:
     out = subprocess.run(["ss", "-ltnpH"], capture_output=True, text=True, timeout=30).stdout
     return [line.split()[3] for line in out.splitlines() if any(f"pid={p}," in line for p in pids)]
