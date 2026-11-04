@@ -53,7 +53,8 @@ public làm portfolio.
   kiểm bundle** (dựng hoặc tải `quillo-<version>.tar` rồi kiểm `manifest.json`), không chứa tệp tar: bundle ~1,1 GB vượt
   giới hạn 100 MB mỗi tệp của GitHub và đã bị `.gitignore` chặn. Muốn người khác tải sẵn thì đính bundle vào một GitHub
   Release, nhưng MIT chỉ áp cho mã quillo: bundle còn chứa image Postgres/pgvector, llama.cpp server và trọng số model
-  GGUF, mỗi thứ có giấy phép riêng. Đọc giấy phép bên thứ ba của từng thành phần (và ghi chúng vào Release) trước khi đính
+  GGUF, còn bundle giao khách của bạn có thêm binary Docker Compose (`tools/docker-compose`, Apache-2.0); mỗi thứ có
+  giấy phép riêng. Đọc giấy phép bên thứ ba của từng thành phần (và ghi chúng vào Release) trước khi đính
   bundle. CUAD thì không đưa lên dưới dạng nào.
 
 Milestone **M00** hướng dẫn tạo repo: cấu trúc thư mục, `Makefile`, README dạng case study, license, `.gitignore`.

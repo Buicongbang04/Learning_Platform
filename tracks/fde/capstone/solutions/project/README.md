@@ -108,5 +108,5 @@ tests/       test của repo
 
 Script và tài liệu trong repo: MIT (`LICENSE`). Bundle quillo không nằm trong repo (vượt 100 MB và có thành phần bên
 thứ ba): mã quillo MIT; image Postgres/pgvector, llama.cpp server và trọng số GGUF (Qwen2.5, nomic-embed) mỗi thứ có
-giấy phép riêng, đọc trước khi phân phối lại. CUAD: CC BY 4.0, The Atticus Project; Hendrycks, Burns, Chen, Ball,
+giấy phép riêng, đọc trước khi phân phối lại; binary Docker Compose trong `tools/` của bundle giao khách: Apache-2.0. CUAD: CC BY 4.0, The Atticus Project; Hendrycks, Burns, Chen, Ball,
 "CUAD: An Expert-Annotated NLP Dataset for Legal Contract Review", NeurIPS 2021.
