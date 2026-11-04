@@ -1,5 +1,5 @@
 """Helper chung của test capstone ETA: thư mục được chấm, import `eta` an toàn, dữ liệu giả, dữ liệu tháng lạ của M13,
-dữ liệu sự cố dựng sẵn của M18.
+dữ liệu sự cố dựng sẵn của M18, khoá ký và pickle độc hại đã vô hại hoá của M17.
 
 Chạy như script để dựng dữ liệu: `uv run python tracks/mlops/capstone/project/tests/etakit.py assessment` (M13) hoặc
 `... etakit.py incident` (M18).
@@ -180,6 +180,60 @@ def incident_data(dest: Path) -> Path:
     if hashlib.sha256(lookup.read_bytes()).hexdigest() != module.LOOKUP_SHA256:
         pytest.fail(f"sha256 của {lookup} không khớp: xoá tệp và tải lại bộ {module.SOURCE[0]}", pytrace=False)
     return module.build(source, reference, lookup, Path(dest))
+
+
+def ec_keypair(folder: Path, name: str) -> tuple[Path, Path]:
+    """M17: cặp khoá EC P-256 sinh offline trong `folder`, khoá riêng quyền 0600; trả `(private.pem, public.pub)`."""
+    import os
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    folder.mkdir(parents=True, exist_ok=True)
+    key = ec.generate_private_key(ec.SECP256R1())
+    private, public = folder / f"{name}.pem", folder / f"{name}.pub"
+    data = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    fd = os.open(private, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
+    public.write_bytes(key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    return private, public
+
+
+class _ExecMarker:
+    """Payload vô hại: nạp vào là `exec` một dòng chỉ ghi chữ `pwned` vào tệp đánh dấu trong thư mục tạm của test."""
+
+    def __init__(self, marker: Path):
+        self.code = f"open({str(marker)!r}, 'w').write('pwned')"
+
+    def __reduce__(self):
+        import builtins
+
+        return (builtins.exec, (self.code,))
+
+
+class _PathMarker:
+    """Payload vô hại qua `pathlib.Path.write_text` (không có trong danh sách chặn của modelscan 0.8.8)."""
+
+    def __init__(self, marker: Path):
+        self.marker = Path(marker)
+
+    def __reduce__(self):
+        return (Path.write_text, (self.marker, "pwned"))
+
+
+def marker_pickle(marker: Path) -> bytes:
+    """M17: pickle trông như checkpoint, modelscan bắt được (CRITICAL). Test không bao giờ nạp nó."""
+    import pickle
+
+    return pickle.dumps({"coef": [0.1, 0.2], "intercept": 1.5, "hook": _ExecMarker(marker)}, protocol=4)
+
+
+def stealth_pickle(marker: Path) -> bytes:
+    """M17: pickle modelscan không bắt; chỉ allowlist định dạng theo nội dung chặn được. Test không bao giờ nạp nó."""
+    import pickle
+
+    return pickle.dumps({"coef": [0.1, 0.2], "hook": _PathMarker(marker)}, protocol=4)
 
 
 def main(argv: list[str] | None = None) -> int:

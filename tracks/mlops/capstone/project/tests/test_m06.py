@@ -141,7 +141,8 @@ def test_m06_online_offline_parity(project, tmp_path):
     try:
         applied = mlopskit.feast_run(repo, "apply", network=network)
         assert applied.returncode == 0, applied.stdout[-1500:] + applied.stderr[-3000:]
-        loaded = mlopskit.feast_run(repo, "materialize", "2019-01-01T00:00:00", "2019-03-15T00:00:00", network=network)
+        loaded = mlopskit.feast_run(repo, "materialize", "-v", "zone_hour_speed", "2019-01-01T00:00:00", "2019-03-15T00:00:00",
+                                  network=network)
         assert loaded.returncode == 0, loaded.stdout[-1500:] + loaded.stderr[-3000:]
         result = mlopskit.feast_python(repo, PARITY_SCRIPT, network=network)
         assert result.returncode == 0, result.stderr[-3000:]

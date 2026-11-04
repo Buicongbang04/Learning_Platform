@@ -1,0 +1,68 @@
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import yaml
+from safetensors.numpy import load_file, save_file
+from sklearn.linear_model import Ridge
+
+ROOT = Path(__file__).resolve().parent
+COLUMNS = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance",
+           "payment_type", "fare_amount", "tip_amount"]
+FEATURES = ["card", "fare_amount", "card_fare", "trip_distance", "card_distance", "airport", "night"]
+AIRPORT_ZONES = (1, 132, 138)
+TARGET = "tip_amount"
+
+
+def metadata() -> dict:
+    return yaml.safe_load((ROOT / "mlproject.yaml").read_text(encoding="utf-8"))
+
+
+def clean(df: pd.DataFrame) -> pd.DataFrame:
+    duration = (df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]).dt.total_seconds()
+    keep = (duration.between(60, 10_800) & df["trip_distance"].between(0.01, 100) & df["fare_amount"].between(2.5, 300)
+            & df["tip_amount"].between(0, 100) & df["payment_type"].isin([1, 2]))
+    return df[keep].sort_values("tpep_pickup_datetime", kind="stable").reset_index(drop=True)
+
+
+def features(df: pd.DataFrame) -> np.ndarray:
+    card = (df["payment_type"] == 1).astype("float64")
+    hour = pd.to_datetime(df["tpep_pickup_datetime"]).dt.hour
+    airport = (df["PULocationID"].isin(AIRPORT_ZONES) | df["DOLocationID"].isin(AIRPORT_ZONES)).astype("float64")
+    cols = {"card": card, "fare_amount": df["fare_amount"].astype("float64"), "card_fare": card * df["fare_amount"],
+            "trip_distance": df["trip_distance"].astype("float64"), "card_distance": card * df["trip_distance"],
+            "airport": airport, "night": ((hour >= 22) | (hour < 6)).astype("float64")}
+    return np.column_stack([np.asarray(cols[name], dtype="float64") for name in FEATURES])
+
+
+def train(X: np.ndarray, y: np.ndarray) -> Ridge:
+    return Ridge(alpha=1.0).fit(X, y)
+
+
+def export(model: Ridge, out_dir: Path) -> Path:
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    meta = metadata()
+    save_file({"coef": np.asarray(model.coef_, dtype="float64").reshape(-1),
+               "intercept": np.asarray([model.intercept_], dtype="float64")},
+              str(out_dir / "model.safetensors"), metadata={"format": "linear"})
+    config = {"features": FEATURES, "target": TARGET, "kind": "ridge"}
+    (out_dir / "config.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    card = {"name": meta["name"], "registry_name": meta["registry_name"], "tags": meta["tags"]}
+    (out_dir / "metadata.json").write_text(json.dumps(card, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return out_dir
+
+
+def load(model_dir: Path):
+    model_dir = Path(model_dir)
+    tensors = load_file(str(model_dir / "model.safetensors"))
+    config = json.loads((model_dir / "config.json").read_text(encoding="utf-8"))
+    if config["features"] != FEATURES:
+        raise ValueError("feature của model khác feature của code")
+    coef, intercept = tensors["coef"], float(tensors["intercept"][0])
+
+    def predict(df: pd.DataFrame) -> np.ndarray:
+        return np.clip(features(df) @ coef + intercept, 0, None)
+
+    return predict

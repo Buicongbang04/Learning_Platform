@@ -1,0 +1,16 @@
+# {{ project_name }}
+
+Dự án model của đội `{{ team }}`, sinh từ golden path của nền tảng ML (template Copier của capstone ETA, M17).
+
+- Chủ sở hữu: {{ owner }}
+- Trung tâm chi phí: {{ cost_center }}
+- Tên trên registry: `{{ team }}-{{ project_slug }}`
+- Model: Ridge trên feature của chuyến taxi, lưu safetensors (không pickle), dự đoán `tip_amount`.
+
+```bash
+python -m pytest -q .
+python train.py --data <yellow_tripdata_YYYY-MM.parquet> --out build
+```
+
+`build/model/` chỉ gồm `model.safetensors` và JSON; `build/metrics.json` có MAE trên 20% cuối theo thời gian. Ký và đưa qua
+cổng deploy bằng `python -m eta.platform sign` và `python -m eta.platform gate` của nền tảng.
