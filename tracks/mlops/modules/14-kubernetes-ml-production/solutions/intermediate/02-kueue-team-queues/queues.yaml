@@ -1,0 +1,58 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: pool-__RUN__
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: team-a-__RUN__
+spec:
+  cohortName: ml-__RUN__
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    withinClusterQueue: Never
+  resourceGroups:
+    - coveredResources: [cpu, memory, __GPU__]
+      flavors:
+        - name: pool-__RUN__
+          resources:
+            - {name: cpu, nominalQuota: "2"}
+            - {name: memory, nominalQuota: 2Gi}
+            - {name: __GPU__, nominalQuota: 2, borrowingLimit: 1}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: team-b-__RUN__
+spec:
+  cohortName: ml-__RUN__
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    withinClusterQueue: Never
+  resourceGroups:
+    - coveredResources: [cpu, memory, __GPU__]
+      flavors:
+        - name: pool-__RUN__
+          resources:
+            - {name: cpu, nominalQuota: "2"}
+            - {name: memory, nominalQuota: 2Gi}
+            - {name: __GPU__, nominalQuota: 2, borrowingLimit: 1}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: team-a
+spec:
+  clusterQueue: team-a-__RUN__
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: team-b
+spec:
+  clusterQueue: team-b-__RUN__

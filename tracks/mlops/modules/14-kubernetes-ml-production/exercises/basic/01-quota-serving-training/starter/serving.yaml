@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: serving-quota
+spec:
+  hard:
+    pods: "10"
+    # TODO: tổng requests CPU, requests/limits bộ nhớ, không cho xin GPU
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: serving-defaults
+spec:
+  limits:
+    - type: Container
+      # TODO: request/limit mặc định, trần bộ nhớ mỗi container
