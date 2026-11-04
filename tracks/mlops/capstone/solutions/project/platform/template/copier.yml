@@ -12,7 +12,7 @@ project_slug:
   type: str
   help: Tên ngắn kebab-case, dùng trong tên model trên registry
   default: "{{ project_name | trim | lower | replace(' ', '-') }}"
-  validator: "{% if not (project_slug | regex_search('^[a-z][a-z0-9]*(-[a-z0-9]+)*$')) %}project_slug phải là kebab-case chữ thường{% endif %}"
+  validator: "{% if not (project_slug | regex_search('^[a-z][a-z0-9]*(-[a-z0-9]+)*\\Z')) %}project_slug phải là kebab-case chữ thường{% endif %}"
 
 team:
   type: str
@@ -27,9 +27,9 @@ team:
 owner:
   type: str
   help: Email người chịu trách nhiệm model
-  validator: "{% if not (owner | regex_search('^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$')) %}owner phải là email{% endif %}"
+  validator: "{% if not (owner | regex_search('^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}\\Z')) %}owner phải là email{% endif %}"
 
 cost_center:
   type: str
   help: Mã trung tâm chi phí, dạng CC-1234
-  validator: "{% if not (cost_center | regex_search('^CC-[0-9]{4}$')) %}cost_center phải dạng CC-1234{% endif %}"
+  validator: "{% if not (cost_center | regex_search('^CC-[0-9]{4}\\Z')) %}cost_center phải dạng CC-1234{% endif %}"

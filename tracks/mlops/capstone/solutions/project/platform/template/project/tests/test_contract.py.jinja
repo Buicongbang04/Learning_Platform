@@ -24,7 +24,7 @@ def trips(n: int = 400, seed: int = 0) -> pd.DataFrame:
 
 def test_required_tags_present():
     tags = metadata().get("tags") or {}
-    bad = [key for key, rule in REQUIRED_TAGS.items() if not re.match(rule, str(tags.get(key) or ""))]
+    bad = [key for key, rule in REQUIRED_TAGS.items() if not re.fullmatch(rule, str(tags.get(key) or ""))]
     assert not bad, f"tag bắt buộc thiếu hoặc sai dạng: {bad}"
 
 
