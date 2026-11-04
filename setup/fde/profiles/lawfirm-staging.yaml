@@ -1,0 +1,14 @@
+description: Công ty luật (staging) — Ubuntu 22.04, không ra internet, chỉ có registry nội bộ của khách.
+image: ubuntu-22.04
+disk_gb: 30
+sudo: true
+egress: none
+tls_inspection: false
+selinux: n/a
+runtime: docker
+services: [registry]
+facts:
+  kernel_major: "5.15"
+  glibc: "2.35"
+  disk_free_gb_max: 28
+  gpu: null

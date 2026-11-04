@@ -305,6 +305,17 @@ DATASETS: dict[str, Dataset] = {
         "thor.robots.ox.ac.uk và www.robots.ox.ac.uk không phản hồi (connect timeout 300 s, curl 25 s) lúc tải thử",
         extract=True,
     ),
+    # --- FDE: hợp đồng pháp lý thật ---
+    "cuad": Dataset(
+        "url", ("https://zenodo.org/records/4595826/files/CUAD_v1.zip?download=1",), ["CUAD_v1.zip"],
+        license="CC BY 4.0 (The Atticus Project, Hendrycks et al. 2021)",
+        homepage="https://zenodo.org/records/4595826",
+        about="Contract Understanding Atticus Dataset v1: 510 hợp đồng thương mại thật (SEC EDGAR, PDF + txt) kèm nhãn chuyên gia 41 loại điều khoản "
+        "(CUAD_v1.json dạng SQuAD, master_clauses.csv). Giải nén vào data/raw/cuad/CUAD_v1/. Yêu cầu ghi công (CC BY 4.0): khi dùng hay "
+        "phân phối lại phải ghi The Atticus Project, dẫn Hendrycks, Burns, Chen, Ball 'CUAD: An Expert-Annotated NLP Dataset for Legal "
+        "Contract Review' (NeurIPS 2021), kèm link license và nêu rõ nếu có chỉnh sửa. Nguồn: bản v1 chính thức trên Zenodo (DOI 10.5281/zenodo.4595826)",
+        extract=True,
+    ),
 }
 
 

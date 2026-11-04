@@ -614,3 +614,151 @@ Không bao giờ `curl ... | sudo bash` (validator kiểm trong `tracks/mlops/**
   `etakit.incident_data` (`mlopskit.real_month`, `mlopskit.zone_lookup`). Test kiểm các trường có đáp án của tệp sự cố
   (hành động, thay đổi gây ra, nguyên nhân, mốc thời gian, vai trò) và chỉ kiểm cấu trúc tối thiểu của `reasons` (≥2 câu, mỗi câu
   ≥6 từ, có số); nội dung lập luận chấm bằng rubric trong `SOLUTION.md`.
+
+## Track FDE
+
+Quy ước riêng của `tracks/fde/` (Forward Deployed Engineer), bổ sung cho phần chung ở trên. Validator
+`tests/test_fde_track.py` kiểm phần lớn các quy tắc này. Track đứng độc lập, không lấy track DevOps hay MLOps làm điều
+kiện. Chi tiết API xem docstring và mã trong `fdekit.py`; lab VM, hồ sơ khách và golden image xem `setup/fde/README.md`.
+
+### Helper `fdekit`
+
+`fdekit.py` ở gốc repo, dựng trên `testkit` (không sửa `testkit.py`), có test riêng ở `tests/test_fdekit.py`.
+"Máy khách" là VM QEMU/KVM thật dựng từ cloud image chính thức (overlay qcow2 trên golden image của hồ sơ khách,
+seed cloud-init, SSH bằng key sinh riêng mỗi lần chạy), không phải container giả lập.
+
+| Test cần | Dùng | Đảm bảo |
+| --- | --- | --- |
+| Có KVM và QEMU | `fdekit.require_kvm()` | Skip khi `/dev/kvm` không đọc/ghi được hoặc thiếu `qemu-system-x86_64`/`qemu-img` |
+| Golden image của một hồ sơ | `fdekit.require_golden("bank")` | Skip kèm đúng lệnh `uv run python -m fdekit prepare bank`; trả đường dẫn golden |
+| Dựng golden (một lần, ngoài bài) | `fdekit.prepare(profile, force=False)` hoặc `python -m fdekit prepare <hồ sơ> [--force]` | Boot cloud image có mạng, chạy `setup/fde/cloud-init/<hồ sơ>.sh`, xoá sudo tạm và key, ghi qcow2 độc lập; pull image proxy/registry phía host mà hồ sơ cần |
+| Cloud image đã ghim | `fdekit.fetch_image("rocky-8")` (khoá trong `fdekit.IMAGES`) | Tải một lần vào `data/raw/fde-images/`, kiểm sha256, tệp sai thì tải lại |
+| Một VM theo hồ sơ | `with fdekit.vm("lab-open", memory_mb=..., forwards=(18080,)) as m:` | Overlay riêng (golden không bao giờ bị ghi), chờ SSH; `restrict`/`sudo` mặc định theo hồ sơ; skip khi thiếu KVM, golden, OpenSSH hay RAM trống < RAM của VM + 512 MB; luôn dọn khi ra |
+| Thao tác trên VM | `m.ssh(cmd, user="fde", timeout=60, check=False)`, `m.put(local, remote)`, `m.get(remote, local)`, `m.port(18080)`, `m.ssh_command()`, `m.snapshot(path)` | `ssh` trả `CompletedProcess` (phần không tin cậy trong `cmd` phải `shlex.quote`); `port` trả cổng `127.0.0.1` phía host của cổng đã khai trong `forwards` (chưa khai thì `KeyError`); `ssh_command` trả argv để dùng với `Popen`; `snapshot` tắt sạch VM rồi ghi qcow2 độc lập |
+| Trọn một "khách hàng" | `with fdekit.customer_site("hospital", memory_mb=..., forwards=(...)) as s:` | `Site` gồm `s.vm`, `s.profile`, `s.proxy_ca` (PEM CA của mitmproxy, sinh mới mỗi lần, **không** được trust sẵn trong VM), `s.registry` (`10.0.2.101:5000`, nhìn từ VM), `s.registry_host` (`127.0.0.1:<cổng>`, nhìn từ host để đẩy image). Proxy/registry chạy bằng `testkit.DockerLab`, tên `fde-ex-<run_id>-proxy`/`-registry` |
+| "Sự thật" để chấm báo cáo survey | `fdekit.PROFILES["bank"].facts` | 13 khoá: `os_id`, `os_version`, `kernel_major`, `glibc`, `cpus`, `mem_mb`, `disk_free_gb_max`, `gpu`, `proxy_url`, `sudo`, `selinux`, `runtime`, `egress`; `cpus`/`mem_mb` là cấu hình `customer_site()` boot mặc định (2 CPU, 2048 MB) |
+| Model GGUF đã ghim | `fdekit.fetch_model("llm-small")` (khoá trong `fdekit.MODELS`: `llm-small`, `llm-medium`, `embed-small`) | Tải một lần vào `data/raw/fde-models/`, kiểm sha256 trước khi đặt tên chính thức |
+| Repo capstone của người học | `fdekit.capstone_dir()` | `SOLUTION=1` ⇒ `tracks/fde/capstone/solutions/project/`; ngược lại đọc `FDE_CAPSTONE_DIR`, chưa đặt hay không phải thư mục thì skip |
+| Kiểm tra không còn rác | `fdekit.leftovers(run_id)`, `fdekit.clean(run_id)`, `fdekit.clean_capstone_tmp()`; CLI `python -m fdekit leftovers`, `python -m fdekit clean <run_id>`, `python -m fdekit clean-tmp` | `leftovers` chỉ **báo cáo**: không có run id (`leftovers()`, CLI `leftovers`) thì liệt kê mọi tiến trình QEMU, thư mục `.fde-lab/fde-ex-*`, container và network `fde-ex-*` còn sót, cùng thư mục tạm capstone `/var/tmp/fde-capstone-<pid>-*` mà pid đã chết, không xoá gì. Chỉ `clean <run_id>` xoá, và chỉ xoá của **đúng** một run id (`fde-ex-<run_id>*`); `clean-tmp` chỉ xoá `/var/tmp/fde-capstone-*` thuộc user hiện tại mà pid trong tên đã chết. Không có lệnh xoá hàng loạt |
+
+- Mọi tài nguyên lab mang tên chứa run id riêng (`fde-ex-<uuid8>`); dọn theo run id, **không bao giờ** theo nhãn hay tiền
+  tố chung (nhiều phiên chạy song song trên cùng máy). QEMU và container của một run chết theo tiến trình pytest kể cả
+  khi bị `SIGKILL` (app cắt test sau 300 s): một tiến trình canh giữ pipe "lifeline" và dọn khi thấy EOF.
+- Test của bài tập, capstone và sản phẩm (`tracks/fde/**/tests/*.py`) **không** gọi `docker` hay `qemu-system-*` trần:
+  Docker qua `testkit.DockerLab` (hoặc helper của `fdekit`), VM qua `fdekit.vm`/`customer_site`. Validator báo lỗi
+  `subprocess.run(["docker", ...])`, `_docker(` và mọi chuỗi `"qemu-system...`. Lệnh `docker` chạy **trong VM** qua
+  `m.ssh("docker ...")` thì được, đó là công cụ thật của khách.
+- Script người học chạy trên host qua `testkit.run_sandboxed` như track DevOps; chạy trên máy khách qua SSH của `fdekit`.
+- Helper chưa có (gate PC GPU qua `FDE_PC_SSH`, k3s của khách, Keycloak, file share…) được thêm vào `fdekit.py` kèm test ở
+  task dùng chúng, không trước.
+
+### Hồ sơ khách
+
+Mỗi hồ sơ là `setup/fde/profiles/<hồ sơ>.yaml`, nạp vào `fdekit.PROFILES`. Bài chọn hồ sơ theo "tật" cần dạy:
+
+| Hồ sơ | OS | sudo | Egress | Runtime | Dịch vụ phía host | Tật chính |
+| --- | --- | --- | --- | --- | --- | --- |
+| `lab-open` | Ubuntu 22.04, 20 GB | có | `open` | Docker + `docker compose` | — | Không tật: máy đối chứng |
+| `hospital` | Ubuntu 20.04, 8 GB | có | `proxy` (TLS inspection) | Docker, không plugin compose | mitmproxy | Proxy chỉ đặt trong `/etc/environment`, CA chưa trust, đĩa nhỏ |
+| `bank` | Rocky Linux 8.10, 20 GB | **không** | `none` | Podman rootless | — | Air-gapped hoàn toàn, SELinux enforcing |
+| `lawfirm-staging` | Ubuntu 22.04, 30 GB | có | `none` | Docker, không plugin compose | registry nội bộ HTTP | Air-gapped, registry chưa khai `insecure-registries` |
+
+Egress `none`/`proxy` ⇒ VM không route ra internet, không DNS, không tới loopback host qua `10.0.2.2`; chỉ còn SSH, các
+cổng `forwards` và `guestfwd` tới proxy (`10.0.2.100:3128`) hoặc registry (`10.0.2.101:5000`). Golden không mang theo
+mạng hay sudo lúc dựng: lúc chạy bài, `vm(profile)`/`customer_site()` áp lại theo hồ sơ.
+
+Thêm hồ sơ mới: thêm YAML + `setup/fde/cloud-init/<hồ sơ>.sh`, đo `facts` trên golden, cập nhật bảng trong
+`setup/fde/README.md` và ở đây; `test_facts_match_vm` trong `tests/test_fdekit.py` phải pass.
+
+### Ngân sách VM và thời gian
+
+- Tối đa **2 VM cùng lúc** mỗi bài (capstone tối đa 3). VM phụ (proxy, registry, Keycloak, file share) ≤2048 MB; VM chạy
+  quillo ≤5120 MB; tổng RAM VM trong một bài ≤8192 MB.
+- Mỗi bài ≤**300 s** kể cả boot VM (nút "Run tests" của app cắt pytest sau 300 s; không sửa timeout này). Golden image
+  chuẩn bị trước bằng `fdekit prepare` và việc tải image/model/dữ liệu lần đầu không tính. Ngưỡng thời gian trong test
+  chừa gấp đôi số đo. Bài vẫn vượt 300 s thì README bài ghi rõ chạy bằng terminal; frontmatter `run` vẫn phải đúng lệnh.
+- Việc nặng (dựng golden, build bundle, `SOLUTION=1` cả module) chạy với `nice -n 15`.
+
+### Chỗ hỏng thật từ hồ sơ khách
+
+- Mọi bài cài đặt/triển khai trên VM có **ít nhất một chỗ hỏng do hồ sơ khách gây ra** (proxy, CA nội bộ, egress bị
+  chặn, đĩa nhỏ, không sudo, SELinux, thiếu plugin compose…), **không** phải lỗi cố tình cài vào code hay starter.
+  Bài chạy suôn sẻ trên `lab-open` thì phải có ca trên hồ sơ "khó" làm nó hỏng.
+- `README.md` của bài chỉ tả bối cảnh và triệu chứng (như khách báo lại: "cài dừng giữa chừng", output lỗi khách gửi);
+  nguyên nhân chỉ nằm trong `solutions/`. Tên hàm, tệp, biến trong starter không được lộ nguyên nhân.
+- Test kiểm **kết quả cuối trên VM** bằng công cụ thật (dịch vụ trả lời qua cổng forward, installer chạy lại idempotent,
+  báo cáo survey khớp `Profile.facts`), không mô phỏng bằng Python và không chỉ grep chuỗi. Mọi quy tắc test chấm phải
+  được nói trong README bài hoặc milestone.
+
+### Module và trường `section`
+
+- 21 module chính `00-introduction` … `20-fde-interview` và 3 module Cloud lab `c1-aws-byoc`, `c2-gcp-azure`,
+  `c3-cloud-gpu-inference`. Module Cloud lab khai `"section": "cloud-lab"` trong `track.json`; app gom chúng vào nhóm
+  "Cloud lab (có phí)", đánh số `C1`…`C3`, không tính vào tiến độ chính và không vào "học tiếp". Id bắt đầu bằng `c` khi
+  và chỉ khi module là Cloud lab; module chính bỏ trống `section`.
+- Bài Cloud lab ghi chi phí ước tính, dựng budget alarm trước tiên, có bước `destroy` bắt buộc kèm script kiểm không còn
+  tài nguyên tính phí; test tự skip khi không có credential. Không bài nào của track chính phụ thuộc Cloud lab.
+- Mỗi module 4–9 bài (≥3 Basic, trừ module 00; ≥2 Advanced); module DSA `15-dsa-core`, `16-dsa-advanced` được tới 30 bài.
+  Basic và Intermediate có `SOLUTION.md` cộng lời giải trùng tên mọi tệp `starter/`; Advanced có `SOLUTION.md` (hướng làm
+  + rubric).
+- Không lặp track cũ: Docker, Linux, K8s, Terraform, RAG cơ bản tối đa **một** `## ` ôn nhanh mỗi module, có link về
+  module gốc (DevOps 01/06/08/10, AE 13/20, MLOps 02). `interview.md` ≥12 câu, có câu tình huống hiện trường ("khách nói
+  X, bạn làm gì").
+
+### Sản phẩm `quillo`
+
+"Sản phẩm công ty" ở `tracks/fde/product/` (MIT, hư cấu): FastAPI + htmx, worker nạp tài liệu, Postgres + pgvector, LLM
+và embedding qua **llama.cpp server** với model GGUF ghim trong `fdekit.MODELS`. Hai bản `1.0.0` và `1.1.0` (migration
+`0002_v1_1_tags.sql`) dựng từ cùng cây mã. `release.py build --version X.Y.Z` tạo bundle offline `quillo-X.Y.Z.tar`
+(image `docker save`, model, compose, `REQUIREMENTS.yaml`, `manifest.json` sha256); `release.py verify` từ chối tar cắt
+cụt, tệp sai sha, thiếu, thừa hay đường dẫn lạ. `REQUIREMENTS.yaml` là chuẩn cho bài survey/preflight. API publish cổng
+`QUILLO_PORT` (mặc định 18080) trên `QUILLO_BIND` (mặc định `127.0.0.1`); hai biến này đặt trong `.env` cạnh
+`compose.yaml` của bản cài quillo (installer ghi), không phải `setup/.env` của repo học. Sản phẩm là công cụ của bài, không phải chủ
+đề dạy; test riêng ở `tracks/fde/product/tests/`.
+
+### Bài tài liệu (dùng từ Phase 3)
+
+Module trụ 2 (11–14), System Design (17–18) và các milestone tài liệu: người học nộp tệp Markdown có **frontmatter YAML
+bắt buộc** (vd. scope must/should/won't, ước lượng có `min`/`max`, rủi ro, tiêu chí nghiệm thu, con số ROI).
+
+- Phần có cấu trúc chấm **xác định** bằng test: đủ trường, kiểu đúng, số liệu nhất quán (ROI tính lại đúng từ input).
+- Phần lập luận chấm bằng **LLM-judge local qua `llmkit`** theo rubric công khai trong README bài; test judge tự skip khi
+  không có model local và có ngưỡng chừa biên. Rubric đầy đủ và bài mẫu nằm trong `solutions/`.
+- Stakeholder simulator: persona và yêu cầu ẩn chỉ nằm trong `solutions/`; tài liệu yêu cầu chấm theo số yêu cầu ẩn
+  hỏi ra được.
+
+### Phần `## 0. Cài đặt` của module
+
+Giống quy ước track DevOps/MLOps: có khi module dùng công cụ lần đầu (module 00: QEMU/KVM, quyền `/dev/kvm`, golden
+image), luôn là phần `## ` đầu tiên, không tính vào 5–8 phần; bảng phiên bản đã kiểm, checksum trước khi cài, lệnh xác
+nhận, cách gỡ. Không bao giờ `... | sudo bash` hay `... | sudo sh` (validator kiểm trong `tracks/fde/**/*.md`).
+
+### Capstone
+
+- Capstone "Trợ lý hợp đồng cho công ty luật" (dữ liệu CUAD, CC BY 4.0, ghi công trong `capstone/README.md`; không commit
+  dữ liệu) làm trong **repo Git riêng của người học**, ngoài repo học. Repo học chỉ chứa đề (`capstone/README.md`,
+  `capstone/milestones/`), bộ chấm (`capstone/tests/`) và lời giải tham chiếu (`capstone/solutions/project/`, không phải
+  repo git lồng).
+- Bộ chấm lấy repo qua `fdekit.capstone_dir()`: `FDE_CAPSTONE_DIR` trong `setup/.env` hoặc môi trường, chưa đặt thì skip;
+  `SOLUTION=1` chấm lời giải tham chiếu. Repo riêng phải tự chứa: không import `testkit`/`fdekit`, không trỏ đường dẫn
+  vào repo học, không commit secret/khoá lab/`.env`/dữ liệu (test M00 kiểm).
+- `uv run pytest tracks/fde/capstone -k mNN` chọn một milestone; tên test bắt đầu bằng `test_mNN_`.
+- 17 milestone `m00`…`m16`; tên tệp cố định theo trường `doc` trong `track.json`. Milestone chỉ gắn (`after`) vào module
+  chính, **không** gắn vào module Cloud lab. `m00`…`m14` sau module cùng số, `m15` sau `18-system-design-fde`, `m16` sau
+  `20-fde-interview`.
+- Capstone dùng tối đa 3 VM cùng lúc, cùng ngân sách RAM và 300 s mỗi test như bài tập.
+- Bộ chấm ở `capstone/tests/` (helper chung `capstonekit.py`, fixture `capstone` trong `conftest.py`). Lệnh `make` của
+  repo người học chạy trên host qua `testkit.run_sandboxed` (repo chỉ đọc, chỉ thư mục tạm ghi được), tới máy khách qua
+  biến `SSH=<lệnh ssh của fdekit>`; bundle lớn đặt ở `/var/tmp` (`fdekit.capstone_tmp()`, tên mang pid để `clean-tmp`
+  dọn khi pytest bị SIGKILL), không ở tmpfs `/tmp`. Mỗi bước có giới hạn riêng và mỗi test có ngân sách chung 270 s
+  (`capstonekit.Budget`) để installer treo làm test FAIL kèm thông báo trước mốc 300 s; đề milestone ghi các giới hạn.
+- Repo tham chiếu `capstone/solutions/project/` là một repo đứng riêng, có thể có test riêng: `capstone/conftest.py` bỏ
+  qua nó khi chạy `uv run pytest tracks/fde/capstone` (gọi thẳng đường dẫn thì vẫn chạy), và quy tắc "test không gọi
+  `docker`/`qemu-system` trần" của validator không quét nó (test của repo người học không dùng `testkit`/`fdekit`).
+
+### Biến `setup/.env`
+
+| Biến | Dùng cho |
+| --- | --- |
+| `FDE_CAPSTONE_DIR` | Đường dẫn repo capstone của người học; chưa đặt thì test capstone skip |
+| `FDE_PC_SSH` | (Phase 2) SSH tới PC có GPU cho bài GPU tuỳ chọn; chưa đặt thì bài đó skip |

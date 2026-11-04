@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block main %}
+<form method="post" action="/login" class="card">
+  <label for="token">Admin token</label>
+  <input id="token" name="token" type="password" autocomplete="current-password" required autofocus>
+  {% if error %}<p class="error">Invalid token.</p>{% endif %}
+  <button type="submit">Sign in</button>
+</form>
+{% endblock %}

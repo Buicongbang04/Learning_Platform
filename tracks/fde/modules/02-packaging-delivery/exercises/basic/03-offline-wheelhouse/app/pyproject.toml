@@ -1,0 +1,19 @@
+[project]
+name = "intake"
+version = "0.3.0"
+description = "Đếm và kiểm tra danh sách tài liệu nạp vào (app mẫu của bài wheelhouse offline)"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic==2.11.7",
+    "pyyaml==6.0.2",
+]
+
+[project.scripts]
+intake = "intake.cli:main"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+exclude-newer = "2026-10-01T00:00:00Z"

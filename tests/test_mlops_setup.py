@@ -278,9 +278,10 @@ def test_kafka_service_pinned_local_and_healthchecked():
     assert mlopskit.STACK_PROFILES["kafka"] == "streaming"
 
 
-def test_env_example_ends_with_kafka_port():
+def test_env_example_lists_kafka_port_in_mlops_block():
     lines = ENV_EXAMPLE.read_text(encoding="utf-8").splitlines()
-    assert lines[-1] == "# MLOPS_KAFKA_PORT=29092"
+    kafka = lines.index("# MLOPS_KAFKA_PORT=29092")
+    assert lines[kafka - 1].startswith("# MLOPS_")
 
 
 def test_readme_documents_streaming_profile():
