@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
-from etakit import COLUMNS, PROJECT, need, synthetic_month
+from etakit import COLUMNS, DURATION_S, PROJECT, need, synthetic_month
 
 from testkit import Exercise, ROOT, run_sandboxed
 
@@ -78,7 +78,7 @@ def test_m01_clean_rules(project, dirty_frame):
     kept = sorted(out["tpep_pickup_datetime"].astype(str))
     expected = sorted(dirty_frame["tpep_pickup_datetime"].iloc[:5].astype(str))
     assert kept == expected, "giữ sai dòng: xem lại biên (60 s, 10 800 s, 100 dặm, zone 1..263, đầu/cuối tháng)"
-    assert out["duration_s"].between(60, 10_800).all()
+    assert out["duration_s"].between(*DURATION_S).all()
     assert set(COLUMNS) <= set(out.columns)
 
 

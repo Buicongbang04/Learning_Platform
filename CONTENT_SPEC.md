@@ -395,7 +395,7 @@ Helper Giai đoạn 2 (test riêng ở `tests/test_mlopskit.py`):
 | Chạy Evidently | `mlopskit.evidently_python(dir, script)` | `python -c script` trong `mlops-evidently:0.7.23`, `dir` mount `/work` (rw), script in JSON ra stdout |
 | Tải thử | `mlopskit.k6_run(script, {"TARGET": url})` | `grafana/k6:1.8.1`, mạng `host`; `.stdout` là JSON của `--summary-export` |
 | Chạy workflow CI | `mlopskit.act_run(workdir)` | `act` với runner `mlops-act-runner:1` tự build, `--pull=false --bind`; `act_run` chỉ đảm bảo không kéo image, **workflow không được dùng `uses:` action từ xa** (chỉ bước `run:`, nếu không act cần mạng và GitHub); skip khi thiếu `act`; trong `finally` chỉ dọn container của chính lần chạy (nhãn `mlops-ex-run=<uuid8>`), không đụng container khác; tuỳ chọn container thêm (vd. `--user uid:gid`) truyền qua tham số `container_options=`, **không** truyền `--container-options` trong `args` (act chỉ giữ giá trị cuối, `act_run` báo lỗi) |
-| Dữ liệu NYC TLC thật | `mlopskit.real_month("nyc-tlc", "2019-03")` (hoặc `"nyc-tlc-2020"`) | Skip khi chưa tải; `pytest.fail` khi sha256 lệch bảng `REAL_SHA256` (tệp nguồn bị TLC sửa hoặc tải hỏng). Không đọc thẳng `data/raw/...` |
+| Dữ liệu NYC TLC thật | `mlopskit.real_month("nyc-tlc", "2019-03")` (hoặc `"nyc-tlc-2020"`), `mlopskit.zone_lookup()` cho `taxi_zone_lookup.csv` | Skip khi chưa tải; `pytest.fail` khi sha256 lệch bảng `REAL_SHA256` (tệp nguồn bị TLC sửa hoặc tải hỏng). Không đọc thẳng `data/raw/...` |
 | Chạy `dvc`/`git` trong sandbox | `mlopskit.dvc_sh(repo, cmd, args, ok=True, env=None)` | DVC/git cấu hình riêng trong `repo`, `repo` ghi được |
 
 Profile Compose `monitoring` (prometheus 29090, alertmanager 29093, grafana 23000) và `feast` (redis 26390) bật bằng `docker compose -f setup/mlops/compose.yaml --profile monitoring --profile feast up -d --wait`.
@@ -452,7 +452,11 @@ Ghi chú kỹ thuật Giai đoạn 4 (đo 2026-11-04):
 - **Load test nhiều replica không qua `port_forward`** (port-forward dính một pod): dùng Service `NodePort` cổng tự cấp
   và `k6` trong mạng Docker `kind`, chờ ~5 giây sau khi endpoint Ready cho kube-proxy. Chấm thông lượng ≥ 1,5×, trung vị
   latency ≤ 0,7×, p95 ≤ 0,9× so với 1 replica; lần 3 replica trông lệch (keep-alive dồn vào một pod) thì đo lại một lần,
-  giữ lần thông lượng cao hơn. Không ép `noConnectionReuse` (bỏ keep-alive làm p95 tăng, lời giải đúng fail oan).
+  giữ lần thông lượng cao hơn. Không ép `noConnectionReuse` (bỏ keep-alive làm p95 tăng, lời giải đúng fail oan):
+  quy tắc này cho bài module 14, nơi người học tự viết script tải. **Ngoại lệ capstone M14:** test tự viết script
+  k6, đo sức một pod C và chạy tải chấm với **cùng** chính sách `noConnectionReuse` (`K6_NO_CONNECTION_REUSE=true`,
+  mỗi request một kết nối) để kube-proxy chia đều tải giữa các replica; ngưỡng p95 suy từ C đo cùng điều kiện nên
+  chi phí bỏ keep-alive đã nằm trong C.
 - Manifest người học ở module 14: tài nguyên cluster-scoped viết `__RUN__`, GPU giả `__GPU__`, namespace trong URL
   `__NAMESPACE__`; test thay. Job/Pod mẫu dùng `busybox:1.37` `IfNotPresent`, non-root, seccomp `RuntimeDefault`,
   drop ALL, rootfs chỉ đọc.
@@ -564,7 +568,7 @@ pipeline đổi đơn vị, OOM GPU do batch size.
 
 ### Bài quyết định
 
-Dùng ở module 10 và capstone (M10, M13, M18). Đề cho tình huống drift kèm số liệu; người học nộp tệp YAML:
+Dùng ở module 10 và capstone (M10, M13); M18 là bài dẫn sự cố với tập hành động riêng (xem mục Capstone). Đề cho tình huống drift kèm số liệu; người học nộp tệp YAML:
 
 ```yaml
 decision: keep   # retrain | rollback | keep
@@ -593,7 +597,20 @@ Không bao giờ `curl ... | sudo bash` (validator kiểm trong `tracks/mlops/**
 - `-k mNN` chọn một milestone; tên test bắt đầu bằng `test_mNN_`.
 - Tên tệp milestone cố định theo trường `doc` trong `track.json`; 18 milestone `m01`…`m18`, mỗi milestone có `after` là
   module mà nó mở ra sau (m12 và m13 cùng sau module 13).
+- M14: tải chấm suy từ sức một pod C đo ngay trong test (bậc thang k6 trên 1 replica, `ceil(2,2 × C)` kẹp trong
+  [150, 400] req/s), cả hai cùng `noConnectionReuse` (xem ghi chú kỹ thuật Giai đoạn 4). Thứ tự ưu tiên serving >
+  training (`value`, `preemptionPolicy: Never` của training) kiểm trên manifest và trên pod thật; preemption thật chỉ
+  thực hành ở module 14 (`basic/02-priority-preemption`). Helper K8s của test (`quantity`, `get_json`, `condition`,
+  `workloads`, `node_url`, `k6_summary`, …) nằm trong `etakit.py`.
+- M15: model Ray so với model train một tiến trình (`eta.train.train`, cùng tham số, cùng dữ liệu, cùng tập valid) qua
+  cổng M04 (`mae` ≤ +3%, `mae_airport` ≤ +5%) và phải thắng rõ baseline trung vị theo cặp zone trên cùng dữ liệu
+  (`mae` < 0,8 × baseline); không so với con số cố định của M04 vì mẫu dữ liệu khác.
 - M16: freshness đo trên **trục thời gian mô phỏng** (`SimClock`), ngưỡng 2 × (cửa sổ + lateness + xử lý × speedup);
   serving đọc snapshot online do job push ghi (image serving không có Feast).
 - M17: lệnh onboarding trong doc được test chạy trong bwrap, trừ lệnh cổng cuối (cần Docker) chạy ngoài với cùng env; test
   gọi hàm cổng với `mlopskit.modelscan_run` thay vào.
+- M18: bài **dẫn sự cố**, không phải "Bài quyết định" retrain | rollback | keep ở trên. Tập hành động riêng
+  (`rollback | restart | scale-out | wait | disable-feature | failover`); dữ liệu sự cố dựng từ ngày thật bằng
+  `etakit.incident_data` (`mlopskit.real_month`, `mlopskit.zone_lookup`). Test kiểm các trường có đáp án của tệp sự cố
+  (hành động, thay đổi gây ra, nguyên nhân, mốc thời gian, vai trò) và chỉ kiểm cấu trúc tối thiểu của `reasons` (≥2 câu, mỗi câu
+  ≥6 từ, có số); nội dung lập luận chấm bằng rubric trong `SOLUTION.md`.

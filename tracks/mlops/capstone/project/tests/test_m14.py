@@ -19,7 +19,8 @@ import httpx
 import joblib
 import pytest
 import yaml
-from etakit import need, require_file, synthetic_month
+from etakit import (admitted, condition, get_json, k6_summary, need, node_url, quantity, ready_endpoints, require_file,
+                    synthetic_month, wait_until, workloads)
 
 import mlopskit
 import testkit
@@ -128,21 +129,6 @@ export default function () {
   http.post(`${__ENV.TARGET}/predict`, body, { headers: { "Content-Type": "application/json" } });
 }
 """
-
-QUANTITY = re.compile(r"^([+-]?(?:\d+\.?\d*|\.\d+))(?:([eE][+-]?\d+)|(Ki|Mi|Gi|Ti|Pi|Ei|n|u|m|k|M|G|T|P|E))?$")
-BINARY = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "Pi": 2**50, "Ei": 2**60}
-DECIMAL = {"n": 1e-9, "u": 1e-6, "m": 1e-3, "k": 1e3, "M": 1e6, "G": 1e9, "T": 1e12, "P": 1e15, "E": 1e18}
-
-
-def quantity(value) -> float:
-    match = QUANTITY.match(str(value).strip())
-    if not match:
-        pytest.fail(f"{value!r} không phải quantity Kubernetes hợp lệ (vd. 500m, 256Mi, 1Gi, 2)", pytrace=False)
-    number, exponent, suffix = match.groups()
-    if exponent:
-        return float(number + exponent)
-    return float(number) * (BINARY.get(suffix) or DECIMAL.get(suffix) or 1)
-
 
 def render(path: Path, **values: str) -> str:
     try:
@@ -414,13 +400,6 @@ def require_cluster() -> None:
                     "chúng ra. Chạy: bash setup/mlops/kind/up.sh --senior")
 
 
-def get_json(*args: str, namespace: str | None = None) -> dict:
-    result = mlopskit.kubectl("get", *args, "-o", "json", namespace=namespace)
-    if result.returncode != 0:
-        pytest.fail(f"kubectl get {' '.join(args)} lỗi: {result.stderr[-500:]}", pytrace=False)
-    return json.loads(result.stdout)
-
-
 def run_id(names: list[str]) -> str:
     for name in names:
         match = re.fullmatch(r"priorityclass/eta-serving-([0-9a-f]{8})", name)
@@ -484,21 +463,6 @@ def deploy_serving(ns: str, images: Images, synthetic_trips, run: str) -> None:
     mlopskit.wait_for("inferenceservice", ISVC, "Ready", ns, ROLLOUT_TIMEOUT)
 
 
-def node_url(ns: str) -> str:
-    node = mlopskit.kubectl("get", "nodes", "-o", "jsonpath={.items[0].metadata.name}").stdout.strip()
-    port = get_json("service", NODE_PORT, namespace=ns)["spec"]["ports"][0]["nodePort"]
-    return f"http://{node}:{port}"
-
-
-def ready_endpoints(ns: str, service: str) -> int:
-    result = mlopskit.kubectl("get", "endpointslices", "-l", f"kubernetes.io/service-name={service}", "-o", "json",
-                              namespace=ns)
-    if result.returncode != 0:
-        return 0
-    return sum(1 for s in json.loads(result.stdout)["items"] for e in s.get("endpoints") or []
-               if (e.get("conditions") or {}).get("ready"))
-
-
 def deployment_state(ns: str) -> tuple[int, int]:
     result = mlopskit.kubectl("get", "deployment", DEPLOYMENT, "-o", "json", namespace=ns)
     if result.returncode != 0:
@@ -544,14 +508,6 @@ def pod_priorities(ns: str, selector: str) -> set:
     return {p["spec"].get("priority") for p in get_json("pods", "-l", selector, namespace=ns)["items"]}
 
 
-def k6_summary(script: Path, target: str, timeout: int) -> dict:
-    env = {"TARGET": target, "K6_NO_CONNECTION_REUSE": "true"}
-    result = mlopskit.k6_run(script, env, network="kind", timeout=timeout)
-    if not result.stdout:
-        pytest.fail(f"k6 không xuất summary (rc={result.returncode}):\n{result.stderr[-2500:]}", pytrace=False)
-    return json.loads(result.stdout)["metrics"]
-
-
 def capacity(script: Path, target: str) -> tuple[int, list[str]]:
     """Bậc tải cao nhất (liên tục từ bậc đầu) mà một pod giữ được p95 ≤ P95_MS và lỗi < MAX_FAILED; 0 nếu bậc đầu đã trượt.
 
@@ -594,7 +550,7 @@ def test_m14_scales_under_load(project, images, synthetic_trips, tmp_path):
         mlopskit.apply_manifest(dump([service]), serving_ns)
         serving_docs = apply_serving_quota(serving_ns)
         deploy_serving(serving_ns, images, synthetic_trips, run)
-        target = node_url(serving_ns)
+        target = node_url(serving_ns, NODE_PORT)
         wait_until(lambda: ready_endpoints(serving_ns, NODE_PORT) >= 1, 60, f"Service {NODE_PORT} chưa có endpoint Ready")
         measured, stair_log = capacity(stairs, target)
         rate, full = load_rate(measured)
@@ -659,36 +615,8 @@ def test_m14_scales_under_load(project, images, synthetic_trips, tmp_path):
             "pod retrain phải chạy với PriorityClass eta-training-${ETA_RUN}"
 
 
-def workloads(ns: str) -> dict[str, dict]:
-    found = {}
-    for item in get_json("workloads.kueue.x-k8s.io", namespace=ns)["items"]:
-        for owner in item["metadata"].get("ownerReferences") or []:
-            if owner.get("kind") == "Job":
-                found[owner["name"]] = item
-    return found
-
-
-def condition(obj: dict, kind: str) -> dict:
-    for item in (obj.get("status") or {}).get("conditions") or []:
-        if item.get("type") == kind:
-            return item
-    return {}
-
-
-def admitted(workload: dict | None) -> bool:
-    return condition(workload or {}, "Admitted").get("status") == "True"
-
-
 def job_status(ns: str, name: str) -> dict:
     return get_json("job", name, namespace=ns).get("status") or {}
-
-
-def wait_until(predicate, timeout: float, what: str, interval: float = 1) -> None:
-    deadline = time.monotonic() + timeout
-    while not predicate():
-        if time.monotonic() > deadline:
-            pytest.fail(f"{what} sau {timeout:.0f} giây", pytrace=False)
-        time.sleep(interval)
 
 
 def stamp(value: str) -> float:
@@ -743,7 +671,7 @@ def test_m14_retrain_queued_and_isolated(project, images, tmp_path):
             logs = mlopskit.kubectl("logs", f"job/{job}", "--all-containers", namespace=training_ns).stdout
             assert '"mae"' in logs, f"Job {job} không in metric JSON của eta.cli train (có thật sự train không?)"
         finished_at = stamp(job_status(training_ns, first)["completionTime"])
-        later = condition(workloads(training_ns)[second], "Admitted").get("lastTransitionTime")
+        later = (condition(workloads(training_ns)[second], "Admitted") or {}).get("lastTransitionTime")
         assert later and stamp(later) >= finished_at - 1, f"Job {second} được admit trước khi Job {first} chạy xong"
         for job, workload in workloads(training_ns).items():
             if job in jobs:

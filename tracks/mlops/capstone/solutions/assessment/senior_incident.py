@@ -25,8 +25,6 @@ import pandas as pd
 DAY = "2019-11-14"
 SOURCE = ("nyc-tlc", "2019-11")
 REFERENCE = ("nyc-tlc", "2019-10")
-LOOKUP = "taxi_zone_lookup.csv"
-LOOKUP_SHA256 = "1a99e105092230f8620f301edcca7f80d3080642ff404d28ed957d3fa222c8ed"
 MARKETS = {"Manhattan": "manhattan", "Queens": "queens", "Brooklyn": "brooklyn"}
 FEATURE_VIEW = "zone_speed_15m"
 AFFECTED = ["queens"]

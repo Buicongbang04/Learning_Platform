@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 
 def ec_keypair(folder: Path, name: str = "signer") -> tuple[Path, Path]:
-    """Sinh cặp khoá EC P-256 offline, trả `(private.pem, public.pem)` trong `folder`."""
+    """Sinh cặp khoá EC P-256 offline, trả `(private.pem, public.pub)` trong `folder`."""
     folder.mkdir(parents=True, exist_ok=True)
     key = ec.generate_private_key(ec.SECP256R1())
     private = folder / f"{name}.pem"

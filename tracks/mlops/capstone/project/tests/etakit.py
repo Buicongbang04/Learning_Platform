@@ -1,5 +1,5 @@
 """Helper chung của test capstone ETA: thư mục được chấm, import `eta` an toàn, dữ liệu giả, dữ liệu tháng lạ của M13,
-dữ liệu sự cố dựng sẵn của M18, khoá ký và pickle độc hại đã vô hại hoá của M17.
+dữ liệu sự cố dựng sẵn của M18, khoá ký và pickle độc hại đã vô hại hoá của M17, helper K8s và k6 của M14.
 
 Chạy như script để dựng dữ liệu: `uv run python tracks/mlops/capstone/project/tests/etakit.py assessment` (M13) hoặc
 `... etakit.py incident` (M18).
@@ -7,7 +7,12 @@ Chạy như script để dựng dữ liệu: `uv run python tracks/mlops/capston
 
 import importlib
 import importlib.util
+import json
+import os
+import pickle
+import re
 import sys
+import time
 from pathlib import Path
 
 if str(Path(__file__).resolve().parents[5]) not in sys.path:
@@ -17,6 +22,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import mlopskit
 from testkit import use_solution
 
 CAPSTONE = Path(__file__).resolve().parents[2]
@@ -24,6 +30,9 @@ STRANGE_MONTH_SCRIPT = CAPSTONE / "solutions" / "assessment" / "strange_month.py
 SENIOR_INCIDENT_SCRIPT = CAPSTONE / "solutions" / "assessment" / "senior_incident.py"
 PROJECT = CAPSTONE / "solutions" / "project" if use_solution() else CAPSTONE / "project"
 COLUMNS = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"]
+DURATION_S = (60, 10_800)
+MAX_DISTANCE_MI = 100
+ZONE_IDS = (1, 263)
 
 
 def need(module: str, *names: str):
@@ -107,8 +116,6 @@ def local_registry(tmp_path: Path, prefix: str = "eta") -> tuple[str, str]:
 
     import mlflow
 
-    import mlopskit
-
     uri = mlopskit.mlflow_local(tmp_path)
     name = f"{prefix}-{uuid.uuid4().hex[:8]}"
     mlflow.create_experiment(name, artifact_location=(tmp_path / "artifacts" / name).as_uri())
@@ -142,8 +149,6 @@ def injected_causes() -> set[str]:
 
 def assessment_data(dest: Path) -> Path:
     """Dựng thư mục dữ liệu M13 trong `dest`: symlink tới các tháng thật xung quanh và tệp tháng lạ sinh từ dữ liệu thật."""
-    import mlopskit
-
     module = _strange_month()
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
@@ -167,25 +172,14 @@ def incident_facts() -> dict:
 
 def incident_data(dest: Path) -> Path:
     """Dựng thư mục dữ liệu sự cố M18 trong `dest` từ ngày thật 2019-11-14 và tháng tham chiếu 2019-10 của `nyc-tlc`."""
-    import hashlib
-
-    import mlopskit
-
     module = _senior_incident()
     source = mlopskit.real_month(*module.SOURCE)
     reference = mlopskit.real_month(*module.REFERENCE)
-    lookup = source.parent / module.LOOKUP
-    if not lookup.is_file():
-        pytest.skip(f"Chưa có {module.LOOKUP}. Chạy: uv run python data/download_dataset.py {module.SOURCE[0]}")
-    if hashlib.sha256(lookup.read_bytes()).hexdigest() != module.LOOKUP_SHA256:
-        pytest.fail(f"sha256 của {lookup} không khớp: xoá tệp và tải lại bộ {module.SOURCE[0]}", pytrace=False)
-    return module.build(source, reference, lookup, Path(dest))
+    return module.build(source, reference, mlopskit.zone_lookup(module.SOURCE[0]), Path(dest))
 
 
 def ec_keypair(folder: Path, name: str) -> tuple[Path, Path]:
     """M17: cặp khoá EC P-256 sinh offline trong `folder`, khoá riêng quyền 0600; trả `(private.pem, public.pub)`."""
-    import os
-
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -198,6 +192,86 @@ def ec_keypair(folder: Path, name: str) -> tuple[Path, Path]:
         handle.write(data)
     public.write_bytes(key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
     return private, public
+
+
+QUANTITY = re.compile(r"^([+-]?(?:\d+\.?\d*|\.\d+))(?:([eE][+-]?\d+)|(Ki|Mi|Gi|Ti|Pi|Ei|n|u|m|k|M|G|T|P|E))?$")
+BINARY = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "Pi": 2**50, "Ei": 2**60}
+DECIMAL = {"n": 1e-9, "u": 1e-6, "m": 1e-3, "k": 1e3, "M": 1e6, "G": 1e9, "T": 1e12, "P": 1e15, "E": 1e18}
+
+
+def quantity(value) -> float:
+    """M14: quantity Kubernetes (`500m`, `256Mi`, `1Gi`, `2`) ra số thực; fail khi sai cú pháp."""
+    match = QUANTITY.match(str(value).strip())
+    if not match:
+        pytest.fail(f"{value!r} không phải quantity Kubernetes hợp lệ (vd. 500m, 256Mi, 1Gi, 2)", pytrace=False)
+    number, exponent, suffix = match.groups()
+    if exponent:
+        return float(number + exponent)
+    return float(number) * (BINARY.get(suffix) or DECIMAL.get(suffix) or 1)
+
+
+def get_json(*args: str, namespace: str | None = None) -> dict:
+    """M14: `kubectl get ... -o json` đã parse; fail khi kubectl lỗi."""
+    result = mlopskit.kubectl("get", *args, "-o", "json", namespace=namespace)
+    if result.returncode != 0:
+        pytest.fail(f"kubectl get {' '.join(args)} lỗi: {result.stderr[-500:]}", pytrace=False)
+    return json.loads(result.stdout)
+
+
+def condition(obj: dict, kind: str) -> dict | None:
+    """M14: condition `kind` trong `status.conditions` của object, `None` khi không có."""
+    for item in (obj.get("status") or {}).get("conditions") or []:
+        if item.get("type") == kind:
+            return item
+    return None
+
+
+def workloads(ns: str) -> dict[str, dict]:
+    """M14: Workload Kueue trong namespace, theo tên Job sở hữu."""
+    found = {}
+    for item in get_json("workloads.kueue.x-k8s.io", namespace=ns)["items"]:
+        for owner in item["metadata"].get("ownerReferences") or []:
+            if owner.get("kind") == "Job":
+                found[owner["name"]] = item
+    return found
+
+
+def admitted(workload: dict | None) -> bool:
+    return (condition(workload or {}, "Admitted") or {}).get("status") == "True"
+
+
+def wait_until(predicate, timeout: float, what: str, interval: float = 1) -> None:
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            pytest.fail(f"{what} sau {timeout:.0f} giây", pytrace=False)
+        time.sleep(interval)
+
+
+def ready_endpoints(ns: str, service: str) -> int:
+    """M14: số endpoint Ready của Service (đọc EndpointSlice); 0 khi chưa đọc được."""
+    result = mlopskit.kubectl("get", "endpointslices", "-l", f"kubernetes.io/service-name={service}", "-o", "json",
+                              namespace=ns)
+    if result.returncode != 0:
+        return 0
+    return sum(1 for s in json.loads(result.stdout)["items"] for e in s.get("endpoints") or []
+               if (e.get("conditions") or {}).get("ready"))
+
+
+def node_url(ns: str, service: str) -> str:
+    """M14: URL `http://<node>:<nodePort>` của Service NodePort, dùng được từ container trong mạng Docker `kind`."""
+    node = mlopskit.kubectl("get", "nodes", "-o", "jsonpath={.items[0].metadata.name}").stdout.strip()
+    port = get_json("service", service, namespace=ns)["spec"]["ports"][0]["nodePort"]
+    return f"http://{node}:{port}"
+
+
+def k6_summary(script: Path, target: str, timeout: int) -> dict:
+    """M14: chạy k6 trong mạng `kind`, không keep-alive (`K6_NO_CONNECTION_REUSE`) để tải chia đều giữa các replica."""
+    env = {"TARGET": target, "K6_NO_CONNECTION_REUSE": "true"}
+    result = mlopskit.k6_run(script, env, network="kind", timeout=timeout)
+    if not result.stdout:
+        pytest.fail(f"k6 không xuất summary (rc={result.returncode}):\n{result.stderr[-2500:]}", pytrace=False)
+    return json.loads(result.stdout)["metrics"]
 
 
 class _ExecMarker:
@@ -224,15 +298,11 @@ class _PathMarker:
 
 def marker_pickle(marker: Path) -> bytes:
     """M17: pickle trông như checkpoint, modelscan bắt được (CRITICAL). Test không bao giờ nạp nó."""
-    import pickle
-
     return pickle.dumps({"coef": [0.1, 0.2], "intercept": 1.5, "hook": _ExecMarker(marker)}, protocol=4)
 
 
 def stealth_pickle(marker: Path) -> bytes:
     """M17: pickle modelscan không bắt; chỉ allowlist định dạng theo nội dung chặn được. Test không bao giờ nạp nó."""
-    import pickle
-
     return pickle.dumps({"coef": [0.1, 0.2], "hook": _PathMarker(marker)}, protocol=4)
 
 

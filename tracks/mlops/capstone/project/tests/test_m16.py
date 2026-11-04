@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
-from etakit import PROJECT, need, require_file
+from etakit import COLUMNS, DURATION_S, MAX_DISTANCE_MI, PROJECT, ZONE_IDS, need, require_file
 
 import mlopskit
 
@@ -51,12 +51,11 @@ def iso(ts: int) -> str:
 def real_trips(start: str, end: str, frac: float, zones: int | None = None, seed: int = 0) -> pd.DataFrame:
     """Chuyến thật 2019-03 có lúc trả khách trong [start, end), làm sạch tối thiểu, có `duration_s`."""
     path = mlopskit.real_month("nyc-tlc", "2019-03")
-    columns = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"]
-    df = pd.read_parquet(path, columns=columns, filters=[("tpep_dropoff_datetime", ">=", pd.Timestamp(start)),
+    df = pd.read_parquet(path, columns=COLUMNS, filters=[("tpep_dropoff_datetime", ">=", pd.Timestamp(start)),
                                                         ("tpep_dropoff_datetime", "<", pd.Timestamp(end))])
     df["duration_s"] = (df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]).dt.total_seconds()
-    keep = (df["duration_s"].between(60, 10_800) & (df["trip_distance"] > 0) & (df["trip_distance"] <= 100)
-            & df["PULocationID"].between(1, 263) & df["DOLocationID"].between(1, 263))
+    keep = (df["duration_s"].between(*DURATION_S) & (df["trip_distance"] > 0) & (df["trip_distance"] <= MAX_DISTANCE_MI)
+            & df["PULocationID"].between(*ZONE_IDS) & df["DOLocationID"].between(*ZONE_IDS))
     df = df[keep]
     if zones:
         df = df[df["PULocationID"].isin(df["PULocationID"].value_counts().index[:zones])]
@@ -96,7 +95,7 @@ def reference(stream: list) -> dict:
     return {"windows": speeds, "late": late, "duplicates": dups, "invalid": invalid, "accepted": accepted, "late_ids": late_ids}
 
 
-def bounded_shuffle(items: list, max_shift: int, seed: int) -> list:
+def shuffle_bounded(items: list, max_shift: int, seed: int) -> list:
     rng = random.Random(seed)
     keyed = [(i + rng.uniform(0, max_shift), i, item) for i, item in enumerate(items)]
     return [item for _, _, item in sorted(keyed, key=lambda k: (k[0], k[1]))]
@@ -190,7 +189,7 @@ def test_m16_replay_stream_matches_batch(project):
     assert events == own_events(shuffled.sort_values("tpep_dropoff_datetime", kind="stable")), (
         "trip_events: một dict năm khoá mỗi chuyến, trip_id là index, sắp theo lúc trả khách (giữ thứ tự gốc khi trùng)"
     )
-    stream = bounded_shuffle(events, max_shift=20, seed=1)
+    stream = shuffle_bounded(events, max_shift=20, seed=1)
     stream = make_late(stream, 15, seed=2)
     rng = random.Random(3)
     for _ in range(25):

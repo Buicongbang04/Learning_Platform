@@ -298,8 +298,38 @@ def test_real_month_skips_when_missing(monkeypatch):
 def test_real_sha256_table_complete():
     expected = {f"{ds}/yellow_tripdata_{year}-{m:02d}.parquet"
                 for ds, year in (("nyc-tlc", 2019), ("nyc-tlc-2020", 2020)) for m in range(1, 13)}
+    expected |= {"nyc-tlc/taxi_zone_lookup.csv", "nyc-tlc-2020/taxi_zone_lookup.csv"}
     assert set(mlopskit.REAL_SHA256) == expected
     assert all(len(v) == 64 for v in mlopskit.REAL_SHA256.values())
+
+
+def test_zone_lookup_checksum_mismatch(tmp_path, monkeypatch):
+    (tmp_path / "nyc-tlc").mkdir()
+    (tmp_path / "nyc-tlc" / "taxi_zone_lookup.csv").write_text("LocationID,Borough\n1,EWR\n")
+    monkeypatch.setattr(testkit.Exercise, "dataset", staticmethod(lambda name: tmp_path / name))
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.zone_lookup()
+    assert "sha256" in str(info.value)
+
+
+def test_zone_lookup_accepts_matching_checksum(tmp_path, monkeypatch):
+    (tmp_path / "nyc-tlc-2020").mkdir()
+    (tmp_path / "nyc-tlc-2020" / "taxi_zone_lookup.csv").write_bytes(b"abc")
+    monkeypatch.setattr(testkit.Exercise, "dataset", staticmethod(lambda name: tmp_path / name))
+    monkeypatch.setitem(mlopskit.REAL_SHA256, "nyc-tlc-2020/taxi_zone_lookup.csv", hashlib.sha256(b"abc").hexdigest())
+    assert mlopskit.zone_lookup("nyc-tlc-2020") == tmp_path / "nyc-tlc-2020" / "taxi_zone_lookup.csv"
+
+
+def test_zone_lookup_skips_with_download_hint(tmp_path, monkeypatch):
+    (tmp_path / "nyc-tlc").mkdir()
+    monkeypatch.setattr(testkit.Exercise, "dataset", staticmethod(lambda name: tmp_path / name))
+    with pytest.raises(pytest.skip.Exception) as info:
+        mlopskit.zone_lookup()
+    assert "download_dataset.py nyc-tlc" in str(info.value)
+
+
+def test_zone_lookup_real_data_matches_table():
+    assert mlopskit.zone_lookup().name == "taxi_zone_lookup.csv"
 
 
 def test_real_month_real_data_matches_table():

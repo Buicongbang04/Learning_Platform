@@ -11,8 +11,10 @@ này tranh nhau cùng một cluster: giờ cao điểm tối thứ Sáu, traffic
 - **Retrain đi qua hàng đợi**: job retrain là `batch/v1` Job nộp vào `LocalQueue` của Kueue. ClusterQueue của training
   chỉ đủ chỗ cho **một** job retrain một lúc; job thứ hai chờ, không tạo pod, rồi tự chạy khi job đầu xong.
 - **Hai namespace, hai quota, hai mức ưu tiên**: namespace serving có ResourceQuota vừa đủ cho số replica tối đa và
-  không nhận Job; namespace training có quota riêng; pod serving mang PriorityClass cao hơn pod retrain, nên khi node
-  hết chỗ, scheduler đẩy retrain ra chứ không đẩy API.
+  không nhận Job; namespace training có quota riêng; pod serving mang PriorityClass cao hơn pod retrain, và class training
+  có `preemptionPolicy: Never`. Test kiểm thứ tự ưu tiên này (serving > training, `preemptionPolicy`) trên manifest
+  và trên pod thật đang chạy; node không bị ép hết chỗ nên không có preemption thật ở đây. Cảnh scheduler đẩy pod
+  ưu tiên thấp ra khi node đầy được thực hành ở module 14, bài `basic/02-priority-preemption`.
 
 Bài học chính: autoscale không phải "bật HPA". Phải chọn metric phản ánh đúng việc pod đang quá tải, biết metric đó
 được đọc từ đâu và mỗi bao lâu, và quota của namespace phải chứa nổi số replica tối đa (không thì HPA ra lệnh scale mà

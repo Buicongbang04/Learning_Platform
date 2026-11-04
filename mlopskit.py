@@ -391,6 +391,8 @@ REAL_SHA256: dict[str, str] = {
     "nyc-tlc-2020/yellow_tripdata_2020-10.parquet": "4e447b9c7cc6c48f6c0bf62ca93ef0051ff89b06d3d039a3c3489cf64a9c7e41",
     "nyc-tlc-2020/yellow_tripdata_2020-11.parquet": "478716ac6420213ab45d9a1107fe5a1ba8c59de0e4bc27588b6f3b2079ad7210",
     "nyc-tlc-2020/yellow_tripdata_2020-12.parquet": "b3e029240c4af3b8bc373169a7412150d5eb1721e2b8498975c13226dfd2bb55",
+    "nyc-tlc/taxi_zone_lookup.csv": "1a99e105092230f8620f301edcca7f80d3080642ff404d28ed957d3fa222c8ed",
+    "nyc-tlc-2020/taxi_zone_lookup.csv": "1a99e105092230f8620f301edcca7f80d3080642ff404d28ed957d3fa222c8ed",
 }
 _SHA_CACHE: dict[tuple[str, int, int], str] = {}
 
@@ -407,12 +409,11 @@ def _sha256(path: Path) -> str:
     return _SHA_CACHE[key]
 
 
-def real_month(dataset: str, month: str) -> Path:
-    """Đường dẫn tệp Parquet một tháng của `nyc-tlc` (2019) hay `nyc-tlc-2020`, đã kiểm sha256; skip khi chưa tải."""
-    name = f"yellow_tripdata_{month}.parquet"
+def real_file(dataset: str, name: str) -> Path:
+    """Đường dẫn một tệp của bộ `nyc-tlc` (2019) hay `nyc-tlc-2020` có trong `REAL_SHA256`, đã kiểm sha256; skip khi chưa tải."""
     expected = REAL_SHA256.get(f"{dataset}/{name}")
     if expected is None:
-        pytest.fail(f"Không có tệp {dataset}/{name} trong bảng sha256 (tháng dạng YYYY-MM, 12 tháng của năm bộ dữ liệu).", pytrace=False)
+        pytest.fail(f"Không có tệp {dataset}/{name} trong bảng sha256 (12 tháng YYYY-MM của năm bộ dữ liệu và taxi_zone_lookup.csv).", pytrace=False)
     path = testkit.Exercise.dataset(dataset) / name
     if not path.is_file():
         pytest.skip(f"Chưa có {name}. Chạy: uv run python data/download_dataset.py {dataset}")
@@ -423,6 +424,16 @@ def real_month(dataset: str, month: str) -> Path:
             pytrace=False,
         )
     return path
+
+
+def real_month(dataset: str, month: str) -> Path:
+    """Đường dẫn tệp Parquet một tháng của `nyc-tlc` (2019) hay `nyc-tlc-2020`, đã kiểm sha256; skip khi chưa tải."""
+    return real_file(dataset, f"yellow_tripdata_{month}.parquet")
+
+
+def zone_lookup(dataset: str = "nyc-tlc") -> Path:
+    """Đường dẫn `taxi_zone_lookup.csv` của bộ `dataset`, đã kiểm sha256; skip kèm lệnh tải khi chưa có."""
+    return real_file(dataset, "taxi_zone_lookup.csv")
 
 
 class ComposeProject:
