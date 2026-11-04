@@ -150,7 +150,8 @@ print(mlopskit.feast_run(r, 'apply', network='mlops_default').stdout)"
   với config **không** có `speed_table` → flow ném lỗi có chữ `avg_speed_mph`.
 - `test_m06_online_offline_parity` (cần Redis, skip kèm lệnh bật nếu chưa có): chép `feature_repo/` sang thư mục tạm, đổi
   `project` thành tên ngẫu nhiên, ghi `data/zone_hour_speed.parquet` từ `zone_hour_speed` của hai tháng giả, `feast apply`,
-  `feast materialize 2019-01-01T00:00:00 2019-03-15T00:00:00`, rồi trong container đọc `get_historical_features` và
+  `feast materialize -v zone_hour_speed 2019-01-01T00:00:00 2019-03-15T00:00:00` (chỉ view này: từ M16 repo có thêm view push
+  `zone_speed_15m`, không materialize), rồi trong container đọc `get_historical_features` và
   `get_online_features` cho 20 `(zone, giờ)` lúc 2019-03-10; online, offline và `attach_speed` trên host phải bằng nhau
   (sai số 1e-6). Cuối test `feast teardown` xoá key trong Redis.
 

@@ -1,0 +1,35 @@
+_min_copier_version: "9.0"
+_subdirectory: project
+_templates_suffix: .jinja
+_answers_file: .copier-answers.yml
+
+project_name:
+  type: str
+  help: Tên dự án model, viết tự do (vd. Tip Amount)
+  validator: "{% if not project_name | trim %}Cần tên dự án{% endif %}"
+
+project_slug:
+  type: str
+  help: Tên ngắn kebab-case, dùng trong tên model trên registry
+  default: "{{ project_name | trim | lower | replace(' ', '-') }}"
+  validator: "{% if not (project_slug | regex_search('^[a-z][a-z0-9]*(-[a-z0-9]+)*$')) %}project_slug phải là kebab-case chữ thường{% endif %}"
+
+team:
+  type: str
+  help: Đội sở hữu model
+  choices:
+    - eta
+    - pricing
+    - fraud
+    - search
+    - ads
+
+owner:
+  type: str
+  help: Email người chịu trách nhiệm model
+  validator: "{% if not (owner | regex_search('^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$')) %}owner phải là email{% endif %}"
+
+cost_center:
+  type: str
+  help: Mã trung tâm chi phí, dạng CC-1234
+  validator: "{% if not (cost_center | regex_search('^CC-[0-9]{4}$')) %}cost_center phải dạng CC-1234{% endif %}"

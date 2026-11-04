@@ -3,7 +3,7 @@ import pandas as pd
 from eta.data import COLUMNS
 
 FEATURES = ["PULocationID", "DOLocationID", "pickup_hour", "pickup_dow", "trip_distance"]
-OPTIONAL_FEATURES = ["avg_speed_mph"]
+OPTIONAL_FEATURES = ["avg_speed_mph", "speed_15m_mph"]
 TARGET = "duration_s"
 AIRPORT_ZONES = (132, 138)
 MIN_DURATION_S = 60
