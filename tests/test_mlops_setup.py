@@ -301,6 +301,15 @@ def test_up_sh_senior_addons_pinned():
     assert "up.sh --senior" in readme and "+0,55 GiB" in readme
 
 
+def test_up_sh_addons_get_mlops_system_priority():
+    text = (KIND_DIR / "up.sh").read_text(encoding="utf-8")
+    assert "name: mlops-system" in text and "value: 1000000" in text and "globalDefault: false" in text
+    assert '"priorityClassName":"mlops-system"' in text and '"<none>"' in text
+    for ns in ("cert-manager", "kserve", "argo", "keda", "kueue-system"):
+        assert ns in text.split("mlops-system", 1)[1], ns
+    assert "mlops-system" in (KIND_DIR / "README.md").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("arg", ["--bogus", "senior", "--senior=1"])
 def test_up_sh_rejects_unknown_arg(arg):
     import os

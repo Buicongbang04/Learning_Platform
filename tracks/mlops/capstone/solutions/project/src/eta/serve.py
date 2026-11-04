@@ -36,6 +36,7 @@ REQUESTS = Counter("eta_requests", "Request POST /predict theo mã HTTP và nhá
 LATENCY = Histogram("eta_request_duration_seconds", "Thời gian xử lý POST /predict", ["variant"], buckets=LATENCY_BUCKETS)
 PREDICTIONS = Histogram("eta_prediction_seconds", "Giá trị ETA dự đoán (giây)", ["variant"], buckets=PREDICTION_BUCKETS)
 MODEL_INFO = Gauge("eta_model_info", "Model đang nạp, giá trị luôn 1", ["version", "variant"])
+IN_FLIGHT = Gauge("eta_requests_in_flight", "Request POST /predict đang xử lý trong pod này (metric autoscale của M14)")
 
 
 class TripRequest(BaseModel):
@@ -240,11 +241,13 @@ async def observe_predict(request: Request, call_next):
         return await call_next(request)
     started = time.perf_counter()
     status = 500
+    IN_FLIGHT.inc()
     try:
         response = await call_next(request)
         status = response.status_code
         return response
     finally:
+        IN_FLIGHT.dec()
         variant = getattr(request.state, "variant", "none")
         REQUESTS.labels(status=str(status), variant=variant).inc()
         LATENCY.labels(variant=variant).observe(time.perf_counter() - started)
@@ -257,13 +260,13 @@ def current(request: Request) -> Models | None:
 
 
 @app.get("/healthz")
-def healthz(request: Request) -> dict:
+async def healthz(request: Request) -> dict:
     models = current(request)
     return {"status": "ok", "model_version": models.champion.version if models else None}
 
 
 @app.get("/readyz")
-def readyz(request: Request):
+async def readyz(request: Request):
     models = current(request)
     if models is None:
         reason = getattr(request.app.state, "not_ready", None) or "chưa khởi động"
@@ -275,7 +278,7 @@ def readyz(request: Request):
 
 
 @app.get("/metrics")
-def metrics() -> Response:
+async def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

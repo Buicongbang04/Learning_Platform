@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: eta-serving
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 2Gi
+    limits.cpu: "8"
+    limits.memory: 4Gi
+    pods: "8"
+    count/jobs.batch: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: eta-serving-defaults
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 100m, memory: 128Mi}
+      default: {cpu: 500m, memory: 256Mi}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: eta
+spec:
+  scaleTargetRef:
+    name: eta-predictor
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - {type: Pods, value: 6, periodSeconds: 15}
+        scaleDown:
+          stabilizationWindowSeconds: 120
+          policies:
+            - {type: Pods, value: 1, periodSeconds: 30}
+  triggers:
+    - type: metrics-api
+      metricType: Value
+      metadata:
+        url: "http://eta-predictor.${ETA_NAMESPACE}.svc.cluster.local/metrics"
+        format: prometheus
+        valueLocation: eta_requests_in_flight
+        targetValue: "1"

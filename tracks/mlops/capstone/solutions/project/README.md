@@ -195,6 +195,57 @@ Training: `argo/train-workflow.yaml` (DAG `validate → train → gate`, paramet
 ConfigMap `eta-train-data`, artifact `sample`, `model`, `metrics` qua MinIO của Argo). Một Workflow trên 1 500 chuyến xong
 trong khoảng 30 giây; `gate` từ chối thoát mã 3 và Workflow Failed ở đúng bước đó.
 
+## Chịu tải trên K8s (M14)
+
+Metric scale là `eta_requests_in_flight`: gauge trong middleware `/predict` của `eta.serve`, tăng khi request vào, giảm
+trong `finally`. CPU (metrics-server) lấy mẫu 15 giây và kẹt ở trần `limits.cpu`; cluster không có Prometheus (không tính
+được `rate()` hay p95), còn in-flight đọc thẳng được từ `/metrics` bằng trigger `metrics-api` (`format: prometheus`) và theo
+định luật Little tăng vọt đúng lúc pod bắt đầu xếp hàng. KEDA đọc qua Service nên mỗi lần chỉ thấy một pod:
+`metricType: Value`, `targetValue: "1"` (một pod nên nhận khoảng 60 req/s ở 15 ms, in-flight khoảng 1). Với `"2"` có lần
+dừng ở 2 replica khi hai pod gánh 150 req/s ở khoảng 88% sức.
+
+```bash
+ETA_RUN=dev1 envsubst '$ETA_RUN' < k8s/cluster.yaml | kubectl --context kind-mlops apply -f -
+ETA_NAMESPACE=eta envsubst '$ETA_NAMESPACE' < k8s/serving.yaml | kubectl --context kind-mlops -n eta apply -f -
+ETA_PRIORITY_CLASS=eta-serving-dev1 envsubst < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
+ETA_RUN=dev1 envsubst '$ETA_RUN' < k8s/training.yaml | kubectl --context kind-mlops -n eta-training apply -f -
+ETA_RUN=dev1 ETA_TRAIN_IMAGE=eta-train:dev ETA_MONTH=2019-03 envsubst '$ETA_RUN $ETA_TRAIN_IMAGE $ETA_MONTH' \
+  < k8s/retrain-job.yaml | kubectl --context kind-mlops -n eta-training create -f -
+```
+
+Đo trên laptop 16 nhân đang chạy việc khác. Bước bậc thang của test (1 replica, mỗi bậc 5 giây) cho sức một pod
+C = 100–175 req/s tuỳ lúc (ví dụ một lần: 150 req/s p95 6 ms, 175 req/s p95 272 ms, 200 req/s p95 731 ms → C = 175);
+tải chấm `ceil(2,2 × C)` = 221–386 req/s, không keep-alive. Một lần chạy với C = 175 (386 req/s):
+
+| t (giây từ lúc k6 bắt đầu) | 0 | 13 | 19 | 25 | 80 |
+| --- | --- | --- | --- | --- | --- |
+| replicas / Ready | 1/1 | 1/1 | 6/1 | 6/6 | 6/6 |
+
+Pha steady (20 giây, 7 721 request): p95 35–45 ms, không lỗi; 10 giây sau tải in-flight bằng 0 trên cả 6 pod. HPA đồng
+bộ mỗi 15 giây, nên thời điểm scale lệch tới 15 giây giữa các lần chạy.
+
+Quota serving: pod predictor xin 100m CPU, 256Mi, giới hạn 1 CPU, 512Mi; `maxReplicaCount: 6` + 1 pod rolling update = 7
+pod → `requests.cpu: 1` (cần 700m), `requests.memory: 2Gi` (cần 1,75Gi), `limits.cpu: 8` (cần 7), `limits.memory: 4Gi`
+(cần 3,5Gi), `pods: 8`, `count/jobs.batch: 0`. Training: Job retrain xin 1 CPU, 768Mi; ClusterQueue và ResourceQuota
+1500m, 1536Mi nên đúng một Job chạy một lúc. PriorityClass `eta-serving` 2 000 (`PreemptLowerPriority`, dưới `mlops-system` 1 000 000 của controller add-on),
+`eta-training` 1 000 (`Never`).
+
+## Retrain phân tán (M15)
+
+`eta.distributed.retrain` chạy Ray Tune: lưới `learning_rate` 0,05/0,1 × `max_leaf_nodes` 31/63, mỗi trial 1 CPU, tối đa
+`workers` trial cùng lúc; mỗi trial `warm_start` thêm 20 cây một đợt, report `trees` và checkpoint `model.joblib` sau mỗi
+đợt, đọc `tune.get_checkpoint()` khi bắt đầu. `FailureConfig(max_failures=2)`, `CheckpointConfig(num_to_keep=2)`.
+Không chia dữ liệu: GBDT dựng cây tuần tự, mẫu 200 000 dòng vừa RAM một worker; các trial độc lập nên song song theo cấu hình
+không cần đồng bộ gì giữa worker, và giữ nguyên model M01 và cổng M04.
+
+| Lần chạy | Thời gian | Kết quả |
+| --- | --- | --- |
+| Test, 40 000 chuyến giả, 2 worker, 4 trial, kill một worker | 25–30 giây | Kill ở 60 cây, chạy lại từ 80 cây trên worker mới; `mae` 33,8 so với 34,5 của model một tiến trình |
+| 2019-01 thật, mẫu 200 000, 2 worker | khoảng 45 giây | Tốt nhất `learning_rate` 0,1, `max_leaf_nodes` 63; `mae` 147 giây trên 20% cuối tháng |
+
+`register` gọi `log_and_register` của M04 với `model_params` của trial tốt nhất (tag `git_commit`, `data_version`) và thêm
+tag `trainer=ray-tune`, `trials`.
+
 ## Đánh giá M13
 
 `make assessment` dựng `data/assessment/` (tháng lạ 2019-10 và ba tháng thật quanh nó), chạy `prepare`, `validate` (exit 1
