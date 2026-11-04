@@ -54,7 +54,7 @@ uv run pytest tracks/fde/capstone -k m03 -q      # ~2 phút, một máy lawfirm-
 
 Hai test dùng chung một máy `customer_site("lawfirm-staging", memory_mb=5120, forwards=(18080,))`; test dựng bundle
 `SITE=lawfirm-staging` trên máy bạn như M02 rồi chép cả thư mục vào `/home/fde/bundle`. `make install`/`make verify`
-chạy như M02 (`SSH=<lệnh ssh của test> REMOTE_BUNDLE=/home/fde/bundle`, sandbox, `install` ≤150 s, `install` với
+chạy như M02 (`SSH=<lệnh ssh của test> REMOTE_BUNDLE=/home/fde/bundle`, sandbox, `install` ≤180 s, `install` với
 bundle bị sửa ≤60 s, `verify` ≤60 s), trong ngân sách chung 270 s mỗi test (kể cả dựng bundle và boot máy nếu test đó
 dựng máy staging): installer treo thì test FAIL kèm tên bước, trước mốc 300 s app cắt test.
 

@@ -88,8 +88,8 @@ tên bước, trước mốc 300 s app cắt test.
     `install.sh`, `verify.sh`, `tools/docker-compose` (sha bằng bản ghim);
   - `QUILLO_RELEASE_SHA256` sai (64 số 0) thì `make bundle` thoát khác `0` và `BUNDLE_DIR` không có `SHA256SUMS`.
 - [ ] `test_m02_installer_idempotent`: bundle `SITE=lab` chép vào `/home/fde/bundle` của một VM `lab-open` 5120 MB:
-  - `make install SSH=<lệnh ssh của test> REMOTE_BUNDLE=/home/fde/bundle` thoát `0` trong 150 s (lời giải tham
-    chiếu ~65 s);
+  - `make install SSH=<lệnh ssh của test> REMOTE_BUNDLE=/home/fde/bundle` thoát `0` trong 180 s (lời giải tham
+    chiếu 65–100 s tuỳ tải máy);
   - `/healthz` qua cổng 18080 forward ra máy bạn trả 200 với `version` `1.0.0`;
   - project compose `quillo` có đủ `db`, `llm`, `embed`, `api`, `worker`, tất cả đang chạy;
   - chạy `make install` lần hai thoát `0` trong 60 s (tham chiếu ~15 s), mọi container giữ nguyên ID và `StartedAt`;
