@@ -283,8 +283,8 @@ def modelscan_run(target: Path, *, timeout: int = 300) -> subprocess.CompletedPr
             timeout=timeout,
         )
         if result.returncode == 125 and "No such image" in result.stderr:
-            pytest.fail(f"modelscan_run: chưa có image {image}; build trước: "
-                        f"docker build -t {image} setup/mlops/modelscan", pytrace=False)
+            pytest.fail(f"modelscan_run: chưa có image {image}; chạy lại test để helper tự build "
+                        f"(image có nhãn mlops-dockerfile-sha)", pytrace=False)
         report = out / "report.json"
         if report.is_symlink():
             pytest.fail("modelscan_run: report.json là symlink, không đọc", pytrace=False)
