@@ -28,12 +28,10 @@ def test_queue_contract():
     assert flavors, "Cần ít nhất một ResourceFlavor"
     for team in ("team-a", "team-b"):
         cq = kit.find(docs, "ClusterQueue", f"{team}-{kit.RUN}")
-        spec = cq.get("spec") or {}
-        assert kit.RUN in str(spec.get("cohortName", "")), f"{team}: cohortName phải chứa {kit.RUN}"
-        assert spec.get("namespaceSelector") is not None, f"{team}: namespaceSelector chưa cho namespace nào gửi job"
+        cohort = (cq.get("spec") or {}).get("cohortName")
+        assert cohort is None or kit.RUN in str(cohort), f"{team}: tên cohort phải chứa {kit.RUN} (không trùng lần chạy khác)"
         quota = gpu_quota(cq, kit.GPU)
         assert kit.quantity(quota.get("nominalQuota", 0)) == 2, f"{team}: quota GPU danh nghĩa phải là 2"
-        assert kit.quantity(quota.get("borrowingLimit", -1)) == 1, f"{team}: được mượn tối đa 1 GPU"
         local = kit.find(docs, "LocalQueue", team)
         assert (local.get("spec") or {}).get("clusterQueue") == f"{team}-{kit.RUN}", f"LocalQueue {team} trỏ sai ClusterQueue"
         assert "namespace" not in (local.get("metadata") or {}), "LocalQueue không ghi namespace (test tự đặt)"
@@ -51,9 +49,22 @@ def test_borrow_hold_reclaim_then_admit():
             def submit(name: str, queue: str, resources: dict, seconds: int) -> None:
                 mlopskit.apply_manifest(kit.dump([kit.job_manifest(name, queue, resources, seconds)]), ns)
 
+            burst = [f"x{i}" for i in range(1, 5)]
+            for name in burst:
+                submit(name, "team-a", need, 600)
+            kit.wait_until(lambda: sum(kit.admitted(w) for j, w in kit.workloads(ns).items() if j in burst) >= 3, 60,
+                           "team-a nộp 4 job 1 GPU khi team-b rảnh mà chưa tới 3 job được admit")
+            time.sleep(10)
+            current = kit.workloads(ns)
+            running = sum(kit.admitted(current[j]) for j in burst if j in current)
+            assert len([j for j in burst if j in current]) == 4, "Có job không đi qua Kueue"
+            assert running == 3, f"team-a nộp 4 job 1 GPU khi team-b rảnh: {running} job được admit, cần đúng 3"
+            kit.delete(ns, *burst)
+            kit.wait_until(lambda: not set(burst) & set(kit.workloads(ns)), 60, "Workload của các job đã xoá chưa biến mất")
+
             submit("b1", "team-b", need, 600)
             kit.wait_workload(ns, "b1", kit.admitted, 60, "chưa được admit dù team-b còn quota")
-            submit("a1", "team-a", double, 45)
+            submit("a1", "team-a", double, 90)
             kit.wait_workload(ns, "a1", kit.admitted, 60, "chưa được admit dù team-a còn quota danh nghĩa")
             submit("a2", "team-a", need, 600)
             kit.wait_workload(ns, "a2", kit.admitted, 60, "chưa được admit dù cohort còn GPU cho mượn")

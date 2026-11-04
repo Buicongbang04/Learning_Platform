@@ -36,15 +36,41 @@ def test_isvc_contract():
     assert annotations.get("serving.kserve.io/autoscalerClass") == "none" or fixed, \
         "Cần tắt autoscaler: autoscalerClass none hoặc minReplicas == maxReplicas"
     container = kit.containers(doc)[0]
+    env = {e.get("name"): e.get("value") for e in container.get("env") or []}
+    assert env.get("SERVICE_MS") == "20" and env.get("CONCURRENCY") == "1", "Không đổi SERVICE_MS, CONCURRENCY"
+
+
+def check_predictor_pod(ns: str) -> None:
+    """Kiểm pod predictor KServe thật sinh ra (không phải YAML): probe, resources, token API."""
+    found = kit.pods(ns, "serving.kserve.io/inferenceservice=eta-load")
+    assert found, "Không thấy pod predictor của eta-load"
+    spec = found[0]["spec"]
+    assert spec.get("automountServiceAccountToken") is False, "Pod serving không cần token API"
+    container = next((c for c in spec["containers"] if c["name"] == "kserve-container"), None)
+    assert container is not None, "Pod predictor không có container kserve-container"
     probe = (container.get("readinessProbe") or {}).get("httpGet") or {}
     assert probe.get("path") == "/v1/models/eta", "readinessProbe phải là httpGet vào /v1/models/eta"
     resources = container.get("resources") or {}
     for part in ("requests", "limits"):
         for key in ("cpu", "memory"):
-            assert key in (resources.get(part) or {}), f"Thiếu resources.{part}.{key}"
-    assert predictor.get("automountServiceAccountToken") is False, "Pod serving không cần token API"
-    env = {e.get("name"): e.get("value") for e in container.get("env") or []}
-    assert env.get("SERVICE_MS") == "20" and env.get("CONCURRENCY") == "1", "Không đổi SERVICE_MS, CONCURRENCY"
+            assert key in (resources.get(part) or {}), f"Pod predictor thiếu resources.{part}.{key}"
+
+
+def measure(script, ns: str, n: int) -> tuple[float, float]:
+    summary = kit.k6(script, kit.node_url(ns, "eta-load-np"))
+    requests = metric(summary, "http_reqs")
+    duration = metric(summary, "http_req_duration")
+    failed = metric(summary, "http_req_failed")
+    checks = metric(summary, "checks")
+    assert requests.get("count", 0) > 0, "k6 không gửi request nào"
+    assert checks.get("passes", 0) > 0, "Script k6 chưa có check nào chạy"
+    assert any("thresholds" in m for m in summary["metrics"].values()), "Script k6 chưa khai báo thresholds"
+    assert failed.get("value", 1) < 0.01, f"{n} replica: tỉ lệ lỗi {failed.get('value')}"
+    return requests["rate"], duration["p(95)"]
+
+
+def scaled(one: tuple[float, float], many: tuple[float, float]) -> bool:
+    return many[0] >= 1.5 * one[0] and many[1] <= 0.75 * one[1]
 
 
 def test_throughput_scales_with_replicas():
@@ -61,16 +87,11 @@ def test_throughput_scales_with_replicas():
             kit.wait_until(lambda: kit.ready_endpoints(ns, "eta-load-np") == n, 180,
                            f"Service chưa có đúng {n} pod Ready")
             time.sleep(5)
-            summary = kit.k6(script, kit.node_url(ns, "eta-load-np"))
-            requests = metric(summary, "http_reqs")
-            duration = metric(summary, "http_req_duration")
-            failed = metric(summary, "http_req_failed")
-            checks = metric(summary, "checks")
-            assert requests.get("count", 0) > 0, "k6 không gửi request nào"
-            assert checks.get("passes", 0) > 0, "Script k6 chưa có check nào chạy"
-            assert any("thresholds" in m for m in summary["metrics"].values()), "Script k6 chưa khai báo thresholds"
-            assert failed.get("value", 1) < 0.01, f"{n} replica: tỉ lệ lỗi {failed.get('value')}"
-            results[n] = (requests["rate"], duration["p(95)"])
+            check_predictor_pod(ns)
+            results[n] = measure(script, ns, n)
+        if not scaled(results[1], results[3]):
+            print(f"\nLần đo 3 replica đầu chưa đạt {results[3]}, đo lại một lần (kết nối keep-alive chia lệch pod)")
+            results[3] = measure(script, ns, 3)
 
     print("\nreplica | req/s | p95 (ms)")
     for n, (rate, p95) in results.items():
@@ -78,4 +99,3 @@ def test_throughput_scales_with_replicas():
     (one_rate, one_p95), (many_rate, many_p95) = results[1], results[3]
     assert many_rate >= 1.5 * one_rate, "Thông lượng không tăng theo số replica như kỳ vọng"
     assert many_p95 <= 0.75 * one_p95, "p95 không giảm khi thêm replica như kỳ vọng"
-

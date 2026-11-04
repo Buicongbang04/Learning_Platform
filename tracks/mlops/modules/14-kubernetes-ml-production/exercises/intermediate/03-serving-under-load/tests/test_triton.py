@@ -10,38 +10,100 @@ from testkit import Exercise
 
 ex = Exercise(__file__)
 TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.09-py3"
-GATE = ("Bài Triton chạy thật chỉ khi MLOPS_TRITON=1: image NGC nhỏ nhất có server là "
-        f"{TRITON_IMAGE} (9,04 GB nén, ~2 lần khi giải nén, không có bản CPU-only), vượt ngân sách đĩa và thời gian "
-        "của module. Kéo trước bằng `docker pull` rồi đặt MLOPS_TRITON=1")
+GATE = ("Bài Triton chạy thật chỉ khi MLOPS_TRITON=1 (CHƯA chạy thật lần nào khi viết bài): image NGC nhỏ nhất có "
+        f"server là {TRITON_IMAGE} (9,04 GB nén, không có bản CPU-only); kéo + nạp vào kind tốn ~2–3 lần trên đĩa "
+        "(Docker, tar tạm ~/.cache/mlops-kind/load, containerd của node), vượt ngân sách của module. "
+        "Kéo trước bằng `docker pull` rồi đặt MLOPS_TRITON=1; gỡ khỏi node: "
+        f"docker exec mlops-control-plane crictl rmi {TRITON_IMAGE}")
 
 
-def config() -> str:
-    text = ex.read("triton/eta/config.pbtxt")
-    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|[{}\[\]:,]|[^\s{}\[\]:,"]+')
 
 
-def field(text: str, name: str) -> str | None:
-    match = re.search(rf"\b{name}\s*:\s*([A-Za-z0-9_]+)", text)
-    return match.group(1) if match else None
+def tokens(text: str) -> list[str]:
+    found = []
+    for line in text.splitlines():
+        for token in TOKEN.findall(line):
+            if token.startswith("#"):
+                break
+            found.append(token)
+    return found
 
 
-def block(text: str, name: str, open_: str, close: str) -> str | None:
-    match = re.search(rf"\b{name}\s*{re.escape(open_)}(.*?){re.escape(close)}", text, re.S)
-    return match.group(1) if match else None
+def parse(text: str) -> dict:
+    """Đọc protobuf text format (`config.pbtxt`) thành dict tên trường → danh sách giá trị; chịu `{}`, `[]` lồng."""
+    items, pos = tokens(text), 0
+
+    def scalar(token: str):
+        if token.startswith('"'):
+            return token[1:-1]
+        try:
+            return int(token)
+        except ValueError:
+            try:
+                return float(token)
+            except ValueError:
+                return token
+
+    def value():
+        nonlocal pos
+        token = items[pos]
+        pos += 1
+        if token == "{":
+            return message("}")
+        return scalar(token)
+
+    def message(close: str | None) -> dict:
+        nonlocal pos
+        fields: dict[str, list] = {}
+        while pos < len(items) and items[pos] != close:
+            name = items[pos]
+            pos += 1
+            if pos < len(items) and items[pos] == ":":
+                pos += 1
+            if pos < len(items) and items[pos] == "[":
+                pos += 1
+                while items[pos] != "]":
+                    fields.setdefault(name, []).append(value())
+                    if items[pos] == ",":
+                        pos += 1
+                pos += 1
+            else:
+                fields.setdefault(name, []).append(value())
+            if pos < len(items) and items[pos] in (",", ";"):
+                pos += 1
+        if close is not None:
+            pos += 1
+        return fields
+
+    try:
+        return message(None)
+    except IndexError:
+        pytest.fail("config.pbtxt không đúng cú pháp protobuf text format (thiếu dấu đóng?)", pytrace=False)
+
+
+def config() -> dict:
+    return parse(ex.read("triton/eta/config.pbtxt"))
+
+
+def one(fields: dict, name: str, default=None):
+    values = fields.get(name) or []
+    return values[0] if values else default
 
 
 def test_triton_config():
     text = config()
-    assert re.search(r'^name\s*:\s*"eta"', text, re.M), "Model phải tên eta"
-    batch = int(field(text, "max_batch_size") or 0)
-    assert 8 <= batch <= 64, "max_batch_size phải từ 8 đến 64"
-    dynamic = block(text, "dynamic_batching", "{", "}")
-    assert dynamic is not None, "Thiếu dynamic_batching"
-    delay = field(dynamic, "max_queue_delay_microseconds")
-    assert delay is not None and 0 < int(delay) <= 5000, "max_queue_delay_microseconds phải từ 1 đến 5000"
-    group = block(text, "instance_group", "[", "]")
-    assert group is not None, "Thiếu instance_group"
-    assert field(group, "kind") == "KIND_CPU" and field(group, "count") == "2", "Cần 2 instance KIND_CPU"
+    assert one(text, "name") == "eta", "Model phải tên eta"
+    batch = one(text, "max_batch_size", 0)
+    assert isinstance(batch, int) and 8 <= batch <= 64, "max_batch_size phải từ 8 đến 64"
+    dynamic = one(text, "dynamic_batching")
+    assert isinstance(dynamic, dict), "Thiếu dynamic_batching"
+    delay = one(dynamic, "max_queue_delay_microseconds")
+    assert isinstance(delay, int) and 0 < delay <= 5000, "max_queue_delay_microseconds phải từ 1 đến 5000"
+    groups = [g for g in text.get("instance_group") or [] if isinstance(g, dict)]
+    assert groups, "Thiếu instance_group"
+    assert all(one(g, "kind", "KIND_AUTO") == "KIND_CPU" for g in groups), "Mọi instance_group phải là KIND_CPU"
+    assert sum(one(g, "count", 1) for g in groups) == 2, "Cần tổng cộng 2 instance KIND_CPU"
 
 
 def metric_value(text: str, name: str) -> float:

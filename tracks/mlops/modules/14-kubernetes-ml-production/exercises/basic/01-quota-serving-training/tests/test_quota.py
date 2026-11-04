@@ -13,11 +13,12 @@ def manifest(name: str, gpu: str) -> list[dict]:
 def pod(name: str, requests: dict | None = None, limits: dict | None = None) -> str:
     resources = {k: v for k, v in (("requests", requests), ("limits", limits)) if v}
     container = {"name": "main", "image": kit.JOB_IMAGE, "imagePullPolicy": "IfNotPresent",
-                 "command": ["sh", "-c", "sleep 300"]}
+                 "command": ["sh", "-c", "sleep 300"], "securityContext": dict(kit.CONTAINER_SECURITY)}
     if resources:
         container["resources"] = resources
     return kit.dump([{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": name},
                       "spec": {"terminationGracePeriodSeconds": 1, "automountServiceAccountToken": False,
+                               "securityContext": dict(kit.POD_SECURITY),
                                "containers": [container]}}])
 
 

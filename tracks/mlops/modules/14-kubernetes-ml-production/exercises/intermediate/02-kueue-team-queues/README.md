@@ -33,14 +33,15 @@ Test tạo các Job busybox (mỗi pod 100m CPU, 64Mi, và GPU) theo thứ tự 
 
 | Bước | Job | Kỳ vọng |
 | --- | --- | --- |
+| 0 | `x1`–`x4` team-a, mỗi job 1 GPU, khi team-b chưa chạy gì | **Đúng 3** job được admit (2 danh nghĩa + mượn 1), job thứ tư chờ; test xoá cả 4 rồi đi tiếp |
 | 1 | `b1` team-b, 1 GPU, chạy lâu | Admit |
-| 2 | `a1` team-a, 2 GPU, chạy ~45 giây | Admit (trong quota danh nghĩa) |
+| 2 | `a1` team-a, 2 GPU, chạy ~90 giây | Admit (trong quota danh nghĩa) |
 | 3 | `a2` team-a, 1 GPU, chạy lâu | Admit nhờ **mượn** 1 GPU của team-b |
 | 4 | `a3` team-a, 1 GPU | **Không** admit sau 10 giây (đã mượn hết hạn mức) |
 | 5 | `b2` team-b, 1 GPU, chạy ~5 giây | Admit trong 90 giây, và ít nhất một job của team-a bị **đẩy ra** (Workload có condition `Evicted`) |
 | 6 | `a3` | Admit trong 150 giây, khi cohort có chỗ trống |
 
-Bài chạy khoảng 30–90 giây.
+Mọi yêu cầu ở đề được chấm bằng **hành vi trên cluster** theo bảng trên; phần đọc tĩnh `queues.yaml` chỉ kiểm tên object, quota danh nghĩa 2 GPU, LocalQueue trỏ đúng ClusterQueue, và tên cohort (nếu có) chứa `__RUN__`. Giới hạn mượn đặt bằng `borrowingLimit` bên mượn hay `lendingLimit` bên cho mượn đều được, miễn hành vi đúng. Bài chạy khoảng 1–2 phút.
 
 ## Tiêu chí đạt
 

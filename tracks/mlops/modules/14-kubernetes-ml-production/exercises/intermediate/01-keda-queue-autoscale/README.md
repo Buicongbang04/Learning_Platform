@@ -31,6 +31,8 @@ Viết `starter/scaledobject.yaml`: ScaledObject `worker-autoscale` trỏ `batch
 2. `pollingInterval` từ 1 đến 10 giây, `cooldownPeriod` từ 1 đến 30 giây (giữ bài trong ngân sách thời gian).
 3. Đúng **một** trigger kiểu `metrics-api` đọc `GET /pending` của Service `batch-queue`, mục tiêu mỗi worker gánh **10** job chưa xong. KEDA operator chạy ở namespace `keda`, nên URL phải có tên namespace đầy đủ: viết `__NAMESPACE__` ở chỗ tên namespace, test thay bằng namespace tạm của nó.
 
+`test_scaledobject_contract` đọc tĩnh `scaledobject.yaml` để giữ ngân sách (mục 1, 2 và loại trigger). Phần còn lại kiểm trên cluster: HPA `keda-hpa-worker-autoscale` do KEDA tạo phải có `maxReplicas` 4 và trỏ `batch-worker`, rồi kịch bản dưới đây.
+
 Test (khoảng 1–3 phút):
 
 1. Apply fixture và ScaledObject, chờ ScaledObject `Ready` và `batch-worker` về **0** replica khi hàng đợi rỗng.

@@ -34,6 +34,10 @@ def run(path: Path, observe):
 
 def test_contract_kept():
     original, mine = kit.load_docs(INCIDENT), kit.load_docs(ex.path("training.yaml"))
+    queueing = [d for d in original if d.get("kind") != "Job"]
+    assert [d for d in mine if d.get("kind") != "Job"] == queueing, \
+        "Phần hàng đợi (ResourceFlavor, ClusterQueue, LocalQueue) do đội platform quản lý: giữ nguyên, không thêm"
+    assert [d.get("kind") for d in mine].count("Job") == 1, "Manifest chỉ có đúng một Job train-eta"
     assert quotas(mine) == quotas(original), "Quota của ClusterQueue ml-train do đội platform cấp, không được đổi"
     assert (kit.find(mine, "LocalQueue", "training").get("spec") or {}).get("clusterQueue") == f"ml-train-{kit.RUN}", \
         "LocalQueue training phải trỏ ClusterQueue ml-train"

@@ -23,6 +23,12 @@ RUN = mlopskit.RUN_TOKEN
 GPU = "__GPU__"
 NAMESPACE = "__NAMESPACE__"
 CLUSTER_KINDS = {"ResourceFlavor", "ClusterQueue", "Cohort", "PriorityClass", "WorkloadPriorityClass"}
+NAMESPACED_KINDS = {"LocalQueue", "Job"}
+NOBODY = 65534
+POD_SECURITY = {"runAsNonRoot": True, "runAsUser": NOBODY, "runAsGroup": NOBODY,
+                "seccompProfile": {"type": "RuntimeDefault"}}
+CONTAINER_SECURITY = {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
+                      "capabilities": {"drop": ["ALL"]}}
 _CACHE: dict[str, str] = {}
 
 
@@ -118,8 +124,14 @@ def applied(docs: list[dict], namespace: str) -> Iterator[str]:
     `__RUN__` ở cả hai phần được thay bằng cùng một run id (LocalQueue trỏ đúng ClusterQueue của lần chạy này). Trả run
     id; ra khỏi khối thì cluster-scoped bị xoá (namespace do `k8s_namespace` của test xoá).
     """
+    unknown = sorted({str(d.get("kind")) for d in docs} - CLUSTER_KINDS - NAMESPACED_KINDS)
+    if unknown:
+        pytest.fail(f"Manifest chỉ được chứa {sorted(CLUSTER_KINDS)} (cluster-scoped) và {sorted(NAMESPACED_KINDS)}; "
+                    f"có thêm {unknown}", pytrace=False)
     cluster = [d for d in docs if d.get("kind") in CLUSTER_KINDS]
-    local = [d for d in docs if d.get("kind") not in CLUSTER_KINDS]
+    local = [d for d in docs if d.get("kind") in NAMESPACED_KINDS]
+    if any("namespace" in (d.get("metadata") or {}) for d in local):
+        pytest.fail("Tài nguyên namespaced không ghi metadata.namespace (test tự đặt)", pytrace=False)
     if not cluster:
         pytest.fail("Manifest không có tài nguyên cluster-scoped nào", pytrace=False)
     with mlopskit.cluster_scoped(dump(cluster)) as names:
@@ -197,17 +209,25 @@ def job_manifest(name: str, queue: str | None, resources: dict, seconds: float, 
                     "restartPolicy": "Never",
                     "terminationGracePeriodSeconds": 1,
                     "automountServiceAccountToken": False,
+                    "securityContext": dict(POD_SECURITY),
                     "containers": [{
                         "name": "main",
                         "image": JOB_IMAGE,
                         "imagePullPolicy": "IfNotPresent",
                         "command": ["sh", "-c", f"sleep {seconds}"],
+                        "securityContext": dict(CONTAINER_SECURITY),
                         "resources": {"requests": dict(resources), "limits": dict(resources)},
                     }],
                 },
             },
         },
     }
+
+
+def delete(namespace: str, *names: str, kind: str = "job") -> None:
+    result = mlopskit.kubectl("delete", kind, *names, "--wait=true", "--timeout=60s", namespace=namespace)
+    if result.returncode != 0:
+        pytest.fail(f"kubectl delete {kind} {' '.join(names)} lỗi: {result.stderr[-300:]}", pytrace=False)
 
 
 def pods(namespace: str, selector: str | None = None) -> list[dict]:

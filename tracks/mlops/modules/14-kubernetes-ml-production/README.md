@@ -30,6 +30,8 @@ kubectl --context kind-mlops -n kueue-system wait --for=condition=Available depl
 
 Test không cần bạn chờ: `mlopskit.require_senior_addons()` thử tạo một đối tượng qua webhook (`--dry-run=server`) tới khi được, tối đa 120 giây. Trên cluster thật, một webhook `Fail` của add-on chặn cả workload không liên quan là rủi ro vận hành: phải giám sát và chạy nhiều replica cho controller.
 
+Mỗi phiên pytest build image lab `mlops-ex-<uuid8>:test` và nạp vào node kind; image tự xoá khỏi Docker nhưng **ở lại trong node** (vài chục MB mỗi lần). Dọn khi cần: `docker exec mlops-control-plane crictl images | grep mlops-ex-` rồi `docker exec mlops-control-plane crictl rmi <image>` (chỉ image không pod nào đang dùng).
+
 Cluster dùng chung giữa các bài (và có thể giữa nhiều người chạy test song song): test chỉ tạo namespace `mlops-ex-<uuid8>`. Tài nguyên cluster-scoped (ClusterQueue, ResourceFlavor, PriorityClass) có hậu tố `<uuid8>` nhờ `__RUN__` trong manifest và được xoá khi xong. GPU giả trên node có tên riêng theo lần chạy và được gỡ khi xong. Tự thử bằng tay thì làm theo đúng quy ước đó. **Không bao giờ** đặt `globalDefault: true` cho PriorityClass trên cluster dùng chung.
 
 ## 1. Autoscaling inference: tín hiệu nào, scale-to-zero và cold start
@@ -115,7 +117,7 @@ Một service model có **trần thông lượng mỗi pod**. Pod xử lý một
 
 Hai điều số đo dạy:
 
-- **Cân bằng tải theo kết nối.** kube-proxy chọn pod lúc **mở kết nối**. k6 (cũng như hầu hết client) giữ kết nối keep-alive, nên 8 VU là 8 kết nối chia ngẫu nhiên cho 3 pod: có lần một pod không nhận kết nối nào và thông lượng chỉ gấp đôi. Client gRPC, HTTP/2 còn dính chặt hơn. Muốn đều thì cân bằng ở L7 (Gateway API, service mesh, router của KServe/Triton) hoặc tăng số kết nối.
+- **Cân bằng tải theo kết nối.** kube-proxy chọn pod lúc **mở kết nối**. k6 (cũng như hầu hết client) giữ kết nối keep-alive, nên 8 VU là 8 kết nối chia ngẫu nhiên cho 3 pod: có lần một pod không nhận kết nối nào và thông lượng chỉ gấp đôi. Test của bài đo lại một lần khi lần đầu lệch. Bỏ keep-alive (`noConnectionReuse`) chia đều theo request nhưng p95 lại tăng vì hàng đợi mỗi pod dao động ngẫu nhiên: đo được ~130 req/s nhưng p95 ~120 ms thay vì ~60 ms. Client gRPC, HTTP/2 còn dính chặt hơn. Muốn đều thì cân bằng ở L7 (Gateway API, service mesh, router của KServe/Triton) hoặc tăng số kết nối.
 - **Không đo qua `kubectl port-forward`.** Port-forward nối vào **một** pod. Test của bài tạo Service `NodePort` và chạy k6 trong mạng Docker `kind` (`mlopskit.k6_run(..., network="kind")`), nên request đi qua kube-proxy như client thật trong cluster.
 
 Kế hoạch capacity đi từ số đo: cần `R` req/s ở đỉnh, mỗi pod chịu được `r` req/s ở p95 đạt SLO. Số replica tối thiểu là `ceil(R / r)` cộng phần dự phòng (mất một node, rolling update). Rồi mới đặt `minReplicas`/`maxReplicas` và ngưỡng autoscale.
@@ -134,7 +136,7 @@ Triton là model server của NVIDIA: một tiến trình phục vụ nhiều mo
 
 Dynamic batching đổi một ít latency (thời gian chờ trong hàng) lấy thông lượng. Trên GPU, một batch 16 thường tốn gần bằng batch 1. Trên CPU, lợi ích nhỏ hơn và phụ thuộc model. Dấu hiệu batching có tác dụng: `nv_inference_exec_count` nhỏ hơn hẳn `nv_inference_request_success`. Chỉnh theo thứ tự: đo p95 khi chưa bật, bật với `max_queue_delay_microseconds` nhỏ (vài ms, trong ngân sách latency), rồi tăng `instance_group.count` khi một instance đã bão hoà.
 
-**Vì sao bài Triton mặc định skip:** image nhỏ nhất có server là `nvcr.io/nvidia/tritonserver:26.09-py3`, **9,04 GB nén** (đo 2026-11-04). Không có bản CPU-only. Giải nén và `kind load` cần gấp nhiều lần dung lượng đó, vượt ngân sách đĩa và thời gian của module. Bài trung cấp 03 vẫn yêu cầu viết `config.pbtxt` (test tĩnh luôn chạy). Phần chạy Triton thật dưới k6 chỉ chạy khi bạn `docker pull` image trước và đặt `MLOPS_TRITON=1`. Load test bắt buộc chạy trên KServe custom predictor.
+**Vì sao bài Triton mặc định skip:** image nhỏ nhất có server là `nvcr.io/nvidia/tritonserver:26.09-py3`, **9,04 GB nén** (đo 2026-11-04). Không có bản CPU-only. Kéo và `kind load` tốn ~2–3 lần dung lượng đó trên đĩa (bản trong Docker, tar tạm ở `~/.cache/mlops-kind/load`, bản trong containerd của node), vượt ngân sách đĩa và thời gian của module. Bài trung cấp 03 vẫn yêu cầu viết `config.pbtxt` (test tĩnh luôn chạy). Phần chạy Triton thật dưới k6 chỉ chạy khi bạn `docker pull` image trước và đặt `MLOPS_TRITON=1`; phần này **chưa chạy thật lần nào** khi viết bài, nên có thể cần chỉnh khi bật lần đầu. Gỡ image khỏi node: `docker exec mlops-control-plane crictl rmi nvcr.io/nvidia/tritonserver:26.09-py3`. Load test bắt buộc chạy trên KServe custom predictor.
 
 ## 3. GPU scheduling: device plugin, extended resource, chia GPU
 

@@ -35,6 +35,9 @@ def test_scales_with_queue_and_back_to_zero():
         mlopskit.wait_for("deployment", "batch-queue", "Available", ns, 180)
         mlopskit.apply_manifest(kit.dump(kit.substitute([scaled_object()], **values)), ns)
         mlopskit.wait_for("scaledobject", "worker-autoscale", "Ready", ns, 120)
+        hpa = kit.get_json("hpa", "keda-hpa-worker-autoscale", namespace=ns)["spec"]
+        assert hpa.get("maxReplicas") == 4, f"HPA do KEDA tạo có maxReplicas {hpa.get('maxReplicas')}, cần 4"
+        assert hpa.get("scaleTargetRef", {}).get("name") == "batch-worker", "HPA do KEDA tạo không trỏ batch-worker"
         kit.wait_until(lambda: kit.replicas(ns, "batch-worker") == 0, 120,
                        "Deployment batch-worker chưa về 0 replica khi hàng đợi rỗng")
 
@@ -48,6 +51,7 @@ def test_scales_with_queue_and_back_to_zero():
                     break
                 time.sleep(2)
             assert stats["done"] >= JOBS, f"Sau 240 giây mới xong {stats['done']}/{JOBS} job"
+            assert peak <= 4, f"Số replica cao nhất {peak} vượt 4"
             assert peak >= 3, f"Số replica cao nhất khi có tải là {peak}, cần tăng lên ít nhất 3"
             assert len(stats["pods"]) >= 3, f"Chỉ {len(stats['pods'])} pod worker đã xử lý job, cần ít nhất 3"
             cold = stats["cold_start_s"]

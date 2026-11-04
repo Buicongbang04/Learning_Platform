@@ -26,11 +26,13 @@ def pod(name: str, priority_class: str, gpu: str) -> dict:
             "priorityClassName": priority_class,
             "terminationGracePeriodSeconds": 1,
             "automountServiceAccountToken": False,
+            "securityContext": dict(kit.POD_SECURITY),
             "containers": [{
                 "name": "main",
                 "image": kit.JOB_IMAGE,
                 "imagePullPolicy": "IfNotPresent",
                 "command": ["sh", "-c", "sleep 600"],
+                "securityContext": dict(kit.CONTAINER_SECURITY),
                 "resources": {"requests": {"cpu": "10m", "memory": "16Mi", gpu: "1"},
                               "limits": {"cpu": "100m", "memory": "32Mi", gpu: "1"}},
             }],

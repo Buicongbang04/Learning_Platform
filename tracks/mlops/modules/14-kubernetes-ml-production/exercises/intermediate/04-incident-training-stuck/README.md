@@ -29,7 +29,7 @@ Chẩn đoán một job huấn luyện không chạy trên cluster có hàng đ�
 
 Tìm nguyên nhân và sửa `starter/training.yaml`. Hợp đồng (test kiểm):
 
-- Quota của ClusterQueue `ml-train-__RUN__` do đội platform cấp: **không đổi** (cpu 4, memory 4Gi, GPU 2). LocalQueue `training` vẫn trỏ nó.
+- Phần hàng đợi do đội platform quản lý: ResourceFlavor, ClusterQueue `ml-train-__RUN__` (cpu 4, memory 4Gi, GPU 2) và LocalQueue `training` **giữ nguyên từng trường**, không thêm ClusterQueue, cohort hay tài nguyên nào khác. Manifest chỉ có thêm đúng Job `train-eta`.
 - Job vẫn gửi qua hàng đợi (nhãn `kueue.x-k8s.io/queue-name: training`); giữ `parallelism`, `completions`, `completionMode`; giữ đủ các container và init container hiện có với đúng `image` và `command`; mỗi worker vẫn xin đúng 1 GPU (`requests` và `limits`).
 
 `__RUN__` và `__GPU__` như các bài Kueue khác (test thay bằng run id và extended resource giả, node có 4 GPU giả). Test chạy lại bản lúc sự cố (`tests/fixtures/training.incident.yaml`) và đòi nó tái hiện triệu chứng: sau khoảng 20 giây Job vẫn đứng yên, không pod nào. Chạy bản của bạn và đòi Job được chạy trong 90 giây và xong cả 2 worker trong 180 giây.

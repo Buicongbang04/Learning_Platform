@@ -29,11 +29,16 @@ SERVICE_SECONDS = float(os.environ.get("SERVICE_MS", "25")) / 1000
 SLOTS = threading.Semaphore(int(os.environ.get("CONCURRENCY", "1")))
 LEASE_EXTRA = float(os.environ.get("LEASE_EXTRA_SECONDS", "10"))
 MAX_ENQUEUE = 10_000
+MAX_BODY = 1 << 20
 COEF = (4.0, 2.1, 0.35, 0.8)
 
 
 def predict(rows: list[list[float]]) -> list[float]:
     return [round(COEF[0] + COEF[1] * r[0] + COEF[2] * r[1] + COEF[3] * r[2], 4) for r in rows]
+
+
+class BodyTooLarge(Exception):
+    pass
 
 
 class Queue:
@@ -112,6 +117,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def body(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
+        if not 0 <= length <= MAX_BODY:
+            raise BodyTooLarge(length)
         return json.loads(self.rfile.read(length) or b"{}")
 
     def do_GET(self) -> None:
@@ -129,6 +136,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self.body()
+        except BodyTooLarge:
+            self.close_connection = True
+            self.reply(413, {"error": f"body phải từ 0 đến {MAX_BODY} byte"})
+            return
         except ValueError as error:
             self.reply(400, {"error": str(error)})
             return
