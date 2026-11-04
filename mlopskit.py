@@ -409,7 +409,7 @@ def _sha256(path: Path) -> str:
     return _SHA_CACHE[key]
 
 
-def real_file(dataset: str, name: str) -> Path:
+def _real_file(dataset: str, name: str) -> Path:
     """Đường dẫn một tệp của bộ `nyc-tlc` (2019) hay `nyc-tlc-2020` có trong `REAL_SHA256`, đã kiểm sha256; skip khi chưa tải."""
     expected = REAL_SHA256.get(f"{dataset}/{name}")
     if expected is None:
@@ -428,12 +428,12 @@ def real_file(dataset: str, name: str) -> Path:
 
 def real_month(dataset: str, month: str) -> Path:
     """Đường dẫn tệp Parquet một tháng của `nyc-tlc` (2019) hay `nyc-tlc-2020`, đã kiểm sha256; skip khi chưa tải."""
-    return real_file(dataset, f"yellow_tripdata_{month}.parquet")
+    return _real_file(dataset, f"yellow_tripdata_{month}.parquet")
 
 
 def zone_lookup(dataset: str = "nyc-tlc") -> Path:
     """Đường dẫn `taxi_zone_lookup.csv` của bộ `dataset`, đã kiểm sha256; skip kèm lệnh tải khi chưa có."""
-    return real_file(dataset, "taxi_zone_lookup.csv")
+    return _real_file(dataset, "taxi_zone_lookup.csv")
 
 
 class ComposeProject:
