@@ -1,0 +1,26 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-serving-__RUN__
+value: 100000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Serving online: được đẩy job training ra để lấy GPU"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-research-__RUN__
+value: 5000
+globalDefault: false
+preemptionPolicy: Never
+description: "Notebook/thử nghiệm: xếp hàng trước training nhưng không đẩy ai"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-training-__RUN__
+value: 1000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Training batch: chạy lại được từ checkpoint, chịu bị đẩy ra"

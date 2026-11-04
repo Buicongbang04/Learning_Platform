@@ -1,0 +1,17 @@
+severity: TODO
+trigger: TODO
+started_at: TODO
+detected_at: TODO
+mitigated_at: TODO
+time_to_detect_min: TODO
+time_to_mitigate_min: TODO
+decision: TODO
+impact:
+  failed_requests: TODO
+  budget_consumed_pct: TODO
+roles:
+  incident_commander: TODO
+  comms: TODO
+  ops: TODO
+next_steps:
+  - TODO

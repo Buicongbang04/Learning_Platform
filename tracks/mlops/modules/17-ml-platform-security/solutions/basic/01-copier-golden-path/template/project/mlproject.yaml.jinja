@@ -1,0 +1,7 @@
+name: {{ project_slug | tojson }}
+registry_name: {{ (team ~ '-' ~ project_slug) | tojson }}
+model_kind: {{ model_kind | tojson }}
+tags:
+  owner: {{ owner | tojson }}
+  team: {{ team | tojson }}
+  cost_center: {{ cost_center | tojson }}

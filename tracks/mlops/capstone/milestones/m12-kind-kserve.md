@@ -77,7 +77,9 @@ Python (cùng cú pháp `${TÊN}` với `envsubst`), rồi `kubectl apply` vào 
 | `${ETA_ADMIN_TOKEN}` | Token cho `POST /admin/reload` (M07 mục 6) |
 
 - Khác module 13 (test thay nguyên văn `eta-serve:dev` vì bài chỉ có một image), manifest này dùng `${...}` vì phải render nhiều bản (champion, challenger, canary, image mỗi lần build) từ một tệp.
-- Dùng **cả bảy** biến; biến nào khác dạng `${...}` hay `$TÊN` làm test fail. Đừng dùng ký tự `$` cho việc khác trong
+- Dùng **cả bảy** biến; biến nào khác dạng `${...}` hay `$TÊN` làm test fail. Ngoại lệ duy nhất là biến thứ tám
+  `${ETA_PRIORITY_CLASS}` mà [M14](m14-k8s-load.md) thêm cho `priorityClassName` của predictor; test M12 thay nó bằng chuỗi rỗng
+  (pod nhận độ ưu tiên mặc định). Đừng dùng ký tự `$` cho việc khác trong
   tệp: `string.Template` hiểu `$$` là một `$`, còn `envsubst` để nguyên `$$`, nên hai cách render sẽ ra hai manifest khác nhau.
 - **Không có challenger** được biểu diễn bằng challenger trùng champion (cùng image, cùng version) và
   `ETA_CANARY_WEIGHT=0`: một manifest, một hình dạng pod cho mọi release.
@@ -86,7 +88,8 @@ Python (cùng cú pháp `${TÊN}` với `envsubst`), rồi `kubectl apply` vào 
   trong InferenceService). Container đọc nó bằng `secretRef` hay `secretKeyRef`.
 - `InferenceService` tên **`eta`**, annotation `serving.kserve.io/deploymentMode: RawDeployment`. Cluster không có
   metrics-server, nên tắt autoscaler: annotation `serving.kserve.io/autoscalerClass: none` hoặc `minReplicas` bằng
-  `maxReplicas` (không thì HPA báo `<unknown>` và `FailedGetResourceMetric` mãi).
+  `maxReplicas` (không thì HPA báo `<unknown>` và `FailedGetResourceMetric` mãi). Từ M14, KEDA quản lý số replica và annotation đổi thành
+  `external` (xem M14 mục 2); test M12 nhận cả hai.
 - `spec.predictor.containers` có **đúng một** container, image `${ETA_SERVE_IMAGE}`, khai **đúng một** `containerPort: 8000`. KServe tạo
   Deployment `eta-predictor` và Service `eta-predictor` cổng 80 trỏ vào cổng đó; test `port_forward` vào `svc/eta-predictor:80`.
 - `readinessProbe` là `httpGet` `/readyz`, `livenessProbe` là `httpGet` `/healthz`. Liveness **không** trỏ `/readyz`: pod
@@ -122,13 +125,14 @@ uv run python -c "import mlopskit; [mlopskit.kind_load(t) for t in ('eta-serve:d
 kubectl --context kind-mlops create namespace eta
 export ETA_SERVE_IMAGE=eta-serve:dev ETA_CHAMPION_IMAGE=eta-model:v1 ETA_CHAMPION_VERSION=v1 \
        ETA_CHALLENGER_IMAGE=eta-model:v1 ETA_CHALLENGER_VERSION=v1 ETA_CANARY_WEIGHT=0 ETA_ADMIN_TOKEN=$(openssl rand -hex 16)
-envsubst '$ETA_SERVE_IMAGE $ETA_CHAMPION_IMAGE $ETA_CHAMPION_VERSION $ETA_CHALLENGER_IMAGE $ETA_CHALLENGER_VERSION $ETA_CANARY_WEIGHT $ETA_ADMIN_TOKEN' \
+envsubst '$ETA_SERVE_IMAGE $ETA_CHAMPION_IMAGE $ETA_CHAMPION_VERSION $ETA_CHALLENGER_IMAGE $ETA_CHALLENGER_VERSION $ETA_CANARY_WEIGHT $ETA_ADMIN_TOKEN $ETA_PRIORITY_CLASS' \
   < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
 kubectl --context kind-mlops -n eta rollout status deployment/eta-predictor
 kubectl --context kind-mlops -n eta port-forward svc/eta-predictor 28090:80
 ```
 
-Truyền danh sách biến cho `envsubst` (như trên) để nó chỉ thay đúng bảy biến release, không đụng `$` nào khác. Tag kiểu `:dev`, `:v1` (không phải `:latest`) để `IfNotPresent` dùng image đã nạp. Dọn: `kubectl --context kind-mlops delete
+Truyền danh sách biến cho `envsubst` (như trên) để nó chỉ thay đúng các biến release, không đụng `$` nào khác;
+`$ETA_PRIORITY_CLASS` (từ M14) chưa đặt thì thành chuỗi rỗng, pod nhận độ ưu tiên mặc định. Tag kiểu `:dev`, `:v1` (không phải `:latest`) để `IfNotPresent` dùng image đã nạp. Dọn: `kubectl --context kind-mlops delete
 namespace eta`.
 
 ### 4. Quy trình release: canary rồi rollback

@@ -211,7 +211,11 @@ vì sao chọn. Nguyên tắc: *công cụ là câu trả lời cho một vấn 
 | Deep learning serving | ONNX Runtime, SegFormer (11) | Triton, TensorRT |
 | Platform, governance, cloud | model card, audit, SageMaker/Vertex/Azure ML so sánh (12) | Databricks |
 | Kubernetes cho ML | kind, KServe, Argo Workflows (13) | Seldon, Kubeflow |
-| Tầng senior | K8s production, Ray, streaming, bảo mật, system design (14-18) | |
+| Autoscale, hàng đợi GPU, serving dưới tải | HPA, KEDA, Kueue, KServe, k6 (14) | Triton, Volcano, YuniKorn |
+| Distributed training | torchrun (DDP, FSDP2 trên gloo), Ray Train/Tune (15) | DeepSpeed, Horovod |
+| Streaming, feature real-time | Kafka, Feast push, River (16) | Flink, Spark Structured Streaming, Bytewax, Tecton |
+| Nền tảng nhiều đội, bảo mật model | Copier, safetensors, modelscan, model-signing, CycloneDX, phân bổ chi phí kiểu OpenCost (17) | Backstage, Sigstore, Kyverno, OpenCost, Kubecost |
+| SLO, sự cố, system design | SLO burn rate có test bằng promtool, incident command, postmortem, design doc (18) | PagerDuty |
 
 ```mermaid
 flowchart LR

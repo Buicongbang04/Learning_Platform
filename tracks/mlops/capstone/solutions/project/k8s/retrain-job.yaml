@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: eta-retrain
+  labels:
+    app.kubernetes.io/name: eta-retrain
+    kueue.x-k8s.io/queue-name: eta-retrain
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eta-retrain
+    spec:
+      priorityClassName: eta-training-${ETA_RUN}
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: retrain
+          image: ${ETA_TRAIN_IMAGE}
+          imagePullPolicy: IfNotPresent
+          args: ["train", "--config", "/app/params.yaml", "--model-out", "/tmp/out/model.joblib",
+                 "--metrics-out", "/tmp/out/metrics.json"]
+          env:
+            - name: ETA_MONTHS
+              value: "${ETA_MONTH}"
+          volumeMounts:
+            - {name: data, mountPath: /data, readOnly: true}
+            - {name: out, mountPath: /tmp/out}
+          resources:
+            requests: {cpu: "1", memory: 768Mi}
+            limits: {cpu: "1", memory: 768Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: data
+          configMap:
+            name: eta-train-data
+        - name: out
+          emptyDir:
+            sizeLimit: 128Mi

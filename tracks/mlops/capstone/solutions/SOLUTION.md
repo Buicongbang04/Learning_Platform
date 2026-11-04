@@ -1,4 +1,4 @@
-# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M13)
+# Lời giải tham chiếu: capstone dịch vụ ETA (M01–M18)
 
 Bản tham chiếu cho phần chấm được bằng test, cùng cây thư mục với `capstone/project/`:
 
@@ -434,6 +434,237 @@ Rubric M13 (chấm `diagnosis.yaml` và `docs/assessment.md`; test chỉ kiểm 
 
 Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô cột Tốt.
 
+## M14: K8s chịu tải, Kueue, quota tách serving và training
+
+Bản tham chiếu ở `project/k8s/` (`cluster.yaml`, `serving.yaml`, `training.yaml`, `retrain-job.yaml`, `eta.yaml` cập
+nhật) và một gauge mới trong `project/src/eta/serve.py`. Số đo ở mục "Chịu tải trên K8s (M14)" của `project/README.md`.
+
+- **Metric: số request đang xử lý.** CPU đọc được (metrics-server của `--senior`) nhưng lấy mẫu 15 giây và kẹt ở trần
+  `limits.cpu` khi hàng đợi dài thêm; RPS và p95 cần Prometheus trong cluster để tính `rate()`/quantile. `eta_requests_in_flight` đọc thẳng từ `/metrics` bằng trigger `metrics-api`
+  (`format: prometheus`), không label (luật M09). KEDA đọc qua Service nên mỗi lần chỉ thấy một pod: `metricType: Value`
+  (`AverageValue` sẽ chia số đọc được cho số replica như thể đó là tổng). `targetValue: "1"` theo định luật Little (60
+  req/s × 15 ms ≈ 1); bản thử `"2"` có lần dừng ở 2 replica (hai pod gánh 150 req/s ở khoảng 88% sức, in-flight quanh
+  2). In-flight là gauge và về 0 khi hết tải (test đo 10 giây sau k6: 0 trên mọi pod).
+- **`autoscalerClass: external`.** Đã thử: với `none`, `kubectl scale --replicas=2` bị KServe kéo về `minReplicas` ngay;
+  với `external` số replica giữ nguyên kể cả khi apply lại InferenceService. Test M12 nhận cả hai, nên M12 vẫn xanh.
+- **Readiness dưới tải.** Bản thử `limits.cpu: 500m`: pod bão hoà trả `/readyz` chậm hơn `timeoutSeconds` mặc định 1
+  giây, bị rút khỏi Service, KEDA không đọc được metric qua Service rỗng và HPA không bao giờ scale (p95 4–6 giây, lỗi
+  3%). Bản cuối giữ `limits.cpu: "1"` và nới readiness (`timeoutSeconds: 3`, `failureThreshold: 3`): readiness là "phục
+  vụ được", không phải "đang bận". Vẫn gặp một lần ở tải 330 req/s: 1 replica suốt 80 giây, lỗi 19%, vì `/readyz` và
+  `/metrics` là `def` nên xếp hàng trong thread pool sau hàng trăm `/predict`, KEDA hết 3 giây chờ. Đổi `/healthz`,
+  `/readyz`, `/metrics` thành `async def` (chạy trên event loop): hai lần chạy sau đều lên 6 replica.
+- **Scale down chậm, scale up nhanh.** `maxReplicaCount: 6`; `scaleUp` không chờ, tối đa +6 pod mỗi 15 giây; `scaleDown` chờ 120 giây, bớt một
+  pod mỗi 30 giây, vì mẫu in-flight của pod mới Ready thường là 0. Không scale về 0: cold start 10–25 giây trên laptop.
+- **Quota.** Serving đủ cho `maxReplicaCount + 1` pod (rolling update) theo request/limit hiệu lực của pod
+  (max(tổng container chính, init lớn nhất)); `count/jobs.batch: "0"`. Training bằng đúng quota ClusterQueue: nhỏ hơn
+  thì Workload được admit mà pod bị `exceeded quota` (bản thử 500m: Job kẹt, test giờ fail ngay khi thấy event này).
+- **Kueue.** ClusterQueue 1500m/1536Mi, Job 1 CPU/768Mi: đúng một Job một lúc; `StrictFIFO`. Job qua nhãn
+  `kueue.x-k8s.io/queue-name` (cluster chỉ quản lý `batch/v1` Job, `manageJobsWithoutQueueName: false`). PriorityClass
+  `eta-training` 1 000 `preemptionPolicy: Never`: retrain chờ, không đẩy ai. `eta-serving` chỉ 2 000: bản đầu đặt 100 000
+  `PreemptLowerPriority`, mà trên cluster một node dùng chung, controller add-on không có class (ưu tiên 0) có thể bị
+  pod serving đẩy ra. `up.sh` giờ gán `mlops-system` (1 000 000) cho controller add-on, contract đòi serving < 1 000 000.
+- **Tải theo sức máy.** Bản đầu dùng 150 req/s cố định: máy rảnh thì một pod gánh được (p95 50 ms) và tải không buộc
+  scale; máy bận thì một pod chỉ ~85 req/s. Test giờ đo sức một pod C bằng bậc thang rồi chấm ở `ceil(2,2 × C)`. Đo
+  được C = 100–175 req/s qua sáu lần chạy, tải chấm 221–386 req/s; bản tham chiếu lên 6 replica, steady p95 24–45 ms,
+  metric về 0 trên mọi pod 10 giây sau tải. Hệ số 2,5 (bản thử) cho 375 req/s với C = 150 làm 4 replica quá tải (p95 5
+  giây, chỉ đạt 307 req/s): nhiều pod chạy cùng lúc thì mỗi pod chậm hơn lúc chạy một mình, nên dùng 2,2 và nâng
+  `maxReplicaCount` lên 6.
+- **Kiểm bộ chấm (mutation):** valueLocation sai tên → fail ở kiểm `/metrics`; valueLocation
+  `eta_request_duration_seconds_count` (counter, trước đây qua hết vì scale thẳng lên max) → fail ở kiểm `# TYPE gauge`;
+  `eta_model_info` với `targetValue: "0.5"` (gauge hằng, scale lên max) → 10 giây sau tải vẫn 2 > 0,5, fail; valueLocation `eta_model_info` (hằng 1) →
+  1 replica; quota serving 300m → 2 replica và event `exceeded quota`; `autoscalerClass: none` → 1 replica, p95 2,8 giây;
+  Job thiếu nhãn hàng đợi → không có Workload; ClusterQueue đủ hai Job → 2 Job admit cùng lúc; serving thiếu
+  `count/jobs.batch` → Job lạc được nhận; quota training 500m → fail ngay vì `exceeded quota`; Job `sleep` thay vì train
+  → không có `"mae"` trong log. Bản đúng viết khác (`minReplicaCount: 2`, quota tương ứng, URL
+  `eta-predictor.<ns>`) qua contract. Nhánh dự phòng "chỉ đòi 2 replica" (khi `2,2 × C` > 400) chưa gặp trên máy này.
+
+Rubric M14:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Chọn metric | Nêu metric và vì sao không dùng CPU | So bốn metric (bảng mục 1), tính `targetValue` từ sức chịu một pod đo được |
+| Kết quả tải | Bảng replica theo thời gian, p95 hai pha | Giải thích độ trễ scale (chu kỳ HPA, cold start), nêu khi nào cần `minReplicaCount` > 1 |
+| Quota và ưu tiên | Phép tính quota hai namespace | Nêu điều gì xảy ra khi node hết chỗ (ai bị đẩy, ai chờ), và giới hạn của cách lấy mẫu một pod |
+
+## M15: retrain bằng Ray Tune, checkpoint, chịu worker bị kill
+
+Bản tham chiếu ở `project/src/eta/distributed.py`; số đo ở mục "Retrain phân tán (M15)" của `project/README.md`.
+
+- **Ray Tune theo cấu hình, không data-parallel.** GBDT dựng cây tuần tự; data-parallel GBDT (LightGBM/XGBoost
+  distributed, allreduce histogram) chỉ đáng khi dữ liệu vượt RAM một worker và kéo theo đổi model, đổi serve. Các trial
+  độc lập nên Tune chạy chúng song song, mỗi trial 1 CPU (`OMP_NUM_THREADS=1` do Ray đặt).
+- **Checkpoint theo đợt cây.** `HistGradientBoostingRegressor(warm_start=True, early_stopping=False)`, mỗi đợt
+  `set_params(model__max_iter=k)` rồi `fit`; checkpoint là thư mục tạm chứa `model.joblib`, `tune.report` chép nó vào
+  `storage_path`. Trial mở đầu bằng `tune.get_checkpoint()`. Model cuối tắt `warm_start` trước khi trả về để lần `fit`
+  sau (nếu có) không cộng dồn cây.
+- **Worker phải import được `eta`.** Lần đầu thiếu `PYTHONPATH`: cả 4 trial `ActorDiedError` với
+  `ModuleNotFoundError: No module named 'eta'`. Test đặt `PYTHONPATH=<project>/src` trước `ray_local`; image train đã có
+  `PYTHONPATH=/app/src`.
+- **Đo ở test:** kill ở 60 cây (sau 3 report), chạy lại từ 80 cây trên `pid` mới, 7 report sau khi chạy lại; cả lần
+  retrain 25–30 giây; `mae` 33,8 so với 34,5 của model một tiến trình.
+- **Kiểm bộ chấm (mutation):** bỏ đọc checkpoint → chạy lại từ 20 cây, fail; `max_failures=0` → retrain raise, mọi test
+  fail; `max_concurrent_trials=1` → không có hai trial chồng nhau; checkpoint chỉ ở cuối → không kill được ai, fail;
+  `metrics` đo trên `train` → lệch `evaluate` trên `valid`; đăng ký thẳng bằng MLflow không qua `log_and_register` → thiếu
+  tag lineage. Bản đúng viết khác (tìm ngẫu nhiên 3 mẫu, checkpoint mỗi hai đợt, `num_to_keep=1`) pass cả bốn test.
+
+Rubric M15:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Lý do kiến trúc | Nêu vì sao không data-parallel GBDT | Ngưỡng dữ liệu/RAM để chuyển sang LightGBM distributed, kèm cái giá (serve, cổng M04) |
+| Chịu lỗi | Log một lần kill và số cây trước/sau | Nêu nơi đặt checkpoint khi node chết thật (object storage), và `max_failures` khác gì retry của Job K8s |
+| Hiệu năng | Thời gian `workers=2` | So `workers=1` và `workers=2` trên máy mình, giải thích vì sao không gấp đôi đúng |
+
+## M16: feature real-time từ stream Kafka phát lại
+
+Đường đi: `trip_events` (event time là lúc trả khách, vì tốc độ của chuyến chỉ biết khi chuyến kết thúc) → `replay` theo `SimClock`
+→ topic `mlopskit.kafka_topic()` → `consume` (`ZoneSpeedWindows`: hỏng → trùng → trễ → cộng, watermark `max(ts) - 120`, đóng ngay
+khi watermark qua `window_end`) → `on_close` → `feast_push.push` (offline mọi dòng, online dòng mới nhất mỗi zone nếu không cũ hơn)
+→ `export_online` (snapshot JSON ghi nguyên tử) → API (`OnlineSpeed`, cùng luật sẵn sàng/TTL với `attach_live_speed`).
+
+Quyết định:
+
+- **Lúc trả khách, không phải lúc đón**: feature là tốc độ, chỉ tính được khi chuyến kết thúc. Lấy lúc đón làm event time thì cửa sổ
+  08:00–08:15 chỉ đủ dữ liệu sau khi chuyến dài nhất của nó kết thúc (tới 3 giờ sau), watermark vô nghĩa.
+- **Tỉ số của tổng**, không phải trung bình tốc độ từng chuyến: cộng dồn được trong stream, chuyến 0,1 dặm trong 60 giây không kéo lệch.
+- **Sẵn sàng = `window_end + LATENESS_S`** khi dựng feature train: serving chỉ thấy cửa sổ sau khi watermark qua nó. Lấy `window_end`
+  thì train thấy feature sớm hơn serving 2 phút, một dạng skew nhỏ nhưng có thật. Feast vẫn ghi `event_timestamp = window_end` (thời
+  điểm của sự thật), điều kiện sẵn sàng nằm ở một hàm dùng chung.
+- **Snapshot cho API** thay vì gọi Feast: image serving không có Feast (M06). Freshness đo tới lúc API đọc được.
+- **Mặc định là `DEFAULT_SPEED_MPH`, trạng thái trả về trong response**: bài học trực tiếp của M18 (model điền 0 khi feature null).
+- Message hỏng chỉ tăng `invalid`: consumer của M18 chết ở một message hỏng.
+
+Số đo: replay 1 giờ dữ liệu ở `speedup=1800` mất khoảng 2 giây; freshness p50 592 s, p95 994 s, max 1 076 s ở `speedup=60` (ngưỡng
+2 160 s). Cả nhóm test M16 chạy khoảng 1,5 phút (phần lớn là `test_m16_live_freshness`).
+
+Mutation test của bộ chấm (đã chạy khi viết bài, mọi biến thể sai fail): `late` dùng `<` thay `<=`; không trừ lateness; không loại
+trùng; không kiểm message hỏng; chỉ đóng cửa sổ lúc `flush`; tốc độ lệch 0,01%; event time là lúc đón (cả ở `trip_events` và
+`zone_speed_batch`); `replay` không chờ đồng hồ; `attach_live_speed` bỏ lateness hoặc TTL tính từ lúc sẵn sàng; `push` không so thời
+điểm online hoặc ghi online mọi dòng; API mặc định 0 hoặc bỏ TTL; `freshness` dùng percentile kiểu `lower`; `features.py` không nhận
+`speed_15m_mph`. Lời giải đúng viết khác vẫn pass: consumer dùng thẳng `consumer_timeout_ms=idle_ms` như module 16; `push` so `>` thay
+`>=`.
+
+Giới hạn đã biết: một partition, một consumer; freshness đo trên một máy, xử lý 1 giây thật thành 60 giây mô phỏng nên máy tải nặng
+làm số xấu đi (ngưỡng dư 2 lần). Snapshot chỉ giữ cửa sổ mới nhất mỗi zone: request "trong quá khứ" (phát lại) có thể nhận `stale` ở
+chỗ point-in-time chọn được cửa sổ cũ hơn; chạy thật không xảy ra.
+
+Rubric M16:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Event time và watermark | Test xanh | Giải thích lúc trả khách, đo số sự kiện trễ khi đổi `LATENESS_S` 60/120/300 |
+| Freshness | Có p50/p95 trong README | Tách thời gian chờ cửa sổ và thời gian xử lý; nêu alert freshness (ngưỡng, `for`) nối với SLO freshness của M18 |
+| Nhiều partition, consumer chết | Nêu watermark theo partition | Chỉ chỗ commit offset sau push, push idempotent, cách bỏ qua message hỏng có log và đếm |
+| Skew | Feature train và API cùng luật | Giải thích vì sao sẵn sàng là `window_end + lateness`, đo được bao nhiêu chuyến đổi giá trị nếu bỏ lateness |
+
+## M17: nền tảng, ký, quét, chi phí
+
+Template `platform/template/` giữ luật của module 17 bài Basic 01, thêm `train.py` (Ridge, safetensors), `metadata.json` chép tag vào
+thư mục model để tag **được ký**. Cổng `deploy_gate` gộp bốn kiểm, báo đủ mọi lý do (gọi `scan` cả khi chữ ký đã sai), không nạp tệp
+nào. `docs/onboarding.md` có 5 lệnh: copier, pytest của dự án sinh ra, train, ký, cổng.
+
+Vì sao **Ridge + safetensors**: trọng số là hai tensor, nạp lại bằng `safetensors.numpy` và một phép nhân ma trận, không cần pickle,
+không cần sklearn lúc serve; allowlist của cổng chỉ cần safetensors và JSON. LightGBM định dạng văn bản không chứa code nhưng là định
+dạng riêng mà modelscan không đọc và allowlist phải thêm luật nhận diện; ONNX cần thêm runtime. MAE 0.72 USD so với 1.68 của trung vị
+là đủ cho bài toán; tip của chuyến tiền mặt luôn ghi 0 nên `payment_type` gánh phần lớn.
+
+Báo cáo chi phí tháng 11/2019 (`reports/cost.yaml`): `eta` 308.82, `eta/unlabelled` 5.29, `pricing-tip-amount` 32.66,
+`unallocated` 4.59, idle 246.42 trên năng lực 351.36 USD. Idle lớn hơn cả chi phí trực tiếp (100.34), chủ yếu GPU node 240 giờ chỉ dùng
+11 giờ: đó là con số mang tới buổi họp ngân sách, không phải chi phí của model nào.
+
+Mutation test của bộ chấm (mọi biến thể sai fail): bỏ allowlist (pickle `.bin` qua được modelscan lọt cổng); bỏ quét; `verify` trả
+`True` khi lỗi; bỏ kiểm tag; gọi `scan` hai lần; cho ký vào trong thư mục model; owner có default; cost center có default; test sinh ra
+không kiểm tag; `train.py` xuất thêm `model.joblib`; idle âm khi dùng vượt; không bỏ khoảng trắng namespace; `unallocated` nhận phần
+idle; sửa tay một số trong `reports/cost.yaml`; khối onboarding 6 lệnh hoặc có `&&`. Không bắt được: cổng nhận `returncode` 1 khi
+không có issue (modelscan thật không trả như vậy; module 17 Intermediate 02 kiểm ca này bằng bản quét giả).
+
+Giới hạn đã biết: lệnh cuối (cổng qua CLI) không chạy trong test vì sandbox không có Docker; test gọi `deploy_gate` với
+`mlopskit.modelscan_run` thay vào. Log sử dụng là số dựng sẵn (`platform/make_usage.py`), không phải log cụm thật.
+
+Rubric M17:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Golden path | Test xanh, 5 lệnh | Giải thích `copier update` kéo thay đổi template về dự án cũ; đề xuất cách đưa luật mới (tag thứ tư) tới mọi dự án |
+| Định dạng model | safetensors có lý do | So sánh với LightGBM text/ONNX bằng rủi ro và chi phí vận hành |
+| Cổng | Bốn kiểm | Nêu ai giữ khoá riêng (CI có quyền ký, người không), phân phối khoá công khai, quy trình khi lộ khoá, so với Sigstore keyless |
+| Chi phí | Báo cáo khớp | Hai đề xuất giảm idle có số tiết kiệm; giải thích showback trước chargeback và vì sao giữ dòng `unallocated` |
+
+## M18: đánh giá senior, sự cố queens 2019-11-14
+
+Sự cố sinh bằng `solutions/assessment/senior_incident.py` (người học nhận tệp qua `etakit.py incident`): mọi chuyến thật của
+2019-11-14 ở ba borough là request, nhãn là thời gian chuyến thật. `v41` là trung vị theo cặp zone và giờ của 2019-10. `v42`
+nhân `v41` với tỉ số tốc độ điển hình của zone (2019-10) trên tốc độ 15 phút gần nhất tính từ chuyến đã kết thúc trong ngày,
+chặn trong [0.6, 2.5]. Script chạy khoảng 3 giây, không có số ngẫu nhiên. Chuỗi sự kiện:
+
+| Giờ | Sự kiện | Ở đâu thấy |
+| --- | --- | --- |
+| 13:05 | `mdl-731`: queens lên `v42` 100% traffic, bỏ canary | `deploys.log`, chat |
+| 15:20 | Consumer partition queens chết ở một message hỏng | `freshness.csv` (`age_s` tăng đều), chat lúc 16:32 |
+| 15:35 | Feature cũ quá 900 giây | `freshness.csv` |
+| 15:50 | Hết TTL 30 phút, online store trả null, `v42` điền 0 nên tỉ số chạm 2.5 | Tỉ lệ tệ queens từ 6% lên 95% |
+| 16:21 | Support báo tài xế JFK/LGA thấy ETA gấp hai, gấp ba | chat (`detected_at`) |
+| 16:40 | Restart consumer, chết lại ở cùng offset | chat |
+| 17:00 | `mdl-733` rollback queens về `v41` | `deploys.log` (16:59:52), chat |
+| 17:18 | Alert chất lượng cũ (1h và 5m trên 50%, `for` 10m, theo lúc nhãn về) mới bắn | `alerts.log` |
+| 18:27 | Bỏ qua offset hỏng, feature tươi lại | `freshness.csv`, `deploys.log` (`ops-77`) |
+
+Số đo (khung 5 phút, request queens trung bình khoảng 90 mỗi khung buổi chiều):
+
+| Trường | Giá trị | Ghi chú |
+| --- | --- | --- |
+| Request/ngày, đỉnh/phút | manhattan 236 990 / 321, queens 15 631 / 35, brooklyn 2 461 / 9 | Sau khi bỏ chuyến dưới 60 s, trên 3 giờ, khoảng cách 0 |
+| Tỉ lệ tệ thường ngày | manhattan 3.1%, queens khoảng 6%, brooklyn 9.5% | `v42` khi feature tươi (13:05–15:20) 5.3%, `v41` buổi sáng 8.3%: không có `model_regression` |
+| `started_at`, `mitigated_at` | 15:50, 17:00 | Khung tệ nhất ngoài sự cố của queens là 32%; manhattan không khung nào quá 9%, brooklyn 16% |
+| `affected_requests`, `bad_predictions` | 1 242, 1 176 (94.7%) | |
+| `quality_budget_consumed_pct` | 2.51 | Budget queens 46 893 dự đoán tệ / 30 ngày |
+| `stale_minutes`, `freshness_budget_consumed_pct` | 172, 39.81 | 15:35 tới 18:26 |
+| `severity` | SEV1 | 14 khung trên 60% |
+| Nhãn về sau (trung vị) | queens 37 phút, manhattan 12 phút | Lý do alert chất lượng luôn đến muộn |
+
+Alert của lời giải chạy trên dữ liệu sự cố: `ETAMarketFeatureStale` bắn cho queens lúc 15:46, sớm hơn support 35 phút và trước khi
+người dùng bị ảnh hưởng 4 phút; `ETAMarketQualityFastBurn` bắn lúc 17:15, sau rollback. Đó là bài học chính: với ML, SLO chất lượng
+là tín hiệu trễ (bằng thời gian nhãn về), SLO freshness của feature là tín hiệu dẫn trước. Partition brooklyn kẹt 23 phút buổi sáng
+(cũ quá 900 giây trong 8 phút) không làm alert freshness bắn, đúng vì 8 phút chỉ tiêu 1.9% budget.
+
+Vì sao chọn kịch bản này: ba mốc của sự cố cách nhau rõ (thay đổi 13:05, hỏng ngầm 15:20, người dùng bị ảnh hưởng 15:50) nên
+người kết luận theo "thay đổi gần nhất" chọn sai `cfg-514` hoặc `cfg-515`; budget chất lượng chỉ tiêu 2.5% dù cả market hỏng 70
+phút, nên người xếp severity theo phần trăm budget sẽ hạ nhầm thành SEV2; người phát hiện là support, không phải alert, nên
+`detected_at` phải đọc cả chat; hành động đầu tiên (restart) không có tác dụng và hành động chấm dứt tác động (rollback model) khác
+hành động sửa gốc (bỏ offset). Mỗi điều là một việc mà người dẫn sự cố mức senior phải phân biệt. Kịch bản khác bài module 18:
+dữ liệu là chuyến thật, nhiều market, và tác động phải tính từ log dự đoán và nhãn chứ không đọc sẵn từ một cột lỗi.
+
+Bẫy trong tập nhãn: `config_change` (`cfg-515` ở brooklyn 2 phút trước tác động; `cfg-514` là thay đổi gần nhất trên service
+queens), `model_regression` (xem tỉ lệ tệ của `v42` khi feature tươi), `label_delay` (alert đến muộn nhưng nhãn về đúng lúc trả
+khách), `traffic_spike`, `upstream_data_change` (không có bằng chứng nào).
+
+Mutation test của bộ chấm (đã chạy khi viết bài): mọi biến thể sai hợp lý sau đều fail, thông báo không lộ giá trị đúng: thêm
+`config_change` hoặc bỏ `unsafe_default`; `mitigated_at` là giờ rollback 17:02; `detected_at` là giờ alert 17:18; `trigger` là
+`cfg-514`; severity SEV2; `decision: restart`; tác động tính từ 15:20; phần trăm budget chia cho cả ba market; `stale_minutes` cộng
+brooklyn; thêm brooklyn vào `affected_markets`; budget chất lượng với SLO 95%; burn rate không `by (market)`; freshness chỉ cửa sổ
+5m; `LabelsMissing` kiểu `or vector(0)` toàn cục; ngưỡng nhanh 14.4; slow burn chỉ cửa sổ 30m; fast burn chỉ cửa sổ 1h; postmortem
+nêu tên, có cụm đổ lỗi, thiếu mốc phát hiện, thiếu loại hành động `phát hiện`; design doc dùng số request chưa làm sạch, thiếu
+fallback, thiếu một SLO. Các lời giải đúng viết khác đều pass: handle có `@`, phần trăm nhiều chữ số, ngày không ngoặc, rule viết
+inline bằng `increase` với `and on (market)` và `for: 0m`, `LabelsMissing` bằng `count by`, số có dấu phân cách hàng nghìn.
+
+Giới hạn đã biết: người học có thể dò `causes` bằng cách chạy test nhiều lần (test chỉ báo số nhãn thiếu và thừa), hoặc đọc
+script sinh. Không ép được; rubric dưới đây là nơi chấm thật. `detected_at` cần phán đoán (tin nhắn nào là "báo triệu chứng");
+đề nói rõ chat là một nguồn, và trong ngày chỉ có một tin như vậy trước alert.
+
+Rubric M18 (chấm bốn tệp; test chỉ kiểm khung, số và nhãn):
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Điều tra | Tính được mọi số của `incident.yaml` | Script tái lập một lệnh; xem theo market trước khi xem theo thời gian; tách ba mốc 13:05, 15:20, 15:50 và giải thích khoảng 30 phút là TTL |
+| Nguyên nhân | Bốn nhãn đúng | Chuỗi nhân quả có thứ tự; loại từng bẫy bằng một số (tỉ lệ tệ của brooklyn quanh 15:48, `v42` khi feature tươi, độ trễ nhãn) |
+| Severity và tác động | SEV1, số khớp | Giải thích vì sao 2.5% budget vẫn là SEV1; tính phần tệ "thừa" so với 6% thường ngày (khoảng 1 100) |
+| Dẫn sự cố | Vai trò đúng | Nhận xét IC chặn giả thuyết `cfg-515`, chọn rollback (đảo ngược được) khi restart thất bại, giữ sự cố mở tới khi feature tươi |
+| SLO và alert | Test xanh | Tính được alert của mình bắn lúc nào trên dữ liệu sự cố (15:46) và so với 16:21; giải thích burn rate tối đa 10 với SLO 90% |
+| Postmortem | Không đổ lỗi, đủ phần | Mỗi nhãn có ít nhất một hành động; hành động có cách kiểm đo được; nói rõ điều may mắn (`v41` còn và không đọc feature) |
+| Design doc | Đủ 11 phần | Cell theo market, fallback không phải 0, cổng canary có freshness, onboard bằng template; số ở phần 8 truy về phần 1 và 2; thừa nhận market nhỏ có ít nhãn |
+
+Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô cột Tốt.
+
 ## Rubric phần tự đánh giá
 
 | Mục | Đạt | Tốt |
@@ -453,3 +684,8 @@ Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô c
 | Cloud (M11, tuỳ chọn) | `--dry-run` đúng, có budget | Xem rubric riêng ở mục M11 |
 | Kubernetes (M12) | Test xanh, README có lệnh và bảng release | Xem rubric riêng ở mục M12 |
 | Đánh giá junior (M13) | Ba nhãn đúng, `keep` + cách ly | Xem rubric riêng ở mục M13 |
+| K8s chịu tải (M14) | Test xanh, README có metric, bảng replica, quota | Xem rubric riêng ở mục M14 |
+| Retrain phân tán (M15) | Test xanh, README có lý do và log kill | Xem rubric riêng ở mục M15 |
+| Feature real-time (M16) | Test xanh, freshness trong README | Xem rubric riêng ở mục M16 |
+| Nền tảng (M17) | Test xanh, báo cáo chi phí | Xem rubric riêng ở mục M17 |
+| Đánh giá senior (M18) | Bốn nhãn đúng, SEV1, alert theo market | Xem rubric riêng ở mục M18 |

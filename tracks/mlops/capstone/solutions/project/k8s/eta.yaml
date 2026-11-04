@@ -28,12 +28,12 @@ metadata:
     app.kubernetes.io/name: eta
   annotations:
     serving.kserve.io/deploymentMode: RawDeployment
-    serving.kserve.io/autoscalerClass: none
+    serving.kserve.io/autoscalerClass: external
 spec:
   predictor:
     minReplicas: 1
-    maxReplicas: 1
     automountServiceAccountToken: false
+    priorityClassName: "${ETA_PRIORITY_CLASS}"
     securityContext:
       runAsNonRoot: true
       runAsUser: 10001
@@ -102,7 +102,8 @@ spec:
         readinessProbe:
           httpGet: {path: /readyz, port: 8000}
           periodSeconds: 5
-          failureThreshold: 2
+          timeoutSeconds: 3
+          failureThreshold: 3
         livenessProbe:
           httpGet: {path: /healthz, port: 8000}
           periodSeconds: 10

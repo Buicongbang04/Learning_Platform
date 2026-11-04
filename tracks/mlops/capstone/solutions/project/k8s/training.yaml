@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: eta-training
+spec:
+  hard:
+    requests.cpu: 1500m
+    requests.memory: 1536Mi
+    limits.cpu: "3"
+    limits.memory: 3Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: eta-training-defaults
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 250m, memory: 256Mi}
+      default: {cpu: "1", memory: 1Gi}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: eta-retrain
+spec:
+  clusterQueue: eta-training-${ETA_RUN}

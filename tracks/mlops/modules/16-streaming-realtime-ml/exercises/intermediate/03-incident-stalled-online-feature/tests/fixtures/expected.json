@@ -1,0 +1,412 @@
+{
+ "main": {
+  "rows": [
+   {
+    "zone_id": 48,
+    "window_start": 1551772800,
+    "window_end": 1551773700,
+    "trips": 66,
+    "avg_fare": 9.946969696969697
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551772800,
+    "window_end": 1551773700,
+    "trips": 46,
+    "avg_fare": 11.326086956521738
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551772800,
+    "window_end": 1551773700,
+    "trips": 37,
+    "avg_fare": 13.27027027027027
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551773700,
+    "window_end": 1551774600,
+    "trips": 54,
+    "avg_fare": 11.981481481481481
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551773700,
+    "window_end": 1551774600,
+    "trips": 46,
+    "avg_fare": 8.58695652173913
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551773700,
+    "window_end": 1551774600,
+    "trips": 64,
+    "avg_fare": 13.3984375
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551774600,
+    "window_end": 1551775500,
+    "trips": 65,
+    "avg_fare": 10.653846153846153
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551774600,
+    "window_end": 1551775500,
+    "trips": 48,
+    "avg_fare": 12.458333333333334
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551774600,
+    "window_end": 1551775500,
+    "trips": 59,
+    "avg_fare": 10.822033898305085
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551775500,
+    "window_end": 1551776400,
+    "trips": 63,
+    "avg_fare": 9.38888888888889
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551775500,
+    "window_end": 1551776400,
+    "trips": 55,
+    "avg_fare": 10.163636363636364
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551775500,
+    "window_end": 1551776400,
+    "trips": 52,
+    "avg_fare": 11.673076923076923
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551776400,
+    "window_end": 1551777300,
+    "trips": 58,
+    "avg_fare": 9.301724137931034
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551776400,
+    "window_end": 1551777300,
+    "trips": 58,
+    "avg_fare": 9.14655172413793
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551776400,
+    "window_end": 1551777300,
+    "trips": 47,
+    "avg_fare": 9.670212765957446
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551777300,
+    "window_end": 1551778200,
+    "trips": 57,
+    "avg_fare": 9.93859649122807
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551777300,
+    "window_end": 1551778200,
+    "trips": 68,
+    "avg_fare": 13.191176470588236
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551777300,
+    "window_end": 1551778200,
+    "trips": 57,
+    "avg_fare": 11.694736842105264
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 55,
+    "avg_fare": 15.39090909090909
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 60,
+    "avg_fare": 11.591666666666667
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 48,
+    "avg_fare": 11.541666666666666
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551779100,
+    "window_end": 1551780000,
+    "trips": 55,
+    "avg_fare": 10.318181818181818
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551779100,
+    "window_end": 1551780000,
+    "trips": 76,
+    "avg_fare": 11.302631578947368
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551779100,
+    "window_end": 1551780000,
+    "trips": 44,
+    "avg_fare": 10.920454545454545
+   }
+  ],
+  "snapshot": {
+   "48": {
+    "zone_id": 48,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 55,
+    "avg_fare": 15.39090909090909
+   },
+   "161": {
+    "zone_id": 161,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 60,
+    "avg_fare": 11.591666666666667
+   },
+   "238": {
+    "zone_id": 238,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 48,
+    "avg_fare": 11.541666666666666
+   }
+  },
+  "stats": {
+   "accepted": 1338,
+   "skipped": 10,
+   "repeated": 25,
+   "rejected": 0
+  }
+ },
+ "extra": {
+  "rows": [
+   {
+    "zone_id": 48,
+    "window_start": 1551772800,
+    "window_end": 1551773700,
+    "trips": 66,
+    "avg_fare": 9.946969696969697
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551772800,
+    "window_end": 1551773700,
+    "trips": 46,
+    "avg_fare": 11.326086956521738
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551772800,
+    "window_end": 1551773700,
+    "trips": 37,
+    "avg_fare": 13.27027027027027
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551773700,
+    "window_end": 1551774600,
+    "trips": 54,
+    "avg_fare": 11.981481481481481
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551773700,
+    "window_end": 1551774600,
+    "trips": 46,
+    "avg_fare": 8.58695652173913
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551773700,
+    "window_end": 1551774600,
+    "trips": 64,
+    "avg_fare": 13.3984375
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551774600,
+    "window_end": 1551775500,
+    "trips": 65,
+    "avg_fare": 10.653846153846153
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551774600,
+    "window_end": 1551775500,
+    "trips": 48,
+    "avg_fare": 12.458333333333334
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551774600,
+    "window_end": 1551775500,
+    "trips": 59,
+    "avg_fare": 10.822033898305085
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551775500,
+    "window_end": 1551776400,
+    "trips": 63,
+    "avg_fare": 9.38888888888889
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551775500,
+    "window_end": 1551776400,
+    "trips": 55,
+    "avg_fare": 10.163636363636364
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551775500,
+    "window_end": 1551776400,
+    "trips": 52,
+    "avg_fare": 11.673076923076923
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551776400,
+    "window_end": 1551777300,
+    "trips": 58,
+    "avg_fare": 9.301724137931034
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551776400,
+    "window_end": 1551777300,
+    "trips": 58,
+    "avg_fare": 9.14655172413793
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551776400,
+    "window_end": 1551777300,
+    "trips": 47,
+    "avg_fare": 9.670212765957446
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551777300,
+    "window_end": 1551778200,
+    "trips": 57,
+    "avg_fare": 9.93859649122807
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551777300,
+    "window_end": 1551778200,
+    "trips": 68,
+    "avg_fare": 13.191176470588236
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551777300,
+    "window_end": 1551778200,
+    "trips": 57,
+    "avg_fare": 11.694736842105264
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 55,
+    "avg_fare": 15.39090909090909
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 60,
+    "avg_fare": 11.591666666666667
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 48,
+    "avg_fare": 11.541666666666666
+   },
+   {
+    "zone_id": 48,
+    "window_start": 1551779100,
+    "window_end": 1551780000,
+    "trips": 55,
+    "avg_fare": 10.318181818181818
+   },
+   {
+    "zone_id": 161,
+    "window_start": 1551779100,
+    "window_end": 1551780000,
+    "trips": 76,
+    "avg_fare": 11.302631578947368
+   },
+   {
+    "zone_id": 238,
+    "window_start": 1551779100,
+    "window_end": 1551780000,
+    "trips": 44,
+    "avg_fare": 10.920454545454545
+   }
+  ],
+  "snapshot": {
+   "48": {
+    "zone_id": 48,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 55,
+    "avg_fare": 15.39090909090909
+   },
+   "161": {
+    "zone_id": 161,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 60,
+    "avg_fare": 11.591666666666667
+   },
+   "238": {
+    "zone_id": 238,
+    "window_start": 1551778200,
+    "window_end": 1551779100,
+    "trips": 48,
+    "avg_fare": 11.541666666666666
+   }
+  },
+  "stats": {
+   "accepted": 1338,
+   "skipped": 10,
+   "repeated": 25,
+   "rejected": 1
+  },
+  "position": 458,
+  "event": {
+   "event_id": "trip-x00001",
+   "zone_id": 161,
+   "fare": 12.0,
+   "pickup_at": "2019-03-08T08:41:41Z",
+   "received_at": "2019-03-05T08:41:41Z"
+  }
+ }
+}

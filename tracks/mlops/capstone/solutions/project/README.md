@@ -74,7 +74,8 @@ miễn phí.
 
 Feast (M06) chạy trong container `mlops-feast:0.67.0`, Redis bật bằng `--profile feast` của stack; ghi
 `feature_repo/data/zone_hour_speed.parquet` bằng `eta.zone_features.zone_hour_speed`, rồi `feast apply` và
-`feast materialize` qua `mlopskit.feast_run(..., network="mlops_default")`.
+`feast materialize -v zone_hour_speed` (view push `zone_speed_15m` của M16 không materialize) qua
+`mlopskit.feast_run(..., network="mlops_default")`.
 
 Canary và shadow (M07): `ETA_CANARY_WEIGHT=0.1` (10% request cho alias `challenger`), `ETA_SHADOW=1` (challenger chấm sau
 response, chỉ ghi log), `ETA_PREDICTION_LOG=/tmp/predictions.jsonl`. Tải thử: `loadtest/eta.js` với `TARGET`.
@@ -194,9 +195,86 @@ Training: `argo/train-workflow.yaml` (DAG `validate → train → gate`, paramet
 ConfigMap `eta-train-data`, artifact `sample`, `model`, `metrics` qua MinIO của Argo). Một Workflow trên 1 500 chuyến xong
 trong khoảng 30 giây; `gate` từ chối thoát mã 3 và Workflow Failed ở đúng bước đó.
 
+## Chịu tải trên K8s (M14)
+
+Metric scale là `eta_requests_in_flight`: gauge trong middleware `/predict` của `eta.serve`, tăng khi request vào, giảm
+trong `finally`. CPU (metrics-server) lấy mẫu 15 giây và kẹt ở trần `limits.cpu`; cluster không có Prometheus (không tính
+được `rate()` hay p95), còn in-flight đọc thẳng được từ `/metrics` bằng trigger `metrics-api` (`format: prometheus`) và theo
+định luật Little tăng vọt đúng lúc pod bắt đầu xếp hàng. KEDA đọc qua Service nên mỗi lần chỉ thấy một pod:
+`metricType: Value`, `targetValue: "1"` (một pod nên nhận khoảng 60 req/s ở 15 ms, in-flight khoảng 1). Với `"2"` có lần
+dừng ở 2 replica khi hai pod gánh 150 req/s ở khoảng 88% sức.
+
+```bash
+ETA_RUN=dev1 envsubst '$ETA_RUN' < k8s/cluster.yaml | kubectl --context kind-mlops apply -f -
+ETA_NAMESPACE=eta envsubst '$ETA_NAMESPACE' < k8s/serving.yaml | kubectl --context kind-mlops -n eta apply -f -
+ETA_PRIORITY_CLASS=eta-serving-dev1 envsubst < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
+ETA_RUN=dev1 envsubst '$ETA_RUN' < k8s/training.yaml | kubectl --context kind-mlops -n eta-training apply -f -
+ETA_RUN=dev1 ETA_TRAIN_IMAGE=eta-train:dev ETA_MONTH=2019-03 envsubst '$ETA_RUN $ETA_TRAIN_IMAGE $ETA_MONTH' \
+  < k8s/retrain-job.yaml | kubectl --context kind-mlops -n eta-training create -f -
+```
+
+Đo trên laptop 16 nhân đang chạy việc khác. Bước bậc thang của test (1 replica, mỗi bậc 5 giây) cho sức một pod
+C = 100–175 req/s tuỳ lúc (ví dụ một lần: 150 req/s p95 6 ms, 175 req/s p95 272 ms, 200 req/s p95 731 ms → C = 175);
+tải chấm `ceil(2,2 × C)` = 221–386 req/s, không keep-alive. Một lần chạy với C = 175 (386 req/s):
+
+| t (giây từ lúc k6 bắt đầu) | 0 | 13 | 19 | 25 | 80 |
+| --- | --- | --- | --- | --- | --- |
+| replicas / Ready | 1/1 | 1/1 | 6/1 | 6/6 | 6/6 |
+
+Pha steady (20 giây, 7 721 request): p95 35–45 ms, không lỗi; 10 giây sau tải in-flight bằng 0 trên cả 6 pod. HPA đồng
+bộ mỗi 15 giây, nên thời điểm scale lệch tới 15 giây giữa các lần chạy.
+
+Quota serving: pod predictor xin 100m CPU, 256Mi, giới hạn 1 CPU, 512Mi; `maxReplicaCount: 6` + 1 pod rolling update = 7
+pod → `requests.cpu: 1` (cần 700m), `requests.memory: 2Gi` (cần 1,75Gi), `limits.cpu: 8` (cần 7), `limits.memory: 4Gi`
+(cần 3,5Gi), `pods: 8`, `count/jobs.batch: 0`. Training: Job retrain xin 1 CPU, 768Mi; ClusterQueue và ResourceQuota
+1500m, 1536Mi nên đúng một Job chạy một lúc. PriorityClass `eta-serving` 2 000 (`PreemptLowerPriority`, dưới `mlops-system` 1 000 000 của controller add-on),
+`eta-training` 1 000 (`Never`).
+
+## Retrain phân tán (M15)
+
+`eta.distributed.retrain` chạy Ray Tune: lưới `learning_rate` 0,05/0,1 × `max_leaf_nodes` 31/63, mỗi trial 1 CPU, tối đa
+`workers` trial cùng lúc; mỗi trial `warm_start` thêm 20 cây một đợt, report `trees` và checkpoint `model.joblib` sau mỗi
+đợt, đọc `tune.get_checkpoint()` khi bắt đầu. `FailureConfig(max_failures=2)`, `CheckpointConfig(num_to_keep=2)`.
+Không chia dữ liệu: GBDT dựng cây tuần tự, mẫu 200 000 dòng vừa RAM một worker; các trial độc lập nên song song theo cấu hình
+không cần đồng bộ gì giữa worker, và giữ nguyên model M01 và cổng M04.
+
+| Lần chạy | Thời gian | Kết quả |
+| --- | --- | --- |
+| Test, 40 000 chuyến giả, 2 worker, 4 trial, kill một worker | 25–30 giây | Kill ở 60 cây, chạy lại từ 80 cây trên worker mới; `mae` 33,8 so với 34,5 của model một tiến trình |
+| 2019-01 thật, mẫu 200 000, 2 worker | khoảng 45 giây | Tốt nhất `learning_rate` 0,1, `max_leaf_nodes` 63; `mae` 147 giây trên 20% cuối tháng |
+
+`register` gọi `log_and_register` của M04 với `model_params` của trial tốt nhất (tag `git_commit`, `data_version`) và thêm
+tag `trainer=ray-tune`, `trials`.
+
 ## Đánh giá M13
 
 `make assessment` dựng `data/assessment/` (tháng lạ 2019-10 và ba tháng thật quanh nó), chạy `prepare`, `validate` (exit 1
 là kết quả mong đợi) và `replay` 2019-09..2019-11 với `params.assessment.yaml`. Chẩn đoán ở
 `reports/assessment/diagnosis.yaml`, báo cáo ở `docs/assessment.md`. Đây là đáp án của bài đánh giá: chỉ đọc sau khi
 đã nộp bài của mình.
+
+## Đánh giá M18
+
+Từ gốc repo, `uv run python tracks/mlops/capstone/project/tests/etakit.py incident --out tracks/mlops/capstone/solutions/project/data/incident`
+dựng bằng chứng của sự cố.
+SLO, budget theo market và alert burn rate ở `reports/senior/slo.yaml`; hồ sơ sự cố ở `reports/senior/incident.yaml`; postmortem ở
+`docs/senior/postmortem.md`; design doc nền tảng nhiều market ở `docs/senior/design-doc.md`. Cách tính từng số ở mục M18 của
+`SOLUTION.md`. Đây là đáp án của bài đánh giá: chỉ đọc sau khi đã nộp bài của mình.
+
+## Feature real-time (M16)
+
+`speed_15m_mph`: tổng quãng đường / tổng thời gian (giờ) của các chuyến đón ở zone và **trả khách** trong cửa sổ 15 phút
+(`eta.streaming.windows`), watermark trễ 120 giây so với event time lớn nhất đã thấy. Phát lại bằng `eta.streaming.events.replay`
+(`SimClock`, `speedup=60`: một phút dữ liệu thành một giây), push vào Feast qua `zone_speed_push` (`feature_repo/streaming.py`,
+`eta.streaming.feast_push`), snapshot online cho API qua `ETA_ONLINE_FEATURES`. Cửa sổ dùng được cho request lúc `t` khi
+`window_end + 120 <= t <= window_end + 1800`; không có thì `DEFAULT_SPEED_MPH` (10.1), trạng thái trả trong `speed_15m_status`.
+
+Freshness đo trên 10 zone, 08:00–08:45 ngày 2019-03-05 (1 197 chuyến được nhận, 5 trễ bị loại): p50 592 s, p95 994 s, max 1 076 s
+mô phỏng. Phần lớn là chờ cửa sổ đóng (trung bình nửa cửa sổ cộng lateness); xử lý (consumer, push SQLite, snapshot) dưới 1 giây thật.
+
+## Nền tảng (M17)
+
+Template ở `platform/template/`, lệnh onboard ở `docs/onboarding.md` (5 lệnh). Model tip: Ridge 7 feature, MAE 0.72 USD so với 1.68
+của trung vị (2019-03, mẫu 300 000, test là 20% cuối theo thời gian). Cổng: `python -m eta.platform gate` (allowlist nội dung,
+modelscan, chữ ký `model-signing` khoá EC, tag). Chi phí: `python -m eta.platform cost platform/usage.csv platform/cost.yaml --out reports`
+(`reports/cost.yaml`, `reports/cost.md`); log sinh lại bằng `python platform/make_usage.py`.

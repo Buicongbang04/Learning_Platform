@@ -1,0 +1,19 @@
+12:58 @trang: [feature-store] bảo trì online store 13:00-13:15, latency có thể tăng nhẹ
+13:09 @alertbot: FIRING ETAErrorBudgetFastBurn service=eta-service severity=critical
+13:11 @hai: mình đang on-call, đang xem. 5xx khoảng 15% trên /predict
+13:13 @hai: tuyên bố SEV2. @my làm incident commander giúp mình nhé, mình cần tay để debug
+13:13 @my: nhận vai trò IC. @son nhận comms: cập nhật status page và kênh #ops-eta mỗi 15 phút
+13:14 @son: nhận comms. đã đăng status page "ETA lỗi một phần"
+13:16 @hai: nghi do feature store bảo trì. @trang xác nhận giúp?
+13:18 @trang: store bảo trì xong lúc 13:12, latency bình thường, không có lỗi phía store
+13:20 @my: @hai thử restart pod để loại trừ trạng thái bẩn trong process
+13:21 @hai: đã restart toàn bộ pod eta-service
+13:27 @hai: restart không đổi gì, 5xx vẫn khoảng 15%
+13:29 @son: [cập nhật] đang điều tra, chưa có thời điểm khắc phục
+13:35 @hai: log có ValueError: Input contains NaN từ model khi passenger_count trống
+13:37 @my: quyết định quay về model trước. @hai thực hiện, ghi lại để viết postmortem
+13:46 @hai: đã chạy mdl-208
+13:50 @hai: 5xx về 0.4%
+13:52 @alertbot: RESOLVED ETAErrorBudgetFastBurn service=eta-service severity=critical
+13:55 @my: theo dõi thêm 15 phút rồi đóng
+14:12 @my: đóng sự cố. postmortem trong 5 ngày làm việc, @hai viết nháp

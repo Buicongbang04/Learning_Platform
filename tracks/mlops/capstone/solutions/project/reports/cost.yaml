@@ -1,0 +1,25 @@
+period: 2019-11
+currency: USD
+models:
+- team: eta
+  model: eta
+  cost_center: CC-1001
+  direct: 89.36
+  idle_share: 219.46
+  total: 308.82
+- team: eta
+  model: unlabelled
+  cost_center: CC-1001
+  direct: 1.53
+  idle_share: 3.76
+  total: 5.29
+- team: pricing
+  model: pricing-tip-amount
+  cost_center: CC-2041
+  direct: 9.45
+  idle_share: 23.21
+  total: 32.66
+unallocated: 4.59
+idle: 246.42
+capacity_cost: 351.36
+total: 351.36

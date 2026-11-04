@@ -1,0 +1,37 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: eta-serving-${ETA_RUN}
+value: 2000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "API ETA online: được đẩy pod retrain ra khi node hết chỗ"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: eta-training-${ETA_RUN}
+value: 1000
+globalDefault: false
+preemptionPolicy: Never
+description: "Retrain ETA: chạy lại được, không đẩy ai ra, chờ trong hàng đợi Kueue"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: eta-default-${ETA_RUN}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: eta-training-${ETA_RUN}
+spec:
+  namespaceSelector: {}
+  queueingStrategy: StrictFIFO
+  resourceGroups:
+    - coveredResources: [cpu, memory]
+      flavors:
+        - name: eta-default-${ETA_RUN}
+          resources:
+            - {name: cpu, nominalQuota: 1500m}
+            - {name: memory, nominalQuota: 1536Mi}

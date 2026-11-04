@@ -5,7 +5,10 @@ reports/*
 !reports/assessment/
 reports/assessment/*
 !reports/assessment/diagnosis.yaml
+!reports/senior/
 metrics.json
 .ci-deps
 dist/
 mlruns/
+!reports/cost.md
+!reports/cost.yaml

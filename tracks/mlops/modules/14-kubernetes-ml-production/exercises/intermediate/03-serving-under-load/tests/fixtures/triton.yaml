@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: triton}
+  template:
+    metadata:
+      labels: {app: triton}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: triton
+          image: nvcr.io/nvidia/tritonserver:26.09-py3
+          imagePullPolicy: IfNotPresent
+          args: ["tritonserver", "--model-repository=/models", "--model-control-mode=explicit", "--load-model=eta"]
+          ports:
+            - {name: http, containerPort: 8000}
+            - {name: metrics, containerPort: 8002}
+          readinessProbe:
+            httpGet: {path: /v2/health/ready, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: models, mountPath: /models, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 4Gi}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: models
+          configMap:
+            name: triton-models
+            items:
+              - {key: config.pbtxt, path: eta/config.pbtxt}
+              - {key: model.py, path: eta/1/model.py}
