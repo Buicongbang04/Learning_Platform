@@ -502,6 +502,81 @@ Rubric M15:
 | Chịu lỗi | Log một lần kill và số cây trước/sau | Nêu nơi đặt checkpoint khi node chết thật (object storage), và `max_failures` khác gì retry của Job K8s |
 | Hiệu năng | Thời gian `workers=2` | So `workers=1` và `workers=2` trên máy mình, giải thích vì sao không gấp đôi đúng |
 
+## M16: feature real-time từ stream Kafka phát lại
+
+Đường đi: `trip_events` (event time là lúc trả khách, vì tốc độ của chuyến chỉ biết khi chuyến kết thúc) → `replay` theo `SimClock`
+→ topic `mlopskit.kafka_topic()` → `consume` (`ZoneSpeedWindows`: hỏng → trùng → trễ → cộng, watermark `max(ts) - 120`, đóng ngay
+khi watermark qua `window_end`) → `on_close` → `feast_push.push` (offline mọi dòng, online dòng mới nhất mỗi zone nếu không cũ hơn)
+→ `export_online` (snapshot JSON ghi nguyên tử) → API (`OnlineSpeed`, cùng luật sẵn sàng/TTL với `attach_live_speed`).
+
+Quyết định:
+
+- **Lúc trả khách, không phải lúc đón**: feature là tốc độ, chỉ tính được khi chuyến kết thúc. Lấy lúc đón làm event time thì cửa sổ
+  08:00–08:15 chỉ đủ dữ liệu sau khi chuyến dài nhất của nó kết thúc (tới 3 giờ sau), watermark vô nghĩa.
+- **Tỉ số của tổng**, không phải trung bình tốc độ từng chuyến: cộng dồn được trong stream, chuyến 0,1 dặm trong 60 giây không kéo lệch.
+- **Sẵn sàng = `window_end + LATENESS_S`** khi dựng feature train: serving chỉ thấy cửa sổ sau khi watermark qua nó. Lấy `window_end`
+  thì train thấy feature sớm hơn serving 2 phút, một dạng skew nhỏ nhưng có thật. Feast vẫn ghi `event_timestamp = window_end` (thời
+  điểm của sự thật), điều kiện sẵn sàng nằm ở một hàm dùng chung.
+- **Snapshot cho API** thay vì gọi Feast: image serving không có Feast (M06). Freshness đo tới lúc API đọc được.
+- **Mặc định là `DEFAULT_SPEED_MPH`, trạng thái trả về trong response**: bài học trực tiếp của M18 (model điền 0 khi feature null).
+- Message hỏng chỉ tăng `invalid`: consumer của M18 chết ở một message hỏng.
+
+Số đo: replay 1 giờ dữ liệu ở `speedup=1800` mất khoảng 2 giây; freshness p50 592 s, p95 994 s, max 1 076 s ở `speedup=60` (ngưỡng
+2 160 s). Cả nhóm test M16 chạy khoảng 1,5 phút (phần lớn là `test_m16_live_freshness`).
+
+Mutation test của bộ chấm (đã chạy khi viết bài, mọi biến thể sai fail): `late` dùng `<` thay `<=`; không trừ lateness; không loại
+trùng; không kiểm message hỏng; chỉ đóng cửa sổ lúc `flush`; tốc độ lệch 0,01%; event time là lúc đón (cả ở `trip_events` và
+`zone_speed_batch`); `replay` không chờ đồng hồ; `attach_live_speed` bỏ lateness hoặc TTL tính từ lúc sẵn sàng; `push` không so thời
+điểm online hoặc ghi online mọi dòng; API mặc định 0 hoặc bỏ TTL; `freshness` dùng percentile kiểu `lower`; `features.py` không nhận
+`speed_15m_mph`. Lời giải đúng viết khác vẫn pass: consumer dùng thẳng `consumer_timeout_ms=idle_ms` như module 16; `push` so `>` thay
+`>=`.
+
+Giới hạn đã biết: một partition, một consumer; freshness đo trên một máy, xử lý 1 giây thật thành 60 giây mô phỏng nên máy tải nặng
+làm số xấu đi (ngưỡng dư 2 lần). Snapshot chỉ giữ cửa sổ mới nhất mỗi zone: request "trong quá khứ" (phát lại) có thể nhận `stale` ở
+chỗ point-in-time chọn được cửa sổ cũ hơn; chạy thật không xảy ra.
+
+Rubric M16:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Event time và watermark | Test xanh | Giải thích lúc trả khách, đo số sự kiện trễ khi đổi `LATENESS_S` 60/120/300 |
+| Freshness | Có p50/p95 trong README | Tách thời gian chờ cửa sổ và thời gian xử lý; nêu alert freshness (ngưỡng, `for`) nối với SLO freshness của M18 |
+| Nhiều partition, consumer chết | Nêu watermark theo partition | Chỉ chỗ commit offset sau push, push idempotent, cách bỏ qua message hỏng có log và đếm |
+| Skew | Feature train và API cùng luật | Giải thích vì sao sẵn sàng là `window_end + lateness`, đo được bao nhiêu chuyến đổi giá trị nếu bỏ lateness |
+
+## M17: nền tảng, ký, quét, chi phí
+
+Template `platform/template/` giữ luật của module 17 bài Basic 01, thêm `train.py` (Ridge, safetensors), `metadata.json` chép tag vào
+thư mục model để tag **được ký**. Cổng `deploy_gate` gộp bốn kiểm, báo đủ mọi lý do (gọi `scan` cả khi chữ ký đã sai), không nạp tệp
+nào. `docs/onboarding.md` có 5 lệnh: copier, pytest của dự án sinh ra, train, ký, cổng.
+
+Vì sao **Ridge + safetensors**: trọng số là hai tensor, nạp lại bằng `safetensors.numpy` và một phép nhân ma trận, không cần pickle,
+không cần sklearn lúc serve; allowlist của cổng chỉ cần safetensors và JSON. LightGBM định dạng văn bản không chứa code nhưng là định
+dạng riêng mà modelscan không đọc và allowlist phải thêm luật nhận diện; ONNX cần thêm runtime. MAE 0.72 USD so với 1.68 của trung vị
+là đủ cho bài toán; tip của chuyến tiền mặt luôn ghi 0 nên `payment_type` gánh phần lớn.
+
+Báo cáo chi phí tháng 11/2019 (`reports/cost.yaml`): `eta` 308.82, `eta/unlabelled` 5.29, `pricing-tip-amount` 32.66,
+`unallocated` 4.59, idle 246.42 trên năng lực 351.36 USD. Idle lớn hơn cả chi phí trực tiếp (100.34), chủ yếu GPU node 240 giờ chỉ dùng
+11 giờ: đó là con số mang tới buổi họp ngân sách, không phải chi phí của model nào.
+
+Mutation test của bộ chấm (mọi biến thể sai fail): bỏ allowlist (pickle `.bin` qua được modelscan lọt cổng); bỏ quét; `verify` trả
+`True` khi lỗi; bỏ kiểm tag; gọi `scan` hai lần; cho ký vào trong thư mục model; owner có default; cost center có default; test sinh ra
+không kiểm tag; `train.py` xuất thêm `model.joblib`; idle âm khi dùng vượt; không bỏ khoảng trắng namespace; `unallocated` nhận phần
+idle; sửa tay một số trong `reports/cost.yaml`; khối onboarding 6 lệnh hoặc có `&&`. Không bắt được: cổng nhận `returncode` 1 khi
+không có issue (modelscan thật không trả như vậy; module 17 Intermediate 02 kiểm ca này bằng bản quét giả).
+
+Giới hạn đã biết: lệnh cuối (cổng qua CLI) không chạy trong test vì sandbox không có Docker; test gọi `deploy_gate` với
+`mlopskit.modelscan_run` thay vào. Log sử dụng là số dựng sẵn (`platform/make_usage.py`), không phải log cụm thật.
+
+Rubric M17:
+
+| Mục | Đạt | Tốt |
+| --- | --- | --- |
+| Golden path | Test xanh, 5 lệnh | Giải thích `copier update` kéo thay đổi template về dự án cũ; đề xuất cách đưa luật mới (tag thứ tư) tới mọi dự án |
+| Định dạng model | safetensors có lý do | So sánh với LightGBM text/ONNX bằng rủi ro và chi phí vận hành |
+| Cổng | Bốn kiểm | Nêu ai giữ khoá riêng (CI có quyền ký, người không), phân phối khoá công khai, quy trình khi lộ khoá, so với Sigstore keyless |
+| Chi phí | Báo cáo khớp | Hai đề xuất giảm idle có số tiết kiệm; giải thích showback trước chargeback và vì sao giữ dòng `unallocated` |
+
 ## M18: đánh giá senior, sự cố queens 2019-11-14
 
 Sự cố sinh bằng `solutions/assessment/senior_incident.py` (người học nhận tệp qua `etakit.py incident`): mọi chuyến thật của
@@ -598,4 +673,6 @@ Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô c
 | Đánh giá junior (M13) | Ba nhãn đúng, `keep` + cách ly | Xem rubric riêng ở mục M13 |
 | K8s chịu tải (M14) | Test xanh, README có metric, bảng replica, quota | Xem rubric riêng ở mục M14 |
 | Retrain phân tán (M15) | Test xanh, README có lý do và log kill | Xem rubric riêng ở mục M15 |
+| Feature real-time (M16) | Test xanh, freshness trong README | Xem rubric riêng ở mục M16 |
+| Nền tảng (M17) | Test xanh, báo cáo chi phí | Xem rubric riêng ở mục M17 |
 | Đánh giá senior (M18) | Bốn nhãn đúng, SEV1, alert theo market | Xem rubric riêng ở mục M18 |

@@ -1,0 +1,8 @@
+name: {{ project_slug | tojson }}
+registry_name: {{ (team ~ '-' ~ project_slug) | tojson }}
+target: tip_amount
+model_format: safetensors
+tags:
+  owner: {{ owner | tojson }}
+  team: {{ team | tojson }}
+  cost_center: {{ cost_center | tojson }}

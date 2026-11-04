@@ -23,10 +23,12 @@ milestone ở [`../milestones/`](../milestones/), tổng quan ở [README capsto
 | `params.assessment.yaml`, `reports/assessment/diagnosis.yaml`, `docs/assessment.md` | [M13](../milestones/m13-junior-assessment.md) | Đánh giá độc lập: chẩn đoán tháng dữ liệu lạ, quyết định có số |
 | `src/eta/serve.py` (gauge in-flight), `k8s/eta.yaml` (cập nhật), `k8s/cluster.yaml`, `k8s/serving.yaml`, `k8s/training.yaml`, `k8s/retrain-job.yaml` | [M14](../milestones/m14-k8s-load.md) | KEDA autoscale theo số request đang xử lý, retrain qua Kueue, quota và PriorityClass tách serving với training |
 | `src/eta/distributed.py` | [M15](../milestones/m15-ray-retrain.md) | Retrain bằng Ray Tune nhiều worker, checkpoint định kỳ, chịu worker bị kill, đăng ký MLflow có lineage |
+| `src/eta/streaming/`, `feature_repo/streaming.py`, `src/eta/serve.py` (bản M16) | [M16](../milestones/m16-streaming-features.md) | Phát lại chuyến vào Kafka, cửa sổ 15 phút theo event time, Feast push, API đọc feature online, freshness |
+| `platform/template/`, `src/eta/platform/`, `docs/onboarding.md`, `reports/cost.yaml`, `reports/cost.md` | [M17](../milestones/m17-platform-onboarding.md) | Template Copier onboard model tip, ký và quét model, cổng deploy, chi phí theo model (đầu vào có sẵn: `platform/usage.csv`, `platform/cost.yaml`) |
 | `reports/senior/slo.yaml`, `reports/senior/incident.yaml`, `docs/senior/postmortem.md`, `docs/senior/design-doc.md` | [M18](../milestones/m18-senior-assessment.md) | Đánh giá senior: SLO và alert burn rate theo market, hồ sơ sự cố, postmortem, design doc nền tảng nhiều market |
 | `tests/` | mọi milestone | Không sửa: test chấm bài. Test của bạn để ở chỗ khác (ví dụ `tests_own/`) |
 
-`.gitignore` ở đây chặn `data/`, `models/`, `reports/` (trừ `reports/decisions/` của M10, `reports/assessment/diagnosis.yaml` của M13 và `reports/senior/` của M18), `metrics.json`, `.ci-deps`,
+`.gitignore` ở đây chặn `data/`, `models/`, `reports/` (trừ `reports/decisions/` của M10, `reports/assessment/diagnosis.yaml` của M13, `reports/cost.yaml` và `reports/cost.md` của M17 và `reports/senior/` của M18), `metrics.json`, `.ci-deps`,
 `dist/`: dữ liệu và model đi qua DVC và MLflow, không qua git.
 
 ## Chạy test
@@ -53,6 +55,9 @@ Chưa làm milestone nào thì test **fail** với thông báo "chưa import đ�
 | Bộ `nyc-tlc-2020` | `test_m10_replay_summary_real`, `test_m10_decision_files_valid` | `uv run python data/download_dataset.py nyc-tlc-2020` |
 | Cluster kind `mlops` | M12 (trừ `test_m12_manifests_contract`) | `bash setup/mlops/kind/up.sh` (module 13, mục 0) |
 | Add-on senior (KEDA, Kueue) trên cluster `mlops` | M14 (trừ `test_m14_manifests_contract`) | `bash setup/mlops/kind/up.sh --senior` (module 14, mục 0) |
+| Kafka (profile `streaming`) | `test_m16_replay_stream_matches_batch`, `test_m16_live_freshness` | `docker compose -f setup/mlops/compose.yaml --profile streaming up -d --wait` |
+| bubblewrap (M17) | `test_m17_template_*`, `test_m17_onboarding_*` | `sudo apt install bubblewrap` |
+| Docker, bộ `nyc-tlc` (M16, M17) | `test_m16_feast_*`, `test_m16_api_*`, `test_m16_live_freshness`, `test_m17_onboarding_*`, `test_m17_gate_*` | Như hai dòng Docker và `nyc-tlc` ở trên |
 
 M11 là milestone tuỳ chọn: chưa có thư mục `cloud/` thì test `test_m11_*` skip và không tính vào phần lõi; `test_m11_cloud_live` chỉ chạy khi đặt `ETA_CLOUD_LIVE=1`. Ngoài M11, skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15` trước `uv run`.
 
@@ -64,3 +69,4 @@ Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và ch�
 Mục này là của bạn. Mỗi milestone thêm một phần theo "Kết quả nộp": lệnh train và MAE (M01), container (M02), dữ liệu và
 ngưỡng validation (M03), registry, runbook rollback và model card (M04), orchestration và replay (M05), feature (M06),
 serving và kết quả k6 (M07), CI/CD (M08), monitoring (M09), drift và sự cố (M10), Kubernetes (M12).
+M16 thêm mục "Feature real-time" (định nghĩa, watermark, TTL, freshness đo được), M17 thêm mục "Nền tảng" (model tip, cổng deploy, chi phí).

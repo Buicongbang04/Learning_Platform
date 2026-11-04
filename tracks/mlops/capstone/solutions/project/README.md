@@ -74,7 +74,8 @@ miễn phí.
 
 Feast (M06) chạy trong container `mlops-feast:0.67.0`, Redis bật bằng `--profile feast` của stack; ghi
 `feature_repo/data/zone_hour_speed.parquet` bằng `eta.zone_features.zone_hour_speed`, rồi `feast apply` và
-`feast materialize` qua `mlopskit.feast_run(..., network="mlops_default")`.
+`feast materialize -v zone_hour_speed` (view push `zone_speed_15m` của M16 không materialize) qua
+`mlopskit.feast_run(..., network="mlops_default")`.
 
 Canary và shadow (M07): `ETA_CANARY_WEIGHT=0.1` (10% request cho alias `challenger`), `ETA_SHADOW=1` (challenger chấm sau
 response, chỉ ghi log), `ETA_PREDICTION_LOG=/tmp/predictions.jsonl`. Tải thử: `loadtest/eta.js` với `TARGET`.
@@ -258,3 +259,21 @@ dựng bằng chứng của sự cố.
 SLO, budget theo market và alert burn rate ở `reports/senior/slo.yaml`; hồ sơ sự cố ở `reports/senior/incident.yaml`; postmortem ở
 `docs/senior/postmortem.md`; design doc nền tảng nhiều market ở `docs/senior/design-doc.md`. Cách tính từng số ở mục M18 của
 `SOLUTION.md`. Đây là đáp án của bài đánh giá: chỉ đọc sau khi đã nộp bài của mình.
+
+## Feature real-time (M16)
+
+`speed_15m_mph`: tổng quãng đường / tổng thời gian (giờ) của các chuyến đón ở zone và **trả khách** trong cửa sổ 15 phút
+(`eta.streaming.windows`), watermark trễ 120 giây so với event time lớn nhất đã thấy. Phát lại bằng `eta.streaming.events.replay`
+(`SimClock`, `speedup=60`: một phút dữ liệu thành một giây), push vào Feast qua `zone_speed_push` (`feature_repo/streaming.py`,
+`eta.streaming.feast_push`), snapshot online cho API qua `ETA_ONLINE_FEATURES`. Cửa sổ dùng được cho request lúc `t` khi
+`window_end + 120 <= t <= window_end + 1800`; không có thì `DEFAULT_SPEED_MPH` (10.1), trạng thái trả trong `speed_15m_status`.
+
+Freshness đo trên 10 zone, 08:00–08:45 ngày 2019-03-05 (1 197 chuyến được nhận, 5 trễ bị loại): p50 592 s, p95 994 s, max 1 076 s
+mô phỏng. Phần lớn là chờ cửa sổ đóng (trung bình nửa cửa sổ cộng lateness); xử lý (consumer, push SQLite, snapshot) dưới 1 giây thật.
+
+## Nền tảng (M17)
+
+Template ở `platform/template/`, lệnh onboard ở `docs/onboarding.md` (5 lệnh). Model tip: Ridge 7 feature, MAE 0.72 USD so với 1.68
+của trung vị (2019-03, mẫu 300 000, test là 20% cuối theo thời gian). Cổng: `python -m eta.platform gate` (allowlist nội dung,
+modelscan, chữ ký `model-signing` khoá EC, tag). Chi phí: `python -m eta.platform cost platform/usage.csv platform/cost.yaml --out reports`
+(`reports/cost.yaml`, `reports/cost.md`); log sinh lại bằng `python platform/make_usage.py`.

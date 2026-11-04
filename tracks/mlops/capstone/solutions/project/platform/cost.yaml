@@ -1,0 +1,17 @@
+period: 2019-11
+currency: USD
+prices:
+  cpu_hour: 0.031
+  gpu_hour: 0.90
+  mem_gb_hour: 0.004
+capacity:
+  cpu_hours: 2880
+  gpu_hours: 240
+  mem_gb_hours: 11520
+namespaces:
+  eta-prod: eta
+  eta-train: eta
+  pricing: pricing
+cost_centers:
+  eta: CC-1001
+  pricing: CC-2041

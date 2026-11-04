@@ -1,0 +1,10 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-autoscale
+spec:
+  scaleTargetRef:
+    name: batch-worker
+  # TODO: số replica tối thiểu/tối đa, chu kỳ hỏi metric, thời gian chờ trước khi về 0
+  triggers: []
+  # TODO: một trigger metrics-api đọc GET /pending của Service batch-queue

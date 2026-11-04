@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-queue
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: batch-queue}
+  template:
+    metadata:
+      labels: {app: batch-queue}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: queue
+          image: ml-lab:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: ROLE, value: queue}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batch-queue
+spec:
+  selector: {app: batch-queue}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: batch-worker}
+  template:
+    metadata:
+      labels: {app: batch-worker}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: worker
+          image: ml-lab:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: ROLE, value: worker}
+            - {name: QUEUE_URL, value: "http://batch-queue:8080"}
+            - {name: MODEL_LOAD_SECONDS, value: "5"}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 128Mi}

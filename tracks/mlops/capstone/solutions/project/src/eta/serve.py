@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from eta.features import MAX_DISTANCE, MIN_DURATION_S, make_features
 from eta.logs import PREDICTION_LOG_COLUMNS, get_logger, log_event
+from eta.streaming.online import MissingOnlineFeatures, OnlineSpeed, needs_live_speed
 from eta.zone_features import MissingSpeedTable, needs_speed, prepare, read_speed_table
 
 ALIAS = "champion"
@@ -49,6 +50,8 @@ class Prediction(BaseModel):
     eta_s: float
     model_version: str
     variant: str
+    speed_15m_mph: float | None = None
+    speed_15m_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,7 @@ class Models:
     champion: Loaded
     challenger: Loaded | None
     speed: pd.DataFrame | None = None
+    online: OnlineSpeed | None = None
 
 
 def route(request_id: str, weight: float) -> str:
@@ -112,10 +116,17 @@ def load_speed_table() -> pd.DataFrame | None:
     return read_speed_table(path) if path else None
 
 
+def load_online() -> OnlineSpeed | None:
+    path = os.environ.get("ETA_ONLINE_FEATURES")
+    return OnlineSpeed(path) if path else None
+
+
 def check_speed(models: Models, speed: pd.DataFrame | None) -> None:
     for role, loaded in (("champion", models.champion), ("challenger", models.challenger)):
         if loaded is not None and needs_speed(loaded.model) and speed is None:
             raise MissingSpeedTable(f"{role} {loaded.version} cần avg_speed_mph nhưng chưa đặt ETA_SPEED_TABLE")
+        if loaded is not None and needs_live_speed(loaded.model) and models.online is None:
+            raise MissingOnlineFeatures(f"{role} {loaded.version} cần speed_15m_mph nhưng chưa đặt ETA_ONLINE_FEATURES")
 
 
 def to_local(value: datetime) -> pd.Timestamp:
@@ -128,18 +139,25 @@ def trip_frame(trip: dict) -> pd.DataFrame:
                           "DOLocationID": trip["DOLocationID"], "trip_distance": trip["trip_distance"]}])
 
 
-def predict_one(loaded: Loaded, frame: pd.DataFrame, speed: pd.DataFrame | None) -> float:
-    features = make_features(prepare(frame, loaded.model, speed))
-    return max(float(loaded.model.predict(features)[0]), float(MIN_DURATION_S))
+def predict_one(loaded: Loaded, frame: pd.DataFrame, models: Models) -> tuple[float, tuple | None]:
+    frame = prepare(frame, loaded.model, models.speed)
+    live = None
+    if needs_live_speed(loaded.model):
+        if models.online is None:
+            raise MissingOnlineFeatures("model cần speed_15m_mph nhưng chưa đặt ETA_ONLINE_FEATURES")
+        frame, found = models.online.attach(frame)
+        live = found[0]
+    features = make_features(frame)
+    return max(float(loaded.model.predict(features)[0]), float(MIN_DURATION_S)), live
 
 
-def warmup(models: Models, speed: pd.DataFrame | None) -> float:
+def warmup(models: Models) -> float:
     started = time.perf_counter()
     frame = trip_frame(WARMUP_TRIP)
-    predict_one(models.champion, frame, speed)
+    predict_one(models.champion, frame, models)
     if models.challenger is not None:
         try:
-            predict_one(models.challenger, frame, speed)
+            predict_one(models.challenger, frame, models)
         except Exception as err:
             log_event(logger, "challenger_warmup_failed", model_version=models.challenger.version, error=repr(err))
     return round((time.perf_counter() - started) * 1000, 2)
@@ -184,7 +202,7 @@ async def lifespan(app: FastAPI):
     state.reload_lock = threading.Lock()
     try:
         install(state)
-    except MissingSpeedTable as err:
+    except (MissingSpeedTable, MissingOnlineFeatures) as err:
         state.not_ready = str(err)
         log_event(logger, "not_ready", reason=state.not_ready)
     yield
@@ -197,9 +215,9 @@ async def lifespan(app: FastAPI):
 
 def install(state) -> dict:
     speed = load_speed_table()
-    models = replace(load_models(), speed=speed)
+    models = replace(load_models(), speed=speed, online=load_online())
     check_speed(models, speed)
-    warm_ms = warmup(models, speed)
+    warm_ms = warmup(models)
     state.models, state.ready, state.not_ready = models, True, None
     publish_model_info(models)
     info = {"champion": models.champion.version, "challenger": models.challenger.version if models.challenger else None}
@@ -267,7 +285,7 @@ def metrics() -> Response:
 def run_shadow(state, models: Models, request_id: str, trip: dict, frame: pd.DataFrame) -> None:
     challenger = models.challenger
     try:
-        eta_s = predict_one(challenger, frame, models.speed)
+        eta_s, _ = predict_one(challenger, frame, models)
     except Exception as err:
         SHADOW_ERRORS.inc()
         log_event(logger, "shadow_failed", request_id=request_id, model_version=challenger.version, error=repr(err))
@@ -276,7 +294,7 @@ def run_shadow(state, models: Models, request_id: str, trip: dict, frame: pd.Dat
     state.log.write(request_id, challenger.version, "shadow", trip, frame, eta_s)
 
 
-@app.post("/predict", response_model=Prediction)
+@app.post("/predict", response_model=Prediction, response_model_exclude_none=True)
 def predict(trip: TripRequest, request: Request, response: Response, background: BackgroundTasks) -> Prediction:
     models = current(request)
     if models is None:
@@ -288,22 +306,24 @@ def predict(trip: TripRequest, request: Request, response: Response, background:
     frame = trip_frame(payload)
     variant = route(request_id, state.canary_weight) if models.challenger is not None else "champion"
     served = models.champion
+    live = None
     if variant == "canary":
         try:
-            eta_s = predict_one(models.challenger, frame, models.speed)
+            eta_s, live = predict_one(models.challenger, frame, models)
             served = models.challenger
         except Exception as err:
             FALLBACKS.inc()
             log_event(logger, "canary_fallback", request_id=request_id, model_version=models.challenger.version, error=repr(err))
             variant = "champion"
     if variant == "champion":
-        eta_s = predict_one(models.champion, frame, models.speed)
+        eta_s, live = predict_one(models.champion, frame, models)
     request.state.variant = variant
     PREDICTIONS.labels(variant=variant).observe(eta_s)
     state.log.write(request_id, served.version, variant, payload, frame, eta_s)
     if state.shadow and models.challenger is not None and variant == "champion":
         background.add_task(run_shadow, state, models, request_id, payload, frame)
-    return Prediction(eta_s=eta_s, model_version=served.version, variant=variant)
+    return Prediction(eta_s=eta_s, model_version=served.version, variant=variant,
+                      speed_15m_mph=live[0] if live else None, speed_15m_status=live[1] if live else None)
 
 
 @app.post("/admin/reload")
