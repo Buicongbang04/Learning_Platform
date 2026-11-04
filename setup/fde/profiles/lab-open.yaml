@@ -1,0 +1,14 @@
+description: Máy lab của chính bạn (đối chứng) — mạng mở, có sudo, Docker từ kho Ubuntu.
+image: ubuntu-22.04
+disk_gb: 20
+sudo: true
+egress: open
+tls_inspection: false
+selinux: n/a
+runtime: docker
+services: []
+facts:
+  kernel_major: "5.15"
+  glibc: "2.35"
+  disk_free_gb_max: 18
+  gpu: null

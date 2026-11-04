@@ -1,0 +1,9 @@
+<div class="answer">
+  <p>{{ answer }}</p>
+  {% if model %}<p class="muted">Model: {{ model }}</p>{% endif %}
+  <ol class="citations">
+  {% for c in citations %}
+    <li><strong>{{ c.filename }}</strong> <span class="muted">#{{ c.chunk }}</span><blockquote>{{ c.text }}</blockquote></li>
+  {% endfor %}
+  </ol>
+</div>

@@ -1,0 +1,12 @@
+[
+  {
+    "check": "egress",
+    "severity": "warning",
+    "detail": "Không ra internet: chỉ cài bằng bundle offline, mang theo mọi image và model"
+  },
+  {
+    "check": "compose",
+    "severity": "warning",
+    "detail": "Docker không có compose (plugin hay binary): bundle phải mang binary compose đã ghim"
+  }
+]

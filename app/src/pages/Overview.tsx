@@ -71,7 +71,7 @@ function StatRow({ tracks }: { tracks: Track[] }) {
       return {
         exercises: sum.exercises + stats.exercises,
         exercisesDone: sum.exercisesDone + stats.exercisesDone,
-        modules: sum.modules + track.modules.length,
+        modules: sum.modules + stats.modules,
         modulesDone: sum.modulesDone + stats.modulesDone,
         sections: sum.sections + stats.sections,
         read: sum.read + stats.read,
@@ -143,7 +143,7 @@ function TrackGrid() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium group-hover:underline group-focus-visible:underline">{track.name}</p>
                   <p className="text-xs text-muted">
-                    {track.modules.length} module{track.capstone ? ` · capstone ${track.capstone.title}` : ""}
+                    {stats.modules} module{track.capstone ? ` · capstone ${track.capstone.title}` : ""}
                   </p>
                 </div>
                 <span className="shrink-0 text-sm font-medium tabular-nums">{stats.percent}%</span>

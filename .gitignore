@@ -43,3 +43,6 @@ setup/.env
 
 # Workspace của superpowers (ledger, brief, review package)
 .superpowers/
+
+# Lab VM của track FDE (overlay, seed, khoá SSH theo lần chạy)
+.fde-lab/

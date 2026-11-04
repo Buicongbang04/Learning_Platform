@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { LEVELS, type Exercise, type Module, type Track } from "./content";
 import type { QuizResult } from "./code/quizResult";
+import { cloudLabModules, mainModules } from "./sections";
 
 /* Tiến độ lưu ở progress.json (gốc repo) qua API của vite.config.ts. */
 
@@ -106,7 +107,8 @@ export function trackStats(track: Track, progress: TrackProgress) {
   let sections = 0;
   let read = 0;
   let modulesDone = 0;
-  for (const module of track.modules) {
+  const modules = mainModules(track);
+  for (const module of modules) {
     const stats = moduleStats(module, progress);
     exercises += module.exercises.length;
     exercisesDone += stats.exercisesDone;
@@ -118,7 +120,18 @@ export function trackStats(track: Track, progress: TrackProgress) {
   const milestonesDone = track.capstone?.milestones.filter((milestone) => progress.milestones[milestone.id]).length ?? 0;
   const units = exercises + sections;
   const percent = units ? Math.round(((exercisesDone + read) / units) * 100) : 0;
-  return { exercises, exercisesDone, sections, read, modulesDone, milestones, milestonesDone, percent };
+  return { exercises, exercisesDone, sections, read, modulesDone, milestones, milestonesDone, percent, modules: modules.length };
+}
+
+/** Cloud lab (có phí) tính riêng, không vào tiến độ chính. */
+export function cloudLabStats(track: Track, progress: TrackProgress) {
+  const modules = cloudLabModules(track);
+  return {
+    modules: modules.length,
+    modulesDone: modules.filter((module) => moduleStats(module, progress).complete).length,
+    exercises: modules.reduce((sum, module) => sum + module.exercises.length, 0),
+    exercisesDone: modules.reduce((sum, module) => sum + moduleStats(module, progress).exercisesDone, 0),
+  };
 }
 
 export type NextItem =
@@ -129,7 +142,7 @@ export type NextItem =
 /** Hàng đợi học tiếp: từng module theo thứ tự — lý thuyết chưa đọc, rồi bài tập chưa xong, rồi milestone. */
 export function nextItems(track: Track, progress: TrackProgress, limit = 6): NextItem[] {
   const items: NextItem[] = [];
-  for (const module of track.modules) {
+  for (const module of mainModules(track)) {
     const readSet = new Set(progress.sections[module.id] ?? []);
     for (const section of module.sections) {
       if (!readSet.has(section.slug)) items.push({ kind: "section", module, slug: section.slug, title: section.title });
@@ -147,5 +160,5 @@ export function nextItems(track: Track, progress: TrackProgress, limit = 6): Nex
 
 /** Module đang học: module đầu tiên chưa xong. */
 export function currentModule(track: Track, progress: TrackProgress) {
-  return track.modules.find((module) => module.hasContent && !moduleStats(module, progress).complete);
+  return mainModules(track).find((module) => module.hasContent && !moduleStats(module, progress).complete);
 }

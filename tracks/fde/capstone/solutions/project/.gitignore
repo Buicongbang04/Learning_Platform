@@ -1,0 +1,30 @@
+# Khoá, chứng chỉ, secret: không bao giờ vào repo
+*.pem
+*.key
+*.p12
+*.pfx
+id_*
+.env
+.env.*
+!.env.example
+*.secret
+quillo.env
+
+# Bundle và công cụ tải về (bundle ~1,1 GB, vượt giới hạn 100 MB/tệp của GitHub)
+*.tar
+*.tar.gz
+*.gguf
+dist/
+.cache/
+
+# Dữ liệu khách và CUAD (không bao giờ commit, kể cả bản trích)
+data/
+cuad/
+*.pdf
+
+# Lab và công cụ
+.fde-lab/
+__pycache__/
+.pytest_cache/
+.venv/
+reports/*.tmp

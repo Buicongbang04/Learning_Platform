@@ -1,0 +1,14 @@
+description: Ngân hàng — Rocky Linux 8, air-gapped hoàn toàn, SELinux enforcing, user fde không có sudo, Podman rootless.
+image: rocky-8
+disk_gb: 20
+sudo: false
+egress: none
+tls_inspection: false
+selinux: enforcing
+runtime: podman
+services: []
+facts:
+  kernel_major: "4.18"
+  glibc: "2.28"
+  disk_free_gb_max: 18
+  gpu: null

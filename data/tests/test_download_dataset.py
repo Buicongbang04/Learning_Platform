@@ -151,3 +151,11 @@ def test_ensure_removes_stale_partial_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(dd, "download", fake_download)
     dd.ensure("nyc-tlc")
     assert not stale.exists() and other.exists()
+
+
+def test_cuad_entry():
+    ds = dd.DATASETS["cuad"]
+    assert "CC BY 4.0" in ds.license
+    assert ds.homepage.startswith("https://") and "atticus" in (ds.homepage + ds.about).lower()
+    assert "ghi công" in ds.about.lower()
+    assert ds.source == "url" and ds.extract

@@ -1,9 +1,10 @@
 import { Link, useParams } from "react-router-dom";
 import { Check, Circle, CircleCheck, CircleDot } from "lucide-react";
 import { findTrack, LEVEL_LABEL, type Module, type Track } from "../content";
-import { currentModule, moduleStats, trackStats, useProgress, type TrackProgress } from "../progress";
+import { cloudLabStats, currentModule, moduleStats, trackStats, useProgress, type TrackProgress } from "../progress";
 import { Shell } from "../components/Shell";
 import { badge, card, cx, ErrorBlock, LoadingBlock, PageHeader, ProgressBar } from "../components/ui";
+import { cloudLabModules, mainModules } from "../sections";
 import { milestoneLink, moduleLink } from "../links";
 import { NotFound } from "./NotFound";
 
@@ -59,6 +60,7 @@ function ModuleRow({ track, module, progress, isCurrent, isFresh }: { track: Tra
             </p>
             {status === "now" && <span className={badge.now}>Đang học</span>}
             {status === "next" && <span className={badge.now}>Bắt đầu ở đây</span>}
+            {module.section === "cloud-lab" && <span className={badge.neutral}>Có phí</span>}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted">{module.hasContent ? module.topics.join(" · ") : "Đang soạn nội dung"}</p>
         </div>
@@ -105,6 +107,9 @@ export function TrackPage() {
   const stats = trackStats(track, progress);
   const current = currentModule(track, progress);
   const fresh = stats.exercisesDone + stats.read === 0;
+  const cloudModules = cloudLabModules(track);
+  const cloud = cloudLabStats(track, progress);
+  const list = "relative flex flex-col gap-1 px-2 before:absolute before:top-7 before:bottom-7 before:left-[1.75rem] before:w-px before:bg-border-strong";
 
   return (
     <Shell header={header}>
@@ -112,11 +117,26 @@ export function TrackPage() {
         <TrackHeader track={track} stats={stats} />
         <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
           <section className={`${card} py-3 lg:self-start`}>
-            <ol className="relative flex flex-col gap-1 px-2 before:absolute before:top-7 before:bottom-7 before:left-[1.75rem] before:w-px before:bg-border-strong">
-              {track.modules.map((module) => (
+            <ol className={list}>
+              {mainModules(track).map((module) => (
                 <ModuleRow key={module.id} track={track} module={module} progress={progress} isCurrent={module.id === current?.id} isFresh={fresh} />
               ))}
             </ol>
+            {cloudModules.length > 0 && (
+              <>
+                <header className="mt-3 border-t border-border px-5 pt-4 pb-1">
+                  <h2 className="text-base font-semibold">Cloud lab (có phí)</h2>
+                  <p className="mt-0.5 text-xs text-muted">
+                    Dùng tài khoản cloud của bạn, tự chịu chi phí. Không tính vào tiến độ chính · {cloud.modulesDone} / {cloud.modules} module
+                  </p>
+                </header>
+                <ol className={list}>
+                  {cloudModules.map((module) => (
+                    <ModuleRow key={module.id} track={track} module={module} progress={progress} isCurrent={false} isFresh={false} />
+                  ))}
+                </ol>
+              </>
+            )}
           </section>
           <div className="flex flex-col gap-5 lg:sticky lg:top-6 lg:self-start">
             <section className={`${card} p-5`}>
@@ -137,7 +157,7 @@ export function TrackPage() {
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted">Module hoàn thành</dt>
                   <dd className="font-medium tabular-nums">
-                    {stats.modulesDone} / {track.modules.length}
+                    {stats.modulesDone} / {stats.modules}
                   </dd>
                 </div>
               </dl>
