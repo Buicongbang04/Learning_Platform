@@ -17,7 +17,8 @@ GATE = ("Bài Triton chạy thật chỉ khi MLOPS_TRITON=1 (CHƯA chạy thật
         f"docker exec mlops-control-plane crictl rmi {TRITON_IMAGE}")
 
 
-TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|[{}\[\]:,]|[^\s{}\[\]:,"]+')
+TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|#.*|[{}\[\]<>:,;]|[^\s{}\[\]<>:,;"#]+')
+CLOSE = {"{": "}", "<": ">"}
 
 
 def tokens(text: str) -> list[str]:
@@ -31,7 +32,7 @@ def tokens(text: str) -> list[str]:
 
 
 def parse(text: str) -> dict:
-    """Đọc protobuf text format (`config.pbtxt`) thành dict tên trường → danh sách giá trị; chịu `{}`, `[]` lồng."""
+    """Đọc protobuf text format (`config.pbtxt`) thành dict tên trường → danh sách giá trị; chịu `{}`, `<>`, `[]` lồng, `;`."""
     items, pos = tokens(text), 0
 
     def scalar(token: str):
@@ -49,8 +50,8 @@ def parse(text: str) -> dict:
         nonlocal pos
         token = items[pos]
         pos += 1
-        if token == "{":
-            return message("}")
+        if token in CLOSE:
+            return message(CLOSE[token])
         return scalar(token)
 
     def message(close: str | None) -> dict:
@@ -65,7 +66,7 @@ def parse(text: str) -> dict:
                 pos += 1
                 while items[pos] != "]":
                     fields.setdefault(name, []).append(value())
-                    if items[pos] == ",":
+                    if items[pos] in (",", ";"):
                         pos += 1
                 pos += 1
             else:
@@ -103,7 +104,9 @@ def test_triton_config():
     groups = [g for g in text.get("instance_group") or [] if isinstance(g, dict)]
     assert groups, "Thiếu instance_group"
     assert all(one(g, "kind", "KIND_AUTO") == "KIND_CPU" for g in groups), "Mọi instance_group phải là KIND_CPU"
-    assert sum(one(g, "count", 1) for g in groups) == 2, "Cần tổng cộng 2 instance KIND_CPU"
+    counts = [one(g, "count", 1) for g in groups]
+    assert all(isinstance(c, int) and not isinstance(c, bool) for c in counts), "count của instance_group phải là số nguyên"
+    assert sum(counts) == 2, "Cần tổng cộng 2 instance KIND_CPU"
 
 
 def metric_value(text: str, name: str) -> float:

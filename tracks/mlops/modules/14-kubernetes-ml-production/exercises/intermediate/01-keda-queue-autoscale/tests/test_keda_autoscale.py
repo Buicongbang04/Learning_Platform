@@ -35,6 +35,8 @@ def test_scales_with_queue_and_back_to_zero():
         mlopskit.wait_for("deployment", "batch-queue", "Available", ns, 180)
         mlopskit.apply_manifest(kit.dump(kit.substitute([scaled_object()], **values)), ns)
         mlopskit.wait_for("scaledobject", "worker-autoscale", "Ready", ns, 120)
+        kit.wait_until(lambda: mlopskit.kubectl("get", "hpa", "keda-hpa-worker-autoscale", namespace=ns).returncode == 0,
+                       60, "KEDA chưa tạo HPA keda-hpa-worker-autoscale")
         hpa = kit.get_json("hpa", "keda-hpa-worker-autoscale", namespace=ns)["spec"]
         assert hpa.get("maxReplicas") == 4, f"HPA do KEDA tạo có maxReplicas {hpa.get('maxReplicas')}, cần 4"
         assert hpa.get("scaleTargetRef", {}).get("name") == "batch-worker", "HPA do KEDA tạo không trỏ batch-worker"
