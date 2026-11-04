@@ -82,6 +82,10 @@ Installer tập trên `lab-open` chạy êm; trên `lawfirm-staging` có bốn c
 | Mọi thứ healthy trong VM, `/healthz` từ ngoài timeout | `compose.yaml` mặc định bind `127.0.0.1` | `QUILLO_BIND=0.0.0.0` từ `site.conf` |
 | `worker` lỗi quyền ghi `/data/inbox` | Image chạy uid 10001, thư mục bind thuộc root | `install -d -o 10001 -g 10001` |
 
+`QUILLO_BIND=0.0.0.0` qua HTTP thường nghĩa là token admin (và cookie phiên) đi trên LAN của khách dạng rõ cho tới khi có
+reverse proxy TLS phía trước; ghi điều đó vào bàn giao, và sau proxy TLS phải chạy uvicorn với `--proxy-headers
+--forwarded-allow-ips=<IP proxy>` để cookie có cờ `Secure` (README sản phẩm, phần bảo mật).
+
 Hai lớp kiểm toàn vẹn: `SHA256SUMS` bắt byte hỏng trong tar (thông báo `quillo-1.0.0.tar`); khi `SHA256SUMS` bị viết
 lại, bước 3 (đọc luồng, chưa ghi ra đĩa) bắt tệp sai trong tar (thông báo `models/qwen2.5-0.5b-instruct-q4_k_m.gguf`).
 Cả hai lần máy không có image, container, `daemon.json` hay restart Docker. Cả hai lớp vẫn nằm trong bundle; xác thực

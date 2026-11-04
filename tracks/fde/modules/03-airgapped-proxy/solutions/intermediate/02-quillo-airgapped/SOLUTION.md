@@ -51,6 +51,8 @@ nó; một chuỗi 64 ký tự đọc qua điện thoại thì không.
    `docker compose -p quillo up -d --wait`, `curl /healthz`, ghi một dòng log.
 
 Bí mật **không** đi trên USB: USB qua tay nhiều người và máy quét; mật khẩu sinh tại chỗ, chỉ nằm trên máy khách.
+Với `QUILLO_BIND=0.0.0.0` qua HTTP thường, token admin đi trên LAN của khách dạng rõ cho tới khi đặt reverse proxy TLS
+phía trước (khi đó uvicorn cần `--proxy-headers --forwarded-allow-ips=<IP proxy>` để cookie có cờ `Secure`).
 
 ## Số đo (2026-11-04, laptop 16 core, NVMe, VM 5120 MB)
 
