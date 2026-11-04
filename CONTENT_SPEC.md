@@ -601,7 +601,8 @@ và embedding qua **llama.cpp server** với model GGUF ghim trong `fdekit.MODEL
 `0002_v1_1_tags.sql`) dựng từ cùng cây mã. `release.py build --version X.Y.Z` tạo bundle offline `quillo-X.Y.Z.tar`
 (image `docker save`, model, compose, `REQUIREMENTS.yaml`, `manifest.json` sha256); `release.py verify` từ chối tar cắt
 cụt, tệp sai sha, thiếu, thừa hay đường dẫn lạ. `REQUIREMENTS.yaml` là chuẩn cho bài survey/preflight. API publish cổng
-`QUILLO_PORT` (mặc định 18080) trên `QUILLO_BIND` (mặc định `127.0.0.1`). Sản phẩm là công cụ của bài, không phải chủ
+`QUILLO_PORT` (mặc định 18080) trên `QUILLO_BIND` (mặc định `127.0.0.1`); hai biến này đặt trong `.env` cạnh
+`compose.yaml` của bản cài quillo (installer ghi), không phải `setup/.env` của repo học. Sản phẩm là công cụ của bài, không phải chủ
 đề dạy; test riêng ở `tracks/fde/product/tests/`.
 
 ### Bài tài liệu (dùng từ Phase 3)
@@ -649,5 +650,4 @@ nhận, cách gỡ. Không bao giờ `... | sudo bash` hay `... | sudo sh` (vali
 | Biến | Dùng cho |
 | --- | --- |
 | `FDE_CAPSTONE_DIR` | Đường dẫn repo capstone của người học; chưa đặt thì test capstone skip |
-| `QUILLO_PORT` | Cổng publish của API quillo (mặc định 18080); `compose.yaml` của quillo đọc biến này, đổi khi cổng đã bị dùng |
 | `FDE_PC_SSH` | (Phase 2) SSH tới PC có GPU cho bài GPU tuỳ chọn; chưa đặt thì bài đó skip |
