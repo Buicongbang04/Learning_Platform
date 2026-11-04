@@ -260,13 +260,13 @@ def current(request: Request) -> Models | None:
 
 
 @app.get("/healthz")
-def healthz(request: Request) -> dict:
+async def healthz(request: Request) -> dict:
     models = current(request)
     return {"status": "ok", "model_version": models.champion.version if models else None}
 
 
 @app.get("/readyz")
-def readyz(request: Request):
+async def readyz(request: Request):
     models = current(request)
     if models is None:
         reason = getattr(request.app.state, "not_ready", None) or "chưa khởi động"
@@ -278,7 +278,7 @@ def readyz(request: Request):
 
 
 @app.get("/metrics")
-def metrics() -> Response:
+async def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

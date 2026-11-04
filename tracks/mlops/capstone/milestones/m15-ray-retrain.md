@@ -10,7 +10,7 @@ giữa chừng (spot, preemption của M14), job chạy lại từ đầu. Sau
 - **Nhiều worker**: Ray Tune chạy các cấu hình của ETA song song, mỗi trial trên một worker Ray (1 CPU), dữ liệu đi qua
   object store một lần.
 - **Checkpoint định kỳ**: mỗi trial thêm cây theo từng đợt `every` cây (`warm_start` của `HistGradientBoostingRegressor`)
-  và lưu checkpoint sau mỗi đợt.
+  và lưu checkpoint định kỳ (sau mỗi đợt, hoặc vài đợt một lần).
 - **Chịu worker bị kill**: `FailureConfig(max_failures > 0)`. Test SIGKILL thật tiến trình worker đang chạy một trial;
   Tune khởi động trial đó trên worker mới, và trial **tiếp từ checkpoint mới nhất**, không train lại từ cây đầu tiên.
 - **Vẫn qua cổng của M04**: model tốt nhất không tệ hơn model train một tiến trình quá mức cho phép, và được đăng ký
@@ -71,9 +71,10 @@ register(result: Retrained, config: Config, data_version: str) -> str
 - **Ít nhất `workers` trial chạy cùng lúc** trên các worker khác nhau: mỗi trial xin 1 CPU (`tune.with_resources`),
   `max_concurrent_trials=workers`, và có ít nhất `workers` cấu hình. Test so khoảng thời gian report của các trial
   (trường `pid`, `timestamp` Tune tự thêm): phải có hai trial khác `pid` chạy chồng lên nhau.
-- Mỗi trial thêm cây theo từng đợt **đúng `every` cây** và sau mỗi đợt gọi
-  `tune.report({...metric..., "trees": <số cây hiện có>}, checkpoint=tune.Checkpoint.from_directory(...))`. Trường
-  **`trees`** là số nguyên, lần report cuối của mọi trial có `trees == rounds`.
+- Mỗi trial thêm cây theo từng đợt **đúng `every` cây** và sau mỗi đợt gọi `tune.report({...metric..., "trees": <số cây
+  hiện có>}, checkpoint=...)`. Trường **`trees`** là số nguyên, lần report cuối của mọi trial có `trees == rounds`.
+  Checkpoint (`tune.Checkpoint.from_directory(...)`) gắn vào report **định kỳ**: mỗi đợt hay vài đợt một lần đều được;
+  điều test tính là **checkpoint mới nhất** trước khi worker bị kill (mục 4).
 - Trial bắt đầu bằng `tune.get_checkpoint()`: có checkpoint thì nạp model và train tiếp từ đó.
 - `retrain` trả model của trial tốt nhất theo `mae` trên `valid` (lần report cuối), `metrics` là metric của **chính model
   trả về** đo bằng `eta.train.evaluate`, `params` gồm `max_iter == rounds`. Trial nào vẫn lỗi sau `max_failures` lần thì
@@ -102,7 +103,7 @@ from eta.train import time_split
 
 trips = clean(load_month(month_path(Path("../../../../data/raw/nyc-tlc"), "2019-01"), 200_000, 0), "2019-01")
 train, valid = time_split(trips)
-ray.init(num_cpus=2, include_dashboard=False, _node_ip_address="127.0.0.1")
+ray.init(num_cpus=2, include_dashboard=False, _node_ip_address="127.0.0.1", _temp_dir="/tmp/eta-ray")
 with tempfile.TemporaryDirectory() as storage:
     result = retrain(train, valid, storage)
     print(result.params, result.metrics)
@@ -110,7 +111,14 @@ PY
 ```
 
 `--project ../../../..` dùng môi trường của repo (có Ray), không phải `pyproject.toml` nhỏ của project. Bản tham chiếu
-chạy lệnh này trong khoảng 45 giây, `mae` 147 giây trên 20% cuối tháng 2019-01. Kill thử một worker trong lúc chạy: `pgrep -af 'ray::'` rồi `kill -9 <pid>` của một tiến trình `ray::ImplicitFunc.train`.
+chạy lệnh này trong khoảng 45 giây, `mae` 147 giây trên 20% cuối tháng 2019-01. Kill thử một worker trong lúc chạy, chỉ trong phiên Ray của bạn (máy có thể đang chạy Ray khác, của test hay của
+người khác): worker là tiến trình con của raylet mang `--temp-dir` bạn đặt, nên
+
+```bash
+pgrep -P "$(pgrep -f 'raylet.*/tmp/eta-ray' | head -1)" -af 'ray::ImplicitFunc'   # rồi kill -9 <pid> một dòng
+```
+
+Đừng `pkill -f 'ray::'`: lệnh đó giết cả worker của mọi phiên Ray trên máy.
 
 ### 3. Checkpoint và `warm_start`
 
@@ -133,10 +141,12 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m15
 Test chạy `retrain` **một lần** cho cả milestone: dữ liệu giả 40 000 chuyến tháng 2019-03 (80% đầu theo thời gian là
 `train`, 20% sau là `valid`), `ray_local(num_cpus=2)`, `workers=2, rounds=200, every=20, max_failures=2`, giới hạn cứng
 240 giây (`signal.alarm`). Một luồng theo dõi `storage_path/name`: trial đầu tiên đã report ít nhất 3 lần, chưa xong,
-và đã có thư mục `checkpoint_*` thì bị **SIGKILL** (qua pidfd, chỉ khi tiến trình đó vẫn là worker `ray::` của user này).
+và đã có thư mục `checkpoint_*` thì bị **SIGKILL** (qua pidfd, chỉ khi tiến trình đó vẫn là worker `ray::` của user này và raylet cha của nó mang thư mục tạm của đúng
+lần `ray_local` này).
 
 - `test_m15_trials_run_in_parallel`: ít nhất 2 trial; hai trial khác `pid` chạy chồng thời gian; lần report cuối của mọi
-  trial có `trees == 200`; sau khi Ray tắt không còn tiến trình worker nào của lần chạy (chờ tối đa 15 giây).
+  trial có `trees == 200`; sau `ray.shutdown()` (trước khi `ray_local` diệt tiến trình còn sót), mọi worker từng chạy trial
+  đã tự thoát trong tối đa 15 giây.
 - `test_m15_killed_worker_resumes_from_checkpoint`: có worker bị kill; trial đó chạy tiếp trên `pid` khác và kết thúc ở
   200 cây; lần report đầu sau khi chạy lại có `trees` = số cây của checkpoint mới nhất trước khi kill + 20, và số lần
   report sau khi chạy lại = (200 − số cây đã lưu) / 20. Train lại từ đầu thì lần report đầu sau khi chạy lại là 20 cây
@@ -174,7 +184,7 @@ Hay vấp:
 ## Tiêu chí đạt
 
 - [ ] `uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m15` pass.
-- [ ] Ít nhất hai worker chạy song song; checkpoint sau mỗi đợt cây; `FailureConfig(max_failures > 0)`.
+- [ ] Ít nhất hai worker chạy song song; checkpoint định kỳ; `FailureConfig(max_failures > 0)`.
 - [ ] Worker bị SIGKILL giữa chừng: trial tiếp từ checkpoint mới nhất, không train lại từ đầu, không còn tiến trình mồ côi.
 - [ ] Model tốt nhất qua cổng so với model một tiến trình và được đăng ký với tag `git_commit`, `data_version`.
 - [ ] (Tự đánh giá) Ước lượng khi nào ETA cần data-parallel GBDT thật (bao nhiêu dòng, bao nhiêu RAM một worker) và

@@ -4,7 +4,9 @@
 cluster-scoped có hậu tố run id (`mlopskit.cluster_scoped`), xoá khi xong kể cả khi fail.
 """
 
+import calendar
 import json
+import math
 import re
 import string
 import time
@@ -46,7 +48,13 @@ RUN_PLACEHOLDER = mlopskit.RUN_TOKEN
 MIN_REPLICAS = (1, 2)
 MAX_REPLICAS = (3, 6)
 PEAK_REPLICAS = 3
-RATE = 150
+FALLBACK_PEAK = 2
+STAIRS = (50, 75, 100, 125, 150, 175, 200, 250, 300)
+STAIR_S = 5
+STAIR_WARMUP_S = 3
+LOAD_FACTOR = 2.2
+RATE_RANGE = (150, 400)
+SETTLE_S = 10
 WARM_S = 60
 STEADY_S = 20
 P95_MS = 300
@@ -54,13 +62,15 @@ MAX_FAILED = 0.01
 ROLLOUT_TIMEOUT = 240
 JOB_TIMEOUT = 300
 SURGE = 1
+ADDON_PRIORITY = 1_000_000
+ADDON_NAMESPACES = ("kserve", "keda", "kueue-system", "cert-manager", "argo")
 
 LOAD_SCRIPT = """
 import http from "k6/http";
 import { check } from "k6";
 
 const ZONES = [48, 79, 132, 138, 161, 162, 230, 236, 237];
-const LOAD = { executor: "constant-arrival-rate", rate: %(rate)d, timeUnit: "1s", preAllocatedVUs: 50, maxVUs: 250 };
+const LOAD = { executor: "constant-arrival-rate", rate: %(rate)d, timeUnit: "1s", preAllocatedVUs: 100, maxVUs: 900 };
 
 export const options = {
   scenarios: {
@@ -84,6 +94,38 @@ export default function () {
   });
   const res = http.post(`${__ENV.TARGET}/predict`, body, { headers: { "Content-Type": "application/json" } });
   check(res, { "status 200": (r) => r.status === 200 });
+}
+"""
+
+STAIR_SCRIPT = """
+import http from "k6/http";
+
+const ZONES = [48, 79, 132, 138, 161, 162, 230, 236, 237];
+const STAIRS = %(stairs)s;
+const scenarios = {};
+const thresholds = {};
+scenarios.warmup = { executor: "constant-arrival-rate", rate: 20, timeUnit: "1s", duration: "%(warmup)ds",
+                     preAllocatedVUs: 10, maxVUs: 50 };
+STAIRS.forEach((rate, i) => {
+  scenarios[`r${rate}`] = { executor: "constant-arrival-rate", rate: rate, timeUnit: "1s", duration: "%(step)ds",
+                            startTime: `${%(warmup)d + i * %(step)d}s`, preAllocatedVUs: 50, maxVUs: 600,
+                            gracefulStop: "2s" };
+  thresholds[`http_req_duration{scenario:r${rate}}`] = ["p(95)<%(p95)d"];
+  thresholds[`http_req_failed{scenario:r${rate}}`] = ["rate<%(failed)s"];
+  thresholds[`http_reqs{scenario:r${rate}}`] = ["count>0"];
+});
+
+export const options = { scenarios: scenarios, thresholds: thresholds,
+                         summaryTrendStats: ["avg", "med", "p(90)", "p(95)", "p(99)", "max"] };
+
+export default function () {
+  const body = JSON.stringify({
+    PULocationID: ZONES[__ITER %% ZONES.length],
+    DOLocationID: ZONES[(__ITER * 7) %% ZONES.length],
+    pickup_datetime: "2019-03-12T08:15:00",
+    trip_distance: 1 + (__ITER %% 80) / 10,
+  });
+  http.post(`${__ENV.TARGET}/predict`, body, { headers: { "Content-Type": "application/json" } });
 }
 """
 
@@ -203,6 +245,25 @@ def job_pod(job: dict) -> dict:
     return ((job.get("spec") or {}).get("template") or {}).get("spec") or {}
 
 
+def hardening_problems(spec: dict, where: str) -> list[str]:
+    """Luật bảo mật pod như module 13/14: non-root, seccomp RuntimeDefault, không leo quyền, bỏ mọi capability."""
+    pod = spec.get("securityContext") or {}
+    problems = []
+    for container in [*(spec.get("initContainers") or []), *(spec.get("containers") or [])]:
+        own = container.get("securityContext") or {}
+        name = f"{where}/{container.get('name')}"
+        if not (own.get("runAsNonRoot", pod.get("runAsNonRoot")) is True):
+            problems.append(f"{name}: runAsNonRoot: true")
+        seccomp = (own.get("seccompProfile") or pod.get("seccompProfile") or {}).get("type")
+        if seccomp != "RuntimeDefault":
+            problems.append(f"{name}: seccompProfile RuntimeDefault")
+        if own.get("allowPrivilegeEscalation") is not False:
+            problems.append(f"{name}: allowPrivilegeEscalation: false")
+        if "ALL" not in ((own.get("capabilities") or {}).get("drop") or []):
+            problems.append(f"{name}: capabilities.drop [ALL]")
+    return problems
+
+
 def test_m14_manifests_contract(project):
     run = "m14contract"
     eta = documents(render(require_file("k8s", "eta.yaml"), **serve_values()), "eta.yaml")
@@ -215,6 +276,8 @@ def test_m14_manifests_contract(project):
     assert annotations.get("serving.kserve.io/autoscalerClass") == "external", \
         "KEDA quản lý số replica: InferenceService cần annotation serving.kserve.io/autoscalerClass: external"
     assert spec.get("priorityClassName") == "eta-serving-m14", "predictor.priorityClassName phải là ${ETA_PRIORITY_CLASS}"
+    problems = hardening_problems(spec, "predictor")
+    assert not problems, f"pod predictor thiếu luật bảo mật: {problems}"
 
     cluster = manifest("cluster.yaml", **cluster_values(run))
     for doc in cluster:
@@ -224,8 +287,8 @@ def test_m14_manifests_contract(project):
     for doc in (serving_class, training_class):
         assert doc.get("globalDefault") is not True, "PriorityClass không được globalDefault (cluster dùng chung)"
         assert isinstance(doc.get("value"), int), "PriorityClass.value phải là số nguyên"
-    assert 1_000_000_000 > serving_class["value"] > training_class["value"] > 0, \
-        "giá trị ưu tiên phải theo thứ tự 1 tỉ > serving > training > 0"
+    assert ADDON_PRIORITY > serving_class["value"] > training_class["value"] > 0, \
+        "giá trị ưu tiên phải theo thứ tự 1 000 000 (mlops-system của controller add-on) > serving > training > 0"
     assert training_class.get("preemptionPolicy") == "Never", "PriorityClass training phải có preemptionPolicy: Never"
     cq_quota = cluster_queue_quota(one(cluster, "ClusterQueue", CLUSTER_QUEUE.format(run=run), "k8s/cluster.yaml: "))
     assert {"cpu", "memory"} <= set(cq_quota), "ClusterQueue training cần nominalQuota cho cpu và memory"
@@ -281,6 +344,8 @@ def test_m14_manifests_contract(project):
     assert containers and containers[0].get("image") == "eta-train:m14", "container retrain dùng ${ETA_TRAIN_IMAGE}"
     assert all(c.get("imagePullPolicy") in ("IfNotPresent", "Never") for c in containers), \
         "image nạp bằng kind_load: imagePullPolicy IfNotPresent"
+    problems = hardening_problems(template, "retrain")
+    assert not problems, f"pod retrain thiếu luật bảo mật: {problems}"
     usage = pod_resources(template)
     for key in ("cpu", "memory"):
         assert usage[f"requests.{key}"] > 0, f"container retrain cần resources.requests.{key}"
@@ -340,6 +405,11 @@ def require_cluster() -> None:
     mlopskit.require_senior_addons()
     if not testkit.docker_ready():
         pytest.skip("Docker chưa sẵn sàng")
+    low = [f"{p['metadata']['namespace']}/{p['metadata']['name']}" for p in get_json("pods", "-A")["items"]
+           if p["metadata"]["namespace"] in ADDON_NAMESPACES and (p["spec"].get("priority") or 0) < ADDON_PRIORITY]
+    if low:
+        pytest.skip(f"controller add-on chưa có PriorityClass mlops-system ({low[:3]}): pod serving của bài có thể đẩy "
+                    "chúng ra. Chạy: bash setup/mlops/kind/up.sh --senior")
 
 
 def get_json(*args: str, namespace: str | None = None) -> dict:
@@ -418,6 +488,15 @@ def node_url(ns: str) -> str:
     return f"http://{node}:{port}"
 
 
+def ready_endpoints(ns: str, service: str) -> int:
+    result = mlopskit.kubectl("get", "endpointslices", "-l", f"kubernetes.io/service-name={service}", "-o", "json",
+                              namespace=ns)
+    if result.returncode != 0:
+        return 0
+    return sum(1 for s in json.loads(result.stdout)["items"] for e in s.get("endpoints") or []
+               if (e.get("conditions") or {}).get("ready"))
+
+
 def deployment_state(ns: str) -> tuple[int, int]:
     result = mlopskit.kubectl("get", "deployment", DEPLOYMENT, "-o", "json", namespace=ns)
     if result.returncode != 0:
@@ -435,32 +514,70 @@ def metric_name(location: str) -> str:
     return re.split(r"[{\s]", location.strip(), maxsplit=1)[0]
 
 
-def exposed_metrics(ns: str) -> str:
-    with mlopskit.port_forward(ns, f"svc/{SERVICE}", 80) as port:
-        reply = httpx.get(f"http://127.0.0.1:{port}/metrics", timeout=10)
-    assert reply.status_code == 200, f"GET /metrics của API trả {reply.status_code}"
+def scrape(ns: str, target: str, port: int) -> str:
+    with mlopskit.port_forward(ns, target, port) as local:
+        reply = httpx.get(f"http://127.0.0.1:{local}/metrics", timeout=10)
+    assert reply.status_code == 200, f"GET /metrics của {target} trả {reply.status_code}"
     return reply.text
+
+
+def metric_type(text: str, name: str) -> str | None:
+    match = re.search(rf"^# TYPE {re.escape(name)} (\w+)\s*$", text, re.M)
+    return match.group(1) if match else None
+
+
+def metric_value(text: str, name: str) -> float | None:
+    values = [float(m.group(1)) for m in re.finditer(rf"^{re.escape(name)}(?:\{{[^}}]*\}})?\s+(\S+)\s*$", text, re.M)]
+    return sum(values) if values else None
+
+
+def predictor_pods(ns: str) -> list[str]:
+    items = get_json("pods", "-l", f"serving.kserve.io/inferenceservice={ISVC}", namespace=ns)["items"]
+    return [p["metadata"]["name"] for p in items
+            if not p["metadata"].get("deletionTimestamp")
+            and any(c.get("type") == "Ready" and c.get("status") == "True" for c in (p.get("status") or {}).get("conditions") or [])]
 
 
 def pod_priorities(ns: str, selector: str) -> set:
     return {p["spec"].get("priority") for p in get_json("pods", "-l", selector, namespace=ns)["items"]}
 
 
-def k6_load(script: Path, target: str) -> dict:
+def k6_summary(script: Path, target: str, timeout: int) -> dict:
     env = {"TARGET": target, "K6_NO_CONNECTION_REUSE": "true"}
-    result = mlopskit.k6_run(script, env, network="kind", timeout=WARM_S + STEADY_S + 120)
+    result = mlopskit.k6_run(script, env, network="kind", timeout=timeout)
     if not result.stdout:
         pytest.fail(f"k6 không xuất summary (rc={result.returncode}):\n{result.stderr[-2500:]}", pytrace=False)
     return json.loads(result.stdout)["metrics"]
+
+
+def capacity(script: Path, target: str) -> tuple[int, list[str]]:
+    """Bậc tải cao nhất (liên tục từ bậc đầu) mà một pod giữ được p95 ≤ P95_MS và lỗi < MAX_FAILED; 0 nếu bậc đầu đã trượt."""
+    metrics = k6_summary(script, target, STAIR_WARMUP_S + len(STAIRS) * STAIR_S + 120)
+    best, log = 0, []
+    for rate in STAIRS:
+        p95 = (metrics.get(f"http_req_duration{{scenario:r{rate}}}") or {}).get("p(95)", math.inf)
+        failed = (metrics.get(f"http_req_failed{{scenario:r{rate}}}") or {}).get("value", 1)
+        log.append(f"{rate} req/s: p95 {p95:.0f} ms, lỗi {failed:.1%}")
+        if p95 > P95_MS or failed >= MAX_FAILED:
+            break
+        best = rate
+    return best, log
+
+
+def load_rate(measured: int) -> tuple[int, bool]:
+    """(tải chấm, có đủ tải để đòi PEAK_REPLICAS không): 2,2 lần sức một pod, kẹp trong RATE_RANGE."""
+    wanted = math.ceil(LOAD_FACTOR * max(measured, STAIRS[0]))
+    rate = min(max(wanted, RATE_RANGE[0]), RATE_RANGE[1])
+    return rate, wanted <= RATE_RANGE[1]
 
 
 def test_m14_scales_under_load(project, images, synthetic_trips, tmp_path):
     for name in ("eta.yaml", "cluster.yaml", "serving.yaml", "training.yaml", "retrain-job.yaml", "Dockerfile.model"):
         require_file("k8s", name)
     require_cluster()
-    script = tmp_path / "m14-load.js"
-    script.write_text(LOAD_SCRIPT % {"rate": RATE, "warm": WARM_S, "steady": STEADY_S, "p95": P95_MS,
-                                     "failed": MAX_FAILED}, encoding="utf-8")
+    stairs = tmp_path / "m14-stairs.js"
+    stairs.write_text(STAIR_SCRIPT % {"stairs": json.dumps(list(STAIRS)), "step": STAIR_S, "warmup": STAIR_WARMUP_S,
+                                      "p95": P95_MS, "failed": MAX_FAILED}, encoding="utf-8")
     with ExitStack() as stack:
         run = apply_cluster(stack)
         serving_value, training_value = class_values(run)
@@ -472,47 +589,68 @@ def test_m14_scales_under_load(project, images, synthetic_trips, tmp_path):
         mlopskit.apply_manifest(dump([service]), serving_ns)
         serving_docs = apply_serving_quota(serving_ns)
         deploy_serving(serving_ns, images, synthetic_trips, run)
+        target = node_url(serving_ns)
+        wait_until(lambda: ready_endpoints(serving_ns, NODE_PORT) >= 1, 60, f"Service {NODE_PORT} chưa có endpoint Ready")
+        measured, stair_log = capacity(stairs, target)
+        rate, full = load_rate(measured)
+        need_peak = PEAK_REPLICAS if full else FALLBACK_PEAK
+        print(f"\nsức một pod C = {measured} req/s ({'; '.join(stair_log)}); tải chấm {rate} req/s, cần ít nhất "
+              f"{need_peak} replica")
+        script = tmp_path / "m14-load.js"
+        script.write_text(LOAD_SCRIPT % {"rate": rate, "warm": WARM_S, "steady": STEADY_S, "p95": P95_MS,
+                                         "failed": MAX_FAILED}, encoding="utf-8")
+
         apply_training(training_ns, run, tmp_path)
         mlopskit.apply_manifest(dump([retrain_job(run, images.train(), "eta-retrain-load")]), training_ns)
 
         scaled = [d for d in serving_docs if d.get("kind") == "ScaledObject"]
         mlopskit.apply_manifest(dump(scaled), serving_ns)
         mlopskit.wait_for("scaledobject", SCALED_OBJECT, "Ready", serving_ns, 120)
-        location = (scaled[0]["spec"]["triggers"][0].get("metadata") or {}).get("valueLocation", "")
-        exposed = exposed_metrics(serving_ns)
-        assert re.search(rf"^{re.escape(metric_name(location))}(\{{|\s)", exposed, re.M), \
-            "valueLocation của trigger phải là một metric có trong /metrics của API"
+        trigger = scaled[0]["spec"]["triggers"][0].get("metadata") or {}
+        name = metric_name(str(trigger.get("valueLocation", "")))
+        threshold = float(trigger.get("targetValue", "nan"))
+        exposed = scrape(serving_ns, f"svc/{SERVICE}", 80)
+        assert metric_value(exposed, name) is not None, "valueLocation của trigger phải là một metric có trong /metrics của API"
+        assert metric_type(exposed, name) == "gauge", \
+            "metric của trigger phải là gauge (`# TYPE <tên> gauge` trong /metrics): counter chỉ tăng, HPA không bao giờ hạ"
         before, _ = deployment_state(serving_ns)
 
         samples: list[tuple[float, int, int]] = []
         started = time.monotonic()
         with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(k6_load, script, node_url(serving_ns))
+            future = pool.submit(k6_summary, script, target, WARM_S + STEADY_S + 120)
             while not future.done():
                 samples.append((time.monotonic() - started, *deployment_state(serving_ns)))
                 time.sleep(2)
             metrics = future.result()
+
+        time.sleep(SETTLE_S)
+        idle = {pod: metric_value(scrape(serving_ns, f"pod/{pod}", 8000), name) for pod in predictor_pods(serving_ns)}
+        wait_until(lambda: bool(pod_priorities(training_ns, "job-name=eta-retrain-load")), 120,
+                   "Job retrain chạy song song với tải chưa có pod")
 
         steady = metrics.get("http_req_duration{scenario:steady}") or {}
         failed = (metrics.get("http_req_failed{scenario:steady}") or {}).get("value", 1)
         count = (metrics.get("http_reqs{scenario:steady}") or {}).get("count", 0)
         peak = max((s[1] for s in samples), default=0)
         ready = max((s[2] for s in samples), default=0)
-        print(f"\nreplica trước tải {before}, cao nhất {peak} (Ready {ready}); steady {count} request, "
-              f"p95 {steady.get('p(95)', float('nan')):.1f} ms, lỗi {failed:.2%}")
+        print(f"replica trước tải {before}, cao nhất {peak} (Ready {ready}); steady {count} request, "
+              f"p95 {steady.get('p(95)', float('nan')):.1f} ms, lỗi {failed:.2%}; metric {SETTLE_S} giây sau tải: {idle}")
         print("t(s) replicas ready: " + ", ".join(f"{t:.0f}:{r}/{k}" for t, r, k in samples[::3]))
         blocked = quota_events(serving_ns)
         assert not blocked, f"ResourceQuota của namespace serving chặn pod khi autoscale: {blocked[:2]}"
         assert before <= MIN_REPLICAS[1], f"trước khi có tải đã có {before} replica"
-        assert peak >= PEAK_REPLICAS and ready >= PEAK_REPLICAS, \
-            f"dưới tải {RATE} req/s, Deployment {DEPLOYMENT} chỉ lên {peak} replica ({ready} Ready), cần ít nhất {PEAK_REPLICAS}"
+        assert peak > before and peak >= need_peak and ready >= need_peak, \
+            f"dưới tải {rate} req/s, Deployment {DEPLOYMENT} chỉ lên {peak} replica ({ready} Ready), cần ít nhất {need_peak}"
+        assert idle and all(v is not None and v <= threshold for v in idle.values()), \
+            f"{SETTLE_S} giây sau khi hết tải, metric của trigger trên từng pod phải về dưới targetValue ({threshold:g})"
         assert count > 0, "k6 không gửi request nào ở pha steady"
         assert failed < MAX_FAILED, f"pha steady có {failed:.2%} request lỗi"
         assert steady.get("p(95)", float("inf")) <= P95_MS, \
             f"p95 pha steady {steady.get('p(95)'):.0f} ms vượt {P95_MS} ms"
         assert pod_priorities(serving_ns, f"serving.kserve.io/inferenceservice={ISVC}") == {serving_value}, \
             "pod predictor phải chạy với PriorityClass eta-serving-${ETA_RUN}"
-        assert pod_priorities(training_ns, "job-name=eta-retrain-load") <= {training_value}, \
+        assert pod_priorities(training_ns, "job-name=eta-retrain-load") == {training_value}, \
             "pod retrain phải chạy với PriorityClass eta-training-${ETA_RUN}"
 
 
@@ -549,7 +687,7 @@ def wait_until(predicate, timeout: float, what: str, interval: float = 1) -> Non
 
 
 def stamp(value: str) -> float:
-    return time.mktime(time.strptime(value, "%Y-%m-%dT%H:%M:%SZ"))
+    return float(calendar.timegm(time.strptime(value, "%Y-%m-%dT%H:%M:%SZ")))
 
 
 def test_m14_retrain_queued_and_isolated(project, images, tmp_path):

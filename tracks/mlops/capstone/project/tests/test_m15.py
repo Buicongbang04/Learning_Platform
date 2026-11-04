@@ -15,6 +15,7 @@ import uuid
 from pathlib import Path
 
 import mlflow
+import ray
 import numpy as np
 import pandas as pd
 import pytest
@@ -75,23 +76,28 @@ def trials(root: Path) -> dict[str, list[dict]]:
     return {d.name: reports(d) for d in sorted(root.iterdir()) if d.is_dir()}
 
 
-def ray_worker(pid: int) -> bool:
+def ray_worker(pid: int, marker: str | None = None) -> bool:
+    """Tiến trình `ray::` của user này; có `marker` thì raylet cha phải mang thư mục tạm của đúng lần `ray_local` này."""
     try:
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
         owner = Path(f"/proc/{pid}").stat().st_uid
-    except OSError:
+        parent = int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[1])
+        parent_cmdline = Path(f"/proc/{parent}/cmdline").read_bytes()
+    except (OSError, ValueError, IndexError):
         return False
-    return owner == os.getuid() and cmdline.startswith(b"ray::")
+    if owner != os.getuid() or not cmdline.startswith(b"ray::"):
+        return False
+    return marker is None or marker.encode() in parent_cmdline
 
 
-def kill_worker(pid: int) -> bool:
-    """SIGKILL qua pidfd, chỉ khi tiến trình đó vẫn là worker Ray của user này (PID không bị tái sử dụng nhầm)."""
+def kill_worker(pid: int, marker: str) -> bool:
+    """SIGKILL qua pidfd, chỉ khi tiến trình đó vẫn là worker Ray của lần chạy này (PID không bị tái sử dụng nhầm)."""
     try:
         fd = os.pidfd_open(pid)
     except OSError:
         return False
     try:
-        if not ray_worker(pid):
+        if not ray_worker(pid, marker):
             return False
         signal.pidfd_send_signal(fd, signal.SIGKILL)
         return True
@@ -104,9 +110,10 @@ def kill_worker(pid: int) -> bool:
 class Killer(threading.Thread):
     """Theo dõi `storage/NAME`: trial đầu tiên đã báo đủ KILL_AFTER_REPORTS lần, chưa xong và đã có checkpoint thì bị kill."""
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, marker: str):
         super().__init__(daemon=True)
         self.root = root
+        self.marker = marker
         self.stop = threading.Event()
         self.victim: dict | None = None
 
@@ -128,7 +135,7 @@ class Killer(threading.Thread):
         except OSError:
             return False
         pid = rows[-1].get("pid")
-        if not isinstance(pid, int) or not kill_worker(pid):
+        if not isinstance(pid, int) or not kill_worker(pid, self.marker):
             return False
         self.victim = {"trial": trial.name, "pid": pid, "reports_before": len(rows)}
         return True
@@ -151,7 +158,7 @@ def outcome(tmp_path_factory):
         with pytest.MonkeyPatch.context() as patch:
             patch.setenv("PYTHONPATH", os.pathsep.join(filter(None, [str(PROJECT / "src"), os.environ.get("PYTHONPATH")])))
             with mlopskit.ray_local(num_cpus=WORKERS) as storage:
-                killer = Killer(storage / NAME)
+                killer = Killer(storage / NAME, str(storage.parent))
                 killer.start()
                 previous = signal.signal(signal.SIGALRM, expire)
                 signal.alarm(TIMEOUT_S)
@@ -171,11 +178,12 @@ def outcome(tmp_path_factory):
                     killer.stop.set()
                     killer.join(timeout=5)
                 cache.update(seconds=time.monotonic() - started, victim=killer.victim, trials=trials(storage / NAME))
-            pids = {r["pid"] for rows in cache["trials"].values() for r in rows if isinstance(r.get("pid"), int)}
-            deadline = time.monotonic() + LEFTOVER_GRACE_S
-            while alive(pids) and time.monotonic() < deadline:
-                time.sleep(0.5)
-            cache.update(leftover=alive(pids))
+                pids = {r["pid"] for rows in cache["trials"].values() for r in rows if isinstance(r.get("pid"), int)}
+                ray.shutdown()
+                deadline = time.monotonic() + LEFTOVER_GRACE_S
+                while alive(pids) and time.monotonic() < deadline:
+                    time.sleep(0.5)
+                cache.update(leftover=alive(pids))
         cache.update(train=train, valid=valid)
         return cache
 
@@ -212,7 +220,8 @@ def test_m15_trials_run_in_parallel(project, outcome):
         assert last.get("trees") == ROUNDS, f"trial {name} báo `trees` cuối là {last.get('trees')}, cần {ROUNDS}"
         trees = [r.get("trees") for r in rows]
         assert all(isinstance(t, int) for t in trees), f"trial {name}: mỗi lần report cần trường `trees` (số nguyên)"
-    assert not result["leftover"], f"còn tiến trình worker Ray sau khi Ray tắt: {result['leftover']}"
+    assert not result["leftover"], \
+        f"{LEFTOVER_GRACE_S} giây sau ray.shutdown() (trước khi ray_local dọn), vẫn còn worker của trial: {result['leftover']}"
     print(f"\nretrain {len(runs)} trial, {result['seconds']:.1f} giây")
 
 

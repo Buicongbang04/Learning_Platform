@@ -125,13 +125,14 @@ uv run python -c "import mlopskit; [mlopskit.kind_load(t) for t in ('eta-serve:d
 kubectl --context kind-mlops create namespace eta
 export ETA_SERVE_IMAGE=eta-serve:dev ETA_CHAMPION_IMAGE=eta-model:v1 ETA_CHAMPION_VERSION=v1 \
        ETA_CHALLENGER_IMAGE=eta-model:v1 ETA_CHALLENGER_VERSION=v1 ETA_CANARY_WEIGHT=0 ETA_ADMIN_TOKEN=$(openssl rand -hex 16)
-envsubst '$ETA_SERVE_IMAGE $ETA_CHAMPION_IMAGE $ETA_CHAMPION_VERSION $ETA_CHALLENGER_IMAGE $ETA_CHALLENGER_VERSION $ETA_CANARY_WEIGHT $ETA_ADMIN_TOKEN' \
+envsubst '$ETA_SERVE_IMAGE $ETA_CHAMPION_IMAGE $ETA_CHAMPION_VERSION $ETA_CHALLENGER_IMAGE $ETA_CHALLENGER_VERSION $ETA_CANARY_WEIGHT $ETA_ADMIN_TOKEN $ETA_PRIORITY_CLASS' \
   < k8s/eta.yaml | kubectl --context kind-mlops -n eta apply -f -
 kubectl --context kind-mlops -n eta rollout status deployment/eta-predictor
 kubectl --context kind-mlops -n eta port-forward svc/eta-predictor 28090:80
 ```
 
-Truyền danh sách biến cho `envsubst` (như trên) để nó chỉ thay đúng bảy biến release, không đụng `$` nào khác. Tag kiểu `:dev`, `:v1` (không phải `:latest`) để `IfNotPresent` dùng image đã nạp. Dọn: `kubectl --context kind-mlops delete
+Truyền danh sách biến cho `envsubst` (như trên) để nó chỉ thay đúng các biến release, không đụng `$` nào khác;
+`$ETA_PRIORITY_CLASS` (từ M14) chưa đặt thì thành chuỗi rỗng, pod nhận độ ưu tiên mặc định. Tag kiểu `:dev`, `:v1` (không phải `:latest`) để `IfNotPresent` dùng image đã nạp. Dọn: `kubectl --context kind-mlops delete
 namespace eta`.
 
 ### 4. Quy trình release: canary rồi rollback

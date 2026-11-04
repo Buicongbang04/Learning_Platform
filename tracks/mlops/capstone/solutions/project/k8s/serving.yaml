@@ -6,8 +6,8 @@ spec:
   hard:
     requests.cpu: "1"
     requests.memory: 2Gi
-    limits.cpu: "6"
-    limits.memory: 3Gi
+    limits.cpu: "8"
+    limits.memory: 4Gi
     pods: "8"
     count/jobs.batch: "0"
 ---
@@ -29,14 +29,14 @@ spec:
   scaleTargetRef:
     name: eta-predictor
   minReplicaCount: 1
-  maxReplicaCount: 4
+  maxReplicaCount: 6
   advanced:
     horizontalPodAutoscalerConfig:
       behavior:
         scaleUp:
           stabilizationWindowSeconds: 0
           policies:
-            - {type: Pods, value: 4, periodSeconds: 15}
+            - {type: Pods, value: 6, periodSeconds: 15}
         scaleDown:
           stabilizationWindowSeconds: 120
           policies:

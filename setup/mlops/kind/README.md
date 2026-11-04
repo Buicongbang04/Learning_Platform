@@ -102,6 +102,17 @@ Cuối bước `--senior`, script chờ APIService `v1beta1.metrics.k8s.io` và 
 `kubectl top pods`: Kueue ~145 MiB, KEDA 3 pod ~80 MiB, metrics-server ~26 MiB; phần còn lại là `kube-apiserver` lớn lên
 vì thêm CRD của KEDA và Kueue. Gỡ add-on mà giữ cluster: không có lệnh riêng, chạy `down.sh` rồi `up.sh` (không `--senior`).
 
+### PriorityClass `mlops-system` cho controller add-on
+
+Cluster một node dùng chung, và bài module 14 / capstone M14 tạo PriorityClass có `preemptionPolicy: PreemptLowerPriority`
+cho pod serving. Pod không có `priorityClassName` có độ ưu tiên 0, nên khi node hết chỗ, scheduler có thể đẩy chính
+controller KServe, KEDA, Kueue, cert-manager, Argo ra để nhường cho pod bài tập. Cuối mỗi lần chạy, `up.sh` tạo
+PriorityClass `mlops-system` (value 1 000 000, `globalDefault: false`, bằng class `workflow-controller` có sẵn của Argo)
+và gán cho mọi Deployment trong `cert-manager`, `kserve`, `argo`, `local-path-storage` (và `keda`, `kueue-system` với
+`--senior`) chưa có `priorityClassName`. Chỉ patch Deployment còn thiếu, nên chạy lại không khởi động lại gì. Không dùng
+`system-cluster-critical`: class đó dành cho thành phần mà node không sống được nếu thiếu (CoreDNS, metrics-server đã
+dùng), và một add-on bài học không nên đứng ngang hàng chúng. Mọi PriorityClass của bài phải dưới 1 000 000.
+
 Tài nguyên cluster-scoped (ClusterQueue, ResourceFlavor, PriorityClass, WorkloadPriorityClass...) trong test chỉ tạo qua
 `mlopskit.cluster_scoped(manifest)` (tên chứa run id, nhãn `mlops-ex-run=<uuid8>`, xoá trong `finally`); extended
 resource giả trên node chỉ qua `mlopskit.fake_extended_resource(...)`. `mlopskit.leftovers()` liệt kê cả hai loại.

@@ -261,4 +261,27 @@ PY
   log "Add-on senior sẵn sàng: metrics-server ${METRICS_SERVER_VERSION}, KEDA ${KEDA_VERSION}, Kueue ${KUEUE_VERSION}"
 fi
 
+log "PriorityClass mlops-system (1000000) cho controller add-on: pod của bài (serving, training) luôn thấp hơn, không đẩy được controller"
+k apply --server-side --field-manager=mlops-kind -f - >/dev/null <<'YAML'
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: mlops-system
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Controller add-on của cluster mlops (KServe, Argo, cert-manager, KEDA, Kueue): cao hơn mọi PriorityClass của bài"
+YAML
+addon_namespaces=(cert-manager kserve argo local-path-storage)
+(( SENIOR )) && addon_namespaces+=(keda kueue-system)
+for ns in "${addon_namespaces[@]}"; do
+  k get namespace "$ns" >/dev/null 2>&1 || continue
+  while read -r name class; do
+    [[ -n "$name" && "$class" == "<none>" ]] || continue
+    k -n "$ns" patch deployment "$name" --type merge \
+      -p '{"spec":{"template":{"spec":{"priorityClassName":"mlops-system"}}}}' >/dev/null
+    k -n "$ns" rollout status "deployment/$name" --timeout=300s >/dev/null
+  done < <(k -n "$ns" get deployment -o custom-columns=N:.metadata.name,P:.spec.template.spec.priorityClassName --no-headers)
+done
+
 log "Xong. Context: $CTX (current-context của kubectl giữ nguyên: ${PREVIOUS_CONTEXT:-<trống>}). Kiểm: kubectl --context $CTX get pods -A"

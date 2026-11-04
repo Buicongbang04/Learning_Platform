@@ -439,31 +439,44 @@ Mức Đạt cần mọi ô cột Đạt; mức Tốt cần ít nhất năm ô c
 Bản tham chiếu ở `project/k8s/` (`cluster.yaml`, `serving.yaml`, `training.yaml`, `retrain-job.yaml`, `eta.yaml` cập
 nhật) và một gauge mới trong `project/src/eta/serve.py`. Số đo ở mục "Chịu tải trên K8s (M14)" của `project/README.md`.
 
-- **Metric: số request đang xử lý.** CPU cần metrics-server (cluster không có), RPS và p95 cần Prometheus trong cluster
-  để tính `rate()`/quantile. `eta_requests_in_flight` đọc thẳng từ `/metrics` bằng trigger `metrics-api`
+- **Metric: số request đang xử lý.** CPU đọc được (metrics-server của `--senior`) nhưng lấy mẫu 15 giây và kẹt ở trần
+  `limits.cpu` khi hàng đợi dài thêm; RPS và p95 cần Prometheus trong cluster để tính `rate()`/quantile. `eta_requests_in_flight` đọc thẳng từ `/metrics` bằng trigger `metrics-api`
   (`format: prometheus`), không label (luật M09). KEDA đọc qua Service nên mỗi lần chỉ thấy một pod: `metricType: Value`
   (`AverageValue` sẽ chia số đọc được cho số replica như thể đó là tổng). `targetValue: "1"` theo định luật Little (60
-  req/s × 15 ms ≈ 1); bản thử `"2"` có lần dừng ở 2 replica.
+  req/s × 15 ms ≈ 1); bản thử `"2"` có lần dừng ở 2 replica (hai pod gánh 150 req/s ở khoảng 88% sức, in-flight quanh
+  2). In-flight là gauge và về 0 khi hết tải (test đo 10 giây sau k6: 0 trên mọi pod).
 - **`autoscalerClass: external`.** Đã thử: với `none`, `kubectl scale --replicas=2` bị KServe kéo về `minReplicas` ngay;
   với `external` số replica giữ nguyên kể cả khi apply lại InferenceService. Test M12 nhận cả hai, nên M12 vẫn xanh.
 - **Readiness dưới tải.** Bản thử `limits.cpu: 500m`: pod bão hoà trả `/readyz` chậm hơn `timeoutSeconds` mặc định 1
   giây, bị rút khỏi Service, KEDA không đọc được metric qua Service rỗng và HPA không bao giờ scale (p95 4–6 giây, lỗi
   3%). Bản cuối giữ `limits.cpu: "1"` và nới readiness (`timeoutSeconds: 3`, `failureThreshold: 3`): readiness là "phục
-  vụ được", không phải "đang bận".
-- **Scale down chậm, scale up nhanh.** `scaleUp` không chờ, tối đa +4 pod mỗi 15 giây; `scaleDown` chờ 120 giây, bớt một
+  vụ được", không phải "đang bận". Vẫn gặp một lần ở tải 330 req/s: 1 replica suốt 80 giây, lỗi 19%, vì `/readyz` và
+  `/metrics` là `def` nên xếp hàng trong thread pool sau hàng trăm `/predict`, KEDA hết 3 giây chờ. Đổi `/healthz`,
+  `/readyz`, `/metrics` thành `async def` (chạy trên event loop): hai lần chạy sau đều lên 6 replica.
+- **Scale down chậm, scale up nhanh.** `maxReplicaCount: 6`; `scaleUp` không chờ, tối đa +6 pod mỗi 15 giây; `scaleDown` chờ 120 giây, bớt một
   pod mỗi 30 giây, vì mẫu in-flight của pod mới Ready thường là 0. Không scale về 0: cold start 10–25 giây trên laptop.
 - **Quota.** Serving đủ cho `maxReplicaCount + 1` pod (rolling update) theo request/limit hiệu lực của pod
   (max(tổng container chính, init lớn nhất)); `count/jobs.batch: "0"`. Training bằng đúng quota ClusterQueue: nhỏ hơn
   thì Workload được admit mà pod bị `exceeded quota` (bản thử 500m: Job kẹt, test giờ fail ngay khi thấy event này).
 - **Kueue.** ClusterQueue 1500m/1536Mi, Job 1 CPU/768Mi: đúng một Job một lúc; `StrictFIFO`. Job qua nhãn
   `kueue.x-k8s.io/queue-name` (cluster chỉ quản lý `batch/v1` Job, `manageJobsWithoutQueueName: false`). PriorityClass
-  `eta-training` `preemptionPolicy: Never`: retrain chờ, không đẩy ai.
-- **Kiểm bộ chấm (mutation):** valueLocation sai tên → fail ở kiểm `/metrics`; valueLocation `eta_model_info` (hằng 1) →
+  `eta-training` 1 000 `preemptionPolicy: Never`: retrain chờ, không đẩy ai. `eta-serving` chỉ 2 000: bản đầu đặt 100 000
+  `PreemptLowerPriority`, mà trên cluster một node dùng chung, controller add-on không có class (ưu tiên 0) có thể bị
+  pod serving đẩy ra. `up.sh` giờ gán `mlops-system` (1 000 000) cho controller add-on, contract đòi serving < 1 000 000.
+- **Tải theo sức máy.** Bản đầu dùng 150 req/s cố định: máy rảnh thì một pod gánh được (p95 50 ms) và tải không buộc
+  scale; máy bận thì một pod chỉ ~85 req/s. Test giờ đo sức một pod C bằng bậc thang rồi chấm ở `ceil(2,2 × C)`. Đo
+  được C = 100–175 req/s qua sáu lần chạy, tải chấm 221–386 req/s; bản tham chiếu lên 6 replica, steady p95 24–45 ms,
+  metric về 0 trên mọi pod 10 giây sau tải. Hệ số 2,5 (bản thử) cho 375 req/s với C = 150 làm 4 replica quá tải (p95 5
+  giây, chỉ đạt 307 req/s): nhiều pod chạy cùng lúc thì mỗi pod chậm hơn lúc chạy một mình, nên dùng 2,2 và nâng
+  `maxReplicaCount` lên 6.
+- **Kiểm bộ chấm (mutation):** valueLocation sai tên → fail ở kiểm `/metrics`; valueLocation
+  `eta_request_duration_seconds_count` (counter, trước đây qua hết vì scale thẳng lên max) → fail ở kiểm `# TYPE gauge`;
+  `eta_model_info` với `targetValue: "0.5"` (gauge hằng, scale lên max) → 10 giây sau tải vẫn 2 > 0,5, fail; valueLocation `eta_model_info` (hằng 1) →
   1 replica; quota serving 300m → 2 replica và event `exceeded quota`; `autoscalerClass: none` → 1 replica, p95 2,8 giây;
   Job thiếu nhãn hàng đợi → không có Workload; ClusterQueue đủ hai Job → 2 Job admit cùng lúc; serving thiếu
   `count/jobs.batch` → Job lạc được nhận; quota training 500m → fail ngay vì `exceeded quota`; Job `sleep` thay vì train
-  → không có `"mae"` trong log. Bản đúng viết khác (`minReplicaCount: 2`, `maxReplicaCount: 6`, quota tương ứng, URL
-  `eta-predictor.<ns>`) qua contract.
+  → không có `"mae"` trong log. Bản đúng viết khác (`minReplicaCount: 2`, quota tương ứng, URL
+  `eta-predictor.<ns>`) qua contract. Nhánh dự phòng "chỉ đòi 2 replica" (khi `2,2 × C` > 400) chưa gặp trên máy này.
 
 Rubric M14:
 

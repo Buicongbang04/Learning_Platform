@@ -22,7 +22,7 @@ nghiệm vận hành cluster thật nhiều node, nơi cold start, phân mảnh 
 
 ```mermaid
 flowchart LR
-    k6[k6 trong mạng Docker kind<br/>150 req/s, không keep-alive] --> np[Service NodePort của test]
+    k6[k6 trong mạng Docker kind<br/>2,2 × sức một pod, không keep-alive] --> np[Service NodePort của test]
     subgraph serving[namespace serving]
         np --> pods[pod eta-predictor x N<br/>PriorityClass eta-serving]
         svc[Service eta-predictor :80] --> pods
@@ -72,22 +72,27 @@ LocalQueue **`eta-retrain`**, ScaledObject **`eta`**.
 
 | Metric | Đọc được trên cluster này? | Phản ánh quá tải của ETA? |
 | --- | --- | --- |
-| CPU của pod (HPA `Resource`) | Không: cluster không có metrics-server | Gián tiếp. CPU cao có thể là warmup hay GC; CPU thấp vẫn có thể nghẽn (thread pool đầy, chờ I/O) |
-| Request/giây (`rate(eta_requests_total[1m])`) | Cần Prometheus trong cluster tính `rate()`; trigger `metrics-api` chỉ đọc được giá trị tức thời | Có, nhưng phải biết trước sức chịu của một pod (req/s mỗi pod) và số đó đổi mỗi khi model đổi |
+| CPU của pod (HPA `Resource`, trigger `cpu` của KEDA) | Có: `--senior` cài metrics-server | Gián tiếp và trễ: metrics-server lấy mẫu mỗi 15 giây, tính theo `requests.cpu`; pod bị giới hạn ở `limits.cpu` thì CPU đứng yên ở trần trong khi hàng đợi vẫn dài thêm |
+| Request/giây (`rate(eta_requests_total[1m])`) | Cần Prometheus trong cluster tính `rate()`; trigger `metrics-api` chỉ đọc giá trị tức thời | Có, nhưng phải biết trước sức chịu của một pod và số đó đổi mỗi khi model đổi |
 | p95 latency (histogram M09) | Cũng cần Prometheus | Là triệu chứng người dùng thấy, nhưng trễ: lúc p95 vượt là đã quá tải rồi |
-| **Số request đang xử lý (in-flight)** | Có: một gauge trong `/metrics`, KEDA `metrics-api` đọc thẳng (`format: prometheus`) | Có. Theo định luật Little, in-flight = req/s × latency: pod còn sức thì in-flight nhỏ (khoảng 0,5 ở 30 req/s, 15 ms), pod quá tải thì hàng đợi dài ra và in-flight tăng vọt (đo được 30–140 ở 150 req/s một pod) |
+| Số request đang xử lý (in-flight) | Có, nếu API xuất nó như một gauge trong `/metrics` | Theo định luật Little, in-flight = req/s × latency: nhỏ khi pod còn sức, tăng vọt khi hàng đợi dài ra |
 
-Bản tham chiếu chọn **in-flight**. Thêm vào `eta.serve` một `Gauge` (vd. `eta_requests_in_flight`), tăng khi request
-`POST /predict` vào middleware M09 và giảm trong `finally`. Gauge không có label (luật label của M09 vẫn áp dụng), không
-đếm `/metrics`, `/healthz`.
+Ghép các cột này với luật dưới đây để chọn. Luật test áp cho metric của trigger:
 
-KEDA gọi URL của trigger qua Service `eta-predictor`, nên mỗi lần đọc chỉ thấy **một pod ngẫu nhiên**. Vì vậy dùng
-`metricType: Value` (giá trị đọc được coi là mức tải của *một* pod; HPA tính `replicas mới = ceil(replicas × giá trị /
-targetValue)`), không dùng `AverageValue` (HPA chia giá trị cho số replica, tức coi số đọc được là tổng của cả
-Deployment). Lấy mẫu một pod thì nhiễu: ngay sau khi scale, pod mới chưa nhận tải có thể báo 0. Đó là lý do cần
-`stabilizationWindowSeconds` cho scale down (mục 3). Ngoài đời, Prometheus trong cluster cộng in-flight của mọi pod
-(`sum(eta_requests_in_flight)`) và trigger `prometheus` của KEDA dùng `AverageValue`; ở đây không có Prometheus trong
-cluster nên dùng cách lấy mẫu.
+- Trigger là `metrics-api` đọc `/metrics` của API (`format: prometheus`); `valueLocation` là tên một metric **có thật**
+  trong `/metrics` của pod và có dòng **`# TYPE <tên> gauge`**. Counter chỉ tăng (HPA sẽ không bao giờ hạ), histogram
+  `_count`/`_sum` cũng vậy.
+- Metric phải **hạ khi hết tải**: 10 giây sau khi k6 dừng, test đọc metric đó trên từng pod predictor và đòi giá trị
+  không lớn hơn `targetValue` của trigger.
+- Nếu bạn thêm metric mới vào `eta.serve`, giữ luật label của M09 (cardinality thấp, không `request_id`).
+
+KEDA gọi URL của trigger qua Service `eta-predictor`, nên mỗi lần đọc chỉ thấy **một pod ngẫu nhiên**. Đọc kỹ ý nghĩa
+hai `metricType` trước khi chọn: với `Value`, HPA coi số đọc được là giá trị của cả target và tính
+`replicas mới = ceil(replicas × giá trị / targetValue)`; với `AverageValue`, HPA chia số đọc được cho số replica (coi nó
+là tổng của mọi pod). Hỏi: số mà KEDA đọc được ở đây là của một pod hay của cả Deployment? Lấy mẫu một pod thì nhiễu, và
+pod mới vừa Ready chưa nhận tải có thể báo 0: nghĩ xem `behavior` của HPA cần gì để không tụt ngay. Ngoài đời, Prometheus
+trong cluster cộng metric của mọi pod rồi trigger `prometheus` của KEDA đọc tổng đó; ở đây không có Prometheus trong
+cluster.
 
 Không scale về 0: API online nhận request liên tục, và cold start của pod ETA (init container chép model, nạp model,
 warmup, readiness) mất 10–25 giây trên laptop. Scale-to-zero hợp với batch inference như bài KEDA của module 14.
@@ -102,9 +107,8 @@ warmup, readiness) mất 10–25 giây trên laptop. Scale-to-zero hợp với b
 - `spec.predictor.priorityClassName: "${ETA_PRIORITY_CLASS}"`. Test M14 thay bằng `eta-serving-<run id>`, test M12 thay
   bằng chuỗi rỗng (pod nhận độ ưu tiên mặc định), nên M12 vẫn pass.
 - Mọi luật của M12 vẫn giữ. Test M12 nhận cả `none` lẫn `external`.
-- `resources` của container chính quyết định sức chịu của một pod. Bản tham chiếu (`limits.cpu: "1"`) chịu khoảng
-  85–90 req/s một pod khi máy bận trước khi hàng đợi dài ra (máy rảnh thì hơn 150 req/s); giới hạn CPU nhỏ hơn thì cần
-  nhiều replica hơn cho cùng tải. Probe cũng phải chịu được tải: xem "Hay vấp" ở cuối mục 7.
+- `resources` của container chính quyết định sức chịu của một pod, và test đặt tải theo sức đó (mục 7). Probe cũng phải
+  chịu được tải: xem "Hay vấp" ở cuối mục 7.
 
 ### 3. `k8s/serving.yaml`: quota và ScaledObject
 
@@ -115,13 +119,11 @@ ScaledObject tên **`eta`**, luật test kiểm:
 - Đúng **một** trigger, `type: metrics-api`, `metadata.format: prometheus`, `metadata.url` là
   `http://eta-predictor.${ETA_NAMESPACE}.svc.cluster.local/metrics` (cổng 80 của Service; host `eta-predictor.${ETA_NAMESPACE}`
   hay `...svc` cũng được). KEDA operator chạy ở namespace `keda`, nên tên Service phải có namespace.
-- `metadata.valueLocation` là tên một metric **có thật** trong `/metrics` của API (test đọc `/metrics` của pod để kiểm).
-- Test đo bằng tải thật (mục 7), nên `targetValue` và `advanced.horizontalPodAutoscalerConfig.behavior` là lựa chọn của
-  bạn. Chọn `targetValue` bằng định luật Little: in-flight mong muốn = req/s một pod nên nhận × latency chấp nhận được.
-  Bản tham chiếu: một pod nên nhận khoảng 60 req/s ở 15 ms, tức in-flight khoảng 1, nên `targetValue: "1"`; scale up
-  không chờ, scale down chờ 120 giây và bớt tối đa một pod mỗi 30 giây. Bản thử với `targetValue: "2"` có lần dừng ở
-  2 replica: hai pod gánh 150 req/s ở khoảng 88% sức, in-flight mỗi pod quanh 2, HPA thấy "vừa đủ" trong khi hàng đợi
-  đã dài. `pollingInterval`, `cooldownPeriod` chỉ có tác dụng khi `minReplicaCount: 0`; KEDA 2.21 cảnh báo nếu bạn đặt.
+- `metadata.valueLocation`: xem luật metric ở mục 1.
+- `metricType`, `targetValue` và `advanced.horizontalPodAutoscalerConfig.behavior` là lựa chọn của bạn, test đo bằng tải
+  thật (mục 7). Gợi ý: đo sức một pod trước (test in ra số này), rồi suy `targetValue` từ định luật Little cho mức tải
+  bạn muốn mỗi pod gánh. `targetValue` quá cao thì HPA thấy "vừa đủ" khi các pod đã gần bão hoà và dừng ở ít replica.
+  `pollingInterval`, `cooldownPeriod` chỉ có tác dụng khi `minReplicaCount: 0`; KEDA 2.21 cảnh báo nếu bạn đặt.
 
 ResourceQuota của namespace serving:
 
@@ -136,8 +138,13 @@ ResourceQuota của namespace serving:
 ### 4. `k8s/cluster.yaml`: mức ưu tiên và ClusterQueue
 
 - PriorityClass `eta-serving-${ETA_RUN}` và `eta-training-${ETA_RUN}`: `value` số nguyên, thứ tự
-  `1 000 000 000 > serving > training > 0` (từ 1 tỉ trở lên dành cho class hệ thống); không `globalDefault: true`
-  (cluster dùng chung). `eta-training` có **`preemptionPolicy: Never`**: retrain chờ chỗ trống, không đẩy pod nào ra.
+  **`1 000 000 > serving > training > 0`**; không `globalDefault: true` (cluster dùng chung). 1 000 000 là PriorityClass
+  `mlops-system` mà `up.sh` gán cho controller add-on (KServe, KEDA, Kueue, cert-manager, Argo; xem
+  [`setup/mlops/kind/README.md`](../../../../setup/mlops/kind/README.md)). Rủi ro chéo tenant: cluster có một node và
+  nhiều người dùng chung; class serving `PreemptLowerPriority` cho phép scheduler đẩy **mọi** pod thấp hơn ra khi node
+  hết chỗ, kể cả pod của bài khác và controller không có class. Vì vậy giữ serving ngay trên training (vài nghìn), dưới
+  hẳn class của controller; test cluster skip kèm lệnh `bash setup/mlops/kind/up.sh --senior` nếu controller add-on chưa
+  có `mlops-system`. `eta-training` có **`preemptionPolicy: Never`**: retrain chờ chỗ trống, không đẩy pod nào ra.
   Serving giữ `PreemptLowerPriority` mặc định.
 - Một ResourceFlavor và ClusterQueue `eta-training-${ETA_RUN}` có `nominalQuota` cho `cpu` và `memory`. Quota này đủ
   cho **đúng một** Job retrain chạy cùng lúc: request của một Job vừa quota, hai Job thì vượt ở ít nhất một tài nguyên.
@@ -158,8 +165,10 @@ ResourceQuota của namespace serving:
   **`kueue.x-k8s.io/queue-name: eta-retrain`**. Test đổi `metadata.name` để nộp nhiều bản.
 - Pod: `priorityClassName: eta-training-${ETA_RUN}`, `restartPolicy: Never`, `automountServiceAccountToken: false`,
   image `${ETA_TRAIN_IMAGE}` với `imagePullPolicy: IfNotPresent`, `resources.requests` có `cpu` và `memory` (quyết định
-  Kueue xếp hàng thế nào). Nên có `securityContext` như pod serving (non-root, `seccompProfile: RuntimeDefault`,
-  `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`).
+  Kueue xếp hàng thế nào).
+- **Bảo mật pod** (test kiểm cả pod retrain lẫn pod predictor của `eta.yaml`, mọi container và init container):
+  `runAsNonRoot: true` và `seccompProfile.type: RuntimeDefault` (ở pod hay container), `allowPrivilegeEscalation: false`,
+  `capabilities.drop: [ALL]`, như module 13/14.
 - Dữ liệu: test tạo trong namespace training ConfigMap **`eta-train-data`** khoá `yellow_tripdata_${ETA_MONTH}.parquet`
   (1 500 chuyến giả, như M12). Mount ở `/data` (image train đặt `ETA_DATA_DIR=/data`) và chạy
   `eta.cli train --config /app/params.yaml` cho tháng `${ETA_MONTH}` qua biến `ETA_MONTHS` (env, không ghép vào chuỗi
@@ -193,30 +202,38 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m14
 ```
 
 - `test_m14_manifests_contract` (không cần cluster): các luật tĩnh của mục 2–6 trên các tệp đã render.
-- `test_m14_scales_under_load`: tạo bộ cluster-scoped, hai namespace (serving, training), một Service NodePort của test
-  (selector `serving.kserve.io/inferenceservice: eta`, cổng 8000), quota serving, release M12 với một model, rồi
-  training (quota, LocalQueue, ConfigMap dữ liệu, một Job retrain chạy song song với tải), rồi ScaledObject (chờ
-  `Ready`). Kiểm `valueLocation` có trong `/metrics`. Sau đó k6 chạy trong mạng Docker `kind`, gọi NodePort với
-  `K6_NO_CONNECTION_REUSE=true` (mỗi request một kết nối, kube-proxy chia đều cho mọi pod; giữ keep-alive thì k6 dính
-  vào pod đầu tiên): **150 req/s** `POST /predict` trong 60 giây (pha `warm`) rồi thêm 20 giây (pha `steady`). Test
-  hỏi số replica mỗi 2 giây. Đạt khi:
-  - trước tải Deployment có tối đa 2 replica; dưới tải lên **ít nhất 3** replica và ít nhất 3 pod Ready;
+- `test_m14_scales_under_load`: test bỏ qua (skip kèm lệnh `up.sh --senior`) nếu controller add-on chưa có
+  PriorityClass `mlops-system`. Tạo bộ cluster-scoped, hai namespace (serving, training), một Service NodePort của test
+  (selector `serving.kserve.io/inferenceservice: eta`, cổng 8000), quota serving, release M12 với một model. Mọi k6 chạy
+  trong mạng Docker `kind`, gọi NodePort với `K6_NO_CONNECTION_REUSE=true` (mỗi request một kết nối, kube-proxy chia đều
+  cho mọi pod; giữ keep-alive thì k6 dính vào pod đầu tiên).
+  1. **Đo sức một pod** (chưa có ScaledObject, 1 replica): bậc thang 50, 75, 100, 125, 150, 175, 200, 250, 300 req/s,
+     mỗi bậc 5 giây. Sức một pod **C** là bậc cao nhất, liên tục từ bậc đầu, có p95 ≤ 300 ms và lỗi dưới 1%. Test in C
+     và từng bậc: dùng số này cho bảng README và để chọn `targetValue`.
+  2. **Tải chấm** = `ceil(2,2 × C)` kẹp trong [150, 400] req/s: hai pod không gánh nổi, nên HPA phải lên từ 3 replica.
+  3. Training (quota, LocalQueue, ConfigMap dữ liệu, một Job retrain chạy song song với tải), rồi ScaledObject (chờ
+     `Ready`); kiểm luật metric ở mục 1 (`valueLocation` có trong `/metrics` và là gauge).
+  4. Tải chấm trong 60 giây (pha `warm`) rồi thêm 20 giây (pha `steady`); test hỏi số replica mỗi 2 giây. 10 giây sau khi
+     k6 dừng, đọc metric của trigger trên từng pod predictor.
+
+  Đạt khi:
+  - trước tải Deployment có tối đa 2 replica; dưới tải số replica tăng và đạt **ít nhất 3** (và ít nhất 3 pod Ready).
+    Nếu `2,2 × C` vượt 400 (máy quá nhanh, test không tạo đủ tải để hai pod quá tải) thì chỉ đòi **ít nhất 2**;
+  - metric của trigger trên mọi pod về không quá `targetValue` sau khi hết tải;
   - pha `steady`: **p95 ≤ 300 ms** (cùng ngưỡng alert latency của M09), lỗi dưới 1%;
   - không có event `exceeded quota` trong namespace serving;
-  - pod predictor có `priority` bằng `value` của `eta-serving-<run>`, pod retrain bằng `value` của `eta-training-<run>`.
+  - pod predictor có `priority` bằng `value` của `eta-serving-<run>`, pod retrain (test chờ nó có pod) bằng `value` của
+    `eta-training-<run>`.
 
-  Số đo của bản tham chiếu trên laptop 16 nhân đang chạy việc khác: sức chịu một pod đổi theo độ bận của máy, khoảng
-  85–90 req/s khi máy bận (150 req/s một pod: p95 1,5–2,4 giây), có lúc gánh được 150 req/s với p95 khoảng 50 ms khi
-  máy rảnh. Vì vậy test đòi cả số replica lẫn p95: p95 một mình không chứng minh autoscale. KEDA lên 4 replica sau
-  15–50 giây tuỳ lúc HPA đồng bộ (chu kỳ 15 giây) và máy bận; pha `steady` với 4 pod p95 14–39 ms qua sáu lần chạy.
-  Ngưỡng 300 ms dư hơn 7 lần so với số đo.
+  p95 một mình không chứng minh autoscale: sức một pod đổi theo độ bận của máy, nên test đặt tải theo C đo ngay trong lần
+  chạy và đòi cả số replica. Số đo của bản tham chiếu ở `solutions/SOLUTION.md`.
 - `test_m14_retrain_queued_and_isolated`: hai namespace và bộ cluster-scoped riêng. Một Job retrain bỏ nhãn hàng đợi,
   tạo vào namespace serving, phải bị từ chối (`forbidden`). Hai Job retrain nộp cùng lúc vào `eta-retrain`: đúng một
   được admit, Job kia không có pod; Job kia chỉ được admit sau khi Job đầu xong (`lastTransitionTime` của condition
   `Admitted` không sớm hơn `completionTime` của Job đầu); cả hai `succeeded` trong 300 giây và log có `"mae"`; Workload
   của chúng có `spec.priority` bằng `value` của `eta-training-<run>`.
 
-Cả milestone khoảng 3 phút trên laptop khi image đã có cache (build và `kind_load` ba image lần đầu thêm khoảng một
+Cả milestone khoảng 4 phút trên laptop khi image đã có cache (build và `kind_load` ba image lần đầu thêm khoảng một
 phút). Image build ra được xoá khỏi Docker trên máy, bản đã nạp ở lại trong node như M12.
 
 Hay vấp:
@@ -224,19 +241,23 @@ Hay vấp:
 - Pod bão hoà trả `/readyz` chậm hơn `timeoutSeconds` của readinessProbe (mặc định 1 giây), bị rút khỏi Service; KEDA
   đọc metric qua chính Service đó nên không còn số nào, HPA không scale, pod càng quá tải. Bản thử với
   `limits.cpu: 500m` rơi đúng vòng này (1 replica suốt 80 giây, p95 4–6 giây). Readiness nghĩa là "phục vụ được", không
-  phải "đang bận": nới `timeoutSeconds`, `failureThreshold` cho `/readyz`, để autoscale lo phần tải.
+  phải "đang bận": nới `timeoutSeconds`, `failureThreshold` cho `/readyz`, để autoscale lo phần tải. Gốc của vòng này
+  trong FastAPI: endpoint `def` (đồng bộ) chạy trong thread pool chung với `/predict`, nên khi hàng trăm `/predict` đang
+  chờ, `/readyz` và `/metrics` cũng xếp sau chúng; KEDA hết thời gian chờ (3 giây) và không đọc được metric đúng lúc cần
+  nhất. Endpoint nhẹ như `/healthz`, `/readyz`, `/metrics` viết `async def` thì chạy trên event loop, trả ngay cả khi
+  thread pool đầy.
 - HPA của KEDA báo `<unknown>` lúc đầu: KEDA chưa đọc được URL. Xem `kubectl describe scaledobject eta` (event
   `KEDAScalerFailed`), thường là sai tên Service, thiếu namespace trong host, hay sai cổng (Service KServe nghe 80, không
   phải 8000).
-- Scale lên rồi tụt ngay: không có `stabilizationWindowSeconds` cho scale down, mà mẫu in-flight của một pod mới vừa
-  Ready là 0.
+- Scale lên rồi tụt ngay: scale down không có `stabilizationWindowSeconds`, trong khi mẫu metric của một pod mới vừa
+  Ready thường là 0.
 - ClusterQueue đủ quota, Workload `Admitted`, mà Job không có pod: xem `kubectl describe job`; thường là ResourceQuota
   của namespace training nhỏ hơn ClusterQueue, hoặc LimitRange đặt `max` nhỏ hơn request của Job.
 - Job chờ mãi với `couldn't assign flavors ... insufficient quota`: request của một Job đã lớn hơn `nominalQuota`.
 
 ## Kết quả nộp
 
-- `src/eta/serve.py` có gauge in-flight; `k8s/eta.yaml` (cập nhật), `k8s/cluster.yaml`, `k8s/serving.yaml`,
+- `src/eta/serve.py` (nếu metric bạn chọn cần thêm vào API); `k8s/eta.yaml` (cập nhật), `k8s/cluster.yaml`, `k8s/serving.yaml`,
   `k8s/training.yaml`, `k8s/retrain-job.yaml`.
 - Mục "Chịu tải trên K8s" trong README của project: metric bạn chọn và vì sao, `targetValue` và cách bạn tìm ra nó (sức
   chịu một pod đo được), bảng replica theo thời gian và p95 của hai pha từ lần chạy test của bạn, và quota hai namespace
@@ -245,10 +266,11 @@ Hay vấp:
 ## Tiêu chí đạt
 
 - [ ] `uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m14` pass, không skip (cluster có add-on senior).
-- [ ] Dưới 150 req/s, Deployment lên từ 3 replica và p95 pha steady ≤ 300 ms; quota serving không chặn pod nào.
+- [ ] Dưới tải 2,2 × sức một pod, Deployment lên từ 3 replica, metric hạ khi hết tải, p95 pha steady ≤ 300 ms; quota
+  serving không chặn pod nào.
 - [ ] Job retrain đi qua Kueue: job thứ hai chờ quota, không có pod, tự chạy khi job đầu xong; namespace serving từ chối Job.
 - [ ] Pod serving có PriorityClass cao hơn pod retrain; retrain không đẩy ai ra (`preemptionPolicy: Never`).
-- [ ] (Tự đánh giá) Khi cluster có Prometheus: viết lại trigger thành `prometheus` với `sum(eta_requests_in_flight)` và
-  `AverageValue`, so độ trễ scale với cách lấy mẫu một pod.
+- [ ] (Tự đánh giá) Khi cluster có Prometheus: viết lại trigger thành `prometheus` với tổng metric của mọi pod,
+  chọn lại `metricType`, so độ trễ scale với cách lấy mẫu một pod.
 - [ ] (Tự đánh giá) Ước lượng cold start của một pod ETA trên cluster thật (kéo image 800 MB, nạp model từ object
   storage) và minReplicaCount bạn chọn cho giờ cao điểm, có số.

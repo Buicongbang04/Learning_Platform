@@ -2,7 +2,7 @@ apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
   name: eta-serving-${ETA_RUN}
-value: 100000
+value: 2000
 globalDefault: false
 preemptionPolicy: PreemptLowerPriority
 description: "API ETA online: được đẩy pod retrain ra khi node hết chỗ"
