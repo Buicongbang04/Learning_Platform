@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -164,6 +165,14 @@ def test_m17_onboarding_in_five_commands(project, tmp_path):
     verifying.Config().use_elliptic_key_verifier(public_key=public).verify(model_dir, signature)
     decision = gate.deploy_gate(model_dir, signature, public, mlopskit.modelscan_run)
     assert decision == {"allowed": True, "reasons": []}, f"model vừa onboard bị cổng chặn: {decision['reasons']}"
+    host_env = {**os.environ, **env, "PATH": sandbox_env()["PATH"]}
+    cli = subprocess.run(["bash", "-euo", "pipefail", "-c", commands[-1]], cwd=work, env=host_env, capture_output=True, text=True,
+                         timeout=300)
+    assert cli.returncode == 0, f"lệnh cổng cuối khối onboarding phải thoát 0 với model vừa onboard:\n{(cli.stdout + cli.stderr)[-2000:]}"
+    flip_byte(model_dir)
+    tampered = subprocess.run(["bash", "-euo", "pipefail", "-c", commands[-1]], cwd=work, env=host_env, capture_output=True,
+                              text=True, timeout=300)
+    assert tampered.returncode != 0, "lệnh cổng phải thoát khác 0 khi model bị sửa sau khi ký"
     assert oct(private.stat().st_mode & 0o777) == "0o600"
 
 
@@ -211,6 +220,7 @@ def test_m17_gate_blocks_unsigned_tampered_or_malicious(project, tmp_path):
         "tag-removed-after-signing": (None, lambda d: set_tags(d, without("cost_center")), private, ["signature", "tag:cost_center"]),
         "signed-without-tag": (lambda d: set_tags(d, without("cost_center")), None, private, ["tag:cost_center"]),
         "signed-bad-owner": (lambda d: set_tags(d, {**TAGS, "owner": "lan"}), None, private, ["tag:owner"]),
+        "signed-cost-center-newline": (lambda d: set_tags(d, {**TAGS, "cost_center": "CC-2041\n"}), None, private, ["tag:cost_center"]),
         "signed-malicious-pickle": (lambda d: (d / "preprocess.pkl").write_bytes(marker_pickle(marker)), None, private,
                                     ["format:preprocess.pkl", "scan"]),
         "signed-stealth-pickle": (lambda d: (d / "extra.bin").write_bytes(stealth_pickle(marker)), None, private, ["format:extra.bin"]),
@@ -239,6 +249,11 @@ def test_m17_gate_blocks_unsigned_tampered_or_malicious(project, tmp_path):
             wrong.append(name)
     assert not marker.exists(), "một tệp model đã bị nạp: cổng không bao giờ được unpickle"
     assert not wrong, f"cổng deploy quyết định sai {len(wrong)}/{len(cases)} ca: {wrong}"
+    def broken_scan(path):
+        raise RuntimeError("scanner không chạy được")
+
+    failed = gate.deploy_gate(tmp_path / "clean" / "model", tmp_path / "clean" / "model.sig", public, broken_scan)
+    assert failed == {"allowed": False, "reasons": ["scan"]}, "máy quét lỗi (exception) thì cổng chặn với lý do scan, không ném lỗi"
     inside = tmp_path / "clean" / "model" / "model.sig"
     with pytest.raises(ValueError):
         signing.sign(tmp_path / "clean" / "model", private, inside)

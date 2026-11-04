@@ -291,7 +291,7 @@ def run_shadow(state, models: Models, request_id: str, trip: dict, frame: pd.Dat
     state.log.write(request_id, challenger.version, "shadow", trip, frame, eta_s)
 
 
-@app.post("/predict", response_model=Prediction)
+@app.post("/predict", response_model=Prediction, response_model_exclude_none=True)
 def predict(trip: TripRequest, request: Request, response: Response, background: BackgroundTasks) -> Prediction:
     models = current(request)
     if models is None:

@@ -13,17 +13,24 @@ FEATURE = "speed_15m_mph"
 COLUMNS = ["PULocationID", "window_start", "window_end", "trips", FEATURE]
 
 
+MAX_DISTANCE = 100.0
+MAX_DURATION_S = 10_800.0
+
+
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _valid(event) -> bool:
     if not isinstance(event, dict):
         return False
     try:
         epoch(event["dropoff_at"])
         zone, distance, seconds = event["PULocationID"], event["trip_distance"], event["duration_s"]
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError, OverflowError):
         return False
-    numbers = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (distance, seconds))
-    return (isinstance(event.get("trip_id"), str) and isinstance(zone, int) and not isinstance(zone, bool) and numbers
-            and math.isfinite(distance) and math.isfinite(seconds) and seconds > 0 and distance >= 0)
+    return (isinstance(event.get("trip_id"), str) and isinstance(zone, int) and not isinstance(zone, bool)
+            and _number(distance) and _number(seconds) and 0 <= distance <= MAX_DISTANCE and 0 < seconds <= MAX_DURATION_S)
 
 
 class ZoneSpeedWindows:
@@ -71,10 +78,12 @@ class ZoneSpeedWindows:
         return rows
 
 
-def _decode(raw: bytes):
+def _decode(raw):
+    if not isinstance(raw, (bytes, bytearray)):
+        return None
     try:
         return json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         return None
 
 

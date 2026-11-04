@@ -40,7 +40,9 @@ flowchart LR
 Cần: bộ `nyc-tlc` (`uv run python data/download_dataset.py nyc-tlc`), Kafka của stack
 (`docker compose -f setup/mlops/compose.yaml --profile streaming up -d --wait`), Docker cho image Feast `mlops-feast:0.67.0`
 (build lần đầu). Thiếu thứ nào thì test cần nó **skip** kèm lệnh bật. Code mới nằm trong `src/eta/streaming/`, khung có sẵn
-trong `capstone/project/src/eta/streaming/` (tên hàm và chữ ký, thân còn `NotImplementedError`).
+trong `capstone/project/src/eta/streaming/` (tên hàm và chữ ký, thân còn `NotImplementedError`). **Dùng lại code module 16 của
+bạn**: luật cửa sổ của bài Basic 01 và Intermediate 01, push và freshness của Intermediate 02; ở đây đổi feature (tốc độ thay cho giá
+cước), event time (lúc trả khách) và thêm phần API.
 
 ### 1. Quy ước thời gian
 
@@ -78,10 +80,11 @@ không message nào sớm hơn `clock.wall(m_i)` quá 0,05 giây, và tổng th�
 
 **`ZoneSpeedWindows(window_s=WINDOW_S, lateness_s=LATENESS_S)`**, có thuộc tính đếm `late`, `duplicates`, `invalid`, và:
 
-- `add(event) -> list[dict]`: `event` là giá trị đã giải mã JSON (có thể là bất cứ thứ gì). Xét **theo thứ tự**:
+- `add(event) -> list[dict]`: `event` là giá trị đã giải mã JSON (có thể là bất cứ thứ gì, kể cả `None`). Xét **theo thứ tự**:
   1. Không hợp lệ thì `invalid += 1`, bỏ: không phải dict, thiếu khoá nào trong năm khoá, `trip_id` không phải chuỗi,
-     `PULocationID` không phải số nguyên, `dropoff_at` không đọc được, `trip_distance` hay `duration_s` không phải số, `duration_s <= 0`
-     hoặc `trip_distance < 0`. Message hỏng **không bao giờ** làm consumer dừng.
+     `PULocationID` không phải số nguyên, `dropoff_at` không đọc được, `trip_distance` hay `duration_s` không phải số hữu hạn,
+     `trip_distance` ngoài `[0, 100]` hoặc `duration_s` ngoài `(0, 10 800]` (cùng giới hạn với `clean` của M01; nhờ vậy tốc độ luôn
+     hữu hạn). Message hỏng **không bao giờ** làm consumer dừng.
   2. `trip_id` đã gặp thì `duplicates += 1`, bỏ.
   3. Cửa sổ tumbling `[start, start + window_s)` với `start = ts - ts % window_s` (`ts` là event time, giây epoch). Nếu đã có
      watermark và `start + window_s <= watermark` thì `late += 1`, bỏ.
@@ -94,7 +97,8 @@ Mỗi dòng cửa sổ có **đúng năm khoá**: `PULocationID`, `window_start`
 tốc độ từng chuyến: chuyến dài nặng hơn, và cộng dồn được).
 
 **`consume(bootstrap, topic, *, on_close=None, idle_ms=3000) -> dict`**: đọc topic **từ đầu** (group mới mỗi lần, tắt auto commit),
-giải mã từng message (bytes không phải JSON thì đưa vào `add` như một giá trị hỏng), dừng khi `idle_ms` không có message mới **kể từ
+giải mã từng message (value không phải bytes, ví dụ tombstone `None`, bytes không phải JSON, hay JSON lồng sâu tới mức parser ném
+`RecursionError` thì đưa vào `add` như giá trị hỏng `None`), dừng khi `idle_ms` không có message mới **kể từ
 message cuối** (trước message đầu tiên thì chờ lâu hơn, ví dụ 30 giây, vì consumer còn join group), rồi `flush`. Mỗi lần có cửa sổ
 vừa đóng (kể cả lúc `flush`) gọi `on_close(rows)` với **list không rỗng** các dòng đó; nối mọi lần gọi lại phải bằng `windows`.
 Trả `{"windows", "late", "duplicates", "invalid", "consumed"}` (`consumed` đếm mọi message đã đọc, kể cả hỏng và trùng).
@@ -115,6 +119,8 @@ với batch dùng để train.
 - View push **không materialize**: nguồn batch của nó là tệp do chính `push` ghi. Từ đây `feast materialize` của M06 phải chỉ rõ view
   (`feast materialize -v zone_hour_speed ...`); test M06 đã làm vậy. Chạy `materialize` không có `-v` sẽ lỗi khi
   `data/zone_speed_15m.parquet` chưa có.
+- Chạy push thật (ngoài test) thì **tạo trước `feature_repo/data/zone_speed_15m.parquet` rỗng** đúng bốn cột (`PULocationID` int64,
+  `speed_15m_mph` float64, `trips` int64, `event_timestamp` datetime UTC), như test làm: push offline ghi nối vào tệp này.
 
 `eta/streaming/feast_push.py` chạy **trong container Feast**, nơi không có package `eta`: đầu tệp chỉ import pandas và thư viện
 chuẩn, `feast` import bên trong hàm. Hằng `PUSH_SOURCE = "zone_speed_push"`, `REFS = ["zone_speed_15m:speed_15m_mph",
@@ -148,7 +154,8 @@ watermark qua nó) và **còn dùng được** khi `t - window_end <= TTL_S` (ha
 - `OnlineSpeed(path)`: đọc snapshot (đọc lại khi tệp đổi), tra theo zone và giờ đón.
 - `serve.py`: biến `ETA_ONLINE_FEATURES` là đường dẫn snapshot. Model có `speed_15m_mph` trong `feature_names_in_` mà chưa đặt
   biến này thì API **không sẵn sàng** (`/readyz` 503), như M06 với `ETA_SPEED_TABLE`. Khi model cần, `/predict` gắn feature từ
-  snapshot theo đúng luật trên và trả thêm hai trường: `speed_15m_mph` (giá trị đã dùng) và `speed_15m_status`: `fresh` (dùng giá trị
+  snapshot theo đúng luật trên và trả thêm hai trường (chỉ khi model dùng feature này; model
+  không dùng thì response giữ đúng hợp đồng M07, không có trường thừa): `speed_15m_mph` (giá trị đã dùng) và `speed_15m_status`: `fresh` (dùng giá trị
   online), `stale` (zone có giá trị nhưng không sẵn sàng hoặc quá TTL), `missing` (zone không có giá trị). `stale` và `missing` dùng
   `DEFAULT_SPEED_MPH`. Snapshot chỉ giữ cửa sổ mới nhất mỗi zone, nên API và `attach_live_speed` cho cùng giá trị khi cửa sổ mới nhất là
   cửa sổ point-in-time chọn (luôn đúng khi chạy thật: request đến sau khi cửa sổ đã đóng).
@@ -170,12 +177,12 @@ thật), và p50 không dưới `LATENESS_S`. Bản tham chiếu đo được p5
 uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m16
 ```
 
-- `test_m16_window_rules` (không cần Kafka): 12 sự kiện viết tay qua `ZoneSpeedWindows(900, 120)`, gồm bản trùng, ba giá trị hỏng
-  (chuỗi, dict thiếu khoá, `duration_s = 0`), một sự kiện trễ và một sự kiện rơi **đúng** vào `window_end == watermark`. Kiểm từng cửa
+- `test_m16_window_rules` (không cần Kafka): 14 sự kiện viết tay qua `ZoneSpeedWindows(900, 120)`, gồm bản trùng, năm giá trị hỏng
+  (chuỗi, dict thiếu khoá, `duration_s = 0`, `trip_distance = 1e300`, `None`), một sự kiện trễ và một sự kiện rơi **đúng** vào `window_end == watermark`. Kiểm từng cửa
   sổ đóng ở đúng sự kiện nào, giá trị, và ba bộ đếm.
 - `test_m16_replay_stream_matches_batch` (Kafka, dữ liệu thật 08:00–09:00 ngày 2019-03-05, 25% chuyến): `trip_events` trên `trips`
-  đã xáo; luồng bị xáo trong phạm vi 20 vị trí, 15 sự kiện của 10 phút đầu dời xuống cuối (thành trễ), 25 bản trùng; ba message hỏng
-  gửi trước. `replay` với `speedup = 1800` vào topic tạm của `mlopskit.kafka_topic()`, rồi `consume`. So với luật tính lại trên đúng
+  đã xáo; luồng bị xáo trong phạm vi 20 vị trí, 15 sự kiện của 10 phút đầu dời xuống cuối (thành trễ), 25 bản trùng; năm message hỏng
+  gửi trước (không phải JSON, thiếu khoá, `duration_s` âm, JSON lồng 100 000 tầng, tombstone `value=None`). `replay` với `speedup = 1800` vào topic tạm của `mlopskit.kafka_topic()`, rồi `consume`. So với luật tính lại trên đúng
   thứ tự đã gửi: các bộ đếm, mọi cửa sổ, thứ tự xuất, các lần gọi `on_close`; `zone_speed_batch` trên các chuyến được nhận bằng stream.
 - `test_m16_attach_point_in_time`: tám chuyến quanh ranh giới sẵn sàng (`+120 s`), TTL (`1800 s`, `1801 s`), zone lạ.
 - `test_m16_feast_online_matches_batch` (Docker): chép `feature_repo/` sang thư mục tạm, thay `feature_store.yaml` bằng online store
@@ -184,9 +191,10 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m16
   2 giờ, đi vào `push` theo 3 lô xáo trộn rồi một lô gửi lại 10 cửa sổ cũ: online của mỗi zone là cửa sổ mới nhất (sai số `1e-9`),
   số dòng ghi online là số zone của từng lô rồi `0`, zone lạ trả `None`, snapshot của `export_online` đúng bằng online.
 - `test_m16_api_reads_online_feature`: train model nhỏ bằng `train.train` trên chuyến có `attach_live_speed`, chạy API bằng
-  `TestClient` với `ETA_ONLINE_FEATURES` là snapshot trên. 12 zone lúc `window_end + 180 s`, một ca quá TTL, một zone lạ: `eta_s` và
+  `TestClient` với `ETA_ONLINE_FEATURES` là snapshot trên. 12 zone lúc `window_end + 180 s`, một ca quá TTL, một zone lạ, một ca chưa sẵn
+  sàng (`window_end + 60 s`, kỳ vọng `stale` và `DEFAULT_SPEED_MPH`): `eta_s` và
   `speed_15m_mph` phải bằng model chạy trên feature của `attach_live_speed`; trạng thái `fresh`/`stale`/`missing`; chưa đặt biến thì
-  `/readyz` 503.
+  `/readyz` 503; model không dùng feature thì response chỉ có ba khoá của M07.
 - `test_m16_live_freshness` (Kafka + Docker, khoảng 1 phút): 10 zone, 08:00–08:45, 30% chuyến, 5 sự kiện dời thành trễ. Container Feast
   (test viết) đọc `on_close` của bạn qua một tệp outbox, gọi `push` và `export_online` của bạn, ghi lúc snapshot có giá trị. `replay`
   với `speedup = 60`, `consume` chạy song song. Kiểm: số sự kiện trễ bị loại, ít nhất 95% sự kiện được nhận có giá trị online,

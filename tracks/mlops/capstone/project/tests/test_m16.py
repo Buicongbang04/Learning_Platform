@@ -121,7 +121,7 @@ def produce_raw(bootstrap: str, topic: str, values: list[bytes]) -> None:
     producer = KafkaProducer(bootstrap_servers=bootstrap)
     try:
         for value in values:
-            producer.send(topic, value=value)
+            producer.send(topic, key=b"tombstone" if value is None else None, value=value)
         producer.flush(timeout=30)
     finally:
         producer.close()
@@ -157,6 +157,7 @@ def test_m16_window_rules(project):
         trip_event("a", 1, t0 + 10, 1.0, 600.0), trip_event("b", 2, t0 + 20, 2.0, 600.0),
         trip_event("c", 1, t0 + 1_000, 3.0, 900.0), trip_event("d", 1, t0 + 890, 1.0, 300.0),
         trip_event("a", 1, t0 + 10, 1.0, 600.0), "oops", {"trip_id": "x"}, trip_event("z", 2, t0 + 1_100, 1.0, 0.0),
+        trip_event("y", 2, t0 + 1_100, 1e300, 1.0), None,
         trip_event("e", 2, t0 + 1_200, 1.5, 540.0), trip_event("f", 1, t0 + 300, 9.0, 60.0),
         trip_event("g", 2, t0 + 1_920, 4.0, 1_200.0), trip_event("h", 1, t0 + 1_500, 2.0, 300.0),
     ]
@@ -167,12 +168,12 @@ def test_m16_window_rules(project):
             closed_at[(row["PULocationID"], row["window_start"] - t0)] = i
             rows.append(row)
     tail = agg.flush()
-    assert closed_at == {(1, 0): 8, (2, 0): 8, (1, 900): 10, (2, 900): 10}, (
+    assert closed_at == {(1, 0): 10, (2, 0): 10, (1, 900): 12, (2, 900): 12}, (
         "cửa sổ phải đóng ngay khi watermark (event time lớn nhất trừ lateness) qua window_end, không sớm hơn, không đợi flush"
     )
     assert [(r["PULocationID"], r["window_start"] - t0) for r in tail] == [(2, 1_800)], "flush trả các cửa sổ còn mở"
     assert all(set(r) == ROW_KEYS for r in rows + tail), "mỗi dòng cửa sổ có đúng năm khoá"
-    assert (agg.late, agg.duplicates, agg.invalid) == (2, 1, 3), "đếm late, duplicates, invalid theo đúng luật của đề"
+    assert (agg.late, agg.duplicates, agg.invalid) == (2, 1, 5), "đếm late, duplicates, invalid theo đúng luật của đề"
     got = {(r["PULocationID"], r["window_start"] - t0): (r["trips"], r[FEATURE]) for r in rows + tail}
     expected = {(1, 0): (2, 8.0), (2, 0): (1, 12.0), (1, 900): (1, 12.0), (2, 900): (1, 10.0), (2, 1_800): (1, 12.0)}
     assert got.keys() == expected.keys() and all(got[k] == (n, pytest.approx(v)) for k, (n, v) in expected.items()), (
@@ -195,8 +196,9 @@ def test_m16_replay_stream_matches_batch(project):
     for _ in range(25):
         i = rng.randrange(len(stream) - 30)
         stream.insert(i + rng.randrange(1, 30), dict(stream[i]))
-    malformed = [b"not json", b'{"trip_id": "m1"}', json.dumps({**events[0], "trip_id": "m2", "duration_s": -5.0}).encode()]
-    expected = reference([None, None, None, *stream])
+    malformed = [b"not json", b'{"trip_id": "m1"}', json.dumps({**events[0], "trip_id": "m2", "duration_s": -5.0}).encode(),
+                 b"[" * 100_000 + b"]" * 100_000, None]
+    expected = reference([*[None] * len(malformed), *stream])
     batches = []
     with mlopskit.kafka_topic() as topic:
         bootstrap = mlopskit.require_kafka()
@@ -220,7 +222,7 @@ def test_m16_replay_stream_matches_batch(project):
         "replay phải gửi theo đồng hồ mô phỏng: sự kiện gửi khi wall time tới clock.wall(event time lớn nhất đã gặp)"
     )
     assert got["consumed"] == len(stream) + len(malformed)
-    assert (got["invalid"], got["duplicates"]) == (3, 25), "message hỏng và bản trùng phải được đếm và bỏ qua"
+    assert (got["invalid"], got["duplicates"]) == (len(malformed), 25), "message hỏng và bản trùng phải được đếm và bỏ qua"
     assert got["late"] == expected["late"] and got["late"] >= 15, (
         f"late={got['late']}, cần đúng số sự kiện có window_end <= watermark lúc đọc tới"
     )
@@ -391,6 +393,15 @@ def test_m16_api_reads_online_feature(project, pushed, tmp_path, monkeypatch):
     with TestClient(serve.app) as api:
         assert api.get("/readyz").status_code == 503, "model cần speed_15m_mph mà chưa đặt ETA_ONLINE_FEATURES thì chưa sẵn sàng"
     monkeypatch.setenv("ETA_ONLINE_FEATURES", str(pushed["root"] / "data" / "online.json"))
+    X_plain, y_plain = features.build_features(pushed["trips"])
+    joblib.dump(train.train(X_plain, y_plain, {"max_iter": 5, "random_state": 0}), tmp_path / "plain.joblib")
+    monkeypatch.setenv("ETA_MODEL_PATH", str(tmp_path / "plain.joblib"))
+    with TestClient(serve.app) as api:
+        plain = api.post("/predict", json=request_at(236, int(windows["window_end"].max()) + 300))
+    assert plain.status_code == 200 and set(plain.json()) == {"eta_s", "model_version", "variant"}, (
+        "model không dùng speed_15m_mph thì response giữ đúng hợp đồng M07"
+    )
+    monkeypatch.setenv("ETA_MODEL_PATH", str(tmp_path / "live.joblib"))
     latest = windows.sort_values("window_end").groupby("PULocationID").tail(1).head(12)
     cases = [(z, end + LATENESS_S + 60, "fresh") for z, end in zip(latest["PULocationID"], latest["window_end"])]
     cases += [(int(latest["PULocationID"].iloc[0]), int(latest["window_end"].iloc[0]) + TTL_S + 60, "stale"),
@@ -398,6 +409,7 @@ def test_m16_api_reads_online_feature(project, pushed, tmp_path, monkeypatch):
     with TestClient(serve.app) as api:
         assert api.get("/readyz").status_code == 200
         replies = [api.post("/predict", json=request_at(z, ts)) for z, ts, _ in cases]
+        early = api.post("/predict", json=request_at(int(latest["PULocationID"].iloc[0]), int(latest["window_end"].iloc[0]) + 60))
     assert all(r.status_code == 200 for r in replies), replies[0].text
     frame = pd.DataFrame([{"tpep_pickup_datetime": pd.Timestamp(request_at(z, ts)["pickup_datetime"]), "PULocationID": z,
                            "DOLocationID": 236, "trip_distance": 2.5} for z, ts, _ in cases])
@@ -411,6 +423,9 @@ def test_m16_api_reads_online_feature(project, pushed, tmp_path, monkeypatch):
     assert [b.get("speed_15m_status") for b in body] == [c[2] for c in cases], "speed_15m_status: fresh, stale hoặc missing"
     assert body[-1][FEATURE] == DEFAULT_SPEED_MPH and body[-2][FEATURE] == DEFAULT_SPEED_MPH, (
         "thiếu feature hay quá TTL thì dùng DEFAULT_SPEED_MPH, không bao giờ 0"
+    )
+    assert early.status_code == 200 and early.json().get("speed_15m_status") == "stale" and early.json()[FEATURE] == DEFAULT_SPEED_MPH, (
+        "cửa sổ chưa sẵn sàng (giờ đón trước window_end + LATENESS_S) thì là stale và dùng DEFAULT_SPEED_MPH"
     )
 
 

@@ -13,7 +13,8 @@ không ai biết model nào tốn bao nhiêu. Milestone này biến capstone th�
 3. **Chi phí theo model**: từ log sử dụng của cụm dùng chung, báo cáo đội nào, model nào tốn bao nhiêu, gồm cả phần không ai muốn
    nhận (năng lực nhàn rỗi, workload không gắn nhãn).
 
-Bài tích hợp sau [module 17](../../modules/17-ml-platform-security/README.md). Kiến thức trong bài là nền; dựng và vận hành một nền
+Bài tích hợp sau [module 17](../../modules/17-ml-platform-security/README.md). **Dùng lại code module 17 của bạn**: template của bài
+Basic 01, sniff định dạng của Intermediate 01, ký và cổng của Intermediate 02, chi phí của Basic 03; ở đây gộp lại thành một nền tảng. Kiến thức trong bài là nền; dựng và vận hành một nền
 tảng ML cho nhiều đội thật (quản lý khoá, quy trình ngoại lệ, chargeback thật) cần kinh nghiệm mà một bài tập không thay được.
 
 ```mermaid
@@ -72,7 +73,8 @@ Trả lời sai hay thiếu thì `copier copy` dừng với lỗi và **không s
 - `tests/`: `python -m pytest -q` trong dự án pass **ít nhất 2 test**, và **fail** khi `mlproject.yaml` mất một trong ba tag.
 - Tệp Python trong template đặt đuôi `.py.jinja` (để pytest của repo không thu thập test của template).
 
-Model nào, feature nào là việc của bạn. Gợi ý: tiền mặt trong TLC luôn ghi tip 0, nên `payment_type` là feature mạnh nhất; một
+Template này **cố ý chuyên cho bài tip** (bảng chuyến TLC, `target: tip_amount` cố định, không có câu hỏi `target`): golden path
+thật sẽ có nhiều loại bài toán, ở đây gọn lại để tập trung vào luật nền tảng. Model nào, feature nào là việc của bạn. Gợi ý: tiền mặt trong TLC luôn ghi tip 0, nên `payment_type` là feature mạnh nhất; một
 `Ridge` vài feature lưu `coef`/`intercept` bằng safetensors là đủ, và nạp lại không cần pickle. Model gradient boosting (LightGBM có
 định dạng văn bản riêng, ONNX) cũng được nếu bạn giữ được luật "chỉ safetensors và JSON" hoặc tự mở rộng allowlist có lý do.
 
@@ -91,14 +93,19 @@ Model nào, feature nào là việc của bạn. Gợi ý: tiền mặt trong TL
 | `empty` | thư mục không có tệp nào |
 | `format:<tệp>` | tệp (đường dẫn tương đối, posix) không phải safetensors hay JSON **theo nội dung**; symlink cũng là `format` |
 | `signature` | `verify` trả `False` |
-| `scan` | kết quả quét không sạch: `returncode` không phải 0 hay 3, `stdout` không phải JSON object, có `issues`, hoặc có `errors` |
-| `tag:<khoá>` | trong `metadata.json` của `model_dir`, `tags.<khoá>` thiếu hoặc sai luật của template (owner email, team trong danh sách, cost center `CC-dddd`); không có `metadata.json` hợp lệ thì cả ba |
+| `scan` | kết quả quét không sạch: `returncode` không phải 0 hay 3, `stdout` không phải JSON object, có `issues`, có `errors`, hoặc `scan` ném exception (không có Docker, quá giờ): cổng không bao giờ ném lỗi |
+| `tag:<khoá>` | trong `metadata.json` của `model_dir`, `tags.<khoá>` thiếu hoặc sai luật của template (owner email, team trong danh sách, cost center `CC-dddd`), so **khớp cả chuỗi** (`"CC-2041\n"` là sai); không có `metadata.json` hợp lệ thì cả ba |
 
   Cách nhận định dạng theo nội dung như module 17 bài Intermediate 01: safetensors khi 8 byte đầu là độ dài header JSON hợp lệ, JSON
   khi cả tệp parse được. Cổng không bao giờ nạp tệp model.
 - `python -m eta.platform sign <model_dir> --key <private.pem> --out <sig>` và
   `python -m eta.platform gate <model_dir> --signature <sig> --public-key <pub>` (in quyết định JSON, mã thoát 0 khi được deploy,
-  khác 0 khi bị chặn; tự chạy modelscan bằng image `mlops-modelscan:0.8.8`, `--network none`).
+  khác 0 khi bị chặn; tự chạy modelscan bằng image `mlops-modelscan:0.8.8` đã build sẵn (không kéo từ mạng), `--network none`,
+  chỉ mount thư mục model, chỉ đọc).
+- Cổng chỉ có nghĩa khi bước deploy dùng **đúng các byte đã kiểm**: chép model vào nơi deploy rồi chạy cổng trên bản chép (hoặc deploy
+  từ chính thư mục vừa qua cổng, không ai ghi được), đừng kiểm một chỗ rồi deploy từ chỗ khác.
+- Phạm vi: cổng này áp cho model onboard qua template. Model ETA hiện vẫn nạp bằng `joblib`/MLflow (pickle) như M04–M12, cổng nền tảng
+  **chưa phủ** ETA; chuyển ETA sang định dạng không pickle là việc tiếp theo, không thuộc milestone này.
 
 ### 3. Onboarding trong tối đa 5 lệnh: `docs/onboarding.md`
 
@@ -113,8 +120,8 @@ Tệp có mục `## Onboarding` và trong đó một khối ` ```bash `. Luật 
 - Lệnh **cuối** là cổng deploy (`python -m eta.platform gate ...`).
 
 Test chạy mọi lệnh **trừ lệnh cuối** trong sandbox bwrap (không có Docker), theo thứ tự, mỗi lệnh `bash -euo pipefail -c`, giới hạn
-300 giây mỗi lệnh. Rồi test tự gọi `deploy_gate` của bạn với modelscan thật trên kết quả (thay cho lệnh cuối, vì modelscan cần
-Docker). Ngưỡng chất lượng: `n_test >= 10 000` và `mae <= 0.8 * baseline_mae` (bản tham chiếu: 0.72 so với 1.68 USD).
+300 giây mỗi lệnh. Rồi test gọi `deploy_gate` của bạn với `mlopskit.modelscan_run` trên kết quả, và chạy **lệnh cuối ngoài sandbox**
+(cần Docker cho modelscan) với cùng biến: phải thoát 0; sửa một byte của model rồi chạy lại: phải thoát khác 0. Ngưỡng chất lượng: `n_test >= 10 000` và `mae <= 0.8 * baseline_mae` (bản tham chiếu: 0.72 so với 1.68 USD).
 
 ### 4. Báo cáo chi phí: `eta.platform.cost` và `reports/`
 
@@ -152,10 +159,11 @@ uv run pytest tracks/mlops/capstone/project/tests -q -rs -k m17
 - `test_m17_onboarding_in_five_commands`: mục 3; kiểm thêm định dạng từng tệp model theo nội dung, tag trong `metadata.json`, verify
   chữ ký bằng thư viện `model-signing`, và cổng cho qua.
 - `test_m17_gate_blocks_unsigned_tampered_or_malicious`: một thư mục model mẫu (safetensors + JSON) qua cổng với modelscan thật trong
-  10 ca: sạch; chưa ký; sửa một byte sau khi ký; ký bằng khoá khác; bỏ tag sau khi ký; ký khi thiếu tag; owner sai dạng; ký kèm pickle
+  11 ca: sạch; chưa ký; sửa một byte sau khi ký; ký bằng khoá khác; bỏ tag sau khi ký; ký khi thiếu tag; owner sai dạng; cost center có
+  xuống dòng ở cuối; ký kèm pickle
   có payload; ký kèm pickle modelscan không bắt được, đuôi `.bin`; thêm pickle sau khi ký. Mỗi ca so đúng cả danh sách `reasons` và việc
-  `scan` được gọi đúng một lần; test chỉ báo tên ca sai. Cuối test: tệp đánh dấu không tồn tại, và `sign` từ chối chữ ký đặt trong thư
-  mục model.
+  `scan` được gọi đúng một lần; test chỉ báo tên ca sai. Cuối test: tệp đánh dấu không tồn tại, `scan` ném exception thì quyết định là `["scan"]`, và
+  `sign` từ chối chữ ký đặt trong thư mục model.
 - `test_m17_cost_report_recomputes`: tính lại bằng pandas từ `platform/usage.csv` và so với `reports/cost.yaml` của bạn (sai số 0,011
   mỗi số), kiểm `reports/cost.md`, rồi gọi `cost_report` trên log có thêm namespace lạ, model chỉ có khoảng trắng, namespace có khoảng
   trắng, và một ngày dùng GPU vượt năng lực.
