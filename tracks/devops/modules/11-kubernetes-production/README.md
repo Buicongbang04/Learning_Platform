@@ -545,8 +545,9 @@ registry OCI (cùng registry chứa image, module 07) hay repo HTTP.
 CKA hỏi "dùng Helm để cài thành phần của cluster": phần lớn add-on (ingress controller, cert-manager, metrics-server, Prometheus)
 được phát hành thành chart, và việc của bạn là đọc values rồi cài đúng một phiên bản ghim. Lab này **cần Internet** (index của repo,
 tệp chart, image `ghcr.io/stefanprodan/podinfo` do kubelet kéo về node), không có test chấm, và không có chart nào vendor sẵn trong
-repo. Chart `podinfo` nhỏ, không cần quyền cluster, chạy được dưới Pod Security `baseline`. Bản `6.7.1` dưới đây chưa được kiểm trên máy
-viết bài: nếu `helm search repo` không liệt kê nó, chọn một bản có trong danh sách và ghim bản đó.
+repo. Chart `podinfo` nhỏ, không cần quyền cluster, chạy được dưới Pod Security `baseline`. Bản `6.7.1` dưới đây có trong index của repo
+(kiểm 2026-11-10), nhưng chưa cài thử trên `devops-lab`: nếu `helm search repo` không liệt kê nó, chọn một bản có trong danh sách và
+ghim bản đó.
 
 ```bash
 export KUBECONFIG=~/.kube/devops-lab.yaml &&
