@@ -1,0 +1,18 @@
+[project]
+name = "census"
+version = "1.2.0"
+description = "Đếm giường đang dùng theo khoa từ tệp xuất CSV của hệ thống nhập viện (app mẫu, cần Python 3.12)"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic==2.11.7",
+]
+
+[project.scripts]
+census = "census.cli:main"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+exclude-newer = "2026-10-01T00:00:00Z"

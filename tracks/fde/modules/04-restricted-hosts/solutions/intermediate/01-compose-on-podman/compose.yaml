@@ -1,0 +1,10 @@
+name: notice
+
+services:
+  notice:
+    image: localhost/notice:1.0
+    ports:
+      - "18081:8080"
+    volumes:
+      - ./config:/etc/notice:ro,Z
+    restart: unless-stopped
