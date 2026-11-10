@@ -6,34 +6,38 @@ Lời giải ở `bench.py` cạnh tệp này:
 SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/05-gpu-field/exercises/intermediate/01-bench-at-factory -q
 ```
 
-Đo 2026-11-11 trên máy của repo: 114 s (boot ~10 s, ca ngày ~35 s, đo lại ~25 s, ca đêm ~10 s).
+Đo 2026-11-11 trên máy của repo: 182 s và 178 s (hai lần; boot ~10 s, ba ca, mỗi ca đo lại các model `ok`).
 
 ## Chuyện gì đã xảy ra ở ca đêm (đo thật trên `factory`)
 
-Không có OOM-kill, và đó chính là cái bẫy. Số liệu, cùng snapshot quillo, `-c 4096 -np 1 -t 2`:
+Không có OOM-kill, và đó chính là cái bẫy. Cùng snapshot quillo, cờ `-c 4096 -np 1 -t 2`, tokens/s của 3 lần sinh:
 
-| Tình huống | `MemAvailable` sau khi nạp model | small tokens/s | medium tokens/s |
-| --- | --- | --- | --- |
-| Mỗi lúc một model, chỉ có quillo | ~2,1 GB (small), ~1,45 GB (medium) | 35–50 | 19–25 |
-| Script team (nạp cả hai rồi mới đo), chỉ có quillo | ~1,3 GB | 42–47 | 18–23 |
-| Script team, job ca đêm giữ 1,2 GB | **144 MB** | **6,4–6,6** | **5,3–5,6** |
+| `MemAvailable` trước khi đo | Một model mỗi lúc | Script team: nạp cả hai rồi mới đo |
+| --- | --- | --- |
+| ~2 090–2 200 MB (ca ngày) | small 43–51, medium 20–25 | small 43–47, medium 21–25 (không chậm) |
+| ~1 670–2 000 MB | small 42–53, medium 21–25 | không chậm |
+| ~1 070–1 080 MB (job giữ ~1,1 GB; đo hai lần) | small 41–52 (còn ~900 MB trống), medium 21–25 (còn ~330 MB) | **small 5,9–6,3, medium 5,1–5,8**; còn ~170 MB trống |
 
-llama.cpp `mmap` tệp GGUF: trọng số là page cache, kernel được bỏ chúng khỏi RAM khi thiếu rồi đọc lại từ đĩa ở token sau.
-Khi script team nạp **cả hai** server trước rồi mới đo (thiết kế hợp lý trên máy lab 32 GB: chờ một lần cho cả hai), cộng
-với job ca đêm, RAM trống còn ~150 MB: không ai bị kill (không có bộ nhớ ẩn danh nào vượt RAM), nhưng trọng số của cả hai
-model, code của Postgres, của quillo và của job tổng hợp liên tục bị đẩy ra rồi đọc lại. Tokens/s rơi 4–8 lần, quillo chậm,
-job chậm, log sạch. Sáng ra hết tải thì "tự khỏi". Số của ca đêm không phải "tốc độ của model", mà là tốc độ của một máy
-đang thrash; khuyến nghị dựa trên nó là sai.
+llama.cpp `mmap` tệp GGUF: trọng số là page cache, được tính vào `MemAvailable` và kernel được bỏ chúng khỏi RAM khi
+thiếu rồi đọc lại từ đĩa ở token sau. Nạp model chiếm ít `MemAvailable` hơn kích thước tệp nhiều (đo: small ~150–180 MB,
+medium ~740 MB với `-c 4096`), nên ở ca ngày nạp cả hai cùng lúc vô hại. Ở ca đêm, mỗi model riêng vẫn vừa (medium còn dư
+~330 MB), nhưng khi script team nạp **cả hai** rồi mới đo, RAM trống xuống ~170 MB: không ai bị kill, nhưng trọng số của
+cả hai model, code của Postgres, quillo và job tổng hợp liên tục bị đẩy ra rồi đọc lại. Tokens/s rơi 7–9 lần, quillo chậm,
+log sạch, sáng ra hết tải thì "tự khỏi". Số của ca đêm không phải tốc độ của model mà là tốc độ của một máy đang thrash;
+khuyến nghị dựa trên nó là sai.
 
 Mặc định của llama.cpp làm chuyện nặng hơn nếu quên cờ: không đặt `-c` thì context theo model (32 768) cho 4 slot,
-`llm-medium` chiếm ~2,4 GB thay vì ~1,7 GB (đo bằng `memory.peak`).
+`llm-medium` chiếm ~2,4 GB thay vì ~1,7 GB (đo bằng `memory.peak`). Bài README module chỉ nói chung về `mmap`; các con
+số trên là của riêng máy này.
 
 ## Cách sửa
 
-1. **Mỗi lúc một model**, xoá container trước khi sang model sau: chỉ một server chiếm RAM tại một thời điểm.
-2. **Đọc `MemAvailable` ngay trước mỗi model** và không chạy khi ước tính không vừa (để lại 128 MB cho máy). Hệ số 1,7 ×
-   tệp lấy từ đo thật (RSS đỉnh / tệp: 1,33 với 0,5B, 1,55–1,65 với 1,5B ở `-c 4096`), làm tròn lên cho an toàn. Model bị
-   bỏ qua được ghi rõ `skipped_memory` kèm `need_mb` và `available_mb`: đó là một kết quả, không phải lỗi.
+1. **Mỗi lúc một model**: khởi động, đo, xoá container rồi mới sang model sau. Chỉ một server chiếm RAM tại một thời
+   điểm. Đây là thứ test ca đêm bắt: bộ chấm đo lại từng model một mình ngay sau đó, số của bạn phải trong 0,5×–2×.
+2. **Đọc `MemAvailable` ngay trước mỗi model** và không chạy khi ước tính không vừa (chừa 128 MB). Hệ số 0,8 × tệp làm
+   tròn lên từ phần `MemAvailable` đo được mà một server chiếm (0,35× với 0,5B, ~0,7× với 1,5B). Ca đêm cuối tháng (còn
+   ~830 MB) thì medium không được chạy: một mình nó cũng làm máy thrash. Model bị bỏ qua được ghi rõ `skipped_memory` kèm
+   `need_mb` và `available_mb`: đó là một kết quả, không phải lỗi.
 3. **Dọn khi bị ngắt**: `try/finally` bao cả bước `docker run`, chặn tạm SIGINT/SIGTERM/SIGHUP trong lúc `docker rm -f`,
    SIGTERM/SIGHUP (mất SSH) chuyển thành `KeyboardInterrupt` để `finally` chạy. Ngắt ở bất kỳ bước nào cũng không để lại
    container.
@@ -43,29 +47,28 @@ Mặc định của llama.cpp làm chuyện nặng hơn nếu quên cờ: không
    `memory.peak` của cgroup (page cache được tính cho cgroup đọc tệp đầu tiên, nên cùng model đo hai lần ra 1 658 MB rồi
    1 092 MB).
 
+Kiểm chứng (2026-11-11, mỗi phương án hai lần): script team nguyên trạng (nạp cả hai, không kiểm RAM) trượt ở ca đêm
+(`llm-small` báo 6,3 và 6,4 tokens/s, bộ chấm đo lại 48,7 và 51,6); script team thêm đúng quy tắc bỏ qua nhưng vẫn nạp cả
+hai trước trượt y như vậy (6,3/6,4 so với 54,2/49,0); lời giải tham chiếu đạt cả hai lần.
+
 Trả lời anh trực IT: số ca ngày đúng (khoảng ±30% tuỳ tải), số ca đêm sai vì chính script đã làm máy thiếu RAM; script mới
-tự bỏ qua `llm-medium` khi máy không đủ chỗ và không làm chậm quillo. Với khách: `llm-medium` chạy được ở ca ngày
-(~20–25 tokens/s, ~1,7 GB) nhưng ở ca đêm máy không đủ RAM cho cả quillo, job tổng hợp và medium; lên medium cần thêm RAM
-(xem bài advanced 02) hoặc chấp nhận dời job.
+đo từng model một, tự bỏ qua model mà máy không đủ chỗ và không làm chậm quillo. Với khách: `llm-medium` chạy được ở ca
+ngày và ca đêm thường (~20–25 tokens/s), nhưng những đêm job nặng hơn thì máy không đủ RAM cho cả quillo, job và medium;
+lên medium lâu dài cần thêm RAM (xem bài advanced 02) hoặc dời job.
 
 ## Các cách khác
 
 Đạt test và đúng với khách này:
 
-- Ước tính `need_mb` chặt hơn từ công thức bài basic 02 (đọc kiến trúc từ metadata GGUF) thay vì hệ số; miễn là vẫn ghi
-  `need_mb` theo đúng công thức README để báo cáo so được giữa các lần.
-- Chạy server bằng binary `llama-server` trích từ image thay vì container: không cần, image đã có sẵn.
+- Ước tính `need_mb` chặt hơn (đọc kiến trúc từ metadata GGUF, công thức bài basic 02) để tự quyết định, miễn là trường
+  `need_mb` trong báo cáo vẫn theo đúng công thức README để so được giữa các lần.
 
 Qua test nhưng sai với khách này:
 
-- Thêm `--mlock` hoặc `--no-mmap` "cho số ổn định": ở ca ngày đạt, nhưng trên máy chật RAM nó đổi thrash thành OOM-kill,
-  và OOM killer có thể chọn Postgres của quillo hay job của xưởng thay vì server benchmark.
-- Tự `docker update --memory` cho container của quillo hoặc dừng quillo trong lúc đo để "có chỗ": test vẫn thấy trạng thái
-  quillo không đổi nếu bạn khéo, nhưng đó là đụng vào production của khách mà không ai cho phép.
+- Thêm `--mlock` hoặc `--no-mmap` "cho số ổn định": trên máy chật RAM nó đổi thrash thành OOM-kill, và OOM killer có thể
+  chọn Postgres của quillo hay job của xưởng thay vì server benchmark.
+- Dừng hay hạ tài nguyên container của quillo trong lúc đo để "có chỗ": đụng vào production của khách mà không ai cho
+  phép, kể cả khi trạng thái container sau đó trông như cũ.
 
-- Giữ thiết kế "nạp mọi model được phép rồi mới đo" và chỉ đọc RAM một lần lúc đầu: ở mức RAM của test ca đêm medium bị
-  bỏ qua nên không lộ, nhưng mỗi model đều được so với cùng một con số RAM trống trong khi chúng cùng nằm trong RAM; với ba
-  model hay một ca đêm nặng hơn thì tổng vượt RAM và máy lại thrash.
-
-Không đạt: script team nguyên trạng (không có `need_mb`/`available_mb`, ca đêm vẫn đo medium), bỏ qua model mà không ghi
-lý do, để lại container khi lỗi.
+Không đạt: script team nguyên trạng hoặc chỉ thêm quy tắc bỏ qua (nạp cả hai, ca đêm ra số sai), đo model khi không đủ
+RAM (ca đêm cuối tháng), bỏ qua model mà không ghi lý do, để lại container.

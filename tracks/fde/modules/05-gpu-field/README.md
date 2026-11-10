@@ -105,9 +105,13 @@ Ba cơ chế tương thích, đừng nhầm:
   của 12.0, với giới hạn. Mốc tối thiểu theo major: 11.x cần ≥ 450.80.02, 12.x cần ≥ 525.60.13 (≥ 525), 13.x cần ≥ 580.
   Giới hạn: tính năng cần driver mới trả `cudaErrorCallRequiresNewerDriver`, và **PTX không JIT được** trên driver cũ;
   binary phải có sẵn SASS cho đúng kiến trúc card. llama.cpp, PyTorch build sẵn thường có SASS cho các kiến trúc phổ biến
-  nên chạy được; kernel tự viết chỉ đóng PTX thì không. Đây là lý do image CUDA 12.8.1 của llama.cpp khai
-  `NVIDIA_REQUIRE_CUDA=cuda>=12.8 brand=nvidia,driver>=550,driver<551 …`: toolkit cho phép chạy trên nhánh 550 dù 550 <
-  570.26.
+  nên chạy được; kernel tự viết chỉ đóng PTX thì không.
+  **Trong container còn một cửa nữa**: image CUDA chính thức khai biến `NVIDIA_REQUIRE_CUDA`, và toolkit
+  (`nvidia-container-cli`) từ chối khởi động container khi driver không thoả nó. Image CUDA 12.8.1 của llama.cpp khai
+  `cuda>=12.8` kèm ngoại lệ theo nhánh `brand=…,driver>=470,driver<471`, `535`, `550`, `560`, `565`: driver nhánh 550
+  chạy được dù 550 < 570.26, nhưng driver 545 hay 555 (vẫn ≥ 525, minor compatibility cho phép) bị toolkit chặn với
+  `unsatisfied condition: cuda>=12.8`, trừ khi đặt `NVIDIA_DISABLE_REQUIRE=1` (tức là tự chịu trách nhiệm về tổ hợp
+  đó). Đọc biến này bằng `docker image inspect <image> --format '{{json .Config.Env}}'` trước khi hứa.
 - **Forward compatibility** (gói `cuda-compat-<major>-<minor>`): chạy CUDA mới trên driver cũ **khác major**, nhưng chỉ
   cho GPU data center, vài SKU RTX chứng nhận NGC và Jetson, không cho GeForce; và chỉ trên nhánh driver LTS/production
   còn hỗ trợ. Với khách dùng RTX 3060 thì câu trả lời là "nâng driver", không có đường tắt.
@@ -123,7 +127,7 @@ báo cáo, đừng đề xuất "nâng driver mới nhất".
 | Cách | Cần | Ghi chú |
 | --- | --- | --- |
 | `--gpus all` (runtime hook của toolkit) | `nvidia-container-toolkit` | Cách quen thuộc; Docker ≥ 19.03 |
-| CDI: `--device nvidia.com/gpu=all` | toolkit ≥ 1.12.0 (`nvidia-ctk cdi generate`), Docker ≥ 25.0 | Docker < 28.3.0 phải bật `"features": {"cdi": true}` trong `daemon.json`; từ 28.3.0 bật sẵn. Podman, containerd dùng CDI tự nhiên. Spec ở `/etc/cdi/nvidia.yaml` phải dựng lại sau mỗi lần nâng driver (toolkit ≥ 1.18 có `nvidia-cdi-refresh.service`) |
+| CDI: `--device nvidia.com/gpu=all` | toolkit ≥ 1.12.0 (`nvidia-ctk cdi generate`), Docker ≥ 25.0 | Docker 25.0–28.1 phải bật `"features": {"cdi": true}` trong `daemon.json`; từ 28.2.0 bật sẵn (moby#49963; trang tham chiếu dockerd ghi 28.3.0). Podman, containerd dùng CDI tự nhiên. Spec (`/etc/cdi/nvidia.yaml` khi tạo tay bằng `nvidia-ctk cdi generate`, `/var/run/cdi/nvidia.yaml` khi do `nvidia-cdi-refresh.service` của toolkit ≥ 1.18 tạo) phải dựng lại sau mỗi lần nâng driver |
 
 Toolkit cũ là rủi ro bảo mật thật, không phải "chỉ cũ": CVE-2024-0132 (sửa ở 1.16.2), CVE-2025-23266 "NVIDIAScape"
 (9.0, sửa ở 1.17.8), CVE-2026-24260 (8.5, sửa ở 1.19.1, bulletin 30/06/2026) đều cho container thoát ra host. Toolkit
@@ -204,7 +208,7 @@ Vài con số để có cảm giác (overhead 512 MB, context 8192, một chuỗ
 
 | Model | Quantization | Trọng số | KV 8k | Tổng | Vừa |
 | --- | --- | --- | --- | --- | --- |
-| Qwen2.5-7B | Q4_K_M (tệp thật) | 4 466 MB | 448 MB | 5 426 MB | RTX 3060 12 GB, còn chỗ cho 4 người × 32k context |
+| Qwen2.5-7B | Q4_K_M (tệp thật) | 4 466 MB | 448 MB | 5 426 MB | RTX 3060 12 GB; 4 người × 32k context cũng vừa sát (12 146 / 12 288 MB) |
 | Qwen2.5-7B | FP16 | 14 515 MB | 448 MB | 15 475 MB | Không vừa 12 GB; vừa L4 24 GB |
 | Qwen2.5-32B | ~4.85 bpw | 18 790 MB | 2 048 MB | 21 350 MB | 24 GB, nhưng context tối đa ~21k; KV q8_0 thì 32k vừa |
 | Qwen2.5-72B | ~4.85 bpw | 42 033 MB | 2 560 MB | 45 105 MB | 48 GB (2× 24 GB hoặc một L40S/A6000) |
@@ -216,14 +220,13 @@ i7-11800H, llama.cpp b11718, `-c 4096 -np 1 -t 2`): `llm-small` 35–50 tokens/s
 tokens/s, RSS đỉnh ~1,6–1,75 GB. Người đọc thoải mái ở ~5–10 tokens/s, nên một model 1–3B trên CPU văn phòng là dùng
 được cho hỏi đáp tài liệu; model 7B trên 2 core thì không.
 
-**RAM thiếu trên CPU thì chuyện gì xảy ra?** llama.cpp mặc định `mmap` tệp GGUF: trọng số là page cache của tệp, kernel
-được quyền bỏ ra khỏi RAM khi thiếu rồi đọc lại từ đĩa khi cần. Hệ quả đo được trên `factory` 3 GB: khi RAM trống còn
-vài trăm MB, không tiến trình nào bị OOM-kill, nhưng mọi thứ dùng tệp (trọng số model, cả code của các dịch vụ khác)
-bị đọc đi đọc lại từ đĩa, tokens/s rơi 4–8 lần và cả máy chậm theo. Đó là kiểu hỏng khó thấy nhất: không có lỗi trong
-log. Bật `--mlock` hay `--no-mmap` thì đổi lại: trọng số thành bộ nhớ không thu hồi được, thiếu RAM là OOM-kill (và OOM
-killer có thể chọn tiến trình của khách chứ không phải của bạn). Mặc định của llama.cpp server b11718 cũng đáng nhớ:
-không đặt `-c` thì context lấy theo model (32 768 với Qwen2.5) cho 4 slot dùng chung, `llm-medium` khi đó chiếm ~2,4 GB
-thay vì ~1,7 GB. Luôn đặt `-c`, `-np`, `-t` tường minh, đúng cấu hình sẽ chạy thật.
+**`mmap` và bộ nhớ.** llama.cpp mặc định `mmap` tệp GGUF: trọng số nằm trong page cache của tệp, là bộ nhớ kernel được
+phép thu hồi rồi đọc lại từ đĩa khi cần, nên nó được tính vào `MemAvailable` dù model đang dùng. `--mlock` giữ chặt các
+trang đó trong RAM, `--no-mmap` đọc trọng số vào bộ nhớ ẩn danh; cả hai biến trọng số thành bộ nhớ không thu hồi được,
+nên đổi cách máy phản ứng khi thiếu RAM (đọc `man 5 proc` mục `MemAvailable` và tài liệu cờ của llama.cpp server). Mặc
+định của llama.cpp server b11718 cũng đáng nhớ: không đặt `-c` thì context lấy theo model (32 768 với Qwen2.5) cho 4 slot
+dùng chung, `llm-medium` khi đó chiếm ~2,4 GB thay vì ~1,7 GB. Luôn đặt `-c`, `-np`, `-t` tường minh, đúng cấu hình sẽ
+chạy thật.
 
 ## 5. Benchmark và báo cáo năng lực phần cứng
 
@@ -314,7 +317,7 @@ GPU của khách" phải đi kèm một phép đo chất lượng trên dữ li�
 - [NVIDIA — Security Bulletin: Container Toolkit, July 2025 (CVE-2025-23266)](https://nvidia.custhelp.com/app/answers/detail/a_id/5659)
 - [NVIDIA — Security Bulletin: Container Toolkit, June 2026 (CVE-2026-24260)](https://nvidia.custhelp.com/app/answers/detail/a_id/5850)
 - [NVIDIA — MIG User Guide](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/index.html)
-- [Docker — dockerd reference (CDI)](https://docs.docker.com/reference/cli/dockerd/)
+- [Docker — dockerd reference (CDI)](https://docs.docker.com/reference/cli/dockerd/), [moby#49963 — Enable CDI by default (28.2.0)](https://github.com/moby/moby/pull/49963)
 - [llama.cpp — server README (cờ `-c`, `-np`, `-t`, `-ngl`, `/completion`, `timings`)](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)
 - [vLLM — GPU installation (yêu cầu phần cứng)](https://docs.vllm.ai/en/latest/getting_started/installation/gpu.html)
 - [Ollama — Documentation](https://github.com/ollama/ollama/tree/main/docs)

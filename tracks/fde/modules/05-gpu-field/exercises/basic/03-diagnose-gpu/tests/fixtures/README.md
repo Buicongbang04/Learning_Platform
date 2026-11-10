@@ -20,7 +20,7 @@ Số liệu (nhiệt độ, công suất, PID, bộ nhớ) là số bịa nhưng
 | `busy-rtx3060.txt` | Cùng máy, một tiến trình `python3` của người khác giữ ~10,5 GiB, GPU-Util 97% |
 | `two-l4-one-busy.txt` | Server 2× L4 24 GB, GPU 0 bận, GPU 1 trống |
 | `container-hidden-processes.txt` | Gọi từ trong container: bộ nhớ đã dùng ~19 GiB nhưng `No running processes found` |
-| `mig-a100.txt` | A100-SXM4-40GB bật MIG, hai instance `1g.10gb` |
+| `mig-a100.txt` | A100-SXM4-80GB bật MIG, hai instance `1g.10gb` |
 | `no-devices.txt` | Driver nạp nhưng không nhận card |
 | `driver-library-mismatch.txt` | Gói driver đã nâng, module kernel cũ chưa reboot |
 | `nvml-unknown-error-in-container.txt` | Container mất quyền device sau `systemctl daemon-reload` |

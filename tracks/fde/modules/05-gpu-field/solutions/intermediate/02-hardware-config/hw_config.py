@@ -79,23 +79,28 @@ def env_values(config: dict) -> dict[str, str]:
 
 
 def rewrite_env(path: Path, values: dict[str, str]) -> bool:
-    old = path.read_text()
+    old = path.read_bytes()
+    newline = b"\r\n" if b"\r\n" in old else b"\n"
     lines, seen = [], set()
-    for line in old.splitlines():
-        key = line.split("=", 1)[0]
-        if key in values and "=" in line and not line.lstrip().startswith("#"):
-            lines.append(f"{key}={values[key]}")
+    for raw in old.splitlines(keepends=True):
+        body = raw.rstrip(b"\r\n")
+        ending = raw[len(body):]
+        key = body.split(b"=", 1)[0].decode(errors="replace")
+        if key in values and b"=" in body and not body.lstrip().startswith(b"#"):
+            lines.append(f"{key}={values[key]}".encode() + ending)
             seen.add(key)
         else:
-            lines.append(line)
-    lines += [f"{key}={value}" for key, value in values.items() if key not in seen]
-    new = "\n".join(lines) + "\n"
+            lines.append(raw)
+    missing = [f"{key}={value}".encode() + newline for key, value in values.items() if key not in seen]
+    if missing and lines and not lines[-1].endswith(b"\n"):
+        lines[-1] += newline
+    new = b"".join(lines + missing)
     if new == old:
         return False
     tmp = path.with_name(path.name + ".hw-config.tmp")
     tmp.unlink(missing_ok=True)
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as handle:
+    with os.fdopen(fd, "wb") as handle:
         handle.write(new)
     os.chmod(tmp, path.stat().st_mode & 0o777)
     os.replace(tmp, path)
@@ -115,7 +120,7 @@ def place_model(quillo: Path, models_dir: Path, filename: str) -> None:
         os.link(source, tmp)
     except OSError:
         shutil.copyfile(source, tmp)
-    os.chmod(tmp, 0o644)
+        os.chmod(tmp, 0o644)
     os.replace(tmp, target)
 
 
@@ -141,11 +146,14 @@ def apply(quillo: Path, models_dir: Path, config: dict) -> None:
     if not env.is_file() or not (quillo / "compose.yaml").is_file():
         raise SystemExit(f"hw_config: {quillo} không phải thư mục cài quillo (thiếu .env hoặc compose.yaml)")
     if config["backend"] == "cuda":
-        found = subprocess.run(["docker", "image", "inspect", CUDA_IMAGE], capture_output=True, text=True)
+        found = subprocess.run(["docker", "image", "inspect", CUDA_IMAGE], capture_output=True, text=True, timeout=60)
         if found.returncode != 0:
-            print(f"hw_config: máy có GPU nhưng chưa có image {CUDA_IMAGE}; nạp image đó rồi chạy lại. "
-                  "Không đổi gì.", file=sys.stderr)
+            print(f"hw_config: máy có GPU nhưng chưa có image {CUDA_IMAGE}; nạp image đó (từ bundle GPU) rồi chạy "
+                  "lại. Không đổi gì.", file=sys.stderr)
             sys.exit(3)
+        print("hw_config: áp cấu hình CUDA cho quillo 1.0.0 (compose CPU) chưa được hỗ trợ. Không đổi gì.",
+              file=sys.stderr)
+        sys.exit(4)
     place_model(quillo, models_dir, config["llm_file"])
     blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM, signal.SIGHUP})
     try:

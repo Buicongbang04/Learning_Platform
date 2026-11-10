@@ -15,8 +15,9 @@ DRIVER_DROPS = (("495", "5.0"), ("590", "7.5"))
 TOOLKIT_CDI = "1.12.0"
 TOOLKIT_SAFE = "1.19.1"
 DOCKER_CDI = "25.0.0"
-DOCKER_CDI_DEFAULT = "28.3.0"
-ERRORS = {"no_driver", "driver_too_old", "cuda_drops_gpu", "driver_drops_gpu", "no_toolkit", "cdi_unsupported"}
+DOCKER_CDI_DEFAULT = "28.2.0"
+ERRORS = {"no_driver", "driver_too_old", "require_cuda_blocks", "cuda_drops_gpu", "driver_drops_gpu", "no_toolkit",
+          "cdi_unsupported"}
 
 
 def version(text: str) -> tuple[int, ...]:
@@ -48,8 +49,13 @@ def check(host: dict) -> dict:
             add("driver_too_old", f"CUDA {minor} cần driver ≥ {CUDA_MIN_DRIVER[minor]} (tối thiểu ≥ "
                                   f"{MAJOR_MIN_DRIVER[major]} nhờ minor version compatibility), máy có {driver}")
         elif not exact:
-            add("minor_version_compat", f"CUDA {minor} chuẩn cần ≥ {CUDA_MIN_DRIVER[minor]}; {driver} chạy được "
-                                        "nhờ minor version compatibility, không JIT được PTX")
+            branches = host.get("require_branches")
+            if branches is not None and version(driver)[0] not in branches and not host.get("disable_require"):
+                add("require_cuda_blocks", f"NVIDIA_REQUIRE_CUDA của image chỉ miễn cho nhánh {sorted(branches)}; "
+                                           f"toolkit từ chối driver {driver} (cuda>={minor})")
+            else:
+                add("minor_version_compat", f"CUDA {minor} chuẩn cần ≥ {CUDA_MIN_DRIVER[minor]}; {driver} chạy được "
+                                            "nhờ minor version compatibility, không JIT được PTX")
         for branch, lowest in DRIVER_DROPS:
             if version(driver) >= version(branch) and cc < version(lowest):
                 add("driver_drops_gpu", f"driver ≥ {branch} không hỗ trợ GPU compute capability < {lowest}")

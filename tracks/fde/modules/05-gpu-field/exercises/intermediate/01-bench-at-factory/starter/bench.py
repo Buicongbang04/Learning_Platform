@@ -90,6 +90,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("models", nargs="+", help="tên=đường_dẫn_gguf, theo thứ tự từ nhỏ tới lớn")
     args = parser.parse_args(argv)
     cores = physical_cores()
+    available = meminfo()["MemAvailable"]
     servers = []
     try:
         for item in args.models:
@@ -105,8 +106,9 @@ def main(argv: list[str]) -> int:
             wait_ready(base)
         results = []
         for name, path, container, base in servers:
-            results.append({"name": name, "file": str(path), "status": "ok", "tokens_per_s": bench(base),
-                            "peak_rss_mb": peak_rss_mb(container)})
+            need = -(-path.stat().st_size * 8 // (10 * 1048576))
+            results.append({"name": name, "file": str(path), "need_mb": need, "available_mb": available,
+                            "status": "ok", "tokens_per_s": bench(base), "peak_rss_mb": peak_rss_mb(container)})
     finally:
         for _, _, container, _ in servers:
             docker("rm", "-f", container)

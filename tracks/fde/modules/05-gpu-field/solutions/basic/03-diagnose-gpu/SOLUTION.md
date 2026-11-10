@@ -13,7 +13,7 @@ SOLUTION=1 uv run pytest tracks/fde/modules/05-gpu-field/exercises/basic/03-diag
 2. Bảng: duyệt từng dòng tới `| Processes:` hoặc `| MIG devices:`; dòng nào khớp `|…| <used>MiB / <total>MiB |…|` là
    dòng hai của một GPU, dòng ngay sau có `MIG M.` ở ô cuối. Tách theo `|` thay vì đếm khoảng trắng, vì tên card dài ngắn
    khác nhau và bảng MIG có ô `Memory-Usage` riêng (không được tính).
-3. MIG trước bộ nhớ: A100 bật MIG trông như trống (38 MiB / 40960 MiB) nhưng không ai được cấp cả card.
+3. MIG trước bộ nhớ: A100 bật MIG trông như trống (38 MiB / 81920 MiB) nhưng không ai được cấp cả card.
 4. Bận hay không theo **bộ nhớ trống so với nhu cầu**, không theo danh sách tiến trình: `container-hidden-processes.txt`
    không liệt kê tiến trình nào (chúng ở PID namespace khác) mà VRAM đã dùng 19 GiB.
 5. Nhiều GPU: chỉ cần một GPU đủ chỗ là `ok` (`two-l4-one-busy.txt`: GPU 0 bận, GPU 1 trống); khi đó cấu hình runtime

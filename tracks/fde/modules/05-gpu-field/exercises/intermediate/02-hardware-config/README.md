@@ -32,6 +32,7 @@ Viết `starter/hw_config.py` (Python 3.10+, thư viện chuẩn, chạy trên m
 | `mem_total_mb(path=Path("/proc/meminfo"))` | `MemTotal` theo MB (KiB // 1024) |
 | `gpu_info()` | GPU dùng được đầu tiên `{"name": str, "memory_mb": int}`, hoặc `None`. "Dùng được" nghĩa là `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits` (tìm trên `PATH`) chạy được, thoát `0` và in ít nhất một dòng `<tên>, <MiB>` |
 | `choose(cores, mem_mb, gpu)` | Dict cấu hình theo bảng dưới |
+| `rewrite_env(path, values)` | Đặt các khoá trong `values` vào tệp `.env` ở `path` (thay dòng `KHOÁ=…` đã có, thêm khoá chưa có ở cuối); mọi dòng khác giữ nguyên từng byte, kể cả `\r\n` và dòng cuối không có xuống dòng; giữ quyền tệp; trả `True` nếu nội dung đổi, `False` nếu không |
 
 Quy tắc của `choose` (`budget` = `gpu["memory_mb"]` nếu có GPU, không thì `mem_mb`):
 
@@ -49,8 +50,10 @@ CLI `python3 hw_config.py [--quillo DIR] [--models DIR] [--dry-run]` (mặc đ�
 hình từ máy đang chạy và in nó dạng JSON một dòng ở **dòng cuối** stdout, thoát `0`. Không có `--dry-run` thì trước khi
 in còn **áp dụng** vào bản cài quillo đang chạy bằng compose:
 
-1. `backend` là `cuda` mà máy chưa có image `ghcr.io/ggml-org/llama.cpp:server-cuda-b11718`: in lý do ra stderr, thoát
-   `3`, **không đổi gì**.
+1. Installer chỉ dùng thứ đã có trên máy (bundle, image đã nạp, `--models`); không tải hay kéo gì qua mạng. `backend` là
+   `cuda` thì: máy chưa có image `ghcr.io/ggml-org/llama.cpp:server-cuda-b11718` → in lý do ra stderr, thoát `3`; đã có
+   image → thoát `4` (áp cấu hình CUDA cho compose CPU của quillo 1.0.0 nằm ngoài phạm vi bài). Cả hai trường hợp **không
+   đổi gì** (`.env`, model, image, container) và quyết định trong ≤ 5 s (lời giải tham chiếu: < 0,1 s).
 2. Model chọn chưa có trong `<quillo>/models/` thì lấy từ `--models` (thiếu cả ở đó thì thoát khác 0 kèm lý do).
 3. Trong `<quillo>/.env` đặt `QUILLO_LLM_FILE`, `QUILLO_LLM_MODEL` (tên `llm-…`), `QUILLO_LLM_THREADS`,
    `QUILLO_EMBED_THREADS`; mọi dòng khác giữ nguyên từng byte, tệp giữ quyền `600` (có secret).
@@ -65,18 +68,21 @@ Test:
   không chạy (in nguyên văn output của laptop ở bài basic 03, thoát 9); có GPU RTX 3060 12288 MiB. Máy `factory` không có
   `nvidia-smi` nào.
 - Boot snapshot `05-gpu-field-factory` (2 core, 3072 MB) rồi `05-gpu-field-lab` (`lab-open`, 4 core, 5120 MB), cả hai đang
-  chạy quillo 1.0.0 với `llm-small` và có `llm-medium` ở `~/models`. Trên `lab-open`, `PATH` có `nvidia-smi` báo driver
-  không chạy; trước đó test chạy một lần với `nvidia-smi` báo có RTX 3060 (máy không có image CUDA).
+  chạy quillo 1.0.0 với `llm-small` và có `llm-medium` ở `~/models`. Trên `factory`, test chạy trước một lần với
+  `nvidia-smi` giả báo có RTX 3060 (máy không có image CUDA), rồi chạy bình thường (không có `nvidia-smi`). Trên
+  `lab-open`, `PATH` có `nvidia-smi` báo driver không chạy.
 
 Đo trên máy của repo: cả bài ~80 s.
 
 ## Tiêu chí đạt
 
-- `test_physical_cores_on_recorded_topology`, `test_choose_rules`: đúng giá trị.
+- `test_physical_cores_on_recorded_topology`, `test_choose_rules`, `test_env_rewrite_keeps_other_bytes` (`.env` có
+  `\r\n`, dòng cuối không xuống dòng): đúng giá trị.
 - `test_dry_run_with_nvidia_smi`: JSON đúng với phần cứng thật của máy bạn (`lscpu`, `/proc/meminfo`) cho cả hai trạng
   thái `nvidia-smi`.
 - `test_factory_and_lab`:
-  - `lab-open` với `nvidia-smi` báo có GPU: thoát `3`, `.env` và container không đổi.
+  - `factory` với `nvidia-smi` báo có GPU: thoát `3` trong ≤ 5 s (đo trong VM), `.env`, thư mục `models`, danh sách
+    image và container không đổi.
   - Trên mỗi máy: thoát `0`, JSON đúng quy tắc với số core vật lý (`lscpu`) và `MemTotal` của chính máy đó; `.env` có bốn
     khoá đúng, các dòng khác không đổi, quyền `600`; container `quillo-llm-1` chạy đúng tệp model và `-t`,
     `quillo-embed-1` đúng `-t`; `/healthz` 200; chạy lại lần hai không khởi động lại container quillo nào.

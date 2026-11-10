@@ -6,7 +6,7 @@ Lời giải ở `hw_config.py` cạnh tệp này:
 SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/05-gpu-field/exercises/intermediate/02-hardware-config -q
 ```
 
-Đo 2026-11-11 trên máy của repo: ~75 s (hai VM lần lượt, `factory` 3072 MB rồi `lab-open` 5120 MB).
+Đo 2026-11-11 trên máy của repo: ~92 s (hai VM lần lượt, `factory` 3072 MB rồi `lab-open` 5120 MB).
 
 ## Kết quả trên hai máy
 
@@ -25,14 +25,20 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/05-gpu-field/exercises/in
 2. **"Có `nvidia-smi`" ≠ "có GPU".** Laptop của repo có card và có `nvidia-smi`, nhưng module không nạp nên `nvidia-smi`
    thoát 9. GPU chỉ "dùng được" khi lệnh query chạy thành công và in ra dòng có tên + bộ nhớ. Chọn `cuda` trên máy như vậy
    thì llama.cpp CUDA không khởi động (hoặc lặng lẽ chạy CPU với image to gấp mấy lần).
-3. **Có GPU mà thiếu image CUDA thì dừng, không đổi gì.** Thoát 3 trước khi đụng `.env` hay container; thông báo nói thiếu
-   gì. Một installer "đổi một nửa rồi chết" ở máy khách là sự cố tệ hơn installer từ chối chạy.
-4. **`.env` có secret**: sửa đúng bốn khoá, giữ nguyên mọi dòng khác, ghi tệp tạm tạo sẵn quyền `0600` (không phải ghi rồi
+3. **Có GPU mà thiếu image CUDA thì dừng ngay, không đổi gì, không tải gì.** Đây là chỗ hỏng thật của `factory`: máy ra
+   internet qua proxy, nhưng proxy chỉ được khai trong `/etc/environment` (cho phiên đăng nhập), còn `dockerd` không có
+   proxy nào. Một installer "thấy thiếu image thì `docker pull`" treo ở bước phân giải DNS rồi chết sau ~50 s (đo:
+   `lookup ghcr.io … i/o timeout`); tải model hay image bằng `curl` qua proxy thì đi được ra internet nhưng lấy về thứ
+   không ghim, chưa đánh giá. Lời giải kiểm `docker image inspect` (đo: 0,06–0,08 s), thoát 3 kèm thông báo nói thiếu gì
+   và lấy ở đâu (bundle GPU). Có image thì thoát 4: bundle 1.0.0 chỉ có compose CPU, áp cấu hình CUDA là việc của một
+   bản phát hành khác. Một installer "đổi một nửa rồi chết" ở máy khách là sự cố tệ hơn installer từ chối chạy.
+4. **`.env` có secret**: sửa đúng bốn khoá, giữ nguyên mọi dòng khác **theo byte** (làm việc trên `bytes`, giữ kết thúc
+   dòng `\r\n` của từng dòng, chỉ thêm xuống dòng cho dòng cuối khi phải nối khoá mới), ghi tệp tạm tạo sẵn quyền `0600` (không phải ghi rồi
    mới `chmod`: giữa hai bước tệp đọc được bởi mọi người) rồi `os.replace` nguyên tử; SIGINT/SIGTERM bị chặn trong lúc
    ghi để không bao giờ còn `.env` dở dang.
 5. **Idempotent**: chỉ ghi khi nội dung đổi; `docker compose up -d` tự không tạo lại service có cấu hình không đổi, nên lần
    chạy thứ hai không khởi động lại container nào. Model chỉ chép khi chưa có, chép qua tệp `.part` rồi đổi tên (hardlink
-   khi cùng filesystem, không tốn thêm 1,1 GB).
+   khi cùng filesystem, không tốn thêm 1,1 GB; không `chmod` tệp hardlink vì đó cũng là inode của tệp nguồn).
 6. **Đi thẳng tới `127.0.0.1`** khi chờ `/healthz` (`ProxyHandler({})`): máy xưởng có `http_proxy` trong
    `/etc/environment`.
 

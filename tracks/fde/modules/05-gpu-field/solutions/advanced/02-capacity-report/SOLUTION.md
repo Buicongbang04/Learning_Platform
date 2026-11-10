@@ -40,7 +40,8 @@
 > gian trả lời gấp đôi mức hiện tại trong 15 phút, khi đó quay về small bằng `hw_config.py` cấu hình cũ.
 > Server 2 × V100 16 GB (driver 535, toolkit 1.14): V100 là compute capability 7.0, nên chỉ dùng được CUDA ≤ 12.9 và
 > driver tối đa nhánh R580 (nhánh cuối hỗ trợ Volta, LTS tới giữa 2028); vLLM bản hiện tại cần CC ≥ 7.5 nên **không** chạy;
-> llama.cpp CUDA (image CUDA 12.8.1) chạy được trên driver 535 nhờ minor version compatibility. Toolkit 1.14 dính
+> llama.cpp CUDA (image CUDA 12.8.1) chạy được trên driver 535 nhờ minor version compatibility (nhánh 535 nằm
+> trong danh sách `NVIDIA_REQUIRE_CUDA` của image miễn). Toolkit 1.14 dính
 > CVE-2024-0132, CVE-2025-23266, CVE-2026-24260 (thoát container): phải nâng lên ≥ 1.19.1 trước khi dùng. Kết luận: dùng
 > được làm phương án tạm (llama.cpp, model 7B 4-bit vừa một card 16 GB, card thứ hai dự phòng) tới khi có GPU mới, kèm ghi chú vòng đời 2028; không
 > nên mua thêm card cùng thế hệ.
@@ -64,8 +65,8 @@
 >
 > **5. Phụ lục cho IT.** Tổ hợp đã kiểm: image `ghcr.io/ggml-org/llama.cpp:server-b11718` (trong bundle quillo 1.0.0),
 > `qwen2.5-0.5b-instruct-q4_k_m.gguf` sha256 `74a4da8c…a9db`, `qwen2.5-1.5b-instruct-q4_k_m.gguf` sha256
-> `6a1a2eb6…407e`; với GPU: image `…:server-cuda-b11718` (CUDA 12.8.1), driver ≥ 570.26 (hoặc ≥ 525.60.13 nhờ minor
-> version compatibility), toolkit ≥ 1.19.1. Tự kiểm: `nvidia-smi > gpu.txt 2>&1` và `diagnose_gpu.py gpu.txt 6000`;
+> `6a1a2eb6…407e`; với GPU: image `…:server-cuda-b11718` (CUDA 12.8.1), driver ≥ 570.26, hoặc nhánh 535/550/560/565
+> (minor version compatibility, được `NVIDIA_REQUIRE_CUDA` của image miễn; nhánh khác bị toolkit chặn), toolkit ≥ 1.19.1. Tự kiểm: `nvidia-smi > gpu.txt 2>&1` và `diagnose_gpu.py gpu.txt 6000`;
 > `cuda_compat.py host.json`; `python3 bench.py --image … --out report.json llm-small=… llm-medium=…` ở ca ngày và ca đêm.
 
 Bài mẫu tách số đã đo (mục 2, có nguồn là hai báo cáo `bench.py`) với số ước lượng (đồng thời, VRAM, thời gian tới chữ

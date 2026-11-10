@@ -16,6 +16,7 @@ QUILLO = "/home/fde/quillo-1.0.0"
 FILES = {"llm-small": "qwen2.5-0.5b-instruct-q4_k_m.gguf", "llm-medium": "qwen2.5-1.5b-instruct-q4_k_m.gguf"}
 KEYS = ("QUILLO_LLM_FILE", "QUILLO_LLM_MODEL", "QUILLO_LLM_THREADS", "QUILLO_EMBED_THREADS")
 RUN_TIMEOUT = 240
+GPU_EXIT_LIMIT = 5.0
 BROKEN = "#!/bin/sh\ncat <<'EOF'\n{text}EOF\nexit 9\n"
 WORKING = ("#!/bin/sh\ncase \"$*\" in\n*--query-gpu*) echo 'NVIDIA GeForce RTX 3060, 12288' ;;\n"
            "*) cat <<'EOF'\n{text}EOF\n;;\nesac\nexit 0\n")
@@ -53,6 +54,24 @@ def test_physical_cores_on_recorded_topology(mod, tmp_path):
     for online, want in (("0-3,8-11\n", 4), ("0,8\n", 1), ("0-5\n", 6), ("0-15\n", 8)):
         (laptop / "online").write_text(online)
         assert mod.physical_cores(laptop) == want, f"online={online.strip()}: cần {want} core vật lý"
+
+
+def test_env_rewrite_keeps_other_bytes(mod, tmp_path):
+    env = tmp_path / ".env"
+    original = b"# secrets\r\nQUILLO_ADMIN_TOKEN=abc \r\nQUILLO_LLM_FILE=old.gguf\r\nQUILLO_PORT=18080"
+    env.write_bytes(original)
+    env.chmod(0o600)
+    values = {"QUILLO_LLM_FILE": "new.gguf", "QUILLO_LLM_MODEL": "llm-small", "QUILLO_LLM_THREADS": "2",
+              "QUILLO_EMBED_THREADS": "1"}
+    mod.rewrite_env(env, values)
+    got = env.read_bytes()
+    lines = got.split(b"\r\n")
+    assert lines[:2] == [b"# secrets", b"QUILLO_ADMIN_TOKEN=abc "], f"Dòng khác phải giữ nguyên từng byte: {got!r}"
+    assert lines[2] == b"QUILLO_LLM_FILE=new.gguf" and lines[3] == b"QUILLO_PORT=18080", got
+    for key, value in values.items():
+        assert f"{key}={value}".encode() in lines, f"Thiếu {key}={value}: {got!r}"
+    assert oct(env.stat().st_mode & 0o777) == "0o600"
+    assert mod.rewrite_env(env, values) is False and env.read_bytes() == got, "Chạy lại không đổi gì phải trả False"
 
 
 @pytest.mark.parametrize("cores,mem_mb,gpu", [
@@ -155,32 +174,48 @@ def facts(m) -> tuple[int, int]:
     return cores, mem
 
 
+def snapshot_state(m) -> str:
+    return sh(m, f"sha256sum {QUILLO}/.env; ls -la {QUILLO}/models; docker images -q --no-trunc | sort").stdout + started(m)
+
+
+def gpu_without_image(m) -> None:
+    before = snapshot_state(m)
+    cmd = ("cd /home/fde && s=$(date +%s%N); PATH=/home/fde/gpubin:$PATH python3 /home/fde/hw/hw_config.py; "
+           "rc=$?; echo \"elapsed_ms=$(( ($(date +%s%N) - s) / 1000000 )) rc=$rc\" >&2")
+    done = sh(m, cmd, timeout=RUN_TIMEOUT)
+    tail = done.stderr.strip().splitlines()[-1] if done.stderr.strip() else ""
+    assert tail.startswith("elapsed_ms="), f"Không đo được thời gian chạy:\n{done.stderr[-1500:]}"
+    elapsed = int(tail.split()[0].split("=")[1]) / 1000
+    assert tail.endswith("rc=3"), (
+        f"factory với GPU dùng được nhưng chưa có image CUDA: hw_config.py phải thoát 3, nhận {tail}\n"
+        f"{done.stderr[-1500:]}")
+    assert elapsed <= GPU_EXIT_LIMIT, (
+        f"Thoát 3 sau {elapsed:.1f} s; phải quyết định ngay từ thứ có trên máy (≤ {GPU_EXIT_LIMIT:g} s)")
+    assert snapshot_state(m) == before, "Thoát 3 thì không được đổi .env, model, image hay container"
+
+
 def test_factory_and_lab(tmp_path):
     factory = fdekit.derived("05-gpu-field-factory")
     lab = fdekit.derived("05-gpu-field-lab")
     script = ex.path("hw_config.py")
-    with fdekit.vm("factory", base=factory) as m:
-        wait_quillo(m, "factory")
-        assert sh(m, "mkdir -p /home/fde/hw").returncode == 0
-        m.put(script, "/home/fde/hw/hw_config.py")
-        cores, mem = facts(m)
-        check_vm(m, "factory", expected(cores, mem, None))
     bins = tmp_path / "bins"
     stub(bins / "broken", "broken")
     stub(bins / "working", "working")
+    with fdekit.vm("factory", base=factory) as m:
+        wait_quillo(m, "factory")
+        assert sh(m, "mkdir -p /home/fde/hw /home/fde/gpubin").returncode == 0
+        m.put(script, "/home/fde/hw/hw_config.py")
+        m.put(bins / "working" / "nvidia-smi", "/home/fde/gpubin/nvidia-smi")
+        assert sh(m, "chmod 755 /home/fde/gpubin/nvidia-smi").returncode == 0
+        gpu_without_image(m)
+        cores, mem = facts(m)
+        check_vm(m, "factory", expected(cores, mem, None))
     with fdekit.vm("lab-open", base=lab, memory_mb=5120, cpus=4) as m:
         wait_quillo(m, "lab-open")
-        assert sh(m, "mkdir -p /home/fde/hw /home/fde/fakebin /home/fde/gpubin").returncode == 0
+        assert sh(m, "mkdir -p /home/fde/hw /home/fde/fakebin").returncode == 0
         m.put(script, "/home/fde/hw/hw_config.py")
         m.put(bins / "broken" / "nvidia-smi", "/home/fde/fakebin/nvidia-smi")
-        m.put(bins / "working" / "nvidia-smi", "/home/fde/gpubin/nvidia-smi")
-        assert sh(m, "chmod 755 /home/fde/fakebin/nvidia-smi /home/fde/gpubin/nvidia-smi").returncode == 0
+        assert sh(m, "chmod 755 /home/fde/fakebin/nvidia-smi").returncode == 0
         cores, mem = facts(m)
         assert cores == 4
-        before, state = env_file(m), started(m)
-        gpu = run_config(m, "/home/fde/gpubin")
-        assert gpu.returncode == 3, (
-            f"lab-open với GPU dùng được nhưng chưa có image CUDA: hw_config.py phải thoát 3, nhận {gpu.returncode}\n"
-            f"{gpu.stderr[-1500:]}")
-        assert env_file(m) == before and started(m) == state, "Thoát 3 thì không được đổi .env hay container"
         check_vm(m, "lab-open", expected(cores, mem, None))

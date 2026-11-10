@@ -22,7 +22,7 @@ SOLUTION=1 uv run pytest tracks/fde/modules/05-gpu-field/exercises/basic/02-size
 | Qwen2.5-7B FP16 trên 12 GB | Không vừa, `max_ctx` 0 | Trọng số 14,5 GB: cần quantize hoặc GPU 24 GB |
 | Qwen2.5-32B ~4.85 bpw trên 24 GB | Vừa ở 8k, tối đa ~21k | Muốn 32k thì KV q8_0 (23,7 GB), chấp nhận giảm nhẹ chất lượng |
 | Qwen2.5-72B ~4.85 bpw | 24 GB không vừa ngay cả trọng số; 48 GB vừa | Đừng hứa 72B trên một card 24 GB |
-| `llm-medium` (tệp thật) với RAM trống 1 400 MB | Không vừa | Lý do bài intermediate 01 bỏ qua medium ở ca đêm |
+| `llm-medium` (tệp thật) với RAM trống 1 400 MB | Không vừa (1 690 MB) | Công thức coi trọng số là bộ nhớ chiếm hẳn; trên CPU với `mmap` thì trọng số là page cache, chiếm ít `MemAvailable` hơn (bài intermediate 01 đo ~0,7× tệp). Công thức là cận trên an toàn, không phải số đo |
 
 Công thức là **ước lượng trước khi đo**: overhead thật phụ thuộc runtime (CUDA context, compute buffer theo batch xử lý
 prompt, `CPU_REPACK` của llama.cpp trên CPU). Đo trên `factory`: `llm-medium` RSS đỉnh ~1,6–1,75 GB với `-c 4096`, tức

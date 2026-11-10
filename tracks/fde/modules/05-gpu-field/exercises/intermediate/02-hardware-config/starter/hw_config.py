@@ -24,6 +24,10 @@ def choose(cores: int, mem_mb: int, gpu: dict | None) -> dict:
     raise NotImplementedError("TODO: bảng quy tắc trong README")
 
 
+def rewrite_env(path: Path, values: dict[str, str]) -> bool:
+    raise NotImplementedError("TODO: đặt các khoá, giữ nguyên mọi byte khác")
+
+
 def apply(quillo: Path, models_dir: Path, config: dict) -> None:
     raise NotImplementedError("TODO: đặt model, sửa .env, docker compose up -d, chờ /healthz")
 

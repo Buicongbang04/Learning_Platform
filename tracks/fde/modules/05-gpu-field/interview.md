@@ -14,8 +14,11 @@ cho lần nâng cấp sau.
 Con số đó là bản CUDA **cao nhất driver hỗ trợ đầy đủ**, không phải CUDA đã cài. Image 12.8 trên driver nhánh 550 chạy
 được nhờ minor version compatibility (cùng major 12, driver ≥ 525.60.13), với hai giới hạn: tính năng cần driver mới trả
 lỗi `cudaErrorCallRequiresNewerDriver`, và PTX không được JIT trên driver cũ, nên binary phải có sẵn mã cho đúng kiến trúc
-card. Với một image dựng sẵn như llama.cpp CUDA thì thường chạy; tôi xác nhận bằng cách chạy thật trên máy khách (hoặc trên
-máy có cùng nhánh driver) chứ không hứa trước, và ghi "chạy nhờ minor compatibility" vào ma trận hỗ trợ như một điều kiện.
+card. Trong container còn cửa thứ ba: image CUDA khai `NVIDIA_REQUIRE_CUDA` (`cuda>=12.8` kèm danh sách nhánh driver được
+miễn), và container toolkit từ chối chạy nếu nhánh của khách không có trong danh sách, dù minor compatibility về lý thuyết
+cho phép. Image CUDA 12.8 của llama.cpp miễn cho nhánh 535/550/560/565, nên driver 550 qua, driver 545 hay 555 thì bị chặn
+(trừ khi đặt `NVIDIA_DISABLE_REQUIRE=1` và tự chịu rủi ro). Tôi đọc biến đó trong image, xác nhận bằng cách chạy thật trên
+máy khách (hoặc máy cùng nhánh driver) chứ không hứa trước, và ghi điều kiện vào ma trận hỗ trợ.
 
 ## 3. Phân biệt backward, minor version và forward compatibility của CUDA. Khi nào forward compatibility cứu được khách?
 

@@ -29,8 +29,8 @@ CPU và trên GPU, và tự tay thấy các con số trong phần 2 và 4 của 
    khởi động lại Docker). Kiểm bằng user `fde-lab`: `nvidia-smi` chạy, `docker run --rm --gpus all
    ghcr.io/ggml-org/llama.cpp:server-cuda-b11718 --version` chạy.
 3. Dưới user `fde-lab`: `docker pull ghcr.io/ggml-org/llama.cpp:server-b11718` và `…:server-cuda-b11718` (image CUDA này
-   có `CUDA_VERSION=12.8.1`: driver nhánh ≥ 570 chạy đầy đủ, nhánh 550 chạy nhờ minor version compatibility; xem bài basic
-   01), chép `qwen2.5-1.5b-instruct-q4_k_m.gguf` (`llm-medium`, sha256 trong `fdekit.MODELS`) vào `~/fde-models/`.
+   có `CUDA_VERSION=12.8.1`: driver ≥ 570.26 chạy đầy đủ; nhánh 535/550/560/565 chạy nhờ minor version compatibility và
+   ngoại lệ trong `NVIDIA_REQUIRE_CUDA` của image; nhánh khác dưới 570 (vd. 545, 555) bị toolkit chặn; xem bài basic 01), chép `qwen2.5-1.5b-instruct-q4_k_m.gguf` (`llm-medium`, sha256 trong `fdekit.MODELS`) vào `~/fde-models/`.
 
 Bộ chấm không cài gì lên PC: nó chỉ ghi vào `~/fde-ex-<run_id>` và dọn thư mục đó khi xong.
 

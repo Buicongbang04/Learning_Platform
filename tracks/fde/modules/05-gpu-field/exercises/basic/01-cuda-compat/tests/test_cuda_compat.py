@@ -7,20 +7,30 @@ import pytest
 from testkit import Exercise, run_sandboxed
 
 ex = Exercise(__file__)
-ERRORS = {"no_driver", "driver_too_old", "cuda_drops_gpu", "driver_drops_gpu", "no_toolkit", "cdi_unsupported"}
+ERRORS = {"no_driver", "driver_too_old", "require_cuda_blocks", "cuda_drops_gpu", "driver_drops_gpu", "no_toolkit",
+          "cdi_unsupported"}
+LLAMA_CUDA_BRANCHES = [470, 535, 550, 560, 565]
 WARNINGS = {"minor_version_compat", "cdi_needs_daemon_config", "toolkit_cve"}
 SAFE = "1.19.1"
 
 
-def host(driver="550.163.01", cuda="12.4.1", toolkit=SAFE, cc="8.6", access="gpus", docker="29.1.2"):
+def host(driver="550.163.01", cuda="12.4.1", toolkit=SAFE, cc="8.6", access="gpus", docker="29.1.2", **extra):
     return {"driver": driver, "cuda": cuda, "toolkit": toolkit, "compute_capability": cc, "access": access,
-            "docker": docker}
+            "docker": docker, **extra}
 
 
 CASES = [
     ("laptop-driver-broken", host(driver=None), {"no_driver"}),
     ("rtx3060-cuda12.4", host(), set()),
     ("rtx3060-cuda12.8-minor-compat", host(cuda="12.8.1"), {"minor_version_compat"}),
+    ("llama-cuda-image-on-550", host(cuda="12.8.1", require_branches=LLAMA_CUDA_BRANCHES), {"minor_version_compat"}),
+    ("llama-cuda-image-on-545-blocked", host(driver="545.29.06", cuda="12.8.1", require_branches=LLAMA_CUDA_BRANCHES),
+     {"require_cuda_blocks"}),
+    ("llama-cuda-image-on-555-disable-require", host(driver="555.58.02", cuda="12.8.1", require_branches=LLAMA_CUDA_BRANCHES,
+                                                     disable_require=True), {"minor_version_compat"}),
+    ("llama-cuda-image-on-570-exact", host(driver="570.172.08", cuda="12.8.1", require_branches=LLAMA_CUDA_BRANCHES), set()),
+    ("require-list-irrelevant-below-major", host(driver="470.256.02", cuda="12.8.1", require_branches=LLAMA_CUDA_BRANCHES),
+     {"driver_too_old"}),
     ("driver535-cuda13", host(driver="535.183.01", cuda="13.0.1"), {"driver_too_old"}),
     ("driver470-cuda12.2", host(driver="470.256.02", cuda="12.2.2"), {"driver_too_old"}),
     ("driver470-cuda11.8-minor-compat", host(driver="470.256.02", cuda="11.8.0"), {"minor_version_compat"}),
@@ -39,6 +49,8 @@ CASES = [
     ("cdi-toolkit-too-old", host(toolkit="1.11.0", access="cdi", docker="28.3.0"), {"cdi_unsupported", "toolkit_cve"}),
     ("cdi-docker24", host(access="cdi", docker="24.0.7"), {"cdi_unsupported"}),
     ("cdi-docker27-needs-config", host(access="cdi", docker="27.5.1"), {"cdi_needs_daemon_config"}),
+    ("cdi-docker28.1-needs-config", host(access="cdi", docker="28.1.1"), {"cdi_needs_daemon_config"}),
+    ("cdi-docker28.2-default-on", host(access="cdi", docker="28.2.0"), set()),
     ("cdi-docker28.3", host(access="cdi", docker="28.3.0"), set()),
     ("gpus-ignores-docker-version", host(docker="20.10.24"), set()),
     ("cuda13.1-on-580-minor-compat", host(driver="580.95.05", cuda="13.1.0"), {"minor_version_compat"}),

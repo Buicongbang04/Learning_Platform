@@ -45,7 +45,7 @@ python3 bench.py --image ghcr.io/ggml-org/llama.cpp:server-b11718 --out <report.
 
 Model đi theo thứ tự tham số (từ nhỏ tới lớn). Với **từng** model, theo thứ tự:
 
-1. `need_mb` = 1,7 × kích thước tệp GGUF tính bằng MB (1 MB = 1 048 576 byte), làm tròn lên. `available_mb` =
+1. `need_mb` = 0,8 × kích thước tệp GGUF tính bằng MB (1 MB = 1 048 576 byte), làm tròn lên. `available_mb` =
    `MemAvailable` trong `/proc/meminfo` (MB, làm tròn xuống) đọc **ngay trước** khi xét model đó.
 2. Nếu `need_mb > available_mb − 128` thì **không chạy** model đó, `status` = `skipped_memory`.
 3. Không thì chạy llama.cpp server trong container từ image trên với đúng cờ `-c 4096 -np 1 -t <số core vật lý>`
@@ -54,7 +54,7 @@ Model đi theo thứ tự tham số (từ nhỏ tới lớn). Với **từng** m
    `Viết một đoạn ngắn hướng dẫn bảo trì máy CNC cho ca đêm.`;
    `tokens_per_s` = tổng `timings.predicted_n` / tổng `timings.predicted_ms` × 1000. `peak_rss_mb` = `VmHWM` của tiến
    trình server (pid từ `docker inspect -f '{{.State.Pid}}'`, `/proc/<pid>/status`) đổi sang MB, đọc sau 3 request.
-   Xoá container trước khi sang model sau. Lỗi khi chạy thì `status` = `failed` kèm `detail`.
+   Lỗi khi chạy thì `status` = `failed` kèm `detail`.
 
 Báo cáo JSON (`--out`):
 
@@ -63,9 +63,9 @@ Báo cáo JSON (`--out`):
   "host": {"physical_cores": 2, "mem_total_mb": 2919, "gpu": null},
   "settings": {"ctx": 4096, "threads": 2, "n_predict": 64, "runs": 3},
   "models": [
-    {"name": "llm-small", "file": "...", "need_mb": 797, "available_mb": 2212, "status": "ok",
+    {"name": "llm-small", "file": "...", "need_mb": 375, "available_mb": 2212, "status": "ok",
      "tokens_per_s": 47.1, "peak_rss_mb": 625},
-    {"name": "llm-medium", "file": "...", "need_mb": 1812, "available_mb": 1402, "status": "skipped_memory"}
+    {"name": "llm-medium", "file": "...", "need_mb": 853, "available_mb": 912, "status": "skipped_memory"}
   ],
   "recommended": "llm-small"
 }
@@ -75,13 +75,15 @@ Báo cáo JSON (`--out`):
 là `MemTotal` (MB, làm tròn xuống), `gpu` là tên GPU nếu `nvidia-smi --query-gpu=name` chạy được, không thì `null`.
 `recommended` là model **cuối cùng** (theo thứ tự tham số) có `status` `ok` và `tokens_per_s` ≥ 10, không có thì `null`.
 
-Test boot snapshot `05-gpu-field-factory` (quillo đang chạy), chép `bench.py` vào `/home/fde/bench/` rồi chạy hai lần:
+Test boot snapshot `05-gpu-field-factory` (quillo đang chạy), chép `bench.py` vào `/home/fde/bench/` rồi chạy ba lần,
+mỗi lần sau một lần trước (job đã khởi động thì chạy tới hết bài):
 
 1. **Ca ngày**: máy chỉ có quillo.
-2. **Ca đêm**: bộ chấm khởi động một tiến trình của xưởng (job tổng hợp) giữ RAM để `MemAvailable` còn ~1400 MB, rồi
-   chạy lại.
+2. **Ca đêm**: bộ chấm khởi động một tiến trình của xưởng (job tổng hợp) giữ RAM để `MemAvailable` còn khoảng
+   `need_mb` của `llm-medium` + 128 + 100 MB.
+3. **Ca đêm cuối tháng**: thêm một job nữa, `MemAvailable` còn khoảng `need_mb` của `llm-medium` + 128 − 150 MB.
 
-Mỗi lần chạy `bench.py` ≤ 150 s. Đo trên máy của repo: cả bài ~2 phút.
+Mỗi lần chạy `bench.py` ≤ 150 s. Đo trên máy của repo: cả bài ~3 phút.
 
 ## Tiêu chí đạt
 
@@ -91,7 +93,9 @@ Mỗi lần chạy `bench.py` ≤ 150 s. Đo trên máy của repo: cả bài ~2
   ±2 MB, `gpu` null).
 - Mỗi model: `need_mb` đúng công thức; `status` đúng quy tắc bước 2 theo chính `available_mb` trong báo cáo; model `ok`
   có `tokens_per_s` và `peak_rss_mb` > 0.
-- Ca ngày: cả hai model `ok`. Ca đêm: `llm-small` `ok`, `llm-medium` `skipped_memory`, tiến trình của xưởng vẫn sống.
+- `available_mb` không lớn hơn `MemAvailable` bộ chấm đọc ngay trước lần chạy + 150 MB.
+- Ca ngày: cả hai model `ok`. Ca đêm: `llm-small` `ok`. Ca đêm cuối tháng: `llm-small` `ok`, `llm-medium`
+  `skipped_memory`. Các job của xưởng vẫn sống.
 - Với mỗi model `ok`, ngay sau đó bộ chấm tự đo lại model đó (một container, đúng cờ và request ở trên) trên cùng máy:
   `tokens_per_s` của báo cáo trong khoảng **0,5× – 2×** số đo lại, `peak_rss_mb` trong khoảng **0,75× – 1,33×**.
 - `recommended` đúng quy tắc theo các số trong báo cáo.

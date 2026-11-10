@@ -14,7 +14,8 @@ dưới đây là kỳ vọng để bạn so, không phải số đã đo.
 1. Kiểm từng tầng như phần 1 của README module, dưới user `fde-lab`: `nvidia-smi`, `nvidia-ctk --version`,
    `docker run --rm --gpus all ghcr.io/ggml-org/llama.cpp:server-cuda-b11718 --version`. Ghi lại driver, toolkit, Docker,
    compute capability rồi chạy `cuda_compat.py` (bài basic 01) với `cuda` = `12.8.1` (biến `CUDA_VERSION` của image).
-   RTX 3060 (CC 8.6) với driver 550: `minor_version_compat`; với 570+: không vấn đề; toolkit < 1.19.1: `toolkit_cve`.
+   RTX 3060 (CC 8.6) với driver 550 và `require_branches` `[470, 535, 550, 560, 565]`: `minor_version_compat`; driver
+   545/555: `require_cuda_blocks`; với 570+: không vấn đề; toolkit < 1.19.1: `toolkit_cve`.
 2. Script đo hai lần cùng một model, cùng cờ, chỉ khác image và `--gpus all -ngl 99`. Container mang tên bắt đầu bằng
    thư mục làm việc (`fde-ex-<run_id>`) để bộ chấm kiểm được không còn sót; `trap` dọn trên EXIT, và INT/TERM/HUP chuyển
    thành `exit` để EXIT trap chạy đúng một lần.

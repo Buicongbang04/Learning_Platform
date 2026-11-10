@@ -15,7 +15,9 @@ MEDIUM = "/home/fde/models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
 WORK = "/home/fde/bench"
 RESERVE_MB = 128
 MIN_TOKENS_PER_S = 10.0
-BUSY_AVAILABLE_MB = 1400
+NIGHT_MARGIN_MB = 100
+HEAVY_MARGIN_MB = -150
+AVAILABLE_SLACK_MB = 150
 BENCH_TIMEOUT = 150
 TPS_RANGE = (0.5, 2.0)
 RSS_RANGE = (0.75, 1.33)
@@ -87,14 +89,17 @@ def measure(m, path: str, threads: int) -> dict:
 
 
 def need_mb(size: int) -> int:
-    return -(-size * 17 // (10 * 1048576))
+    return -(-size * 8 // (10 * 1048576))
 
 
-def check_entry(entry: dict, size: int, attempt: str) -> None:
+def check_entry(entry: dict, size: int, attempt: str, ceiling: int) -> None:
     name = entry["name"]
     need = need_mb(size)
-    assert entry.get("need_mb") == need, f"{attempt}/{name}: need_mb phải là {need} (1,7 × MB của tệp GGUF, làm tròn lên)"
+    assert entry.get("need_mb") == need, f"{attempt}/{name}: need_mb phải là {need} (0,8 × MB của tệp GGUF, làm tròn lên)"
     assert isinstance(entry.get("available_mb"), int), f"{attempt}/{name}: thiếu available_mb (số nguyên MB)"
+    assert entry["available_mb"] <= ceiling, (
+        f"{attempt}/{name}: available_mb {entry['available_mb']} lớn hơn MemAvailable bộ chấm đọc ngay trước khi chạy "
+        f"({ceiling - AVAILABLE_SLACK_MB} MB)")
     want = "skipped_memory" if need > entry["available_mb"] - RESERVE_MB else "ok"
     assert entry.get("status") == want, (
         f"{attempt}/{name}: với need_mb {need} và available_mb {entry['available_mb']}, status phải là {want!r}, "
@@ -121,6 +126,37 @@ def check_recommended(report: dict, attempt: str) -> None:
     assert report["recommended"] == want, f"{attempt}: recommended phải là {want!r}, nhận {report['recommended']!r}"
 
 
+def start_job(m, mb: int, tag: str) -> str:
+    pid_file = f"/home/fde/.grader/{tag}.pid"
+    sh(m, f"setsid nohup python3 /home/fde/.grader/hog.py {mb} {pid_file} > /dev/null 2>&1 < /dev/null &")
+    deadline = time.monotonic() + 60
+    while sh(m, f"test -s {pid_file}").returncode != 0:
+        assert time.monotonic() < deadline, f"Bộ chấm không dựng được job {tag} của xưởng"
+        time.sleep(1)
+    return sh(m, f"cat {pid_file}").stdout.strip()
+
+
+def shift(m, attempt: str, out: str, sizes: dict[str, int], cores: int, want: list[str | None]) -> dict:
+    ceiling = available_mb(m) + AVAILABLE_SLACK_MB
+    report = run_bench(m, out, attempt)
+    host = report["host"]
+    assert host.get("physical_cores") == cores, f"{attempt}: host.physical_cores phải là {cores}, nhận {host.get('physical_cores')}"
+    mem_total = int(sh(m, "awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo").stdout)
+    assert abs(host.get("mem_total_mb", 0) - mem_total) <= 2, f"{attempt}: host.mem_total_mb phải là {mem_total}"
+    assert host.get("gpu", "thiếu") is None, f"{attempt}: máy xưởng không có GPU dùng được, host.gpu phải là null"
+    for entry in report["models"]:
+        check_entry(entry, sizes[entry["name"]], attempt, ceiling)
+    statuses = [e["status"] for e in report["models"]]
+    assert all(w is None or w == got for w, got in zip(want, statuses)), (
+        f"{attempt}: status của hai model phải là {want} (None: theo quy tắc), nhận {statuses}")
+    assert other_containers(m) == [], f"bench.py để lại container: {other_containers(m)}"
+    for entry, path in zip(report["models"], (SMALL, MEDIUM)):
+        if entry["status"] == "ok":
+            compare(entry, measure(m, path, cores), attempt)
+    check_recommended(report, attempt)
+    return report
+
+
 def test_bench_on_factory(tmp_path):
     base = fdekit.derived("05-gpu-field-factory")
     script = ex.path("bench.py")
@@ -128,7 +164,6 @@ def test_bench_on_factory(tmp_path):
         wait_quillo(m)
         sizes = {name: int(sh(m, f"stat -c %s {path}").stdout) for name, path in (("llm-small", SMALL), ("llm-medium", MEDIUM))}
         cores = int(sh(m, "lscpu -p=CORE,SOCKET | grep -v '^#' | sort -u | wc -l").stdout)
-        mem_total = int(sh(m, "awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo").stdout)
         assert sh(m, f"mkdir -p {WORK} /home/fde/.grader").returncode == 0
         m.put(script, f"{WORK}/bench.py")
         (tmp_path / "hog.py").write_text(HOG)
@@ -136,39 +171,16 @@ def test_bench_on_factory(tmp_path):
         m.put(tmp_path / "hog.py", "/home/fde/.grader/hog.py")
         before = quillo_state(m)
         need_medium = need_mb(sizes["llm-medium"]) + RESERVE_MB
-        assert available_mb(m) >= need_medium + 50, "Snapshot của xưởng không còn đủ RAM trống cho ca ngày; dựng lại snapshot"
+        assert available_mb(m) >= need_medium + 300, "Snapshot của xưởng không còn đủ RAM trống cho ca ngày; dựng lại snapshot"
 
-        day = run_bench(m, f"{WORK}/report-ca-ngay.json", "ca ngày")
-        host = day["host"]
-        assert host.get("physical_cores") == cores, f"host.physical_cores phải là {cores}, nhận {host.get('physical_cores')}"
-        assert abs(host.get("mem_total_mb", 0) - mem_total) <= 2, f"host.mem_total_mb phải là {mem_total}"
-        assert host.get("gpu", "thiếu") is None, "Máy xưởng không có GPU dùng được: host.gpu phải là null"
-        for entry in day["models"]:
-            check_entry(entry, sizes[entry["name"]], "ca ngày")
-        assert [e["status"] for e in day["models"]] == ["ok", "ok"], "Ca ngày máy đủ RAM cho cả hai model"
-        assert other_containers(m) == [], f"bench.py để lại container: {other_containers(m)}"
-        for entry, path in zip(day["models"], (SMALL, MEDIUM)):
-            compare(entry, measure(m, path, cores), "ca ngày")
-        check_recommended(day, "ca ngày")
+        shift(m, "ca ngày", f"{WORK}/report-ca-ngay.json", sizes, cores, ["ok", "ok"])
 
-        hog = max(available_mb(m) - BUSY_AVAILABLE_MB, 0)
-        sh(m, f"setsid nohup python3 /home/fde/.grader/hog.py {hog} /home/fde/.grader/hog.pid "
-              "> /dev/null 2>&1 < /dev/null &")
-        deadline = time.monotonic() + 60
-        while sh(m, "test -s /home/fde/.grader/hog.pid").returncode != 0:
-            assert time.monotonic() < deadline, "Bộ chấm không dựng được job ca đêm"
-            time.sleep(1)
-        hog_pid = sh(m, "cat /home/fde/.grader/hog.pid").stdout.strip()
-        night = run_bench(m, f"{WORK}/report-ca-dem.json", "ca đêm")
-        for entry in night["models"]:
-            check_entry(entry, sizes[entry["name"]], "ca đêm")
-        statuses = [e["status"] for e in night["models"]]
-        assert statuses == ["ok", "skipped_memory"], (
-            f"Ca đêm (job của xưởng giữ ~{hog} MB) phải đo llm-small và bỏ qua llm-medium, nhận {statuses}")
-        assert sh(m, f"kill -0 {hog_pid}").returncode == 0, "Job ca đêm của xưởng đã chết trong lúc benchmark"
-        assert other_containers(m) == [], f"bench.py để lại container: {other_containers(m)}"
-        compare(night["models"][0], measure(m, SMALL, cores), "ca đêm")
-        check_recommended(night, "ca đêm")
+        night = start_job(m, max(available_mb(m) - need_medium - NIGHT_MARGIN_MB, 0), "ca-dem")
+        shift(m, "ca đêm", f"{WORK}/report-ca-dem.json", sizes, cores, ["ok", None])
+        heavy = start_job(m, max(available_mb(m) - need_medium - HEAVY_MARGIN_MB, 0), "ca-dem-cuoi-thang")
+        shift(m, "ca đêm cuối tháng", f"{WORK}/report-ca-dem-cuoi-thang.json", sizes, cores, ["ok", "skipped_memory"])
+        for pid in (night, heavy):
+            assert sh(m, f"kill -0 {pid}").returncode == 0, "Job của xưởng đã chết trong lúc benchmark"
 
         assert quillo_state(m) == before, (
             f"Container quillo của xưởng đã bị khởi động lại hoặc bị kill trong lúc benchmark:\n{before}\n→\n{quillo_state(m)}")

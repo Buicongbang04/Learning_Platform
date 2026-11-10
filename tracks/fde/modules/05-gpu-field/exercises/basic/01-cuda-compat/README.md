@@ -29,6 +29,8 @@ Viết `starter/cuda_compat.py` với hàm **`check(host: dict) -> dict`**. `hos
 | `compute_capability` | `"8.6"` | `nvidia-smi --query-gpu=compute_cap --format=csv` |
 | `access` | `"gpus"` (`docker run --gpus`) hoặc `"cdi"` (`--device nvidia.com/gpu=all`) | Cách bạn định chạy |
 | `docker` | `"28.3.0"` hoặc `None` | `docker version --format '{{.Server.Version}}'` |
+| `require_branches` | `[470, 535, 550, 560, 565]`, hoặc không có khoá/`None` | Các nhánh driver được miễn trong biến `NVIDIA_REQUIRE_CUDA` của image (`brand=…,driver>=550,driver<551` → `550`); image không khai biến đó thì không có khoá |
+| `disable_require` | `True`/`False`, mặc định `False` | Container chạy với `NVIDIA_DISABLE_REQUIRE=1` |
 
 Phiên bản so theo số từng phần (`580.65.06` > `580.9`; `620` < `620.0.1`). `cuda` chỉ xét `X.Y` (bỏ phần update).
 `X.Y` không có trong bảng 1 (vd. `12.7`, `10.2`) hoặc `access` khác `gpus`/`cdi` thì `ValueError`.
@@ -63,12 +65,13 @@ Phiên bản so theo số từng phần (`580.65.06` > `580.9`; `620` < `620.0.1
 | --- | --- | --- |
 | `no_driver` | error | `driver` là `None` (khi đó không xét ba dòng driver bên dưới) |
 | `driver_too_old` | error | `driver` < mốc của `X.Y` trong bảng 1 **và** < mốc major trong bảng 2 |
-| `minor_version_compat` | warning | `driver` < mốc của `X.Y` trong bảng 1 nhưng ≥ mốc major trong bảng 2 |
+| `minor_version_compat` | warning | `driver` < mốc của `X.Y` trong bảng 1 nhưng ≥ mốc major trong bảng 2, và không có `require_cuda_blocks` |
+| `require_cuda_blocks` | error | Như dòng trên, nhưng `require_branches` là một danh sách không chứa nhánh của `driver` (số đầu tiên, vd. `545` của `545.29.06`) và `disable_require` không bật: toolkit từ chối khởi động container (`unsatisfied condition: cuda>=X.Y`) |
 | `driver_drops_gpu` | error | (`driver` ≥ 495 và CC < 5.0) hoặc (`driver` ≥ 590 và CC < 7.5) |
 | `cuda_drops_gpu` | error | CC < mốc CC của major trong bảng 2 |
 | `no_toolkit` | error | `toolkit` là `None` (khi đó không xét ba dòng toolkit bên dưới) |
 | `cdi_unsupported` | error | `access` là `cdi` và (`toolkit` < 1.12.0 hoặc `docker` là `None` hoặc `docker` < 25.0.0) |
-| `cdi_needs_daemon_config` | warning | `access` là `cdi`, không có `cdi_unsupported`, và `docker` < 28.3.0 (phải bật `features.cdi` trong `daemon.json`) |
+| `cdi_needs_daemon_config` | warning | `access` là `cdi`, không có `cdi_unsupported`, và `docker` < 28.2.0 (phải bật `features.cdi` trong `daemon.json`; CDI bật mặc định từ Docker 28.2.0, moby#49963) |
 | `toolkit_cve` | warning | `toolkit` < 1.19.1 (còn CVE đã công bố tới bulletin 30/06/2026) |
 
 `docker` chỉ được xét khi `access` là `cdi`.
@@ -78,8 +81,9 @@ khi không.
 
 ## Tiêu chí đạt
 
-- `test_cases`: 26 tổ hợp có thật ở hiện trường (laptop driver hỏng, RTX 3060 với image CUDA 12.4 và 12.8, P100, V100,
-  K80, toolkit cũ, CDI trên Docker 24/27/28.3, các mốc biên như `525.60.12`/`525.60.13`…): đúng tập `code`, đúng
+- `test_cases`: 33 tổ hợp có thật ở hiện trường (laptop driver hỏng, RTX 3060 với image CUDA 12.4 và 12.8, image CUDA của
+  llama.cpp trên driver 545/550/555/570, P100, V100, K80, toolkit cũ, CDI trên Docker 24/27/28.1/28.2/28.3, các mốc biên như
+  `525.60.12`/`525.60.13`…): đúng tập `code`, đúng
   `severity`, có `detail`, đúng `compatible`.
 - `test_unknown_input_raises`: CUDA 12.7 (không tồn tại), CUDA 10.2 (ngoài bảng), `access` lạ đều `ValueError`.
 - `test_cli`: CLI chạy trong sandbox, JSON đúng, mã thoát đúng.

@@ -17,10 +17,17 @@ SOLUTION=1 uv run pytest tracks/fde/modules/05-gpu-field/exercises/basic/01-cuda
    không đạt cả hai thì `driver_too_old`. Thứ tự này quan trọng ở 11.x: mốc GA của 11.0 (450.51.05) **thấp hơn** mốc
    minor compatibility của cả major (450.80.02), nên kiểm mốc major trước sẽ báo sai `driver_too_old` cho tổ hợp 11.0 +
    450.51.05 vốn chạy đúng chuẩn.
-4. **Card**: hai chiều độc lập. CUDA bỏ kiến trúc (`cuda_drops_gpu`: 12.x cần CC ≥ 5.0, 13.x cần ≥ 7.5) và driver bỏ kiến
+4. **Cửa của container toolkit**: minor compatibility là điều CUDA cho phép, còn `NVIDIA_REQUIRE_CUDA` là điều image cho
+   phép. `nvidia-container-cli` kiểm `cuda>=X.Y` theo CUDA cao nhất driver hỗ trợ, hoặc một ngoại lệ `brand=…,driver>=N,
+   driver<N+1`. Image CUDA 12.8.1 của llama.cpp (`server-cuda-b11718`) miễn cho nhánh 470, 535, 550, 560, 565: driver 550
+   qua (cảnh báo `minor_version_compat`), driver 545/555 bị chặn (`require_cuda_blocks`) dù ≥ 525. `NVIDIA_DISABLE_REQUIRE=1`
+   tắt cửa này; khi đó còn lại đúng rủi ro của minor compatibility. Ngoại lệ 470 trong danh sách không cứu được driver 470:
+   toolkit cho container khởi động, nhưng CUDA 12 runtime không chạy trên driver dưới 525 (`driver_too_old`).
+5. **Card**: hai chiều độc lập. CUDA bỏ kiến trúc (`cuda_drops_gpu`: 12.x cần CC ≥ 5.0, 13.x cần ≥ 7.5) và driver bỏ kiến
    trúc (`driver_drops_gpu`: từ R495 bỏ Kepler, từ R590 bỏ CC < 7.5). K80 với driver 470 và CUDA 12.2 dính
    `driver_too_old` và `cuda_drops_gpu` cùng lúc: hai lý do, hai việc khác nhau.
-5. **Toolkit**: CDI cần toolkit ≥ 1.12.0 và Docker ≥ 25.0; Docker 25–28.2 cần bật `features.cdi`, 28.3.0 trở đi bật sẵn.
+6. **Toolkit**: CDI cần toolkit ≥ 1.12.0 và Docker ≥ 25.0; Docker 25.0–28.1 cần bật `features.cdi`, 28.2.0 trở đi bật sẵn
+   (moby#49963, milestone 28.2.0; trang tham chiếu dockerd ghi 28.3.0, bài theo PR).
    Phiên bản Docker chỉ xét khi đi đường CDI (`--gpus` chạy từ Docker 19.03). Toolkit < 1.19.1 là cảnh báo bảo mật, không
    phải lỗi tương thích: máy vẫn chạy, nhưng báo cáo phải có dòng đó (CVE-2024-0132, CVE-2025-23266, CVE-2026-24260 đều
    là thoát container).
