@@ -1,0 +1,5 @@
+%{ for name, service in services ~}
+upstream ${name} {
+  server ${name}:${service.port};
+}
+%{ endfor ~}

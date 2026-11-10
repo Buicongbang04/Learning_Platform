@@ -217,3 +217,109 @@ def test_cpuset_none_detection():
     assert cpuset_none_lines("ghim (`DEVOPS_CPUSET` rỗng hoặc `none`)")
     assert cpuset_none_lines("unset DEVOPS_CPUSET") == []
     assert cpuset_none_lines("export DEVOPS_CPUSET=2-7") == []
+
+
+def test_registry_service_loopback():
+    registry = _services()["registry"]
+    assert re.fullmatch(r"registry:2\.\d+\.\d+", registry["image"]), registry["image"]
+    assert registry["profiles"] == ["devops"]
+    assert [str(m) for m in registry["ports"]] == ["127.0.0.1:${DEVOPS_REGISTRY_PORT:-15000}:5000"]
+    assert registry["cpuset"] == "${DEVOPS_CPUSET:-}"
+    assert str(registry["environment"]["REGISTRY_STORAGE_DELETE_ENABLED"]).lower() == "true"
+    assert 15000 not in RESERVED_PORTS
+
+
+def test_registry_registered_in_testkit():
+    assert testkit.SERVICES["registry"] == ("REGISTRY_HOST", "localhost", "DEVOPS_REGISTRY_PORT", 15000)
+
+
+def test_env_example_lists_registry_port():
+    assert "# DEVOPS_REGISTRY_PORT=15000" in (ROOT / "setup" / ".env.example").read_text(encoding="utf-8").splitlines()
+
+
+def test_devops_tools_documents_act_and_registry():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    assert "| act |" in text and testkit.ACT_MIN_VERSION in text and testkit.ACT_IMAGE in text
+    assert "up -d registry" in text and "DEVOPS_REGISTRY_PORT" in text
+
+
+ACT_RUNNER = ROOT / "setup" / "act-runner"
+
+
+def test_act_runner_base_is_pinned_by_digest():
+    text = (ACT_RUNNER / "Dockerfile").read_text(encoding="utf-8")
+    bases = re.findall(r"^FROM\s+(\S+)", text, re.M)
+    assert len(bases) == 1
+    assert re.fullmatch(rf"{re.escape(testkit.ACT_BASE_IMAGE)}@sha256:[0-9a-f]{{64}}", bases[0])
+
+
+def test_act_runner_tag_follows_inputs():
+    import hashlib
+
+    text = (ACT_RUNNER / "Dockerfile").read_text(encoding="utf-8")
+    version = re.search(r'devops-track\.act-runner="([^"]+)"', text).group(1)
+    content = (ACT_RUNNER / "Dockerfile").read_bytes() + (ACT_RUNNER / "requirements-ci.txt").read_bytes()
+    expected = f"devops-track/act-runner:{version}-{hashlib.sha256(content).hexdigest()[:8]}"
+    assert testkit.ACT_IMAGE == expected, (
+        f"Tag image runner phải theo nội dung setup/act-runner: {expected}. Build lại bằng: {testkit.ACT_IMAGE_BUILD}")
+    assert "UV_OFFLINE=1" in text and "UV_PYTHON_DOWNLOADS=never" in text
+
+
+def test_act_runner_build_command_matches_readme():
+    build = testkit.ACT_IMAGE_BUILD
+    digest = re.search(r"^FROM\s+\S+@(sha256:[0-9a-f]{64})", (ACT_RUNNER / "Dockerfile").read_text(encoding="utf-8"), re.M).group(1)
+    for piece in (f"grep -qx 'node@{digest}'", "nice -n 15 docker build --pull=false", '${DEVOPS_CPUSET:+--cpuset-cpus "$DEVOPS_CPUSET"}',
+                  f"-t {testkit.ACT_IMAGE} setup/act-runner"):
+        assert piece in build, piece
+    readme = (ROOT / "tracks" / "devops" / "modules" / "07-cicd-artifacts" / "README.md").read_text(encoding="utf-8")
+    assert ('ACT_RUNNER="devops-track/act-runner:1.0-$(cat setup/act-runner/Dockerfile setup/act-runner/requirements-ci.txt '
+            '| sha256sum | cut -c1-8)"') in readme
+    assert f"'node@{digest}'" in readme and '-t "$ACT_RUNNER" setup/act-runner' in readme
+    assert testkit.ACT_IMAGE in readme, (
+        f"README module 07 phải in tag hiện tại {testkit.ACT_IMAGE} trong output mẫu và ~/.actrc; cập nhật sau khi build lại")
+
+
+def test_act_runner_caches_every_sample_app_requirement():
+    cached = set((ACT_RUNNER / "requirements-ci.txt").read_text(encoding="utf-8").split())
+    app = (ROOT / "tracks" / "devops" / "sample-app" / "requirements.txt").read_text(encoding="utf-8").split()
+    assert set(app) <= cached
+    for dev in ROOT.glob("tracks/devops/modules/*/exercises/*/*/tests/fixtures/repo/requirements-dev.txt"):
+        assert set(dev.read_text(encoding="utf-8").split()) <= cached, dev
+
+
+DE_LOCALSTACK_BLOCK = '''  localstack:
+    # Giả lập API AWS (S3, IAM, STS...) trên máy local cho module 11-cloud, không tốn tiền.
+    # Pin bản 4.x community: các bản mới hơn có thể yêu cầu LOCALSTACK_AUTH_TOKEN.
+    image: localstack/localstack:4.4.0
+    profiles: [cloud, all]
+    environment:
+      SERVICES: s3,iam,sts
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "${LOCALSTACK_PORT:-4566}:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:4566/_localstack/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+'''
+
+
+def test_de_localstack_block_byte_identical():
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert text.count(DE_LOCALSTACK_BLOCK + "\n") == 1
+    assert text.endswith("  localstack_data:\n  devops_localstack_data:\n    name: devops-track-localstack-data\n")
+
+
+def test_env_example_lists_localstack_devops_port():
+    assert "# LOCALSTACK_DEVOPS_PORT=14566" in (ROOT / "setup" / ".env.example").read_text(encoding="utf-8").splitlines()
+
+
+def test_devops_tools_documents_tofu_and_localstack_devops():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    assert "| tofu (OpenTofu) |" in text and testkit.TOFU_MIN_VERSION in text and testkit.TOFU_VERSION in text
+    assert testkit.LOCALSTACK_DEVOPS_START in text and "rm -fsv localstack-devops" in text
+    assert "docker volume rm devops-track-localstack-data" in text and testkit.TOFU_AWS_PROVIDER in text

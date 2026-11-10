@@ -1,0 +1,5 @@
+**
+!requirements.txt
+!olist_shop/
+olist_shop/**/__pycache__
+olist_shop/**/*.pyc

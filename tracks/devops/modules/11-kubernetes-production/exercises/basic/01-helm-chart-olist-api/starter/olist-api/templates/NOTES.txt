@@ -1,0 +1,3 @@
+Olist API đã cài trong namespace {{ .Release.Namespace }}.
+
+Kiểm: kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "olist-api.fullname" . }}

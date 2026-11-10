@@ -1,11 +1,10 @@
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from testkit import Exercise, run_sandboxed
+from testkit import Exercise, GitRepo, git_env, run_sandboxed
 
 ex = Exercise(__file__)
 NAIVE = Path(__file__).parent / "fixtures" / "naive-pre-commit"
@@ -15,7 +14,6 @@ pytestmark = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("gi
 AWS_KEY = "AKIA2OLISTSHOP7Q3XYZ"
 STS_KEY = "ASIAQ4OLIST5SESSION1"
 FIXTURE_KEY = "AKIAQ7FAKEFIXTURE001"
-SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 
 
 def pem(kind: str) -> str:
@@ -28,24 +26,6 @@ def git_version():
     ex.require_tool("git", min_version="2.30")
 
 
-def git_env(home: Path) -> dict[str, str]:
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(home),
-        "GIT_CONFIG_GLOBAL": "/dev/null",
-        "GIT_CONFIG_SYSTEM": "/dev/null",
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "Olist Dev",
-        "GIT_AUTHOR_EMAIL": "dev@olist-shop.example",
-        "GIT_COMMITTER_NAME": "Olist Dev",
-        "GIT_COMMITTER_EMAIL": "dev@olist-shop.example",
-        "GIT_AUTHOR_DATE": "2026-05-01T10:00:00+00:00",
-        "GIT_COMMITTER_DATE": "2026-05-01T10:00:00+00:00",
-        "GIT_TERMINAL_PROMPT": "0",
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-    }
-
 
 class Repo:
     def __init__(self, tmp_path: Path, hook: Path, initial: bool = True):
@@ -54,7 +34,7 @@ class Repo:
         self.home.mkdir(parents=True)
         self.path = tmp_path / "olist-shop"
         self.path.mkdir()
-        self.tainted = False
+        self.repo = GitRepo(self.path, self.home, writable=[tmp_path])
         self.git("init", "-q")
         if initial:
             self.write("README.md", "# Olist Shop\n")
@@ -65,14 +45,7 @@ class Repo:
         target.chmod(0o755)
 
     def git(self, *args: str, check: bool = True) -> str:
-        cmd = ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", *args]
-        if self.tainted:
-            result = run_sandboxed(cmd, writable=[self.tmp], cwd=self.path, env=git_env(self.home))
-        else:
-            result = subprocess.run(cmd, cwd=self.path, env=git_env(self.home), capture_output=True, text=True)
-        if check and result.returncode != 0:
-            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
-        return result.stdout.strip()
+        return self.repo.out(*args, check=check)
 
     def write(self, name: str, content: str) -> None:
         target = self.path / name
@@ -88,7 +61,7 @@ class Repo:
         return self.git("rev-parse", "--verify", "--quiet", "HEAD", check=False)
 
     def commit(self):
-        self.tainted = True
+        self.repo.taint()
         return run_sandboxed(
             ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "feat: change"],
             writable=[self.tmp], cwd=self.path, env=git_env(self.home), timeout=30,

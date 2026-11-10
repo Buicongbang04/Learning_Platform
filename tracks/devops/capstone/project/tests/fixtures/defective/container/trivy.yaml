@@ -1,0 +1,10 @@
+severity:
+  - UNKNOWN
+  - LOW
+  - MEDIUM
+  - HIGH
+  - CRITICAL
+exit-code: 0
+scan:
+  scanners:
+    - vuln

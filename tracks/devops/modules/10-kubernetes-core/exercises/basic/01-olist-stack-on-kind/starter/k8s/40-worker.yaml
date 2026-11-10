@@ -1,0 +1,2 @@
+# TODO: Deployment worker (1 replica, image devops-track/olist-shop:1.0, command python -m olist_shop.worker, cổng metrics 9101),
+# cùng ConfigMap olist-config và DATABASE_URL từ Secret olist-db như api; có livenessProbe và resources.

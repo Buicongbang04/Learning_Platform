@@ -1,0 +1,4 @@
+Olist API {{ include "olist-api.image" . }} đã cài trong namespace {{ .Release.Namespace }}.
+
+Kiểm: kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "olist-api.fullname" . }}
+Thử: helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

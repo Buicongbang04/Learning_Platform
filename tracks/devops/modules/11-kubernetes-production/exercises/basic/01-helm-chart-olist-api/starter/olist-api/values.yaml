@@ -1,0 +1,29 @@
+replicaCount: 2
+
+image:
+  repository: devops-track/olist-shop
+  tag: ""
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  port: 8000
+
+config:
+  logLevel: INFO
+  redisUrl: redis://redis:6379/0
+
+database:
+  existingSecret: olist-db
+  key: DATABASE_URL
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+# TODO: podSecurityContext và securityContext đạt Pod Security restricted (namespace của bài là restricted)

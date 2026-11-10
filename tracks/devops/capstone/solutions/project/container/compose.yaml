@@ -1,0 +1,92 @@
+name: olist-shop-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-app: &app
+  cpuset: "${DEVOPS_CPUSET:-}"
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+  logging: *logging
+  environment:
+    DATABASE_URL: postgresql+psycopg://olist:${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}@postgres:5432/olist
+    REDIS_URL: redis://redis:6379/0
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  api:
+    <<: *app
+    image: ${OLIST_API_IMAGE:?đặt OLIST_API_IMAGE=<registry>/olist-shop/api@sha256:...}
+    ports:
+      - "127.0.0.1:${OLIST_SHOP_API_PORT:-28000}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+
+  worker:
+    <<: *app
+    image: ${OLIST_WORKER_IMAGE:?đặt OLIST_WORKER_IMAGE=<registry>/olist-shop/worker@sha256:...}
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  postgres:
+    image: postgres:16.15-alpine
+    cpuset: "${DEVOPS_CPUSET:-}"
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: olist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?đặt POSTGRES_PASSWORD}
+      POSTGRES_DB: olist
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U olist -d olist"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  redis:
+    image: redis:7.4.12-alpine
+    cpuset: "${DEVOPS_CPUSET:-}"
+    restart: unless-stopped
+    logging: *logging
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  pgdata:
+  redisdata:

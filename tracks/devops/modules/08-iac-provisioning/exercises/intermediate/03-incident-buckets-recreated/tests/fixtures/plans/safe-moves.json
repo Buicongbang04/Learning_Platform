@@ -1,0 +1,35 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.2",
+  "resource_changes": [
+    {
+      "address": "aws_s3_bucket.exports[\"orders\"]",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "exports",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {},
+        "after": {}
+      },
+      "previous_address": "aws_s3_bucket.exports[0]"
+    },
+    {
+      "address": "aws_ssm_parameter.export_path",
+      "mode": "managed",
+      "type": "aws_ssm_parameter",
+      "name": "export_path",
+      "provider_name": "registry.opentofu.org/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {},
+        "after": {}
+      }
+    }
+  ]
+}

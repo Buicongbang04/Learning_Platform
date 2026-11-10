@@ -1,0 +1,83 @@
+- name: Rollout worker Olist Shop từng máy một
+  hosts: workers
+  become: true
+  gather_facts: false
+  serial: 1
+  max_fail_percentage: 0
+  order: inventory
+  vars:
+    olist_root: /opt/olist-shop
+    olist_maintenance_flag: /var/lib/olist-shop/maintenance
+  pre_tasks:
+    - name: Kiểm tham số olist_release
+      ansible.builtin.assert:
+        that:
+          - olist_release is defined
+          - olist_release is match('^\d+\.\d+\.\d+$')
+        fail_msg: "Truyền phiên bản cần deploy bằng -e olist_release=X.Y.Z"
+        quiet: true
+
+    - name: Đọc bản đang chạy
+      ansible.builtin.stat:
+        path: "{{ olist_root }}/current"
+      register: olist_current
+
+    - name: Ghi nhớ bản cũ và bản đích
+      ansible.builtin.set_fact:
+        olist_previous: "{{ olist_current.stat.lnk_source | default('') }}"
+        olist_target: "{{ olist_root }}/releases/{{ olist_release }}"
+
+  tasks:
+    - name: Deploy khi máy chưa ở bản đích
+      when: olist_previous != olist_target
+      block:
+        - name: Rút máy khỏi load balancer
+          ansible.builtin.copy:
+            content: "rollout {{ olist_release }}\n"
+            dest: "{{ olist_maintenance_flag }}"
+            mode: "0644"
+
+        - name: Tạo thư mục bản mới
+          ansible.builtin.file:
+            path: "{{ olist_target }}"
+            state: directory
+            mode: "0755"
+
+        - name: Ghi VERSION
+          ansible.builtin.copy:
+            content: "{{ olist_release }}\n"
+            dest: "{{ olist_target }}/VERSION"
+            mode: "0644"
+
+        - name: Chuyển current sang bản mới
+          ansible.builtin.file:
+            src: "{{ olist_target }}"
+            dest: "{{ olist_root }}/current"
+            state: link
+
+        - name: Kiểm sức khoẻ
+          ansible.builtin.command: /usr/local/bin/olist-healthcheck
+          register: olist_health
+          until: olist_health.rc == 0
+          retries: 3
+          delay: 1
+          changed_when: false
+
+        - name: Đưa máy về load balancer
+          ansible.builtin.file:
+            path: "{{ olist_maintenance_flag }}"
+            state: absent
+
+      rescue:
+        - name: Rollback current về bản cũ
+          ansible.builtin.file:
+            src: "{{ olist_previous }}"
+            dest: "{{ olist_root }}/current"
+            state: link
+          when: olist_previous | length > 0
+
+        - name: Dừng rollout
+          ansible.builtin.fail:
+            msg: >-
+              {{ inventory_hostname }} không khoẻ với {{ olist_release }}: đã rollback về {{ olist_previous }},
+              giữ cờ maintenance để máy ở ngoài load balancer. Rollout dừng, các máy sau chưa bị đụng tới.

@@ -155,3 +155,43 @@ def test_ports_avoid_common_defaults():
     assert sorted(defaults) == [25432, 26379, 28000]
     assert not set(defaults) & {5432, 6379, 8000, 8080, 9000, 9001, 15432, 16379}
 
+
+
+def test_500_has_request_id(broken_engine, fake_redis):
+    client = TestClient(create_app(engine=broken_engine, redis_client=fake_redis), raise_server_exceptions=False)
+    r = client.get("/orders/o1", headers={"X-Request-ID": "req-500"})
+    assert r.status_code == 500
+    assert r.headers.get("X-Request-ID") == "req-500"
+    assert r.json() == {"error": "internal server error"}
+    generated = client.get("/orders/o1")
+    assert generated.status_code == 500 and len(generated.headers.get("X-Request-ID", "")) == 32
+
+
+def test_500_is_counted_in_metrics(broken_engine, fake_redis):
+    client = TestClient(create_app(engine=broken_engine, redis_client=fake_redis), raise_server_exceptions=False)
+    client.get("/orders/o1")
+    body = client.get("/metrics").text
+    assert 'http_requests_total{method="GET",path="/orders/{order_id}",status="500"} 1.0' in body
+
+
+def test_recompute_503_when_redis_down(engine, broken_redis):
+    client = TestClient(create_app(engine=engine, redis_client=broken_redis))
+    r = client.post("/jobs/recompute", headers={"X-Request-ID": "req-503"})
+    assert r.status_code == 503
+    assert r.json() == {"error": "redis unavailable"}
+    assert r.headers.get("X-Request-ID") == "req-503"
+    assert 'jobs_enqueued_total 0.0' in client.get("/metrics").text
+
+
+def test_engine_connect_timeout(monkeypatch, tmp_path):
+    from olist_shop import db
+
+    calls = []
+    monkeypatch.setattr(db, "create_engine", lambda url, **kwargs: calls.append((url, kwargs)))
+    db.make_engine("postgresql+psycopg://olist:olist@postgres:5432/olist")
+    db.make_engine("postgresql://olist:olist@postgres:5432/olist")
+    db.make_engine(f"sqlite:///{tmp_path / 'shop.db'}")
+    assert calls[0][1]["connect_args"] == {"connect_timeout": 3}
+    assert calls[1][1]["connect_args"] == {"connect_timeout": 3}
+    assert "connect_args" not in calls[2][1], "sqlite3 không nhận connect_timeout"
+    assert all(kwargs["pool_pre_ping"] for _, kwargs in calls)

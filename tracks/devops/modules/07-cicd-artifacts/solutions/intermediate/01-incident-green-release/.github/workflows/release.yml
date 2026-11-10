@@ -1,0 +1,97 @@
+name: olist-shop-release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_VERSION: 0.10.8
+      UV_SHA256_X86_64: f0c566b55683395a62fefb9261a060fa09824914b5682c3b9629fa154762ae2f
+      UV_SHA256_AARCH64: 661860e954f87dcd823251191866af3486484d1a9df60eed56f4586ed7559e3d
+      PYTHON_VERSION: 3.12.13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Cài uv
+        run: |
+          if [ "$(uv --version 2>/dev/null | cut -d' ' -f2)" = "$UV_VERSION" ]; then
+            echo "Đã có uv $UV_VERSION: $(command -v uv)"
+            exit 0
+          fi
+          case "$(uname -m)" in
+            x86_64) target=x86_64-unknown-linux-gnu; sum="$UV_SHA256_X86_64" ;;
+            aarch64) target=aarch64-unknown-linux-gnu; sum="$UV_SHA256_AARCH64" ;;
+            *) echo "Không có bản uv cho kiến trúc $(uname -m)" >&2; exit 1 ;;
+          esac
+          node -e 'const [u, o] = process.argv.slice(1); fetch(u).then(r => { if (!r.ok) throw new Error("HTTP " + r.status + " " + u); return r.arrayBuffer(); }).then(b => require("fs").writeFileSync(o, Buffer.from(b))).catch(e => { console.error("Tải lỗi: " + ((e.cause && e.cause.code) || e.message)); process.exit(1); })' \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${target}.tar.gz" "$RUNNER_TEMP/uv.tar.gz"
+          echo "${sum}  $RUNNER_TEMP/uv.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/uv.tar.gz" -C "$RUNNER_TEMP/bin" --strip-components=1 "uv-${target}/uv"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Cài Python và dependency
+        run: |
+          uv venv --python "$PYTHON_VERSION" "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" -r requirements.txt -r requirements-dev.txt
+      - name: Test
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -m pytest -q tests 2>&1 | tee pytest-report.txt
+      - name: Tóm tắt kết quả test
+        if: always()
+        run: |
+          summary="$(tail -n 1 pytest-report.txt)"
+          echo "devops-ex-output summary=${summary}"
+          echo "### Kết quả test: ${summary}" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Tính tag
+        id: meta
+        run: |
+          tag="sha-${GITHUB_SHA::12}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "devops-ex-output tag=${tag}"
+      - name: Đăng nhập GHCR
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build và push image
+        if: ${{ !env.ACT }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: .
+          build-args: APP_VERSION=${{ steps.meta.outputs.tag }}
+          tags: ghcr.io/${{ github.repository_owner }}/olist-api:${{ steps.meta.outputs.tag }}
+          push: true

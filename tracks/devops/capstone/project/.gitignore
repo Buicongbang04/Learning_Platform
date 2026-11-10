@@ -1,2 +1,8 @@
 backups/
 nginx/tls/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+ansible/runtime.json
+ansible/artifacts/

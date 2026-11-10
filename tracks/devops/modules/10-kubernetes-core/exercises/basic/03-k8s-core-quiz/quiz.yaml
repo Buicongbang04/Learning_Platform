@@ -1,0 +1,127 @@
+questions:
+  - id: who-schedules
+    kind: knowledge
+    type: single
+    prompt: "Bạn `kubectl apply` một Deployment 3 replica. Thành phần nào quyết định mỗi pod chạy trên node nào, và nó ghi quyết định đó vào đâu?"
+    options:
+      - { id: a, text: "kubelet của từng node tự nhận pod khi thấy node còn đủ CPU và RAM, rồi báo lại cho API server" }
+      - { id: b, text: "controller-manager, vì ReplicaSet controller vừa tạo pod vừa chọn node cho pod" }
+      - { id: c, text: "kube-scheduler: theo dõi pod chưa có node, chọn node rồi ghi `spec.nodeName` qua API server (binding); kubelet của node đó mới chạy container" }
+      - { id: d, text: "etcd: nó lưu danh sách node cùng tài nguyên còn trống, và khi nhận object Pod mới nó tự gán pod vào node theo vòng tròn rồi báo cho kubelet qua watch, nên không cần thành phần riêng để lên lịch" }
+  - id: api-down
+    kind: knowledge
+    type: single
+    prompt: "kube-apiserver của cluster một control plane chết 10 phút. Trong 10 phút đó, pod đang chạy trên worker thế nào?"
+    options:
+      - { id: a, text: "Vẫn chạy và vẫn nhận traffic qua Service; kubelet vẫn restart container lỗi theo pod spec đã có. Không tạo, xoá, scale hay lên lịch pod mới được" }
+      - { id: b, text: "Bị kubelet dừng hết sau 40 giây vì kubelet không gửi được heartbeat của node" }
+      - { id: c, text: "Bị dừng ngay, vì kubelet cần hỏi API server trước mỗi request đi vào container" }
+      - { id: d, text: "Vẫn chạy, và Deployment vẫn rollout bản mới được nhờ controller-manager đọc thẳng etcd" }
+  - id: cri-cni-csi
+    kind: knowledge
+    type: single
+    prompt: "Ghép đúng: (1) kubelet nói chuyện với containerd, (2) pod mới nhận địa chỉ IP và đường mạng tới pod khác, (3) volume EBS gắn vào node rồi mount vào pod."
+    options:
+      - { id: a, text: "(1) CNI, (2) CSI, (3) CRI" }
+      - { id: b, text: "(1) CRI, (2) CNI, (3) CSI" }
+      - { id: c, text: "(1) CRI, (2) kube-proxy, (3) CNI" }
+      - { id: d, text: "(1) OCI, (2) CoreDNS, (3) CRI" }
+  - id: liveness-readyz
+    kind: knowledge
+    type: single
+    prompt: "API của Olist Shop có `/healthz` (chỉ kiểm tiến trình) và `/readyz` (kiểm cả Postgres, Redis). Team đặt livenessProbe gọi `/readyz`. Postgres chậm 2 phút. Chuyện gì xảy ra?"
+    options:
+      - { id: a, text: "Không sao, vì liveness chỉ chạy lúc pod mới khởi động" }
+      - { id: b, text: "Pod chỉ bị bỏ khỏi endpoint của Service cho tới khi Postgres hồi phục, không bao giờ bị restart, vì kubelet tự nhận ra lỗi nằm ở dependency bên ngoài chứ không ở tiến trình và bỏ qua kết quả liveness trong lúc đó" }
+      - { id: c, text: "Liveness fail trên mọi pod cùng lúc nên kubelet restart toàn bộ API, biến sự cố DB thành sự cố API (cascading failure). Liveness gọi `/healthz`, readiness gọi `/readyz`" }
+      - { id: d, text: "Scheduler dời pod sang node khác có kết nối DB tốt hơn" }
+  - id: startup-probe
+    kind: knowledge
+    type: single
+    prompt: "Worker mất tới 90 giây khởi động (chờ schema DB) rồi mới mở cổng metrics. livenessProbe `periodSeconds: 10, failureThreshold: 3` làm nó bị restart lặp. Sửa đúng nhất?"
+    options:
+      - { id: a, text: "Thêm startupProbe cùng endpoint với `failureThreshold × periodSeconds` lớn hơn 90 giây; liveness chỉ bắt đầu sau khi startup đạt" }
+      - { id: b, text: "Bỏ hẳn livenessProbe" }
+      - { id: c, text: "Đặt `restartPolicy: Never` cho Deployment" }
+      - { id: d, text: "Tăng `resources.limits.cpu` lên gấp đôi để worker khởi động nhanh hơn ngưỡng 30 giây, rồi đặt `initialDelaySeconds: 0` để liveness phát hiện lỗi sớm nhất có thể ngay từ giây đầu" }
+  - id: qos-oom
+    kind: knowledge
+    type: single
+    prompt: "Node hết RAM. Ba pod: A không đặt requests/limits, B có requests nhỏ hơn limits, C có requests bằng limits cho cả CPU và RAM. Kubelet evict pod nào trước?"
+    options:
+      - { id: a, text: "C (Guaranteed), vì nó giữ nhiều RAM nhất" }
+      - { id: b, text: "B (Burstable) trước, vì kubelet luôn evict pod có limits lớn hơn requests đầu tiên để giữ chỗ cho cả pod BestEffort lẫn Guaranteed, bất kể pod đang dùng bao nhiêu RAM" }
+      - { id: c, text: "Ngẫu nhiên, Kubernetes không có thứ tự" }
+      - { id: d, text: "A (BestEffort) trước, rồi Burstable dùng vượt request, Guaranteed sau cùng" }
+  - id: rollout-capacity
+    kind: knowledge
+    type: single
+    prompt: "Deployment 4 replica, strategy mặc định (maxSurge 25%, maxUnavailable 25%). Bản mới không bao giờ ready. Lúc rollout kẹt, có bao nhiêu pod cũ còn phục vụ?"
+    options:
+      - { id: a, text: "4, vì với mọi giá trị maxUnavailable, Deployment controller luôn chờ pod mới đạt readiness rồi mới scale ReplicaSet cũ xuống, nên bản lỗi không bao giờ lấy mất pod đang phục vụ" }
+      - { id: b, text: "3: maxUnavailable 25% của 4 là 1 pod được phép thiếu. Muốn giữ đủ 4 thì đặt maxUnavailable 0, maxSurge 1" }
+      - { id: c, text: "0, vì RollingUpdate xoá hết pod cũ trước" }
+      - { id: d, text: "2, vì maxSurge và maxUnavailable cộng lại là 50%" }
+  - id: rollback-rs
+    kind: knowledge
+    type: single
+    prompt: "`kubectl rollout undo deployment/api` làm gì với ReplicaSet?"
+    options:
+      - { id: a, text: "Tạo một ReplicaSet hoàn toàn mới với pod template của revision trước và tên ngẫu nhiên mới, rồi xoá ReplicaSet đang chạy cùng toàn bộ lịch sử revision để tránh rollback chồng rollback" }
+      - { id: b, text: "Xoá ReplicaSet hiện tại và mọi revision cũ" }
+      - { id: c, text: "Chép pod template của revision trước vào Deployment; ReplicaSet cũ có cùng `pod-template-hash` được scale lên lại, revision đó nhận số mới. Giữ được bao nhiêu bản lùi phụ thuộc `revisionHistoryLimit`" }
+      - { id: d, text: "Chỉ đổi annotation change-cause, pod giữ nguyên" }
+  - id: workload-choice
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi cặp workload đúng:"
+    options:
+      - { id: a, text: "Agent thu log chạy đúng một bản trên mỗi node: DaemonSet" }
+      - { id: b, text: "Postgres cần tên ổn định `postgres-0` và volume đi theo tên đó: StatefulSet kèm Service headless" }
+      - { id: c, text: "Báo cáo doanh thu chạy 2 giờ sáng mỗi ngày: Deployment 1 replica có vòng lặp sleep" }
+      - { id: d, text: "Migration schema chạy một lần mỗi release, retry có giới hạn: Job" }
+  - id: selector-mismatch
+    kind: knowledge
+    type: single
+    prompt: "Pod `api` Running và Ready, nhưng gọi `http://api:8000` từ pod khác bị `connection refused`, còn `kubectl get endpointslices -l kubernetes.io/service-name=api` không liệt kê địa chỉ nào. Nguyên nhân hay gặp nhất?"
+    options:
+      - { id: a, text: "CoreDNS lỗi" }
+      - { id: b, text: "`spec.selector` của Service không khớp nhãn của pod (hay `targetPort` sai tên); sửa selector, endpoint xuất hiện ngay" }
+      - { id: c, text: "kube-proxy chưa chạy trên node của pod nên EndpointSlice controller không thấy pod; cài lại DaemonSet kube-proxy rồi chờ vài phút cho endpoint tự xuất hiện" }
+      - { id: d, text: "Pod thiếu livenessProbe" }
+  - id: headless-dns
+    kind: knowledge
+    type: single
+    prompt: "StatefulSet `postgres` có `serviceName: postgres` (headless) trong namespace `shop`. Pod khác muốn nói chuyện đúng với replica 0. Tên DNS nào?"
+    options:
+      - { id: a, text: "`postgres.shop.svc.cluster.local`, CoreDNS luôn trả pod 0 trước" }
+      - { id: b, text: "`postgres-0.shop.pod.cluster.local`" }
+      - { id: c, text: "`shop.postgres-0.svc`" }
+      - { id: d, text: "`postgres-0.postgres.shop.svc.cluster.local`" }
+  - id: pvc-pending
+    kind: knowledge
+    type: single
+    prompt: "PVC kẹt `Pending`, event `storageclass.storage.k8s.io \"fast-ssd\" not found`. Pod dùng nó cũng `Pending`. Việc đầu tiên?"
+    options:
+      - { id: a, text: "`kubectl get storageclass` để xem class nào có thật (trên kind là `standard`), rồi sửa `storageClassName` trong volumeClaimTemplates hay PVC; PVC không sửa class tại chỗ được nên xoá và tạo lại" }
+      - { id: b, text: "Tạo PV hostPath tay để PVC bind vào" }
+      - { id: c, text: "Restart kubelet trên mọi node" }
+      - { id: d, text: "Tăng `resources.requests.storage` lên 10Gi để provisioner chọn ổ lớn hơn, vì local-path báo not found khi dung lượng xin nhỏ hơn mức tối thiểu của StorageClass" }
+  - id: etcd-backup
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi điều đúng về backup etcd của cluster kubeadm:"
+    options:
+      - { id: a, text: "`etcdctl snapshot save` cần endpoint của etcd và chứng chỉ client etcd tin (`--cacert`, `--cert`, `--key` trong `/etc/kubernetes/pki/etcd`)" }
+      - { id: b, text: "Snapshot chứa mọi Secret ở dạng đọc được nếu chưa bật encryption at rest, nên phải mã hoá và giới hạn quyền đọc tệp backup" }
+      - { id: c, text: "Restore là `etcdutl snapshot restore` ra data dir mới rồi trỏ static pod etcd vào đó; cluster quay về đúng thời điểm snapshot, mọi thay đổi sau đó mất" }
+      - { id: d, text: "Backup etcd thay được backup dữ liệu của Postgres chạy trong cluster, vì PV cũng nằm trong etcd" }
+  - id: distro-choice
+    kind: knowledge
+    type: single
+    prompt: "Một chuỗi cửa hàng cần chạy app ở 300 cửa hàng, mỗi nơi một máy mini 4 GB RAM, mạng chập chờn, không có người vận hành tại chỗ. Bản Kubernetes hợp nhất?"
+    options:
+      - { id: a, text: "kind, vì nó nhẹ nhất" }
+      - { id: b, text: "kubeadm đầy đủ với ba control plane mỗi cửa hàng" }
+      - { id: c, text: "k3s (một binary, SQLite hay etcd nhúng, ít RAM, hợp edge), quản tập trung bằng GitOps" }
+      - { id: d, text: "EKS ở mỗi cửa hàng" }

@@ -1,0 +1,2 @@
+olist_worker_redis_url: redis://redis.internal:6379/0
+olist_worker_log_level: INFO

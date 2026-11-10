@@ -1,0 +1,10 @@
+fastapi==0.143.1
+uvicorn==0.54.0
+sqlalchemy==2.1.6
+psycopg[binary]==3.3.6
+redis==8.1.0
+prometheus-client==0.26.0
+pytest==9.2.0
+fakeredis==2.40.0
+httpx==0.28.1
+pyyaml==6.0.3

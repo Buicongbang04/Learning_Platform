@@ -1,0 +1,14 @@
+- name: Canary
+  hosts: role_worker:&env_prod:&canary
+  gather_facts: false
+  tasks:
+    - name: Deploy bản mới lên canary
+      ansible.builtin.ping:
+
+- name: Các worker prod còn lại
+  hosts: role_worker:&env_prod:!canary
+  gather_facts: false
+  serial: "50%"
+  tasks:
+    - name: Deploy bản mới theo đợt
+      ansible.builtin.ping:

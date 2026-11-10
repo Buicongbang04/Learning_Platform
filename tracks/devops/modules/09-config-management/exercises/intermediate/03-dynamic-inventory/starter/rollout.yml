@@ -1,0 +1,13 @@
+- name: Canary
+  hosts: workers
+  gather_facts: false
+  tasks:
+    - name: Deploy bản mới lên canary
+      ansible.builtin.ping:
+
+- name: Các worker prod còn lại
+  hosts: workers
+  gather_facts: false
+  tasks:
+    - name: Deploy bản mới theo đợt
+      ansible.builtin.ping:

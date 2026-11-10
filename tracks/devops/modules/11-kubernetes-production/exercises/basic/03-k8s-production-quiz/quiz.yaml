@@ -1,0 +1,127 @@
+questions:
+  - id: role-scope
+    kind: knowledge
+    type: single
+    prompt: "Bạn tạo ClusterRole `pod-reader` (get, list pods) rồi một RoleBinding trong namespace `shop` trỏ tới nó cho user `an`. An đọc được pod ở đâu?"
+    options:
+      - { id: a, text: "Mọi namespace, vì ClusterRole là quyền cấp cluster nên mọi binding tới nó đều có hiệu lực toàn cluster" }
+      - { id: b, text: "Chỉ namespace `shop`: RoleBinding giới hạn phạm vi, ClusterRole chỉ là bộ quy tắc dùng lại được" }
+      - { id: c, text: "Không đâu cả, vì RoleBinding chỉ được trỏ tới Role cùng namespace và API server từ chối tạo binding này" }
+      - { id: d, text: "Mọi namespace trừ `kube-system`, vì namespace hệ thống luôn được bảo vệ khỏi binding của người dùng thường" }
+  - id: ci-token
+    kind: knowledge
+    type: single
+    prompt: "Pipeline CI ngoài cluster cần deploy vào namespace `shop`. Cách cấp quyền nào đúng tinh thần least privilege nhất?"
+    options:
+      - { id: a, text: "Dùng kubeconfig admin của cluster, lưu thành secret mã hoá của hệ thống CI và đổi mật khẩu mỗi quý" }
+      - { id: b, text: "ServiceAccount riêng `ci-deployer`, Role trong `shop` chỉ có verb cần để deploy, token ngắn hạn" }
+      - { id: c, text: "ServiceAccount `default` của namespace `shop`, gắn ClusterRole `edit` bằng ClusterRoleBinding để khỏi thiếu quyền" }
+      - { id: d, text: "Một Secret loại service-account-token không hết hạn, gắn Role có `*` trên `apps` để CI chủ động hơn" }
+  - id: psa-levels
+    kind: knowledge
+    type: single
+    prompt: "Namespace có nhãn `pod-security.kubernetes.io/enforce=restricted`. Pod nào bị từ chối?"
+    options:
+      - { id: a, text: "Pod chạy image có user 10001, `runAsNonRoot: true`, `allowPrivilegeEscalation: false`, drop ALL, seccomp RuntimeDefault" }
+      - { id: b, text: "Pod của một Deployment mà container không đặt `securityContext` nào; Deployment vẫn tạo được nhưng ReplicaSet báo FailedCreate" }
+      - { id: c, text: "Pod chỉ dùng volume `configMap`, `secret`, `emptyDir` và `persistentVolumeClaim`, không có hostPath hay hostPort" }
+      - { id: d, text: "Pod có `readOnlyRootFilesystem: true` và mount emptyDir vào `/tmp` cho tệp tạm của ứng dụng" }
+  - id: netpol-dns
+    kind: knowledge
+    type: single
+    prompt: "Bạn áp NetworkPolicy deny-all cho cả Ingress và Egress, rồi một policy cho `api` egress tới `postgres:5432`. Pod `api` mới khởi động báo lỗi kết nối DB. Nguyên nhân thường gặp nhất?"
+    options:
+      - { id: a, text: "NetworkPolicy mới chỉ có hiệu lực với pod sau khi node chạy pod đó được khởi động lại hoàn toàn" }
+      - { id: b, text: "Egress tới CoreDNS cũng bị chặn nên `api` không phân giải được tên `postgres`; mở UDP/TCP 53 tới kube-dns" }
+      - { id: c, text: "Policy egress của `api` phải ghi IP của Service postgres, vì podSelector không áp được cho đích là Service" }
+      - { id: d, text: "Postgres cần thêm policy egress để gói trả lời về được `api`, vì NetworkPolicy không theo dõi trạng thái kết nối" }
+  - id: netpol-union
+    kind: knowledge
+    type: single
+    prompt: "Hai NetworkPolicy cùng chọn pod `redis`: một cho phép Ingress từ `api`, một cho phép Ingress từ `worker`. Kết quả?"
+    options:
+      - { id: a, text: "Chỉ policy tạo sau có hiệu lực" }
+      - { id: b, text: "Giao của hai policy: không pod nào vào được vì không pod nào vừa là api vừa là worker" }
+      - { id: c, text: "Hợp của hai policy: cả `api` và `worker` vào được, pod khác bị chặn" }
+      - { id: d, text: "API server từ chối policy thứ hai vì trùng podSelector" }
+  - id: taint-noexecute
+    kind: knowledge
+    type: single
+    prompt: "Admin muốn đưa worker ra bảo trì mà không làm ứng dụng mất quá một pod mỗi lúc (có PDB). Lệnh nào tôn trọng PDB?"
+    options:
+      - { id: a, text: "`kubectl taint node w1 maint=true:NoExecute`, vì taint NoExecute đuổi pod theo thứ tự PDB" }
+      - { id: b, text: "`kubectl drain w1 --ignore-daemonsets`: đi qua Eviction API nên PDB được kiểm trước mỗi lần đuổi" }
+      - { id: c, text: "`kubectl delete pods --field-selector spec.nodeName=w1`, vì controller tự tạo pod mới ở node khác" }
+      - { id: d, text: "`kubectl cordon w1`, vì cordon đuổi dần pod khỏi node theo PDB rồi đánh dấu unschedulable" }
+  - id: spread-cordon
+    kind: knowledge
+    type: single
+    prompt: "Deployment 4 replica có `topologySpreadConstraints` maxSkew 1 theo hostname, `DoNotSchedule`, mặc định mọi trường khác. Drain một trong hai worker thì pod thay thế `Pending` với lý do topology spread. Sửa nhỏ nhất giữ được ràng buộc?"
+    options:
+      - { id: a, text: "Đặt `nodeTaintsPolicy: Honor` để node bị cordon (có taint unschedulable) không còn tính vào độ lệch" }
+      - { id: b, text: "Tăng `maxSkew` lên 4 để scheduler luôn tìm được chỗ cho pod thay thế ở node còn lại" }
+      - { id: c, text: "Thêm toleration không có key với `operator: Exists` để pod chạy được trên mọi node" }
+      - { id: d, text: "Xoá PodDisruptionBudget để drain không bị chặn khi pod thay thế chưa lên" }
+  - id: preemption
+    kind: knowledge
+    type: single
+    prompt: "Cluster đầy. Pod `payment` dùng PriorityClass value 100000, các pod batch dùng value 100. Pod `payment` mới không xếp được. Scheduler làm gì?"
+    options:
+      - { id: a, text: "Giữ `payment` Pending tới khi cluster autoscaler thêm node mới, vì scheduler không bao giờ đụng pod đang chạy ổn định" }
+      - { id: b, text: "Đuổi pod batch ưu tiên thấp trên một node (preemption) để `payment` vào; PDB chỉ được tôn trọng theo kiểu cố gắng" }
+      - { id: c, text: "Hạ requests của các pod batch đang chạy xuống để vừa chỗ cho `payment` mà không phải xoá pod nào" }
+      - { id: d, text: "Xếp `payment` lên control plane vì pod ưu tiên cao được bỏ qua taint của control plane" }
+  - id: quota-limitrange
+    kind: knowledge
+    type: single
+    prompt: "Namespace có ResourceQuota `requests.memory: 1Gi` nhưng không có LimitRange. Một Deployment không khai báo resources. Chuyện gì xảy ra?"
+    options:
+      - { id: a, text: "Pod vẫn chạy bình thường ở lớp BestEffort, vì quota chỉ tính những pod có khai báo resources trong spec" }
+      - { id: b, text: "API server từ chối tạo Deployment ngay khi `kubectl apply`" }
+      - { id: c, text: "ReplicaSet không tạo được pod: quota trên requests.memory buộc mọi pod khai báo request (LimitRange điền hộ được)" }
+      - { id: d, text: "Kubelet tự gán request 1Gi cho pod đầu tiên để lấp đầy quota rồi từ chối mọi pod tạo sau đó trong cùng namespace đó" }
+  - id: hpa-requests
+    kind: knowledge
+    type: single
+    prompt: "HPA `averageUtilization: 60` trên CPU báo `FailedGetResourceMetric: missing request for cpu`, metrics-server vẫn chạy và `kubectl top pods` có số. Sửa gì?"
+    options:
+      - { id: a, text: "Thêm `resources.requests.cpu` cho container: Utilization là phần trăm của request, không có request thì không tính được" }
+      - { id: b, text: "Cài lại metrics-server với cờ `--kubelet-insecure-tls`, vì HPA chỉ đọc được số liệu qua TLS đã kiểm chứng" }
+      - { id: c, text: "Đổi target sang `type: AverageValue` với `averageValue: 60` vì Utilization chỉ dùng cho bộ nhớ" }
+      - { id: d, text: "Đặt `limits.cpu` bằng một core, vì HPA chia mức dùng CPU cho limit để ra phần trăm Utilization" }
+  - id: helm-or-kustomize
+    kind: knowledge
+    type: single
+    prompt: "Team nội bộ có 3 môi trường cho một service, khác nhau vài trường (replicas, tài nguyên, tên Secret). Không ai ngoài team cài service này. Chọn gì và vì sao?"
+    options:
+      - { id: a, text: "Helm chart công khai trên Artifact Hub, vì mọi thứ chạy trên Kubernetes đều nên đóng gói thành chart có version riêng" }
+      - { id: b, text: "Kustomize base cộng overlay mỗi môi trường: YAML thuần, có sẵn trong kubectl; Helm đáng khi phân phối cho người khác" }
+      - { id: c, text: "Ba bản sao YAML đầy đủ, mỗi môi trường một thư mục, để diff giữa các môi trường rõ ràng nhất" }
+      - { id: d, text: "Operator tự viết, vì chỉ operator mới biết khác biệt giữa các môi trường lúc chạy" }
+  - id: upgrade-order
+    kind: knowledge
+    type: single
+    prompt: "Cluster kubeadm 1.34, đích 1.36. Trình tự nào đúng?"
+    options:
+      - { id: a, text: "Nâng kubelet của mọi worker lên 1.36 trước, rồi mới tới control plane, để node đã sẵn sàng khi API server mới lên" }
+      - { id: b, text: "`kubeadm upgrade apply v1.36.x` trên control plane đầu tiên, sau đó lần lượt tới các node còn lại" }
+      - { id: c, text: "Control plane lên 1.35 rồi 1.36, từng node; worker giữ 1.34 trong lúc đó (skew cho phép), rồi drain và nâng từng worker" }
+      - { id: d, text: "Snapshot etcd, dựng một control plane 1.36 mới hoàn toàn, restore snapshot vào đó, rồi trỏ mọi worker 1.34 sang cụm mới" }
+  - id: autoscalers
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi phát biểu đúng về HPA, VPA và Cluster Autoscaler."
+    options:
+      - { id: a, text: "Cluster Autoscaler thêm node khi có pod Pending vì thiếu tài nguyên, bớt node khi tổng requests trên node thấp và pod dời được" }
+      - { id: b, text: "VPA chế độ Auto và HPA cùng điều khiển một Deployment theo CPU dễ đánh nhau: VPA đổi request làm thay đổi phần trăm mà HPA đọc" }
+      - { id: c, text: "Cluster Autoscaler nhìn mức dùng CPU thật của node để quyết định thêm node" }
+      - { id: d, text: "HPA đọc metrics qua API `metrics.k8s.io` (metrics-server) cho CPU và bộ nhớ, hay custom/external metrics qua adapter" }
+  - id: managed-choice
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi phát biểu đúng khi so sánh nền tảng chạy container."
+    options:
+      - { id: a, text: "EKS, GKE, AKS quản control plane; bạn vẫn lo nâng node, addon, RBAC, NetworkPolicy và phiên bản" }
+      - { id: b, text: "ECS trên Fargate không có node để bạn vá hay drain; đổi lại không có API Kubernetes, CRD hay Helm" }
+      - { id: c, text: "Docker Swarm có NetworkPolicy, CRD và HPA tương đương Kubernetes nên chuyển qua lại không cần sửa gì" }
+      - { id: d, text: "GKE Autopilot tính tiền theo requests của pod và không cho chạy pod privileged; Kubernetes vẫn là Kubernetes ở phía API" }

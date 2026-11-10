@@ -151,6 +151,7 @@ constraint-dependencies = [
 pythonpath = ["."]
 addopts = "-p no:cacheprovider --import-mode=importlib"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["kube_nodes: test cordon, drain, taint worker của cluster devops-lab dùng chung qua KubeLab.node_action; không chạy song song"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
