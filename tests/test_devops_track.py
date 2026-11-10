@@ -194,7 +194,7 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
     return errors
 
 
-TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu")
+TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
 NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
 TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
@@ -389,8 +389,9 @@ def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
 
 
 def check_tool_calls(path: Path) -> list[str]:
-    """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu trực tiếp; đi qua helper của testkit
-    (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp).
+    """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu, sops, age, age-keygen, vault trực tiếp;
+    đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab,
+    kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với sops_env/vault_env).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
     `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
@@ -768,6 +769,11 @@ def test_exercise_layout_basic_minimum_and_bad_level(tmp_path):
 
 TOOL_DENYLIST_BAD = {
     "list-docker": 'subprocess.run(["docker", "run", "--rm", "nginx"])\n',
+    "list-sops": 'subprocess.run(["sops", "decrypt", "secret.enc.yaml"])\n',
+    "list-age-keygen": 'subprocess.run(["age-keygen", "-o", "key.txt"])\n',
+    "string-age": 'subprocess.run("age -d -i key.txt secret.age", shell=True)\n',
+    "list-vault": 'subprocess.run(["vault", "kv", "get", "secret/app"])\n',
+    "shell-c-vault": 'subprocess.run(["bash", "-c", "vault login root && vault kv put secret/x a=b"])\n',
     "tuple-docker": "subprocess.run(('docker', 'ps', '-a'))\n",
     "list-kind": 'subprocess.run(["kind", "get", "clusters"], check=True)\n',
     "list-act-via-variable": 'cmd = ["act", "-j", "test"]\nsubprocess.run(cmd)\n',
@@ -854,6 +860,9 @@ TOOL_DENYLIST_GOOD = {
     "act-run-helper": 'result = act_run(tmp_path / "project", job="build")\nassert act_job_results(result) == {"build": True}\n',
     "testkit-act-run": 'testkit.act_run(project, event="push", secrets={"DEPLOY_TOKEN": "x"}, timeout=300)\n',
     "run-sandboxed-shell-c": 'run_sandboxed(["bash", "-c", "tofu init && tofu plan"], writable=[t], cwd=t, env={})\n',
+    "run-sandboxed-sops": 'run_sandboxed(["sops", "decrypt", "s.yaml"], writable=[t], cwd=t, env=sops_env(t / "h", key))\n',
+    "run-sandboxed-vault": 'run_sandboxed(["vault", "kv", "get", "secret/app"], writable=[t], cwd=t, env=vault_env(token))\n',
+    "age-keypair": 'key, public = age_keypair(tmp_path / "keys")\n',
     "other-argv": 'subprocess.run(["git", "status"])\nsubprocess.run(["bash", "-c", "echo docker"])\n',
     "nice-python": 'subprocess.run(["nice", "-n", "15", "python3", "x.py"])\n',
     "wrapper-learner-script": 'subprocess.run(["timeout", "30", "bash", "deploy.sh", "docker"])\n',

@@ -323,3 +323,11 @@ def test_devops_tools_documents_tofu_and_localstack_devops():
     assert "| tofu (OpenTofu) |" in text and testkit.TOFU_MIN_VERSION in text and testkit.TOFU_VERSION in text
     assert testkit.LOCALSTACK_DEVOPS_START in text and "rm -fsv localstack-devops" in text
     assert "docker volume rm devops-track-localstack-data" in text and testkit.TOFU_AWS_PROVIDER in text
+
+
+def test_devops_tools_documents_sops_age_vault():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    assert "| sops |" in text and testkit.SOPS_VERSION in text and testkit.SOPS_MIN_VERSION in text
+    assert "| age, age-keygen |" in text and testkit.AGE_VERSION in text and testkit.AGE_MIN_VERSION in text
+    assert testkit.VAULT_DEVOPS_START in text and "rm -s -f -v vault-devops" in text and "DEVOPS_VAULT_PORT" in text
+    assert _services()["vault-devops"]["image"] == testkit.VAULT_IMAGE

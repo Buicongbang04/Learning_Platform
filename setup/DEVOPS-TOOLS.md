@@ -25,6 +25,9 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | kubectl | 10 Kubernetes core (bản đã kiểm 1.34.13, khớp minor của node image) | 1.33 (lệch tối đa một minor với API server 1.34) | [Cài đặt](../tracks/devops/modules/10-kubernetes-core/README.md#0-cài-đặt) |
 | helm | 11 Kubernetes production (bản đã kiểm 3.22.1; Kustomize có sẵn trong kubectl) | 3.18 | [Cài đặt](../tracks/devops/modules/11-kubernetes-production/README.md#0-cài-đặt) |
 | metrics-server (trong cluster, không cài lên máy) | 11 Kubernetes production (HPA, `kubectl top`; bản 0.9.1 ghim trong `setup/kind/metrics-server/`, xem [metrics-server dùng chung](#metrics-server-dùng-chung)) | Đúng bản đã ghim | [Cài đặt](../tracks/devops/modules/11-kubernetes-production/README.md#0-cài-đặt) |
+| sops | 12 GitOps & secrets (bản đã kiểm 3.13.3, binary chính thức từ GitHub release, kiểm SHA-256 theo `sops-v3.13.3.checksums.txt`; test chạy `sops` trong sandbox với `sops_env`, không đọc `~/.config/sops` hay `SOPS_*` của máy) | 3.9 | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
+| age, age-keygen | 12 GitOps & secrets (bản đã kiểm 1.3.2; khoá của bài sinh bằng `age_keypair` trong sandbox, nằm ngoài repo và ngoài project của bạn) | 1.2 | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
+| Vault (image `hashicorp/vault:2.2.1` ghim digest, chạy dev mode trong compose, xem [Vault dev](#dịch-vụ-phụ-trợ-vault-dev)) | 12 GitOps & secrets | Đúng tag đã ghim | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
@@ -88,6 +91,17 @@ docker volume rm devops-track-localstack-data
 ```
 
 Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM và Secrets Manager. Lần chạy test đầu tiên (cần mạng) tự tải đúng provider `hashicorp/aws` 6.12.0 (khoảng 150 MB, giải nén khoảng 780 MB) vào `~/.cache/devops-track/tofu-plugins`; từ đó test chạy offline. Provider mới hơn 6.12 chưa chạy được với LocalStack 4.4.0 (bảng DynamoDB, tag bucket S3), nên test chỉ cài bản này: ràng buộc như `~> 6.0` vẫn ra 6.12.0, ràng buộc loại trừ 6.12.0 thì test báo lỗi kèm lý do.
+
+## Dịch vụ phụ trợ: Vault dev
+
+Module 12 và capstone dùng một Vault chạy dev mode: service `vault-devops` (image `hashicorp/vault:2.2.1` ghim digest), profile `devops`, không thuộc `all`. Dev mode giữ mọi dữ liệu trong RAM, đã unseal sẵn, mất hết khi container dừng; không bao giờ dùng cấu hình này cho môi trường thật.
+
+```bash
+docker compose -f setup/docker-compose.yml --profile devops up -d --wait vault-devops
+docker compose -f setup/docker-compose.yml --profile devops rm -s -f -v vault-devops
+```
+
+Vault ở `http://127.0.0.1:18200`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `DEVOPS_VAULT_PORT` trong `setup/.env`. Token root của dev mode là chuỗi cố định cho lab `devops-lab-root` (không phải bí mật, đổi bằng `DEVOPS_VAULT_TOKEN`). Image khai báo `VOLUME /vault/file` và `/vault/logs`, nên lệnh tắt có `-v` để xoá luôn hai volume ẩn danh đi kèm. Test không đọc `VAULT_ADDR`, `VAULT_TOKEN` hay `~/.vault-token` của máy: `vault_env` dựng env từ đầu.
 
 ## Cluster kind devops-lab
 

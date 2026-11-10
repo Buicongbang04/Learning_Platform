@@ -28,6 +28,8 @@ Trong test:
     with AnsibleLab(["worker-1"]) as lab: run = lab.playbook("site.yml", cwd=lab.stage(ex.target)); run.changed  # bài Ansible: target SSH trong container
     with KubeLab() as lab: lab.apply_learner(ex.path("k8s")); lab.kubectl("get", "deploy", "api", "-o", "json")  # bài Kubernetes: namespace riêng trên devops-lab
     kind_node_exec("devops-lab-control-plane", "etcdctl", "version")  # lệnh cố định của testkit trong node kind, argv không qua shell
+    key, public = age_keypair(tmp_path / "keys"); env = sops_env(tmp_path / "home", key)  # bài SOPS: sops chạy trong run_sandboxed
+    ex.require_vault_devops(); env = vault_env(VAULT_DEV_TOKEN)  # bài Vault: vault CLI chạy trong run_sandboxed, Vault dev của lab
 """
 
 from __future__ import annotations
@@ -87,6 +89,7 @@ SERVICES = {
     "mailpit": ("MAILPIT_HOST", "localhost", "MAILPIT_SMTP_PORT", 11025),
     "registry": ("REGISTRY_HOST", "localhost", "DEVOPS_REGISTRY_PORT", 15000),
     "localstack-devops": ("LOCALSTACK_DEVOPS_HOST", "localhost", "LOCALSTACK_DEVOPS_PORT", 14566),
+    "vault-devops": ("DEVOPS_VAULT_HOST", "localhost", "DEVOPS_VAULT_PORT", 18200),
 }
 
 def _port(name: str) -> int:
@@ -130,6 +133,7 @@ TOOL_VERSION_ARGS = {
     "openssl": ["version"],
     "dig": ["-v"],
     "ssh": ["-V"],
+    "sops": ["--version", "--disable-version-check"],
 }
 
 _VERSION = re.compile(r"\d+(?:\.\d+)+")
@@ -300,6 +304,18 @@ def free_port() -> int:
 
 def _docker(*args: str, timeout: float = 60) -> subprocess.CompletedProcess:
     return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+
+
+_ANONYMOUS_VOLUME = re.compile(r"[0-9a-f]{64}")
+_VOLUME_MOUNTS = '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}} {{end}}{{end}}'
+
+
+def _anonymous_volumes(names: list[str]) -> list[str]:
+    """Volume ẩn danh (tên 64 ký tự hex, sinh từ `VOLUME` của image) đang gắn vào các container `names`."""
+    if not names:
+        return []
+    found = _docker("inspect", "--format", _VOLUME_MOUNTS, *names).stdout.split()
+    return list(dict.fromkeys(v for v in found if _ANONYMOUS_VOLUME.fullmatch(v)))
 
 
 def docker_leftovers(lab_id: str) -> list[str]:
@@ -670,7 +686,7 @@ class DockerLab:
             if result.returncode == 0:
                 self.ports[alias] = dict(publish)
                 return name
-            _docker("rm", "-f", name)
+            _docker("rm", "-f", "-v", name)
             if not any(text in result.stderr for text in _PORT_TAKEN):
                 break
         pytest.fail(f"docker run {alias} ({image}) lỗi: {result.stderr.strip()}")
@@ -961,9 +977,18 @@ class DockerLab:
                 self.project.down()
             except (OSError, subprocess.TimeoutExpired):
                 pass
+        try:
+            volumes = _anonymous_volumes(self.names)
+        except (OSError, subprocess.TimeoutExpired):
+            volumes = []
         for name in self.names:
             try:
-                _docker("rm", "-f", name)
+                _docker("rm", "-f", "-v", name)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if volumes:
+            try:
+                _docker("volume", "rm", *volumes)
             except (OSError, subprocess.TimeoutExpired):
                 pass
         self._delete_pushed()
@@ -999,7 +1024,7 @@ SANDBOX_SKIP = (
 
 CREDENTIAL_PATHS = (
     ".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".git-credentials", ".netrc", ".terraform.d",
-    ".cache/devops-track/kube",
+    ".cache/devops-track/kube", ".config/sops", ".gnupg", ".vault-token",
 )
 
 
@@ -2236,6 +2261,81 @@ class TofuLab:
 
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
 _MAGIC = re.compile(r"^(\s*)(?:[%!]|[\w, ]+=\s*[%!]).*$")
+
+
+SOPS_VERSION = "3.13.3"
+SOPS_MIN_VERSION = "3.9"
+AGE_VERSION = "1.3.2"
+AGE_MIN_VERSION = "1.2"
+VAULT_VERSION = "2.2.1"
+VAULT_IMAGE = f"hashicorp/vault:{VAULT_VERSION}@sha256:962a92876e168d68eaaa24b0b8b49bbce1cb63024060a67bba95cd158a366fc2"
+VAULT_DEVOPS_START = "docker compose -f setup/docker-compose.yml --profile devops up -d --wait vault-devops"
+VAULT_DEV_TOKEN = os.environ.get("DEVOPS_VAULT_TOKEN", "devops-lab-root")
+_AGE_PUBLIC = re.compile(r"^# public key: (age1[0-9a-z]+)$", re.M)
+
+
+def _key_outside(path: Path, outside) -> Path:
+    real = Path(path).resolve()
+    for root in (ROOT, *outside):
+        if real.is_relative_to(Path(root).resolve()):
+            raise ValueError(f"Khoá age phải nằm ngoài {root} (repo hay project của người học): {real}")
+    return real
+
+
+def sops_env(home: Path, key_file: Path, *, outside=()) -> dict[str, str]:
+    """Env cho `sops` trong `run_sandboxed`: `HOME` và `XDG_CONFIG_HOME` tạm (không đọc `~/.config/sops`), `GNUPGHOME` trong
+    `home` (tạo nếu chưa có), `SOPS_AGE_KEY_FILE` là khoá của lab. Không mang `SOPS_*`, `AGE_*`, `GNUPGHOME` của máy. `key_file` nằm trong repo
+    hay trong một thư mục của `outside` (project của người học) thì ValueError. Khoá dưới /tmp (như `tmp_path`) bị tmpfs của
+    sandbox che: truyền `readonly=[key_file.parent]` cho `run_sandboxed`."""
+    home = Path(home).resolve()
+    key = _key_outside(key_file, outside)
+    (home / ".config").mkdir(parents=True, exist_ok=True)
+    return {"HOME": str(home), "XDG_CONFIG_HOME": f"{home}/.config", "GNUPGHOME": f"{home}/.gnupg", "SOPS_AGE_KEY_FILE": str(key)}
+
+
+def age_keypair(directory: Path, *, outside=()) -> tuple[Path, str]:
+    """Sinh khoá age bằng `age-keygen -o` trong sandbox (chỉ `directory` ghi được); trả (đường dẫn khoá riêng, public key).
+    `directory` nằm trong repo hay trong `outside` thì ValueError. Không bao giờ in khoá riêng."""
+    directory = _key_outside(directory, outside)
+    Exercise.require_tool("age-keygen", AGE_MIN_VERSION)
+    directory.mkdir(parents=True, exist_ok=True)
+    key = directory / "age-key.txt"
+    if key.exists():
+        raise ValueError(f"Đã có khoá {key}; dùng thư mục mới cho mỗi khoá")
+    result = run_sandboxed(["age-keygen", "-o", str(key)], writable=[directory], cwd=directory, env={})
+    found = _AGE_PUBLIC.search(key.read_text(encoding="utf-8")) if key.is_file() else None
+    if result.returncode != 0 or found is None:
+        pytest.fail(f"age-keygen lỗi (mã {result.returncode}): {result.stderr.strip()[-DOCKER_LOG_CHARS:]}")
+    return key, found.group(1)
+
+
+def vault_devops_address() -> str:
+    host = os.environ.get(SERVICES["vault-devops"][0], SERVICES["vault-devops"][1])
+    return f"http://{'127.0.0.1' if host == 'localhost' else host}:{_port('vault-devops')}"
+
+
+def vault_env(token: str) -> dict[str, str]:
+    """Env cho `vault` CLI: `VAULT_ADDR` của `vault-devops` và `token` truyền vào; không mang `VAULT_*` của máy."""
+    if not token:
+        raise ValueError("vault_env cần token của lab")
+    return {"VAULT_ADDR": vault_devops_address(), "VAULT_TOKEN": token}
+
+
+def _vault_health(address: str) -> dict | None:
+    import urllib.error
+    import urllib.request
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f"{address}/v1/sys/health", timeout=3) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        try:
+            return json.loads(error.read().decode("utf-8"))
+        except ValueError:
+            return None
+    except (OSError, ValueError):
+        return None
 
 
 ANSIBLE_VERSION = "2.21.5"
@@ -4609,6 +4709,19 @@ class Exercise:
                 f"Cổng {_port('localstack-devops')} đang mở nhưng không phải localstack-devops (thiếu S3, IAM, STS hay "
                 f"DynamoDB). Đổi LOCALSTACK_DEVOPS_PORT trong setup/.env rồi chạy: {LOCALSTACK_DEVOPS_START}")
         return endpoint
+
+    @staticmethod
+    def require_vault_devops() -> str:
+        """Skip khi `vault-devops` (profile `devops`) chưa chạy hoặc cổng của nó là server khác; trả địa chỉ. Test dùng qua
+        `vault_env`."""
+        if not service_up("vault-devops"):
+            pytest.skip(f"Vault dev của track DevOps chưa chạy. Bật bằng: {VAULT_DEVOPS_START}")
+        health = _vault_health(vault_devops_address())
+        if not isinstance(health, dict) or health.get("initialized") is not True or health.get("sealed") is not False:
+            pytest.skip(
+                f"Cổng {_port('vault-devops')} đang mở nhưng không phải vault-devops (GET /v1/sys/health không trả Vault đã "
+                f"unseal). Đổi DEVOPS_VAULT_PORT trong setup/.env rồi chạy: {VAULT_DEVOPS_START}")
+        return vault_devops_address()
 
     @staticmethod
     def require_tool(name: str, min_version: str | None = None) -> None:

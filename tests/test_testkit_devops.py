@@ -361,10 +361,10 @@ def test_docker_lab_cleans_up_even_when_run_fails(monkeypatch):
     with pytest.raises(pytest.fail.Exception):
         with lab:
             lab.start("api", "python:3.12.16-alpine3.24", ports=[8000])
-    removed = [c for c in fake.calls if c[1:3] == ["rm", "-f"]]
-    assert [f"devops-ex-{lab.id}-api"] in [c[3:] for c in removed]
+    removed = [c for c in fake.calls if c[1:4] == ["rm", "-f", "-v"]]
+    assert [f"devops-ex-{lab.id}-api"] in [c[4:] for c in removed]
     assert fake.calls[-1] == ["docker", "network", "rm", lab.network]
-    assert all(c[1] != "rm" or c[3].startswith(f"devops-ex-{lab.id}") for c in fake.calls if c[1] == "rm")
+    assert all(c[-1].startswith(f"devops-ex-{lab.id}") for c in fake.calls if c[1] == "rm")
 
 
 def test_docker_lab_publishes_on_loopback_free_port(monkeypatch):
@@ -518,8 +518,9 @@ def test_sandbox_ready_retries_after_transient_failure(monkeypatch):
     assert len(calls) == 3, "Chỉ cache lần thử thành công"
 
 
-CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".terraform.d")
-CREDENTIAL_FILES = (".git-credentials", ".netrc")
+CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".terraform.d", ".config/sops",
+                   ".gnupg")
+CREDENTIAL_FILES = (".git-credentials", ".netrc", ".vault-token")
 
 
 @pytest.fixture
@@ -645,7 +646,7 @@ def test_docker_lab_close_removes_every_container(monkeypatch):
             lab.start("a", "x:1")
             lab.start("b", "x:1")
             raise KeyboardInterrupt
-    removed = [c[3] for c in fake.calls if c[1:3] == ["rm", "-f"]]
+    removed = [c[4] for c in fake.calls if c[1:4] == ["rm", "-f", "-v"]]
     assert removed == [lab.name("a"), lab.name("b")]
 
 
@@ -5842,3 +5843,190 @@ def test_kube_lab_crd_conversion_webhook_denied_real():
             result = lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
             assert result.returncode != 0 and "denied" in result.stderr, result.stderr
     assert testkit.kube_leftovers(lab.id) == []
+
+
+ANON_A = "a" * 64
+ANON_B = "0123456789abcdef" * 4
+
+
+class VolumeDocker(FakeDocker):
+    def __init__(self, mounts: str):
+        super().__init__()
+        self.mounts = mounts
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(list(cmd))
+        stdout = self.mounts if cmd[1] == "inspect" else ""
+        return subprocess.CompletedProcess(cmd, 0, stdout, "")
+
+
+def test_docker_lab_close_removes_anonymous_volumes_unit(monkeypatch):
+    fake = VolumeDocker(f"{ANON_A} \n{ANON_B} devops-track-localstack-data act-toolcache\n")
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    with testkit.DockerLab() as lab:
+        lab.start("db", "postgres:16.15-alpine")
+    removed = [c for c in fake.calls if c[1] == "rm"]
+    assert removed == [["docker", "rm", "-f", "-v", lab.name("db")]]
+    volumes = [c for c in fake.calls if c[1:3] == ["volume", "rm"]]
+    assert volumes == [["docker", "volume", "rm", ANON_A, ANON_B]], "Chỉ xoá volume ẩn danh (64 ký tự hex) của container lab"
+    inspect = next(c for c in fake.calls if c[1] == "inspect")
+    assert inspect[-1] == lab.name("db") and fake.calls.index(inspect) < fake.calls.index(removed[0])
+
+
+def test_docker_lab_close_without_volumes_skips_volume_rm(monkeypatch):
+    fake = VolumeDocker("")
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    with testkit.DockerLab() as lab:
+        lab.start("web", "nginx:1.30.6-alpine")
+    assert not [c for c in fake.calls if c[1:3] == ["volume", "rm"]]
+    before = len(fake.calls)
+    with testkit.DockerLab():
+        pass
+    assert not [c for c in fake.calls[before:] if c[1] in ("inspect", "rm")]
+
+
+def test_docker_lab_close_removes_anonymous_volumes():
+    image = require_real_docker("redis:7.4.12-alpine")
+    lab = testkit.DockerLab()
+    with lab:
+        lab.start("cache", image, "300", entrypoint="sleep")
+        mounts = testkit._docker("inspect", "--format", "{{json .Mounts}}", lab.name("cache")).stdout
+        anonymous = [m["Name"] for m in json.loads(mounts) if m["Type"] == "volume"]
+        assert anonymous, "Image redis có VOLUME /data nên container phải có volume ẩn danh"
+    dangling = testkit._docker("volume", "ls", "-q", "-f", "dangling=true").stdout.split()
+    existing = testkit._docker("volume", "ls", "-q").stdout.split()
+    assert not set(anonymous) & (set(dangling) | set(existing))
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_sops_env_isolated_and_key_outside_repo(monkeypatch, tmp_path):
+    host = {"SOPS_AGE_KEY": "AGE-SECRET-KEY-MAY-THAT", "SOPS_AGE_KEY_FILE": "/home/x/.config/sops/age/keys.txt",
+            "SOPS_AGE_KEY_CMD": "cat /home/x/key", "SOPS_KMS_ARN": "arn:aws:kms:x", "AGE_PLUGIN": "x",
+            "GNUPGHOME": "/home/x/.gnupg", "XDG_CONFIG_HOME": "/home/x/.config", "VAULT_TOKEN": "s.that"}
+    for key, value in host.items():
+        monkeypatch.setenv(key, value)
+    home = tmp_path / "home"
+    key = tmp_path / "keys" / "age.txt"
+    env = testkit.sops_env(home, key)
+    assert env["SOPS_AGE_KEY_FILE"] == str(key.resolve())
+    assert env["HOME"] == str(home.resolve()) and env["XDG_CONFIG_HOME"] == f"{home.resolve()}/.config"
+    assert not set(host.values()) & set(env.values())
+    assert {k for k in env if k.startswith(("SOPS_", "AGE_"))} == {"SOPS_AGE_KEY_FILE"}
+    assert not any(k.startswith("VAULT_") for k in env)
+    assert env.get("GNUPGHOME", str(home.resolve())).startswith(str(home.resolve()))
+    for inside in (testkit.ROOT / "tracks" / "devops" / "age.txt", testkit.ROOT / "age.txt"):
+        with pytest.raises(ValueError, match="ngoài"):
+            testkit.sops_env(home, inside)
+    project = tmp_path / "repo"
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.sops_env(home, project / "keys" / "age.txt", outside=[project])
+    assert testkit.sops_env(home, key, outside=[project])["SOPS_AGE_KEY_FILE"] == str(key.resolve())
+
+
+def test_sandbox_hides_sops_vault_and_gpg_credentials():
+    for rel in (".config/sops", ".gnupg", ".vault-token"):
+        assert rel in testkit.CREDENTIAL_PATHS
+
+
+def test_sops_and_age_versions():
+    assert testkit.parse_version(testkit.SOPS_VERSION) >= testkit.parse_version(testkit.SOPS_MIN_VERSION)
+    assert testkit.parse_version(testkit.AGE_VERSION) >= testkit.parse_version(testkit.AGE_MIN_VERSION)
+    assert testkit.TOOL_VERSION_ARGS["sops"] == ["--version", "--disable-version-check"]
+
+
+@SANDBOX_REQUIRED
+def test_age_keypair_in_sandbox(monkeypatch, tmp_path):
+    testkit.Exercise.require_tool("age-keygen", testkit.AGE_MIN_VERSION)
+    calls = []
+    real = testkit.run_sandboxed
+
+    def spy(cmd, **kwargs):
+        calls.append((list(map(str, cmd)), kwargs))
+        return real(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", spy)
+    keys = tmp_path / "keys"
+    key, public = testkit.age_keypair(keys)
+    assert key.parent == keys.resolve() and key.is_file()
+    assert (key.stat().st_mode & 0o077) == 0, "Khoá riêng chỉ chủ sở hữu đọc được"
+    assert re.fullmatch(r"age1[0-9a-z]{58}", public)
+    assert f"# public key: {public}" in key.read_text(encoding="utf-8")
+    assert calls and Path(calls[0][0][0]).name == "age-keygen" and calls[0][1]["writable"] == [keys.resolve()]
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.age_keypair(testkit.ROOT / "tracks" / "devops" / "keys")
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.age_keypair(tmp_path / "repo" / "keys", outside=[tmp_path / "repo"])
+
+
+@SANDBOX_REQUIRED
+def test_sops_roundtrip_with_lab_key_in_sandbox(monkeypatch, tmp_path):
+    testkit.Exercise.require_tool("sops", testkit.SOPS_MIN_VERSION)
+    testkit.Exercise.require_tool("age-keygen", testkit.AGE_MIN_VERSION)
+    other, _ = testkit.age_keypair(tmp_path / "other")
+    monkeypatch.setenv("SOPS_AGE_KEY_FILE", str(other))
+    key, public = testkit.age_keypair(tmp_path / "keys")
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "secret.yaml").write_text("password: khong-duoc-lo-ra\n", encoding="utf-8")
+    env = testkit.sops_env(tmp_path / "home", key)
+    encrypt = testkit.run_sandboxed(["sops", "encrypt", "--age", public, "--output", "enc.yaml", "secret.yaml"],
+                                    writable=[work, tmp_path / "home"], cwd=work, env=env)
+    assert encrypt.returncode == 0, encrypt.stderr
+    assert "khong-duoc-lo-ra" not in (work / "enc.yaml").read_text(encoding="utf-8")
+    hidden = testkit.run_sandboxed(["sops", "decrypt", "enc.yaml"], writable=[work, tmp_path / "home"], cwd=work, env=env)
+    assert hidden.returncode != 0, "Thư mục khoá dưới /tmp không mount thì sandbox không thấy khoá"
+    decrypt = testkit.run_sandboxed(["sops", "decrypt", "enc.yaml"], writable=[work, tmp_path / "home"], cwd=work, env=env,
+                                    readonly=[key.parent])
+    assert decrypt.returncode == 0, decrypt.stderr
+    assert "khong-duoc-lo-ra" in decrypt.stdout
+    wrong = testkit.run_sandboxed(["sops", "decrypt", "enc.yaml"], writable=[work, tmp_path / "home"], cwd=work,
+                                  env=testkit.sops_env(tmp_path / "home", other), readonly=[other.parent])
+    assert wrong.returncode != 0 and "khong-duoc-lo-ra" not in wrong.stdout + wrong.stderr
+
+
+def test_vault_service_loopback_profile_devops(monkeypatch):
+    import yaml
+
+    data = yaml.safe_load((testkit.ROOT / "setup" / "docker-compose.yml").read_text(encoding="utf-8"))
+    vault = data["services"]["vault-devops"]
+    assert vault["profiles"] == ["devops"]
+    assert vault["image"] == testkit.VAULT_IMAGE
+    assert re.fullmatch(r"hashicorp/vault:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}", vault["image"])
+    assert vault["image"].split(":")[1].split("@")[0] == testkit.VAULT_VERSION
+    assert vault["ports"] == ["127.0.0.1:${DEVOPS_VAULT_PORT:-18200}:8200"]
+    assert vault["cpuset"] == "${DEVOPS_CPUSET:-}"
+    assert vault["environment"]["VAULT_DEV_ROOT_TOKEN_ID"] == "${DEVOPS_VAULT_TOKEN:-devops-lab-root}"
+    assert vault["environment"]["VAULT_DEV_LISTEN_ADDRESS"] == "0.0.0.0:8200"
+    assert "healthcheck" in vault and "volumes" not in vault
+    assert testkit.SERVICES["vault-devops"] == ("DEVOPS_VAULT_HOST", "localhost", "DEVOPS_VAULT_PORT", 18200)
+    lines = (testkit.ROOT / "setup" / ".env.example").read_text(encoding="utf-8").splitlines()
+    assert "# DEVOPS_VAULT_PORT=18200" in lines and "# DEVOPS_VAULT_TOKEN=devops-lab-root" in lines
+    monkeypatch.delenv("DEVOPS_VAULT_PORT", raising=False)
+    monkeypatch.delenv("DEVOPS_VAULT_HOST", raising=False)
+    assert testkit.vault_devops_address() == "http://127.0.0.1:18200"
+
+
+def test_vault_env_drops_host_vars(monkeypatch):
+    for key, value in {"VAULT_ADDR": "https://vault.that.example:8200", "VAULT_TOKEN": "hvs.that",
+                       "VAULT_NAMESPACE": "admin", "VAULT_CACERT": "/etc/that.pem"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("DEVOPS_VAULT_PORT", "28200")
+    env = testkit.vault_env("lab-token")
+    assert env == {"VAULT_ADDR": "http://127.0.0.1:28200", "VAULT_TOKEN": "lab-token"}
+    with pytest.raises(ValueError):
+        testkit.vault_env("")
+
+
+def test_require_vault_devops_skips_when_down(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: False)
+    with pytest.raises(pytest.skip.Exception, match="--profile devops up -d --wait vault-devops"):
+        testkit.Exercise.require_vault_devops()
+
+
+def test_require_vault_devops_rejects_other_server(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: True)
+    monkeypatch.setattr(testkit, "_vault_health", lambda address: None)
+    with pytest.raises(pytest.skip.Exception, match="không phải vault-devops"):
+        testkit.Exercise.require_vault_devops()
+    monkeypatch.setattr(testkit, "_vault_health", lambda address: {"initialized": True, "sealed": False})
+    assert testkit.Exercise.require_vault_devops() == testkit.vault_devops_address()
