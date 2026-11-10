@@ -124,12 +124,13 @@ def counts(conn: psycopg.Connection) -> tuple[int, int]:
 
 
 def read_only_query(conn: psycopg.Connection, sql: str, params=()) -> list[dict]:
-    """Chạy một câu SELECT trong transaction READ ONLY (ghi thì Postgres báo lỗi), tối đa 5 s. `SELECT 1` chạy trước để
-    transaction đã có snapshot: sau đó `SET TRANSACTION READ WRITE` trong `sql` bị Postgres từ chối."""
+    """Chạy MỘT câu SELECT trong transaction READ ONLY, tối đa 5 s. `prepare=True` ép extended protocol nên Postgres từ
+    chối nhiều câu trong một lần gọi (`COMMIT; DELETE …`); `SELECT 1` chạy trước để transaction đã có snapshot, sau đó
+    `SET TRANSACTION READ WRITE` bị từ chối. Đây là rào chắn lỗi của mã extension tin cậy, không phải ranh giới bảo mật."""
     with conn.transaction():
         conn.execute("SET TRANSACTION READ ONLY")
         conn.execute("SET LOCAL statement_timeout = 5000")
         conn.execute("SELECT 1")
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql, params)
+            cur.execute(sql, params, prepare=True)
             return cur.fetchall() if cur.description else []

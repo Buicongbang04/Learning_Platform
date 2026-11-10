@@ -1,4 +1,5 @@
 import os
+import stat
 import subprocess
 import time
 
@@ -66,6 +67,8 @@ def test_backup_restore_roundtrip(pg, tmp_path):
     assert made.returncode == 0, made.stdout + made.stderr
     dump = dest / made.stdout.strip().splitlines()[-1].rsplit("/", 1)[-1]
     assert dump.is_file() and dump.suffix == ".dump" and dump.read_bytes()[:5] == b"PGDMP"
+    assert stat.S_IMODE(dump.stat().st_mode) == 0o600
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o700
     checksum = dump.with_name(dump.name + ".sha256")
     assert checksum.read_text().split() == [release.sha256(dump), dump.name]
 

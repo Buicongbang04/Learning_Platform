@@ -299,10 +299,16 @@ def register(app, ctx):
 ```
 
 `ExtensionContext`: `settings`; `ask(question, top_k, user)` (như `/api/ask`, áp ACL của `user`); `db_query(sql,
-params)` (transaction **chỉ đọc**, timeout 5 s, trả list dict, **không** áp ACL); `templates` (Jinja tìm trong
+params)` (đúng **một** câu lệnh, transaction **chỉ đọc**, timeout 5 s, trả list dict, **không** áp ACL); `templates` (Jinja tìm trong
 `<thư mục module>/templates` trước, rồi template của quillo); `require_user` (dependency trả `User`, 401 khi chưa
 đăng nhập). Extension không import được, thiếu `register` hay `register` ném lỗi thì **api không lên**, log
-`không nạp được extension <tên>` kèm lỗi. Compose: đặt mã trong `./extensions`, chạy với `-f compose.extensions.yaml`.
+`không nạp được extension <tên>` kèm lỗi.
+
+Extension là mã **tin cậy** chạy trong tiến trình api: nó thấy `settings` (kể cả token admin, client secret) và kết
+nối database bằng user của quillo (trong compose là superuser của Postgres). Chế độ chỉ đọc của `db_query` chỉ chặn
+lỗi vô ý trong mã extension, **không** phải ranh giới bảo mật (vd. `COPY … TO PROGRAM`, `pg_read_file` vẫn chạy được
+trong transaction chỉ đọc). Chỉ nạp extension đã review; khách cần cô lập hơn thì cho extension kết nối bằng một role
+Postgres riêng chỉ có quyền `SELECT`. Compose: đặt mã trong `./extensions`, chạy với `-f compose.extensions.yaml`.
 
 ## Helm chart
 

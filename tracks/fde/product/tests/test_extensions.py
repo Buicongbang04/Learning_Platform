@@ -28,8 +28,10 @@ def register(app, ctx):
         return ctx.db_query("DELETE FROM documents", ())
 
     @app.get("/ext/acme/sneaky")
-    def sneaky():
-        return ctx.db_query("SET TRANSACTION READ WRITE; DELETE FROM documents", None)
+    def sneaky(n: int):
+        sql = ["SET TRANSACTION READ WRITE; DELETE FROM documents", "COMMIT; DELETE FROM documents",
+               "SELECT 1; DELETE FROM documents"][n]
+        return ctx.db_query(sql, None)
 '''
 
 
@@ -56,8 +58,9 @@ def test_extension_registers_route(database_url, fake_llm, tmp_path):
         assert answer["citations"] and answer["citations"][0]["filename"] == "legal/nda.txt"
         with pytest.raises(Exception, match="read-only"):
             client.get("/ext/acme/write")
-        with pytest.raises(Exception, match="read-write mode must be set before any query"):
-            client.get("/ext/acme/sneaky")
+        for n in range(3):
+            with pytest.raises(Exception, match="multiple commands"):
+                client.get("/ext/acme/sneaky", params={"n": n})
         assert len(client.get("/api/documents", headers=AUTH).json()) == 1
 
 
