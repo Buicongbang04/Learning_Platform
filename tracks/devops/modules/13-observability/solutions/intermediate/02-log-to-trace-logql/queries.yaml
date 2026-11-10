@@ -1,0 +1,4 @@
+request_logs: '{service_name="olist-shop-api"} | json | request_id = "$request_id"'
+trace_id_of_request: '{service_name="olist-shop-api"} | json | request_id = "$request_id" and msg = "request" | line_format "{{.trace_id}}"'
+worker_logs_of_trace: '{service_name="olist-shop-worker"} | trace_id = "$trace_id"'
+errors_by_path: 'sum by (path) (count_over_time({service_name="olist-shop-api"} | json | msg = "request" and status >= 500 [5m]))'

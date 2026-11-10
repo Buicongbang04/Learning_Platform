@@ -1,0 +1,90 @@
+rule_files: [rules.yml]
+evaluation_interval: 1m
+
+tests:
+  - name: lỗi 20% thì bắn sau for, recording rule đúng giá trị
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+48x20'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="POST", path="/jobs/recompute", status="503"}'
+        values: '0+12x20'
+    promql_expr_test:
+      - expr: job:http_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests:rate5m{job="olist-api"}'
+            value: 1
+      - expr: job:http_requests_errors:ratio_rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests_errors:ratio_rate5m{job="olist-api"}'
+            value: 0.2
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: OlistApiHighErrorRate
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: OlistApiHighErrorRate
+        exp_alerts:
+          - exp_labels: {severity: page, job: olist-api}
+            exp_annotations:
+              summary: "API Olist trả 5xx cho 20% request trong 5 phút"
+              runbook_url: https://runbooks.olist-shop.example/api-high-error-rate
+
+  - name: lỗi 2% không bắn
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+98x20'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0+2x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OlistApiHighErrorRate
+        exp_alerts: []
+
+  - name: GET /orders chậm thì bắn ticket, nhanh thì không
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="1"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="+Inf"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/stats/revenue-by-state", le="0.25"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/stats/revenue-by-state", le="1"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/stats/revenue-by-state", le="+Inf"}'
+        values: '0+60x30'
+    promql_expr_test:
+      - expr: job_path:http_request_duration_seconds:p95_5m
+        eval_time: 15m
+        exp_samples:
+          - labels: 'job_path:http_request_duration_seconds:p95_5m{job="olist-api", path="/orders/{order_id}"}'
+            value: 0.95
+          - labels: 'job_path:http_request_duration_seconds:p95_5m{job="olist-api", path="/stats/revenue-by-state"}'
+            value: 0.2375
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: OlistApiSlowOrders
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: OlistApiSlowOrders
+        exp_alerts:
+          - exp_labels: {severity: ticket, job: olist-api, path: "/orders/{order_id}"}
+            exp_annotations:
+              summary: "p95 của GET /orders/{order_id} là 950ms, quá 500ms"
+              runbook_url: https://runbooks.olist-shop.example/api-slow-orders
+
+  - name: GET /orders/{order_id} nhanh thì không bắn
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="0.25"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="+Inf"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: OlistApiSlowOrders
+        exp_alerts: []

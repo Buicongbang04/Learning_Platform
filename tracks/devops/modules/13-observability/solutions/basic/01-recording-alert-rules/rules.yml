@@ -1,0 +1,32 @@
+groups:
+  - name: olist-api-recording
+    interval: 15s
+    rules:
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+      - record: job:http_requests_errors:ratio_rate5m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (job) (rate(http_requests_total[5m]))
+      - record: job_path:http_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (job, path, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+  - name: olist-api-alerts
+    rules:
+      - alert: OlistApiHighErrorRate
+        expr: job:http_requests_errors:ratio_rate5m{job="olist-api"} > 0.05
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "API Olist trả 5xx cho {{ $value | humanizePercentage }} request trong 5 phút"
+          runbook_url: https://runbooks.olist-shop.example/api-high-error-rate
+      - alert: OlistApiSlowOrders
+        expr: job_path:http_request_duration_seconds:p95_5m{job="olist-api", path="/orders/{order_id}"} > 0.5
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "p95 của GET /orders/{order_id} là {{ $value | humanizeDuration }}, quá 500ms"
+          runbook_url: https://runbooks.olist-shop.example/api-slow-orders

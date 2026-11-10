@@ -33,6 +33,7 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | ArgoCD và git server (trong cluster, không cài lên máy) | 12 GitOps & secrets (ArgoCD v3.5.6 bản core ghim trong `setup/kind/argocd/`, sidecar CMP `sops-kustomize`, git server chỉ đọc trong `devops-git`; xem [ArgoCD và git server dùng chung](#argocd-và-git-server-dùng-chung)) | Đúng bản đã ghim | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 | Stack observability (image Docker ghim digest: OTel Collector contrib 0.163.2, Jaeger 2.22.0, Loki 3.7.9, Prometheus v3.5.0, Alertmanager v0.34.1, Grafana 13.2.5; xem [Stack observability](#stack-observability)) | 13 Observability (chạy trong container bằng `testkit.ObsStack`, không cài lên máy) | Đúng tag và digest đã ghim | [Stack observability](#stack-observability) |
 | promtool, amtool | 13 Observability (chạy trong image Prometheus, Alertmanager ghim qua `testkit.promtool`/`amtool`, không cần cài; muốn gõ tay thì dùng `docker run` ở [Stack observability](#stack-observability)) | Đúng bản trong image | [Stack observability](#stack-observability) |
+| logcli (tuỳ chọn) | 13 Observability (bản đã kiểm 3.7.9, cùng bản Loki của stack, kiểm SHA-256 theo `SHA256SUMS` của release; không bài nào cần, chỉ để chạy LogQL từ terminal) | 3.0 | [Cài đặt](../tracks/devops/modules/13-observability/README.md#0-cài-đặt) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 

@@ -1,0 +1,11 @@
+{
+  "uid": "olist-api-red",
+  "title": "TODO: tên dashboard",
+  "tags": [],
+  "schemaVersion": 41,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": []
+}

@@ -1,0 +1,130 @@
+questions:
+  - id: logs-cheap-volume
+    kind: knowledge
+    type: single
+    prompt: "Olist Shop sinh khoảng 200 GB log mỗi ngày, gần như chỉ đọc khi có sự cố, lọc theo service, khoảng thời gian và `trace_id`. Team 2 người, đã có Grafana, muốn chi phí lưu trữ thấp. Chọn gì?"
+    options:
+      - { id: a, text: "Elasticsearch tự host ba node, index toàn văn mọi trường để tìm gì cũng nhanh, chấp nhận tốn đĩa và RAM" }
+      - { id: b, text: "Loki trên object storage: chỉ index label, nội dung nén thành chunk, query bằng LogQL trong Grafana" }
+      - { id: c, text: "Prometheus: đổi mỗi dòng log thành một metric có nhãn message để lưu lâu và query bằng PromQL" }
+      - { id: d, text: "Ghi log vào bảng Postgres của Olist Shop, thêm index theo thời gian, xoá bằng cron mỗi tuần" }
+  - id: soc-full-text
+    kind: knowledge
+    type: single
+    prompt: "Đội bảo mật cần tìm toàn văn trên log 12 tháng (IP, user agent, chuỗi bất kỳ), viết detection rule kiểu SIEM và dashboard điều tra. Ngân sách có. Lựa chọn nào hợp nhất?"
+    options:
+      - { id: a, text: "Loki với retention 12 tháng, vì LogQL có line filter `|=` tìm được mọi chuỗi trong log" }
+      - { id: b, text: "Papertrail, vì giao diện tail log trực tiếp đơn giản và đủ cho đội bảo mật xem hằng ngày" }
+      - { id: c, text: "Splunk hoặc Elastic/OpenSearch có phần security analytics: index toàn văn, rule phát hiện, điều tra" }
+      - { id: d, text: "Jaeger lưu 12 tháng, vì mỗi request đã có trace kèm IP và user agent nên không cần log riêng cho bảo mật" }
+  - id: snmp-fleet
+    kind: knowledge
+    type: single
+    prompt: "Kho vận của Olist có 300 switch, máy in nhãn, UPS chỉ nói SNMP, cùng vài chục VM Windows cũ không cài được exporter. Đội NOC cần template dựng sẵn, auto-discovery và màn hình tổng quan. Chọn gì?"
+    options:
+      - { id: a, text: "Zabbix: agent và SNMP, template cho thiết bị mạng, auto-discovery, trigger và màn hình NOC" }
+      - { id: b, text: "OpenTelemetry SDK cài vào firmware của từng switch, máy in và UPS để gửi OTLP về Collector trung tâm" }
+      - { id: c, text: "Jaeger, vì nó vẽ được bản đồ phụ thuộc giữa các thiết bị trong mạng kho vận" }
+      - { id: d, text: "Loki, gửi syslog của thiết bị về rồi đếm dòng log để biết thiết bị còn sống" }
+  - id: tiny-team-logs
+    kind: knowledge
+    type: single
+    prompt: "Startup 3 dev chạy app trên một PaaS, không ai làm vận hành. Cần xem log trực tiếp như `tail -f`, tìm trong 7 ngày gần nhất và nhận email khi có chuỗi `ERROR`. Chọn gì?"
+    options:
+      - { id: a, text: "Dựng cụm OpenSearch ba node với ISM policy và dashboard riêng cho từng service" }
+      - { id: b, text: "Papertrail hay một dịch vụ log SaaS nhỏ: gửi syslog, tail và tìm trên web, alert theo chuỗi" }
+      - { id: c, text: "Zabbix với item log và agent, vì nó giám sát được cả log lẫn phần cứng của nhà cung cấp PaaS" }
+      - { id: d, text: "Tự host Graylog, MongoDB và OpenSearch trên một VM riêng để giữ toàn quyền dữ liệu" }
+  - id: no-platform-team
+    kind: knowledge
+    type: single
+    prompt: "Công ty 40 microservice, không có team platform, cần APM, metric hạ tầng, log và RUM trong một chỗ trong tháng này. Ngân sách chấp nhận trả theo host và GB. Chọn gì?"
+    options:
+      - { id: a, text: "Tự dựng Prometheus, Loki, Tempo, Grafana và Alertmanager, rồi tự vận hành bản HA của từng thứ" }
+      - { id: b, text: "Datadog hay New Relic: agent hoặc OpenTelemetry gửi lên SaaS, nhiều tính năng có sẵn" }
+      - { id: c, text: "Chỉ dùng Zabbix, vì một công cụ cho mọi thứ luôn rẻ hơn ghép nhiều công cụ chuyên biệt" }
+      - { id: d, text: "Chỉ dùng log JSON và grep trên từng máy, vì metric và trace là việc của team lớn hơn" }
+  - id: pricing-users
+    kind: knowledge
+    type: single
+    prompt: "Lượng dữ liệu không đổi, nhưng hoá đơn observability tăng mạnh sau khi 20 kỹ sư mới được cấp quyền đầy đủ để xem trace và dashboard. Mô hình giá nào gây ra điều này?"
+    options:
+      - { id: a, text: "Giá theo số host có agent, vì kỹ sư mới cài agent lên laptop để xem dashboard" }
+      - { id: b, text: "Giá theo số series metric, vì mỗi người mở dashboard lại tạo thêm series mới trong backend" }
+      - { id: c, text: "Giá theo GB ingest cộng phí mỗi user đầy đủ, kiểu của New Relic, nên số người tính tiền" }
+      - { id: d, text: "Giá theo số span được sampling, vì người xem trace làm Collector giữ thêm span" }
+  - id: self-host-log-ui
+    kind: knowledge
+    type: single
+    prompt: "Công ty cỡ vừa muốn tự host quản lý log có UI cho đội vận hành: định tuyến log theo stream, phân quyền, alert theo điều kiện, lưu trên OpenSearch. Không muốn tự viết UI. Chọn gì?"
+    options:
+      - { id: a, text: "Graylog: nhận GELF và syslog, stream, pipeline xử lý, alert, phân quyền, lưu trên OpenSearch" }
+      - { id: b, text: "Prometheus với recording rule đếm log, rồi Alertmanager gửi cảnh báo theo stream" }
+      - { id: c, text: "Jaeger với storage OpenSearch, vì nó đã có UI tìm kiếm, phân quyền và lưu được dữ liệu dạng log" }
+      - { id: d, text: "Papertrail bản doanh nghiệp, vì nó chạy được trên hạ tầng riêng của công ty khi cần" }
+  - id: avoid-lock-in
+    kind: knowledge
+    type: single
+    prompt: "Ban lãnh đạo muốn dùng vendor SaaS bây giờ nhưng giữ khả năng đổi vendor hoặc về tự host sau hai năm mà không sửa code của 40 service. Instrument thế nào?"
+    options:
+      - { id: a, text: "Dùng agent và thư viện độc quyền của vendor, vì chúng có nhiều tính năng tự động nhất" }
+      - { id: b, text: "OpenTelemetry SDK trong app, gửi OTLP tới Collector; đổi backend là đổi exporter của Collector" }
+      - { id: c, text: "Không instrument gì, chỉ đọc log stdout của container, vì log là định dạng duy nhất không phụ thuộc vendor" }
+      - { id: d, text: "Mỗi service tự chọn thư viện của vendor nó thích, rồi viết adapter chuyển đổi khi cần đổi" }
+  - id: keep-errors-sampling
+    kind: knowledge
+    type: single
+    prompt: "API nhận 5000 request mỗi giây. Lưu mọi trace quá đắt; team muốn giữ **mọi** trace có lỗi hoặc chậm hơn 1 giây và khoảng 1% trace bình thường. Cách nào làm được?"
+    options:
+      - { id: a, text: "Head sampling 1% trong SDK của từng service, vì quyết định sớm ở đầu request là nhẹ nhất cho app" }
+      - { id: b, text: "Tail sampling trong Collector: gom đủ span của trace rồi quyết theo lỗi, độ trễ và tỉ lệ" }
+      - { id: c, text: "Tắt trace, thay bằng log mức DEBUG cho mọi request để tìm lỗi khi cần" }
+      - { id: d, text: "Head sampling 100% rồi xoá trace bình thường trong Jaeger bằng cron mỗi đêm" }
+  - id: short-batch-job
+    kind: knowledge
+    type: single
+    prompt: "Job đối soát thanh toán chạy 30 giây mỗi giờ rồi thoát. Prometheus scrape 15 giây một lần và thường bỏ lỡ nó. Cần ghi lại số bản ghi đã xử lý và lần chạy thành công gần nhất. Làm gì?"
+    options:
+      - { id: a, text: "Giảm scrape interval của toàn bộ Prometheus xuống 1 giây để không bỏ lỡ job ngắn" }
+      - { id: b, text: "Bắt job ngủ thêm 5 phút trước khi thoát để Prometheus kịp scrape vài lần cho chắc" }
+      - { id: c, text: "Đẩy metric khi job xong: Pushgateway hoặc OTLP, kèm metric thời điểm thành công cuối" }
+      - { id: d, text: "Ghi số bản ghi vào log rồi tạo alert khi log có chữ ERROR trong vòng một giờ qua" }
+  - id: page-worthy
+    kind: knowledge
+    type: single
+    prompt: "Alert nào đáng **đánh thức người trực** lúc 3 giờ sáng cho API Olist Shop?"
+    options:
+      - { id: a, text: "CPU của một pod api trên 85% trong 5 phút, dù latency và tỉ lệ lỗi vẫn bình thường" }
+      - { id: b, text: "Một pod api restart một lần trong đêm, replica khác vẫn phục vụ đủ traffic" }
+      - { id: c, text: "Đĩa của node Postgres đầy 70%, theo xu hướng còn ba tuần nữa mới đầy hẳn" }
+      - { id: d, text: "Tỉ lệ 5xx của checkout trên 5% trong 5 phút, khách đang không đặt được hàng" }
+  - id: percentile-across-replicas
+    kind: knowledge
+    type: single
+    prompt: "API chạy 10 replica. Cần p95 latency của **cả service**, tính lại được cho cửa sổ 5 phút hay 1 giờ. Nên xuất latency dạng gì?"
+    options:
+      - { id: a, text: "Summary có sẵn quantile 0.95 ở mỗi replica, rồi lấy trung bình 10 giá trị p95" }
+      - { id: b, text: "Histogram: cộng bucket của mọi replica rồi histogram_quantile trên tổng đã gộp" }
+      - { id: c, text: "Gauge ghi latency của request cuối cùng, rồi lấy max_over_time trong cửa sổ" }
+      - { id: d, text: "Counter tổng thời gian xử lý, rồi chia cho số replica để ra p95 của service" }
+  - id: golden-signals
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi tín hiệu thuộc Four Golden Signals của Google SRE."
+    options:
+      - { id: a, text: "Latency" }
+      - { id: b, text: "Traffic" }
+      - { id: c, text: "Errors" }
+      - { id: d, text: "Saturation" }
+      - { id: e, text: "Uptime của máy chủ" }
+      - { id: f, text: "Tần suất deploy" }
+  - id: pii-logs
+    kind: knowledge
+    type: multi
+    prompt: "Log của Olist Shop từng chứa email và số điện thoại khách. Chọn mọi biện pháp đúng."
+    options:
+      - { id: a, text: "Không ghi PII ngay từ code: log id nội bộ, che hay băm trường nhạy cảm trước khi ghi" }
+      - { id: b, text: "Thêm lớp chặn ở Collector (processor xoá hay che thuộc tính) làm lưới an toàn cho code cũ" }
+      - { id: c, text: "Đặt retention theo loại dữ liệu và giới hạn ai được query log có thể chứa PII" }
+      - { id: d, text: "Mã hoá đĩa của Loki là đủ, vì ai query được log thì đã là người đáng tin" }
+      - { id: e, text: "Tăng retention lên 2 năm cho mọi log để phục vụ yêu cầu xoá dữ liệu của khách" }

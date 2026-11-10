@@ -1,0 +1,47 @@
+route:
+  receiver: default
+  group_by: [alertname, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    - receiver: deadman
+      matchers: [alertname="Watchdog"]
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
+    - receiver: oncall-pager
+      matchers: [severity="page"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 2h
+    - receiver: shop-tickets
+      matchers: [severity="ticket"]
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 24h
+
+inhibit_rules:
+  - source_matchers: [alertname="OlistServiceDown"]
+    target_matchers: [alertname!="OlistServiceDown"]
+    equal: [service]
+  - source_matchers: [severity="page"]
+    target_matchers: [severity="ticket"]
+    equal: [service, alertname]
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: https://chat.olist-shop.example/hooks/observability-triage
+  - name: oncall-pager
+    webhook_configs:
+      - url: https://pager.olist-shop.example/v1/olist-shop
+        send_resolved: true
+  - name: shop-tickets
+    webhook_configs:
+      - url: https://tickets.olist-shop.example/hooks/alerts
+        send_resolved: true
+  - name: deadman
+    webhook_configs:
+      - url: https://heartbeat.olist-shop.example/ping/olist-alerting
+        send_resolved: false

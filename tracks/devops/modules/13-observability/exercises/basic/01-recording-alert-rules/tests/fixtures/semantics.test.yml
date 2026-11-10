@@ -1,0 +1,115 @@
+rule_files: [rules.yml]
+evaluation_interval: 1m
+
+tests:
+  - name: lỗi 25%, recording rule gộp theo job
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+60x20'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="404"}'
+        values: '0+30x20'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/readyz", status="503"}'
+        values: '0+30x20'
+    promql_expr_test:
+      - expr: job:http_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests:rate5m{job="olist-api"}'
+            value: 2
+      - expr: job:http_requests_errors:ratio_rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests_errors:ratio_rate5m{job="olist-api"}'
+            value: 0.25
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: OlistApiHighErrorRate
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: OlistApiHighErrorRate
+        exp_alerts:
+          - exp_labels: {alertname: OlistApiHighErrorRate, severity: page, job: olist-api}
+      - eval_time: 12m
+        alertname: OlistApiSlowOrders
+        exp_alerts: []
+
+  - name: lỗi 1% của olist-api không bắn, job khác lỗi cũng không
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+99x20'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0+1x20'
+      - series: 'http_requests_total{job="olist-admin", instance="admin:8000", method="GET", path="/", status="500"}'
+        values: '0+60x20'
+    promql_expr_test:
+      - expr: job:http_requests_errors:ratio_rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests_errors:ratio_rate5m{job="olist-api"}'
+            value: 0.01
+          - labels: 'job:http_requests_errors:ratio_rate5m{job="olist-admin"}'
+            value: 1
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: OlistApiHighErrorRate
+        exp_alerts: []
+
+  - name: không có traffic thì không bắn
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/readyz", status="503"}'
+        values: '7x20'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/readyz", status="200"}'
+        values: '3x20'
+    promql_expr_test:
+      - expr: job:http_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests:rate5m{job="olist-api"}'
+            value: 0
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: OlistApiHighErrorRate
+        exp_alerts: []
+
+  - name: p95 theo path, alert chậm chỉ xét GET /orders/{order_id}
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="1"}'
+        values: '0+40x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="+Inf"}'
+        values: '0+40x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/stats/revenue-by-state", le="2"}'
+        values: '0+20x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/stats/revenue-by-state", le="+Inf"}'
+        values: '0+20x30'
+    promql_expr_test:
+      - expr: job_path:http_request_duration_seconds:p95_5m
+        eval_time: 15m
+        exp_samples:
+          - labels: 'job_path:http_request_duration_seconds:p95_5m{job="olist-api", path="/orders/{order_id}"}'
+            value: 0.95
+          - labels: 'job_path:http_request_duration_seconds:p95_5m{job="olist-api", path="/stats/revenue-by-state"}'
+            value: 1.9
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: OlistApiSlowOrders
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: OlistApiSlowOrders
+        exp_alerts:
+          - exp_labels: {alertname: OlistApiSlowOrders, severity: ticket, job: olist-api, path: "/orders/{order_id}"}
+
+  - name: GET /orders/{order_id} nhanh thì không bắn
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="0.1"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="+Inf"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OlistApiSlowOrders
+        exp_alerts: []
