@@ -38,10 +38,10 @@ questions:
   - id: presync-order
     kind: knowledge
     type: single
-    prompt: "Job migrate là hook `PreSync`, đọc ConfigMap `olist-config` và gọi Postgres; cả hai là resource thường trong cùng repo. Deploy lần đầu vào namespace trống thì sao?"
+    prompt: "Job `warm-cache` là hook `PreSync`, đọc ConfigMap `cache-config` và ghi vào Redis; cả hai là resource thường trong cùng repo. Deploy lần đầu vào namespace trống thì sao?"
     options:
       - { id: a, text: "Chạy bình thường vì ArgoCD luôn tạo ConfigMap và Secret trước mọi hook, kể cả PreSync" }
-      - { id: b, text: "Hook chạy trước mọi resource của phase Sync: ConfigMap, Postgres chưa có, hook kẹt" }
+      - { id: b, text: "Hook chạy trước mọi resource của phase Sync: ConfigMap, Redis chưa có, hook kẹt" }
       - { id: c, text: "ArgoCD tự đổi hook sang PostSync khi thấy hook phụ thuộc vào resource chưa tồn tại" }
       - { id: d, text: "Kustomize báo lỗi lúc render vì Job hook không được tham chiếu ConfigMap thường" }
   - id: sops-what

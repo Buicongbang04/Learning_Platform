@@ -45,7 +45,7 @@ Sửa `starter/` để:
 | Yêu cầu | Chi tiết |
 | --- | --- |
 | Namespace trống | Sync tự hoàn tất, `Synced` và `Healthy` trong 4 phút |
-| Thứ tự | `migrate` chạy khi postgres đã có và trước khi api được tạo |
+| Thứ tự | `migrate` chạy mỗi lần sync và chỉ khi mọi thứ nó cần đã sẵn sàng; api không nhận traffic trước khi schema có |
 | `migrate` vẫn là hook | Chạy lại mỗi lần sync; lần sync sau tạo lại được Job cùng tên |
 | Hỏng thì hỏng nhanh | `backoffLimit` tối đa 2, `activeDeadlineSeconds` tối đa 300 (mặc định Job thử 6 lần, kéo hơn 6 phút; Job không có hạn thì treo mãi) |
 | Thử lại có giới hạn | `syncPolicy.retry` với `limit` từ 1 tới 5 và có `backoff` |
@@ -58,7 +58,7 @@ hiện sớm hơn thế nào.
 
 | Test | Cần cluster | Kiểm |
 | --- | --- | --- |
-| `test_migration_runs_after_database_before_api` | Không | Render Kustomize: `migrate` là hook; (phase, sync wave) của postgres nhỏ hơn của `migrate`, của `migrate` nhỏ hơn của api (PreSync < Sync < PostSync, rồi tới wave) |
+| `test_sync_order_satisfies_migrate_dependencies` | Không | Render Kustomize: `migrate` là hook; theo đúng thứ tự ArgoCD áp object (phase rồi sync wave), thứ `migrate` cần đứng trước nó và api đứng sau nó |
 | `test_migration_fails_fast_and_reruns` | Không | `backoffLimit` ≤ 2, `activeDeadlineSeconds` từ 1 tới 300, `hook-delete-policy` có `BeforeHookCreation` |
 | `test_application_retries_bounded` | Không | `retry.limit` từ 1 tới 5, có `retry.backoff.duration` |
 | `test_fresh_namespace_syncs` | Có | Lab mới (namespace trống): `Synced`, `Healthy` trong 240 giây; kết quả sync có Job `migrate` `Succeeded` |
@@ -83,5 +83,5 @@ của từng object.
 
 ### Gợi ý 2
 
-Đọc tài liệu "Sync Phases and Waves" của ArgoCD: thứ tự là phase trước, wave sau; ArgoCD chờ mọi object của một wave healthy rồi mới sang
-wave kế. Hook có annotation `argocd.argoproj.io/hook`, resource thường thuộc phase `Sync`.
+Liệt kê những gì pod `migrate` cần để chạy được, rồi hỏi: trên một namespace trống, lúc ArgoCD tạo Job này thì những thứ đó đã tồn tại
+chưa? Tài liệu "Sync Phases and Waves" và "Resource Hooks" của ArgoCD nói rõ ArgoCD áp object theo thứ tự nào.

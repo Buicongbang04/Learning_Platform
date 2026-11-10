@@ -165,7 +165,7 @@ def order_problems(docs) -> list[str]:
     return found
 
 
-def test_migration_runs_after_database_before_api(tmp_path):
+def test_sync_order_satisfies_migrate_dependencies(tmp_path):
     problems = order_problems(render(ex.path("gitops/shop"), tmp_path))
     assert not problems, "\n".join(problems)
 

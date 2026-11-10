@@ -85,5 +85,5 @@ Mã hoá bằng `>` vào tệp tạm rồi `mv` cũng được, miễn là bản
 
 ### Gợi ý 2
 
-Trong `.sops.yaml`, `age:` nhận một chuỗi nhiều recipient cách nhau bằng dấu phẩy. `encrypted_regex` so với **tên khoá** YAML ở mọi cấp:
+Trong `.sops.yaml`, `age:` nhận một chuỗi nhiều recipient cách nhau bằng dấu phẩy, hay một danh sách YAML. `encrypted_regex` so với **tên khoá** YAML ở mọi cấp:
 `^(data|stringData)$` mã hoá cả cây con dưới hai khoá đó. Trường `plugin` nằm trong `spec.source` của Application.

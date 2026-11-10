@@ -28,11 +28,10 @@ Một lần sync chạy theo phase (PreSync, Sync, PostSync; SyncFail khi lỗi)
 rồi tên; ArgoCD chờ mọi object của một wave healthy mới sang wave kế. Hook là object có annotation `argocd.argoproj.io/hook`, thường là Job,
 chạy mỗi lần sync; `hook-delete-policy` quyết định khi nào xoá (mặc định `BeforeHookCreation`).
 
-Lỗi điển hình: Job migration là hook PreSync đọc ConfigMap và gọi Postgres, cả hai là resource thường. Trên staging chạy ổn vì chúng đã có;
-trên namespace preview mới, PreSync chạy trước khi chúng tồn tại, pod kẹt `CreateContainerConfigError`, Job không có
-`activeDeadlineSeconds` nên không bao giờ failed, thao tác sync `Running` mãi và commit sửa không vào được vì auto-sync chờ thao tác cũ.
-Sửa: migration thành hook phase Sync ở wave sau Postgres, api ở wave sau nữa, Job có `backoffLimit` và `activeDeadlineSeconds`, Application
-có `retry` giới hạn.
+Lỗi điển hình: Job smoke test là hook PostSync dùng image có tag gõ sai. Pod kẹt `ImagePullBackOff`, mà pod kẹt như vậy không bao giờ làm
+Job failed; Job không có `activeDeadlineSeconds` nên thao tác sync `Running` mãi, và commit sửa tag cũng không vào được vì auto-sync chờ thao
+tác cũ kết thúc. Gỡ: admin huỷ thao tác (`argocd app terminate-op`), commit bản sửa. Phòng: mọi Job hook có `backoffLimit` nhỏ và
+`activeDeadlineSeconds`, Application có `retry` giới hạn, alert khi thao tác `Running` quá 10 phút, và CI thử sync repo trên namespace trống.
 
 ## Application `Synced` nhưng `Degraded`, và một Application khác `OutOfSync` mãi dù vừa sync xong. Bạn gỡ thế nào?
 

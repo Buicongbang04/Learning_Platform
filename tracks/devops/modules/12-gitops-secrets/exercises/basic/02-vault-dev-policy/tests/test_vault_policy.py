@@ -1,3 +1,4 @@
+import hmac
 import json
 import secrets
 import time
@@ -38,6 +39,7 @@ def vault(tmp_path_factory):
     root = Vault(tmp, VAULT_DEV_TOKEN, "root")
     password = secrets.token_urlsafe(18)
     accessors: list[str] = []
+    issued: list[str] = []
 
     def token(ttl: str | None = None) -> tuple[str, dict]:
         env = {**vault_env(VAULT_DEV_TOKEN, tmp / "home-script"), "POLICY_NAME": policy}
@@ -45,6 +47,7 @@ def vault(tmp_path_factory):
             env["TOKEN_TTL"] = ttl
         result = run_sandboxed(["bash", str(ex.path("token.sh"))], writable=[tmp], cwd=tmp, env=env, timeout=30)
         value = result.stdout.strip()
+        issued.extend(line.strip() for line in value.splitlines() if line.strip())
         if result.returncode != 0 or not value or "\n" in value:
             return "", {"error": f"token.sh phải in đúng một dòng là token (mã {result.returncode}): {result.stderr.strip()[-500:]}"}
         looked = root.run("token", "lookup", "-format=json", value)
@@ -70,6 +73,8 @@ def vault(tmp_path_factory):
     finally:
         for accessor in accessors:
             root.run("token", "revoke", "-accessor", accessor)
+        for line in issued:
+            root.run("token", "revoke", line)
         root.run("policy", "delete", policy)
         root.run("secrets", "disable", mount)
 
@@ -102,7 +107,8 @@ def test_token_reads_its_path(vault):
     app = Vault(vault["tmp"], value, "app")
     got = app.run("kv", "get", f"-mount={vault['mount']}", "-field=password", "olist/api/db")
     assert got.returncode == 0, f"Token phải đọc được olist/api/db: {got.stderr.strip()[-300:]}"
-    assert got.stdout.strip() == vault["password"], "Giá trị đọc được khác giá trị đã ghi (không in giá trị)"
+    matches = hmac.compare_digest(got.stdout.strip().encode(), vault["password"].encode())
+    assert matches, "Giá trị đọc được khác giá trị đã ghi (không in giá trị)"
     listed = app.run("kv", "list", f"-mount={vault['mount']}", "-format=json", "olist/api")
     assert listed.returncode == 0, f"Token phải liệt kê được khoá dưới olist/api (metadata): {listed.stderr.strip()[-300:]}"
     assert sorted(json.loads(listed.stdout)) == ["db", "redis"]
@@ -128,11 +134,12 @@ def test_token_cannot_write_or_wander(vault):
 
 
 def test_token_expires(vault):
-    value, data = vault["token"]("4s")
+    value, data = vault["token"]("10s")
     assert "error" not in data, data.get("error")
-    assert data["creation_ttl"] == 4, f"token.sh phải dùng TOKEN_TTL khi được đặt (TOKEN_TTL=4s, đang là {data['creation_ttl']})"
+    assert data["creation_ttl"] == 10, f"token.sh phải dùng TOKEN_TTL khi được đặt (TOKEN_TTL=10s, đang là {data['creation_ttl']})"
     app = Vault(vault["tmp"], value, "app")
-    assert app.run("kv", "get", f"-mount={vault['mount']}", "-field=username", "olist/api/db").returncode == 0
-    time.sleep(6)
+    early = app.run("kv", "get", f"-mount={vault['mount']}", "-field=username", "olist/api/db")
+    assert early.returncode == 0, f"Token TTL 10 giây phải đọc được ngay sau khi tạo: {early.stderr.strip()[-300:]}"
+    time.sleep(12)
     late = app.run("kv", "get", f"-mount={vault['mount']}", "-field=username", "olist/api/db")
     assert late.returncode != 0, "Token đã quá TTL mà vẫn đọc được secret"

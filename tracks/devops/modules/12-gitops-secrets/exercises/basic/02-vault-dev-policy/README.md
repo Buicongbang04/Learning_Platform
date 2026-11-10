@@ -55,9 +55,11 @@ bằng token root của lab:
 | `test_token_ttl_is_short` | `creation_ttl` và `ttl` từ 1 tới 900 giây, `explicit_max_ttl` từ 1 tới 3600 giây |
 | `test_token_reads_its_path` | Token đọc được `password` của `olist/api/db` (so với giá trị đã ghi, không in ra) và liệt kê `olist/api` ra đúng `db`, `redis` |
 | `test_token_cannot_write_or_wander` | 8 thao tác ngoài quyền đều `permission denied`: `kv put`, `kv patch`, `kv delete`, `kv metadata delete` trên `olist/api/db`, `kv get olist/payments/stripe`, `kv list olist`, `policy read`, `token create` |
-| `test_token_expires` | `TOKEN_TTL=4s`: token đọc được ngay, 6 giây sau thì không |
+| `test_token_expires` | `TOKEN_TTL=10s`: token đọc được ngay, 12 giây sau thì không |
 
-Cuối cùng test thu hồi token, xoá policy và tắt mount. Khoảng 10 giây.
+Cuối cùng test thu hồi mọi token `token.sh` đã in ra (kể cả khi output sai định dạng), xoá policy và tắt mount. Khoảng 20 giây. Test bị
+giết giữa chừng (Ctrl-C hai lần, SIGKILL) có thể để lại mount `devops-ex-<id>`, policy và token trong Vault dev; dev mode chỉ giữ dữ liệu
+trong RAM, nên tắt rồi bật lại `vault-devops` (hai lệnh trong mục 0 của module) là sạch.
 
 ## Tiêu chí đạt
 

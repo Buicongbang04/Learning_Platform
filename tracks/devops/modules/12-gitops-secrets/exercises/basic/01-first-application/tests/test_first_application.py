@@ -193,5 +193,6 @@ def test_new_commit_reconciled_and_pruned(synced):
 def test_drift_self_healed(synced):
     _, state = synced
     assert "desired" in state, "Chưa tới bước thử drift (các bước trước chưa đạt)"
+    assert isinstance(state["desired"], int), "Không đọc được spec.replicas của Deployment api trước khi thử drift"
     assert state.get("healed") == state["desired"], \
         f"kubectl scale tay lên {(state['desired'] or 1) + 2} mà sau 90 giây replicas vẫn là {state.get('healed')} (self-heal)"

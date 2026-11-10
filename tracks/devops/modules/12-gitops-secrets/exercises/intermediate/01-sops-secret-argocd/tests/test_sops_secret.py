@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import hmac
 import json
 import re
 import secrets
@@ -34,6 +35,11 @@ def plain_secret(directory, password: str):
                        "DATABASE_URL": f"postgresql+psycopg://olist:{password}@postgres:5432/olist"}}, sort_keys=False),
         encoding="utf-8")
     return path
+
+
+def same(a, b) -> bool:
+    """So hai giá trị bí mật ngoài câu assert, để pytest không in chúng khi lệch."""
+    return isinstance(a, str) and isinstance(b, str) and hmac.compare_digest(a.encode(), b.encode())
 
 
 def needles(password: str) -> list[bytes]:
@@ -105,7 +111,8 @@ def test_sops_config_rules():
     matching = [r for r in rules if re.search(r.get("path_regex", "$^"), TARGET)]
     assert matching, f"Cần creation_rule có path_regex khớp {TARGET}"
     rule = matching[0]
-    recipients = [r.strip() for r in str(rule.get("age", "")).split(",")]
+    raw = rule.get("age", "")
+    recipients = [r.strip() for item in (raw if isinstance(raw, list) else [raw]) for r in str(item).split(",") if r.strip()]
     assert sorted(recipients) == ["ARGOCD_AGE_RECIPIENT", "TEAM_AGE_RECIPIENT"], \
         f"Rule phải mã hoá cho cả team (TEAM_AGE_RECIPIENT) lẫn ArgoCD (ARGOCD_AGE_RECIPIENT), đang là {recipients}"
     pattern = rule.get("encrypted_regex")
@@ -140,8 +147,8 @@ def test_both_recipients_can_decrypt(tmp_path):
     for who in ("team", "argocd"):
         code, doc = decrypt(tmp_path, state["repo"], state[who][0])
         assert code == 0, f"Khoá của {who} không giải mã được {TARGET}"
-        assert (doc.get("stringData") or {}).get("POSTGRES_PASSWORD") == state["password"], \
-            f"Giải mã bằng khoá của {who} ra giá trị khác giá trị gốc (không in giá trị)"
+        matches = same((doc.get("stringData") or {}).get("POSTGRES_PASSWORD"), state["password"])
+        assert matches, f"Giải mã bằng khoá của {who} ra giá trị khác giá trị gốc (không in giá trị)"
 
 
 def test_kustomize_includes_secret_and_workloads_use_it(tmp_path):
@@ -220,11 +227,12 @@ def test_pods_read_the_sealed_value(deployed):
     lab, state = deployed
     assert isinstance(state.get("status"), dict), "Application chưa sync được"
     secret = json.loads(lab.kubectl("get", "secret", "olist-db", "-o", "json").stdout)
-    got = base64.b64decode(secret["data"]["POSTGRES_PASSWORD"]).decode()
-    assert got == state["password"], "Secret olist-db trên cluster khác giá trị đã mã hoá (không in giá trị)"
+    matches = same(base64.b64decode(secret["data"]["POSTGRES_PASSWORD"]).decode(), state["password"])
+    assert matches, "Secret olist-db trên cluster khác giá trị đã mã hoá (không in giá trị)"
     result = lab.kubectl("exec", "deployment/postgres", "--", "sh", "-c", PASSWORD_HASH, check=False)
     expected = hashlib.sha256(state["password"].encode()).hexdigest()
-    assert result.stdout.split()[:1] == [expected], "POSTGRES_PASSWORD trong pod postgres khác giá trị đã mã hoá (chỉ so hash)"
+    hashed = same((result.stdout.split() or [""])[0], expected)
+    assert hashed, "POSTGRES_PASSWORD trong pod postgres khác giá trị đã mã hoá (chỉ so hash)"
 
 
 def test_value_not_in_argocd_status(deployed):
@@ -233,4 +241,5 @@ def test_value_not_in_argocd_status(deployed):
     app = lab.kubectl("get", "applications.argoproj.io", APP, "-o", "json").stdout
     described = lab.kubectl("describe", "applications.argoproj.io", APP).stdout
     encoded = [n.decode() for n in needles(state["password"])]
-    assert not any(n in app or n in described for n in encoded), "Giá trị Secret xuất hiện trong Application (không in giá trị)"
+    exposed = any(n in app or n in described for n in encoded)
+    assert not exposed, "Giá trị Secret xuất hiện trong Application (không in giá trị)"

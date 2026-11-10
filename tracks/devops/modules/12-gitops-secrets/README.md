@@ -398,12 +398,11 @@ CRD, ServiceAccount... trước Deployment) rồi theo tên. ArgoCD chờ mọi 
 sequenceDiagram
   participant C as application-controller
   participant K as API server
-  C->>K: PreSync hook (Job backup, schema check)
+  C->>K: PreSync hook (Job snapshot dữ liệu, chờ Succeeded)
   K-->>C: hook Succeeded
-  C->>K: Sync wave -1: Namespace, ConfigMap, Secret
-  C->>K: Sync wave 0: postgres, redis (chờ healthy)
-  C->>K: Sync wave 1: hook Sync migrate (chờ Succeeded)
-  C->>K: Sync wave 2: api
+  C->>K: Sync wave -1: CRD, ServiceAccount, ConfigMap
+  C->>K: Sync wave 0: Deployment, Service (chờ healthy)
+  C->>K: Sync wave 1: Ingress, HPA
   C->>K: PostSync hook (smoke test, báo Slack)
   Note over C,K: hook lỗi thì chạy SyncFail hook, thao tác Failed
 ```
@@ -416,8 +415,8 @@ sequenceDiagram
 
 Ba điều hay làm hỏng:
 
-- **Hook PreSync phụ thuộc resource thường**: PreSync chạy trước mọi resource của phase Sync. Trên namespace có sẵn thì chạy được (phụ
-  thuộc đã tồn tại), trên namespace trống thì kẹt. Intermediate 02.
+- **Hook giả định thứ tự không có thật**: hook chỉ chắc chắn thấy những gì đã được tạo ở các phase và wave **trước** nó. Một hook chạy được
+  trên môi trường cũ có thể chỉ vì thứ nó cần đã tồn tại từ các lần sync trước; luôn thử sync repo trên một namespace trống.
 - **Hook không có hạn**: Job pod kẹt `CreateContainerConfigError` hay `ImagePullBackOff` không bao giờ failed; không có
   `activeDeadlineSeconds` thì thao tác sync `Running` mãi, và auto-sync không bắt đầu thao tác mới cho commit mới khi thao tác cũ chưa xong.
 - **Ghi `hook-delete-policy: HookSucceeded` một mình**: mất mặc định `BeforeHookCreation`, lần sync sau tạo Job cùng tên thì lỗi nếu Job cũ
@@ -757,7 +756,7 @@ chuỗi promote nhiều giai đoạn khi có nhiều môi trường. Advanced 01
 | --- | --- | --- |
 | `Unknown`, condition `ComparisonError` | `status.conditions` | Repo không đọc được, Kustomize hay Helm lỗi, plugin lỗi (SOPS thiếu recipient của ArgoCD) |
 | `OutOfSync` mãi dù vừa sync xong | `kubectl get application -o yaml` phần `status.resources`, diff của từng object | Trường do controller hay webhook khác ghi (replicas do HPA, `caBundle` do cert-manager, default của API server): `ignoreDifferences`, `RespectIgnoreDifferences`, hay server-side diff |
-| Thao tác `Running` mãi | `status.operationState.message` | Hook chờ (PreSync phụ thuộc thứ chưa có, Job không có hạn), wave chờ object không bao giờ healthy (Deployment thiếu readiness, PVC Pending) |
+| Thao tác `Running` mãi | `status.operationState.message` | Hook chờ (hook cần thứ chưa có, Job không có hạn), wave chờ object không bao giờ healthy (Deployment thiếu readiness, PVC Pending) |
 | Commit mới không được sync | `operationState.operation.sync.revision`, `status.sync.revision` | Thao tác cũ chưa kết thúc; sync lỗi trên commit cũ không có `retry`; sync window đang chặn; `targetRevision` trỏ tag cố định |
 | `Synced` nhưng `Degraded` | Health từng object, event | Ứng dụng hỏng thật: ArgoCD áp đúng Git, Git sai |
 | `is forbidden` khi sync | `operationState.syncResult` | Sync bằng impersonation: ServiceAccount đích không có quyền; hay AppProject không cho kind, namespace đó |
