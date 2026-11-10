@@ -28,6 +28,7 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | sops | 12 GitOps & secrets (bản đã kiểm 3.13.3, binary chính thức từ GitHub release, kiểm SHA-256 theo `sops-v3.13.3.checksums.txt`; test chạy `sops` trong sandbox với `sops_env`, không đọc `~/.config/sops` hay `SOPS_*` của máy) | 3.9 | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 | age, age-keygen | 12 GitOps & secrets (bản đã kiểm 1.3.2; khoá của bài sinh bằng `age_keypair` trong sandbox, nằm ngoài repo và ngoài project của bạn) | 1.2 | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 | Vault (image `hashicorp/vault:2.2.1` ghim digest, chạy dev mode trong compose, xem [Vault dev](#dịch-vụ-phụ-trợ-vault-dev)) | 12 GitOps & secrets | Đúng tag đã ghim | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
+| ArgoCD và git server (trong cluster, không cài lên máy) | 12 GitOps & secrets (ArgoCD v3.5.6 bản core ghim trong `setup/kind/argocd/`, sidecar CMP `sops-kustomize`, git server chỉ đọc trong `devops-git`; xem [ArgoCD và git server dùng chung](#argocd-và-git-server-dùng-chung)) | Đúng bản đã ghim | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
@@ -234,6 +235,7 @@ Test không bao giờ tạo hay xoá cluster. `require_cluster` skip khi kind c�
 ```bash
 KUBECONFIG=~/.kube/devops-lab.yaml kubectl get namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
 KUBECONFIG=~/.kube/devops-lab.yaml kubectl delete namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex
+KUBECONFIG=~/.kube/devops-lab.yaml kubectl -n argocd delete appprojects.argoproj.io -l devops-ex
 ```
 
 Lệnh xoá trên chỉ chọn object có nhãn `devops-ex`, không đụng gì khác; chỉ chạy khi không có test nào đang chạy. Node kind là container Docker chạy privileged, nên pod privileged, hostPath, hostNetwork trên cluster này chạm được tới máy của bạn: namespace của test chặn chúng bằng Pod Security, và bài thực hành tay cũng nên làm trong namespace có nhãn `pod-security.kubernetes.io/enforce=baseline`.
@@ -273,13 +275,108 @@ kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Available apis
 Lần lấy số liệu đầu tiên mất khoảng 30 giây sau khi rollout xong (`--metric-resolution=15s`); `kubectl --kubeconfig
 ~/.kube/devops-lab.yaml top nodes` có số là xong. Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/metrics-server`.
 
+### ArgoCD và git server dùng chung
+
+Bài GitOps (module 12, capstone m07) dùng một ArgoCD và một git server trong cluster do **admin cài một lần** sau khi tạo cluster;
+test không bao giờ cài, thiếu thì `ex.require_argocd()` skip kèm lệnh dưới. Tệp ghim trong `setup/kind/argocd/`:
+
+| Thành phần | Bản | Ghim |
+| --- | --- | --- |
+| `00-argocd-v3.5.6-core-install.yaml` | `manifests/core-install.yaml` của tag v3.5.6 (`https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.6/manifests/core-install.yaml`), chép nguyên. Bản 3.5 mới nhất phát hành từ hai tuần trước ngày cài (2026-10-20); 3.5.7 và 3.6.x ra sau 2026-10-27 nên chưa dùng | `SHA256SUMS` (`d3d9d3555ad77eb4...`) |
+| Image `quay.io/argoproj/argocd:v3.5.6` | application-controller, repo-server, sidecar CMP và git server dùng chung image này | Kéo theo digest `sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335` rồi gắn tag |
+| Image `public.ecr.aws/docker/library/redis:8.2.3-alpine` | Cache của ArgoCD, đúng tag trong manifest của release | Digest `sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba` |
+| Image `ghcr.io/getsops/sops:v3.13.3-alpine` | Init container chép binary `sops` (cùng bản `SOPS_VERSION`) cho sidecar CMP | Digest `sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea` |
+| `01-namespaces.yaml`, `10-sops-cmp.yaml`, `20-default-project.yaml`, `30-git-server.yaml`, `kustomization.yaml`, `namespace.yaml` (track viết) | Namespace `argocd`, `devops-git` (Pod Security `restricted`); plugin CMP; AppProject `default` khoá trống; git server; patch cấu hình, tài nguyên, `imagePullPolicy: Never` | `SHA256SUMS` |
+
+Lựa chọn và lý do:
+
+- **Bản core** (`core-install.yaml`) thay vì `install.yaml`: chỉ có application-controller, repo-server, redis (applicationset-controller
+  để 0 replica vì ApplicationSet chỉ học ở mức khái niệm). Không có API server, UI, Dex, notifications: nhẹ hơn, không có mật khẩu
+  admin hay cổng nào để lộ. Test và người học đọc trạng thái Application bằng `kubectl` với token của lab.
+- **Application trong namespace của lab** (`application.namespaces: devops-ex-*` trong `argocd-cmd-params-cm`): người học tạo
+  `Application` ngay trong `devops-ex-<id>`, không cần quyền gì trong namespace `argocd`.
+- **Sync bằng impersonation** (`application.sync.impersonation.enabled: "true"` trong `argocd-cm`): controller của ArgoCD có quyền
+  admin cả cluster. AppProject của mỗi lab đặt `destinationServiceAccounts` là `devops-ex-learner` của lab, nên mọi object trong repo
+  được apply bằng chính token của lab: RBAC, ValidatingAdmissionPolicy và Pod Security của lab vẫn áp dụng. Đã kiểm: repo có
+  ServiceAccount mà Role không cho thì sync lỗi `forbidden: User "system:serviceaccount:<ns>:devops-ex-learner" cannot get resource
+  "serviceaccounts"`.
+- **SOPS bằng sidecar CMP `sops-kustomize`** thay vì ksops: ksops là plugin exec của kustomize, cần bật `--enable-alpha-plugins
+  --enable-exec` cho repo-server, nghĩa là repo của bất kỳ lab nào cũng chạy được chương trình tuỳ ý trong repo-server (nơi có khoá
+  age). Sidecar CMP chỉ chạy `sops --decrypt --in-place` cho mọi `*.enc.yaml` rồi `kustomize build --load-restrictor
+  LoadRestrictionsRootOnly .` (không exec plugin, không Helm), trong một container riêng; khoá riêng chỉ mount vào container đó (chỉ
+  đọc), container `argocd-repo-server` chính không thấy. Application chọn plugin bằng `spec.source.plugin.name: sops-kustomize`
+  (plugin không có `discover`, không tự áp cho repo khác). kustomize lỗi sau khi giải mã thì output bị ẩn để không in giá trị Secret.
+  Đã thử: `secretGenerator` đọc `/sops-age/keys.txt` bị kustomize từ chối, symlink trỏ ra ngoài repo bị repo-server từ chối
+  (`repository contains out-of-bounds symlinks`).
+- **Git server là `git daemon` chỉ đọc** (giao thức `git://`, cổng 9418) chạy bằng chính image ArgoCD (có sẵn `git-daemon`), thay vì
+  `git http-backend` sau nginx: không thêm image nào, không cần web server hay CGI, không ai push được qua mạng. Testkit ghi repo
+  bằng quyền admin (`kubectl cp` một git bundle vào pod rồi `git fetch` vào repo bare `/srv/git/<namespace>.git`). NetworkPolicy chỉ
+  cho repo-server của ArgoCD kết nối, nên pod của lab không đọc được repo của lab khác. Repo nằm trong `emptyDir`: pod git khởi
+  động lại (drain worker, máy khởi động lại) là mất repo của lab đang chạy; lab sau đẩy lại từ đầu.
+- **AppProject `default` khoá trống**: không Application nào dùng được; mỗi lab dùng AppProject `devops-ex-<id>` do testkit tạo.
+
+Chạy từ thư mục gốc của repo, sau khi đã tạo cluster:
+
+```bash
+ok=1
+for ref in quay.io/argoproj/argocd:v3.5.6@sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335 \
+           public.ecr.aws/docker/library/redis:8.2.3-alpine@sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba \
+           ghcr.io/getsops/sops:v3.13.3-alpine@sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea; do
+  image="${ref%@*}" && archive=~/.cache/devops-track/kind-images/"$(echo "$image" | tr '/:' '__')".tar &&
+  docker pull "${image%:*}@${ref##*@}" && docker tag "${image%:*}@${ref##*@}" "$image" &&
+  mkdir -p ~/.cache/devops-track/kind-images && docker save --platform linux/amd64 -o "$archive" "$image" &&
+  nice -n 15 kind load image-archive "$archive" --name devops-lab --nodes devops-lab-worker,devops-lab-worker2 &&
+  rm -f "$archive" || { ok=0; break; }
+done
+[ "$ok" = 1 ] &&
+(cd setup/kind/argocd && sha256sum --check SHA256SUMS) &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/argocd &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd/appprojects.argoproj.io --timeout=60s &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side --force-conflicts -f setup/kind/argocd/20-default-project.yaml
+```
+
+Khoá age dùng chung cho mọi lab (admin tạo một lần). Khoá riêng chỉ đi vào Secret `argocd/devops-sops-age` rồi bị xoá khỏi máy;
+public key vào ConfigMap `argocd/devops-sops-age-public` để bài mã hoá (`lab.sops_age_recipient`). Testkit không bao giờ đọc Secret
+đó, và không có gì của nó vào sandbox của bài:
+
+```bash
+keydir=$(mktemp -d) && age-keygen -o "$keydir/keys.txt" &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd create secret generic devops-sops-age --from-file=keys.txt="$keydir/keys.txt" &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd create configmap devops-sops-age-public --from-literal=recipient="$(age-keygen -y "$keydir/keys.txt")" &&
+rm -rf "$keydir" &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd rollout status deployment/argocd-repo-server --timeout=180s &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd rollout status statefulset/argocd-application-controller --timeout=180s &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n devops-git rollout status deployment/git --timeout=120s
+```
+
+Repo-server chờ Secret này (pod kẹt `ContainerCreating` khi chưa có). Xoay khoá: tạo khoá mới, thay Secret và ConfigMap, `kubectl -n
+argocd rollout restart deployment/argocd-repo-server`; tệp mã hoá bằng khoá cũ phải mã hoá lại (`sops updatekeys`).
+
+**Đã kiểm 2026-11-10** (kind 0.30.0, node v1.34.0, CPU ghim `12-35`, image nạp sẵn): từ `apply` tới khi mọi pod sẵn sàng khoảng 21
+giây. RAM (working set theo `crictl stats`): lúc nghỉ khoảng 145 MiB (application-controller 92, repo-server 27, sidecar CMP 19,
+redis 5, git server 1), sau hai bài GitOps chạy song song khoảng 190 MiB (controller 136). Sync đầu tiên của một Application tự động
+khoảng 2 giây; sau commit mới (`gitops_repo` yêu cầu hard refresh) khoảng 2 giây; Secret SOPS được giải mã khi sync và giá trị
+không xuất hiện trong `status` của Application, log của repo-server hay của controller.
+
+Giới hạn cần biết:
+
+- Manifest ArgoCD render (kể cả Secret đã giải mã, dạng base64) được cache trong redis của namespace `argocd`; NetworkPolicy của
+  release chỉ cho controller và repo-server kết nối redis.
+- Một lần sync tự động đang lỗi được ArgoCD thử lại với backoff trên đúng commit cũ; commit mới chỉ được sync khi thao tác đó kết
+  thúc (hết lượt thử hay bị huỷ bằng `kubectl patch application <tên> --type merge -p
+  '{"status":{"operationState":{"phase":"Terminating"}}}'`).
+- Mọi lab dùng chung một khoá age: ranh giới giữa các lab là AppProject (repo riêng) chứ không phải khoá.
+
+Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/argocd` (xoá CRD là xoá mọi Application và AppProject; Secret
+và ConfigMap khoá age nằm trong namespace `argocd` nên bị xoá cùng).
+
 ### Bài thao tác node (cordon, drain, taint)
 
 Bài cần cordon, drain hay taint worker (module 11) làm qua `KubeLab.node_action` của testkit, chỉ trên worker, `close()` hoàn tác.
 Trạng thái node là của cả cluster, nên testkit giữ khoá `~/.cache/devops-track/kube-nodes.lock` suốt từ lần thao tác node đầu tiên
 tới khi hoàn tác xong: hai bài như vậy không bao giờ chạy chồng nhau, kể cả ở hai terminal. Tệp test của các bài này mang marker
 `kube_nodes`; muốn chạy song song phần còn lại thì loại chúng ra (`-m "not kube_nodes"`). Bài bị giết giữa chừng (SIGKILL, tắt terminal) không kịp hoàn tác: testkit ghi mọi thao tác node vào `~/.cache/devops-track/kube-nodes.state.json`, và bài cluster chạy sau đó (khi không có bài thao tác node nào đang chạy) tự so tệp với trạng thái thật của node, hoàn tác phần còn sót rồi chạy tiếp. Chỉ khi việc hoàn tác lỗi, test mới skip kèm đúng lệnh `kubectl uncordon`, `kubectl taint ... -` cần chạy. Testkit coi mọi cordon, taint ghi trong tệp mà còn trên node là của bài bị ngắt, nên đừng tự cordon đúng node đó bằng tay trước khi chạy lại test. Trong lúc bài drain một worker, pod của bài
-khác, Traefik và metrics-server đang nằm trên worker đó cũng bị dời; sau khi hoàn tác, testkit chờ chúng available lại rồi mới trả.
+khác, Traefik, metrics-server, ArgoCD và git server đang nằm trên worker đó cũng bị dời (repo trong git server mất theo pod); sau khi hoàn tác, testkit chờ chúng available lại rồi mới trả.
 
 ## Ghim CPU
 

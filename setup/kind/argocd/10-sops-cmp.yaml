@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devops-sops-cmp
+  labels:
+    app.kubernetes.io/part-of: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: sops-kustomize
+    spec:
+      generate:
+        command: [sh, -c]
+        args:
+          - |
+            set -eu
+            if [ -z "$(find . -type f -name '*.enc.yaml' -print -quit)" ]; then
+              exec kustomize build --load-restrictor LoadRestrictionsRootOnly .
+            fi
+            find . -type f -name '*.enc.yaml' -print0 | xargs -0 -r -n1 /custom-tools/sops --decrypt --in-place
+            if ! kustomize build --load-restrictor LoadRestrictionsRootOnly . 2>/dev/null; then
+              echo "kustomize build lỗi sau khi giải mã tệp *.enc.yaml; output bị ẩn để không lộ giá trị Secret. Chạy kustomize build trên bản đã giải mã ở máy của bạn để xem lỗi" >&2
+              exit 1
+            fi

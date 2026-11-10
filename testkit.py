@@ -3168,8 +3168,41 @@ KUBE_SKIP_METRICS = (
     "kind load image-archive, kiểm SHA256SUMS, xem module 11 mục 0 và setup/DEVOPS-TOOLS.md): {setup}; vừa cài thì chờ khoảng "
     "30 giây cho lần lấy số liệu đầu tiên"
 )
+KUBE_ARGOCD_DIR = ROOT / "setup" / "kind" / "argocd"
+KUBE_ARGOCD_VERSION = "3.5.6"
+KUBE_ARGOCD_NAMESPACE = "argocd"
+KUBE_ARGOCD_IMAGE = "quay.io/argoproj/argocd:v3.5.6"
+KUBE_ARGOCD_IMAGE_DIGEST = "sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335"
+KUBE_ARGOCD_REDIS_IMAGE = "public.ecr.aws/docker/library/redis:8.2.3-alpine"
+KUBE_ARGOCD_REDIS_IMAGE_DIGEST = "sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba"
+KUBE_ARGOCD_SOPS_IMAGE = "ghcr.io/getsops/sops:v3.13.3-alpine"
+KUBE_ARGOCD_SOPS_IMAGE_DIGEST = "sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea"
+KUBE_ARGOCD_CMP = "sops-kustomize"
+KUBE_ARGOCD_AGE_SECRET = "devops-sops-age"
+KUBE_ARGOCD_AGE_PUBLIC = "devops-sops-age-public"
+KUBE_IN_CLUSTER = "https://kubernetes.default.svc"
+KUBE_GIT_NAMESPACE = "devops-git"
+KUBE_GIT_SERVICE = "git.devops-git.svc.cluster.local"
+KUBE_GIT_ROOT = "/srv/git"
+KUBE_ARGOCD_SETUP = (
+    "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/argocd "
+    "&& kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd/appprojects.argoproj.io --timeout=60s "
+    "&& kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side --force-conflicts -f setup/kind/argocd/20-default-project.yaml"
+)
+KUBE_ARGOCD_KEY_SETUP = (
+    'keydir=$(mktemp -d) && age-keygen -o "$keydir/keys.txt" && kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd create secret '
+    'generic devops-sops-age --from-file=keys.txt="$keydir/keys.txt" && kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd '
+    'create configmap devops-sops-age-public --from-literal=recipient="$(age-keygen -y "$keydir/keys.txt")" && rm -rf "$keydir"'
+)
+KUBE_SKIP_ARGOCD = (
+    "Cluster kind {name} chưa có ArgoCD dùng chung ({detail}). Admin cài một lần (kéo ba image theo digest rồi nạp bằng docker save "
+    "và kind load image-archive, kiểm SHA256SUMS, xem module 12 mục 0 và setup/DEVOPS-TOOLS.md): {setup}; rồi tạo khoá age dùng "
+    "chung (khoá riêng chỉ vào Secret argocd/devops-sops-age, không để lại trên máy): {key}"
+)
+_KUBE_AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{58}")
+_KUBE_ARGO_APP = re.compile(r"[a-z0-9]([-a-z0-9]{0,51}[a-z0-9])?")
 KUBE_NODE_LOCK_TIMEOUT = 900
-KUBE_SHARED_NAMESPACES = ("kube-system", "local-path-storage", "devops-gateway")
+KUBE_SHARED_NAMESPACES = ("kube-system", "local-path-storage", "devops-gateway", "argocd", "devops-git")
 KUBE_SHARED_READY_TIMEOUT = 180
 KUBE_LOAD = "kind load docker-image {images} --name {name} --nodes " + KUBE_WORKERS
 KUBE_SKIP_IMAGES = (
@@ -3218,6 +3251,10 @@ _KUBE_REFUSED = {
     "PersistentVolume": "PV do bài tạo trỏ được ra ngoài cluster (nfs tới máy host) hay giữ sẵn PVC của lab khác; PV tĩnh dùng "
                         "KubeLab.admin_local_pv, PV động dùng StorageClass standard",
     "Gateway": "bài gắn route vào Gateway dùng chung devops-gateway/public; Gateway chiếm listener của controller dùng chung",
+    "AppProject": "AppProject quyết định repo và namespace mà ArgoCD được sync tới; testkit tạo sẵn project riêng của lab "
+                  "(KubeLab.argocd_project)",
+    "ApplicationSet": "ApplicationSet sinh Application hàng loạt và không chạy trong namespace của lab; viết từng Application "
+                      "trong project của lab",
     "GatewayClass": "GatewayClass chọn controller cho cả cluster; dùng GatewayClass devops-traefik có sẵn",
     "ReferenceGrant": "ReferenceGrant mở quyền tham chiếu chéo namespace; route của bài chỉ trỏ Service trong namespace của lab",
     "StorageClass": "provisioner chạy bằng quyền của node; tham số như pathPattern của local-path tạo được volume trỏ ra ngoài thư "
@@ -3252,6 +3289,7 @@ _KUBE_LEARNER_RULES = [
     {"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": _KUBE_RW},
     {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"], "verbs": _KUBE_RW},
     {"apiGroups": ["metrics.k8s.io"], "resources": ["pods"], "verbs": ["get", "list"]},
+    {"apiGroups": ["argoproj.io"], "resources": ["applications"], "verbs": _KUBE_RW},
 ]
 _KUBE_SYSTEM_USER = (
     "((request.userInfo.username.startsWith('system:') && !request.userInfo.username.startsWith('system:serviceaccount:')) || "
@@ -3351,6 +3389,11 @@ class _KubeAdmin:
         result = self.run("api-resources", "--namespaced=false", "--verbs=list,delete", "-o", "name")
         names = [line.split()[0] for line in result.stdout.splitlines() if line.strip()]
         return [n for n in names if n.split(".")[0] != "nodes"]
+
+    def has_argocd(self) -> bool:
+        """Cluster có CRD Application của ArgoCD (nhóm `argoproj.io`)."""
+        result = self.run("api-resources", "--api-group=argoproj.io", "-o", "name")
+        return result.returncode == 0 and "applications.argoproj.io" in result.stdout.split()
 
     def cluster_kinds(self) -> set[str]:
         result = self.run("api-resources", "--namespaced=false", "--no-headers")
@@ -3676,6 +3719,33 @@ def _kube_route_problems(where: str, kind: str, doc: dict, namespace: str) -> li
     return found
 
 
+def kube_git_url(namespace: str) -> str:
+    """URL nội bộ của repo git riêng của lab trên git server dùng chung (`git daemon` chỉ đọc trong namespace `devops-git`)."""
+    return f"git://{KUBE_GIT_SERVICE}/{namespace}.git"
+
+
+def _kube_argocd_problems(where: str, kind: str, doc: dict, namespace: str) -> list[str]:
+    if kind != "Application" or not str(doc.get("apiVersion", "")).startswith("argoproj.io/"):
+        return []
+    spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+    url = kube_git_url(namespace)
+    found = []
+    if spec.get("project") != namespace:
+        found.append(f"{where}: spec.project phải là project riêng của lab ({namespace}), không phải {spec.get('project')!r}")
+    destination = spec.get("destination") if isinstance(spec.get("destination"), dict) else {}
+    server, name = destination.get("server"), destination.get("name")
+    if (destination.get("namespace") != namespace or server not in (None, KUBE_IN_CLUSTER) or name not in (None, "in-cluster")
+            or (server is None and name is None)):
+        found.append(f"{where}: destination chỉ được là namespace {namespace} trên cluster hiện tại ({KUBE_IN_CLUSTER})")
+    sources = ([spec["source"]] if isinstance(spec.get("source"), dict) else []) + [
+        s for s in spec.get("sources") or [] if isinstance(s, dict)]
+    if not sources or any(s.get("repoURL") != url for s in sources):
+        found.append(f"{where}: repoURL chỉ được là repo git của lab ({url})")
+    if "sourceHydrator" in spec:
+        found.append(f"{where}: sourceHydrator ghi ngược vào git, lab không dùng")
+    return found
+
+
 def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), cluster_kinds=(), api_group: str | None = None) -> list[str]:
     """Kiểm tĩnh object Kubernetes của bài trước khi apply (tín hiệu sớm, ranh giới thật là quyền RBAC, policy và Pod Security
     trong cluster, xem `KubeLab`). Object namespaced chỉ ở namespace của lab (không ghi namespace thì lab đặt). Object
@@ -3685,7 +3755,8 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
     escalate/bind/impersonate, `*` trên `*` hay aggregationRule; pod (ở bất kỳ độ sâu nào: Deployment, CronJob...) privileged,
     hostPath, hostNetwork/hostPID/hostIPC, hostPort, capability ngoài baseline, procMount, seccomp/AppArmor Unconfined;
     PersistentVolume hostPath hay local; StorageClass; PriorityClass globalDefault; Service có externalIPs; CustomResourceDefinition
-    ngoài nhóm API `api_group` của lab."""
+    ngoài nhóm API `api_group` của lab; AppProject, ApplicationSet; Application của ArgoCD có project khác project của lab,
+    destination ngoài namespace của lab hay ngoài cluster hiện tại, repoURL khác repo git của lab (`kube_git_url`)."""
     found = []
     cluster = _KUBE_CLUSTER_KINDS | set(cluster_kinds)
     for index, doc in enumerate(_kube_flatten(documents), 1):
@@ -3710,6 +3781,7 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
             found.append(f"{where}: namespace {meta.get('namespace')} nằm ngoài namespace của lab ({namespace})")
         found += _kube_rbac_problems(where, kind, doc, namespace)
         found += _kube_route_problems(where, kind, doc, namespace)
+        found += _kube_argocd_problems(where, kind, doc, namespace)
         for spec in _kube_pod_specs(doc):
             found += _kube_pod_problems(where, spec)
         if kind == "PriorityClass" and doc.get("globalDefault") is True:
@@ -3771,12 +3843,20 @@ def _kube_hostpath_pv(name: str, path: str) -> str:
 
 
 def kube_leftovers(lab_id: str, name: str = KIND_CLUSTER) -> list[str]:
-    """Namespace `devops-ex-<id>` và object cluster-scoped có nhãn `devops-ex=<id>` còn trên cluster; rỗng là đã dọn sạch."""
+    """Namespace `devops-ex-<id>`, object cluster-scoped có nhãn `devops-ex=<id>`, AppProject của lab trong `argocd` và repo git
+    của lab trên git server còn trên cluster; rỗng là đã dọn sạch."""
     with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}{lab_id}-check-") as tmp:
         admin = _KubeAdmin(Path(tmp), name)
-        found = admin.run("get", "namespace", f"{DOCKER_PREFIX}{lab_id}", "--ignore-not-found", "-o", "name").stdout.split()
+        namespace = f"{DOCKER_PREFIX}{lab_id}"
+        found = admin.run("get", "namespace", namespace, "--ignore-not-found", "-o", "name").stdout.split()
         kinds = ",".join(admin.cluster_resources())
         found += admin.run("get", kinds, "-l", f"{_KUBE_LABEL_KEY}={lab_id}", "-o", "name").stdout.split()
+        if admin.has_argocd():
+            projects = admin.run("-n", KUBE_ARGOCD_NAMESPACE, "get", "appprojects.argoproj.io", "-l", f"{_KUBE_LABEL_KEY}={lab_id}",
+                                 "-o", "name")
+            found += projects.stdout.split() if projects.returncode == 0 else []
+            listed = admin.run("-n", KUBE_GIT_NAMESPACE, "exec", "deploy/git", "-c", "git", "--", "ls", "-1A", KUBE_GIT_ROOT)
+            found += [f"git:{KUBE_GIT_ROOT}/{line}" for line in listed.stdout.split() if line == f"{namespace}.git"]
         return found
 
 
@@ -3790,7 +3870,8 @@ class KubeLab:
     `serviceaccounts/token`, không escalate/bind; ghi được ResourceQuota, LimitRange của chính namespace đó), ClusterRoleBinding
     vào `view` (đọc mọi namespace, không có Secret) và quyền đọc object cluster-scoped, quyền ghi đúng các kind trong `allow`
     (`KUBE_ALLOWABLE`, không có StorageClass; có CustomResourceDefinition thì Role thêm quyền ghi mọi resource của nhóm API riêng
-    `api_group` trong namespace của lab, và CRD phải thuộc nhóm đó), và bốn
+    `api_group` trong namespace của lab, và CRD phải thuộc nhóm đó; ghi `applications.argoproj.io` trong namespace của lab,
+    không ghi `appprojects`), và năm
     ValidatingAdmissionPolicy: policy `devops-ex-<id>` áp cho mọi ServiceAccount của namespace (nhóm
     `system:serviceaccounts:<ns>`, kể cả ServiceAccount bài tự tạo rồi lấy token trong pod): object cluster-scoped tạo, sửa,
     xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, CRD chỉ thuộc `api_group`,
@@ -3800,8 +3881,11 @@ class KubeLab:
     không cấp cho `system:*` hay ServiceAccount của namespace khác (RoleBinding bỏ trống namespace của subject ServiceAccount là
     namespace của chính nó); policy `devops-ex-<id>-routes` (cũng cho mọi ServiceAccount
     của namespace): Ingress phải `ingressClassName: devops-traefik`, không `defaultBackend`, HTTPRoute chỉ gắn Gateway
-    `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con. Lab chỉ trao kubeconfig khi cả
-    bốn policy đã chặn được lần tạo thử.
+    `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con; policy `devops-ex-<id>-argocd`
+    (cũng cho mọi ServiceAccount của namespace): Application phải có `spec.project` là project của lab (`devops-ex-<id>`),
+    destination là namespace của lab trên `https://kubernetes.default.svc`, repoURL là `repo_url` của lab, không
+    `sourceHydrator`. Lab chỉ trao kubeconfig khi cả năm policy đã chặn được lần tạo thử (policy ArgoCD chỉ thử khi cluster có
+    CRD của ArgoCD). GitOps: `argocd_project`, `gitops_repo`, `argocd_wait`, `age_public_key`/`sops_age_recipient`.
 
     `kubectl`, `helm`, `run` (script của bài), `apply_learner`, `helm_install` chạy qua `run_sandboxed` với `KUBECONFIG` là
     kubeconfig của lab (một cluster, một context có namespace của lab, token của `devops-ex-learner`) trong thư mục `control`
@@ -3813,7 +3897,7 @@ class KubeLab:
     `kubectl` nhận `--user`, `--group`, `--serviceaccount` duy nhất khi argv bắt đầu bằng `create rolebinding` hay `create
     clusterrolebinding` (subject của binding); đặt trước lệnh con hay ở lệnh khác là cờ danh tính, bị từ chối.
 
-    Ranh giới: quyền RBAC của token, bốn policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
+    Ranh giới: quyền RBAC của token, năm policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
     hostNetwork, hostPID, hostIPC, hostPort, capability lạ). Node kind là container privileged: pod privileged thấy ổ đĩa của máy
     host, hostPath vào node chạm `/var` và `/run/containerd` của node. Vì thế chặn các trường đó là yêu cầu an toàn cho máy host
     chứ không chỉ cho cluster. `kube_manifest_problems` trong `apply_learner` và `helm_install` (sau `helm template`) là tín hiệu
@@ -3848,6 +3932,12 @@ class KubeLab:
         self._taints: set[tuple[str, str, str]] = set()
         self._local_nodes: set[str] = set()
         self._node_lock = None
+        self._argocd = False
+        self._project = False
+        self._git_pushed = False
+        self._git_repo: GitRepo | None = None
+        self._age_public: str | None = None
+        self.gitops_revision = ""
 
     @property
     def control(self) -> Path:
@@ -3897,6 +3987,7 @@ class KubeLab:
         self._admin = _KubeAdmin(self.root, self.name)
         _kube_ready(self._admin, self.name)
         self._cluster_kinds = self._admin.cluster_kinds()
+        self._argocd = self._admin.has_argocd()
         self._created = True
         result = self._admin.run("apply", "-f", "-", input=json.dumps({"apiVersion": "v1", "kind": "List",
                                                                        "items": self._bootstrap()}))
@@ -4011,6 +4102,24 @@ class KubeLab:
                            f"size(object.spec.hostnames) > 0 && object.spec.hostnames.all(h, {host_ok}))",
              "message": f"HTTPRoute của bài chỉ gắn vào {KUBE_GATEWAY_NAMESPACE}/{KUBE_GATEWAY_NAME}, hostnames là {domain} hay tên con"},
         ]
+        url = kube_git_url(self.namespace)
+        applications = [{"apiGroups": ["argoproj.io"], "apiVersions": ["*"], "resources": ["applications"],
+                         "operations": ["CREATE", "UPDATE"]}]
+        argocd_rules = [
+            {"expression": f"has(object.spec.project) && object.spec.project == '{self.namespace}'",
+             "message": f"Application của bài phải dùng project riêng của lab: spec.project {self.namespace}"},
+            {"expression": f"has(object.spec.destination) && has(object.spec.destination.namespace) && "
+                           f"object.spec.destination.namespace == '{self.namespace}' && "
+                           f"(has(object.spec.destination.server) || has(object.spec.destination.name)) && "
+                           f"(!has(object.spec.destination.server) || object.spec.destination.server == '{KUBE_IN_CLUSTER}') && "
+                           "(!has(object.spec.destination.name) || object.spec.destination.name == 'in-cluster')",
+             "message": f"Application của bài chỉ sync vào namespace {self.namespace} trên cluster hiện tại ({KUBE_IN_CLUSTER})"},
+            {"expression": f"(has(object.spec.source) || has(object.spec.sources)) && "
+                           f"(!has(object.spec.source) || object.spec.source.repoURL == '{url}') && "
+                           f"(!has(object.spec.sources) || object.spec.sources.all(s, s.repoURL == '{url}')) && "
+                           "!has(object.spec.sourceHydrator)",
+             "message": f"Application của bài chỉ lấy nguồn từ repo git của lab: {url}"},
+        ]
         items = [
             *policy(self.namespace, everything,
                     f"{lab_identity} || (request.operation == 'CREATE' && request.dryRun == true && "
@@ -4020,6 +4129,8 @@ class KubeLab:
                     f"object.metadata.name == '{self._probe}-rbac')", rbac_rules),
             *policy(f"{self.namespace}-routes", routes,
                     f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-routes')", route_rules),
+            *policy(f"{self.namespace}-argocd", applications,
+                    f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-argocd')", argocd_rules),
             *policy(f"{self.namespace}-pv", volumes,
                     f"!{_KUBE_SYSTEM_USER} && !(request.dryRun == true && object.metadata.name.endsWith('-probe-pv') && "
                     f"object.metadata.name != '{self._probe}-pv')", no_host_pv),
@@ -4064,7 +4175,7 @@ class KubeLab:
     def _wait_ready(self) -> None:
         """Policy và RBAC mới tạo chỉ có hiệu lực sau khi API server đồng bộ (vài giây). Chờ tới khi mỗi lần tạo thử bằng admin
         (dry-run, tên probe riêng của lab) bị đúng policy tương ứng của lab chặn: ClusterRole không nhãn, ClusterRole nhãn
-        aggregate-to, PV hostPath, Ingress không class. Rồi chờ token
+        aggregate-to, PV hostPath, Ingress không class, và (cluster có ArgoCD) Application dùng project `default`. Rồi chờ token
         của lab được tạo pod, mới trao kubeconfig."""
         probes = {
             self.namespace: {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
@@ -4079,6 +4190,12 @@ class KubeLab:
                                        "metadata": {"name": f"{self._probe}-rbac", "labels": {f"{_KUBE_AGGREGATE}view": "true"}},
                                        "rules": []},
         }
+        if self._argocd:
+            probes[f"{self.namespace}-argocd"] = {
+                "apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+                "metadata": {"name": f"{self._probe}-argocd", "namespace": self.namespace},
+                "spec": {"project": "default", "destination": {"server": KUBE_IN_CLUSTER, "namespace": self.namespace},
+                         "source": {"repoURL": kube_git_url(self.namespace), "path": ".", "targetRevision": "main"}}}
         deadline = time.monotonic() + 30
         for name, probe in probes.items():
             while True:
@@ -4219,6 +4336,204 @@ class KubeLab:
             pytest.fail(f"Chart {chart.name} bị từ chối trước khi cài:\n- " + "\n- ".join(problems))
         return self.helm("upgrade", "--install", release, str(chart), "--namespace", self.namespace, *args, readonly=[chart],
                          check=check)
+
+    def _require_argocd(self, detail: str) -> None:
+        if not self._argocd:
+            pytest.skip(KUBE_SKIP_ARGOCD.format(name=self.name, detail=detail, setup=KUBE_ARGOCD_SETUP, key=KUBE_ARGOCD_KEY_SETUP))
+
+    @property
+    def repo_url(self) -> str:
+        """URL nội bộ của repo git riêng của lab (`git://git.devops-git.svc.cluster.local/<namespace>.git`), dùng trong
+        `spec.source.repoURL` của Application. Chỉ repo-server của ArgoCD đọc được (NetworkPolicy của `devops-git`)."""
+        return kube_git_url(self.namespace)
+
+    def argocd_project(self) -> str:
+        """Bằng quyền admin tạo AppProject `devops-ex-<id>` trong namespace `argocd` (nhãn của lab, xoá trong `close()`):
+        `sourceRepos` chỉ `repo_url`, `destinations` chỉ namespace của lab trên `https://kubernetes.default.svc`,
+        `sourceNamespaces` chỉ namespace của lab, không có `clusterResourceWhitelist` (không object cluster-scoped nào), và
+        `destinationServiceAccounts` buộc ArgoCD sync bằng chính ServiceAccount `devops-ex-learner` của lab (impersonation):
+        object trong repo chỉ được tạo khi token của lab tạo được, qua đúng RBAC, policy và Pod Security của lab. Trả tên
+        project để ghi vào `spec.project`."""
+        self._require_entered()
+        self._require_argocd("chưa có CRD applications.argoproj.io")
+        project = {
+            "apiVersion": "argoproj.io/v1alpha1", "kind": "AppProject",
+            "metadata": {"name": self.namespace, "namespace": KUBE_ARGOCD_NAMESPACE, "labels": {_KUBE_LABEL_KEY: self.id}},
+            "spec": {
+                "description": f"Project riêng của lab {self.namespace}",
+                "sourceRepos": [self.repo_url],
+                "sourceNamespaces": [self.namespace],
+                "destinations": [{"server": KUBE_IN_CLUSTER, "namespace": self.namespace}],
+                "clusterResourceWhitelist": [],
+                "destinationServiceAccounts": [{"server": KUBE_IN_CLUSTER, "namespace": self.namespace,
+                                                "defaultServiceAccount": _KUBE_SA}],
+            },
+        }
+        self._project = True
+        result = self._admin.run("apply", "-f", "-", input=json.dumps(project))
+        if result.returncode != 0:
+            pytest.fail(f"Không tạo được AppProject {self.namespace}: {_output_tail(result)}")
+        return self.namespace
+
+    def _git_pods(self, running: bool = False) -> list[str]:
+        argv = ["-n", KUBE_GIT_NAMESPACE, "get", "pods", "-l", "app.kubernetes.io/name=git", "-o", "jsonpath={.items[*].metadata.name}"]
+        result = self._admin.run(*argv, *(["--field-selector=status.phase=Running"] if running else []))
+        return [p for p in result.stdout.split() if re.fullmatch(r"[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?", p)] if result.returncode == 0 else []
+
+    def _git_exec(self, pod: str, *argv: str) -> subprocess.CompletedProcess:
+        return self._admin.run("-n", KUBE_GIT_NAMESPACE, "exec", pod, "-c", "git", "--", *argv, timeout=120)
+
+    def gitops_repo(self, path: Path) -> str:
+        """Chép tệp thường trong thư mục `path` (bỏ `.git`, không nhận symlink, không nhận tệp có khoá riêng age) vào một repo git
+        mới của lab (`GitRepo`, `SAFE_GIT_CONFIG`, tác giả và ngày cố định), commit, rồi bằng quyền admin đẩy lên repo riêng
+        `<namespace>.git` của git server (`kubectl cp` bundle vào pod rồi `git fetch` vào repo bare; git server chỉ cho đọc, không
+        ai push được qua mạng). Gọi lại với nội dung mới là thêm một commit lên `main` (lịch sử giữ nguyên) và yêu cầu mọi
+        Application của lab refresh ngay. `gitops_revision` là SHA của commit vừa đẩy. Trả `repo_url`; `close()` xoá repo."""
+        self._require_entered()
+        self._require_argocd("chưa có CRD applications.argoproj.io")
+        source = Path(path).resolve()
+        if not source.is_dir():
+            raise ValueError(f"gitops_repo cần thư mục, không thấy {source}")
+        files = []
+        for item in sorted(source.rglob("*")):
+            rel = item.relative_to(source)
+            if ".git" in rel.parts:
+                continue
+            if item.is_symlink():
+                pytest.fail(f"gitops_repo: {rel} là symlink; repo GitOps của bài chỉ nhận tệp thường")
+            if item.is_file():
+                files.append(rel)
+        leaked = [str(rel) for rel in files if b"AGE-SECRET-KEY-" in (source / rel).read_bytes()]
+        if leaked:
+            pytest.fail(f"gitops_repo: {', '.join(leaked)} chứa khoá riêng age (AGE-SECRET-KEY-...); khoá riêng không bao giờ được "
+                        "commit vào repo, chỉ public key (age1...) nằm trong .sops.yaml")
+        pods = self._git_pods(running=True)
+        if not pods:
+            pytest.skip(KUBE_SKIP_ARGOCD.format(name=self.name, detail=f"git server trong {KUBE_GIT_NAMESPACE} chưa chạy",
+                                                setup=KUBE_ARGOCD_SETUP, key=KUBE_ARGOCD_KEY_SETUP))
+        work, home = self.root / "gitops" / "repo", self.root / "gitops" / "home"
+        if self._git_repo is None:
+            work.mkdir(parents=True)
+            home.mkdir(parents=True)
+            self._git_repo = GitRepo(work, home)
+            self._git_repo.out("init", "--quiet")
+        else:
+            for child in work.iterdir():
+                if child.name != ".git":
+                    shutil.rmtree(child) if child.is_dir() and not child.is_symlink() else child.unlink()
+        for rel in files:
+            (work / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / rel, work / rel)
+        repo = self._git_repo
+        repo.out("add", "--all")
+        repo.out("commit", "--quiet", "--allow-empty", "-m", f"{self.namespace}: {source.name}")
+        bundle = self._admin.home / f"{self.namespace}.bundle"
+        repo.out("bundle", "create", str(bundle), "main")
+        pod, remote, incoming = pods[0], f"{KUBE_GIT_ROOT}/{self.namespace}.git", f"/tmp/{self.namespace}.bundle"
+        self._git_pushed = True
+        try:
+            result = self._admin.run("cp", str(bundle), f"{KUBE_GIT_NAMESPACE}/{pod}:{incoming}", "-c", "git", timeout=120)
+            for argv in (("git", *SAFE_GIT_CONFIG, "init", "--quiet", "--bare", remote),
+                         ("git", *SAFE_GIT_CONFIG, "-C", remote, "fetch", "--quiet", "--force", incoming, "+main:main")):
+                if result.returncode == 0:
+                    result = self._git_exec(pod, *argv)
+            if result.returncode != 0:
+                pytest.fail(f"Không đẩy được repo {self.namespace}.git lên git server: {_output_tail(result)}")
+        finally:
+            bundle.unlink(missing_ok=True)
+            self._git_exec(pod, "rm", "-f", incoming)
+        self.gitops_revision = repo.out("rev-parse", "HEAD")
+        apps = [a for a in self.kubectl("get", "applications.argoproj.io", "-o", "name", check=False).stdout.split()
+                if a.startswith("application.argoproj.io/")]
+        if apps:
+            self.kubectl("annotate", *apps, "argocd.argoproj.io/refresh=hard", "--overwrite", check=False)
+        return self.repo_url
+
+    def argocd_wait(self, app: str, *, health: str | None = "Healthy", sync: str | None = "Synced", timeout: float = 180,
+                    latest: bool = True) -> dict:
+        """Chờ Application `app` trong namespace của lab có `status.health.status == health` và `status.sync.status == sync`
+        (`None` là bỏ qua điều kiện đó), không còn thao tác sync đang chạy, và (`latest`, sau `gitops_repo`) trạng thái tính trên
+        đúng commit cuối cùng đã đẩy. Đọc bằng token của lab. Trả `status` của Application; quá `timeout` giây thì fail kèm
+        health, sync, revision, thông điệp của thao tác sync và condition (không bao giờ in object hay giá trị Secret)."""
+        self._require_entered()
+        if not isinstance(app, str) or not _KUBE_ARGO_APP.fullmatch(app):
+            raise ValueError(f"Tên Application {app!r} không hợp lệ")
+        if not 1 <= timeout <= 900:
+            raise ValueError(f"timeout {timeout!r} phải từ 1 tới 900 giây")
+        deadline = time.monotonic() + timeout
+        status: dict = {}
+        while True:
+            result = self.kubectl("get", "applications.argoproj.io", app, "-o", "json", check=False)
+            try:
+                status = (json.loads(result.stdout).get("status") or {}) if result.returncode == 0 else {}
+            except ValueError:
+                status = {}
+            got_sync = status.get("sync") or {}
+            revisions = [got_sync.get("revision"), *(got_sync.get("revisions") or [])]
+            running = (status.get("operationState") or {}).get("phase") in ("Running", "Terminating")
+            if (status and (health is None or (status.get("health") or {}).get("status") == health)
+                    and (sync is None or got_sync.get("status") == sync) and not running
+                    and (not latest or not self.gitops_revision or self.gitops_revision in revisions)):
+                return status
+            if time.monotonic() > deadline:
+                break
+            time.sleep(2)
+        operation = status.get("operationState") or {}
+        conditions = "; ".join(f"{c.get('type')}: {c.get('message')}" for c in status.get("conditions") or [] if isinstance(c, dict))
+        detail = (f"health={(status.get('health') or {}).get('status')}, sync={(status.get('sync') or {}).get('status')}, "
+                  f"revision={(status.get('sync') or {}).get('revision')}, commit cuối của gitops_repo={self.gitops_revision or '-'}, "
+                  f"thao tác sync={operation.get('phase')}: {operation.get('message')}; condition: {conditions or '-'}")
+        pytest.fail(f"Application {app} chưa đạt health={health}, sync={sync} sau {timeout:.0f}s ({detail[:DOCKER_LOG_CHARS]})")
+
+    @property
+    def age_public_key(self) -> str:
+        """Public key (`age1...`) của khoá age dùng chung mà admin tạo cho ArgoCD, đọc từ ConfigMap
+        `argocd/devops-sops-age-public`. Khoá riêng chỉ nằm trong Secret `argocd/devops-sops-age`, chỉ mount vào sidecar CMP
+        `sops-kustomize` của repo-server; testkit không bao giờ đọc Secret đó, và không có gì của nó vào sandbox của người học."""
+        self._require_entered()
+        if self._age_public is None:
+            result = self._admin.run("-n", KUBE_ARGOCD_NAMESPACE, "get", "configmap", KUBE_ARGOCD_AGE_PUBLIC, "-o",
+                                     "jsonpath={.data.recipient}")
+            value = result.stdout.strip()
+            if result.returncode != 0 or not _KUBE_AGE_RECIPIENT.fullmatch(value):
+                pytest.skip(KUBE_SKIP_ARGOCD.format(name=self.name, detail=f"thiếu ConfigMap {KUBE_ARGOCD_NAMESPACE}/"
+                                                    f"{KUBE_ARGOCD_AGE_PUBLIC} có recipient age1...", setup=KUBE_ARGOCD_SETUP,
+                                                    key=KUBE_ARGOCD_KEY_SETUP))
+            self._age_public = value
+        return self._age_public
+
+    @property
+    def sops_age_recipient(self) -> str:
+        """Recipient cho `sops encrypt --age <recipient>` và `creation_rules[].age` của `.sops.yaml`: chính `age_public_key`."""
+        return self.age_public_key
+
+    def _delete_applications(self, errors: list[str]) -> None:
+        listed = self._admin.run("-n", self.namespace, "get", "applications.argoproj.io", "-o", "name", "--ignore-not-found")
+        names = [n for n in listed.stdout.split() if n.startswith("application.argoproj.io/")]
+        if not names:
+            return
+        result = self._admin.run("-n", self.namespace, "delete", *names, "--ignore-not-found", "--wait=true", "--timeout=60s",
+                                 timeout=90)
+        if result.returncode == 0:
+            return
+        for name in names:
+            self._admin.run("-n", self.namespace, "patch", name, "--type=merge", "-p", '{"metadata":{"finalizers":null}}')
+        result = self._admin.run("-n", self.namespace, "delete", *names, "--ignore-not-found", "--wait=true", "--timeout=30s",
+                                 timeout=60)
+        if result.returncode != 0:
+            errors.append(f"xoá Application trong {self.namespace}: {_output_tail(result)}")
+
+    def _remove_gitops(self, errors: list[str]) -> None:
+        if self._project:
+            result = self._admin.run("-n", KUBE_ARGOCD_NAMESPACE, "delete", "appprojects.argoproj.io", "-l", self.label,
+                                     "--ignore-not-found", "--wait=true", "--timeout=60s", timeout=90)
+            if result.returncode != 0:
+                errors.append(f"xoá AppProject {self.namespace}: {_output_tail(result)}")
+        if self._git_pushed:
+            for pod in self._git_pods():
+                result = self._git_exec(pod, "rm", "-rf", f"{KUBE_GIT_ROOT}/{self.namespace}.git", f"/tmp/{self.namespace}.bundle")
+                if result.returncode != 0:
+                    errors.append(f"xoá repo {self.namespace}.git trong {KUBE_GIT_NAMESPACE}/{pod}: {_output_tail(result)}")
 
     def _worker(self, node) -> str:
         if not isinstance(node, str) or not _KUBE_WORKER.fullmatch(node) or node not in kind_nodes(self.name):
@@ -4371,7 +4686,7 @@ class KubeLab:
         `~/.cache/devops-track/kube-nodes.lock` (flock, chờ tối đa `KUBE_NODE_LOCK_TIMEOUT`) tới khi `close()` hoàn tác xong: hai
         lab dùng `node_action` không bao giờ chạy chồng nhau, kể cả ở hai tiến trình pytest. Test dùng `node_action` mang marker
         `kube_nodes`. Sau khi hoàn tác, `close()` chờ Deployment trong `KUBE_SHARED_NAMESPACES` (CoreDNS, local-path, Gateway,
-        metrics-server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node. `timeout` là
+        metrics-server, ArgoCD, git server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node. `timeout` là
         `--timeout` của drain (10 tới 120 giây).
 
         Mỗi thao tác được ghi vào `kube-nodes.state.json` cạnh khoá (chỉ đọc, ghi, xoá khi đang giữ khoá) trước khi chạy và xoá khi
@@ -4450,14 +4765,18 @@ class KubeLab:
             self._wait_shared_ready(errors)
 
     def close(self) -> None:
-        """Gỡ thao tác node của lab, xoá namespace, chờ rồi xoá PV có `claimRef` trỏ namespace của lab (PV do local-path tạo
-        cho PVC của bài không mang nhãn), xoá object cluster-scoped có nhãn của lab, xoá thư mục PV local trong worker."""
+        """Gỡ thao tác node của lab, xoá Application của ArgoCD trong namespace của lab (gỡ finalizer nếu ArgoCD không xử lý kịp),
+        xoá namespace, chờ rồi xoá PV có `claimRef` trỏ namespace của lab (PV do local-path tạo cho PVC của bài không mang nhãn),
+        xoá object cluster-scoped có nhãn của lab, AppProject của lab và repo git của lab trên git server, xoá thư mục PV local
+        trong worker."""
         import warnings
 
         errors = []
         try:
             if self._admin is not None and self._created:
                 self._restore_nodes(errors)
+                if self._argocd:
+                    self._delete_applications(errors)
                 result = self._admin.run("delete", "namespace", self.namespace, "--ignore-not-found", "--wait=true",
                                          f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
                 if result.returncode != 0:
@@ -4476,6 +4795,7 @@ class KubeLab:
                                          f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
                 if result.returncode != 0:
                     errors.append(f"xoá object cluster-scoped nhãn {self.label}: {_output_tail(result)}")
+                self._remove_gitops(errors)
                 for node in sorted(self._local_nodes):
                     removed = kind_node_exec(node, "rm", "-rf", f"{KUBE_LOCAL_PV_ROOT}/{self.id}")
                     if removed.returncode != 0:
@@ -4826,6 +5146,48 @@ class Exercise:
                 result = admin.run(*args)
                 if result.returncode != 0 or not ok(result.stdout):
                     pytest.skip(KUBE_SKIP_METRICS.format(name=name, detail=what, setup=KUBE_METRICS_SETUP))
+
+    @staticmethod
+    def require_argocd(name: str = KIND_CLUSTER) -> None:
+        """Skip kèm lệnh cài khi cluster chưa có ArgoCD dùng chung đúng cấu hình của track: CRD `applications.argoproj.io`,
+        `application.namespaces: devops-ex-*` (Application trong namespace của lab), sync bằng impersonation, AppProject
+        `default` đã khoá, application-controller sẵn sàng, repo-server (kèm sidecar CMP `sops-kustomize`, cần Secret
+        `argocd/devops-sops-age`) available, ConfigMap `argocd/devops-sops-age-public` có recipient `age1...`, git server
+        `devops-git/git` available. Không đọc Secret chứa khoá riêng. Admin cài một lần từ `setup/kind/argocd/`; test không bao
+        giờ cài."""
+        _require_cluster_up(name)
+        with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}argocd-") as tmp:
+            admin = _KubeAdmin(Path(tmp), name)
+            ns = ("-n", KUBE_ARGOCD_NAMESPACE)
+            checks = (
+                ("CRD applications.argoproj.io", ("get", "crd", "applications.argoproj.io", "-o", "name"),
+                 lambda out: "applications.argoproj.io" in out),
+                ("argocd-cmd-params-cm chưa có application.namespaces: devops-ex-*",
+                 (*ns, "get", "configmap", "argocd-cmd-params-cm", "-o", r"jsonpath={.data.application\.namespaces}"),
+                 lambda out: "devops-ex-*" in [part.strip() for part in out.split(",")]),
+                ("argocd-cm chưa bật application.sync.impersonation.enabled",
+                 (*ns, "get", "configmap", "argocd-cm", "-o", r"jsonpath={.data.application\.sync\.impersonation\.enabled}"),
+                 lambda out: out.strip() == "true"),
+                ("AppProject default chưa khoá (20-default-project.yaml)",
+                 (*ns, "get", "appprojects.argoproj.io", "default", "-o", "jsonpath={.spec.sourceRepos}{.spec.destinations}"),
+                 lambda out: out.strip() in ("", "[]", "[][]")),
+                ("application-controller chưa sẵn sàng", (*ns, "get", "statefulset", "argocd-application-controller", "-o",
+                                                          "jsonpath={.status.readyReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+                (f"repo-server chưa có pod available (thiếu Secret {KUBE_ARGOCD_NAMESPACE}/{KUBE_ARGOCD_AGE_SECRET} thì pod kẹt ở "
+                 "ContainerCreating)", (*ns, "get", "deployment", "argocd-repo-server", "-o", "jsonpath={.status.availableReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+                (f"thiếu ConfigMap {KUBE_ARGOCD_NAMESPACE}/{KUBE_ARGOCD_AGE_PUBLIC} có recipient age1...",
+                 (*ns, "get", "configmap", KUBE_ARGOCD_AGE_PUBLIC, "-o", "jsonpath={.data.recipient}"),
+                 lambda out: bool(_KUBE_AGE_RECIPIENT.fullmatch(out.strip()))),
+                (f"git server {KUBE_GIT_NAMESPACE}/git chưa có pod available",
+                 ("-n", KUBE_GIT_NAMESPACE, "get", "deployment", "git", "-o", "jsonpath={.status.availableReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+            )
+            for what, args, ok in checks:
+                result = admin.run(*args)
+                if result.returncode != 0 or not ok(result.stdout):
+                    pytest.skip(KUBE_SKIP_ARGOCD.format(name=name, detail=what, setup=KUBE_ARGOCD_SETUP, key=KUBE_ARGOCD_KEY_SETUP))
 
     @staticmethod
     def require_kind_images(*images: str, name: str = KIND_CLUSTER) -> None:

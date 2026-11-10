@@ -1,5 +1,6 @@
 """Test cho helper DevOps của testkit: phiên bản công cụ, docker, cpuset, cluster kind."""
 
+import base64
 import json
 import os
 import pwd
@@ -3598,6 +3599,7 @@ def test_ansible_bypass_legacy_ssh_aliases(ansible_lab):
 
 CONTROL_ATTACK = """#!/usr/bin/env python3
 import errno
+import base64
 import json
 import os
 import sys
@@ -3674,6 +3676,7 @@ class Connection(Local):
 """
 
 SHADOW_ATTACK = """#!/usr/bin/env python3
+import base64
 import json
 import os
 
@@ -3722,6 +3725,7 @@ def test_ansible_plugin_shadowing_does_not_change_connection(ansible_lab):
 
 
 HOME_ROLE_PLANT = """#!/usr/bin/env python3
+import base64
 import json
 import os
 
@@ -3786,6 +3790,7 @@ def test_ansible_role_in_home_is_refused_and_never_loaded(ansible_lab, tmp_path)
 
 
 USER_SITE_PLANT = """#!/usr/bin/env python3
+import base64
 import json
 import os
 
@@ -3942,7 +3947,7 @@ class KubeFake:
             return done(out=API_RESOURCES)
         if "--dry-run=server" in cmd:
             name = json.loads(input)["metadata"]["name"]
-            suffix = next((s for s in ("-pv", "-rbac", "-routes") if name.endswith(f"-probe{s}")), "")
+            suffix = next((s for s in ("-pv", "-rbac", "-routes", "-argocd") if name.endswith(f"-probe{s}")), "")
             probe = name.removesuffix(f"-probe{suffix}") + suffix
             return done(1, "", f"ValidatingAdmissionPolicy '{probe}' with binding '{probe}' denied request")
         if cmd[1:3] == ["auth", "can-i"]:
@@ -4115,7 +4120,8 @@ def test_kube_lab_namespace_and_label(monkeypatch):
     resources = {r for rule in role["rules"] for r in rule["resources"]}
     assert not verbs & {"impersonate", "escalate", "bind", "*"} and "serviceaccounts/token" not in resources and "*" not in resources
     policies = {i["metadata"]["name"]: i for i in items if i["kind"] == "ValidatingAdmissionPolicy"}
-    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac", f"{lab.namespace}-routes"}
+    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac", f"{lab.namespace}-routes",
+                             f"{lab.namespace}-argocd"}
     rbac = policies[f"{lab.namespace}-rbac"]["spec"]
     assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in rbac["matchConditions"][0]["expression"]
     assert {r["scope"] for r in rbac["matchConstraints"]["resourceRules"]} == {"*"}
@@ -6088,3 +6094,533 @@ def test_require_vault_devops_rejects_other_server(monkeypatch):
         testkit.Exercise.require_vault_devops()
     monkeypatch.setattr(testkit, "_vault_health", lambda address: {"initialized": True, "sealed": False})
     assert testkit.Exercise.require_vault_devops() == testkit.vault_devops_address()
+
+
+RECIPIENT = "age1" + "q" * 58
+ARGO_RESOURCES = "applications.argoproj.io\napplicationsets.argoproj.io\nappprojects.argoproj.io\n"
+
+
+class ArgoFake(KubeFake):
+    """KubeFake cộng ArgoCD: CRD argoproj.io, ConfigMap public key, pod git server, Application đọc bằng token của lab. Lệnh
+    `git` trên máy (repo của lab trong thư mục tạm) chạy thật."""
+
+    def __init__(self, monkeypatch, *, recipient=RECIPIENT, git_pods="git-5d46cfbbc8-58gjz", apps="", app_status=()):
+        self.real_run = subprocess.run
+        self.recipient = recipient
+        self.git_pods = git_pods
+        self.apps = apps
+        self.app_status = list(app_status)
+        super().__init__(monkeypatch)
+
+    def run(self, cmd, **kwargs):
+        if str(cmd[0]) == "git":
+            return self.real_run(cmd, **kwargs)
+        return super().run(cmd, **kwargs)
+
+    def run_sandboxed(self, cmd, *, writable, cwd, env, timeout=30, input=None, readonly=()):
+        joined = " ".join(map(str, cmd))
+        answer = None
+        if "api-resources --api-group=argoproj.io" in joined:
+            answer = ARGO_RESOURCES
+        elif f"configmap {testkit.KUBE_ARGOCD_AGE_PUBLIC}" in joined:
+            answer = self.recipient
+        elif "app.kubernetes.io/name=git" in joined:
+            answer = self.git_pods
+        elif "get applications.argoproj.io -o name" in joined:
+            answer = self.apps
+        elif "get applications.argoproj.io" in joined and "-o json" in joined:
+            status = self.app_status.pop(0) if len(self.app_status) > 1 else (self.app_status or [{}])[0]
+            answer = json.dumps({"metadata": {"name": "web"}, "status": status})
+        if answer is None:
+            return super().run_sandboxed(cmd, writable=writable, cwd=cwd, env=env, timeout=timeout, input=input, readonly=readonly)
+        cmd = [str(part) for part in cmd]
+        self.sandbox_calls.append({"cmd": cmd, "env": dict(env), "writable": list(writable), "readonly": list(readonly),
+                                   "cwd": cwd, "input": input})
+        return subprocess.CompletedProcess(cmd, 0, answer, "")
+
+
+def bootstrap_items(fake) -> list:
+    [apply] = [c for c in fake.calls_with("apply") if c["input"] and '"Namespace"' in c["input"]]
+    return json.loads(apply["input"])["items"]
+
+
+def test_argocd_project_restricts_destination_and_source(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        assert lab.argocd_project() == lab.namespace
+        [call] = [c for c in fake.calls_with("apply") if c["input"] and '"AppProject"' in c["input"]]
+        assert call["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig)
+        project = json.loads(call["input"])
+        assert project["metadata"] == {"name": lab.namespace, "namespace": "argocd", "labels": {"devops-ex": lab.id}}
+        spec = project["spec"]
+        assert lab.repo_url == f"git://git.devops-git.svc.cluster.local/{lab.namespace}.git"
+        assert spec["sourceRepos"] == [lab.repo_url]
+        assert spec["destinations"] == [{"server": "https://kubernetes.default.svc", "namespace": lab.namespace}]
+        assert spec["sourceNamespaces"] == [lab.namespace]
+        assert spec["clusterResourceWhitelist"] == []
+        assert spec["destinationServiceAccounts"] == [{"server": "https://kubernetes.default.svc", "namespace": lab.namespace,
+                                                       "defaultServiceAccount": "devops-ex-learner"}]
+        assert "*" not in json.dumps(spec)
+        assert not {"namespaceResourceWhitelist", "clusterResourceBlacklist", "permitOnlyProjectScopedClusters"} & set(spec)
+    role = next(i for i in bootstrap_items(fake) if i["kind"] == "Role")
+    argo = [r for r in role["rules"] if "argoproj.io" in r["apiGroups"]]
+    assert argo == [{"apiGroups": ["argoproj.io"], "resources": ["applications"], "verbs": testkit._KUBE_RW}]
+    deletes = [c["cmd"] for c in fake.calls_with("delete") if "appprojects.argoproj.io" in c["cmd"]]
+    assert deletes and all(["-n", "argocd"] == c[1:3] and "-l" in c and f"devops-ex={lab.id}" in c for c in deletes)
+    assert not any("appprojects.argoproj.io" in c["cmd"] and "--all" in c["cmd"] for c in fake.sandbox_calls)
+
+
+def test_argocd_project_skips_without_argocd(monkeypatch):
+    KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        with pytest.raises(pytest.skip.Exception) as info:
+            lab.argocd_project()
+    assert_skip(info, "chưa có ArgoCD", "setup/kind/argocd", "devops-sops-age")
+
+
+def gitops_tree(root: Path, value: str) -> Path:
+    (root / "app").mkdir(parents=True, exist_ok=True)
+    (root / "app" / "kustomization.yaml").write_text("resources: [cm.yaml]\n", encoding="utf-8")
+    (root / "app" / "cm.yaml").write_text(f"apiVersion: v1\nkind: ConfigMap\nmetadata: {{name: web}}\ndata: {{v: '{value}'}}\n",
+                                          encoding="utf-8")
+    (root / ".git").mkdir(exist_ok=True)
+    (root / ".git" / "config").write_text("[core]\n\thooksPath = /tmp/khong-duoc-dung\n", encoding="utf-8")
+    return root
+
+
+def lab_git(lab, *args) -> str:
+    return lab._git_repo.out(*args)
+
+
+def test_gitops_repo_isolated_per_lab(monkeypatch, tmp_path):
+    fake = ArgoFake(monkeypatch)
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as a, testkit.KubeLab() as b:
+        url_a, url_b = a.gitops_repo(source), b.gitops_repo(source)
+        assert url_a == a.repo_url and url_b == b.repo_url and url_a != url_b
+        for lab, other in ((a, b), (b, a)):
+            writes = [c for c in fake.sandbox_calls if c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig)
+                      and ("cp" in c["cmd"] or "exec" in c["cmd"])]
+            text = "\n".join(" ".join(c["cmd"]) for c in writes)
+            assert f"/srv/git/{lab.namespace}.git" in text and other.namespace not in text
+            for call in writes:
+                assert not {"sh", "bash", "dash"} & set(call["cmd"]), call["cmd"]
+                assert lab.kubeconfig.parent not in map(Path, call["readonly"] + call["writable"])
+            assert lab_git(lab, "ls-files").split() == ["app/cm.yaml", "app/kustomization.yaml"]
+            assert re.fullmatch(r"[0-9a-f]{40}", lab.gitops_revision)
+            assert not list(lab._admin.home.glob("*.bundle"))
+        first = a.gitops_revision
+        gitops_tree(source, "2")
+        a.gitops_repo(source)
+        assert a.gitops_revision != first and len(lab_git(a, "log", "--format=%H").split()) == 2
+        assert "v: '2'" in (a.root / "gitops" / "repo" / "app" / "cm.yaml").read_text(encoding="utf-8")
+        assert len(lab_git(b, "log", "--format=%H").split()) == 1
+    removed = [" ".join(c["cmd"]) for c in fake.sandbox_calls if "rm" in c["cmd"] and "-rf" in c["cmd"]]
+    assert any(f"/srv/git/{a.namespace}.git" in r for r in removed) and any(f"/srv/git/{b.namespace}.git" in r for r in removed)
+    assert all(r.count("/srv/git/") == 1 for r in removed)
+
+
+def test_gitops_repo_never_runs_learner_git_config(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as lab:
+        lab.gitops_repo(source)
+        config = (lab.root / "gitops" / "repo" / ".git" / "config").read_text(encoding="utf-8")
+        assert "khong-duoc-dung" not in config
+
+
+def test_gitops_repo_refuses_symlink_and_private_key(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as lab:
+        (source / "app" / "link.yaml").symlink_to(source / "app" / "cm.yaml")
+        with pytest.raises(pytest.fail.Exception, match="symlink"):
+            lab.gitops_repo(source)
+        (source / "app" / "link.yaml").unlink()
+        secret_key = "AGE-SECRET-KEY-1" + "Q" * 58
+        (source / "app" / "keys.txt").write_text(f"# public key: {RECIPIENT}\n{secret_key}\n", encoding="utf-8")
+        with pytest.raises(pytest.fail.Exception) as info:
+            lab.gitops_repo(source)
+        assert "keys.txt" in str(info.value) and secret_key not in str(info.value)
+        assert lab._git_repo is None
+
+
+def argo_app(namespace: str, **change) -> dict:
+    app = {"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": {"name": "web"},
+           "spec": {"project": namespace,
+                    "source": {"repoURL": testkit.kube_git_url(namespace), "path": "app", "targetRevision": "main"},
+                    "destination": {"server": "https://kubernetes.default.svc", "namespace": namespace},
+                    "syncPolicy": {"automated": {"prune": True, "selfHeal": True}}}}
+    for key, value in change.items():
+        if value is None:
+            app["spec"].pop(key)
+        else:
+            app["spec"][key] = value
+    return app
+
+
+FOREIGN_APPS = {
+    "project-default": ({"project": "default"}, "spec.project"),
+    "project-other-lab": ({"project": "devops-ex-0000beef"}, "spec.project"),
+    "dest-namespace": ({"destination": {"server": "https://kubernetes.default.svc", "namespace": "kube-system"}}, "destination"),
+    "dest-cluster": ({"destination": {"server": "https://10.0.0.1:6443", "namespace": "NS"}}, "destination"),
+    "dest-name": ({"destination": {"name": "prod", "namespace": "NS"}}, "destination"),
+    "dest-missing-ns": ({"destination": {"server": "https://kubernetes.default.svc"}}, "destination"),
+    "repo-other-lab": ({"source": {"repoURL": "git://git.devops-git.svc.cluster.local/devops-ex-0000beef.git", "path": "."}},
+                       "repoURL"),
+    "repo-github": ({"source": {"repoURL": "https://github.com/argoproj/argocd-example-apps.git", "path": "guestbook"}},
+                    "repoURL"),
+    "sources-one-bad": ({"source": None, "sources": [{"repoURL": "REPO", "path": "."},
+                                                     {"repoURL": "https://github.com/x/y.git", "path": "."}]}, "repoURL"),
+    "hydrator": ({"sourceHydrator": {"drySource": {"repoURL": "REPO"}}}, "sourceHydrator"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(FOREIGN_APPS))
+def test_application_with_foreign_project_refused(case):
+    namespace = "devops-ex-abc12345"
+    change, needle = FOREIGN_APPS[case]
+    text = json.dumps(change).replace('"NS"', json.dumps(namespace)).replace('"REPO"', json.dumps(testkit.kube_git_url(namespace)))
+    app = argo_app(namespace, **json.loads(text))
+    assert testkit.kube_manifest_problems([argo_app(namespace)], lab_id="abc12345", namespace=namespace) == []
+    problems = testkit.kube_manifest_problems([app], lab_id="abc12345", namespace=namespace)
+    assert any(needle in p for p in problems), problems
+
+
+@pytest.mark.parametrize("kind", ["AppProject", "ApplicationSet"])
+def test_argocd_admin_kinds_refused_statically(kind):
+    doc = {"apiVersion": "argoproj.io/v1alpha1", "kind": kind, "metadata": {"name": "x"}, "spec": {}}
+    problems = testkit.kube_manifest_problems([doc], lab_id="abc12345", namespace="devops-ex-abc12345")
+    assert problems and "bị từ chối" in problems[0]
+
+
+def test_application_policy_in_cluster(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicy"
+                  and i["metadata"]["name"] == f"{lab.namespace}-argocd")
+    spec = policy["spec"]
+    assert spec["failurePolicy"] == "Fail"
+    assert spec["matchConstraints"]["resourceRules"] == [{"apiGroups": ["argoproj.io"], "apiVersions": ["*"],
+                                                          "resources": ["applications"], "operations": ["CREATE", "UPDATE"]}]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in spec["matchConditions"][0]["expression"]
+    text = json.dumps(spec["validations"])
+    for needle in (f"object.spec.project == '{lab.namespace}'", f"object.spec.destination.namespace == '{lab.namespace}'",
+                   "https://kubernetes.default.svc", lab.repo_url, "sourceHydrator", "object.spec.sources.all"):
+        assert needle in text, needle
+    probes = [json.loads(c["input"]) for c in fake.calls_with("--dry-run=server")]
+    [probe] = [p for p in probes if p["kind"] == "Application"]
+    assert probe["metadata"]["name"] == f"{lab.namespace}-probe-argocd" and probe["spec"]["project"] == "default"
+
+
+def test_application_policy_probe_only_with_argocd(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    assert any(i["metadata"]["name"] == f"{lab.namespace}-argocd" for i in bootstrap_items(fake))
+    assert not any(json.loads(c["input"])["kind"] == "Application" for c in fake.calls_with("--dry-run=server"))
+    assert not [c for c in fake.sandbox_calls if "applications.argoproj.io" in c["cmd"] and "delete" in c["cmd"]]
+
+
+ARGOCD_OK = {
+    "crd applications.argoproj.io": (0, "customresourcedefinition.apiextensions.k8s.io/applications.argoproj.io\n"),
+    "argocd-cmd-params-cm": (0, "devops-ex-*"),
+    "configmap argocd-cm -o": (0, "true"),
+    "appprojects.argoproj.io default": (0, "[][]"),
+    "statefulset argocd-application-controller": (0, "1"),
+    "deployment argocd-repo-server": (0, "1"),
+    "configmap devops-sops-age-public": (0, RECIPIENT),
+    "deployment git": (0, "1"),
+}
+
+
+def argocd_fake(monkeypatch, answers):
+    fake = KubeFake(monkeypatch)
+    calls = []
+
+    def run(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        calls.append(joined)
+        for key, (code, out) in answers.items():
+            if key in joined:
+                return subprocess.CompletedProcess(cmd, code, out, "" if code == 0 else "NotFound")
+        return fake.run_sandboxed(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return calls
+
+
+def test_require_argocd_ok_never_reads_private_key(monkeypatch):
+    calls = argocd_fake(monkeypatch, ARGOCD_OK)
+    testkit.Exercise.require_argocd()
+    assert len([c for c in calls if c.startswith("kubectl")]) == len(ARGOCD_OK)
+    assert not any(" secret" in c or "secrets" in c for c in calls), calls
+
+
+@pytest.mark.parametrize("broken,answer,needle", [
+    ("crd applications.argoproj.io", (1, ""), "CRD applications.argoproj.io"),
+    ("argocd-cmd-params-cm", (0, ""), "application.namespaces"),
+    ("argocd-cmd-params-cm", (0, "devops-ex-abc"), "application.namespaces"),
+    ("configmap argocd-cm -o", (0, "false"), "impersonation"),
+    ("appprojects.argoproj.io default", (0, "[\"*\"][{\"namespace\":\"*\",\"server\":\"*\"}]"), "AppProject default"),
+    ("statefulset argocd-application-controller", (0, "0"), "application-controller"),
+    ("deployment argocd-repo-server", (0, ""), "Secret argocd/devops-sops-age"),
+    ("configmap devops-sops-age-public", (1, ""), "devops-sops-age-public"),
+    ("configmap devops-sops-age-public", (0, "AGE-SECRET-KEY-1XYZ"), "devops-sops-age-public"),
+    ("deployment git", (0, "0"), "git server"),
+])
+def test_require_argocd_messages(monkeypatch, broken, answer, needle):
+    answers = dict(ARGOCD_OK)
+    answers[broken] = answer
+    argocd_fake(monkeypatch, answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_argocd()
+    assert_skip(info, needle, "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/argocd",
+                "20-default-project.yaml", "create secret generic devops-sops-age", "age-keygen -y", "image-archive")
+
+
+def test_require_argocd_needs_cluster_first(monkeypatch):
+    KubeFake(monkeypatch, clusters="\n")
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_argocd()
+    assert_skip(info, "Chưa có cluster kind devops-lab")
+
+
+def test_age_private_key_never_in_sandbox(monkeypatch, tmp_path):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        assert lab.sops_age_recipient == lab.age_public_key == RECIPIENT
+        lab.kubectl("get", "pods")
+        lab.run(["kubectl", "get", "applications"])
+        learner = [c for c in fake.sandbox_calls if c["env"]["KUBECONFIG"] == str(lab.kubeconfig)]
+    reads = [c["cmd"] for c in fake.sandbox_calls if "devops-sops-age-public" in c["cmd"]]
+    assert reads == [[*reads[0][:1], "-n", "argocd", "get", "configmap", "devops-sops-age-public", "-o", "jsonpath={.data.recipient}"]]
+    for call in fake.sandbox_calls:
+        assert not {"secret", "secrets", "devops-sops-age"} & set(call["cmd"]), call["cmd"]
+    assert learner
+    for call in learner:
+        assert all(Path(p).is_relative_to(lab.root) for p in call["readonly"] + call["writable"])
+        assert not any("SOPS" in key or "AGE" in key for key in call["env"])
+
+
+def test_age_private_key_only_in_cmp_sidecar():
+    import yaml
+
+    folder = testkit.KUBE_ARGOCD_DIR
+    texts = {p.name: p.read_text(encoding="utf-8") for p in folder.iterdir() if p.is_file()}
+    assert not any("AGE-SECRET-KEY" in text for text in texts.values())
+    kustomization = yaml.safe_load(texts["kustomization.yaml"])
+    [patch] = [p for p in kustomization["patches"] if p["target"]["name"] == "argocd-repo-server"]
+    spec = yaml.safe_load(patch["patch"])["spec"]["template"]["spec"]
+    [volume] = [v for v in spec["volumes"] if "secret" in v]
+    assert volume["secret"]["secretName"] == testkit.KUBE_ARGOCD_AGE_SECRET
+    mounting = [c["name"] for c in spec["containers"] + spec["initContainers"]
+                if any(m["name"] == volume["name"] for m in c.get("volumeMounts", []))]
+    assert mounting == [testkit.KUBE_ARGOCD_CMP]
+    sidecar = next(c for c in spec["containers"] if c["name"] == testkit.KUBE_ARGOCD_CMP)
+    assert all(m.get("readOnly") for m in sidecar["volumeMounts"] if m["name"] in (volume["name"], "custom-tools"))
+    for name, text in texts.items():
+        if name.endswith(".yaml"):
+            for doc in yaml.safe_load_all(text):
+                assert not (isinstance(doc, dict) and doc.get("kind") == "Secret"
+                            and doc["metadata"]["name"] == testkit.KUBE_ARGOCD_AGE_SECRET), name
+
+
+def test_argocd_wait_waits_for_latest_revision(monkeypatch, tmp_path):
+    synced = {"health": {"status": "Healthy"}, "sync": {"status": "Synced", "revision": "a" * 40},
+              "operationState": {"phase": "Succeeded"}}
+    fake = ArgoFake(monkeypatch, app_status=[synced, synced])
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    with testkit.KubeLab() as lab:
+        assert lab.argocd_wait("web") == synced
+        lab.gitops_revision = "b" * 40
+        later = {**synced, "sync": {"status": "Synced", "revision": "b" * 40}}
+        running = {**later, "operationState": {"phase": "Running"}}
+        fake.app_status = [synced, running, later]
+        assert lab.argocd_wait("web")["sync"]["revision"] == "b" * 40
+        reads = [c for c in fake.sandbox_calls if "applications.argoproj.io" in c["cmd"] and "json" in c["cmd"]]
+        assert reads and all(c["env"]["KUBECONFIG"] == str(lab.kubeconfig) for c in reads)
+        with pytest.raises(ValueError):
+            lab.argocd_wait("Web; rm")
+
+
+def test_argocd_wait_failure_message(monkeypatch):
+    stuck = {"health": {"status": "Degraded"}, "sync": {"status": "OutOfSync", "revision": "c" * 40},
+             "operationState": {"phase": "Failed", "message": "one or more objects failed to apply"},
+             "conditions": [{"type": "SyncError", "message": "namespace default is not permitted"}],
+             "resources": [{"kind": "Secret", "name": "db"}]}
+    ArgoFake(monkeypatch, app_status=[stuck])
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    with testkit.KubeLab() as lab:
+        clock = iter(range(0, 10_000, 100))
+        monkeypatch.setattr(testkit.time, "monotonic", lambda: next(clock))
+        with pytest.raises(pytest.fail.Exception) as info:
+            lab.argocd_wait("web", timeout=5)
+    text = str(info.value)
+    for needle in ("health=Degraded", "sync=OutOfSync", "Failed", "namespace default is not permitted"):
+        assert needle in text, text
+    assert '"Secret"' not in text
+
+
+def test_argocd_setup_pinned_and_documented():
+    import hashlib
+
+    folder = testkit.KUBE_ARGOCD_DIR
+    sums = dict(reversed(line.split()) for line in (folder / "SHA256SUMS").read_text(encoding="utf-8").splitlines())
+    assert set(sums) == {p.name for p in folder.iterdir() if p.is_file() and p.name != "SHA256SUMS"}
+    for name, digest in sums.items():
+        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest, name
+    assert sums["00-argocd-v3.5.6-core-install.yaml"] == "d3d9d3555ad77eb4b6d27b1ec0d2af7978a91537e84d54631f983c227f0a3d31"
+    text = "\n".join((folder / name).read_text(encoding="utf-8") for name in sums)
+    images = set(re.findall(r"image: (\S+)", text))
+    assert images == {testkit.KUBE_ARGOCD_IMAGE, testkit.KUBE_ARGOCD_REDIS_IMAGE, testkit.KUBE_ARGOCD_SOPS_IMAGE}
+    kustomization = (folder / "kustomization.yaml").read_text(encoding="utf-8")
+    for needle in ("application.namespaces: devops-ex-*", 'application.sync.impersonation.enabled: "true"', "unsetOnly"):
+        assert needle in kustomization + (folder / "namespace.yaml").read_text(encoding="utf-8"), needle
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    for needle in (testkit.KUBE_ARGOCD_IMAGE_DIGEST, testkit.KUBE_ARGOCD_REDIS_IMAGE_DIGEST, testkit.KUBE_ARGOCD_SOPS_IMAGE_DIGEST,
+                   "setup/kind/argocd", "devops-sops-age-public", sums["00-argocd-v3.5.6-core-install.yaml"][:16]):
+        assert needle in doc, needle
+
+
+@pytest.mark.skipif(not shutil.which("kubectl"), reason="Cần kubectl để render kustomization")
+def test_argocd_rendered_manifests_fail_closed(tmp_path):
+    import yaml
+
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "KUBECONFIG": str(tmp_path / "none"), "KUBERC": "off"}
+    result = subprocess.run(["kubectl", "kustomize", str(testkit.KUBE_ARGOCD_DIR)], capture_output=True, text=True, env=env,
+                            timeout=120)
+    assert result.returncode == 0, result.stderr
+    docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+    namespaces = {d["metadata"].get("namespace") for d in docs} - {None}
+    assert namespaces == {"argocd", "devops-git"}
+    for doc in docs:
+        if doc["kind"] in ("Deployment", "StatefulSet"):
+            spec = doc["spec"]["template"]["spec"]
+            for container in spec.get("initContainers", []) + spec["containers"]:
+                assert container.get("imagePullPolicy") == "Never", (doc["metadata"]["name"], container["name"])
+    git = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "git")
+    command = git["spec"]["template"]["spec"]["containers"][0]["command"]
+    assert command[:2] == ["git", "daemon"] and not any("receive-pack" in part for part in command)
+    policy = next(d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["namespace"] == "devops-git")
+    assert policy["spec"]["ingress"][0]["from"] == [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "argocd"}},
+                                                     "podSelector": {"matchLabels": {"app.kubernetes.io/name": "argocd-repo-server"}}}]
+    labelled = [d["metadata"]["name"] for d in docs if "devops-ex" in (d["metadata"].get("labels") or {})]
+    assert labelled == []
+    appset = next(d for d in docs if d["metadata"]["name"] == "argocd-applicationset-controller" and d["kind"] == "Deployment")
+    assert appset["spec"]["replicas"] == 0
+
+
+def apply_as_learner(lab, doc: dict) -> subprocess.CompletedProcess:
+    return lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
+
+
+@KUBE_REQUIRED
+def test_argocd_application_syncs_only_into_lab_namespace_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as a, testkit.KubeLab() as b:
+        a.argocd_project()
+        b.argocd_project()
+        a.gitops_repo(source)
+        b.gitops_repo(source)
+        assert apply_as_learner(a, argo_app(a.namespace)).returncode == 0
+        started = time.monotonic()
+        status = a.argocd_wait("web", timeout=120)
+        first_sync = time.monotonic() - started
+        assert status["sync"]["revision"] == a.gitops_revision
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "1"
+        gitops_tree(source, "2")
+        a.gitops_repo(source)
+        started = time.monotonic()
+        a.argocd_wait("web", timeout=120)
+        resync = time.monotonic() - started
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "2"
+        print(f"ArgoCD: sync đầu {first_sync:.1f}s, sync lại sau commit mới {resync:.1f}s")
+        foreign = [
+            argo_app(a.namespace, project="default"),
+            argo_app(a.namespace, project=b.namespace),
+            argo_app(a.namespace, destination={"server": "https://kubernetes.default.svc", "namespace": "default"}),
+            argo_app(a.namespace, destination={"server": "https://kubernetes.default.svc", "namespace": b.namespace}),
+            argo_app(a.namespace, destination={"server": "https://10.0.0.1:6443", "namespace": a.namespace}),
+            argo_app(a.namespace, source={"repoURL": b.repo_url, "path": "app", "targetRevision": "main"}),
+        ]
+        for index, doc in enumerate(foreign):
+            doc["metadata"]["name"] = f"foreign-{index}"
+            result = apply_as_learner(a, doc)
+            assert result.returncode != 0 and f"{a.namespace}-argocd" in result.stderr, (doc["spec"], result.stderr)
+        assert not a.can_i("create", "appprojects.argoproj.io", serviceaccount="devops-ex-learner")
+        assert not a.can_i("create", "applications.argoproj.io", serviceaccount="devops-ex-learner", all_namespaces=True)
+        bypass = {
+            "admin-default-project": argo_app(a.namespace, project="default"),
+            "admin-foreign-namespace": argo_app(a.namespace, destination={"server": "https://kubernetes.default.svc",
+                                                                         "namespace": b.namespace}),
+            "admin-foreign-repo": argo_app(a.namespace, source={"repoURL": b.repo_url, "path": "app", "targetRevision": "main"}),
+        }
+        for name, doc in bypass.items():
+            doc["metadata"].update(name=name, namespace=a.namespace)
+            assert admin_kubectl("apply", "-f", "-", input=json.dumps(doc)).returncode == 0
+        deadline = time.monotonic() + 60
+        refused = {}
+        while time.monotonic() < deadline and len(refused) < len(bypass):
+            for name in bypass:
+                got = json.loads(admin_kubectl("-n", a.namespace, "get", "applications.argoproj.io", name, "-o", "json").stdout)
+                messages = " ".join(c.get("message", "") for c in (got.get("status") or {}).get("conditions") or [])
+                if "not permitted" in messages or "do not match any of the allowed destinations" in messages:
+                    refused[name] = messages
+            time.sleep(2)
+        assert set(refused) == set(bypass), refused
+        assert b.kubectl("get", "configmap", "web", "--ignore-not-found", "-o", "name").stdout.strip() == ""
+        escape = tmp_path / "escape"
+        (escape / "app").mkdir(parents=True)
+        (escape / "app" / "kustomization.yaml").write_text("resources: [objects.yaml]\n", encoding="utf-8")
+        (escape / "app" / "objects.yaml").write_text(
+            f"apiVersion: v1\nkind: ConfigMap\nmetadata: {{name: escaped, namespace: {b.namespace}}}\ndata: {{x: '1'}}\n---\n"
+            f"apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata: {{name: {a.namespace}-escape, labels: "
+            f"{{devops-ex: {a.id}}}}}\nrules: []\n---\n"
+            "apiVersion: v1\nkind: ServiceAccount\nmetadata: {name: impersonated}\n", encoding="utf-8")
+        a.gitops_repo(escape)
+        with pytest.raises(pytest.fail.Exception) as info:
+            a.argocd_wait("web", timeout=60)
+        assert "not permitted in project" in str(info.value) or "is forbidden" in str(info.value), str(info.value)
+        assert admin_kubectl("-n", b.namespace, "get", "configmap", "escaped").returncode != 0
+        assert admin_kubectl("get", "clusterrole", f"{a.namespace}-escape").returncode != 0
+    for lab in (a, b):
+        assert testkit.kube_leftovers(lab.id) == []
+
+
+@KUBE_REQUIRED
+@SANDBOX_REQUIRED
+def test_argocd_sops_secret_decrypted_on_sync_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    testkit.Exercise.require_tool("sops", testkit.SOPS_MIN_VERSION)
+    value = "mat-khau-" + os.urandom(6).hex()
+    with testkit.KubeLab() as lab:
+        lab.argocd_project()
+        recipient = lab.sops_age_recipient
+        assert re.fullmatch(r"age1[0-9a-z]{58}", recipient)
+        repo = tmp_path / "repo"
+        (repo / "app").mkdir(parents=True)
+        (repo / ".sops.yaml").write_text(f"creation_rules:\n  - path_regex: .*\\.enc\\.yaml$\n    encrypted_regex: ^(data|stringData)$\n"
+                                         f"    age: {recipient}\n", encoding="utf-8")
+        (repo / "app" / "kustomization.yaml").write_text("resources: [secret.enc.yaml]\n", encoding="utf-8")
+        (repo / "app" / "secret.enc.yaml").write_text(
+            f"apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\nstringData:\n  password: {value}\n", encoding="utf-8")
+        home = tmp_path / "home"
+        home.mkdir()
+        encrypt = testkit.run_sandboxed(["sops", "encrypt", "--in-place", "app/secret.enc.yaml"], writable=[repo, home], cwd=repo,
+                                        env={"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config")})
+        assert encrypt.returncode == 0, encrypt.stderr
+        assert not any(value in p.read_text(encoding="utf-8") for p in repo.rglob("*") if p.is_file())
+        lab.gitops_repo(repo)
+        app = argo_app(lab.namespace)
+        app["spec"]["source"].update(plugin={"name": testkit.KUBE_ARGOCD_CMP})
+        assert apply_as_learner(lab, app).returncode == 0
+        status = lab.argocd_wait("web", timeout=120)
+        assert value not in json.dumps(status)
+        got = lab.kubectl("get", "secret", "db", "-o", "jsonpath={.data.password}").stdout
+        assert base64.b64decode(got).decode() == value, "Secret sau khi sync không có đúng giá trị đã mã hoá"
+        described = lab.kubectl("describe", "application.argoproj.io", "web").stdout
+        assert value not in described
+    assert testkit.kube_leftovers(lab.id) == []

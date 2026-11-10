@@ -194,7 +194,7 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
     return errors
 
 
-TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault")
+TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault", "argocd")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
 NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
 TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
@@ -389,9 +389,10 @@ def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
 
 
 def check_tool_calls(path: Path) -> list[str]:
-    """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu, sops, age, age-keygen, vault trực tiếp;
-    đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab,
-    kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với sops_env/vault_env).
+    """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu, sops, age, age-keygen, vault, argocd trực
+    tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab,
+    kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với sops_env/vault_env; ArgoCD qua
+    KubeLab.argocd_project, gitops_repo, argocd_wait).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
     `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
@@ -773,6 +774,8 @@ TOOL_DENYLIST_BAD = {
     "list-age-keygen": 'subprocess.run(["age-keygen", "-o", "key.txt"])\n',
     "string-age": 'subprocess.run("age -d -i key.txt secret.age", shell=True)\n',
     "list-vault": 'subprocess.run(["vault", "kv", "get", "secret/app"])\n',
+    "list-argocd": 'subprocess.run(["argocd", "app", "sync", "web", "--core"])\n',
+    "string-argocd": 'subprocess.run("argocd app wait web --health", shell=True)\n',
     "shell-c-vault": 'subprocess.run(["bash", "-c", "vault login root && vault kv put secret/x a=b"])\n',
     "tuple-docker": "subprocess.run(('docker', 'ps', '-a'))\n",
     "list-kind": 'subprocess.run(["kind", "get", "clusters"], check=True)\n',
@@ -869,6 +872,8 @@ TOOL_DENYLIST_GOOD = {
     "learner-script-string": 'subprocess.run("./deploy.sh docker", shell=True)\n',
     "echo-mentions-tool": 'subprocess.run("echo use kubectl here", shell=True)\n',
     "kube-lab": 'with KubeLab() as lab:\n    lab.apply_learner(ex.path("k8s"))\n    lab.kubectl("get", "deploy", "api")\n    lab.helm("list")\n',
+    "kube-lab-gitops": ('ex.require_argocd()\nwith KubeLab() as lab:\n    lab.argocd_project()\n    lab.gitops_repo(ex.path("gitops"))\n'
+                        '    lab.apply_learner(ex.path("app.yaml"))\n    lab.argocd_wait("web")\n    r = lab.sops_age_recipient\n'),
     "kube-lab-run-script": 'with KubeLab() as lab:\n    lab.run(["bash", "deploy.sh"], readonly=[ex.target])\n',
     "kind-node-exec": 'kind_node_exec("devops-lab-control-plane", "etcdctl", "version")\n',
     "kind-node-exec-kubectl-argv": 'kind_node_exec("devops-lab-control-plane", "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "get", "nodes")\n',
