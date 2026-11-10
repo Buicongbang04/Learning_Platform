@@ -158,8 +158,8 @@ def order_problems(docs) -> list[str]:
     if HOOK not in (migrate["metadata"].get("annotations") or {}):
         found.append("migrate vẫn là hook của ArgoCD (chạy lại mỗi lần sync)")
     if not order(postgres) < order(migrate):
-        found.append(f"migrate (phase, wave) {order(migrate)} phải chạy sau postgres {order(postgres)}: lúc migrate chạy, "
-                     "postgres phải đã có")
+        found.append(f"theo thứ tự ArgoCD áp object, migrate (phase, wave) {order(migrate)} chạy trước ít nhất một thứ nó "
+                     "cần lúc khởi động")
     if not order(migrate) < order(api):
         found.append(f"api {order(api)} chỉ được tạo sau khi migrate {order(migrate)} xong")
     return found
