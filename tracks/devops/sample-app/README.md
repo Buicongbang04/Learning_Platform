@@ -24,6 +24,7 @@ flowchart LR
 | Seed | `olist_shop/seed.py` (`python -m olist_shop.seed <thư mục CSV>`) | Nạp `orders`, `order_items`, `customers` |
 | Cấu hình | `olist_shop/settings.py` | Đọc biến môi trường |
 | Log | `olist_shop/log.py` | Log JSON một dòng mỗi sự kiện |
+| Trace | `olist_shop/tracing.py` | Trace và log OpenTelemetry, chỉ bật khi có `OTEL_EXPORTER_OTLP_ENDPOINT` |
 
 ## Endpoint
 
@@ -54,6 +55,8 @@ Worker phơi metrics `jobs_processed_total`, `jobs_failed_total` ở cổng `WOR
 | `LOG_LEVEL` | `INFO` | |
 | `APP_VERSION` | `dev` | Trả trong `/healthz`, dùng để kiểm bản đang chạy sau deploy |
 | `WORKER_METRICS_PORT` | `9101` | Chỉ worker dùng |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | rỗng | Ví dụ `http://otel-collector:4317` (OTLP gRPC). Rỗng thì không xuất trace, không import OpenTelemetry |
+| `OTEL_SERVICE_NAME` | `olist-shop-api` / `olist-shop-worker` | Đổi tên service trong trace |
 | `OLIST_SHOP_PG_PORT` / `OLIST_SHOP_REDIS_PORT` / `OLIST_SHOP_API_PORT` | `25432` / `26379` / `28000` | Cổng trên máy host, chỉ mở trên `127.0.0.1` (Postgres mật khẩu `olist`, Redis không mật khẩu) |
 | `DEVOPS_CPUSET` | rỗng | Ghim core cho mọi container, ví dụ `12-35` trên máy dùng chung |
 
@@ -66,13 +69,29 @@ Postgres báo trùng bảng, worker thử lại vài lần, còn nếu vẫn ch�
 
 ## Log
 
-Mỗi sự kiện là một dòng JSON có `ts`, `level`, `msg`, `request_id`. API lấy `request_id` từ header
+Mỗi sự kiện là một dòng JSON có `ts`, `level`, `msg`, `request_id`, `trace_id`. API lấy `request_id` từ header
 `X-Request-ID` (hoặc sinh mới) và trả lại trong header response, nên bạn lần được một request qua
-Nginx, API và log. Ở worker, `request_id` là `job_id`.
+Nginx, API và log. Ở worker, `request_id` là `job_id`. `trace_id` là trace OpenTelemetry đang chạy, `-` khi trace tắt.
 
 ```json
-{"ts": "2026-11-01T08:00:00.000+00:00", "level": "INFO", "msg": "request", "request_id": "abc", "logger": "olist_shop.api", "method": "GET", "path": "/healthz", "status": 200, "duration_ms": 1.2}
+{"ts": "2026-11-01T08:00:00.000+00:00", "level": "INFO", "msg": "request", "request_id": "abc", "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "logger": "olist_shop.api", "method": "GET", "path": "/healthz", "status": 200, "duration_ms": 1.2}
 ```
+
+## Trace
+
+Khi có `OTEL_EXPORTER_OTLP_ENDPOINT`, API và worker gửi trace và log qua OTLP gRPC (SDK OpenTelemetry Python 1.45.1, ghim trong
+`requirements.txt`):
+
+| Span | Kind | Thuộc tính chính |
+| --- | --- | --- |
+| `GET /orders/{order_id}` (mỗi request) | `SERVER` | `http.request.method`, `http.route`, `http.response.status_code`; nối tiếp trace từ header `traceparent` nếu có |
+| `SELECT olist`, `INSERT olist`... (mỗi query) | `CLIENT` | `db.system.name`, `db.namespace`, `db.query.text` (câu SQL có tham số, không có giá trị) |
+| `send olist:jobs` (đẩy job) | `PRODUCER` | `messaging.destination.name`, `messaging.message.id` |
+| `process olist:jobs` (worker xử lý job) | `CONSUMER` | Con của `send olist:jobs`: context W3C đi trong trường `otel` của payload job |
+
+Vì context đi theo job, một request `POST /jobs/recompute` và lần worker tính lại doanh thu nằm trong **cùng một trace**. Log
+cũng được gửi qua OTLP (nội dung là đúng dòng JSON ở trên) nên trong Loki bạn tìm log theo `trace_id` rồi mở trace trong Jaeger.
+Không có biến này thì app không import OpenTelemetry và không mở kết nối nào.
 
 ## Chạy bằng Docker Compose
 

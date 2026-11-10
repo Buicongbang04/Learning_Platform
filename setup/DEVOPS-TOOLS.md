@@ -17,7 +17,7 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | nginx (image Docker `nginx:1.30.6-alpine`, kèm `python:3.12.16-alpine3.24` cho backend giả) | 05 Web server & proxy (chạy trong container, không cài lên máy) | Đúng tag đã ghim | [Cài đặt](../tracks/devops/modules/05-web-server-proxy/README.md#0-cài-đặt) |
 | docker buildx (BuildKit, builder driver `docker`), image `python:3.12.16-slim-trixie`, `gcr.io/distroless/python3-debian13:nonroot` | 06 Containers (build image trong test bằng BuildKit của Docker) | buildx có sẵn trong Docker Engine; image đúng tag/digest đã ghim | [Cài đặt](../tracks/devops/modules/06-containers/README.md#0-cài-đặt) |
 | trivy (kèm DB lỗ hổng ở `~/.cache/devops-track/trivy`) | 06 Containers | 0.76 | [Cài đặt](../tracks/devops/modules/06-containers/README.md#0-cài-đặt) |
-| act | 07 CI/CD & artifacts (chạy workflow GitHub Actions trên máy; image runner `devops-track/act-runner:1.0-9d5fff50` (đuôi là hash của Dockerfile và requirements-ci.txt, đổi khi hai tệp đổi) build một lần từ `setup/act-runner/` trên `node:24.22.2-trixie-slim`, có sẵn uv, CPython 3.12.13 và wheel nên chấm offline; cache action ở `~/.cache/devops-track/act`) | 0.2.94 | [Cài đặt](../tracks/devops/modules/07-cicd-artifacts/README.md#0-cài-đặt) |
+| act | 07 CI/CD & artifacts (chạy workflow GitHub Actions trên máy; image runner `devops-track/act-runner:1.0-a5037b3b` (đuôi là hash của Dockerfile và requirements-ci.txt, đổi khi hai tệp đổi) build một lần từ `setup/act-runner/` trên `node:24.22.2-trixie-slim`, có sẵn uv, CPython 3.12.13 và wheel nên chấm offline; cache action ở `~/.cache/devops-track/act`) | 0.2.94 | [Cài đặt](../tracks/devops/modules/07-cicd-artifacts/README.md#0-cài-đặt) |
 | actionlint | 07 CI/CD & artifacts (kiểm tĩnh workflow; thiếu thì riêng test actionlint skip) | 1.7 | [Cài đặt](../tracks/devops/modules/07-cicd-artifacts/README.md#0-cài-đặt) |
 | tofu (OpenTofu) | 08 IaC & provisioning (bản đã kiểm 1.13.2; test chạy `tofu` trong sandbox với LocalStack riêng `localstack-devops`, provider `hashicorp/aws` 6.12.0 tải một lần vào `~/.cache/devops-track/tofu-plugins` rồi dùng offline; trivy của module 06 quét chính sách ở Intermediate 04) | 1.10 (1.11 cho biến `ephemeral`: Basic 02, capstone m05) | [Cài đặt](../tracks/devops/modules/08-iac-provisioning/README.md#0-cài-đặt) |
 | ansible-core (`ansible`, `ansible-playbook`, `ansible-inventory`, `ansible-vault`...) | 09 Configuration management (bản đã kiểm 2.21.5, cài vào venv riêng `~/.cache/devops-track/ansible` bằng `uv pip install --require-hashes -r setup/ansible/requirements.txt`, symlink vào `~/.local/bin`; không thêm vào `pyproject.toml` gốc; test chạy Ansible trong sandbox tới target là container SSH build từ `setup/ansible-target/` trên `python:3.12.16-slim-trixie`) | 2.21 | [Cài đặt](../tracks/devops/modules/09-config-management/README.md#0-cài-đặt) |
@@ -31,6 +31,8 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | vault (CLI) | 12 GitOps & secrets (bản đã kiểm 2.2.1 từ releases.hashicorp.com, kiểm SHA-256 theo `vault_2.2.1_SHA256SUMS`; test chạy `vault` trong sandbox với `vault_env`, không đọc `VAULT_*` hay `~/.vault-token` của máy) | 1.15 | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 | argocd (CLI, tuỳ chọn) | 12 GitOps & secrets (bản đã kiểm 3.5.6, kiểm SHA-256 theo `cli_checksums.txt`; không bài nào cần: bản core của track không có API server, và `argocd --core` v3.5.6 không đọc được Application ngoài namespace `argocd`, nên trạng thái đọc bằng `kubectl`) | Không đặt | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 | ArgoCD và git server (trong cluster, không cài lên máy) | 12 GitOps & secrets (ArgoCD v3.5.6 bản core ghim trong `setup/kind/argocd/`, sidecar CMP `sops-kustomize`, git server chỉ đọc trong `devops-git`; xem [ArgoCD và git server dùng chung](#argocd-và-git-server-dùng-chung)) | Đúng bản đã ghim | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
+| Stack observability (image Docker ghim digest: OTel Collector contrib 0.163.2, Jaeger 2.22.0, Loki 3.7.9, Prometheus v3.5.0, Alertmanager v0.34.1, Grafana 13.2.5; xem [Stack observability](#stack-observability)) | 13 Observability (chạy trong container bằng `testkit.ObsStack`, không cài lên máy) | Đúng tag và digest đã ghim | [Stack observability](#stack-observability) |
+| promtool, amtool | 13 Observability (chạy trong image Prometheus, Alertmanager ghim qua `testkit.promtool`/`amtool`, không cần cài; muốn gõ tay thì dùng `docker run` ở [Stack observability](#stack-observability)) | Đúng bản trong image | [Stack observability](#stack-observability) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
@@ -57,6 +59,9 @@ Hệ quả:
   chạy sau.
 - Lệnh gỡ `rm -f ~/.local/bin/act`, `rm -f ~/.local/bin/kind ~/.local/bin/kubectl` trong module 07, 10 xoá cả bản track MLOps đang
   dùng. Còn học MLOps thì đừng gỡ, hoặc cài lại theo hướng dẫn của track đó.
+- Prometheus và Alertmanager không phải binary trên máy mà là image Docker: track DevOps dùng đúng `prom/prometheus:v3.5.0` và
+  `prom/alertmanager:v0.34.1` như track MLOps (cùng digest), nên không tải thêm và không hạ bản nào. `promtool`, `amtool` của
+  hai track đều chạy trong hai image này. Đừng `docker image rm` hai image khi còn học track kia.
 
 ## Dịch vụ phụ trợ: Mailpit
 
@@ -105,6 +110,51 @@ docker compose -f setup/docker-compose.yml --profile devops rm -s -f -v vault-de
 ```
 
 Vault ở `http://127.0.0.1:18200`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `DEVOPS_VAULT_PORT` trong `setup/.env`. Token root của dev mode là chuỗi cố định cho lab `devops-lab-root` (không phải bí mật, đổi bằng `DEVOPS_VAULT_TOKEN`). Image khai báo `VOLUME /vault/file` và `/vault/logs`, nên lệnh tắt có `-v` để xoá luôn hai volume ẩn danh đi kèm. Test không đọc `VAULT_ADDR`, `VAULT_TOKEN` hay `~/.vault-token` của máy: `vault_env` dựng env từ đầu, với `HOME` tạm riêng nên `vault login` không ghi `.vault-token` vào project của bạn.
+
+## Stack observability
+
+Module 13, 16 và capstone m08, m09 dựng stack observability bằng `testkit.ObsStack` trong một `DockerLab`: OTel Collector,
+Jaeger, Loki, Prometheus, Alertmanager và Grafana cùng project compose với app của bài, cổng trống trên `127.0.0.1`, xoá sạch khi
+test xong. Cấu hình mặc định ở `setup/observability/`. Test không tự kéo image: thiếu image thì skip kèm lệnh. Admin hay người học
+kéo một lần (khoảng 3,4 GB trên đĩa, Grafana chiếm 1,95 GB; Prometheus và Alertmanager có sẵn nếu đã học track MLOps):
+
+```bash
+nice -n 15 docker pull otel/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849 &&
+nice -n 15 docker pull jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17 &&
+nice -n 15 docker pull grafana/loki:3.7.9@sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28 &&
+nice -n 15 docker pull prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996 &&
+nice -n 15 docker pull prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a &&
+nice -n 15 docker pull grafana/grafana:13.2.5@sha256:9f7aa1e1e3246aade5792d35a738049f7f32f89cd51d1956cf426a4e86268a84
+```
+
+Kéo bằng `tag@digest` thì `docker images` hiện tag là `<none>`; testkit tìm image theo đúng chuỗi `tag@digest` nên vẫn thấy.
+Image Prometheus, Alertmanager đã kéo theo tag (track MLOps) cũng được nhận vì digest trùng.
+
+| Thành phần | Bản | Ngày phát hành | Ghi chú |
+|---|---|---|---|
+| OTel Collector contrib | 0.163.2 | 2026-10-21 | Bản contrib vì cần `spanmetrics`, exporter `prometheus`, processor `attributes` |
+| Jaeger | 2.22.0 | 2026-10-06 | Bản 2.x chỉ còn API query v3 (`/api/v3/traces`); lưu trace trong RAM |
+| Loki | 3.7.9 | 2026-10-20 | Nhận log OTLP ở `/otlp`, `trace_id` thành structured metadata |
+| Prometheus | v3.5.0 | LTS, cùng bản track MLOps | Kèm `promtool` |
+| Alertmanager | v0.34.1 | 2026-09-17, cùng bản track MLOps | Kèm `amtool` |
+| Grafana | 13.2.5 | 2026-10-27 | Đọc ẩn danh (Viewer), tắt tải plugin và báo cáo thống kê |
+
+RAM đo 2026-11-11 (cpuset 12-35, `docker stats`): riêng stack khoảng 410 MB (Grafana khoảng 255 MB, Loki 46 MB, Collector 45 MB,
+Prometheus 35 MB, Jaeger 15 MB, Alertmanager 15 MB), khởi động khoảng 13 giây; cùng Olist Shop (api, worker, postgres, redis)
+khoảng 620 MB, khoảng 16 giây khi image app đã build. Mỗi container giới hạn 512 MB. Không service nào tạo volume: dữ liệu nằm
+trong tmpfs và mất khi tắt.
+
+Muốn tự chạy stack ngoài test (ví dụ xem dashboard khi làm module 13): `docker compose -f setup/observability/compose.yaml up -d`,
+Grafana ở `http://127.0.0.1:13300`, Jaeger `16686`, Prometheus `19090`, Alertmanager `19093`, Loki `13100`, OTLP gRPC `14317`, HTTP
+`14318` (đổi bằng biến `DEVOPS_*_PORT` trong tệp compose), tắt bằng `docker compose -f setup/observability/compose.yaml down -v`.
+Olist Shop gửi trace và log tới đó khi đặt `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:14317`. Gõ `promtool`, `amtool` bằng tay:
+
+```bash
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$PWD:/work:ro" -w /work --entrypoint /bin/promtool \
+  prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996 test rules tests.yml
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$PWD:/work:ro" -w /work --entrypoint /bin/amtool \
+  prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a check-config alertmanager.yml
+```
 
 ## Cluster kind devops-lab
 

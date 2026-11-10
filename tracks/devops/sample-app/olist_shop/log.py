@@ -11,6 +11,14 @@ request_id: ContextVar[str] = ContextVar("request_id", default="-")
 _RESERVED = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime", "color_message"}
 
 
+def current_trace_id() -> str:
+    trace = sys.modules.get("opentelemetry.trace")
+    if trace is None:
+        return "-"
+    span = trace.get_current_span().get_span_context()
+    return format(span.trace_id, "032x") if span.is_valid else "-"
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         event = {
@@ -18,6 +26,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "msg": record.getMessage(),
             "request_id": request_id.get(),
+            "trace_id": current_trace_id(),
             "logger": record.name,
         }
         event.update({k: v for k, v in record.__dict__.items() if k not in _RESERVED})

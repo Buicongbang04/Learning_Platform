@@ -1,0 +1,77 @@
+name: devops-observability
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
+    cpuset: "${DEVOPS_CPUSET:-}"
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector:/etc/otelcol-contrib:ro
+    ports:
+      - "127.0.0.1:${DEVOPS_OTLP_GRPC_PORT:-14317}:4317"
+      - "127.0.0.1:${DEVOPS_OTLP_HTTP_PORT:-14318}:4318"
+      - "127.0.0.1:${DEVOPS_OTEL_HEALTH_PORT:-13133}:13133"
+    depends_on: [jaeger, loki]
+
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17
+    cpuset: "${DEVOPS_CPUSET:-}"
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    ports:
+      - "127.0.0.1:${DEVOPS_JAEGER_PORT:-16686}:16686"
+
+  loki:
+    image: grafana/loki:3.7.9@sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28
+    cpuset: "${DEVOPS_CPUSET:-}"
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki:/etc/loki:ro
+    tmpfs: ["/loki:size=256m,mode=1777"]
+    ports:
+      - "127.0.0.1:${DEVOPS_LOKI_PORT:-13100}:3100"
+
+  prometheus:
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    cpuset: "${DEVOPS_CPUSET:-}"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=2h
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+    tmpfs: ["/prometheus:size=256m,mode=1777"]
+    ports:
+      - "127.0.0.1:${DEVOPS_PROMETHEUS_PORT:-19090}:9090"
+    depends_on: [alertmanager]
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
+    cpuset: "${DEVOPS_CPUSET:-}"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+    tmpfs: ["/alertmanager:size=32m,mode=1777"]
+    ports:
+      - "127.0.0.1:${DEVOPS_ALERTMANAGER_PORT:-19093}:9093"
+
+  grafana:
+    image: grafana/grafana:13.2.5@sha256:9f7aa1e1e3246aade5792d35a738049f7f32f89cd51d1956cf426a4e86268a84
+    cpuset: "${DEVOPS_CPUSET:-}"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${DEVOPS_GRAFANA_PORT:-13300}:3000"
+    depends_on: [prometheus, loki, jaeger]

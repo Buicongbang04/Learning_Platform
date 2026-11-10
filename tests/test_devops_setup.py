@@ -331,3 +331,22 @@ def test_devops_tools_documents_sops_age_vault():
     assert "| age, age-keygen |" in text and testkit.AGE_VERSION in text and testkit.AGE_MIN_VERSION in text
     assert testkit.VAULT_DEVOPS_START in text and "rm -s -f -v vault-devops" in text and "DEVOPS_VAULT_PORT" in text
     assert _services()["vault-devops"]["image"] == testkit.VAULT_IMAGE
+
+
+def test_devops_tools_documents_observability_stack():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    for image in testkit.OBS_IMAGES.values():
+        assert f"docker pull {image}" in text, image
+    assert "| promtool, amtool |" in text and "## Stack observability" in text
+    assert "setup/observability/compose.yaml" in text and "RAM" in text
+    spec = (ROOT / "CONTENT_SPEC.md").read_text(encoding="utf-8")
+    assert "testkit.ObsStack(lab, project=ex.target)" in spec and "testkit.promtool(" in spec
+    assert "`promtool`, `amtool` thẳng" in spec
+
+
+def test_sample_app_otel_pinned_and_absent_from_ansible_worker():
+    app = (ROOT / "tracks" / "devops" / "sample-app" / "requirements.txt").read_text(encoding="utf-8").split()
+    otel = [line for line in app if line.startswith("opentelemetry")]
+    assert otel and all("==" in line for line in otel)
+    worker = (testkit.ANSIBLE_TARGET_DIR / "requirements-worker.txt").read_text(encoding="utf-8")
+    assert "opentelemetry" not in worker, "Worker của bài Ansible chạy không có OpenTelemetry (chỉ bật khi có endpoint)"

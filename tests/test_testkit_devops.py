@@ -6945,3 +6945,307 @@ def test_gitops_repo_counts_bytes_read_not_reported_size(monkeypatch, tmp_path):
         with pytest.raises(pytest.fail.Exception, match="vượt 1000 byte"):
             lab.gitops_repo(source)
         assert lab._git_repo is None
+
+
+OBS_SERVICES = {"otel-collector", "jaeger", "loki", "prometheus", "alertmanager", "grafana"}
+OBS_DATA_DIRS = {"prometheus": "/prometheus", "alertmanager": "/alertmanager", "loki": "/loki", "jaeger": "/tmp"}
+
+
+def obs_compose() -> dict:
+    import yaml
+
+    return yaml.safe_load((testkit.OBS_DIR / "compose.yaml").read_text(encoding="utf-8"))
+
+
+def test_obs_images_pinned_by_digest_and_match_compose():
+    assert set(testkit.OBS_IMAGES) == OBS_SERVICES == set(testkit.OBS_READY)
+    for image in testkit.OBS_IMAGES.values():
+        assert re.fullmatch(r"[a-z0-9./-]+:v?\d+\.\d+\.\d+@sha256:[0-9a-f]{64}", image), image
+    services = obs_compose()["services"]
+    assert {name: svc["image"] for name, svc in services.items()} == testkit.OBS_IMAGES
+    for name, svc in services.items():
+        assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", [])), name
+        assert all(volume.startswith("./") and volume.endswith(":ro") for volume in svc.get("volumes", [])), name
+        assert svc["cpuset"] == "${DEVOPS_CPUSET:-}"
+    for name, path in OBS_DATA_DIRS.items():
+        assert any(t.split(":")[0] == path for t in services[name]["tmpfs"]), (
+            f"{name}: image có VOLUME {path}, phải phủ tmpfs để không sinh volume ẩn danh")
+    assert testkit.OBS_PULL.count("docker pull ") == len(testkit.OBS_IMAGES)
+
+
+def test_obs_defaults_point_at_stack_services():
+    import yaml
+
+    prom = yaml.safe_load((testkit.OBS_DIR / "prometheus" / "prometheus.yml").read_text(encoding="utf-8"))
+    targets = {c["job_name"]: c["static_configs"][0]["targets"] for c in prom["scrape_configs"]}
+    assert targets["olist-api"] == ["api:8000"] and targets["olist-worker"] == ["worker:9101"]
+    assert prom["alerting"]["alertmanagers"][0]["static_configs"][0]["targets"] == ["alertmanager:9093"]
+    collector = yaml.safe_load((testkit.OBS_DIR / "otel-collector" / "config.yaml").read_text(encoding="utf-8"))
+    pipelines = collector["service"]["pipelines"]
+    assert "otlp/jaeger" in pipelines["traces"]["exporters"] and pipelines["logs"]["exporters"] == ["otlphttp/loki"]
+    sources = yaml.safe_load((testkit.OBS_DIR / "grafana" / "provisioning" / "datasources" / "datasources.yaml").read_text(encoding="utf-8"))
+    assert {d["uid"] for d in sources["datasources"]} == {"prometheus", "loki", "jaeger"}
+
+
+OBS_PROJECT_COMPOSE = """
+name: olist-cua-nguoi-hoc
+services:
+  api:
+    build: .
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    networks: [backend]
+networks:
+  backend: {}
+"""
+
+
+def test_obs_stage_merges_project_and_overlays_config(tmp_path):
+    import yaml
+
+    project = tmp_path / "project"
+    write_compose(project, OBS_PROJECT_COMPOSE)
+    rules = project / "observability" / "prometheus" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "olist.yml").write_text("groups: []\n", encoding="utf-8")
+    (project / "observability" / "otel-collector").mkdir()
+    (project / "observability" / "otel-collector" / "config.yaml").write_text("receivers: {}\n", encoding="utf-8")
+    (project / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    (project / "entrypoint.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (project / "entrypoint.sh").chmod(0o700)
+    project.chmod(0o700)
+    stage = tmp_path / "stage"
+    stage.mkdir(mode=0o700)
+    file = testkit._obs_stage(stage, project)
+    merged = yaml.safe_load(file.read_text(encoding="utf-8"))
+    assert "name" not in merged, "Tên project do DockerLab đặt (devops-ex-<id>), không lấy name: của người học"
+    assert set(merged["services"]) == OBS_SERVICES | {"api"}
+    assert merged["services"]["api"]["build"] == "."
+    assert merged["services"]["prometheus"]["volumes"] == ["./observability/prometheus:/etc/prometheus:ro"]
+    for name in OBS_SERVICES:
+        assert merged["services"][name]["networks"] == ["default", "backend"]
+    config = stage / "observability"
+    assert (config / "prometheus" / "rules" / "watchdog.yml").is_file(), "Tệp mặc định vẫn còn khi người học thêm rule"
+    assert (config / "prometheus" / "rules" / "olist.yml").read_text(encoding="utf-8") == "groups: []\n"
+    assert (config / "otel-collector" / "config.yaml").read_text(encoding="utf-8") == "receivers: {}\n"
+    assert not (config / "compose.yaml").exists()
+    for path in [stage, *stage.rglob("*")]:
+        wanted = 0o755 if path.is_dir() else 0o644
+        assert path.stat().st_mode & wanted == wanted, f"{path}: container (uid khác) phải đọc được"
+    assert (stage / "entrypoint.sh").stat().st_mode & 0o777 == 0o744, "Giữ bit thực thi của tệp người học"
+    assert (project / "observability" / "otel-collector" / "config.yaml").read_text(encoding="utf-8") == "receivers: {}\n"
+
+
+def test_obs_stage_without_project_has_only_stack(tmp_path):
+    import yaml
+
+    merged = yaml.safe_load(testkit._obs_stage(tmp_path, None).read_text(encoding="utf-8"))
+    assert set(merged["services"]) == OBS_SERVICES
+    assert all("networks" not in svc for svc in merged["services"].values())
+
+
+@pytest.mark.parametrize("name", ["prometheus", "otel-collector"])
+def test_obs_stage_refuses_service_clash(tmp_path, name):
+    project = tmp_path / "project"
+    write_compose(project, f"services:\n  {name}:\n    image: {BASE}\n")
+    with pytest.raises(pytest.fail.Exception, match=f"service {name} trùng tên"):
+        testkit._obs_stage(tmp_path / "stage", project)
+
+
+def test_obs_stack_skips_without_images(monkeypatch):
+    missing = testkit.OBS_IMAGES["grafana"]
+
+    def fake(*args, **kwargs):
+        return subprocess.CompletedProcess(args, 1 if missing in args else 0, "", "")
+
+    monkeypatch.setattr(testkit, "_docker", fake)
+    monkeypatch.setattr(testkit.Exercise, "require_tool", staticmethod(lambda *a, **k: None))
+    with pytest.raises(pytest.skip.Exception) as info:
+        with testkit.DockerLab() as lab:
+            testkit.ObsStack(lab)
+    assert f"Chưa có image {missing}" in str(info.value) and testkit.OBS_PULL in str(info.value)
+
+
+def require_obs_images():
+    for image in testkit.OBS_IMAGES.values():
+        require_real_docker(image)
+
+
+def test_obs_stack_loopback_and_cleanup(monkeypatch):
+    require_obs_images()
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    defaults = {int(port) for svc in obs_compose()["services"].values() for spec in svc.get("ports", [])
+                for port in re.findall(r":-(\d+)\}", spec)}
+    assert len(defaults) == 8
+    lab = testkit.DockerLab()
+    with lab:
+        stack = testkit.ObsStack(lab)
+        rows = stack.project.ps()
+        assert {row["Service"] for row in rows} == OBS_SERVICES
+        for row in rows:
+            info = inspect_container(row["Name"])
+            assert info["Config"]["Labels"]["devops-ex"] == "1"
+            assert "no-new-privileges:true" in info["HostConfig"]["SecurityOpt"]
+            assert info["HostConfig"]["CpusetCpus"] == build_cpuset()
+            for bindings in (info["HostConfig"]["PortBindings"] or {}).values():
+                assert all(b["HostIp"] == "127.0.0.1" for b in bindings), row["Name"]
+                assert not {int(b["HostPort"]) for b in bindings} & defaults, f"{row['Name']} giữ cổng cố định"
+            mounts = info["Mounts"]
+            assert not [m for m in mounts if m["Type"] == "volume"], f"{row['Service']} tạo volume: {mounts}"
+            assert all(not m["RW"] for m in mounts if m["Type"] == "bind"), row["Name"]
+        assert "devops-obs-stack" in {d["uid"] for d in stack.grafana_dashboards()}
+        assert "Watchdog" in {a["labels"]["alertname"] for a in stack.alerts(timeout=60)}
+        up = {r["metric"]["job"]: r["value"][1] for r in stack.prom_query('up{job=~"prometheus|otel-collector"}', timeout=30)}
+        assert up == {"prometheus": "1", "otel-collector": "1"}
+        with pytest.raises(pytest.fail.Exception, match="prometheus /api/v1/query trả 400"):
+            stack.prom_query("rate(")
+        assert stack.jaeger_traces("khong-co-service") == []
+    assert testkit.docker_leftovers(lab.id) == []
+    project = testkit._docker("volume", "ls", "-q", "--filter", f"label=com.docker.compose.project=devops-ex-{lab.id}")
+    assert project.stdout.split() == []
+
+
+OBS_OLIST_COMPOSE = f"""
+x-app: &app
+  build: .
+  environment:
+    DATABASE_URL: postgresql+psycopg://olist:olist@postgres:5432/olist
+    REDIS_URL: redis://redis:6379/0
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  depends_on:
+    postgres: {{condition: service_healthy}}
+    redis: {{condition: service_started}}
+services:
+  postgres:
+    image: {testkit.KUBE_IMAGES["postgres"]}
+    environment: {{POSTGRES_USER: olist, POSTGRES_PASSWORD: olist, POSTGRES_DB: olist}}
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck: {{test: ["CMD-SHELL", "pg_isready -U olist -d olist"], interval: 2s, retries: 30}}
+  redis:
+    image: {testkit.KUBE_IMAGES["redis"]}
+    tmpfs: ["/data"]
+  api:
+    <<: *app
+    ports: ["8000"]
+  worker:
+    <<: *app
+    command: ["python", "-m", "olist_shop.worker"]
+"""
+
+
+def test_obs_stack_olist_trace_log_metric(monkeypatch, tmp_path):
+    import httpx
+
+    require_obs_images()
+    for image in (testkit.KUBE_IMAGES["postgres"], testkit.KUBE_IMAGES["redis"], "python:3.12.16-slim-trixie"):
+        require_real_docker(image)
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    app = testkit.ROOT / "tracks" / "devops" / "sample-app"
+    project = tmp_path / "project"
+    shutil.copytree(app / "olist_shop", project / "olist_shop", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(app / "requirements.txt", project)
+    shutil.copy(testkit.KUBE_OLIST_DOCKERFILE, project / "Dockerfile")
+    write_compose(project, OBS_OLIST_COMPOSE)
+    lab = testkit.DockerLab()
+    with lab:
+        stack = testkit.ObsStack(lab, project=project)
+        api = f"http://127.0.0.1:{stack.project.port('api', 8000)}"
+        with httpx.Client(trust_env=False, timeout=10) as client:
+            assert client.get(f"{api}/orders/khong-co", headers={"X-Request-ID": "obs-order"}).status_code == 404
+            assert client.post(f"{api}/jobs/recompute", headers={"X-Request-ID": "obs-job"}).status_code == 202
+
+        def order_traces():
+            return [t for t in stack.jaeger_traces("olist-shop-api") if any(s["name"] == "GET /orders/{order_id}" for s in t["spans"])]
+
+        trace = stack.eventually(order_traces, 60)
+        assert trace, "Không thấy trace của GET /orders/{order_id} trong Jaeger"
+        spans = trace[0]["spans"]
+        server = next(s for s in spans if s["name"] == "GET /orders/{order_id}")
+        db = [s for s in spans if s["attributes"].get("db.system.name") == "postgresql"]
+        assert db and all(s["parentSpanID"] == server["spanID"] for s in db), "Trace phải có span DB là con của span HTTP"
+
+        def job_traces():
+            return [t for t in stack.jaeger_traces("olist-shop-worker") if any(s["name"] == "process olist:jobs" for s in t["spans"])]
+
+        job = stack.eventually(job_traces, 60)
+        assert job and {s["service"] for s in job[0]["spans"]} == {"olist-shop-api", "olist-shop-worker"}, \
+            "Trace của job phải đi từ API qua Redis tới worker"
+        trace_id = trace[0]["traceID"]
+        logs = stack.loki_query(f'{{service_name="olist-shop-api"}} |= "{trace_id}"', timeout=60)
+        lines = [json.loads(value) for stream in logs for _, value in stream["values"]]
+        assert any(line["request_id"] == "obs-order" and line["trace_id"] == trace_id for line in lines), lines
+        metric = stack.prom_query('http_requests_total{job="olist-api", path="/orders/{order_id}", status="404"}', timeout=30)
+        assert metric and metric[0]["value"][1] == "1"
+        spans = stack.prom_query('traces_span_metrics_calls_total{service_name="olist-shop-api", span_name="GET /orders/{order_id}"}',
+                                 timeout=60)
+        assert spans, "spanmetrics của Collector phải tới Prometheus"
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_promtool_amtool_argv(monkeypatch, tmp_path):
+    fake = FakeDocker()
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+    monkeypatch.setenv("DEVOPS_CPUSET", "2-3")
+    testkit.promtool("check", "rules", "rules.yml", cwd=tmp_path)
+    testkit.amtool("check-config", "alertmanager.yml", cwd=tmp_path)
+    runs = [c for c in fake.calls if c[:2] == ["docker", "run"]]
+    assert len(runs) == 2
+    for argv, image, entrypoint, args in ((runs[0], testkit.OBS_IMAGES["prometheus"], "/bin/promtool", ["check", "rules", "rules.yml"]),
+                                          (runs[1], testkit.OBS_IMAGES["alertmanager"], "/bin/amtool", ["check-config", "alertmanager.yml"])):
+        assert "--rm" in argv and argv[argv.index("-v") + 1] == f"{tmp_path.resolve()}:/work:ro"
+        assert argv.count("-v") == 1 and "-p" not in argv
+        assert argv[argv.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+        assert argv[argv.index("--workdir") + 1] == "/work" and argv[argv.index("--entrypoint") + 1] == entrypoint
+        assert argv[argv.index("--cpuset-cpus") + 1] == "2-3" and "no-new-privileges" in argv
+        assert argv[argv.index("--network") + 1].startswith("devops-ex-")
+        assert argv[-len(args) - 1:] == [image, *args]
+    assert [c for c in fake.calls if c[1:3] == ["network", "rm"]], "Network của lab chạy promtool được dọn"
+
+
+PROM_RULES = """groups:
+  - name: olist
+    rules:
+      - alert: ApiDown
+        expr: up{job="olist-api"} == 0
+        for: 1m
+"""
+PROM_RULES_TEST = """rule_files: [rules.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="olist-api", instance="api:8000"}'
+        values: '0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ApiDown
+        exp_alerts:
+          - exp_labels: {job: olist-api, instance: "api:8000"}
+"""
+
+
+def test_promtool_readonly_mount(tmp_path):
+    require_real_docker(testkit.OBS_IMAGES["prometheus"])
+    require_real_docker(testkit.OBS_IMAGES["alertmanager"])
+    work = tmp_path / "work"
+    work.mkdir(mode=0o700)
+    (work / "rules.yml").write_text(PROM_RULES, encoding="utf-8")
+    (work / "tests.yml").write_text(PROM_RULES_TEST, encoding="utf-8")
+    (work / "data.om").write_text("# TYPE x counter\nx_total 1 1700000000\n# EOF\n", encoding="utf-8")
+    (work / "alertmanager.yml").write_text("route: {receiver: default}\nreceivers: [{name: default}]\n", encoding="utf-8")
+    checked = testkit.promtool("check", "rules", "rules.yml", cwd=work)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    tested = testkit.promtool("test", "rules", "tests.yml", cwd=work)
+    assert tested.returncode == 0 and "SUCCESS" in tested.stdout + tested.stderr, tested.stdout + tested.stderr
+    (work / "tests.yml").write_text(PROM_RULES_TEST.replace("eval_time: 3m", "eval_time: 30s"), encoding="utf-8")
+    assert testkit.promtool("test", "rules", "tests.yml", cwd=work).returncode != 0
+    written = testkit.promtool("tsdb", "create-blocks-from", "openmetrics", "data.om", "blocks", cwd=work)
+    assert written.returncode != 0 and "read-only file system" in (written.stdout + written.stderr).lower()
+    assert sorted(p.name for p in work.iterdir()) == ["alertmanager.yml", "data.om", "rules.yml", "tests.yml"]
+    config = testkit.amtool("check-config", "alertmanager.yml", cwd=work)
+    assert config.returncode == 0, config.stdout + config.stderr
+    (work / "alertmanager.yml").write_text("route: {receiver: missing}\nreceivers: [{name: default}]\n", encoding="utf-8")
+    assert testkit.amtool("check-config", "alertmanager.yml", cwd=work).returncode != 0
+    names = testkit._docker("ps", "-a", "--filter", "name=devops-ex-", "--format", "{{.Names}}").stdout.split()
+    assert not [n for n in names if n.endswith(("-promtool", "-amtool"))]

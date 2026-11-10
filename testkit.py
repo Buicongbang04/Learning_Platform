@@ -653,7 +653,7 @@ class DockerLab:
 
     def run_args(self, alias: str, image: str, *command: str, detach: bool = True, mounts=(), publish=(),
                  env: dict[str, str] | None = None, entrypoint: str | None = None, memory: str = DOCKER_MEMORY,
-                 pids_limit: int = DOCKER_PIDS_LIMIT) -> list[str]:
+                 pids_limit: int = DOCKER_PIDS_LIMIT, user: str | None = None, workdir: str | None = None) -> list[str]:
         args = ["docker", "run", "-d" if detach else "--rm"]
         args += ["--name", self.name(alias), "--label", DOCKER_LABEL, "--network", self.network, "--network-alias", alias]
         args += ["--security-opt", "no-new-privileges", "--memory", memory, "--pids-limit", str(pids_limit), *docker_cpu_args()]
@@ -665,6 +665,10 @@ class DockerLab:
             args += ["-e", f"{key}={value}"]
         if entrypoint:
             args += ["--entrypoint", entrypoint]
+        if user:
+            args += ["--user", user]
+        if workdir:
+            args += ["--workdir", workdir]
         return [*args, image, *command]
 
     def _track(self, alias: str) -> str:
@@ -693,12 +697,13 @@ class DockerLab:
         pytest.fail(f"docker run {alias} ({image}) lỗi: {result.stderr.strip()}")
 
     def run_once(self, alias: str, image: str, *command: str, mounts=(), entrypoint=None, timeout: float = 60,
-                 memory: str = DOCKER_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT) -> subprocess.CompletedProcess:
+                 memory: str = DOCKER_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT, user: str | None = None,
+                 workdir: str | None = None) -> subprocess.CompletedProcess:
         """Chạy container tới khi xong (vd. `nginx -t`) và trả kết quả; container vẫn được dọn nếu quá giờ."""
         self._require_entered()
         self._track(alias)
         args = self.run_args(alias, image, *command, detach=False, mounts=mounts, entrypoint=entrypoint, memory=memory,
-                             pids_limit=pids_limit)
+                             pids_limit=pids_limit, user=user, workdir=workdir)
         try:
             return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -2349,6 +2354,254 @@ def _vault_health(address: str) -> dict | None:
             return None
     except (OSError, ValueError):
         return None
+
+
+OBS_DIR = ROOT / "setup" / "observability"
+OBS_IMAGES = {
+    "prometheus": "prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996",
+    "alertmanager": "prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a",
+    "grafana": "grafana/grafana:13.2.5@sha256:9f7aa1e1e3246aade5792d35a738049f7f32f89cd51d1956cf426a4e86268a84",
+    "loki": "grafana/loki:3.7.9@sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28",
+    "otel-collector": "otel/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849",
+    "jaeger": "jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17",
+}
+OBS_READY = {
+    "otel-collector": (13133, "/"),
+    "jaeger": (16686, "/"),
+    "loki": (3100, "/ready"),
+    "prometheus": (9090, "/-/ready"),
+    "alertmanager": (9093, "/-/ready"),
+    "grafana": (3000, "/api/health"),
+}
+OBS_CONFIG_DIR = "observability"
+OBS_COMPOSE = "devops-ex-obs.compose.yaml"
+OBS_PROJECT_FILES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
+OBS_MEMORY = "512m"
+OBS_TIMEOUT = 180
+OBS_PULL = " && ".join(f"docker pull {image}" for image in OBS_IMAGES.values())
+
+
+def _obs_stage(stage: Path, project: Path | None) -> Path:
+    """Dựng thư mục project cho `ObsStack` trong `stage`: cấu hình mặc định của `setup/observability/` chép vào
+    `observability/`, rồi chép đè thư mục `project` của người học (tệp cùng đường dẫn trong `observability/` thay tệp
+    mặc định), rồi gộp service của stack vào tệp compose của người học (nếu có) thành một tệp `OBS_COMPOSE`."""
+    import yaml
+
+    shutil.copytree(OBS_DIR, stage / OBS_CONFIG_DIR, ignore=shutil.ignore_patterns("compose.yaml", *_COPY_IGNORE))
+    merged: dict[str, Any] = {}
+    if project is not None:
+        project = Path(project).resolve()
+        if not project.is_dir():
+            pytest.fail(f"ObsStack: không có thư mục project {project}")
+        shutil.copytree(project, stage, symlinks=True, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+        found = next((stage / name for name in OBS_PROJECT_FILES if (stage / name).is_file()), None)
+        if found is not None:
+            try:
+                merged = yaml.safe_load(found.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError as error:
+                pytest.fail(f"ObsStack: không đọc được {found.name} của project: {error}")
+            if not isinstance(merged, dict):
+                pytest.fail(f"ObsStack: {found.name} của project phải là một mapping")
+    obs = yaml.safe_load((OBS_DIR / "compose.yaml").read_text(encoding="utf-8"))["services"]
+    own = dict(merged.get("services") or {})
+    clash = sorted(set(own) & set(obs))
+    if clash:
+        pytest.fail(f"ObsStack: service {', '.join(clash)} trùng tên service của stack observability. Đổi tên service "
+                    f"của bạn; muốn đổi cấu hình của stack thì đặt tệp vào {OBS_CONFIG_DIR}/<service>/ trong project")
+    networks = list(merged.get("networks") or {})
+    for name, svc in obs.items():
+        svc["volumes"] = [f"./{OBS_CONFIG_DIR}/{volume[2:]}" if volume.startswith("./") else volume
+                          for volume in svc.get("volumes") or []]
+        if networks:
+            svc["networks"] = list(dict.fromkeys(["default", *networks]))
+        own[name] = svc
+    merged.pop("name", None)
+    merged["services"] = own
+    file = stage / OBS_COMPOSE
+    file.write_text(yaml.safe_dump(merged, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    for path in [stage, *stage.rglob("*")]:
+        if not path.is_symlink():
+            path.chmod(path.stat().st_mode | (0o755 if path.is_dir() else 0o644))
+    return file
+
+
+def _otlp_value(value: dict):
+    for key in ("stringValue", "boolValue", "doubleValue"):
+        if key in value:
+            return value[key]
+    if "intValue" in value:
+        return int(value["intValue"])
+    if "arrayValue" in value:
+        return [_otlp_value(item) for item in value["arrayValue"].get("values", [])]
+    return None
+
+
+def _otlp_traces(result: dict) -> list:
+    """OTLP JSON (`resourceSpans`) thành danh sách trace, mỗi trace một mục, span kèm `service` và `attributes` dạng dict."""
+    traces: dict[str, list] = {}
+    for resource in result.get("resourceSpans") or []:
+        attributes = {a["key"]: _otlp_value(a.get("value") or {}) for a in (resource.get("resource") or {}).get("attributes", [])}
+        for scope in resource.get("scopeSpans") or []:
+            for span in scope.get("spans") or []:
+                traces.setdefault(span["traceId"], []).append({
+                    "spanID": span.get("spanId"), "parentSpanID": span.get("parentSpanId") or None,
+                    "name": span.get("name"), "kind": span.get("kind"), "service": attributes.get("service.name"),
+                    "attributes": {a["key"]: _otlp_value(a.get("value") or {}) for a in span.get("attributes") or []},
+                })
+    return [{"traceID": trace_id, "spans": spans} for trace_id, spans in traces.items()]
+
+
+class ObsStack:
+    """Stack observability (OTel Collector, Jaeger, Loki, Prometheus, Alertmanager, Grafana; image `OBS_IMAGES` ghim
+    digest) của một `DockerLab`, dựng bằng `lab.compose` nên có mọi bảo đảm của nó: cổng trống trên 127.0.0.1, nhãn
+    `devops-ex=1`, cpuset, giới hạn RAM, bind mount chỉ đọc, `close()` của lab chạy `down -v`.
+
+    Không service nào của stack tạo volume: dữ liệu của Prometheus, Loki, Alertmanager, Jaeger nằm trong tmpfs, Grafana
+    ghi vào lớp ghi của container. Cấu hình mặc định ở `setup/observability/`.
+
+    `project` (tuỳ chọn) là thư mục của người học. Tệp `compose.yaml` trong đó (nếu có, ví dụ api, worker, postgres,
+    redis của Olist Shop) được gộp với stack thành một project compose: app gửi OTLP gRPC tới `otel-collector:4317`,
+    Prometheus scrape `api:8000` và `worker:9101`. Tệp trong `project/observability/` thay tệp mặc định cùng đường dẫn,
+    ví dụ `observability/prometheus/rules/olist.yml`, `observability/grafana/dashboards/olist.json`,
+    `observability/otel-collector/config.yaml`. Service của người học trùng tên service của stack thì fail.
+
+    Mỗi lab một project compose, nên một lab chỉ dựng một `ObsStack` và không gọi `lab.compose` riêng. Các hàm truy vấn
+    nhận `timeout` (giây): lớn hơn 0 thì hỏi lại tới khi có kết quả khác rỗng hoặc hết giờ.
+    """
+
+    def __init__(self, lab: DockerLab, *, project: Path | None = None, env: dict | None = None,
+                 memory: str = OBS_MEMORY, timeout: float = OBS_TIMEOUT) -> None:
+        lab._require_entered()
+        for image in OBS_IMAGES.values():
+            Exercise.require_image(image, f"Tải các image của stack bằng: {OBS_PULL}")
+        stage = Path(tempfile.mkdtemp(prefix=f"{lab.network}-obs-"))
+        try:
+            file = _obs_stage(stage, project)
+            start = time.monotonic()
+            self.project = lab.compose(file, env=env, memory=memory, timeout=timeout)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+        self.urls = {name: f"http://127.0.0.1:{self.project.port(name, port)}" for name, (port, _) in OBS_READY.items()}
+        self._wait_ready(max(timeout - (time.monotonic() - start), 30))
+        self.startup_seconds = time.monotonic() - start
+
+    @staticmethod
+    def _client():
+        import httpx
+
+        return httpx.Client(trust_env=False, timeout=10)
+
+    def _wait_ready(self, timeout: float) -> None:
+        import httpx
+
+        pending = dict(OBS_READY)
+        deadline = time.monotonic() + timeout
+        with self._client() as client:
+            while pending:
+                for name, (_, path) in list(pending.items()):
+                    try:
+                        if client.get(self.urls[name] + path).status_code == 200:
+                            del pending[name]
+                    except httpx.HTTPError:
+                        pass
+                if not pending:
+                    return
+                if time.monotonic() > deadline:
+                    logs = "\n".join(f"--- {name}\n{self.project.logs(name, tail=DOCKER_LOG_LINES)[-DOCKER_LOG_CHARS:]}"
+                                     for name in pending)
+                    pytest.fail(f"ObsStack: {', '.join(pending)} chưa sẵn sàng sau {int(timeout)} giây.\n{logs}")
+                time.sleep(0.5)
+
+    def url(self, service: str) -> str:
+        return self.urls[service]
+
+    def _get(self, service: str, path: str, params: dict | None = None):
+        with self._client() as client:
+            response = client.get(self.urls[service] + path, params=params)
+        if response.status_code >= 400:
+            pytest.fail(f"{service} {path} trả {response.status_code}: {response.text[:DOCKER_LOG_CHARS]}")
+        return response.json()
+
+    @staticmethod
+    def eventually(fetch, timeout: float = 60, interval: float = 1):
+        """Gọi `fetch()` tới khi kết quả khác rỗng hoặc hết `timeout` giây, trả kết quả cuối. Dùng khi cần điều kiện
+        riêng, ví dụ `stack.eventually(lambda: [t for t in stack.jaeger_traces("api") if ...])`."""
+        deadline = time.monotonic() + timeout
+        result = fetch()
+        while not result and time.monotonic() < deadline:
+            time.sleep(interval)
+            result = fetch()
+        return result
+
+    def _poll(self, fetch, timeout: float):
+        return self.eventually(fetch, timeout) if timeout > 0 else fetch()
+
+    def prom_query(self, expr: str, *, timeout: float = 0) -> list:
+        """`data.result` của `/api/v1/query` (instant query); query sai cú pháp thì fail kèm lỗi của Prometheus."""
+        return self._poll(lambda: self._get("prometheus", "/api/v1/query", {"query": expr})["data"]["result"], timeout)
+
+    def loki_query(self, logql: str, *, since: float = 3600, limit: int = 100, timeout: float = 0) -> list:
+        """`data.result` của `/loki/api/v1/query_range` trong `since` giây gần nhất (stream, mỗi stream có `values`)."""
+        def fetch():
+            end = time.time_ns()
+            params = {"query": logql, "start": str(end - int(since * 1e9)), "end": str(end), "limit": str(limit),
+                      "direction": "backward"}
+            return self._get("loki", "/loki/api/v1/query_range", params)["data"]["result"]
+        return self._poll(fetch, timeout)
+
+    def jaeger_traces(self, service: str, *, limit: int = 20, lookback: float = 3600, timeout: float = 0) -> list:
+        """Trace của `service` (`service.name` của OTel) qua API v3 của Jaeger, gom theo trace: mỗi mục là
+        `{"traceID", "spans": [{"spanID", "parentSpanID", "name", "kind", "service", "attributes"}]}`."""
+        def fetch():
+            from datetime import datetime, timedelta, timezone
+
+            now = datetime.now(timezone.utc)
+            params = {"query.service_name": service, "query.search_depth": str(limit),
+                      "query.start_time_min": (now - timedelta(seconds=lookback)).isoformat().replace("+00:00", "Z"),
+                      "query.start_time_max": (now + timedelta(seconds=60)).isoformat().replace("+00:00", "Z")}
+            with self._client() as client:
+                response = client.get(self.urls["jaeger"] + "/api/v3/traces", params=params)
+            if response.status_code == 404:
+                return []
+            if response.status_code >= 400:
+                pytest.fail(f"jaeger /api/v3/traces trả {response.status_code}: {response.text[:DOCKER_LOG_CHARS]}")
+            return _otlp_traces(response.json().get("result") or {})
+        return self._poll(fetch, timeout)
+
+    def grafana_dashboards(self) -> list:
+        """Dashboard đã provision (`/api/search?type=dash-db`): mỗi mục có `uid`, `title`, `tags`, `folderTitle`."""
+        return self._get("grafana", "/api/search", {"type": "dash-db"})
+
+    def grafana_dashboard(self, uid: str) -> dict:
+        return self._get("grafana", f"/api/dashboards/uid/{uid}")["dashboard"]
+
+    def alerts(self, *, timeout: float = 0) -> list:
+        """Alert đang active trong Alertmanager (`/api/v2/alerts`): mỗi mục có `labels`, `annotations`, `status`."""
+        return self._poll(lambda: self._get("alertmanager", "/api/v2/alerts"), timeout)
+
+
+def _obs_tool(alias: str, image: str, entrypoint: str, args: tuple[str, ...], cwd: Path,
+              timeout: float) -> subprocess.CompletedProcess:
+    Exercise.require_image(image)
+    cwd = Path(cwd).resolve()
+    if not cwd.is_dir():
+        pytest.fail(f"{alias}: cwd {cwd} không phải thư mục")
+    with DockerLab() as lab:
+        return lab.run_once(alias, image, *args, mounts=[(cwd, "/work")], entrypoint=entrypoint, timeout=timeout,
+                            user=f"{os.getuid()}:{os.getgid()}", workdir="/work")
+
+
+def promtool(*args: str, cwd: Path, timeout: float = 120) -> subprocess.CompletedProcess:
+    """`promtool <args>` trong image Prometheus ghim (`OBS_IMAGES`), qua `DockerLab.run_once`: `cwd` mount chỉ đọc ở
+    `/work` (thư mục làm việc), chạy bằng uid/gid của người chạy test, network riêng của lab. Ví dụ
+    `promtool("test", "rules", "tests.yml", cwd=project)`."""
+    return _obs_tool("promtool", OBS_IMAGES["prometheus"], "/bin/promtool", args, cwd, timeout)
+
+
+def amtool(*args: str, cwd: Path, timeout: float = 120) -> subprocess.CompletedProcess:
+    """`amtool <args>` trong image Alertmanager ghim, cùng cách cách ly như `promtool`. Ví dụ
+    `amtool("check-config", "alertmanager.yml", cwd=project)`."""
+    return _obs_tool("amtool", OBS_IMAGES["alertmanager"], "/bin/amtool", args, cwd, timeout)
 
 
 ANSIBLE_VERSION = "2.21.5"
