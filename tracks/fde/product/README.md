@@ -33,6 +33,9 @@ flowchart LR
 | `1.0.0` | 1 (`0001_init.sql`) | Tài liệu, chunk, embedding 768 chiều, hỏi đáp có trích dẫn, UI htmx, worker inbox |
 | `1.1.0` | 2 (`+ 0002_v1_1_tags.sql`) | Cột `tags` cho tài liệu; `POST /api/documents` nhận field `tags` (phân tách bằng dấu phẩy) |
 
+SSO (OIDC), ACL theo thư mục, `/metrics`, extension, Helm chart và script backup/restore (Phase 2) **không đổi schema**
+nên có ở cả `1.0.0` lẫn `1.1.0` (xem các mục bên dưới).
+
 Một cây mã nguồn dựng cả hai bản: `release.py build --version` truyền `QUILLO_VERSION` vào image và chỉ chép các
 migration thuộc bản đó (`db.SCHEMA_FOR_RELEASE`). API khởi động thì chạy migration còn thiếu trong **một** transaction
 có khoá advisory, ghi vào bảng `schema_migrations`; chạy lại không làm gì (idempotent). Bản cũ chạy trên schema mới hơn
@@ -47,11 +50,18 @@ có khoá advisory, ghi vào bảng `schema_migrations`; chạy lại không là
 | `src/quillo/rag.py` | Embed câu hỏi, tìm `top_k` chunk gần nhất (cosine, HNSW), prompt có đánh số, tách trích dẫn `[n]` |
 | `src/quillo/llm.py` | Client API kiểu OpenAI (`/v1/chat/completions`, `/v1/embeddings`, `/health`) |
 | `src/quillo/db.py` | Kết nối, migration, truy vấn (luôn tham số hoá) |
-| `src/quillo/auth.py` | Token tĩnh `QUILLO_ADMIN_TOKEN` (so sánh constant-time), cookie phiên HMAC cho UI |
+| `src/quillo/auth.py` | Người gọi (`User`): token tĩnh `QUILLO_ADMIN_TOKEN` (admin), access token OIDC, cookie phiên HMAC cho UI |
+| `src/quillo/oidc.py` | Kiểm JWT qua JWKS (cache, xoay khoá), đăng nhập UI bằng authorization code + PKCE |
+| `src/quillo/acl.py` | `QUILLO_ACL`: nhóm → tiền tố thư mục của tài liệu |
+| `src/quillo/metrics.py` | `GET /metrics` (Prometheus) |
+| `src/quillo/extensions.py` | Nạp extension của khách (`QUILLO_EXTENSIONS`), `ExtensionContext` |
 | `src/quillo/config.py` | Đọc biến môi trường, log JSON một dòng mỗi sự kiện |
 | `migrations/` | `0001_init.sql`, `0002_v1_1_tags.sql` |
 | `Dockerfile`, `requirements.lock` | Image `quillo-api` (Python 3.12 slim ghim digest, pip `--require-hashes`, user 10001) |
-| `compose.yaml`, `.env.example` | Triển khai một node |
+| `compose.yaml`, `.env.example` | Triển khai một node; `compose.sso.yaml`, `compose.extensions.yaml` là tệp ghép thêm khi bật SSO/extension |
+| `chart/quillo/` | Helm chart (chart version = bản phát hành); `chart/examples/values-restricted.yaml` là values mẫu cho cluster PSA restricted + quota (không nằm trong bundle) |
+| `ops/backup.sh`, `ops/restore.sh` | Sao lưu/khôi phục database (compose, Podman hay `kubectl exec`) |
+| `ops/models_image.py` | Dựng image `quillo-models` (cho initContainer của chart) từ chính bundle, không cần Docker |
 | `REQUIREMENTS.yaml` | Yêu cầu tối thiểu của máy khách (chuẩn để bài survey/preflight so sánh) |
 | `release.py` | `build` bundle offline, `verify` bundle theo `manifest.json` |
 | `tests/` | Test của sản phẩm (model giả qua HTTP, Postgres thật qua `testkit.DockerLab`) |
@@ -68,7 +78,15 @@ uv run pytest tracks/fde/product -q
   trình test; sản phẩm chỉ được trỏ `QUILLO_LLM_URL`/`QUILLO_EMBED_URL` sang nó, không có "chế độ giả" trong code.
 - Postgres là container `pgvector/pgvector` qua `testkit.DockerLab`; mỗi test một database riêng. Thiếu Docker hay
   thiếu image thì test skip kèm lệnh `docker pull`.
-- `test_release.py` dựng bundle 1.0.0 thật (build image, `docker save`, model GGUF) vào `dist/pytest-*` rồi xoá.
+- `test_release.py` dựng bundle 1.0.0 thật (build image, `docker save`, model GGUF) vào `dist/pytest-*` rồi xoá; bundle
+  dựng một lần cho cả phiên test (fixture `bundle`).
+- IdP OIDC trong test là `tests/fake_idp.py` (discovery, JWKS, authorize/token có PKCE, khoá RSA sinh mới mỗi lần).
+  `test_keycloak_end_to_end` thì dùng Keycloak thật: `fdekit.customer_site("lab-open", extra_services=("keycloak",))`,
+  cài bundle trong VM với `compose.sso.yaml`, rồi thêm mapper `groups` cho client `quillo` qua admin REST API (realm
+  mẫu cố ý không có mapper này). Thiếu golden/KVM/image Keycloak thì skip kèm lệnh.
+- `test_chart.py` chạy `helm lint`/`helm template` trong container `alpine/helm:3.22.1` (ghim digest, cùng bản helm với
+  golden `lawfirm-prod`) và kiểm values mẫu restricted theo luật PSA restricted, quota và LimitRange của `lawfirm-prod`.
+- `test_backup.py` chạy `ops/*.sh` với `--exec "docker exec -i <container pgvector của test>"`.
 
 ## Dựng bundle offline
 
@@ -82,11 +100,25 @@ Cần Docker và mạng lúc build (pull image theo digest, tải model qua `fde
 
 ```text
 quillo-1.0.0/
-├── manifest.json        {"version", "files": {đường dẫn: sha256}, "images": [ref@digest…, "quillo-api:1.0.0"]}
-├── compose.yaml  .env.example  REQUIREMENTS.yaml  LICENSE
+├── manifest.json        {"version", "files": {đường dẫn: sha256}, "images": [ref@digest…, "quillo-api:1.0.0"],
+│                         "derived": {"images/quillo-models.tar": {"sha256", "image", "from", "tool"}}}
+├── compose.yaml  compose.sso.yaml  compose.extensions.yaml  .env.example  REQUIREMENTS.yaml  LICENSE
 ├── migrations/0001_init.sql
 ├── images/pgvector.tar  images/llama-cpp-server.tar  images/quillo-api.tar     (docker save, linux/amd64)
-└── models/qwen2.5-0.5b-instruct-q4_k_m.gguf  models/nomic-embed-text-v1.5.Q8_0.gguf
+├── models/qwen2.5-0.5b-instruct-q4_k_m.gguf  models/nomic-embed-text-v1.5.Q8_0.gguf
+├── chart/quillo-1.0.0.tgz                 (Helm chart, version = appVersion = 1.0.0)
+└── ops/backup.sh  ops/restore.sh  ops/models_image.py
+```
+
+Image `quillo-models:<version>` cho initContainer của Helm chart **không** nằm sẵn trong bundle: nó chỉ là các layer
+của `images/llama-cpp-server.tar` cộng một layer chứa `models/*.gguf`, mà cả hai đã có trong bundle; mang thêm một
+bản GGUF làm bundle nặng ~1,7 GiB, vượt ngân sách và làm installer của capstone m02 hết chỗ đĩa ở lần cài thứ hai.
+Người cài dựng nó tại chỗ, không cần Docker hay mạng (Python 3.8+ chuẩn), kết quả tái lập từng byte và được so với
+sha256 ghi trong `manifest.json` → `derived`:
+
+```bash
+python3 ops/models_image.py . /var/tmp/quillo-models-1.0.0.tar     # chạy trong thư mục bundle đã giải nén
+# → OCI archive: docker/podman load, ctr images import, hoặc đẩy lên registry nội bộ bằng skopeo/crane/regctl
 ```
 
 `verify` thoát 1 khi tệp nào sai sha256, thiếu, thừa (không có trong manifest), tar bị cắt cụt, có đường dẫn
@@ -101,14 +133,16 @@ Bundle **không tái lập được từng byte**: build lại cùng bản cho r
 image, attestation của buildx) và tar có mtime khác. Thứ cố định là các ref đã ghim, `requirements.lock` có hash và sha
 của model; so hai bundle thì so `manifest.json` → `images`/sha của model, đừng so sha cả tệp tar.
 
-| Thành phần (2026-11-04) | Ghim | Trong bundle |
+| Thành phần (2026-11-11) | Ghim | Trong bundle |
 | --- | --- | --- |
 | `pgvector/pgvector:0.8.6-pg16` | `@sha256:ccc6e83d6e35…` (2026-08-13) | 156 MB |
 | `ghcr.io/ggml-org/llama.cpp:server-b11718` (CPU) | `@sha256:4b7be0376002…` (2026-10-18) | 309 MB |
-| `quillo-api:1.0.0` trên `python:3.12.14-slim-bookworm` | `@sha256:392307d22300…` (2026-09-19) | 59 MB |
+| `quillo-api:1.0.0` trên `python:3.12.14-slim-bookworm` | `@sha256:392307d22300…` (2026-09-19) | 65 MB |
 | `qwen2.5-0.5b-instruct-q4_k_m.gguf` | `fdekit.MODELS["llm-small"]` | 491 MB |
 | `nomic-embed-text-v1.5.Q8_0.gguf` | `fdekit.MODELS["embed-small"]` | 146 MB |
-| **`quillo-1.0.0.tar`** | | **1,08 GiB** (1 162 219 520 byte), ngân sách 1,5 GB |
+| `chart/quillo-1.0.0.tgz`, `ops/*` | | < 0,1 MB |
+| **`quillo-1.0.0.tar`** (2026-11-11) | | **1,09 GiB** (1 168 076 800 byte; Phase 1: 1,08 GiB), ngân sách 1,5 GB |
+| `quillo-models:1.0.0` dựng tại chỗ (`ops/models_image.py`, ~2 s) | layer llama.cpp + GGUF | ngoài bundle, 946 MB |
 
 Compose dùng tên image **không kèm digest** (`pgvector/pgvector:0.8.6-pg16`): sau `docker load` image chỉ có tag, ref
 `@sha256` không còn khớp trên mọi kiểu image store. Tính toàn vẹn do sha256 của `images/*.tar` trong manifest đảm bảo;
@@ -147,16 +181,27 @@ Worker kiểm lúc khởi động rằng `inbox/`, `inbox/done/`, `inbox/failed/
 | `QUILLO_LLM_FILE`, `QUILLO_LLM_MODEL` | Qwen2.5-0.5B, `llm-small` | tệp GGUF trong `./models` và tên model trả về trong `/api/ask` |
 | `QUILLO_LLM_THREADS`, `QUILLO_EMBED_THREADS` | `2` | số luồng CPU của llama.cpp |
 | `QUILLO_LOG_LEVEL` | `INFO` | log JSON ra stdout (`docker compose logs api`) |
+| `QUILLO_ACL` | (rỗng) | `nhóm:thư_mục[,nhóm:thư_mục…]`, xem mục SSO và ACL |
+| `QUILLO_OIDC_ISSUER`, `QUILLO_OIDC_CLIENT_ID` | (rỗng) | đặt issuer là bật SSO; dùng cùng `compose.sso.yaml` |
+| `QUILLO_OIDC_CLIENT_SECRET_FILE` | `compose.sso.yaml` đặt | **tệp** chứa client secret (`./oidc/client-secret`); không có biến chứa secret trực tiếp |
+| `QUILLO_OIDC_GROUPS_CLAIM` | `groups` | claim trong token chứa danh sách nhóm |
+| `QUILLO_OIDC_CA_FILE` | (rỗng) | CA của IdP khi IdP dùng chứng chỉ của CA nội bộ (vd. `/etc/quillo/oidc/ca.pem`) |
+| `QUILLO_EXTENSIONS`, `QUILLO_EXTENSIONS_PATH` | (rỗng) | module extension và thư mục chứa chúng; dùng cùng `compose.extensions.yaml` |
 
 ## API
 
 | Phương thức | Đường dẫn | Auth | Trả về |
 | --- | --- | --- | --- |
 | GET | `/healthz` | không | `{"status": "ok", "version": "1.0.0", "checks": {"db", "llm", "embed"}}`; 503 + `"degraded"` khi một check false |
-| POST | `/api/documents` | token | multipart `file` (+ `tags` từ 1.1.0) → 201 `{"doc_id", "filename", "chunks"}`; 413/415/422 |
-| GET | `/api/documents` | token | danh sách tài liệu |
+| GET | `/metrics` | không | chỉ số Prometheus (text format 0.0.4) |
+| GET | `/api/me` | token | `{"user", "groups", "admin"}`: quillo thấy người gọi là ai, thuộc nhóm nào (chẩn đoán SSO) |
+| POST | `/api/documents` | token | multipart `file` (+ `folder`, + `tags` từ 1.1.0) → 201 `{"doc_id", "filename", "chunks"}`; 403/413/415/422 |
+| GET | `/api/documents` | token | danh sách tài liệu người gọi được xem |
 | POST | `/api/ask` | token | `{"question", "top_k": 4}` → `{"answer", "citations": [{"doc_id", "chunk", "text"}], "model"}` |
 | GET | `/`, `/login` | cookie | UI htmx (htmx 2.0.11 vendor trong `static/`, không CDN) |
+| GET | `/oidc/login`, `/oidc/callback` | không | đăng nhập SSO (authorization code + PKCE); 404 khi chưa bật OIDC |
+
+"token" là `Authorization: Bearer <QUILLO_ADMIN_TOKEN>` (admin) hoặc `Bearer <access token OIDC>` khi bật SSO.
 
 `doc_id` là 16 ký tự đầu sha256 của nội dung: nạp lại cùng tệp thì thay bản cũ. Worker nạp tệp thả vào `./inbox`
 (chuyển sang `inbox/done/` hoặc `inbox/failed/`, trùng tên thì thêm hậu tố `-1`, `-2`…). Tệp sửa đổi chưa quá 2 chu kỳ
@@ -173,11 +218,137 @@ Giới hạn đã biết: tệp **luôn** gây lỗi kết nối (vd. tài liệ
 sự cố hạ tầng và giữ cả hàng đợi. Log `dịch vụ không với tới…` ghi tên tệp; người vận hành chuyển tệp đó ra khỏi
 `inbox` bằng tay (hoặc cắt nhỏ) rồi worker chạy tiếp. Câu trả lời trích `[n]` thì `citations` là các đoạn được trích; model không trích thì trả mọi đoạn đã đưa vào prompt.
 
+## SSO (OIDC) và ACL theo thư mục
+
+```mermaid
+sequenceDiagram
+    participant U as Người dùng / script
+    participant IdP as IdP của khách (Keycloak, AD FS…)
+    participant Q as quillo api
+    participant DB as Postgres
+    U->>IdP: đăng nhập (UI: authorization code + PKCE qua /oidc/login)
+    IdP-->>U: access token JWT (iss, aud/azp, exp, groups)
+    U->>Q: POST /api/ask, Authorization: Bearer JWT
+    Q->>IdP: discovery + JWKS (cache; tải lại khi gặp kid lạ)
+    Q->>Q: kiểm chữ ký, iss, aud/azp, exp (lệch tối đa 60 s) → nhóm
+    Q->>DB: tìm top_k đoạn WHERE đường dẫn bắt đầu bằng thư mục của nhóm
+    Q-->>U: câu trả lời + trích dẫn chỉ từ thư mục được xem
+```
+
+- Bật bằng `QUILLO_OIDC_ISSUER`, `QUILLO_OIDC_CLIENT_ID` và tệp client secret (`QUILLO_OIDC_CLIENT_SECRET_FILE`). Đặt
+  thiếu một trong ba thì api không khởi động và nói thiếu gì. Issuer phải khớp đúng chuỗi `issuer` trong discovery của
+  IdP và claim `iss` của token (kể cả `http`/`https`, cổng, đường dẫn realm).
+- API nhận `Authorization: Bearer <JWT>`: chữ ký kiểm bằng khoá trong JWKS (chỉ RS*/PS*/ES*, không nhận `none` hay
+  HS*), `iss` đúng issuer, `aud` chứa client id hoặc `azp` là client id, `exp` còn hạn (lệch đồng hồ tối đa 60 s), có
+  `sub`. Token bị từ chối thì 401 và log `token OIDC bị từ chối` kèm lý do. IdP không với tới (chưa từng tải được
+  JWKS) thì 503 `IdP (OIDC) không phản hồi`.
+- UI: `/login` có thêm link SSO; `/oidc/login` chuyển sang IdP với `state`, `nonce`, `code_challenge` (S256), các giá
+  trị chờ nằm trong cookie ký HMAC (SameSite=Lax, 10 phút); `/oidc/callback` đổi code lấy token, kiểm ID token (`aud`,
+  `nonce`) rồi cấp cookie phiên 8 giờ mang tên và nhóm lúc đăng nhập. `redirect_uri` là `<URL quillo>/oidc/callback`
+  (sau reverse proxy thì chạy uvicorn với `--proxy-headers`); IdP phải cho phép đúng URL này.
+- Nhóm lấy từ claim `QUILLO_OIDC_GROUPS_CLAIM` (mặc định `groups`); `/legal` (Keycloak "full path") được hiểu là
+  `legal`. Token không có claim này thì người dùng không thuộc nhóm nào: đăng nhập được nhưng không thấy tài liệu nào.
+  Xem `GET /api/me` để biết quillo thấy nhóm gì.
+- `QUILLO_ACL="legal:legal/,finance:finance/"`: nhóm `legal` xem tài liệu có đường dẫn bắt đầu bằng `legal/`. Đường
+  dẫn tài liệu là đường dẫn tương đối: worker giữ thư mục con trong inbox (`inbox/legal/nda-01.pdf` → `legal/nda-01.pdf`,
+  chuyển xong vào `done/legal/`, sâu tối đa 8 cấp), upload qua API/UI nhận field `folder`. Mỗi phần của đường dẫn được
+  làm sạch như tên tệp (ký tự ngoài `A-Za-z0-9._ -` thành `_`, vd. `Hợp đồng/` thành `H_p _ng/`), nên ACL phải ghi
+  tên đã làm sạch (`GET /api/documents` cho thấy đường dẫn thật đã lưu). Tài liệu không khớp thư mục nào (kể cả tài liệu
+  ở gốc inbox) **chỉ admin thấy**. ACL nằm trong chính câu truy vấn vector (`WHERE` + HNSW quét tiếp tới khi đủ
+  `top_k`), không lọc sau khi đã lấy `top_k`, nên vừa không lộ đoạn của nhóm khác (kể cả vào prompt của LLM) vừa không
+  trả thiếu đoạn. Người dùng SSO chỉ upload được vào thư mục mình xem được (403), kể cả khi nội dung trùng một
+  tài liệu ở thư mục khác (cùng nội dung là cùng `doc_id`, nạp lại sẽ chuyển tài liệu đó sang thư mục mới).
+- Token tĩnh `QUILLO_ADMIN_TOKEN` vẫn chạy và là admin (thấy mọi tài liệu); giữ nó như mật khẩu root.
+
+Ví dụ (compose):
+
+```bash
+sudo install -d -o 10001 -g 10001 -m 0700 oidc
+printf '%s' "$CLIENT_SECRET" | sudo install -o 10001 -g 10001 -m 0400 /dev/stdin oidc/client-secret
+cat >> .env <<'ENV'
+QUILLO_OIDC_ISSUER=https://sso.lawfirm.example/realms/lawfirm
+QUILLO_OIDC_CLIENT_ID=quillo
+QUILLO_ACL=legal:legal/,finance:finance/
+ENV
+docker compose -f compose.yaml -f compose.sso.yaml up -d
+curl -s -H "Authorization: Bearer $ACCESS_TOKEN" http://127.0.0.1:18080/api/me
+```
+
+## `/metrics`
+
+Không cần auth, chỉ có số đếm: `quillo_requests_total{route,status}` (route là mẫu đường dẫn như `/api/ask`, URL lạ
+gom vào `unmatched`), `quillo_ask_seconds` (histogram thời gian trả lời `/api/ask`, `/ui/ask` thành công), `quillo_documents`,
+`quillo_chunks` (đếm lúc scrape; database không trả lời thì `NaN`), `quillo_model_up{kind="llm"|"embed"}` (1 khi model
+server trả `/health` 200). Compose chỉ publish cổng api trên `127.0.0.1`, nên Prometheus của khách cần đi qua reverse
+proxy hoặc chạy cùng máy; trên Kubernetes thì scrape Service `<release>-api` cổng 8080.
+
+## Extension
+
+`QUILLO_EXTENSIONS=acme.report` nạp module `acme.report` từ `QUILLO_EXTENSIONS_PATH` (chỉ từ thư mục đó; tên trùng
+module của Python hay `quillo` bị từ chối) và gọi `register(app, ctx)` lúc api khởi động:
+
+```python
+from fastapi import Depends
+
+
+def register(app, ctx):
+    @app.get("/ext/acme/report")
+    def report(user=Depends(ctx.require_user)):
+        rows = ctx.db_query("SELECT count(*) AS n FROM documents WHERE filename LIKE %s", ("legal/%",))
+        return ctx.templates.get_template("report.html").render(n=rows[0]["n"], user=user.name)
+```
+
+`ExtensionContext`: `settings`; `ask(question, top_k, user)` (như `/api/ask`, áp ACL của `user`); `db_query(sql,
+params)` (transaction **chỉ đọc**, timeout 5 s, trả list dict, **không** áp ACL); `templates` (Jinja tìm trong
+`<thư mục module>/templates` trước, rồi template của quillo); `require_user` (dependency trả `User`, 401 khi chưa
+đăng nhập). Extension không import được, thiếu `register` hay `register` ném lỗi thì **api không lên**, log
+`không nạp được extension <tên>` kèm lỗi. Compose: đặt mã trong `./extensions`, chạy với `-f compose.extensions.yaml`.
+
+## Helm chart
+
+`chart/quillo-<version>.tgz` trong bundle (nguồn: `chart/quillo/`). Cài: `helm upgrade --install quillo
+chart/quillo-1.0.0.tgz -n quillo -f values-<khách>.yaml`.
+
+| Value | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `image.registry` | `""` | registry nội bộ; có thì ảnh là `<registry>/quillo-api:<version>`, `<registry>/pgvector/pgvector:…`, `<registry>/ggml-org/llama.cpp:…`, `<registry>/quillo-models:<version>` |
+| `image.pullPolicy` | `IfNotPresent` | |
+| `podSecurityContext`, `containerSecurityContext` | `{}` | chung cho mọi pod/container (kể cả initContainer); `<api|worker|db|llm|embed>.podSecurityContext` đè riêng |
+| `resources` | `{}` | theo thành phần: `resources.api`, `.worker`, `.db`, `.llm`, `.embed`, `.models` (initContainer) |
+| `networkPolicy.enabled` | `false` | NetworkPolicy cho đúng các luồng api→db/llm/embed, worker→db/embed, DNS; `apiFrom`, `apiExtraEgress` (vd. tới IdP) |
+| `oidc.issuer`, `oidc.clientId`, `oidc.existingSecret`, `oidc.secretKey`, `oidc.groupsClaim`, `oidc.caConfigMap` | tắt | client secret lấy từ Secret có sẵn (tạo từ tệp), không nằm trong values |
+| `acl` | `""` | như `QUILLO_ACL` |
+| `extensions.configMap`, `extensions.items`, `extensions.modules` | tắt | mã extension từ ConfigMap, mount vào `/opt/quillo/extensions` |
+| `persistence.size`, `persistence.inboxSize`, `persistence.storageClass` | `5Gi`, `1Gi`, mặc định của cluster | PVC của db (StatefulSet) và inbox của worker |
+| `models.*` | GGUF của bundle | initContainer chép GGUF từ `quillo-models:<version>` (dựng bằng `ops/models_image.py`) vào emptyDir của pod llm/embed |
+| `auth.existingSecret` | `""` | Secret có `admin-token`, `db-password`; rỗng thì chart tạo `<release>-auth` một lần (giữ qua upgrade, không xoá khi uninstall) |
+
+Như phần lớn chart của vendor, mặc định **không** đặt securityContext, resources hay NetworkPolicy: chạy được trên
+cluster dễ dãi, nhưng namespace có PSA `restricted`, ResourceQuota hay NetworkPolicy default-deny sẽ từ chối hoặc chặn
+pod. `chart/examples/values-restricted.yaml` (đi kèm mã nguồn, không nằm trong bundle) là values mẫu qua được PSA
+restricted và quota kiểu `lawfirm-prod`.
+
+## Backup và restore
+
+```bash
+ops/backup.sh /backup/quillo                    # trong thư mục cài đặt compose; in đường dẫn tệp .dump
+ops/restore.sh /backup/quillo/quillo-20261111T090000Z.dump            # từ chối nếu DB đang có tài liệu
+ops/restore.sh --force /backup/quillo/quillo-20261111T090000Z.dump    # ghi đè (dừng api/worker trước)
+COMPOSE="podman compose" ops/backup.sh /backup/quillo                 # Podman
+ops/backup.sh --kubectl -n quillo /backup/quillo                       # kubectl exec vào statefulset/quillo-db
+```
+
+`backup.sh` chạy `pg_dump -Fc` **trong** container db (không cần cài client Postgres trên máy), ghi `.dump` và
+`.dump.sha256`, kiểm lại bằng `pg_restore --list`, và từ chối khi đĩa trống ở đích nhỏ hơn 2 lần `pg_database_size`.
+`restore.sh` kiểm sha256 trước, từ chối khi database đang có tài liệu trừ khi `--force`, rồi `pg_restore --clean
+--if-exists --single-transaction` (lỗi giữa chừng thì database giữ nguyên). Đích k8s khác thì đặt `QUILLO_DB_TARGET`
+(vd. `statefulset/acme-db`), runtime khác hẳn thì `--exec "<tiền tố chạy lệnh trong container db, nhận stdin>"`.
+
 ## Bảo mật (Phase 1)
 
 - Token so sánh bằng `hmac.compare_digest`. Cookie phiên `<thời điểm cấp>.<HMAC(token, "v1:<thời điểm cấp>")>`
   (HttpOnly, SameSite=Strict): không chứa token, server từ chối khi quá 8 giờ kể từ lúc cấp hoặc chữ ký sai. Đổi token
-  = mọi phiên cũ mất hiệu lực. OIDC thêm ở Phase 2.
+  = mọi phiên cũ mất hiệu lực (kể cả phiên SSO, ký cùng khoá). OIDC: xem mục SSO ở trên.
 - Upload phải có `Content-Length`; mọi POST bị chặn kích thước trước khi parse (trước cả kiểm token): upload tối đa
   `QUILLO_MAX_UPLOAD_MB`, các POST khác 64 KB. Upload chỉ nhận `.pdf .html .htm .txt .md`, tên tệp được làm sạch (bỏ thư
   mục, ký tự lạ, `-`/`.` đầu tên, tối đa 200 ký tự); không ghi tệp upload ra đĩa theo tên gốc. `tags`: tối đa 20, mỗi tag

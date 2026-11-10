@@ -5,12 +5,11 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import uuid
 
 import pytest
+import yaml
 
 import release
-import testkit
 from quillo.config import PRODUCT_DIR
 
 BUDGET = int(1.5 * 1024**3)
@@ -19,17 +18,6 @@ BUDGET = int(1.5 * 1024**3)
 def run_verify(path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(PRODUCT_DIR / "release.py"), "verify", str(path)],
                           capture_output=True, text=True, timeout=300)
-
-
-@pytest.fixture(scope="module")
-def bundle():
-    if not testkit.docker_ready():
-        pytest.skip("release.py build cần Docker đang chạy")
-    out = PRODUCT_DIR / "dist" / f"pytest-{uuid.uuid4().hex[:8]}"
-    try:
-        yield release.build("1.0.0", out)
-    finally:
-        shutil.rmtree(out, ignore_errors=True)
 
 
 def test_release_bundle_layout(bundle):
@@ -165,6 +153,7 @@ def test_build_removes_partial_bundle_on_failure(tmp_path, monkeypatch):
     blob.write_bytes(b"x" * 1024)
     monkeypatch.setattr(release, "build_api_image", lambda version, work: f"quillo-api:{version}")
     monkeypatch.setattr(release, "save_images", lambda tag, work: {"images/quillo-api.tar": blob})
+    monkeypatch.setattr(release, "derived_images", lambda version, sources, work: {})
     monkeypatch.setattr(fdekit, "fetch_model", lambda name: blob.with_name(f"{name}.gguf"))
     for name in ("llm-small", "embed-small"):
         blob.with_name(f"{name}.gguf").write_bytes(b"gguf")
@@ -206,3 +195,75 @@ def test_verify_handles_dot_members(tmp_path):
     write(tmp_path / "outside.tar", [("./evil.sh", b"x")])
     outside = run_verify(tmp_path / "outside.tar")
     assert outside.returncode == 1 and "evil.sh" in outside.stdout and "Traceback" not in outside.stderr
+
+
+def test_bundle_contains_chart_and_ops(bundle):
+    with tarfile.open(bundle) as tar:
+        manifest = json.load(tar.extractfile("quillo-1.0.0/manifest.json"))
+        names = set(manifest["files"])
+        assert {"chart/quillo-1.0.0.tgz", "ops/backup.sh", "ops/restore.sh", "ops/models_image.py",
+                "compose.sso.yaml", "compose.extensions.yaml"} <= names
+        assert "images/quillo-models.tar" not in names
+        for script in ("ops/backup.sh", "ops/restore.sh"):
+            assert tar.getmember(f"quillo-1.0.0/{script}").mode == 0o755
+        chart = tarfile.open(fileobj=io.BytesIO(tar.extractfile("quillo-1.0.0/chart/quillo-1.0.0.tgz").read()))
+        meta = yaml.safe_load(chart.extractfile("quillo/Chart.yaml"))
+        values = yaml.safe_load(chart.extractfile("quillo/values.yaml"))
+    assert meta["version"] == meta["appVersion"] == "1.0.0"
+    assert values["models"]["llmFile"] == "qwen2.5-0.5b-instruct-q4_k_m.gguf" and values["models"]["llmAlias"] == "llm-small"
+    assert {"quillo/values.yaml", "quillo/templates/api.yaml"} <= set(chart.getnames())
+    assert not [n for n in chart.getnames() if not n.startswith("quillo/")]
+    assert manifest["derived"]["images/quillo-models.tar"]["image"] == "quillo-models:1.0.0"
+
+
+def blob(tar: tarfile.TarFile, digest: str) -> bytes:
+    return tar.extractfile(f"blobs/sha256/{digest.removeprefix('sha256:')}").read()
+
+
+def test_bundle_contains_chart_and_models_image(bundle):
+    """Image quillo-models dựng từ chính bundle bằng ops/models_image.py: tái lập đúng sha ghi trong manifest, là OCI
+    layout hợp lệ (digest/diff_id khớp), có models/*.gguf và giữ các layer của llama.cpp (có `cp`)."""
+    import fdekit
+
+    work = bundle.parent / "models-image"
+    try:
+        with tarfile.open(bundle) as tar:
+            members = [m for m in tar.getmembers() if m.isfile() and (
+                m.name.endswith(("manifest.json", "llama-cpp-server.tar", ".gguf")) or "/ops/" in m.name)]
+            tar.extractall(work, members=members, filter="data")
+        root = work / "quillo-1.0.0"
+        out = work / "quillo-models.tar"
+        made = subprocess.run([sys.executable, str(root / "ops" / "models_image.py"), str(root), str(out)],
+                              capture_output=True, text=True, timeout=300)
+        assert made.returncode == 0 and "khớp manifest.json" in made.stdout, made.stdout + made.stderr
+        with tarfile.open(out) as image, tarfile.open(root / "images" / "llama-cpp-server.tar") as base:
+            index = json.load(image.extractfile("index.json"))
+            assert index["manifests"][0]["annotations"]["io.containerd.image.name"] == "docker.io/library/quillo-models:1.0.0"
+            manifest = json.loads(blob(image, index["manifests"][0]["digest"]))
+            config_bytes = blob(image, manifest["config"]["digest"])
+            assert hashlib.sha256(config_bytes).hexdigest() == manifest["config"]["digest"][7:]
+            config = json.loads(config_bytes)
+            assert config["config"]["User"] == "65534"
+            docker_manifest = json.load(image.extractfile("manifest.json"))[0]
+            assert docker_manifest["RepoTags"] == ["quillo-models:1.0.0"]
+            base_index = json.load(base.extractfile("index.json"))
+            base_layers = json.loads(blob(base, base_index["manifests"][0]["digest"]))["layers"]
+            assert manifest["layers"][:-1] == base_layers
+            last = manifest["layers"][-1]
+            data = blob(image, last["digest"])
+            assert hashlib.sha256(data).hexdigest() == last["digest"][7:] == config["rootfs"]["diff_ids"][-1][7:]
+            assert len(config["rootfs"]["diff_ids"]) == len(manifest["layers"])
+            with tarfile.open(fileobj=io.BytesIO(data)) as layer:
+                sizes = {m.name: m.size for m in layer.getmembers() if m.isfile()}
+        for name in ("llm-small", "embed-small"):
+            model = fdekit.fetch_model(name)
+            assert sizes[f"models/{model.name}"] == model.stat().st_size
+        again = subprocess.run([sys.executable, str(root / "ops" / "models_image.py"), str(root), str(out)],
+                               capture_output=True, text=True, timeout=300)
+        assert again.returncode == 0
+        (root / "models" / "nomic-embed-text-v1.5.Q8_0.gguf").write_bytes(b"tampered")
+        tampered = subprocess.run([sys.executable, str(root / "ops" / "models_image.py"), str(root), str(out)],
+                                  capture_output=True, text=True, timeout=300)
+        assert tampered.returncode == 1 and "khác manifest.json" in tampered.stderr and not out.exists()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)

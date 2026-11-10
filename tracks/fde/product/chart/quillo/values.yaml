@@ -1,0 +1,95 @@
+# Giá trị mặc định chạy được trên cluster dễ dãi (không PSA, không quota). Cluster có PSA "restricted", ResourceQuota
+# hay NetworkPolicy default-deny cần đặt podSecurityContext, containerSecurityContext, resources, networkPolicy:
+# xem chart/examples/values-restricted.yaml đi kèm mã nguồn quillo.
+
+image:
+  # Registry nội bộ, vd. 10.0.2.101:5000. Rỗng: dùng tên gốc (quillo-api:<version>, ghcr.io/ggml-org/llama.cpp...).
+  # Có registry thì bỏ host gốc khỏi tên: <registry>/ggml-org/llama.cpp:server-b11718.
+  registry: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+  api:
+    repository: quillo-api
+    tag: ""
+  db:
+    repository: pgvector/pgvector
+    tag: 0.8.6-pg16
+  llamaCpp:
+    repository: ghcr.io/ggml-org/llama.cpp
+    tag: server-b11718
+
+models:
+  # initContainer chép GGUF từ image này vào emptyDir của pod llm/embed (không cần hostPath).
+  image:
+    repository: quillo-models
+    tag: ""
+  llmFile: qwen2.5-0.5b-instruct-q4_k_m.gguf
+  llmAlias: llm-small
+  embedFile: nomic-embed-text-v1.5.Q8_0.gguf
+  threads: 2
+  scratchSizeLimit: 2Gi
+
+auth:
+  # Secret có sẵn chứa admin-token và db-password. Rỗng: chart tạo Secret <release>-auth (sinh ngẫu nhiên một lần,
+  # giữ nguyên qua upgrade và cả khi uninstall, vì database trên PVC vẫn dùng mật khẩu cũ).
+  existingSecret: ""
+
+oidc:
+  # Đặt issuer để bật SSO. Client secret lấy từ Secret có sẵn (tạo từ tệp, không để trong values).
+  issuer: ""
+  clientId: quillo
+  existingSecret: ""
+  secretKey: client-secret
+  groupsClaim: groups
+  # ConfigMap chứa CA của IdP (khoá caKey) khi IdP dùng chứng chỉ của CA nội bộ.
+  caConfigMap: ""
+  caKey: ca.crt
+
+# Nhóm → thư mục, vd. "legal:legal/,finance:finance/". Tài liệu ngoài mọi thư mục trong ACL chỉ admin thấy.
+acl: ""
+
+extensions:
+  # ConfigMap chứa mã extension, mount chỉ đọc vào /opt/quillo/extensions. items: [{key, path}] để dựng package
+  # (vd. key acme_init → path acme/__init__.py). modules: tên module nạp lúc khởi động (QUILLO_EXTENSIONS).
+  configMap: ""
+  items: []
+  modules: []
+
+persistence:
+  size: 5Gi
+  inboxSize: 1Gi
+  storageClass: ""
+
+maxUploadMb: 20
+logLevel: INFO
+
+service:
+  port: 8080
+
+podSecurityContext: {}
+containerSecurityContext: {}
+# Theo thành phần: api, worker, db, llm, embed, models (initContainer), vd. resources.api.requests.cpu.
+resources: {}
+
+api:
+  podSecurityContext: {}
+  containerSecurityContext: {}
+worker:
+  podSecurityContext: {}
+  containerSecurityContext: {}
+db:
+  podSecurityContext: {}
+  containerSecurityContext: {}
+llm:
+  podSecurityContext: {}
+  containerSecurityContext: {}
+embed:
+  podSecurityContext: {}
+  containerSecurityContext: {}
+
+networkPolicy:
+  enabled: false
+  # Nguồn được gọi api (cổng 8080), dạng "from" của NetworkPolicy. Rỗng: mọi nguồn.
+  apiFrom: []
+  # Luật egress thêm cho api, vd. tới IdP: [{to: [{ipBlock: {cidr: 10.0.2.102/32}}], ports: [{port: 8080}]}]
+  apiExtraEgress: []

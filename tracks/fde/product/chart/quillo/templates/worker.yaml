@@ -1,0 +1,60 @@
+{{- $component := dict "root" $ "component" "worker" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-inbox
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "quillo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.inboxSize }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "quillo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "quillo.selector" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "quillo.selector" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "quillo.pullSecrets" . | nindent 6 }}
+      {{- include "quillo.podSecurityContext" $component | nindent 6 }}
+      containers:
+        - name: worker
+          image: {{ include "quillo.image" (list $ .Values.image.api.repository .Values.image.api.tag) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "quillo.ingest", "--watch", "/data/inbox"]
+          env:
+            {{- include "quillo.appEnv" . | nindent 12 }}
+          {{- include "quillo.containerExtras" $component | nindent 10 }}
+          volumeMounts:
+            - name: inbox
+              mountPath: /data/inbox
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: inbox
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-inbox
+        - name: tmp
+          emptyDir: {}

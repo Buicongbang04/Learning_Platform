@@ -1,0 +1,82 @@
+{{- range $kind := list "llm" "embed" }}
+{{- $component := dict "root" $ "component" $kind }}
+{{- $file := ternary $.Values.models.llmFile $.Values.models.embedFile (eq $kind "llm") }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $kind }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "quillo.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $kind }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "quillo.selector" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "quillo.selector" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "quillo.pullSecrets" $ | nindent 6 }}
+      {{- include "quillo.podSecurityContext" $component | nindent 6 }}
+      initContainers:
+        - name: models
+          image: {{ include "quillo.image" (list $ $.Values.models.image.repository $.Values.models.image.tag) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["cp", "/models/{{ $file }}", "/work/{{ $file }}"]
+          {{- include "quillo.containerExtras" (dict "root" $ "component" $kind "resources" "models") | nindent 10 }}
+          volumeMounts:
+            - name: models
+              mountPath: /work
+      containers:
+        - name: {{ $kind }}
+          image: {{ include "quillo.image" (list $ $.Values.image.llamaCpp.repository $.Values.image.llamaCpp.tag) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          {{- if eq $kind "llm" }}
+          args: ["-m", "/models/{{ $file }}", "--alias", {{ $.Values.models.llmAlias | quote }}, "-c", "4096",
+                 "-t", {{ $.Values.models.threads | quote }}, "--host", "0.0.0.0", "--port", "8080"]
+          {{- else }}
+          args: ["-m", "/models/{{ $file }}", "--embeddings", "--pooling", "mean", "-c", "2048", "-b", "2048",
+                 "-ub", "2048", "-t", {{ $.Values.models.threads | quote }}, "--host", "0.0.0.0", "--port", "8080"]
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+          {{- include "quillo.containerExtras" $component | nindent 10 }}
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+      volumes:
+        - name: models
+          emptyDir:
+            sizeLimit: {{ $.Values.models.scratchSizeLimit }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $kind }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "quillo.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $kind }}
+spec:
+  selector:
+    {{- include "quillo.selector" $component | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- end }}

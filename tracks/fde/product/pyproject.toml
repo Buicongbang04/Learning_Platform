@@ -12,6 +12,8 @@ dependencies = [
     "jinja2==3.1.6",
     "python-multipart==0.0.32",
     "pypdf==6.21.1",
+    "pyjwt[crypto]==2.15.1",
+    "prometheus-client==0.26.0",
 ]
 
 [tool.uv]

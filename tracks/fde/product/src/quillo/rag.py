@@ -32,9 +32,11 @@ def cited(answer: str, passages: list[dict]) -> list[dict]:
     return [passages[n - 1] for n in numbers] or passages
 
 
-def answer(conn, embedder: ModelServer, llm: ModelServer, question: str, top_k: int) -> dict:
+def answer(conn, embedder: ModelServer, llm: ModelServer, question: str, top_k: int,
+           allowed: list[str] | None = None) -> dict:
+    """Trả lời từ các đoạn người hỏi được xem (`allowed`: tiền tố thư mục theo ACL, None = admin)."""
     [query] = embedder.embed([QUERY_PREFIX + question])
-    passages = db.search(conn, query, top_k)
+    passages = db.search(conn, query, top_k, allowed)
     if not passages:
         return {"answer": NO_DOCUMENTS, "citations": [], "model": "", "passages": []}
     messages = [{"role": "system", "content": SYSTEM_PROMPT},

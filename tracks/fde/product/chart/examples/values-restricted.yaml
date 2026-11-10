@@ -1,0 +1,57 @@
+# Values mẫu cho cluster của khách kiểu lawfirm-prod: namespace PSA "restricted", ResourceQuota (requests.cpu 3,
+# requests.memory 4Gi, limits.memory 5Gi), LimitRange (mỗi pod tối đa cpu 2, memory 3Gi; PVC tối đa 10Gi),
+# image kéo từ registry nội bộ. Dùng: helm upgrade --install quillo quillo-<version>.tgz -n quillo -f <tệp này>.
+#
+# PSA restricted đòi mọi container (kể cả initContainer): runAsNonRoot, không leo quyền, bỏ mọi capability,
+# seccompProfile RuntimeDefault. Image pgvector và llama.cpp mặc định chạy root nên phải đặt runAsUser.
+# Tổng 5 pod: requests cpu 1 / memory 2Gi, limits memory 3,375Gi. requests.cpu giữ thấp vì node chỉ có 2 vCPU và
+# pod hệ thống của k3s đã giữ một phần: tổng requests vượt phần còn lại thì pod Pending "Insufficient cpu" dù quota
+# còn chỗ. llm, embed, worker dùng strategy Recreate; api rolling update cần thêm một pod api (512Mi) lúc chuyển.
+
+image:
+  registry: 10.0.2.101:5000
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+api:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+worker:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+db:
+  podSecurityContext: {runAsUser: 999, runAsGroup: 999, fsGroup: 999}
+llm:
+  podSecurityContext: {runAsUser: 65534, runAsGroup: 65534}
+embed:
+  podSecurityContext: {runAsUser: 65534, runAsGroup: 65534}
+
+resources:
+  api:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  worker:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+  db:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  llm:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {cpu: "2", memory: 1536Mi}
+  embed:
+    requests: {cpu: 250m, memory: 384Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  models:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 128Mi}
+
+persistence:
+  size: 5Gi
+  inboxSize: 1Gi

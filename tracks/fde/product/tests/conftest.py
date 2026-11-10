@@ -60,3 +60,36 @@ def client(database_url, fake_llm):
     with TestClient(create_app(make_settings(database_url, fake_llm.url))) as test_client:
         yield test_client
 
+
+
+@pytest.fixture
+def idp():
+    from fake_idp import FakeIdP
+
+    with FakeIdP() as fake:
+        yield fake
+
+
+@pytest.fixture
+def sso_client(database_url, fake_llm, idp):
+    from fastapi.testclient import TestClient
+
+    from quillo.app import create_app
+    from quillo_support import sso_settings
+
+    with TestClient(create_app(sso_settings(database_url, fake_llm.url, idp))) as test_client:
+        yield test_client
+
+
+@pytest.fixture(scope="session")
+def bundle():
+    """Bundle 1.0.0 dựng thật một lần cho cả phiên test (dist/pytest-*, xoá khi xong)."""
+    import shutil
+
+    if not testkit.docker_ready():
+        pytest.skip("release.py build cần Docker đang chạy")
+    out = release.PRODUCT / "dist" / f"pytest-{uuid.uuid4().hex[:8]}"
+    try:
+        yield release.build("1.0.0", out)
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
