@@ -43,6 +43,12 @@ def numbers(text: str) -> set[int]:
     return {int(n) for n in re.findall(r"(?<![\d:.,])(\d+)(?![\d:])", text)}
 
 
+def in_order(times: list[tuple[int, int]]) -> bool:
+    minutes = [h * 60 + m for h, m in times]
+    drops = sum(1 for a, b in zip(minutes, minutes[1:]) if b < a)
+    return drops == 0 or (drops == 1 and minutes[-1] <= minutes[0])
+
+
 def postmortem_problems(doc: str) -> list[str]:
     found = ["Còn TODO"] if "TODO" in doc else []
     for number in range(1, 9):
@@ -53,7 +59,7 @@ def postmortem_problems(doc: str) -> list[str]:
     times = [(int(m.group(1)), int(m.group(2))) for line in section(doc, 3).splitlines() if (m := TIME.match(line.strip()))]
     if len(times) < 8:
         found.append(f"Phần 3: timeline cần ít nhất 8 dòng bảng bắt đầu bằng giờ HH:MM, có {len(times)}")
-    elif times != sorted(times):
+    elif not in_order(times):
         found.append("Phần 3: timeline phải theo thứ tự thời gian")
     actions = table_rows(section(doc, 8))
     if len(actions) < 5:
@@ -85,7 +91,7 @@ def test_impact_and_detection_minutes():
 def test_root_cause_names_mechanism():
     text = flat(section(ex.read("POSTMORTEM.md"), 4))
     assert all(any(word in text for word in group) for group in MECHANISM), \
-        "Phần 4: chưa chỉ ra cơ chế cụ thể trong cấu hình khiến alert không tới người trực, và phần thiếu trong đó (đối chiếu evidence/)"
+        "Phần 4: chưa chỉ ra cơ chế cụ thể trong cấu hình khiến alert không tới người trực (đối chiếu evidence/)"
 
 
 def test_action_items_prevent_mechanism():
@@ -104,6 +110,11 @@ def test_checks_catch_weak_postmortem():
     for needle in ("Phần 3: timeline phải theo thứ tự", "Phần 8: mỗi action item cần người phụ trách", "Phần 6: chưa nói tới watchdog",
                    "Phần 7: ít nhất 3", "Phần 1: tóm tắt cần"):
         assert needle in found, f"Không bắt được: {needle}\n{found}"
+
+
+def test_timeline_may_cross_midnight():
+    assert in_order([(22, 10), (23, 40), (0, 15), (1, 30)])
+    assert not in_order([(22, 10), (0, 15), (23, 40)])
 
 
 def test_good_postmortem_passes():

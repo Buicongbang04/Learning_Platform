@@ -55,7 +55,7 @@ Alert dùng recording rule, không viết lại biểu thức gốc. Mỗi alert
 | --- | --- |
 | `test_rules_pass_promtool_check` | `promtool check rules rules.yml` |
 | `test_alert_labels_and_annotations` | `severity`, `summary`, `runbook_url` |
-| `test_rules_behave_as_specified` | Chạy `tests/fixtures/semantics.test.yml` trên rule của bạn (đã bỏ annotations): giá trị recording rule, nhãn còn lại, thời điểm alert bắn, không bắn khi lỗi 1%, khi job khác lỗi, khi không có traffic, khi path khác chậm |
+| `test_rules_behave_as_specified` | Chạy `tests/fixtures/semantics.test.yml` trên rule của bạn (đã bỏ annotations và mọi nhãn thêm của alert trừ `severity`, nên bạn được thêm nhãn như `team`): giá trị recording rule, nhãn còn lại, thời điểm alert bắn, không bắn khi lỗi 1%, khi job khác lỗi, khi không có traffic, khi path khác chậm |
 | `test_own_unit_tests_pass_and_cover_every_rule` | `rules.test.yml` pass và phủ đủ như trên |
 | `test_own_unit_tests_catch_broken_rule` (7 ca) | Test sửa rule của bạn thành bản hỏng (nhân đôi hay chia đôi giá trị, alert không bao giờ bắn, alert luôn bắn khi có dữ liệu); `rules.test.yml` phải **fail** với mỗi bản hỏng |
 | `test_rules_on_real_olist_data` | Dựng Olist Shop cùng `ObsStack`, nạp `rules.yml` vào Prometheus, gửi request (có 503 thật), rồi kiểm Prometheus nạp rule không lỗi và cả ba recording rule ra số với `job="olist-api"` |

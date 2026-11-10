@@ -37,7 +37,8 @@ Sửa `starter/observability/otel-collector/config.yaml`. Không đổi code app
 **Cách test chấm.** Test dựng Olist Shop cùng `ObsStack` với cấu hình của bạn, gửi 40 request `GET /orders/...` tới các đơn hàng khác
 nhau, rồi kiểm:
 
-- Tổng lời gọi của span `GET /orders/{order_id}` với `http_response_status_code="404"` trong spanmetrics đủ 40.
+- Tổng lời gọi của span `GET /orders/{order_id}` với `http_request_method="GET"`, `http_response_status_code="404"` trong spanmetrics
+  đủ 40.
 - Số series `traces_span_metrics_calls_total{service_name="olist-shop-api"}` không quá 20, tức không lớn lên theo số request.
 - Trace kèm span DB vẫn tới Jaeger.
 

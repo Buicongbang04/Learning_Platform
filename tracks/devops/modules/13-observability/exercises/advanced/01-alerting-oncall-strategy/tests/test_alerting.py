@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -195,10 +196,15 @@ def test_inhibition_in_real_alertmanager(tmp_path):
         before = states(base)
         assert not any(before.values()), f"Khi chưa có OlistServiceDown, không alert nào được bị inhibit: {before}"
         post_alerts(base, [down])
+        targets = [(labels["alertname"], "olist-api") for labels in same]
+        deadline = time.monotonic() + 15
         after = states(base)
-        assert not after[("OlistServiceDown", "olist-api")], "OlistServiceDown không được tự inhibit chính nó"
+        while not all(after.get(key) for key in targets) and time.monotonic() < deadline:
+            time.sleep(0.5)
+            after = states(base)
+        assert not after.get(("OlistServiceDown", "olist-api")), "OlistServiceDown không được tự inhibit chính nó"
         for labels in same:
-            assert after[(labels["alertname"], "olist-api")], f"{labels['alertname']} của olist-api phải bị inhibit khi olist-api down"
+            assert after.get((labels["alertname"], "olist-api")), f"{labels['alertname']} của olist-api phải bị inhibit khi olist-api down"
         for labels in other:
-            assert not after[(labels["alertname"], "olist-worker")], \
+            assert not after.get((labels["alertname"], "olist-worker")), \
                 f"{labels['alertname']} của olist-worker không được bị inhibit khi chỉ olist-api down"

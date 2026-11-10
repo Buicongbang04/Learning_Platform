@@ -12,7 +12,7 @@ ORDERS = 40
 LIMIT = 20
 SERIES = 'traces_span_metrics_calls_total{service_name="olist-shop-api"}'
 ORDER_404 = ('sum(traces_span_metrics_calls_total{service_name="olist-shop-api", span_name="GET /orders/{order_id}", '
-             'http_response_status_code="404"})')
+             'http_request_method="GET", http_response_status_code="404"})')
 
 
 def olist_project(tmp_path: Path, config: Path) -> Path:
@@ -53,7 +53,7 @@ def leaked(series: list[dict]) -> list[str]:
 def test_span_metrics_stay_bounded(tmp_path):
     result = run_traffic(tmp_path, ex.path(CONFIG))
     assert result["total"], (f"Sau {ORDERS} request GET /orders/..., Prometheus phải có tổng {ORDERS} lời gọi trong "
-                             f"traces_span_metrics_calls_total theo span_name và http_response_status_code=\"404\"")
+                             f"traces_span_metrics_calls_total theo span_name, http_request_method=\"GET\" và http_response_status_code=\"404\"")
     count, per_request = len(result["series"]), bool(leaked(result["series"]))
     assert count <= LIMIT, (f"{count} series spanmetrics cho olist-shop-api sau {ORDERS} request; "
                             f"số series phải không phụ thuộc số request (tối đa {LIMIT})")

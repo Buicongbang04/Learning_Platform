@@ -48,10 +48,12 @@ def stage(tmp_path: Path, name: str, rules: dict, test_file: Path) -> Path:
     return folder
 
 
-def without_annotations(data: dict) -> dict:
+def comparable(data: dict) -> dict:
     data = yaml.safe_load(yaml.safe_dump(data))
     for rule in rules_of(data):
         rule.pop("annotations", None)
+        if "alert" in rule:
+            rule["labels"] = {k: v for k, v in (rule.get("labels") or {}).items() if k == "severity"}
     return data
 
 
@@ -86,7 +88,7 @@ def test_alert_labels_and_annotations():
 def test_rules_behave_as_specified(tmp_path):
     data = load("rules.yml")
     require_names(data)
-    folder = stage(tmp_path, "spec", without_annotations(data), FIXTURES / "semantics.test.yml")
+    folder = stage(tmp_path, "spec", comparable(data), FIXTURES / "semantics.test.yml")
     result = testkit.promtool("test", "rules", "tests.yml", cwd=folder)
     assert result.returncode == 0, "Rule chưa đúng đặc tả trong đề (kịch bản kiểm của bài):\n" + result.stdout + result.stderr
 

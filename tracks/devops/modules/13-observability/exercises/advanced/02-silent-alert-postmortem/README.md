@@ -44,8 +44,8 @@ Dữ kiện người trực gom được ngày 2026-10-21 (giờ Việt Nam), ch
 Thêm:
 
 - Heartbeat của Watchdog tới dịch vụ bên ngoài đều đặn suốt buổi tối; dịch vụ đó không báo gì.
-- Luật thứ hai trong `inhibit_rules` được team Search thêm 3 tuần trước trong PR "im alert khi bảo trì". PR qua `amtool check-config` trong
-  CI và được một người team Search duyệt. Không có test nào chạy Alertmanager thật.
+- Một PR của team Search 3 tuần trước sửa `alertmanager.yml` ("im alert khi bảo trì"). PR qua `amtool check-config` trong CI và được một
+  người team Search duyệt. Không có test nào chạy Alertmanager thật.
 - Ngày 2026-10-08, trong một đợt bảo trì khác của Search (14:00 tới 18:00), ticket `OlistPostgresDiskFillingUp` của Olist Shop không được
   tạo; đĩa được phát hiện ở mức 91% hai ngày sau qua dashboard.
 - Trung bình khoảng 95 lượt đặt hàng mỗi phút vào giờ đó; số đơn thất bại ước tính 1.900, khoảng 60% khách thử lại thành công sau 22:00.
@@ -62,7 +62,7 @@ chấm nội dung.
 | 1. Tóm tắt | Ít nhất 250 ký tự văn xuôi |
 | 2. Tác động | Thời gian ảnh hưởng đúng theo dữ kiện (số phút), nhắc đơn hàng và khách |
 | 3. Timeline | Ít nhất 8 dòng bảng có cột đầu là giờ `HH:MM`, theo thứ tự thời gian |
-| 4. Nguyên nhân | Ít nhất 3 gạch đầu dòng; chỉ ra đúng cơ chế cấu hình và phần thiếu trong đó (kiểm bằng từ khoá, không công bố: bằng chứng đủ để tự tìm) |
+| 4. Nguyên nhân | Ít nhất 3 gạch đầu dòng; chỉ ra đúng cơ chế cấu hình gây ra sự cố (kiểm bằng từ khoá, không công bố: bằng chứng đủ để tự tìm) |
 | 5. Phát hiện và xử lý | Thời gian từ lúc bắt đầu lỗi tới lúc con người biết (số phút); nhắc rollback |
 | 6. Chạy tốt, chưa tốt | Ít nhất 3 gạch đầu dòng; nhắc Watchdog |
 | 7. Bài học | Ít nhất 3 gạch đầu dòng |
@@ -85,5 +85,6 @@ cho thấy alert đã đi tới bước nào? Trường `inhibitedBy` trỏ tớ
 
 ### Gợi ý 2
 
-So luật thứ hai trong `inhibit_rules` với luật thứ nhất ngay trên nó. Rồi hỏi: luật đó được viết cho ai, và nó thực sự áp dụng cho ai? Mỗi
+Khi đã biết alert nào đứng sau `fingerprint` trong `inhibitedBy`, tìm phần cấu hình cho phép nó làm vậy, rồi hỏi: phần đó được viết cho
+ai, và nó thực sự áp dụng cho ai? Mỗi
 nguyên nhân hệ thống (review, CI, cách mô hình hoá bảo trì, cách giám sát chính hệ thống alert) nên có ít nhất một action item.

@@ -19,6 +19,7 @@ UID = "olist-api-red"
 FOLDER = "Olist Shop"
 DATASOURCES = {"prometheus": "prometheus", "loki": "loki"}
 PANEL_TYPES = {"timeseries", "stat", "gauge", "bargauge", "table", "logs", "heatmap"}
+FIVE_XX = r'status\s*(?:>=\s*5\d\d|>\s*499|=~\s*"5)'
 WINDOW = re.compile(r"\b(?:rate|increase|irate)\s*\([^\[]*\[([^\]]+)\]")
 
 
@@ -109,13 +110,14 @@ def test_red_queries_present():
     if not find(data, "prometheus", r"\brate\(", r"jobs_processed_total"):
         missing.append("Worker: rate(jobs_processed_total ...)")
     logs = [p for p in panels(data) if p.get("type") == "logs"]
-    if not logs or not find(data, "loki", r'service_name="olist-shop-api"'):
-        missing.append('Panel logs với query Loki trên {service_name="olist-shop-api"}')
+    if not logs or not find(data, "loki", r'service_name="olist-shop-api"', FIVE_XX):
+        missing.append('Panel logs với query Loki trên {service_name="olist-shop-api"} chỉ lấy request 5xx')
     assert not missing, "Còn thiếu: " + "; ".join(missing)
 
 
 def test_counters_and_windows():
     data = dashboard()
+    assert exprs(data, "prometheus"), "Dashboard chưa có query Prometheus nào"
     for expr in exprs(data, "prometheus"):
         bare = re.sub(r"\b(?:rate|increase|irate)\s*\([^()]*\)", "", expr)
         assert not re.search(r"\w+_total\b", bare), f"Counter vẽ thô, cần rate()/increase(): {expr}"
@@ -189,6 +191,6 @@ def test_dashboard_provisioned_and_panels_return_data(tmp_path):
         send_traffic(stack)
         empty = []
         for panel, target in targets(loaded):
-            if not stack.eventually(lambda: grafana_query(stack, panel, target), 45, 3):
+            if not stack.eventually(lambda: grafana_query(stack, panel, target), 20, 2):
                 empty.append(f"'{panel.get('title')}': {target.get('expr')}")
         assert not empty, "Query không trả dữ liệu dù Olist Shop đã có traffic, job và lỗi 503:\n" + "\n".join(empty)

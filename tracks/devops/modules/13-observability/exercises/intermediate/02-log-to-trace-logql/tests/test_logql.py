@@ -94,6 +94,12 @@ def prepare(stack: ObsStack) -> None:
         for i in range(ERRORS):
             assert client.get(f"{api}/readyz", headers={"X-Request-ID": f"chk-ready-{i}"}).status_code == 503
 
+    def ingested():
+        result = stack.loki_query('{service_name="olist-shop-api"} |= "chk-ready-" | json | status >= 500', since=900, limit=50)
+        return sum(len(s.get("values") or []) for s in result) >= ERRORS
+
+    assert stack.eventually(ingested, 60), "Loki chưa nhận đủ log 503 của /readyz"
+
 
 @pytest.fixture(scope="module")
 def olist(tmp_path_factory):
