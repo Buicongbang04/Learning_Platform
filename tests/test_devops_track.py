@@ -194,8 +194,8 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
     return errors
 
 
-TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault", "argocd", "promtool", "amtool",
-         "aws", "awslocal")
+TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault", "argocd", "linkerd", "promtool",
+         "amtool", "aws", "awslocal")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
 NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
 TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
@@ -391,9 +391,10 @@ def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
 
 def check_tool_calls(path: Path) -> list[str]:
     """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu, sops, age, age-keygen, vault, argocd,
-    promtool, amtool, aws, awslocal trực tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command, act_run,
-    TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với
-    sops_env/vault_env; ArgoCD qua KubeLab.argocd_project, gitops_repo, argocd_wait; promtool, amtool qua
+    linkerd, promtool, amtool, aws, awslocal trực tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command,
+    act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với
+    sops_env/vault_env; ArgoCD qua KubeLab.argocd_project, gitops_repo, argocd_wait; Linkerd qua KubeLab(mesh=True) và
+    KubeLab.mesh_status; promtool, amtool qua
     testkit.promtool/amtool; stack observability qua ObsStack; AWS qua localstack_client, handler Lambda qua LambdaLab).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
@@ -778,6 +779,9 @@ TOOL_DENYLIST_BAD = {
     "list-vault": 'subprocess.run(["vault", "kv", "get", "secret/app"])\n',
     "list-argocd": 'subprocess.run(["argocd", "app", "sync", "web", "--core"])\n',
     "string-argocd": 'subprocess.run("argocd app wait web --health", shell=True)\n',
+    "list-linkerd": 'subprocess.run(["linkerd", "viz", "stat", "deploy", "-n", lab.namespace])\n',
+    "string-linkerd": 'subprocess.run("linkerd check --proxy", shell=True)\n',
+    "shell-c-linkerd": 'subprocess.run(["bash", "-c", "linkerd identity -n x"])\n',
     "list-promtool": 'subprocess.run(["promtool", "test", "rules", "tests.yml"])\n',
     "string-amtool": 'subprocess.run("amtool check-config alertmanager.yml", shell=True)\n',
     "shell-c-promtool": 'subprocess.run(["bash", "-c", "cd rules && promtool check rules *.yml"])\n',
@@ -903,6 +907,8 @@ TOOL_DENYLIST_GOOD = {
                       '"snapshot", "save", "/var/lib/etcd/devops-ex-snapshot.db", timeout=120)\n'),
     "require-kind-images": 'ex.require_kind_images("devops-track/olist-shop:1.0", "postgres:16.15-alpine")\n',
     "require-gateway": 'ex.require_gateway()\nwith KubeLab() as lab:\n    host = lab.hostname\n',
+    "kube-lab-mesh": ('ex.require_linkerd()\nwith KubeLab(mesh=True) as lab:\n    lab.apply_learner(ex.path("k8s"))\n'
+                      '    status = lab.mesh_status("deployment/api")\n    assert status["mtls"]\n'),
     "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
 }
 

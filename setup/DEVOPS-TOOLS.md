@@ -31,6 +31,8 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | vault (CLI) | 12 GitOps & secrets (bản đã kiểm 2.2.1 từ releases.hashicorp.com, kiểm SHA-256 theo `vault_2.2.1_SHA256SUMS`; test chạy `vault` trong sandbox với `vault_env`, không đọc `VAULT_*` hay `~/.vault-token` của máy) | 1.15 | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 | argocd (CLI, tuỳ chọn) | 12 GitOps & secrets (bản đã kiểm 3.5.6, kiểm SHA-256 theo `cli_checksums.txt`; không bài nào cần: bản core của track không có API server, và `argocd --core` v3.5.6 không đọc được Application ngoài namespace `argocd`, nên trạng thái đọc bằng `kubectl`) | Không đặt | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
 | ArgoCD và git server (trong cluster, không cài lên máy) | 12 GitOps & secrets (ArgoCD v3.5.6 bản core ghim trong `setup/kind/argocd/`, sidecar CMP `sops-kustomize`, git server chỉ đọc trong `devops-git`; xem [ArgoCD và git server dùng chung](#argocd-và-git-server-dùng-chung)) | Đúng bản đã ghim | [Cài đặt](../tracks/devops/modules/12-gitops-secrets/README.md#0-cài-đặt) |
+| linkerd (CLI, tuỳ chọn) | 15 Service mesh & patterns (bản đã kiểm edge-26.10.1, kiểm SHA-256 theo digest của asset trên GitHub release vì release của Linkerd không kèm tệp checksum; test không gọi `linkerd`, CLI chỉ để xem tay bằng kubeconfig admin, ví dụ `linkerd --kubeconfig ~/.kube/devops-lab.yaml check`) | Không đặt | [Cài đặt](../tracks/devops/modules/15-service-mesh-patterns/README.md#0-cài-đặt) |
+| Linkerd (trong cluster, không cài lên máy) | 15 Service mesh & patterns (edge-26.10.1, control plane cộng linkerd-cni render sẵn trong `setup/kind/linkerd/`, chứng chỉ do admin sinh bằng `certs.sh`; xem [Linkerd dùng chung](#linkerd-dùng-chung)) | Đúng bản đã ghim | [Cài đặt](../tracks/devops/modules/15-service-mesh-patterns/README.md#0-cài-đặt) |
 | Stack observability (image Docker ghim digest: OTel Collector contrib 0.163.2, Jaeger 2.22.0, Loki 3.7.9, Prometheus v3.5.0, Alertmanager v0.34.1, Grafana 13.2.5; xem [Stack observability](#stack-observability)) | 13 Observability (chạy trong container bằng `testkit.ObsStack`, không cài lên máy) | Đúng tag và digest đã ghim | [Stack observability](#stack-observability) |
 | promtool, amtool | 13 Observability (chạy trong image Prometheus, Alertmanager ghim qua `testkit.promtool`/`amtool`, không cần cài; muốn gõ tay thì dùng `docker run` ở [Stack observability](#stack-observability)) | Đúng bản trong image | [Stack observability](#stack-observability) |
 | logcli (tuỳ chọn) | 13 Observability (bản đã kiểm 3.7.9, cùng bản Loki của stack, kiểm SHA-256 theo `SHA256SUMS` của release; không bài nào cần, chỉ để chạy LogQL từ terminal) | 3.0 | [Cài đặt](../tracks/devops/modules/13-observability/README.md#0-cài-đặt) |
@@ -492,13 +494,144 @@ Giới hạn cần biết:
 Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/argocd` (xoá CRD là xoá mọi Application và AppProject; Secret
 và ConfigMap khoá age nằm trong namespace `argocd` nên bị xoá cùng).
 
+### Linkerd dùng chung
+
+Bài service mesh (module 15, capstone) dùng một Linkerd do **admin cài một lần** sau khi tạo cluster và cài CRD Gateway API (bước đầu
+của [Gateway dùng chung](#gateway-dùng-chung-gateway-api-và-traefik)); test không bao giờ cài, thiếu thì `ex.require_linkerd()` và
+`KubeLab(mesh=True)` skip kèm lệnh dưới. Tệp ghim trong `setup/kind/linkerd/`:
+
+| Thành phần | Bản | Ghim |
+| --- | --- | --- |
+| `00-linkerd-crds-edge-26.10.1.yaml` | `helm template` của chart `linkerd-crds` 2026.10.1 (CRD `policy.linkerd.io`, `linkerd.io`, `workload.linkerd.io`; không kèm CRD Gateway API) | `SHA256SUMS` |
+| `10-linkerd-cni-edge-26.10.1.yaml` | `helm template` của chart `linkerd2-cni` 2026.10.1 với `values-cni.yaml` (`imagePullPolicy: Never`, request nhỏ) | `SHA256SUMS` |
+| `20-linkerd-control-plane-edge-26.10.1.yaml` | `helm template` của chart `linkerd-control-plane` 2026.10.1 với `values-control-plane.yaml` | `SHA256SUMS` |
+| `01-namespaces.yaml`, `kustomization.yaml`, `certs.sh`, `values-*.yaml` (track viết) | Namespace `linkerd` (Pod Security `restricted`) và `linkerd-cni` (`privileged`, CNI ghi vào `/etc/cni/net.d` của node), cả hai tắt webhook của Linkerd; script sinh chứng chỉ | `SHA256SUMS` |
+| Image `cr.l5d.io/linkerd/controller:edge-26.10.1` | destination, policy controller, identity, proxy-injector | Digest `sha256:880437e01bbd4bf3d8fa7b56996c4ed5dd6551843363dc851ddd0b298b923e8a` |
+| Image `cr.l5d.io/linkerd/proxy:edge-26.10.1` | Proxy sidecar và init container `linkerd-network-validator` của mọi pod trong mesh | Digest `sha256:f2add36071cfca33754d2930800860785aaed672590bc0207be2f4da9889eb11` |
+| Image `cr.l5d.io/linkerd/cni-plugin:v1.7.0` | DaemonSet `linkerd-cni` trên cả ba node (kể cả control plane) | Digest `sha256:f710874e5d70edfcf6e9e2a8ad18175b928a3f572eae322d7123b96f9b40c5a4` |
+
+Lựa chọn và lý do:
+
+- **Bản edge-26.10.1.** Linkerd mã nguồn mở chỉ phát hành bản edge; bản "stable" do nhà phân phối (Buoyant) build và cần đăng ký.
+  edge-26.10.1 (2026-10-05) là bản edge mới nhất đã ra đủ hai tuần trước ngày cài (2026-11-11): edge-26.10.2 ra 2026-10-29, chỉ
+  thiếu một ngày. Bản này chỉ nâng dependency và proxy v2.370.0, không có thay đổi phá vỡ so với 26.9.x.
+- **Render bằng `helm template` thay cho `linkerd install`.** `linkerd install --ignore-cluster` không cho dùng issuer ngoài
+  (`--identity-external-issuer`), còn để CLI tự sinh thì trust anchor, issuer và khoá webhook nằm thẳng trong manifest, tức là
+  trong repo. Chart Helm của đúng release, render với `identity.externalCA: true`, issuer `kubernetes.io/tls` và
+  `externalSecret: true` cho ba webhook, cho ra manifest không có Secret hay khoá nào. Render lại được: lệnh ở dưới, chart ghim
+  SHA-256.
+- **linkerd-cni thay init container `linkerd-init`.** `linkerd-init` cần NET_ADMIN, NET_RAW để đặt iptables trong pod, mà namespace
+  của lab là Pod Security baseline: pod sẽ bị từ chối. Với CNI, pod chỉ có thêm `linkerd-network-validator` (không capability, uid
+  65534) và proxy native sidecar (`readOnlyRootFilesystem`, drop ALL), chạy được dưới baseline lẫn restricted.
+- **Không cài viz.** `KubeLab.mesh_status` đọc thẳng `/metrics` và `/env.json` trên cổng admin 4191 của proxy qua API server
+  (`kubectl get --raw /api/v1/namespaces/<ns>/pods/<pod>:4191/proxy/metrics`), nên không cần Prometheus và dashboard của viz
+  (thêm vài trăm MiB). Heartbeat (CronJob gửi về linkerd.io) tắt.
+- **Chứng chỉ do admin sinh bằng openssl** (không cần thêm binary `step`): `certs.sh` tạo trust anchor (ECDSA P-256, 10 năm), ký
+  issuer (CA trung gian `identity.linkerd.cluster.local`, 1 năm), **xoá khoá trust anchor ngay sau khi ký**, rồi đưa trust anchor vào
+  ConfigMap `linkerd/linkerd-identity-trust-roots`, issuer vào Secret `linkerd/linkerd-identity-issuer`. Ba webhook dùng một CA
+  riêng (khoá cũng bị xoá sau khi ký) và Secret `linkerd-*-k8s-tls`; script vá `caBundle` của ba webhook rồi khởi động lại control
+  plane. Mọi tệp nằm trong `mktemp -d`, `umask 077`, xoá khi thoát; Secret tạo bằng server-side apply nên khoá không bị chép vào
+  annotation `last-applied-configuration`. Khoá viết dạng PKCS#8: policy controller (Rust) không đọc khoá EC dạng SEC1 (`could not
+  load private key`). Testkit không bao giờ đọc các Secret này.
+- **Tài nguyên:** request 5-10m CPU, 16-32 MiB cho mỗi container control plane, giới hạn 128-256 MiB; proxy request 10m, 16 MiB,
+  giới hạn 128 MiB (áp cho cả proxy trong pod của bài).
+
+Chạy từ thư mục gốc của repo, sau khi đã tạo cluster và cài CRD Gateway API:
+
+```bash
+ok=1
+for ref in cr.l5d.io/linkerd/controller:edge-26.10.1@sha256:880437e01bbd4bf3d8fa7b56996c4ed5dd6551843363dc851ddd0b298b923e8a \
+           cr.l5d.io/linkerd/proxy:edge-26.10.1@sha256:f2add36071cfca33754d2930800860785aaed672590bc0207be2f4da9889eb11 \
+           cr.l5d.io/linkerd/cni-plugin:v1.7.0@sha256:f710874e5d70edfcf6e9e2a8ad18175b928a3f572eae322d7123b96f9b40c5a4; do
+  image="${ref%@*}" && archive=~/.cache/devops-track/kind-images/"$(echo "$image" | tr '/:' '__')".tar &&
+  nodes=devops-lab-worker,devops-lab-worker2 && case "$image" in *cni-plugin*) nodes="devops-lab-control-plane,$nodes";; esac &&
+  docker pull "${image%:*}@${ref##*@}" && docker tag "${image%:*}@${ref##*@}" "$image" &&
+  mkdir -p ~/.cache/devops-track/kind-images && docker save --platform linux/amd64 -o "$archive" "$image" &&
+  nice -n 15 kind load image-archive "$archive" --name devops-lab --nodes "$nodes" &&
+  rm -f "$archive" || { ok=0; break; }
+done
+[ "$ok" = 1 ] &&
+(cd setup/kind/linkerd && sha256sum --check SHA256SUMS) &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/linkerd &&
+bash setup/kind/linkerd/certs.sh &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n linkerd-cni rollout status daemonset/linkerd-cni --timeout=120s &&
+kubectl --kubeconfig ~/.kube/devops-lab.yaml -n linkerd rollout status deployment/linkerd-identity deployment/linkerd-destination deployment/linkerd-proxy-injector --timeout=180s
+```
+
+`certs.sh` đọc kubeconfig admin ở `~/.kube/devops-lab.yaml` (đổi bằng biến `DEVOPS_LAB_KUBECONFIG`). Chạy lại `certs.sh` là xoay
+toàn bộ chứng chỉ: trust anchor mới, nên phải khởi động lại mọi pod đang trong mesh (`kubectl rollout restart`); không có khoá trust
+anchor cũ để ký issuer mới chung gốc. `apply -k` lại thư mục này đặt `caBundle` của webhook về chuỗi giữ chỗ
+`devops-linkerd-certs-sh`: chạy lại `certs.sh` sau đó (`require_linkerd` báo đúng lỗi này). CRD Gateway API cài sau Linkerd thì
+policy controller không theo dõi HTTPRoute của Gateway API cho tới khi `kubectl -n linkerd rollout restart deployment/linkerd-destination`.
+
+Render lại manifest (người bảo trì track, khi nâng bản; chart lấy từ `https://helm.linkerd.io/edge`, SHA-256 là `digest` trong
+`index.yaml` của repo chart):
+
+```bash
+mkdir -p ~/.cache/devops-track/dl/linkerd-charts && cd ~/.cache/devops-track/dl/linkerd-charts &&
+for chart in linkerd-crds-2026.10.1 linkerd2-cni-2026.10.1 linkerd-control-plane-2026.10.1; do
+  curl -fsSLO "https://helm.linkerd.io/edge/$chart.tgz" || break
+done &&
+printf '%s\n' "455eb0dd8934e1e832a14cdd255de48c4f7861caeb175573ec8d17e5c4a1ce94  linkerd-crds-2026.10.1.tgz" \
+  "05acb652a9651d3a0a02d14d302e89686e116414bf35bdf5bd56547787c2ca1b  linkerd2-cni-2026.10.1.tgz" \
+  "e8db107da4932f09f67316ff305e9d097815396a56f6a401ca940a994a137567  linkerd-control-plane-2026.10.1.tgz" | sha256sum --check &&
+cd - && cd setup/kind/linkerd &&
+helm template linkerd-crds ~/.cache/devops-track/dl/linkerd-charts/linkerd-crds-2026.10.1.tgz --namespace linkerd > 00-linkerd-crds-edge-26.10.1.yaml &&
+helm template linkerd2-cni ~/.cache/devops-track/dl/linkerd-charts/linkerd2-cni-2026.10.1.tgz --namespace linkerd-cni -f values-cni.yaml > 10-linkerd-cni-edge-26.10.1.yaml &&
+helm template linkerd-control-plane ~/.cache/devops-track/dl/linkerd-charts/linkerd-control-plane-2026.10.1.tgz --namespace linkerd -f values-control-plane.yaml > 20-linkerd-control-plane-edge-26.10.1.yaml
+```
+
+CLI `linkerd` (tuỳ chọn, cho người học xem tay; release không kèm tệp checksum, SHA-256 dưới đây là digest GitHub ghi cho asset):
+
+```bash
+mkdir -p ~/.cache/devops-track/dl && cd ~/.cache/devops-track/dl &&
+curl -fsSLO https://github.com/linkerd/linkerd2/releases/download/edge-26.10.1/linkerd2-cli-edge-26.10.1-linux-amd64 &&
+echo "66d634f5318c8016f0b5face246a688964b6e2c86d6c3be34be68ab9fcd2a8cc  linkerd2-cli-edge-26.10.1-linux-amd64" | sha256sum --check &&
+install -m 0755 linkerd2-cli-edge-26.10.1-linux-amd64 ~/.local/bin/linkerd
+linkerd version --client
+```
+
+`linkerd --kubeconfig ~/.kube/devops-lab.yaml check` cho kết quả `√` (chỉ cảnh báo có bản edge mới hơn). Gỡ CLI: `rm -f
+~/.local/bin/linkerd`.
+
+**Đã kiểm 2026-11-11** (kind 0.30.0, node v1.34.0, CPU ghim `12-35`, image đã kéo về máy): cả khối lệnh cài ở trên, gồm nạp ba
+image vào node, chạy xong trong khoảng 30 giây trên cluster mới. RAM (working set theo `crictl stats`) lúc nghỉ khoảng 85 MiB cho cả Linkerd:
+destination 17, sp-validator 14, policy 5, identity 14, proxy-injector 18, ba proxy của control plane 3 mỗi cái, `linkerd-cni` 3
+mỗi node. Mỗi pod trong mesh thêm một proxy khoảng 3-4 MiB. Hai Deployment nginx trong namespace mesh gọi nhau qua mTLS
+(`client_id` và `server_id` là `<sa>.<ns>.serviceaccount.identity.linkerd.cluster.local`); sau khi có `Server`,
+`MeshTLSAuthentication` và `AuthorizationPolicy` chỉ cho ServiceAccount `api`, pod thứ ba nhận 403 và
+`inbound_http_authz_deny_total` tăng; pod ngoài mesh gọi thẳng cũng nhận 403.
+
+Linkerd và ghim CPU: node kind đã ghim bằng `docker update --cpuset-cpus "$DEVOPS_CPUSET"`, nên mọi container của Linkerd (control
+plane, CNI, proxy trong pod của bài) chỉ chạy trên các core đó. Proxy dùng một worker thread (`proxy.runtime.workers.minimum: 1`,
+`LINKERD2_PROXY_CORES=1`), không tự giãn theo số core thấy được, nên ghim 24 core không làm proxy ăn nhiều CPU hơn. Các thành phần
+Go (destination, identity, injector) đặt `GOMAXPROCS` theo số core được phép chạy, tức theo dải ghim.
+
+Giới hạn cần biết:
+
+- Webhook proxy-injector có `failurePolicy: Ignore` (mặc định của Linkerd): injector không chạy thì pod vẫn được tạo nhưng không có
+  proxy. `mesh_status` báo `injected: False` cho trường hợp này.
+- Cổng admin 4191 của mọi proxy mở cho mọi pod trong cluster: `/metrics` và `/env.json` (biến môi trường của container proxy, không
+  có token) đọc được từ lab khác; `/proxy-log-level` và `/shutdown` chỉ nhận từ localhost (đã thử: 403). Điều này không lộ thêm gì
+  so với quyền `view` mọi namespace mà lab vốn có.
+- Lab ghi được `servers`, `authorizationpolicies`, `httproutes`, `meshtlsauthentications` trong namespace của lab; không
+  `networkauthentications`, `httplocalratelimitpolicies`, `serverauthorizations`, `egressnetworks`, `serviceprofiles`. Policy
+  `devops-ex-<id>-mesh` chặn mọi tham chiếu ra ngoài namespace của lab (HTTPRoute gắn vào `Server` của lab khác làm request không khớp
+  route nào của lab đó nhận 404) và danh tính `*` trần trong `MeshTLSAuthentication`.
+- Danh tính mTLS dựa trên token ServiceAccount của pod; token của lab không xin được token cho ServiceAccount khác, nên pod của
+  lab chỉ mang danh tính của namespace mình.
+
+Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/linkerd` (xoá CRD là xoá mọi object `policy.linkerd.io`;
+ConfigMap và Secret do `certs.sh` tạo nằm trong namespace `linkerd` nên bị xoá cùng), rồi `kubectl rollout restart` các workload
+còn proxy.
+
 ### Bài thao tác node (cordon, drain, taint)
 
 Bài cần cordon, drain hay taint worker (module 11) làm qua `KubeLab.node_action` của testkit, chỉ trên worker, `close()` hoàn tác.
 Trạng thái node là của cả cluster, nên testkit giữ khoá `~/.cache/devops-track/kube-nodes.lock` suốt từ lần thao tác node đầu tiên
 tới khi hoàn tác xong: hai bài như vậy không bao giờ chạy chồng nhau, kể cả ở hai terminal. Tệp test của các bài này mang marker
 `kube_nodes`; muốn chạy song song phần còn lại thì loại chúng ra (`-m "not kube_nodes"`). Bài bị giết giữa chừng (SIGKILL, tắt terminal) không kịp hoàn tác: testkit ghi mọi thao tác node vào `~/.cache/devops-track/kube-nodes.state.json`, và bài cluster chạy sau đó (khi không có bài thao tác node nào đang chạy) tự so tệp với trạng thái thật của node, hoàn tác phần còn sót rồi chạy tiếp. Chỉ khi việc hoàn tác lỗi, test mới skip kèm đúng lệnh `kubectl uncordon`, `kubectl taint ... -` cần chạy. Testkit coi mọi cordon, taint ghi trong tệp mà còn trên node là của bài bị ngắt, nên đừng tự cordon đúng node đó bằng tay trước khi chạy lại test. Trong lúc bài drain một worker, pod của bài
-khác, Traefik, metrics-server, ArgoCD và git server đang nằm trên worker đó cũng bị dời (repo trong git server mất theo pod); sau khi hoàn tác, testkit chờ chúng available lại rồi mới trả.
+khác, Traefik, metrics-server, ArgoCD, git server và control plane của Linkerd đang nằm trên worker đó cũng bị dời (repo trong git server mất theo pod); sau khi hoàn tác, testkit chờ chúng available lại rồi mới trả.
 
 ## Ghim CPU
 

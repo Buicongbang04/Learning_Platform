@@ -35,6 +35,7 @@ Trong test:
 from __future__ import annotations
 
 import atexit
+import base64
 import importlib.util
 import json
 import linecache
@@ -3902,6 +3903,33 @@ KUBE_SKIP_ARGOCD = (
     "và kind load image-archive, kiểm SHA256SUMS, xem module 12 mục 0 và setup/DEVOPS-TOOLS.md): {setup}; rồi tạo khoá age dùng "
     "chung (khoá riêng chỉ vào Secret argocd/devops-sops-age, không để lại trên máy): {key}"
 )
+KUBE_LINKERD_DIR = ROOT / "setup" / "kind" / "linkerd"
+KUBE_LINKERD_VERSION = "edge-26.10.1"
+KUBE_LINKERD_NAMESPACE = "linkerd"
+KUBE_LINKERD_CNI_NAMESPACE = "linkerd-cni"
+KUBE_LINKERD_IMAGES = {
+    "cr.l5d.io/linkerd/controller:edge-26.10.1": "sha256:880437e01bbd4bf3d8fa7b56996c4ed5dd6551843363dc851ddd0b298b923e8a",
+    "cr.l5d.io/linkerd/proxy:edge-26.10.1": "sha256:f2add36071cfca33754d2930800860785aaed672590bc0207be2f4da9889eb11",
+    "cr.l5d.io/linkerd/cni-plugin:v1.7.0": "sha256:f710874e5d70edfcf6e9e2a8ad18175b928a3f572eae322d7123b96f9b40c5a4",
+}
+KUBE_LINKERD_GROUP = "policy.linkerd.io"
+KUBE_LINKERD_RESOURCES = ("servers", "authorizationpolicies", "httproutes", "meshtlsauthentications")
+KUBE_LINKERD_TRUST_DOMAIN = "cluster.local"
+KUBE_LINKERD_IDENTITY_SUFFIX = f"serviceaccount.identity.linkerd.{KUBE_LINKERD_TRUST_DOMAIN}"
+KUBE_LINKERD_ADMIN_PORT = 4191
+KUBE_LINKERD_CA_PLACEHOLDER = "devops-linkerd-certs-sh"
+KUBE_LINKERD_DEPLOYMENTS = ("linkerd-identity", "linkerd-destination", "linkerd-proxy-injector")
+KUBE_LINKERD_SETUP = (
+    "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/linkerd && bash setup/kind/linkerd/certs.sh"
+)
+KUBE_SKIP_LINKERD = (
+    "Cluster kind {name} chưa có Linkerd dùng chung ({detail}). Admin cài một lần sau Gateway API CRD (kéo ba image "
+    "cr.l5d.io/linkerd theo digest rồi nạp bằng docker save và kind load image-archive, cni-plugin nạp cả control plane; kiểm "
+    "SHA256SUMS; xem module 15 mục 0 và setup/DEVOPS-TOOLS.md): {setup}. certs.sh sinh trust anchor, issuer và chứng chỉ webhook "
+    "bằng openssl trong thư mục tạm, khoá trust anchor bị xoá ngay sau khi ký"
+)
+_KUBE_MESH_IDENTITY = re.compile(r"(?:\*|[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)")
+_KUBE_WORKLOAD = re.compile(r"(?:(deployment|statefulset|daemonset|pod)/)?([a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)")
 _KUBE_AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{58}")
 KUBE_GITOPS_MAX_BYTES = 20 * 1024 * 1024
 KUBE_GITOPS_MAX_FILES = 2000
@@ -3909,7 +3937,7 @@ KUBE_GITOPS_MAX_REPO_BYTES = 40 * 1024 * 1024
 _KUBE_OPERATION_SOURCES = ("source", "sources", "manifests")
 _KUBE_ARGO_APP = re.compile(r"[a-z0-9]([-a-z0-9]{0,51}[a-z0-9])?")
 KUBE_NODE_LOCK_TIMEOUT = 900
-KUBE_SHARED_NAMESPACES = ("kube-system", "local-path-storage", "devops-gateway", "argocd", "devops-git")
+KUBE_SHARED_NAMESPACES = ("kube-system", "local-path-storage", "devops-gateway", "argocd", "devops-git", "linkerd")
 KUBE_SHARED_READY_TIMEOUT = 180
 KUBE_LOAD = "kind load docker-image {images} --name {name} --nodes " + KUBE_WORKERS
 KUBE_SKIP_IMAGES = (
@@ -3997,13 +4025,14 @@ _KUBE_LEARNER_RULES = [
     {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"], "verbs": _KUBE_RW},
     {"apiGroups": ["metrics.k8s.io"], "resources": ["pods"], "verbs": ["get", "list"]},
     {"apiGroups": ["argoproj.io"], "resources": ["applications"], "verbs": _KUBE_RW},
+    {"apiGroups": [KUBE_LINKERD_GROUP], "resources": list(KUBE_LINKERD_RESOURCES), "verbs": _KUBE_RW},
 ]
 KUBE_ARGOCD_HOOK_FINALIZER = "argocd.argoproj.io/hook-finalizer"
 _KUBE_HOOK_KINDS = ",".join(
     f"{resource}.{group}" if group else resource
     for rule in _KUBE_LEARNER_RULES if "create" in rule["verbs"]
     for group in rule["apiGroups"] for resource in rule["resources"]
-    if "/" not in resource and group not in ("argoproj.io", "gateway.networking.k8s.io"))
+    if "/" not in resource and group not in ("argoproj.io", "gateway.networking.k8s.io", KUBE_LINKERD_GROUP))
 _KUBE_SYSTEM_USER = (
     "((request.userInfo.username.startsWith('system:') && !request.userInfo.username.startsWith('system:serviceaccount:')) || "
     "request.userInfo.username.startsWith('system:serviceaccount:kube-system:') || "
@@ -4107,6 +4136,46 @@ class _KubeAdmin:
         """Cluster có CRD Application của ArgoCD (nhóm `argoproj.io`)."""
         result = self.run("api-resources", "--api-group=argoproj.io", "-o", "name")
         return result.returncode == 0 and "applications.argoproj.io" in result.stdout.split()
+
+    def has_linkerd(self) -> bool:
+        """Cluster có CRD policy của Linkerd (nhóm `policy.linkerd.io`)."""
+        result = self.run("api-resources", f"--api-group={KUBE_LINKERD_GROUP}", "-o", "name")
+        return result.returncode == 0 and f"servers.{KUBE_LINKERD_GROUP}" in result.stdout.split()
+
+    def linkerd_problem(self) -> str | None:
+        """Lý do Linkerd dùng chung chưa dùng được, hay None. Chỉ đọc ConfigMap, Deployment, DaemonSet và webhook; không đọc
+        Secret nào (issuer, chứng chỉ webhook)."""
+        ns = ("-n", KUBE_LINKERD_NAMESPACE)
+        placeholder = base64.b64encode(KUBE_LINKERD_CA_PLACEHOLDER.encode()).decode()
+
+        def ready(out: str) -> bool:
+            numbers = out.split()
+            return len(numbers) == 2 and numbers[0] == numbers[1] and numbers[0] not in ("", "0")
+
+        checks = [
+            (f"CRD servers.{KUBE_LINKERD_GROUP}", ("get", "crd", f"servers.{KUBE_LINKERD_GROUP}", "-o", "name"),
+             lambda out: f"servers.{KUBE_LINKERD_GROUP}" in out),
+            ("linkerd-config chưa bật cniEnabled (pod trong namespace baseline cần CNI thay cho proxy-init có NET_ADMIN)",
+             (*ns, "get", "configmap", "linkerd-config", "-o", "jsonpath={.data.values}"),
+             lambda out: "\ncniEnabled: true\n" in f"\n{out}\n"),
+            (f"DaemonSet {KUBE_LINKERD_CNI_NAMESPACE}/linkerd-cni chưa sẵn sàng trên mọi node",
+             ("-n", KUBE_LINKERD_CNI_NAMESPACE, "get", "daemonset", "linkerd-cni", "-o",
+              "jsonpath={.status.numberReady} {.status.desiredNumberScheduled}"), ready),
+            ("thiếu ConfigMap linkerd/linkerd-identity-trust-roots (chưa chạy certs.sh)",
+             (*ns, "get", "configmap", "linkerd-identity-trust-roots", "-o", r"jsonpath={.data.ca-bundle\.crt}"),
+             lambda out: out.strip().startswith("-----BEGIN CERTIFICATE-----")),
+            ("webhook linkerd-proxy-injector chưa có caBundle thật (chưa chạy certs.sh sau khi apply)",
+             ("get", "mutatingwebhookconfiguration", "linkerd-proxy-injector-webhook-config", "-o",
+              "jsonpath={.webhooks[0].clientConfig.caBundle}"), lambda out: out.strip() not in ("", placeholder)),
+            *[(f"Deployment linkerd/{name} chưa có pod available (thiếu Secret do certs.sh tạo thì pod kẹt ContainerCreating)",
+               (*ns, "get", "deployment", name, "-o", "jsonpath={.status.availableReplicas}"),
+               lambda out: out.strip() not in ("", "0")) for name in KUBE_LINKERD_DEPLOYMENTS],
+        ]
+        for what, args, ok in checks:
+            result = self.run(*args)
+            if result.returncode != 0 or not ok(result.stdout):
+                return what
+        return None
 
     def cluster_kinds(self) -> set[str]:
         result = self.run("api-resources", "--namespaced=false", "--no-headers")
@@ -4466,6 +4535,96 @@ def _kube_argocd_problems(where: str, kind: str, doc: dict, namespace: str) -> l
     return found
 
 
+_PROM_SAMPLE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(.*)\})?\s+(\S+)(?:\s+\S+)?$")
+_PROM_LABEL = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"')
+
+
+def _linkerd_metrics(text: str) -> dict:
+    """Gộp số đếm từ `/metrics` của proxy Linkerd: inbound trên cổng ứng dụng (bỏ cổng admin 4191), outbound theo route,
+    và proxy đã có chứng chỉ mTLS chưa (`control_identity_cert_expiration_timestamp_seconds` > 0)."""
+    counts = {"success": 0, "failure": 0, "denied": 0, "plaintext": 0, "outbound_success": 0, "outbound_failure": 0,
+              "retries": 0, "cert": False, "clients": set(), "servers": set()}
+    for line in text.splitlines():
+        match = _PROM_SAMPLE.match(line.strip())
+        if not match or line.startswith("#"):
+            continue
+        name, raw, value = match.groups()
+        try:
+            number = float(value)
+        except ValueError:
+            continue
+        labels = dict(_PROM_LABEL.findall(raw or ""))
+        admin = labels.get("target_port") == str(KUBE_LINKERD_ADMIN_PORT)
+        inbound = labels.get("direction") == "inbound" and not admin
+        if name == "control_identity_cert_expiration_timestamp_seconds" and number > 0:
+            counts["cert"] = True
+        elif name == "response_total" and inbound:
+            key = "failure" if labels.get("classification") == "failure" else "success"
+            counts[key] += int(number)
+            if labels.get("tls") == "true" and labels.get("client_id"):
+                counts["clients"].add(labels["client_id"])
+        elif name == "request_total" and inbound and labels.get("tls") != "true":
+            counts["plaintext"] += int(number)
+        elif name in ("inbound_http_authz_deny_total", "inbound_tcp_authz_deny_total") and not admin:
+            counts["denied"] += int(number)
+        elif name == "outbound_http_route_request_statuses_total":
+            status = labels.get("http_status", "")
+            key = "outbound_failure" if labels.get("error") or status.startswith("5") or not status else "outbound_success"
+            counts[key] += int(number)
+        elif name == "outbound_http_route_retry_requests_total":
+            counts["retries"] += int(number)
+        elif name == "response_total" and labels.get("direction") == "outbound" and labels.get("tls") == "true" \
+                and labels.get("server_id"):
+            counts["servers"].add(labels["server_id"])
+    return counts
+
+
+def kube_mesh_identity_ok(identity, namespace: str) -> bool:
+    """Danh tính mTLS mà MeshTLSAuthentication của lab được nêu: ServiceAccount (hay `*`) trong đúng namespace của lab,
+    `<sa>.<namespace>.serviceaccount.identity.linkerd.cluster.local`. Không nhận `*` trần hay danh tính của namespace khác."""
+    suffix = f".{namespace}.{KUBE_LINKERD_IDENTITY_SUFFIX}"
+    return (isinstance(identity, str) and identity.endswith(suffix)
+            and bool(_KUBE_MESH_IDENTITY.fullmatch(identity.removesuffix(suffix))))
+
+
+def _kube_mesh_problems(where: str, kind: str, doc: dict, namespace: str) -> list[str]:
+    if not str(doc.get("apiVersion", "")).startswith(f"{KUBE_LINKERD_GROUP}/"):
+        return []
+    spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+    found = []
+
+    def refs(value) -> list[dict]:
+        return [r for r in value if isinstance(r, dict)] if isinstance(value, list) else []
+
+    def foreign(ref: dict) -> bool:
+        kind_of = str(ref.get("kind", "")).lower()
+        return ref.get("namespace") not in (None, "", namespace) or (kind_of == "namespace" and ref.get("name") != namespace)
+
+    if kind == "AuthorizationPolicy":
+        target = spec.get("targetRef") if isinstance(spec.get("targetRef"), dict) else {}
+        if foreign(target):
+            found.append(f"{where}: targetRef chỉ được trỏ Server, HTTPRoute hay Namespace của lab ({namespace})")
+        if any(foreign(r) for r in refs(spec.get("requiredAuthenticationRefs"))):
+            found.append(f"{where}: requiredAuthenticationRefs chỉ được trỏ object, ServiceAccount trong namespace {namespace}")
+    if kind == "MeshTLSAuthentication":
+        identities = spec.get("identities") if isinstance(spec.get("identities"), list) else []
+        bad = [i for i in identities if not kube_mesh_identity_ok(i, namespace)]
+        if bad:
+            found.append(f"{where}: identities chỉ gồm <serviceaccount hay *>.{namespace}.{KUBE_LINKERD_IDENTITY_SUFFIX}, "
+                         f"không nhận {', '.join(map(str, bad))}")
+        identity_refs = refs(spec.get("identityRefs"))
+        if any(foreign(r) or str(r.get("kind", "")).lower() not in ("serviceaccount", "namespace") or r.get("name") == "*"
+               for r in identity_refs):
+            found.append(f"{where}: identityRefs chỉ gồm ServiceAccount hay Namespace của lab ({namespace})")
+    if kind == "HTTPRoute":
+        rules = spec.get("rules") if isinstance(spec.get("rules"), list) else []
+        backends = [b for rule in rules if isinstance(rule, dict) for b in refs(rule.get("backendRefs"))]
+        if any(foreign(r) for r in refs(spec.get("parentRefs")) + backends):
+            found.append(f"{where}: parentRefs và backendRefs chỉ được trỏ Service, Server trong namespace {namespace}; route "
+                         "gắn vào Server của lab khác đổi luật inbound của lab đó")
+    return found
+
+
 def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), cluster_kinds=(), api_group: str | None = None) -> list[str]:
     """Kiểm tĩnh object Kubernetes của bài trước khi apply (tín hiệu sớm, ranh giới thật là quyền RBAC, policy và Pod Security
     trong cluster, xem `KubeLab`). Object namespaced chỉ ở namespace của lab (không ghi namespace thì lab đặt). Object
@@ -4476,7 +4635,10 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
     hostPath, hostNetwork/hostPID/hostIPC, hostPort, capability ngoài baseline, procMount, seccomp/AppArmor Unconfined;
     PersistentVolume hostPath hay local; StorageClass; PriorityClass globalDefault; Service có externalIPs; CustomResourceDefinition
     ngoài nhóm API `api_group` của lab; AppProject, ApplicationSet; Application của ArgoCD có project khác project của lab,
-    destination ngoài namespace của lab hay ngoài cluster hiện tại, repoURL khác repo git của lab (`kube_git_url`)."""
+    destination ngoài namespace của lab hay ngoài cluster hiện tại, repoURL khác repo git của lab (`kube_git_url`); object
+    `policy.linkerd.io` tham chiếu namespace khác: AuthorizationPolicy có targetRef hay requiredAuthenticationRefs ngoài lab,
+    MeshTLSAuthentication có danh tính ngoài namespace của lab (kể cả `*` trần) hay identityRefs ngoài lab, HTTPRoute có
+    parentRefs, backendRefs ngoài lab."""
     found = []
     cluster = _KUBE_CLUSTER_KINDS | set(cluster_kinds)
     for index, doc in enumerate(_kube_flatten(documents), 1):
@@ -4502,6 +4664,7 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
         found += _kube_rbac_problems(where, kind, doc, namespace)
         found += _kube_route_problems(where, kind, doc, namespace)
         found += _kube_argocd_problems(where, kind, doc, namespace)
+        found += _kube_mesh_problems(where, kind, doc, namespace)
         for spec in _kube_pod_specs(doc):
             found += _kube_pod_problems(where, spec)
         if kind == "PriorityClass" and doc.get("globalDefault") is True:
@@ -4591,7 +4754,8 @@ class KubeLab:
     vào `view` (đọc mọi namespace, không có Secret) và quyền đọc object cluster-scoped, quyền ghi đúng các kind trong `allow`
     (`KUBE_ALLOWABLE`, không có StorageClass; có CustomResourceDefinition thì Role thêm quyền ghi mọi resource của nhóm API riêng
     `api_group` trong namespace của lab, và CRD phải thuộc nhóm đó; ghi `applications.argoproj.io` trong namespace của lab,
-    không ghi `appprojects`), và năm
+    không ghi `appprojects`; ghi `servers`, `authorizationpolicies`, `httproutes`, `meshtlsauthentications` của
+    `policy.linkerd.io` trong namespace của lab), và sáu
     ValidatingAdmissionPolicy: policy `devops-ex-<id>` áp cho mọi ServiceAccount của namespace (nhóm
     `system:serviceaccounts:<ns>`, kể cả ServiceAccount bài tự tạo rồi lấy token trong pod): object cluster-scoped tạo, sửa,
     xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, CRD chỉ thuộc `api_group`,
@@ -4604,8 +4768,14 @@ class KubeLab:
     `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con; policy `devops-ex-<id>-argocd`
     (cũng cho mọi ServiceAccount của namespace): Application phải có `spec.project` là project của lab (`devops-ex-<id>`),
     destination là namespace của lab trên `https://kubernetes.default.svc`, repoURL là `repo_url` của lab, không
-    `sourceHydrator`. Lab chỉ trao kubeconfig khi cả năm policy đã chặn được lần tạo thử (policy ArgoCD chỉ thử khi cluster có
-    CRD của ArgoCD). GitOps: `argocd_project`, `gitops_repo`, `argocd_wait`, `age_public_key`/`sops_age_recipient`.
+    `sourceHydrator`; policy `devops-ex-<id>-mesh` (cũng cho mọi ServiceAccount của namespace): AuthorizationPolicy,
+    MeshTLSAuthentication, HTTPRoute của Linkerd chỉ tham chiếu namespace của lab (targetRef, requiredAuthenticationRefs,
+    identityRefs, parentRefs, backendRefs), danh tính trong `identities` là `<sa hay *>.<namespace>.serviceaccount.identity.
+    linkerd.cluster.local`, không `*` trần. Lab chỉ trao kubeconfig khi cả sáu policy đã chặn được lần tạo thử (policy ArgoCD chỉ thử
+    khi cluster có CRD của ArgoCD, policy mesh khi có CRD `policy.linkerd.io`). GitOps: `argocd_project`, `gitops_repo`,
+    `argocd_wait`, `age_public_key`/`sops_age_recipient`. Service mesh: `mesh=True` kiểm Linkerd dùng chung như
+    `Exercise.require_linkerd` (thiếu thì skip) rồi gắn annotation `linkerd.io/inject: enabled` vào namespace, nên mọi pod của
+    bài có proxy; `mesh_status(workload)` đọc trạng thái proxy, danh tính mTLS và số request.
 
     `kubectl`, `helm`, `run` (script của bài), `apply_learner`, `helm_install` chạy qua `run_sandboxed` với `KUBECONFIG` là
     kubeconfig của lab (một cluster, một context có namespace của lab, token của `devops-ex-learner`) trong thư mục `control`
@@ -4617,7 +4787,7 @@ class KubeLab:
     `kubectl` nhận `--user`, `--group`, `--serviceaccount` duy nhất khi argv bắt đầu bằng `create rolebinding` hay `create
     clusterrolebinding` (subject của binding); đặt trước lệnh con hay ở lệnh khác là cờ danh tính, bị từ chối.
 
-    Ranh giới: quyền RBAC của token, năm policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
+    Ranh giới: quyền RBAC của token, sáu policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
     hostNetwork, hostPID, hostIPC, hostPort, capability lạ). Node kind là container privileged: pod privileged thấy ổ đĩa của máy
     host, hostPath vào node chạm `/var` và `/run/containerd` của node. Vì thế chặn các trường đó là yêu cầu an toàn cho máy host
     chứ không chỉ cho cluster. `kube_manifest_problems` trong `apply_learner` và `helm_install` (sau `helm template`) là tín hiệu
@@ -4625,10 +4795,12 @@ class KubeLab:
 
     `close()` gỡ cordon và taint lab đã đặt, xoá namespace (chờ tối đa `KUBE_CLEANUP_TIMEOUT`), xoá PV có `claimRef` trỏ namespace
     của lab, object cluster-scoped có nhãn `devops-ex=<id>` (không bao giờ đụng object khác, không xoá node), thư mục PV local
-    trong worker, rồi thư mục tạm. Dọn lỗi thì có `UserWarning`, và test đang đạt sẽ fail.
+    trong worker, rồi thư mục tạm. Object `policy.linkerd.io` của bài là namespaced nên đi theo namespace; Linkerd không giữ gì
+    của lab ngoài namespace (chứng chỉ của proxy chỉ nằm trong bộ nhớ của pod). Dọn lỗi thì có `UserWarning`, và test đang đạt sẽ fail.
     """
 
-    def __init__(self, name: str = KIND_CLUSTER, *, allow=(), pod_security: str = "baseline", timeout: float = KUBE_TIMEOUT) -> None:
+    def __init__(self, name: str = KIND_CLUSTER, *, allow=(), pod_security: str = "baseline", timeout: float = KUBE_TIMEOUT,
+                 mesh: bool = False) -> None:
         if pod_security not in ("baseline", "restricted"):
             raise ValueError(f"pod_security chỉ nhận baseline hoặc restricted, không nhận {pod_security!r}")
         for kind in allow:
@@ -4638,6 +4810,7 @@ class KubeLab:
         self.allow = tuple(allow)
         self.pod_security = pod_security
         self.timeout = timeout
+        self.mesh = bool(mesh)
         self.id = uuid.uuid4().hex[:8]
         self.namespace = f"{DOCKER_PREFIX}{self.id}"
         self.label = f"{_KUBE_LABEL_KEY}={self.id}"
@@ -4653,6 +4826,7 @@ class KubeLab:
         self._local_nodes: set[str] = set()
         self._node_lock = None
         self._argocd = False
+        self._linkerd = False
         self._project = False
         self._git_pushed = False
         self._git_repo: GitRepo | None = None
@@ -4708,6 +4882,11 @@ class KubeLab:
         _kube_ready(self._admin, self.name)
         self._cluster_kinds = self._admin.cluster_kinds()
         self._argocd = self._admin.has_argocd()
+        self._linkerd = self._admin.has_linkerd()
+        if self.mesh:
+            problem = self._admin.linkerd_problem()
+            if problem:
+                pytest.skip(KUBE_SKIP_LINKERD.format(name=self.name, detail=problem, setup=KUBE_LINKERD_SETUP))
         if self._argocd:
             self._sweep_gitops()
         self._created = True
@@ -4849,6 +5028,32 @@ class KubeLab:
                            "(has(object.status) && has(oldObject.status) && object.status == oldObject.status))",
              "message": "status của Application do ArgoCD ghi; bài không được tạo hay sửa status"},
         ]
+        ns = self.namespace
+
+        def local(ref: str) -> str:
+            return (f"((!has({ref}.namespace) || {ref}.namespace == '' || {ref}.namespace == '{ns}') && "
+                    f"(!has({ref}.kind) || {ref}.kind.lowerAscii() != 'namespace' || {ref}.name == '{ns}'))")
+
+        identity = (r"^(\*|[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)\." + ns + r"\." + KUBE_LINKERD_IDENTITY_SUFFIX.replace(".", r"\.")
+                    + "$").replace("\\", "\\\\")
+        mesh = [{"apiGroups": [KUBE_LINKERD_GROUP], "apiVersions": ["*"],
+                 "resources": ["authorizationpolicies", "meshtlsauthentications", "httproutes"], "operations": ["CREATE", "UPDATE"]}]
+        mesh_rules = [
+            {"expression": "request.resource.resource != 'authorizationpolicies' || (has(object.spec.targetRef) && "
+                           f"{local('object.spec.targetRef')} && (!has(object.spec.requiredAuthenticationRefs) || "
+                           f"object.spec.requiredAuthenticationRefs.all(r, {local('r')})))",
+             "message": f"AuthorizationPolicy của bài chỉ trỏ targetRef, requiredAuthenticationRefs trong namespace {ns}"},
+            {"expression": "request.resource.resource != 'meshtlsauthentications' || ((!has(object.spec.identities) || "
+                           f"object.spec.identities.all(i, i.matches('{identity}'))) && (!has(object.spec.identityRefs) || "
+                           f"object.spec.identityRefs.all(r, {local('r')} && has(r.kind) && "
+                           "r.kind.lowerAscii() in ['serviceaccount', 'namespace'] && r.name != '*')))",
+             "message": f"MeshTLSAuthentication của bài chỉ nêu danh tính <serviceaccount hay *>.{ns}.{KUBE_LINKERD_IDENTITY_SUFFIX} "
+                        "và identityRefs ServiceAccount, Namespace của lab"},
+            {"expression": "request.resource.resource != 'httproutes' || ((!has(object.spec.parentRefs) || "
+                           f"object.spec.parentRefs.all(r, {local('r')})) && (!has(object.spec.rules) || object.spec.rules.all(x, "
+                           f"!has(x.backendRefs) || x.backendRefs.all(r, {local('r')}))))",
+             "message": f"HTTPRoute (policy.linkerd.io) của bài chỉ trỏ parentRefs, backendRefs trong namespace {ns}"},
+        ]
         items = [
             *policy(self.namespace, everything,
                     f"{lab_identity} || (request.operation == 'CREATE' && request.dryRun == true && "
@@ -4860,10 +5065,13 @@ class KubeLab:
                     f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-routes')", route_rules),
             *policy(f"{self.namespace}-argocd", applications,
                     f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-argocd')", argocd_rules),
+            *policy(f"{self.namespace}-mesh", mesh,
+                    f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-mesh')", mesh_rules),
             *policy(f"{self.namespace}-pv", volumes,
                     f"!{_KUBE_SYSTEM_USER} && !(request.dryRun == true && object.metadata.name.endsWith('-probe-pv') && "
                     f"object.metadata.name != '{self._probe}-pv')", no_host_pv),
-            {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": self.namespace, "labels": ns_labels}},
+            {"apiVersion": "v1", "kind": "Namespace", "metadata": {
+                "name": self.namespace, "labels": ns_labels, **({"annotations": {"linkerd.io/inject": "enabled"}} if self.mesh else {})}},
             {"apiVersion": "v1", "kind": "ServiceAccount", "metadata": meta(_KUBE_SA, True), "automountServiceAccountToken": False},
             {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role", "metadata": meta(_KUBE_SA, True),
              "rules": _KUBE_LEARNER_RULES},
@@ -4925,6 +5133,10 @@ class KubeLab:
                 "metadata": {"name": f"{self._probe}-argocd", "namespace": self.namespace},
                 "spec": {"project": "default", "destination": {"server": KUBE_IN_CLUSTER, "namespace": self.namespace},
                          "source": {"repoURL": kube_git_url(self.namespace), "path": ".", "targetRevision": "main"}}}
+        if self._linkerd:
+            probes[f"{self.namespace}-mesh"] = {
+                "apiVersion": f"{KUBE_LINKERD_GROUP}/v1alpha1", "kind": "MeshTLSAuthentication",
+                "metadata": {"name": f"{self._probe}-mesh", "namespace": self.namespace}, "spec": {"identities": ["*"]}}
         deadline = time.monotonic() + 30
         for name, probe in probes.items():
             while True:
@@ -5261,6 +5473,75 @@ class KubeLab:
     def sops_age_recipient(self) -> str:
         """Recipient cho `sops encrypt --age <recipient>` và `creation_rules[].age` của `.sops.yaml`: chính `age_public_key`."""
         return self.age_public_key
+
+    def mesh_status(self, workload: str) -> dict:
+        """Trạng thái mesh của một workload trong namespace của lab, đọc bằng kubeconfig admin qua lệnh cố định của testkit:
+        `get` object và pod, rồi `get --raw` endpoint admin `/metrics`, `/env.json` của proxy Linkerd (cổng 4191) qua API server.
+        `workload` là `deployment/<tên>` (mặc định khi chỉ ghi tên), `statefulset/<tên>`, `daemonset/<tên>` hay `pod/<tên>`.
+
+        Trả dict: `pods` (pod đang Running), `injected` (mọi pod có container `linkerd-proxy`), `identity` (danh tính mTLS của
+        workload, `<sa>.<namespace>.serviceaccount.identity.linkerd.cluster.local`, None khi chưa có), `mtls` (mọi pod đã nhận chứng chỉ
+        từ linkerd-identity), phía inbound trên cổng của ứng dụng (không tính cổng admin): `success`, `failure` (response 5xx),
+        `denied` (request bị AuthorizationPolicy chặn), `plaintext` (request không qua mTLS), `clients` (danh tính client đã
+        gọi qua mTLS); phía outbound: `outbound_success`, `outbound_failure` (kết quả cuối mà ứng dụng nhận, sau retry),
+        `retries` (lần thử lại do HTTPRoute), `servers` (danh tính server đã gọi qua mTLS). Số đếm cộng dồn từ lúc proxy khởi
+        động."""
+        self._require_entered()
+        match = _KUBE_WORKLOAD.fullmatch(workload) if isinstance(workload, str) else None
+        if not match:
+            raise ValueError(f"workload {workload!r} phải là <tên>, deployment/<tên>, statefulset/<tên>, daemonset/<tên> hay "
+                             "pod/<tên> trong namespace của lab")
+        kind, name = match.group(1) or "deployment", match.group(2)
+        ns = ("-n", self.namespace)
+        if kind == "pod":
+            selector = None
+        else:
+            found = self._admin.run(*ns, "get", kind, name, "-o", "json")
+            if found.returncode != 0:
+                pytest.fail(f"Không đọc được {kind}/{name} trong {self.namespace}: {_output_tail(found)}")
+            labels = ((json.loads(found.stdout).get("spec") or {}).get("selector") or {}).get("matchLabels") or {}
+            if not labels:
+                pytest.fail(f"{kind}/{name} không có spec.selector.matchLabels để tìm pod")
+            selector = ",".join(f"{key}={value}" for key, value in sorted(labels.items()))
+        listed = self._admin.run(*ns, "get", "pods", *(("-l", selector) if selector else (name,)), "-o", "json")
+        if listed.returncode != 0:
+            pytest.fail(f"Không liệt kê được pod của {kind}/{name}: {_output_tail(listed)}")
+        data = json.loads(listed.stdout or "{}")
+        items = data.get("items", [data]) if data.get("kind") == "List" or "items" in data else [data]
+        pods = [item for item in items if (item.get("status") or {}).get("phase") == "Running"
+                and not (item.get("metadata") or {}).get("deletionTimestamp")]
+        status = {"workload": f"{kind}/{name}", "pods": sorted(p["metadata"]["name"] for p in pods), "injected": bool(pods),
+                  "identity": None, "mtls": bool(pods), "success": 0, "failure": 0, "denied": 0, "plaintext": 0, "clients": [],
+                  "outbound_success": 0, "outbound_failure": 0, "retries": 0, "servers": []}
+        identities, clients, servers = set(), set(), set()
+        for pod in pods:
+            spec = pod.get("spec") or {}
+            containers = [c.get("name") for c in (spec.get("containers") or []) + (spec.get("initContainers") or [])]
+            if "linkerd-proxy" not in containers:
+                status["injected"] = status["mtls"] = False
+                continue
+            base = f"/api/v1/namespaces/{self.namespace}/pods/{pod['metadata']['name']}:{KUBE_LINKERD_ADMIN_PORT}/proxy"
+            env = self._admin.run("get", "--raw", f"{base}/env.json")
+            metrics = self._admin.run("get", "--raw", f"{base}/metrics")
+            if env.returncode != 0 or metrics.returncode != 0:
+                status["mtls"] = False
+                continue
+            try:
+                local = json.loads(env.stdout).get("LINKERD2_PROXY_IDENTITY_LOCAL_NAME")
+            except ValueError:
+                local = None
+            counts = _linkerd_metrics(metrics.stdout)
+            if local and counts["cert"]:
+                identities.add(local)
+            else:
+                status["mtls"] = False
+            for key in ("success", "failure", "denied", "plaintext", "outbound_success", "outbound_failure", "retries"):
+                status[key] += counts[key]
+            clients |= counts["clients"]
+            servers |= counts["servers"]
+        status["identity"] = next(iter(identities)) if len(identities) == 1 and status["mtls"] else None
+        status["clients"], status["servers"] = sorted(clients), sorted(servers)
+        return status
 
     def _sweep_gitops(self) -> None:
         """Dọn phần GitOps của lab bị giết trước khi kịp `close()` (SIGKILL): repo `devops-ex-<id>.git`, bundle trong pod git và
@@ -6000,6 +6281,19 @@ class Exercise:
                 result = admin.run(*args)
                 if result.returncode != 0 or not ok(result.stdout):
                     pytest.skip(KUBE_SKIP_ARGOCD.format(name=name, detail=what, setup=KUBE_ARGOCD_SETUP, key=KUBE_ARGOCD_KEY_SETUP))
+
+    @staticmethod
+    def require_linkerd(name: str = KIND_CLUSTER) -> None:
+        """Skip kèm lệnh cài khi cluster chưa có Linkerd dùng chung đúng cấu hình của track: CRD `servers.policy.linkerd.io`,
+        `linkerd-config` bật `cniEnabled` (pod trong namespace baseline không cần NET_ADMIN), DaemonSet `linkerd-cni` sẵn sàng
+        trên mọi node, ConfigMap `linkerd-identity-trust-roots` có chứng chỉ, webhook proxy-injector có caBundle thật (đã chạy
+        `certs.sh`), và linkerd-identity, linkerd-destination, linkerd-proxy-injector available. Không đọc Secret nào. Admin cài
+        một lần từ `setup/kind/linkerd/`; test không bao giờ cài. `KubeLab(mesh=True)` tự kiểm như vậy khi mở lab."""
+        _require_cluster_up(name)
+        with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}linkerd-") as tmp:
+            problem = _KubeAdmin(Path(tmp), name).linkerd_problem()
+            if problem:
+                pytest.skip(KUBE_SKIP_LINKERD.format(name=name, detail=problem, setup=KUBE_LINKERD_SETUP))
 
     @staticmethod
     def require_kind_images(*images: str, name: str = KIND_CLUSTER) -> None:

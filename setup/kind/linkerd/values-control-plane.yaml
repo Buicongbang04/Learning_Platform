@@ -1,0 +1,55 @@
+imagePullPolicy: Never
+cniEnabled: true
+disableHeartBeat: true
+identityTrustDomain: cluster.local
+identity:
+  externalCA: true
+  issuer:
+    scheme: kubernetes.io/tls
+proxyInjector:
+  externalSecret: true
+  caBundle: devops-linkerd-certs-sh
+profileValidator:
+  externalSecret: true
+  caBundle: devops-linkerd-certs-sh
+policyValidator:
+  externalSecret: true
+  caBundle: devops-linkerd-certs-sh
+policyController:
+  resources:
+    cpu:
+      request: 10m
+    memory:
+      request: 32Mi
+      limit: 256Mi
+proxy:
+  resources:
+    cpu:
+      request: 10m
+    memory:
+      request: 16Mi
+      limit: 128Mi
+destinationResources:
+  cpu:
+    request: 10m
+  memory:
+    request: 32Mi
+    limit: 256Mi
+spValidatorResources:
+  cpu:
+    request: 5m
+  memory:
+    request: 16Mi
+    limit: 128Mi
+identityResources:
+  cpu:
+    request: 5m
+  memory:
+    request: 16Mi
+    limit: 128Mi
+proxyInjectorResources:
+  cpu:
+    request: 5m
+  memory:
+    request: 32Mi
+    limit: 256Mi

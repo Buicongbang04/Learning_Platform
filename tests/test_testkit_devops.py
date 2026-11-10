@@ -3957,7 +3957,7 @@ class KubeFake:
             return done(out=API_RESOURCES)
         if "--dry-run=server" in cmd:
             name = json.loads(input)["metadata"]["name"]
-            suffix = next((s for s in ("-pv", "-rbac", "-routes", "-argocd") if name.endswith(f"-probe{s}")), "")
+            suffix = next((s for s in ("-pv", "-rbac", "-routes", "-argocd", "-mesh") if name.endswith(f"-probe{s}")), "")
             probe = name.removesuffix(f"-probe{suffix}") + suffix
             return done(1, "", f"ValidatingAdmissionPolicy '{probe}' with binding '{probe}' denied request")
         if cmd[1:3] == ["auth", "can-i"]:
@@ -4131,7 +4131,7 @@ def test_kube_lab_namespace_and_label(monkeypatch):
     assert not verbs & {"impersonate", "escalate", "bind", "*"} and "serviceaccounts/token" not in resources and "*" not in resources
     policies = {i["metadata"]["name"]: i for i in items if i["kind"] == "ValidatingAdmissionPolicy"}
     assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac", f"{lab.namespace}-routes",
-                             f"{lab.namespace}-argocd"}
+                             f"{lab.namespace}-argocd", f"{lab.namespace}-mesh"}
     rbac = policies[f"{lab.namespace}-rbac"]["spec"]
     assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in rbac["matchConditions"][0]["expression"]
     assert {r["scope"] for r in rbac["matchConstraints"]["resourceRules"]} == {"*"}
@@ -7848,3 +7848,525 @@ def test_localstack_sweep_paginates_event_buses(monkeypatch):
     monkeypatch.setattr(boto3, "client", lambda service, **kwargs: Fake(service))
     assert testkit.localstack_sweep("devops-ex-abc12345") == ["events-bus:devops-ex-abc12345-bus"]
     assert deleted == ["devops-ex-abc12345-bus"]
+
+
+LINKERD_RESOURCES = "".join(f"{r}.policy.linkerd.io\n" for r in (
+    "authorizationpolicies", "egressnetworks", "httplocalratelimitpolicies", "httproutes", "meshtlsauthentications",
+    "networkauthentications", "serverauthorizations", "servers"))
+LINKERD_TRUST_ROOT = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"
+LINKERD_OK = {
+    "crd servers.policy.linkerd.io": (0, "customresourcedefinition.apiextensions.k8s.io/servers.policy.linkerd.io\n"),
+    "configmap linkerd-config": (0, "clusterDomain: cluster.local\ncniEnabled: true\ndisableHeartBeat: true\n"),
+    "daemonset linkerd-cni": (0, "3 3"),
+    "configmap linkerd-identity-trust-roots": (0, LINKERD_TRUST_ROOT),
+    "mutatingwebhookconfiguration linkerd-proxy-injector-webhook-config": (0, "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"),
+    "deployment linkerd-identity": (0, "1"),
+    "deployment linkerd-destination": (0, "1"),
+    "deployment linkerd-proxy-injector": (0, "1"),
+}
+
+
+class LinkerdFake(KubeFake):
+    """KubeFake cộng Linkerd: CRD policy.linkerd.io, các kiểm của `linkerd_problem`, và endpoint admin của proxy qua
+    `get --raw` (trả `raw[đường dẫn]`)."""
+
+    def __init__(self, monkeypatch, *, answers=None, objects=None, raw=None):
+        self.answers = dict(LINKERD_OK if answers is None else answers)
+        self.objects = objects or {}
+        self.raw = raw or {}
+        super().__init__(monkeypatch)
+
+    def run_sandboxed(self, cmd, *, writable, cwd, env, timeout=30, input=None, readonly=()):
+        joined = " ".join(map(str, cmd))
+        answer = None
+        if "api-resources --api-group=policy.linkerd.io" in joined:
+            answer = (0, LINKERD_RESOURCES)
+        elif "get --raw /api/" in joined:
+            path = cmd[cmd.index("--raw") + 1]
+            answer = (0, self.raw[path]) if path in self.raw else (1, "")
+        else:
+            answer = next((v for k, v in {**self.answers, **self.objects}.items() if k in joined), None)
+        if answer is None:
+            return super().run_sandboxed(cmd, writable=writable, cwd=cwd, env=env, timeout=timeout, input=input, readonly=readonly)
+        cmd = [str(part) for part in cmd]
+        self.sandbox_calls.append({"cmd": cmd, "env": dict(env), "writable": list(writable), "readonly": list(readonly),
+                                   "cwd": cwd, "input": input})
+        return subprocess.CompletedProcess(cmd, answer[0], answer[1], "" if answer[0] == 0 else "NotFound")
+
+
+def namespace_item(fake) -> dict:
+    return next(i for i in bootstrap_items(fake) if i["kind"] == "Namespace")
+
+
+def test_kube_lab_mesh_annotation(monkeypatch):
+    fake = LinkerdFake(monkeypatch)
+    with testkit.KubeLab(mesh=True) as lab:
+        assert lab.mesh is True
+    assert namespace_item(fake)["metadata"]["annotations"] == {"linkerd.io/inject": "enabled"}
+    probes = [json.loads(c["input"]) for c in fake.calls_with("--dry-run=server")]
+    [probe] = [p for p in probes if p["kind"] == "MeshTLSAuthentication"]
+    assert probe["metadata"]["name"] == f"{lab.namespace}-probe-mesh" and probe["spec"] == {"identities": ["*"]}
+    plain = LinkerdFake(monkeypatch)
+    with testkit.KubeLab():
+        pass
+    assert "annotations" not in namespace_item(plain)["metadata"]
+
+
+def test_kube_lab_mesh_skips_without_linkerd(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with pytest.raises(pytest.skip.Exception) as info:
+        with testkit.KubeLab(mesh=True):
+            pass
+    assert_skip(info, "chưa có Linkerd", "apply --server-side -k setup/kind/linkerd", "certs.sh")
+    assert not fake.calls_with("apply", "-f", "-")
+    with testkit.KubeLab() as lab:
+        pass
+    assert not any(json.loads(c["input"])["kind"] == "MeshTLSAuthentication" for c in fake.calls_with("--dry-run=server"))
+    assert any(i["metadata"]["name"] == f"{lab.namespace}-mesh" for i in bootstrap_items(fake))
+
+
+def test_kube_lab_role_writes_linkerd_policy_in_lab_only(monkeypatch):
+    fake = LinkerdFake(monkeypatch)
+    with testkit.KubeLab():
+        pass
+    role = next(i for i in bootstrap_items(fake) if i["kind"] == "Role")
+    linkerd = [r for r in role["rules"] if any("linkerd" in g for g in r["apiGroups"])]
+    assert linkerd == [{"apiGroups": ["policy.linkerd.io"],
+                        "resources": ["servers", "authorizationpolicies", "httproutes", "meshtlsauthentications"],
+                        "verbs": testkit._KUBE_RW}]
+    cluster_roles = [i for i in bootstrap_items(fake) if i["kind"] == "ClusterRole"]
+    assert not any("linkerd" in json.dumps(c["rules"]) for c in cluster_roles)
+    assert "policy.linkerd.io" not in testkit._KUBE_HOOK_KINDS
+    assert "linkerd" in testkit.KUBE_SHARED_NAMESPACES
+
+
+MESH_NS = "devops-ex-abc12345"
+
+
+def mesh_identity(sa: str, ns: str = MESH_NS) -> str:
+    return f"{sa}.{ns}.serviceaccount.identity.linkerd.cluster.local"
+
+
+def mesh_doc(kind: str, spec: dict, version: str = "v1alpha1") -> dict:
+    return {"apiVersion": f"policy.linkerd.io/{version}", "kind": kind, "metadata": {"name": "x"}, "spec": spec}
+
+
+FOREIGN_MESH = {
+    "authz-target-namespace-other": mesh_doc("AuthorizationPolicy", {
+        "targetRef": {"kind": "Namespace", "name": "devops-ex-other"},
+        "requiredAuthenticationRefs": [{"kind": "ServiceAccount", "name": "api"}]}),
+    "authz-target-ns-field": mesh_doc("AuthorizationPolicy", {"targetRef": {"group": "policy.linkerd.io", "kind": "Server",
+                                                                            "name": "web", "namespace": "linkerd"}}),
+    "authz-auth-ref-other": mesh_doc("AuthorizationPolicy", {
+        "targetRef": {"group": "policy.linkerd.io", "kind": "Server", "name": "web"},
+        "requiredAuthenticationRefs": [{"group": "policy.linkerd.io", "kind": "MeshTLSAuthentication", "name": "a",
+                                        "namespace": "devops-ex-other"}]}),
+    "authz-sa-ref-other": mesh_doc("AuthorizationPolicy", {
+        "targetRef": {"group": "policy.linkerd.io", "kind": "Server", "name": "web"},
+        "requiredAuthenticationRefs": [{"kind": "ServiceAccount", "name": "api", "namespace": "kube-system"}]}),
+    "mtls-star": mesh_doc("MeshTLSAuthentication", {"identities": ["*"]}),
+    "mtls-other-ns": mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("api", "devops-ex-other")]}),
+    "mtls-control-plane": mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("linkerd-destination", "linkerd")]}),
+    "mtls-suffix-trick": mesh_doc("MeshTLSAuthentication", {"identities": [f"a.b.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local"]}),
+    "mtls-star-suffix": mesh_doc("MeshTLSAuthentication", {"identities": ["*.cluster.local"]}),
+    "mtls-ref-other-sa": mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "api",
+                                                                             "namespace": "devops-ex-other"}]}),
+    "mtls-ref-other-namespace": mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "Namespace", "name": "linkerd"}]}),
+    "mtls-ref-star": mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "*"}]}),
+    "route-parent-other": mesh_doc("HTTPRoute", {"parentRefs": [{"group": "policy.linkerd.io", "kind": "Server", "name": "web",
+                                                                 "namespace": "devops-ex-other"}]}, "v1beta3"),
+    "route-backend-other": mesh_doc("HTTPRoute", {"parentRefs": [{"group": "core", "kind": "Service", "name": "web", "port": 80}],
+                                                  "rules": [{"backendRefs": [{"name": "web", "port": 80,
+                                                                              "namespace": "devops-ex-other"}]}]}, "v1beta3"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(FOREIGN_MESH))
+def test_linkerd_policy_foreign_namespace_refused(case):
+    problems = testkit.kube_manifest_problems([FOREIGN_MESH[case]], lab_id="abc12345", namespace=MESH_NS)
+    assert problems and all(p.startswith(f"{FOREIGN_MESH[case]['kind']} x:") for p in problems), problems
+
+
+def test_linkerd_policy_inside_lab_allowed():
+    docs = [
+        mesh_doc("Server", {"podSelector": {"matchLabels": {"app": "web"}}, "port": "http", "proxyProtocol": "HTTP/1"}, "v1beta3"),
+        mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("api"), f"*.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local"]}),
+        mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "api"},
+                                                            {"kind": "ServiceAccount", "name": "worker", "namespace": MESH_NS},
+                                                            {"kind": "Namespace", "name": MESH_NS}]}),
+        mesh_doc("AuthorizationPolicy", {"targetRef": {"group": "policy.linkerd.io", "kind": "Server", "name": "web"},
+                                         "requiredAuthenticationRefs": [{"group": "policy.linkerd.io", "kind": "MeshTLSAuthentication",
+                                                                         "name": "api-only"}]}),
+        mesh_doc("AuthorizationPolicy", {"targetRef": {"kind": "Namespace", "name": MESH_NS},
+                                         "requiredAuthenticationRefs": [{"kind": "ServiceAccount", "name": "api",
+                                                                         "namespace": MESH_NS}]}),
+        {**mesh_doc("HTTPRoute", {"parentRefs": [{"group": "core", "kind": "Service", "name": "web", "port": 80}],
+                                  "rules": [{"timeouts": {"request": "2s"}, "backendRefs": [{"name": "web", "port": 80}]}]}, "v1beta3"),
+         "metadata": {"name": "web", "annotations": {"retry.linkerd.io/http": "5xx"}}},
+    ]
+    assert testkit.kube_manifest_problems(docs, lab_id="abc12345", namespace=MESH_NS) == []
+
+
+def test_linkerd_policy_vap_in_bootstrap(monkeypatch):
+    fake = LinkerdFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicy"
+                  and i["metadata"]["name"] == f"{lab.namespace}-mesh")
+    spec = policy["spec"]
+    assert spec["failurePolicy"] == "Fail"
+    assert spec["matchConstraints"]["resourceRules"] == [{
+        "apiGroups": ["policy.linkerd.io"], "apiVersions": ["*"],
+        "resources": ["authorizationpolicies", "meshtlsauthentications", "httproutes"], "operations": ["CREATE", "UPDATE"]}]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in spec["matchConditions"][0]["expression"]
+    text = json.dumps(spec["validations"])
+    for needle in ("object.spec.targetRef", "requiredAuthenticationRefs.all", "identityRefs.all", "parentRefs.all",
+                   "backendRefs.all", f"{lab.namespace}\\\\\\\\.serviceaccount\\\\\\\\.identity\\\\\\\\.linkerd\\\\\\\\.cluster\\\\\\\\.local$",
+                   "lowerAscii() != 'namespace'", "r.name != '*'"):
+        assert needle in text, needle
+    binding = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicyBinding"
+                   and i["metadata"]["name"] == f"{lab.namespace}-mesh")
+    assert binding["spec"]["validationActions"] == ["Deny"]
+
+
+@pytest.mark.parametrize("identity,ok", [
+    (mesh_identity("api"), True), (f"*.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local", True),
+    ("*", False), (mesh_identity("api", "devops-ex-other"), False), (f"a.b.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local", False),
+    (f"api.{MESH_NS}.serviceaccount.identity.linkerd.example.org", False), (None, False), ("", False),
+])
+def test_kube_mesh_identity_ok(identity, ok):
+    assert testkit.kube_mesh_identity_ok(identity, MESH_NS) is ok
+
+
+def linkerd_fake(monkeypatch, answers):
+    fake = KubeFake(monkeypatch)
+    calls = []
+
+    def run(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        calls.append(joined)
+        for key, (code, out) in answers.items():
+            if key in joined:
+                return subprocess.CompletedProcess(cmd, code, out, "" if code == 0 else "NotFound")
+        return fake.run_sandboxed(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return calls
+
+
+def test_require_linkerd_ok_never_reads_secrets(monkeypatch):
+    calls = linkerd_fake(monkeypatch, LINKERD_OK)
+    testkit.Exercise.require_linkerd()
+    assert len([c for c in calls if c.startswith("kubectl")]) == len(LINKERD_OK)
+    assert not any(" secret" in c or "secrets" in c for c in calls), calls
+
+
+@pytest.mark.parametrize("broken,answer,needle", [
+    ("crd servers.policy.linkerd.io", (1, ""), "CRD servers.policy.linkerd.io"),
+    ("configmap linkerd-config", (0, "cniEnabled: false\n"), "cniEnabled"),
+    ("configmap linkerd-config", (1, ""), "cniEnabled"),
+    ("daemonset linkerd-cni", (0, "2 3"), "linkerd-cni"),
+    ("daemonset linkerd-cni", (0, "0 0"), "linkerd-cni"),
+    ("configmap linkerd-identity-trust-roots", (1, ""), "linkerd-identity-trust-roots"),
+    ("mutatingwebhookconfiguration linkerd-proxy-injector-webhook-config",
+     (0, base64.b64encode(b"devops-linkerd-certs-sh").decode()), "caBundle"),
+    ("mutatingwebhookconfiguration linkerd-proxy-injector-webhook-config", (0, ""), "caBundle"),
+    ("deployment linkerd-identity", (0, "0"), "linkerd/linkerd-identity"),
+    ("deployment linkerd-destination", (0, ""), "linkerd/linkerd-destination"),
+    ("deployment linkerd-proxy-injector", (1, ""), "linkerd/linkerd-proxy-injector"),
+])
+def test_require_linkerd_messages(monkeypatch, broken, answer, needle):
+    answers = dict(LINKERD_OK)
+    answers[broken] = answer
+    linkerd_fake(monkeypatch, answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_linkerd()
+    assert_skip(info, needle, "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/linkerd",
+                "bash setup/kind/linkerd/certs.sh", "image-archive", "SHA256SUMS", "Gateway API CRD")
+
+
+def test_require_linkerd_needs_cluster_first(monkeypatch):
+    KubeFake(monkeypatch, clusters="\n")
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_linkerd()
+    assert_skip(info, "Chưa có cluster kind devops-lab")
+
+
+WEB_METRICS = """# HELP response_total Total count of HTTP responses.
+# TYPE response_total counter
+control_identity_cert_expiration_timestamp_seconds 1794439715.0
+response_total{direction="inbound",target_addr="10.244.2.6:80",target_ip="10.244.2.6",target_port="80",tls="true",client_id="api.NS.serviceaccount.identity.linkerd.cluster.local",srv_kind="server",srv_name="web-http",status_code="200",classification="success",grpc_status="",error=""} 5
+response_total{direction="inbound",target_addr="10.244.2.6:80",target_ip="10.244.2.6",target_port="80",tls="true",client_id="api.NS.serviceaccount.identity.linkerd.cluster.local",srv_kind="server",srv_name="web-http",status_code="503",classification="failure",grpc_status="",error=""} 2
+response_total{direction="inbound",target_addr="0.0.0.0:4191",target_ip="0.0.0.0",target_port="4191",tls="no_identity",no_tls_reason="no_tls_from_remote",status_code="200",classification="success",grpc_status="",error=""} 40
+request_total{direction="inbound",target_addr="10.244.2.6:80",target_ip="10.244.2.6",target_port="80",tls="no_identity",no_tls_reason="no_tls_from_remote",srv_kind="default"} 1
+request_total{direction="inbound",target_addr="0.0.0.0:4191",target_ip="0.0.0.0",target_port="4191",tls="no_identity",no_tls_reason="no_tls_from_remote"} 40
+inbound_http_authz_deny_total{target_port="80",srv_group="policy.linkerd.io",srv_kind="server",srv_name="web-http",srv_port="80",tls="true",client_id="intruder.NS.serviceaccount.identity.linkerd.cluster.local"} 3
+"""
+API_METRICS = """control_identity_cert_expiration_timestamp_seconds 1794439715.0
+response_total{direction="outbound",authority="web.NS.svc.cluster.local",target_port="80",tls="true",server_id="web.NS.serviceaccount.identity.linkerd.cluster.local",status_code="200",classification="success",grpc_status="",error=""} 5
+outbound_http_route_request_statuses_total{parent_kind="Service",parent_name="web",route_name="web-retry",hostname="",http_status="200",error=""} 6
+outbound_http_route_request_statuses_total{parent_kind="Service",parent_name="web",route_name="web-retry",hostname="",http_status="503",error=""} 1
+outbound_http_route_request_statuses_total{parent_kind="Service",parent_name="web",route_name="web-retry",hostname="",http_status="",error="TIMEOUT"} 2
+outbound_http_route_retry_requests_total{parent_kind="Service",route_name="web-retry",hostname=""} 4
+"""
+
+
+def mesh_pod(name: str, sa: str, *, proxy=True, phase="Running") -> dict:
+    sidecars = [{"name": "linkerd-network-validator"}] + ([{"name": "linkerd-proxy", "restartPolicy": "Always"}] if proxy else [])
+    return {"metadata": {"name": name}, "spec": {"serviceAccountName": sa, "initContainers": sidecars,
+                                                 "containers": [{"name": "app"}]}, "status": {"phase": phase}}
+
+
+def mesh_lab_fake(monkeypatch, pods, metrics, ns_holder):
+    fake = LinkerdFake(monkeypatch)
+    original = fake.run_sandboxed
+
+    def run(cmd, **kwargs):
+        cmd = [str(c) for c in cmd]
+        ns = ns_holder.get("ns", "")
+        joined = " ".join(cmd)
+        if "/pods/" in joined:
+            fake.sandbox_calls.append({"cmd": cmd, "env": dict(kwargs["env"]), "input": None})
+        if "get deployment web -o json" in joined:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"spec": {"selector": {"matchLabels": {"app": "web"}}}}), "")
+        if "get pods -l app=web -o json" in joined or "get pods web-0 -o json" in joined:
+            body = {"kind": "List", "items": pods} if "-l" in cmd else pods[0]
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(body), "")
+        if "--raw" in cmd and "/pods/" in cmd[cmd.index("--raw") + 1]:
+            path = cmd[cmd.index("--raw") + 1]
+            pod = path.split("/pods/")[1].split(":")[0]
+            if path.endswith("/env.json"):
+                sa = next(p["spec"]["serviceAccountName"] for p in pods if p["metadata"]["name"] == pod)
+                return subprocess.CompletedProcess(cmd, 0, json.dumps({"LINKERD2_PROXY_IDENTITY_LOCAL_NAME": mesh_identity(sa, ns)}), "")
+            return subprocess.CompletedProcess(cmd, 0, metrics.get(pod, "").replace("NS", ns), "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return fake
+
+
+def test_mesh_status_reads_identity_and_counts(monkeypatch):
+    holder = {}
+    pods = [mesh_pod("web-1", "web"), mesh_pod("web-2", "web"), mesh_pod("web-3", "web", phase="Pending")]
+    fake = mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS, "web-2": WEB_METRICS + API_METRICS}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("web")
+        assert status["workload"] == "deployment/web" and status["pods"] == ["web-1", "web-2"]
+        assert status["injected"] and status["mtls"]
+        assert status["identity"] == mesh_identity("web", lab.namespace)
+        assert (status["success"], status["failure"], status["denied"], status["plaintext"]) == (10, 4, 6, 2)
+        assert status["clients"] == [mesh_identity("api", lab.namespace)]
+        assert (status["outbound_success"], status["outbound_failure"], status["retries"]) == (6, 3, 4)
+        assert status["servers"] == [mesh_identity("web", lab.namespace)]
+        raws = [c for c in fake.sandbox_calls if "--raw" in c["cmd"] and "/readyz" not in c["cmd"]]
+        assert raws and all(c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig) for c in raws)
+        assert {c["cmd"][c["cmd"].index("--raw") + 1] for c in raws} == {
+            f"/api/v1/namespaces/{lab.namespace}/pods/{p}:4191/proxy/{e}" for p in ("web-1", "web-2") for e in ("metrics", "env.json")}
+
+
+def test_mesh_status_unmeshed_pod_reports_not_injected(monkeypatch):
+    holder = {}
+    pods = [mesh_pod("web-0", "web", proxy=False)]
+    mesh_lab_fake(monkeypatch, pods, {}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("pod/web-0")
+        assert status["pods"] == ["web-0"] and not status["injected"] and not status["mtls"] and status["identity"] is None
+
+
+def test_mesh_status_without_certificate_has_no_identity(monkeypatch):
+    holder = {}
+    pods = [mesh_pod("web-1", "web")]
+    mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS.replace("1794439715.0", "0")}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("deployment/web")
+        assert status["injected"] and not status["mtls"] and status["identity"] is None
+
+
+@pytest.mark.parametrize("workload", ["", "Web", "service/web", "deployment/", "web; rm -rf /", "../web", "-n", None,
+                                      "deployment/web/x"])
+def test_mesh_status_validates_workload(monkeypatch, workload):
+    LinkerdFake(monkeypatch)
+    with testkit.KubeLab(mesh=True) as lab:
+        with pytest.raises(ValueError):
+            lab.mesh_status(workload)
+
+
+def test_linkerd_setup_pinned_and_documented():
+    import hashlib
+
+    folder = testkit.KUBE_LINKERD_DIR
+    sums = dict(reversed(line.split()) for line in (folder / "SHA256SUMS").read_text(encoding="utf-8").splitlines())
+    assert set(sums) == {p.name for p in folder.iterdir() if p.is_file() and p.name != "SHA256SUMS"}
+    for name, digest in sums.items():
+        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest, name
+    text = "\n".join((folder / name).read_text(encoding="utf-8") for name in sums)
+    for name in sums:
+        if name.endswith(".yaml"):
+            body = (folder / name).read_text(encoding="utf-8")
+            assert "-----BEGIN" not in body and not re.search(r"^\s*tls\.key:", body, re.M), name
+    images = set(re.findall(r"image: (\S+)", text))
+    assert images == set(testkit.KUBE_LINKERD_IMAGES)
+    pulls = re.findall(r"imagePullPolicy: (\S+)", text)
+    assert pulls and set(pulls) == {"Never"}
+    rendered = (folder / "20-linkerd-control-plane-edge-26.10.1.yaml").read_text(encoding="utf-8")
+    for needle in ("cniEnabled: true", "disableHeartBeat: true", "externalCA: true", "scheme: kubernetes.io/tls",
+                   "linkerdVersion: edge-26.10.1", "enableShutdownEndpoint: false"):
+        assert needle in rendered, needle
+    assert "kind: Secret" not in rendered and "kind: CronJob" not in rendered
+    assert rendered.count(f"caBundle: {base64.b64encode(testkit.KUBE_LINKERD_CA_PLACEHOLDER.encode()).decode()}") == 3
+    script = (folder / "certs.sh").read_text(encoding="utf-8")
+    for needle in ("mktemp -d", "trap 'rm -rf", "umask 077", "rm -f root.key", "openssl genpkey -algorithm EC",
+                   "linkerd-identity-trust-roots", "linkerd-identity-issuer", "--server-side", "caBundle"):
+        assert needle in script, needle
+    assert script.index("rm -f root.key") < script.index("create configmap linkerd-identity-trust-roots")
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    for needle in (*testkit.KUBE_LINKERD_IMAGES.values(), "setup/kind/linkerd", "bash setup/kind/linkerd/certs.sh",
+                   "edge-26.10.1", "66d634f5318c8016f0b5face246a688964b6e2c86d6c3be34be68ab9fcd2a8cc"):
+        assert needle in doc, needle
+
+
+@pytest.mark.skipif(not shutil.which("kubectl"), reason="Cần kubectl để render kustomization")
+def test_linkerd_rendered_manifests_fail_closed(tmp_path):
+    import yaml
+
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "KUBECONFIG": str(tmp_path / "none"), "KUBERC": "off"}
+    result = subprocess.run(["kubectl", "kustomize", str(testkit.KUBE_LINKERD_DIR)], capture_output=True, text=True, env=env,
+                            timeout=120)
+    assert result.returncode == 0, result.stderr
+    docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+    namespaces = {d["metadata"].get("namespace") for d in docs} - {None}
+    assert namespaces == {"linkerd", "linkerd-cni"}
+    for doc in docs:
+        if doc["kind"] in ("Deployment", "DaemonSet"):
+            spec = doc["spec"]["template"]["spec"]
+            for container in spec.get("initContainers", []) + spec["containers"]:
+                assert container.get("imagePullPolicy") == "Never", (doc["metadata"]["name"], container["name"])
+                assert "NET_ADMIN" not in json.dumps(container), container["name"]
+    assert not [d for d in docs if d["kind"] in ("Secret", "CronJob")]
+    labelled = [d["metadata"]["name"] for d in docs if "devops-ex" in (d["metadata"].get("labels") or {})]
+    assert labelled == []
+    ns = {d["metadata"]["name"]: d["metadata"]["labels"] for d in docs if d["kind"] == "Namespace"}
+    assert ns["linkerd"]["pod-security.kubernetes.io/enforce"] == "restricted"
+    assert ns["linkerd"]["config.linkerd.io/admission-webhooks"] == "disabled"
+    injector = next(d for d in docs if d["kind"] == "MutatingWebhookConfiguration")
+    exprs = injector["webhooks"][0]["namespaceSelector"]["matchExpressions"]
+    assert {"key": "config.linkerd.io/admission-webhooks", "operator": "NotIn", "values": ["disabled"]} in exprs
+
+
+MESH_APP = """apiVersion: v1
+kind: ServiceAccount
+metadata: {name: SA}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: SA}
+spec:
+  selector: {matchLabels: {app: SA}}
+  template:
+    metadata: {labels: {app: SA}}
+    spec:
+      serviceAccountName: SA
+      containers:
+      - name: SA
+        image: nginx:1.30.6-alpine
+        imagePullPolicy: Never
+        ports: [{containerPort: 80, name: http}]
+"""
+MESH_POLICY = """apiVersion: v1
+kind: Service
+metadata: {name: web}
+spec:
+  selector: {app: web}
+  ports: [{port: 80, targetPort: 80, name: http}]
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata: {name: web-http}
+spec:
+  podSelector: {matchLabels: {app: web}}
+  port: http
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata: {name: api-only}
+spec:
+  identityRefs:
+  - {kind: ServiceAccount, name: api}
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata: {name: web-from-api}
+spec:
+  targetRef: {group: policy.linkerd.io, kind: Server, name: web-http}
+  requiredAuthenticationRefs:
+  - {group: policy.linkerd.io, kind: MeshTLSAuthentication, name: api-only}
+"""
+
+
+def curl_code(lab, deployment: str, url: str) -> str:
+    result = lab.kubectl("exec", f"deploy/{deployment}", "-c", deployment, "--", "curl", "-s", "-m", "5", "-o", "/dev/null",
+                         "-w", "%{http_code}", url, check=False)
+    return result.stdout.strip()
+
+
+@KUBE_REQUIRED
+def test_kube_lab_mesh_mtls_and_authorization_policy_real(tmp_path):
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_linkerd()
+    testkit.Exercise.require_kind_images(testkit.KUBE_IMAGES["nginx"])
+    (tmp_path / "app.yaml").write_text("---\n".join(MESH_APP.replace("SA", sa) for sa in ("web", "api", "intruder")), encoding="utf-8")
+    (tmp_path / "policy.yaml").write_text(MESH_POLICY, encoding="utf-8")
+    with testkit.KubeLab(mesh=True) as lab:
+        lab.apply_learner(tmp_path / "app.yaml")
+        lab.kubectl("rollout", "status", "deployment/web", "deployment/api", "deployment/intruder", "--timeout=120s", timeout=150)
+        lab.apply_learner(tmp_path / "policy.yaml")
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and curl_code(lab, "intruder", "http://web/") != "403":
+            time.sleep(1)
+        assert [curl_code(lab, "api", "http://web/") for _ in range(3)] == ["200"] * 3
+        assert curl_code(lab, "intruder", "http://web/") == "403"
+        web = lab.mesh_status("deployment/web")
+        assert web["injected"] and web["mtls"], web
+        assert web["identity"] == f"web.{lab.namespace}.serviceaccount.identity.linkerd.cluster.local"
+        assert f"api.{lab.namespace}.serviceaccount.identity.linkerd.cluster.local" in web["clients"]
+        assert web["success"] >= 3 and web["denied"] >= 1 and web["failure"] == 0, web
+        api = lab.mesh_status("api")
+        assert api["identity"] == f"api.{lab.namespace}.serviceaccount.identity.linkerd.cluster.local"
+        assert web["identity"] in api["servers"] and api["outbound_success"] >= 3, api
+    assert testkit.kube_leftovers(lab.id) == []
+
+
+@KUBE_REQUIRED
+def test_linkerd_policy_vap_refuses_foreign_namespace_real():
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_linkerd()
+    with testkit.KubeLab() as lab:
+        def named(doc, name):
+            return {**doc, "metadata": {"name": name}}
+
+        good = [named(mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("api", lab.namespace)]}), "by-name"),
+                named(mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "api"}]}), "good"),
+                named(mesh_doc("AuthorizationPolicy", {"targetRef": {"kind": "Namespace", "name": lab.namespace},
+                                                       "requiredAuthenticationRefs": [{"group": "policy.linkerd.io",
+                                                                                       "kind": "MeshTLSAuthentication",
+                                                                                       "name": "good"}]}), "good"),
+                named(mesh_doc("HTTPRoute", {"parentRefs": [{"group": "core", "kind": "Service", "name": "web", "port": 80}],
+                                             "rules": [{"backendRefs": [{"name": "web", "port": 80}]}]}, "v1beta3"), "good")]
+        for doc in good:
+            result = lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
+            assert result.returncode == 0, (doc["kind"], result.stderr)
+        for case, doc in sorted(FOREIGN_MESH.items()):
+            if case == "authz-target-ns-field":
+                continue
+            text = json.dumps(doc).replace(MESH_NS, lab.namespace)
+            result = lab.kubectl("apply", "-f", "-", input=text.replace('"name": "x"', f'"name": "{case}"', 1), check=False)
+            assert result.returncode != 0 and f"{lab.namespace}-mesh" in result.stderr, (case, result.stderr)
+        for resource in ("networkauthentications", "httplocalratelimitpolicies", "serverauthorizations", "egressnetworks"):
+            assert lab.kubectl("auth", "can-i", "create", f"{resource}.policy.linkerd.io", check=False).stdout.strip() == "no"
+        assert lab.kubectl("auth", "can-i", "create", "serviceprofiles.linkerd.io", check=False).stdout.strip() == "no"
+        assert lab.kubectl("auth", "can-i", "create", "servers.policy.linkerd.io", "-n", "linkerd",
+                           check=False).stdout.strip() == "no"
