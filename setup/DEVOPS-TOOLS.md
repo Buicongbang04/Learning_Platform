@@ -99,7 +99,7 @@ docker compose -f setup/docker-compose.yml --profile devops rm -fsv localstack-d
 docker volume rm devops-track-localstack-data
 ```
 
-Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM, Secrets Manager, SQS, EventBridge (`events`) và API Gateway REST (v1; API Gateway v2/HTTP API chỉ có ở bản Pro). Không bật Lambda và không mount socket Docker: LocalStack cần socket Docker để chạy code Lambda, tức là quyền root trên máy. LocalStack 4.4.0 vẫn nạp API `lambda` vì Secrets Manager phụ thuộc nó (rotation), nhưng function tạo ra luôn ở trạng thái `Failed` và không invoke được; code Lambda chạy trong `LambdaLab` (mục dưới). Đổi danh sách service chỉ cần tạo lại container, không cần xoá volume (không bật `PERSISTENCE`, tài nguyên chỉ nằm trong RAM; volume chỉ giữ cache):
+Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM, Secrets Manager, SQS, EventBridge (`events`) và API Gateway REST (v1; API Gateway v2/HTTP API chỉ có ở bản Pro). Integration HTTP của API Gateway và API destination của EventBridge khiến chính `localstack-devops` gửi request ra ngoài tới URL do cấu hình chỉ định (bề mặt SSRF từ máy của bạn), nên bài tập không dùng hai tính năng này. Không bật Lambda và không mount socket Docker: LocalStack cần socket Docker để chạy code Lambda, tức là quyền root trên máy. LocalStack 4.4.0 vẫn nạp API `lambda` vì Secrets Manager phụ thuộc nó (rotation), nhưng function tạo ra luôn ở trạng thái `Failed` và không invoke được; code Lambda chạy trong `LambdaLab` (mục dưới). Đổi danh sách service chỉ cần tạo lại container, không cần xoá volume (không bật `PERSISTENCE`, tài nguyên chỉ nằm trong RAM; volume chỉ giữ cache):
 
 ```bash
 docker compose -f setup/docker-compose.yml --profile devops rm -s -f localstack-devops && docker compose -f setup/docker-compose.yml --profile devops up -d --wait localstack-devops
@@ -116,14 +116,36 @@ ghim theo tag có ngày và digest (bản 2026-10-22, Python 3.12.15, boto3 1.42
 nice -n 15 docker pull public.ecr.aws/lambda/python:3.12.2026.10.22.03@sha256:25aee9bac65f131c5d090d3e3a36ccf232d65cf3e6c1dbd0bffd43ca7ce34406
 ```
 
-Mỗi `LambdaLab` là một container trong network riêng của test: code mount chỉ đọc, filesystem chỉ đọc, không có socket
-Docker, credential giả `test`/`test`, `AWS_ENDPOINT_URL` trỏ `localstack-devops`. Container không tới được
-`127.0.0.1:14566` của máy, nên testkit mở một bộ chuyển tiếp TCP trong tiến trình pytest, nghe trên IP gateway của network
-test (dạng `172.x.0.1`) và chỉ nhận kết nối từ subnet đó. Nếu tường lửa của máy (ufw, firewalld) chặn container nói chuyện
-với IP gateway, test LambdaLab skip kèm lý do; mở bằng luật cho phép dải network Docker mặc định vào máy (ví dụ với ufw:
-`sudo ufw allow from 172.16.0.0/12`), hoặc bỏ qua các bài này. Handler chỉ dùng được thư viện chuẩn và gói có
-sẵn trong image (boto3, botocore, s3transfer, jmespath, python-dateutil, urllib3, six, simplejson); `requirements.txt` có
-gói khác thì test báo lỗi. RAM đo 2026-11-11: khoảng 40 MB mỗi container (giới hạn mặc định 256 MB), khởi động dưới 1 giây.
+Mỗi `LambdaLab` là một container chạy một mình trên một network Docker `--internal` riêng (`devops-ex-<id>-lambda-net`):
+code mount chỉ đọc, filesystem chỉ đọc, không có socket Docker, credential giả `test`/`test`, `AWS_ENDPOINT_URL` trỏ
+`localstack-devops`. Network internal nên handler không ra được Internet và không thấy container khác của bài; test gọi
+handler thẳng qua IP container. Bài cần handler nói chuyện với container khác của lab (ví dụ Postgres thay RDS) dùng
+`isolated=False`: khi đó container nằm trên network của lab và ra được Internet như mọi container của `DockerLab`. Dù
+cách nào, container vẫn tới được các cổng mà máy mở trên `0.0.0.0` (qua IP gateway), như mọi container Docker. Credential
+giả và endpoint bị ép chỉ bảo đảm client AWS mặc định gọi LocalStack và không có credential thật để lộ; đó không phải rào
+mạng.
+
+Container không tới được `127.0.0.1:14566` của máy, nên testkit mở một bộ chuyển tiếp TCP trong tiến trình pytest, nghe trên
+IP gateway của network Lambda (dạng `172.x.0.1`) ở một cổng trong dải cố định `DEVOPS_LAMBDA_FORWARD_PORTS` (mặc định
+`47100-47199`, đổi trong `setup/.env` hay env khi chạy pytest), chỉ nhận kết nối từ subnet đó, tối đa 64 kết nối cùng lúc,
+và chỉ sống trong lúc test chạy. Nếu tường lửa của máy chặn container nói chuyện với IP gateway, test LambdaLab skip kèm lý do.
+Cách đơn giản nhất là bỏ qua các bài này. Muốn chạy thì mở **đúng dải cổng đó, chỉ TCP, chỉ từ dải network Docker mặc định**:
+
+```bash
+sudo ufw allow proto tcp from 172.16.0.0/12 to any port 47100:47199
+sudo ufw delete allow proto tcp from 172.16.0.0/12 to any port 47100:47199
+sudo firewall-cmd --zone=docker --add-port=47100-47199/tcp
+sudo firewall-cmd --zone=docker --remove-port=47100-47199/tcp
+```
+
+Luật này cho mọi địa chỉ trong `172.16.0.0/12` (mọi container Docker, và cả máy trong mạng LAN nếu LAN của bạn dùng dải
+này) kết nối tới các cổng 47100-47199 của máy. Bình thường không có gì nghe ở đó ngoài bộ chuyển tiếp lúc test chạy; nhưng
+nếu một chương trình khác dùng cổng trong dải này, nó cũng bị lộ. Đừng mở rộng thành `allow from 172.16.0.0/12` (mở mọi cổng
+của máy). Xoá luật (dòng thứ hai) khi học xong; với firewalld, luật không có `--permanent` tự mất khi reload.
+
+Handler chỉ dùng được thư viện chuẩn và gói có sẵn trong image (boto3, botocore, s3transfer, jmespath, python-dateutil,
+urllib3, six, simplejson); `requirements.txt` có gói khác thì test báo lỗi. RAM đo 2026-11-11: khoảng 40 MB mỗi container
+(giới hạn mặc định 256 MB), khởi động dưới 1 giây.
 
 ## Dịch vụ phụ trợ: Vault dev
 

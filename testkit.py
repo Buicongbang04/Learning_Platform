@@ -2080,10 +2080,17 @@ def localstack_sweep(prefix: str) -> list[str]:
             attempt(f"sqs:{name}", lambda url=url: sqs.delete_queue(QueueUrl=url))
 
     events = boto3.client("events", **options)
+    buses: list[str] = []
     try:
-        buses = [bus["Name"] for bus in events.list_event_buses().get("EventBuses", [])]
+        token = None
+        while True:
+            page = events.list_event_buses(**({"NextToken": token} if token else {}))
+            buses += [bus["Name"] for bus in page.get("EventBuses", [])]
+            token = page.get("NextToken")
+            if not token:
+                break
     except errors:
-        buses = []
+        pass
     for bus in buses:
         try:
             rules = [rule["Name"] for page in events.get_paginator("list_rules").paginate(EventBusName=bus)
@@ -2364,11 +2371,29 @@ def _memory_mb(memory: str) -> int:
     return {"k": value // 1024, "m": value, "g": value * 1024, "": value // (1024 * 1024)}[unit]
 
 
-class _Forward:
-    """Chuyển tiếp TCP từ `bind` (IP gateway của network lab trên máy) tới `target` (localstack-devops trên loopback), chỉ
-    nhận kết nối từ `subnet` của lab. `close()` đóng socket nghe và mọi kết nối đang mở."""
+LAMBDA_FORWARD_PORTS = "47100-47199"
+LAMBDA_FORWARD_LIMIT = 64
 
-    def __init__(self, bind: str, subnet: str, target: tuple[str, int]) -> None:
+
+def lambda_forward_ports() -> range:
+    """Dải cổng (trên IP gateway của network Lambda) mà bộ chuyển tiếp tới localstack-devops được nghe: biến
+    `DEVOPS_LAMBDA_FORWARD_PORTS` dạng `đầu-cuối`, mặc định `LAMBDA_FORWARD_PORTS`. Cố định để luật tường lửa mở đúng dải này."""
+    text = os.environ.get("DEVOPS_LAMBDA_FORWARD_PORTS", LAMBDA_FORWARD_PORTS).strip()
+    match = re.fullmatch(r"(\d+)-(\d+)", text)
+    first, last = (int(match.group(1)), int(match.group(2))) if match else (0, 0)
+    if not match or not 1024 <= first <= last <= 65535:
+        raise ValueError(f"DEVOPS_LAMBDA_FORWARD_PORTS={text!r} phải dạng đầu-cuối trong 1024..65535, vd. {LAMBDA_FORWARD_PORTS}")
+    return range(first, last + 1)
+
+
+class _Forward:
+    """Chuyển tiếp TCP từ `bind` (IP gateway của network Lambda trên máy), ở cổng trống đầu tiên của `ports`, tới `target`
+    (localstack-devops trên loopback). Chỉ nhận kết nối từ `subnet`, tối đa `limit` kết nối cùng lúc (quá thì đóng ngay).
+    `close()` đóng socket nghe và mọi kết nối đang mở."""
+
+    def __init__(self, bind: str, subnet: str, target: tuple[str, int], *, ports: range | None = None,
+                 limit: int = LAMBDA_FORWARD_LIMIT) -> None:
+        import errno
         import ipaddress
         import threading
 
@@ -2376,10 +2401,21 @@ class _Forward:
         self.subnet = ipaddress.ip_network(subnet, strict=False)
         self.target = target
         self.lock = threading.Lock()
+        self.slots = threading.BoundedSemaphore(limit)
         self.sockets: set[socket.socket] = set()
         self.closed = False
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.bind((bind, 0))
+        for port in ports if ports is not None else lambda_forward_ports():
+            try:
+                self.server.bind((bind, port))
+                break
+            except OSError as error:
+                if error.errno != errno.EADDRINUSE:
+                    self.server.close()
+                    raise
+        else:
+            self.server.close()
+            raise OSError(errno.EADDRINUSE, f"Hết cổng trống trong DEVOPS_LAMBDA_FORWARD_PORTS trên {bind}")
         self.server.listen(32)
         self.port = self.server.getsockname()[1]
         self._thread(target=self._accept, daemon=True).start()
@@ -2392,7 +2428,7 @@ class _Forward:
                 client, peer = self.server.accept()
             except OSError:
                 return
-            if ipaddress.ip_address(peer[0]) not in self.subnet:
+            if ipaddress.ip_address(peer[0]) not in self.subnet or not self.slots.acquire(blocking=False):
                 client.close()
                 continue
             try:
@@ -2400,11 +2436,13 @@ class _Forward:
                 upstream.settimeout(None)
             except OSError:
                 client.close()
+                self.slots.release()
                 continue
             with self.lock:
                 if self.closed:
                     client.close()
                     upstream.close()
+                    self.slots.release()
                     return
                 self.sockets.update((client, upstream))
             pair = [client, upstream, 2]
@@ -2428,6 +2466,7 @@ class _Forward:
             for sock in pair[:2]:
                 self.sockets.discard(sock)
                 sock.close()
+        self.slots.release()
 
     def close(self) -> None:
         with self.lock:
@@ -2441,10 +2480,26 @@ class _Forward:
             sock.close()
 
 
+def _ipv4_gateway(config) -> tuple[str, str] | None:
+    """Cặp (gateway, subnet) IPv4 đầu tiên có gateway trong mục `IPAM.Config` của `docker network inspect`."""
+    import ipaddress
+
+    for entry in config or []:
+        subnet, gateway = (entry or {}).get("Subnet"), (entry or {}).get("Gateway")
+        if not subnet or not gateway:
+            continue
+        try:
+            if ipaddress.ip_network(subnet, strict=False).version == 4 and ipaddress.ip_address(gateway).version == 4:
+                return gateway, subnet
+        except ValueError:
+            continue
+    return None
+
+
 class LambdaLab:
     """Chạy handler Python của người học như một Lambda trên máy: image `LAMBDA_IMAGE` (Lambda Python 3.12 của AWS, ghim
-    digest, có sẵn Runtime Interface Emulator) trong network của `lab` (`DockerLab` đã mở). Dùng
-    `with LambdaLab(lab, ex.path("handler"), "app.handler") as fn: fn.invoke({...})`.
+    digest, có sẵn Runtime Interface Emulator). Dùng
+    `with LambdaLab(lab, ex.path("handler"), "app.handler") as fn: fn.invoke({...})` bên trong `with DockerLab() as lab:`.
 
     Container chạy bằng `docker run` dựng từ `lab.run_args` (tên `devops-ex-<id>-<alias>`, `lab.close()` cũng dọn): code
     mount chỉ đọc ở `/var/task`, root filesystem chỉ đọc cộng tmpfs `/tmp`, uid/gid của người chạy test (65534 khi là root),
@@ -2452,23 +2507,30 @@ class LambdaLab:
     giây (`AWS_LAMBDA_FUNCTION_TIMEOUT`; quá giờ thì `invoke` trả `{"errorMessage": "Task timed out ..."}`). Không mount socket
     Docker hay thư mục nào khác, không mang biến môi trường nào của máy.
 
+    Network: mặc định (`isolated=True`) container nằm một mình trên network `--internal` riêng `devops-ex-<id>-<alias>-net`:
+    không ra Internet, không thấy container khác của lab; test gọi RIE thẳng qua IP container. `isolated=False` thì container
+    nằm trên network của lab (thấy container khác, ra được Internet như mọi container của `DockerLab`), RIE mở trên
+    `127.0.0.1` ở cổng trống. Cả hai trường hợp container vẫn tới được các cổng mà máy mở trên `0.0.0.0` qua IP gateway.
+
     Env bị ép, người học không ghi đè được (`env` có `AWS_*`, `LAMBDA_*`, `_*`, biến proxy, `PYTHON*`, `LD_*`, `PATH`, `HOME`,
     `TZ`, `LANG` thì fail, giống biến dành riêng của Lambda thật): `AWS_ENDPOINT_URL` trỏ `localstack-devops`, credential
     giả `test`/`test`, `AWS_REGION=us-east-1`, `AWS_CONFIG_FILE`/`AWS_SHARED_CREDENTIALS_FILE=/dev/null`,
     `AWS_EC2_METADATA_DISABLED=true`, `HTTPS_PROXY`/`HTTP_PROXY` là cổng chết trong container, `NO_PROXY` chỉ có loopback và
-    endpoint, nên boto3 chỉ tới được LocalStack.
+    endpoint. Bảo đảm là: không có credential thật, và client AWS mặc định chỉ gọi LocalStack; đó không phải rào mạng, code
+    tự mở socket vẫn đi được tới đâu network cho phép.
 
     `localstack-devops` chỉ mở trên `127.0.0.1` của máy, container không tới được. LambdaLab không nối network nào vào
-    service dùng chung: nó mở một bộ chuyển tiếp TCP trong tiến trình pytest, nghe trên IP gateway của network lab ở cổng
-    trống, chỉ nhận kết nối từ subnet của lab, chuyển tới `localstack_devops_endpoint()`. Tường lửa chặn container nói
-    chuyện với máy thì skip kèm lý do.
+    service dùng chung: nó mở một bộ chuyển tiếp TCP trong tiến trình pytest, nghe trên IP gateway của network container ở
+    cổng đầu tiên còn trống trong `lambda_forward_ports()` (`DEVOPS_LAMBDA_FORWARD_PORTS`, mặc định 47100-47199), chỉ nhận
+    kết nối từ subnet đó, tối đa `LAMBDA_FORWARD_LIMIT` kết nối cùng lúc, chuyển tới `localstack_devops_endpoint()`. Tường lửa
+    chặn container nói chuyện với máy thì skip kèm lý do.
 
     Thư viện: chỉ thư viện chuẩn và gói có sẵn trong image (`LAMBDA_BUNDLED`: boto3, botocore...), không cài gì thêm;
     `requirements.txt` trong `handler_dir` chỉ được liệt kê các gói đó.
     """
 
     def __init__(self, lab: DockerLab, handler_dir: Path, handler: str, *, env: dict[str, str] | None = None,
-                 memory: str = "256m", timeout: int = LAMBDA_TIMEOUT, alias: str = "lambda") -> None:
+                 memory: str = "256m", timeout: int = LAMBDA_TIMEOUT, alias: str = "lambda", isolated: bool = True) -> None:
         if not _LAMBDA_HANDLER.match(handler):
             raise ValueError(f"handler {handler!r} phải dạng module.hàm (vd. app.handler)")
         if not _IMAGE_ALIAS.match(alias):
@@ -2487,12 +2549,17 @@ class LambdaLab:
         self.memory_mb = _memory_mb(memory)
         self.timeout = int(timeout)
         self.alias = alias
+        self.isolated = bool(isolated)
+        self.network = f"{lab.network}-{alias}-net" if self.isolated else lab.network
         self.endpoint: str | None = None
         self.url: str | None = None
         self._forward: _Forward | None = None
+        self._network_created = False
         self._entered = False
 
     def __enter__(self) -> "LambdaLab":
+        if self._entered:
+            raise RuntimeError("Mỗi LambdaLab chỉ vào `with` một lần; tạo LambdaLab mới cho lần chạy khác")
         self._entered = True
         try:
             self._start()
@@ -2529,19 +2596,47 @@ class LambdaLab:
             "PYTHONDONTWRITEBYTECODE": "1",
         }
 
-    def run_args(self, host_port: int) -> list[str]:
+    def run_args(self, host_port: int | None = None) -> list[str]:
         user = f"{os.getuid()}:{os.getgid()}" if os.getuid() else "65534:65534"
+        publish = [] if self.isolated or host_port is None else [(LAMBDA_RIE_PORT, host_port)]
         args = self.lab.run_args(self.alias, LAMBDA_IMAGE, self.handler, mounts=[(self.handler_dir, LAMBDA_TASK_ROOT)],
-                                 publish=[(LAMBDA_RIE_PORT, host_port)], env=self.env(), memory=self.memory, user=user)
+                                 publish=publish, env=self.env(), memory=self.memory, user=user)
+        args[args.index("--network") + 1] = self.network
         hardening = ["--read-only", "--tmpfs", f"/tmp:rw,nosuid,nodev,size={LAMBDA_TMP_SIZE}", "--cap-drop", "ALL"]
         return [*args[:3], *hardening, *args[3:]]
 
-    def _network(self) -> tuple[str, str]:
-        result = _docker("network", "inspect", "-f", "{{range .IPAM.Config}}{{.Gateway}} {{.Subnet}} {{end}}", self.lab.network)
-        fields = result.stdout.split()
-        if result.returncode != 0 or len(fields) < 2:
-            pytest.fail(f"Không đọc được gateway của network {self.lab.network}: {result.stderr.strip()}")
-        return fields[0], fields[1]
+    def _gateway(self) -> tuple[str, str]:
+        result = _docker("network", "inspect", "-f", "{{json .IPAM.Config}}", self.network)
+        try:
+            found = _ipv4_gateway(json.loads(result.stdout or "null")) if result.returncode == 0 else None
+        except ValueError:
+            found = None
+        if found is None:
+            pytest.fail(f"Network {self.network} không có subnet IPv4 kèm gateway: {(result.stderr or result.stdout).strip()}")
+        return found
+
+    def _create_network(self) -> None:
+        self._network_created = True
+        result = _docker("network", "create", "--internal", "--label", DOCKER_LABEL, "--label", f"{DOCKER_LAB_LABEL}={self.lab.id}",
+                         self.network)
+        if result.returncode != 0:
+            pytest.fail(f"Không tạo được network {self.network}: {result.stderr.strip()}")
+
+    def _run(self) -> str:
+        name = self.lab._track(self.alias)
+        result = None
+        for _ in range(1 if self.isolated else 3):
+            port = None if self.isolated else free_port()
+            result = subprocess.run(self.run_args(port), capture_output=True, text=True, timeout=120)
+            if result.returncode == 0:
+                if port is not None:
+                    self.lab.ports[self.alias] = {LAMBDA_RIE_PORT: port}
+                    return f"http://127.0.0.1:{port}"
+                return f"http://{self.lab.ip(self.alias)}:{LAMBDA_RIE_PORT}"
+            _docker("rm", "-f", "-v", name)
+            if not any(text in result.stderr for text in _PORT_TAKEN):
+                break
+        pytest.fail(f"docker run Lambda {self.alias} lỗi: {result.stderr.strip() if result else ''}")
 
     def _start(self) -> None:
         self.lab._require_entered()
@@ -2553,27 +2648,20 @@ class LambdaLab:
                         f"({', '.join(sorted(LAMBDA_BUNDLED))}). Bỏ khỏi requirements.txt:\n- " + "\n- ".join(problems))
         Exercise.require_image(LAMBDA_IMAGE, hint=f"Tải bằng: {LAMBDA_PULL}")
         target = urlsplit(_localstack_devops_checked())
-        gateway, subnet = self._network()
-        self._forward = _Forward(gateway, subnet, (target.hostname or "127.0.0.1", target.port or 80))
+        ports = lambda_forward_ports()
+        if self.isolated:
+            self._create_network()
+        gateway, subnet = self._gateway()
+        try:
+            self._forward = _Forward(gateway, subnet, (target.hostname or "127.0.0.1", target.port or 80), ports=ports)
+        except OSError as error:
+            pytest.fail(f"Không mở được bộ chuyển tiếp trên {gateway} trong dải {ports.start}-{ports.stop - 1}: {error}")
         self.endpoint = f"http://{gateway}:{self._forward.port}"
-        name = self.lab._track(self.alias)
-        result = None
-        for _ in range(3):
-            port = free_port()
-            result = subprocess.run(self.run_args(port), capture_output=True, text=True, timeout=120)
-            if result.returncode == 0:
-                self.lab.ports[self.alias] = {LAMBDA_RIE_PORT: port}
-                break
-            _docker("rm", "-f", "-v", name)
-            if not any(text in result.stderr for text in _PORT_TAKEN):
-                break
-        if result is None or result.returncode != 0:
-            pytest.fail(f"docker run Lambda {self.alias} lỗi: {result.stderr.strip() if result else ''}")
-        base = f"http://127.0.0.1:{self.lab.port(self.alias, LAMBDA_RIE_PORT)}"
+        base = self._run()
         self.lab.wait_http(self.alias, f"{base}/", timeout=60)
         reach = self.lab.exec(self.alias, "python", "-c", _LAMBDA_PROBE, gateway, str(self._forward.port), timeout=30)
         if reach.returncode != 0:
-            pytest.skip(f"Container không tới được {self.endpoint} (IP gateway của network lab trên máy): "
+            pytest.skip(f"Container không tới được {self.endpoint} (IP gateway của network Lambda trên máy): "
                         f"{(reach.stderr or reach.stdout).strip()[-300:]}. Tường lửa (ufw, firewalld) có thể đang chặn "
                         "container nói chuyện với máy; xem setup/DEVOPS-TOOLS.md mục LambdaLab")
         self.url = f"{base}{_LAMBDA_INVOKE_PATH}"
@@ -2606,6 +2694,12 @@ class LambdaLab:
         if self._entered:
             try:
                 _docker("rm", "-f", "-v", self.lab.name(self.alias))
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if self._network_created:
+            self._network_created = False
+            try:
+                _docker("network", "rm", self.network)
             except (OSError, subprocess.TimeoutExpired):
                 pass
 

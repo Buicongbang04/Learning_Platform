@@ -7407,11 +7407,16 @@ def test_lambda_lab_run_args_hardened(monkeypatch, tmp_path):
     fn = testkit.LambdaLab(lab, write_handler(tmp_path / "h", "def handler(e, c):\n    return {}\n"), "app.handler",
                            env={"APP_TABLE": "orders"}, memory="512m", timeout=7)
     fn.endpoint = "http://172.30.0.1:40000"
+    assert fn.network == f"{lab.network}-lambda-net"
+    isolated = " ".join(fn.run_args(41000))
+    assert f"--network {lab.network}-lambda-net " in isolated and "-p " not in isolated
+    shared = testkit.LambdaLab(lab, tmp_path / "h", "app.handler", isolated=False)
+    assert f"--network {lab.network} " in " ".join(shared.run_args(41000)) and "-p 127.0.0.1:41000:8080" in " ".join(shared.run_args(41000))
     argv = fn.run_args(41000)
     joined = " ".join(argv)
     assert argv[:3] == ["docker", "run", "-d"] and argv[-2:] == [testkit.LAMBDA_IMAGE, "app.handler"]
     for flag in ("--read-only", "--cap-drop ALL", "--security-opt no-new-privileges", "--memory 512m", "--cpuset-cpus 12-35",
-                 f"-v {tmp_path / 'h'}:/var/task:ro", "-p 127.0.0.1:41000:8080", f"--network {lab.network}"):
+                 f"-v {tmp_path / 'h'}:/var/task:ro"):
         assert flag in joined
     assert "docker.sock" not in joined and "host-secret" not in joined and "--privileged" not in joined
     assert [a for a in argv if a.startswith("-v")] == ["-v"] and argv.count("-v") == 1
@@ -7486,11 +7491,13 @@ def test_lambda_lab_endpoint_forced_to_localstack(monkeypatch, tmp_path):
     with pytest.raises(pytest.fail.Exception, match="AWS_ENDPOINT_URL"):
         testkit.LambdaLab(testkit.DockerLab(), handler, "app.handler", env={"AWS_ENDPOINT_URL": "https://example.com"})
     with testkit.DockerLab() as lab:
-        gateway = testkit._docker("network", "inspect", "-f", "{{range .IPAM.Config}}{{.Gateway}}{{end}}", lab.network).stdout.strip()
         with testkit.LambdaLab(lab, handler, "app.handler") as fn:
+            gateway = testkit._docker("network", "inspect", "-f", "{{range .IPAM.Config}}{{.Gateway}}{{end}}",
+                                      fn.network).stdout.strip()
             result = fn.invoke({})
             endpoint = fn.endpoint
     assert testkit.docker_leftovers(lab.id) == []
+    assert int(endpoint.rsplit(":", 1)[1]) in testkit.lambda_forward_ports()
     assert endpoint.startswith(f"http://{gateway}:") and result["endpoint"] == endpoint
     assert result["env"]["AWS_ENDPOINT_URL"] == endpoint
     assert result["env"]["NO_PROXY"] == f"127.0.0.1,localhost,{gateway}"
@@ -7642,3 +7649,202 @@ def test_localstack_sweep_serverless_resources():
     finally:
         sqs.delete_queue(QueueUrl=keep_url)
         testkit.localstack_sweep(prefix)
+
+
+def test_lambda_lab_enter_twice_refused(monkeypatch, tmp_path):
+    fn = testkit.LambdaLab(testkit.DockerLab(), write_handler(tmp_path, "def handler(e, c):\n    return {}\n"), "app.handler")
+    monkeypatch.setattr(fn, "_start", lambda: None)
+    monkeypatch.setattr(testkit, "_docker", lambda *a, **k: subprocess.CompletedProcess(a, 0, "", ""))
+    with fn:
+        with pytest.raises(RuntimeError, match="một lần"):
+            fn.__enter__()
+    with pytest.raises(RuntimeError, match="một lần"):
+        with fn:
+            pass
+
+
+@pytest.mark.parametrize("config,expected", [
+    ([{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}, {"Subnet": "172.30.0.0/16", "Gateway": "172.30.0.1"}],
+     ("172.30.0.1", "172.30.0.0/16")),
+    ([{"Subnet": "172.31.0.0/16", "Gateway": ""}, {"Subnet": "172.30.0.0/16", "Gateway": "172.30.0.1"}],
+     ("172.30.0.1", "172.30.0.0/16")),
+    ([{"Subnet": "172.31.0.0/16"}], None),
+    ([{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}], None),
+    ([{"Subnet": "bad", "Gateway": "x"}, None], None),
+    (None, None),
+])
+def test_lambda_ipv4_gateway(config, expected):
+    assert testkit._ipv4_gateway(config) == expected
+
+
+def test_lambda_lab_gateway_parses_ipam_json(monkeypatch, tmp_path):
+    config = [{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}, {"Subnet": "172.30.0.0/16", "Gateway": "172.30.0.1"}]
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, json.dumps(config), "")
+
+    monkeypatch.setattr(testkit, "_docker", fake)
+    fn = testkit.LambdaLab(testkit.DockerLab(), tmp_path, "app.handler")
+    assert fn._gateway() == ("172.30.0.1", "172.30.0.0/16")
+    assert calls[0][-1] == fn.network and "{{json .IPAM.Config}}" in calls[0]
+    config = [{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}]
+    with pytest.raises(pytest.fail.Exception, match="IPv4"):
+        fn._gateway()
+
+
+@pytest.mark.parametrize("value,expected", [(None, range(47100, 47200)), ("50000-50009", range(50000, 50010)), ("6000-6000", range(6000, 6001))])
+def test_lambda_forward_ports(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("DEVOPS_LAMBDA_FORWARD_PORTS", raising=False)
+    else:
+        monkeypatch.setenv("DEVOPS_LAMBDA_FORWARD_PORTS", value)
+    assert testkit.lambda_forward_ports() == expected
+
+
+@pytest.mark.parametrize("value", ["80-90", "50010-50000", "abc", "50000", "60000-70000"])
+def test_lambda_forward_ports_invalid(monkeypatch, value):
+    monkeypatch.setenv("DEVOPS_LAMBDA_FORWARD_PORTS", value)
+    with pytest.raises(ValueError):
+        testkit.lambda_forward_ports()
+
+
+def test_lambda_forward_binds_inside_range():
+    taken = socket.socket()
+    taken.bind(("127.0.0.1", 0))
+    taken.listen(1)
+    port = taken.getsockname()[1]
+    with pytest.raises(OSError, match="DEVOPS_LAMBDA_FORWARD_PORTS"):
+        testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", 9), ports=range(port, port + 1))
+    taken.close()
+    forward = testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", 9), ports=range(port, port + 1))
+    try:
+        assert forward.port == port
+    finally:
+        forward.close()
+
+
+def test_lambda_forward_caps_connections():
+    import threading
+
+    server = socket_server()
+    accepted = []
+
+    def hold():
+        while True:
+            try:
+                accepted.append(server.accept()[0])
+            except OSError:
+                return
+
+    threading.Thread(target=hold, daemon=True).start()
+    forward = testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", server.getsockname()[1]), ports=range(0, 1), limit=2)
+    clients = []
+    try:
+        for _ in range(3):
+            clients.append(socket.create_connection(("127.0.0.1", forward.port), timeout=2))
+        clients[2].settimeout(2)
+        try:
+            assert clients[2].recv(10) == b""
+        except ConnectionResetError:
+            pass
+        deadline = time.monotonic() + 5
+        while len(forward.sockets) < 4 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert len(forward.sockets) == 4 and len(accepted) == 2
+        clients[0].close()
+        accepted[0].close()
+        deadline = time.monotonic() + 5
+        while len(forward.sockets) > 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        clients.append(socket.create_connection(("127.0.0.1", forward.port), timeout=2))
+        deadline = time.monotonic() + 5
+        while len(accepted) < 3 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert len(accepted) == 3
+    finally:
+        for sock in clients + accepted:
+            sock.close()
+        forward.close()
+        server.close()
+
+
+LAMBDA_NET_HANDLER = '''import socket
+
+
+def handler(event, context):
+    result = {}
+    for name, host, port in event["targets"]:
+        try:
+            socket.create_connection((host, port), timeout=3).close()
+            result[name] = "ok"
+        except OSError as error:
+            result[name] = type(error).__name__
+    return result
+'''
+
+
+def test_lambda_lab_isolated_network(tmp_path):
+    require_lambda_image()
+    peer_image = require_real_docker()
+    handler = write_handler(tmp_path / "h", LAMBDA_NET_HANDLER)
+    with testkit.DockerLab() as lab:
+        lab.start("peer", peer_image, "python", "-u", "-m", "http.server", "8000")
+        targets = {"targets": [["peer", "peer", 8000], ["internet", "1.1.1.1", 443]]}
+        with testkit.LambdaLab(lab, handler, "app.handler") as fn:
+            network = fn.network
+            internal = testkit._docker("network", "inspect", "-f", "{{.Internal}}", network).stdout.strip()
+            isolated = fn.invoke(targets)
+        assert testkit._docker("network", "inspect", network).returncode != 0
+        lab.wait_log("peer", "Serving HTTP", timeout=30)
+        with testkit.LambdaLab(lab, handler, "app.handler", alias="shared", isolated=False) as shared:
+            assert shared.network == lab.network
+            reached = shared.invoke({"targets": [["peer", "peer", 8000]]})
+    assert testkit.docker_leftovers(lab.id) == []
+    assert internal == "true" and network == f"{lab.network}-lambda-net"
+    assert isolated["peer"] != "ok" and isolated["internet"] != "ok"
+    assert reached == {"peer": "ok"}
+
+
+def test_lambda_firewall_docs_are_port_scoped():
+    text = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    section = text[text.index("## Lambda local: LambdaLab"):text.index("## Dịch vụ phụ trợ: Vault dev")]
+    first, last = testkit.LAMBDA_FORWARD_PORTS.split("-")
+    rules = [line for line in section.splitlines() if line.startswith("sudo ")]
+    assert f"sudo ufw allow proto tcp from 172.16.0.0/12 to any port {first}:{last}" in rules
+    assert f"sudo ufw delete allow proto tcp from 172.16.0.0/12 to any port {first}:{last}" in rules
+    assert all(f"{first}" in rule and "tcp" in rule for rule in rules)
+    assert "DEVOPS_LAMBDA_FORWARD_PORTS" in section and "Xoá luật" in section and "bỏ qua các bài này" in section
+    assert "SSRF" in text and "SSRF" in (testkit.ROOT / "CONTENT_SPEC.md").read_text(encoding="utf-8")
+
+
+def test_localstack_sweep_paginates_event_buses(monkeypatch):
+    import boto3
+
+    deleted = []
+    pages = {None: {"EventBuses": [{"Name": "default"}], "NextToken": "t1"},
+             "t1": {"EventBuses": [{"Name": "devops-ex-abc12345-bus"}, {"Name": "other-bus"}]}}
+
+    class Fake:
+        def __init__(self, service):
+            self.service = service
+
+        def get_paginator(self, name):
+            return self
+
+        def paginate(self, **kwargs):
+            return []
+
+        def list_buckets(self, **kwargs):
+            return {"Buckets": []}
+
+        def list_event_buses(self, **kwargs):
+            return pages[kwargs.get("NextToken")]
+
+        def delete_event_bus(self, Name):
+            deleted.append(Name)
+
+    monkeypatch.setattr(boto3, "client", lambda service, **kwargs: Fake(service))
+    assert testkit.localstack_sweep("devops-ex-abc12345") == ["events-bus:devops-ex-abc12345-bus"]
+    assert deleted == ["devops-ex-abc12345-bus"]
