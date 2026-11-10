@@ -90,7 +90,7 @@ Registry ở `localhost:15000`, chỉ mở trên `127.0.0.1`; Docker cho push l�
 
 ## Dịch vụ phụ trợ: LocalStack riêng cho IaC
 
-Module 08 và capstone m05 tạo bucket S3, bảng DynamoDB, IAM role, khoá KMS... bằng OpenTofu trên một LocalStack riêng của track DevOps: service `localstack-devops` (cùng image `localstack/localstack:4.4.0` với track DE, bản community không cần `LOCALSTACK_AUTH_TOKEN`), profile `devops`, không thuộc `all`. Nó tách hẳn service `localstack` của track Data Engineer: cổng khác, volume khác (`devops-track-localstack-data`), nên bài DevOps không bao giờ đụng dữ liệu của DE.
+Module 08, 14 và capstone m05 tạo bucket S3, bảng DynamoDB, IAM role, khoá KMS, hàng đợi SQS... bằng OpenTofu trên một LocalStack riêng của track DevOps: service `localstack-devops` (cùng image `localstack/localstack:4.4.0` với track DE, bản community không cần `LOCALSTACK_AUTH_TOKEN`), profile `devops`, không thuộc `all`. Nó tách hẳn service `localstack` của track Data Engineer: cổng khác, volume khác (`devops-track-localstack-data`), nên bài DevOps không bao giờ đụng dữ liệu của DE.
 
 ```bash
 docker compose -f setup/docker-compose.yml --profile devops up -d --wait localstack-devops
@@ -99,7 +99,31 @@ docker compose -f setup/docker-compose.yml --profile devops rm -fsv localstack-d
 docker volume rm devops-track-localstack-data
 ```
 
-Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM và Secrets Manager. Lần chạy test đầu tiên (cần mạng) tự tải đúng provider `hashicorp/aws` 6.12.0 (khoảng 150 MB, giải nén khoảng 780 MB) vào `~/.cache/devops-track/tofu-plugins`; từ đó test chạy offline. Provider mới hơn 6.12 chưa chạy được với LocalStack 4.4.0 (bảng DynamoDB, tag bucket S3), nên test chỉ cài bản này: ràng buộc như `~> 6.0` vẫn ra 6.12.0, ràng buộc loại trừ 6.12.0 thì test báo lỗi kèm lý do.
+Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `LOCALSTACK_DEVOPS_PORT` trong `setup/.env` (không được trùng `LOCALSTACK_PORT` của DE, test sẽ từ chối). Service bật S3, IAM, STS, DynamoDB, KMS, SSM, Secrets Manager, SQS, EventBridge (`events`) và API Gateway REST (v1; API Gateway v2/HTTP API chỉ có ở bản Pro). Không bật Lambda và không mount socket Docker: LocalStack cần socket Docker để chạy code Lambda, tức là quyền root trên máy. LocalStack 4.4.0 vẫn nạp API `lambda` vì Secrets Manager phụ thuộc nó (rotation), nhưng function tạo ra luôn ở trạng thái `Failed` và không invoke được; code Lambda chạy trong `LambdaLab` (mục dưới). Đổi danh sách service chỉ cần tạo lại container, không cần xoá volume (không bật `PERSISTENCE`, tài nguyên chỉ nằm trong RAM; volume chỉ giữ cache):
+
+```bash
+docker compose -f setup/docker-compose.yml --profile devops rm -s -f localstack-devops && docker compose -f setup/docker-compose.yml --profile devops up -d --wait localstack-devops
+```
+
+RAM đo 2026-11-11 (`docker stats`, đã bật đủ service ở trên): khoảng 440 MB. Lần chạy test đầu tiên (cần mạng) tự tải đúng provider `hashicorp/aws` 6.12.0 (khoảng 150 MB, giải nén khoảng 780 MB) vào `~/.cache/devops-track/tofu-plugins`; từ đó test chạy offline. Provider mới hơn 6.12 chưa chạy được với LocalStack 4.4.0 (bảng DynamoDB, tag bucket S3), nên test chỉ cài bản này: ràng buộc như `~> 6.0` vẫn ra 6.12.0, ràng buộc loại trừ 6.12.0 thì test báo lỗi kèm lý do.
+
+## Lambda local: LambdaLab
+
+Module 14 chạy handler Lambda Python của người học bằng image Lambda chính thức của AWS (có sẵn Runtime Interface Emulator),
+ghim theo tag có ngày và digest (bản 2026-10-22, Python 3.12.15, boto3 1.42.97). Tải một lần (khoảng 750 MB trên đĩa):
+
+```bash
+nice -n 15 docker pull public.ecr.aws/lambda/python:3.12.2026.10.22.03@sha256:25aee9bac65f131c5d090d3e3a36ccf232d65cf3e6c1dbd0bffd43ca7ce34406
+```
+
+Mỗi `LambdaLab` là một container trong network riêng của test: code mount chỉ đọc, filesystem chỉ đọc, không có socket
+Docker, credential giả `test`/`test`, `AWS_ENDPOINT_URL` trỏ `localstack-devops`. Container không tới được
+`127.0.0.1:14566` của máy, nên testkit mở một bộ chuyển tiếp TCP trong tiến trình pytest, nghe trên IP gateway của network
+test (dạng `172.x.0.1`) và chỉ nhận kết nối từ subnet đó. Nếu tường lửa của máy (ufw, firewalld) chặn container nói chuyện
+với IP gateway, test LambdaLab skip kèm lý do; mở bằng luật cho phép dải network Docker mặc định vào máy (ví dụ với ufw:
+`sudo ufw allow from 172.16.0.0/12`), hoặc bỏ qua các bài này. Handler chỉ dùng được thư viện chuẩn và gói có
+sẵn trong image (boto3, botocore, s3transfer, jmespath, python-dateutil, urllib3, six, simplejson); `requirements.txt` có
+gói khác thì test báo lỗi. RAM đo 2026-11-11: khoảng 40 MB mỗi container (giới hạn mặc định 256 MB), khởi động dưới 1 giây.
 
 ## Dịch vụ phụ trợ: Vault dev
 

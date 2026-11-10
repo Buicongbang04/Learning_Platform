@@ -194,7 +194,8 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
     return errors
 
 
-TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault", "argocd", "promtool", "amtool")
+TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault", "argocd", "promtool", "amtool",
+         "aws", "awslocal")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
 NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
 TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
@@ -390,10 +391,10 @@ def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
 
 def check_tool_calls(path: Path) -> list[str]:
     """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu, sops, age, age-keygen, vault, argocd,
-    promtool, amtool trực tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab,
-    AnsibleLab, KubeLab, kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với
+    promtool, amtool, aws, awslocal trực tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command, act_run,
+    TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với
     sops_env/vault_env; ArgoCD qua KubeLab.argocd_project, gitops_repo, argocd_wait; promtool, amtool qua
-    testkit.promtool/amtool; stack observability qua ObsStack).
+    testkit.promtool/amtool; stack observability qua ObsStack; AWS qua localstack_client, handler Lambda qua LambdaLab).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
     `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
@@ -798,6 +799,8 @@ TOOL_DENYLIST_BAD = {
     "local-run-wrapper": 'def run_cmd(c):\n    return subprocess.run(c)\nrun_cmd(["kind", "get", "clusters"])\n',
     "local-exec-wrapper": 'exec_tool(("tofu", "plan"))\n',
     "string-subprocess": 'subprocess.check_output("docker run --rm nginx", shell=True)\n',
+    "list-aws": 'subprocess.run(["aws", "sqs", "list-queues"])\n',
+    "string-awslocal": 'subprocess.run("awslocal s3 ls", shell=True)\n',
     "string-os-system": "os.system('docker rm -f x')\n",
     "string-os-popen": "os.popen('kubectl get ns').read()\n",
     "string-popen": 'Popen("helm list", shell=True)\n',
@@ -872,6 +875,10 @@ TOOL_DENYLIST_GOOD = {
     "age-keypair": 'key, public = age_keypair(tmp_path / "keys")\n',
     "promtool-helper": 'result = promtool("test", "rules", "tests.yml", cwd=ex.target)\nassert result.returncode == 0\n',
     "amtool-helper": 'testkit.amtool("check-config", "alertmanager.yml", cwd=ex.target)\n',
+    "lambda-lab": ('with DockerLab() as lab:\n    with LambdaLab(lab, ex.path("handler"), "app.handler", env={"QUEUE_NAME": q}) as fn:\n'
+                   '        assert fn.invoke({"Records": []}) == {"orders": []}\n'),
+    "localstack-client": 'sqs = localstack_client("sqs")\nsqs.create_queue(QueueName=f"{lab.prefix}-orders")\n',
+    "run-sandboxed-aws": 'run_sandboxed(["aws", "sqs", "list-queues"], writable=[t], cwd=t, env=tofu_env(t / "h", prefix=p))\n',
     "obs-stack": ('with DockerLab() as lab:\n    stack = ObsStack(lab, project=ex.target)\n    stack.prom_query("up")\n'
                   '    stack.loki_query(\'{service_name="olist-shop-api"}\')\n    stack.jaeger_traces("olist-shop-api")\n'),
     "other-argv": 'subprocess.run(["git", "status"])\nsubprocess.run(["bash", "-c", "echo docker"])\n',

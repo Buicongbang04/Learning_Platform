@@ -341,7 +341,7 @@ def test_devops_tools_documents_observability_stack():
     assert "setup/observability/compose.yaml" in text and "RAM" in text
     spec = (ROOT / "CONTENT_SPEC.md").read_text(encoding="utf-8")
     assert "testkit.ObsStack(lab, project=ex.target)" in spec and "testkit.promtool(" in spec
-    assert "`promtool`, `amtool` thẳng" in spec
+    assert "`promtool`, `amtool`, " in spec
 
 
 def test_sample_app_otel_pinned_and_absent_from_ansible_worker():
@@ -350,3 +350,12 @@ def test_sample_app_otel_pinned_and_absent_from_ansible_worker():
     assert otel and all("==" in line for line in otel)
     worker = (testkit.ANSIBLE_TARGET_DIR / "requirements-worker.txt").read_text(encoding="utf-8")
     assert "opentelemetry" not in worker, "Worker của bài Ansible chạy không có OpenTelemetry (chỉ bật khi có endpoint)"
+
+
+def test_devops_tools_documents_lambda_lab():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    assert "## Lambda local: LambdaLab" in text and testkit.LAMBDA_PULL in text
+    assert testkit.LOCALSTACK_DEVOPS_RECREATE in text and "SQS" in text and "không mount socket Docker" in text
+    spec = (ROOT / "CONTENT_SPEC.md").read_text(encoding="utf-8")
+    assert "testkit.LambdaLab(lab, " in spec and "`aws`, `awslocal` thẳng" in spec
+    assert testkit.LAMBDA_IMAGE.split("@")[0] in spec

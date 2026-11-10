@@ -255,13 +255,14 @@ services:
       retries: 10
 
   localstack-devops:
-    # LocalStack riêng của track DevOps (module 08, capstone m05), tách hẳn service `localstack` của track DE:
+    # LocalStack riêng của track DevOps (module 08, 14, capstone m05), tách hẳn service `localstack` của track DE:
     # cổng khác, volume khác, profile devops. Cùng image ghim với DE nên không cần LOCALSTACK_AUTH_TOKEN.
+    # Không bật Lambda, không mount socket Docker: code Lambda chạy trong LambdaLab của testkit.
     image: localstack/localstack:4.4.0
     profiles: [devops]
     cpuset: "${DEVOPS_CPUSET:-}"
     environment:
-      SERVICES: s3,iam,sts,dynamodb,kms,ssm,secretsmanager
+      SERVICES: s3,iam,sts,dynamodb,kms,ssm,secretsmanager,sqs,events,apigateway
       AWS_DEFAULT_REGION: us-east-1
     ports:
       - "127.0.0.1:${LOCALSTACK_DEVOPS_PORT:-14566}:4566"

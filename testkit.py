@@ -1695,6 +1695,8 @@ TOFU_AWS_PROVIDER = "6.12.0"
 TOFU_TIMEOUT = 300
 TOFU_REGION = "us-east-1"
 LOCALSTACK_DEVOPS_START = "docker compose -f setup/docker-compose.yml --profile devops up -d --wait localstack-devops"
+LOCALSTACK_DEVOPS_RECREATE = ("docker compose -f setup/docker-compose.yml --profile devops rm -s -f localstack-devops && "
+                              f"{LOCALSTACK_DEVOPS_START}")
 _TOFU_PREFIX = re.compile(rf"{DOCKER_PREFIX}[0-9a-f]{{8}}")
 TOFU_PROVIDERS = {"hashicorp/aws": TOFU_AWS_PROVIDER}
 TOFU_REGISTRY = "registry.opentofu.org"
@@ -1966,7 +1968,9 @@ def localstack_sweep(prefix: str) -> list[str]:
     """Xoá trên `localstack-devops` (không bao giờ trên `localstack` của DE) mọi tài nguyên mang đúng tiền tố của một lab
     (`devops-ex-<8 hex>`): tên bằng tiền tố hoặc bắt đầu bằng `<tiền tố>-`/`<tiền tố>/` (bỏ `/` đầu và `alias/`). Gồm bucket
     S3 (mọi version), bảng DynamoDB, IAM role và policy, tham số SSM, secret của Secrets Manager (xoá ngay), alias KMS (kèm
-    lên lịch xoá khoá khi không còn alias nào khác trỏ tới). Trả danh sách `loại:tên` đã xoá."""
+    lên lịch xoá khoá khi không còn alias nào khác trỏ tới), hàng đợi SQS, rule EventBridge (gỡ target trước; rule mang
+    tiền tố hoặc nằm trên bus mang tiền tố) và event bus, REST API của API Gateway, function Lambda (kèm event source
+    mapping). Trả danh sách `loại:tên` đã xoá."""
     if not _TOFU_PREFIX.fullmatch(prefix):
         raise ValueError(f"Tiền tố {prefix!r} không phải devops-ex-<8 hex> của một lab")
     endpoint = _localstack_devops_checked()
@@ -2064,6 +2068,56 @@ def localstack_sweep(prefix: str) -> list[str]:
                 kms.schedule_key_deletion(KeyId=key, PendingWindowInDays=7)
             except errors:
                 pass
+
+    sqs = boto3.client("sqs", **options)
+    try:
+        queues = [url for page in sqs.get_paginator("list_queues").paginate() for url in page.get("QueueUrls", [])]
+    except errors:
+        queues = []
+    for url in queues:
+        name = url.rstrip("/").rsplit("/", 1)[-1]
+        if _owned_by(name.removesuffix(".fifo"), prefix):
+            attempt(f"sqs:{name}", lambda url=url: sqs.delete_queue(QueueUrl=url))
+
+    events = boto3.client("events", **options)
+    try:
+        buses = [bus["Name"] for bus in events.list_event_buses().get("EventBuses", [])]
+    except errors:
+        buses = []
+    for bus in buses:
+        try:
+            rules = [rule["Name"] for page in events.get_paginator("list_rules").paginate(EventBusName=bus)
+                     for rule in page.get("Rules", [])]
+        except errors:
+            rules = []
+        for rule in rules:
+            if not _owned_by(rule, prefix) and not _owned_by(bus, prefix):
+                continue
+
+            def unhook(rule=rule, bus=bus) -> None:
+                ids = [t["Id"] for t in events.list_targets_by_rule(Rule=rule, EventBusName=bus).get("Targets", [])]
+                if ids:
+                    events.remove_targets(Rule=rule, EventBusName=bus, Ids=ids, Force=True)
+
+            attempt(f"events-rule:{bus}/{rule}", unhook,
+                    lambda rule=rule, bus=bus: events.delete_rule(Name=rule, EventBusName=bus, Force=True))
+        if bus != "default" and _owned_by(bus, prefix):
+            attempt(f"events-bus:{bus}", lambda bus=bus: events.delete_event_bus(Name=bus))
+
+    apigateway = boto3.client("apigateway", **options)
+    for api in listed(apigateway, "get_rest_apis", "items", "name"):
+        attempt(f"apigateway:{api['name']}", lambda api=api: apigateway.delete_rest_api(restApiId=api["id"]))
+
+    lambdas = boto3.client("lambda", **options)
+    for function in listed(lambdas, "list_functions", "Functions", "FunctionName"):
+        name = function["FunctionName"]
+        try:
+            mappings = lambdas.list_event_source_mappings(FunctionName=name).get("EventSourceMappings", [])
+        except errors:
+            mappings = []
+        for mapping in mappings:
+            attempt(f"lambda-esm:{mapping['UUID']}", lambda uuid=mapping["UUID"]: lambdas.delete_event_source_mapping(UUID=uuid))
+        attempt(f"lambda:{name}", lambda name=name: lambdas.delete_function(FunctionName=name))
     return removed
 
 
@@ -2266,6 +2320,294 @@ class TofuLab:
             finally:
                 if self.root is not None:
                     shutil.rmtree(self.root, ignore_errors=True)
+
+
+LAMBDA_IMAGE = ("public.ecr.aws/lambda/python:3.12.2026.10.22.03"
+                "@sha256:25aee9bac65f131c5d090d3e3a36ccf232d65cf3e6c1dbd0bffd43ca7ce34406")
+LAMBDA_PULL = f"docker pull {LAMBDA_IMAGE}"
+LAMBDA_RIE_PORT = 8080
+LAMBDA_TASK_ROOT = "/var/task"
+LAMBDA_TMP_SIZE = "64m"
+LAMBDA_TIMEOUT = 30
+LAMBDA_DEAD_PROXY = "http://127.0.0.1:9"
+LAMBDA_BUNDLED = frozenset({"boto3", "botocore", "jmespath", "python_dateutil", "s3transfer", "six", "urllib3", "simplejson"})
+_LAMBDA_INVOKE_PATH = "/2015-03-31/functions/function/invocations"
+_LAMBDA_HANDLER = re.compile(r"^[A-Za-z_]\w*(?:[./][A-Za-z_]\w*)*\.[A-Za-z_]\w*$")
+_LAMBDA_ENV_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_LAMBDA_RESERVED = re.compile(r"^(?:AWS_.*|_.*|LAMBDA_.*|(?:HTTPS?|NO|ALL)_PROXY|PYTHON.*|LD_.*|PATH|HOME|TZ|LANG)$")
+_LAMBDA_REQUIREMENT = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
+_LAMBDA_PROBE = ("import socket, sys\ntry:\n    socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=5).close()\n"
+                 "except OSError as error:\n    sys.exit(str(error))\n")
+
+
+def _lambda_requirement_problems(handler_dir: Path) -> list[str]:
+    path = handler_dir / "requirements.txt"
+    if not path.is_file():
+        return []
+    problems = []
+    for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        text = line.split("#", 1)[0].strip()
+        if not text:
+            continue
+        match = _LAMBDA_REQUIREMENT.match(text)
+        name = re.sub(r"[-.]+", "_", match.group(1)).lower() if match else None
+        if name not in LAMBDA_BUNDLED:
+            problems.append(f"requirements.txt:{number}: {text!r}")
+    return problems
+
+
+def _memory_mb(memory: str) -> int:
+    match = re.fullmatch(r"(\d+)([kmg]?)b?", memory.strip().lower())
+    if not match:
+        raise ValueError(f"memory {memory!r} phải dạng 256m hay 1g")
+    value, unit = int(match.group(1)), match.group(2)
+    return {"k": value // 1024, "m": value, "g": value * 1024, "": value // (1024 * 1024)}[unit]
+
+
+class _Forward:
+    """Chuyển tiếp TCP từ `bind` (IP gateway của network lab trên máy) tới `target` (localstack-devops trên loopback), chỉ
+    nhận kết nối từ `subnet` của lab. `close()` đóng socket nghe và mọi kết nối đang mở."""
+
+    def __init__(self, bind: str, subnet: str, target: tuple[str, int]) -> None:
+        import ipaddress
+        import threading
+
+        self._thread = threading.Thread
+        self.subnet = ipaddress.ip_network(subnet, strict=False)
+        self.target = target
+        self.lock = threading.Lock()
+        self.sockets: set[socket.socket] = set()
+        self.closed = False
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.bind((bind, 0))
+        self.server.listen(32)
+        self.port = self.server.getsockname()[1]
+        self._thread(target=self._accept, daemon=True).start()
+
+    def _accept(self) -> None:
+        import ipaddress
+
+        while True:
+            try:
+                client, peer = self.server.accept()
+            except OSError:
+                return
+            if ipaddress.ip_address(peer[0]) not in self.subnet:
+                client.close()
+                continue
+            try:
+                upstream = socket.create_connection(self.target, timeout=5)
+                upstream.settimeout(None)
+            except OSError:
+                client.close()
+                continue
+            with self.lock:
+                if self.closed:
+                    client.close()
+                    upstream.close()
+                    return
+                self.sockets.update((client, upstream))
+            pair = [client, upstream, 2]
+            self._thread(target=self._pump, args=(client, upstream, pair), daemon=True).start()
+            self._thread(target=self._pump, args=(upstream, client, pair), daemon=True).start()
+
+    def _pump(self, source: socket.socket, sink: socket.socket, pair: list) -> None:
+        try:
+            while data := source.recv(65536):
+                sink.sendall(data)
+        except OSError:
+            pass
+        try:
+            sink.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+        with self.lock:
+            pair[2] -= 1
+            if pair[2]:
+                return
+            for sock in pair[:2]:
+                self.sockets.discard(sock)
+                sock.close()
+
+    def close(self) -> None:
+        with self.lock:
+            self.closed = True
+            sockets, self.sockets = [self.server, *self.sockets], set()
+        for sock in sockets:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            sock.close()
+
+
+class LambdaLab:
+    """Chạy handler Python của người học như một Lambda trên máy: image `LAMBDA_IMAGE` (Lambda Python 3.12 của AWS, ghim
+    digest, có sẵn Runtime Interface Emulator) trong network của `lab` (`DockerLab` đã mở). Dùng
+    `with LambdaLab(lab, ex.path("handler"), "app.handler") as fn: fn.invoke({...})`.
+
+    Container chạy bằng `docker run` dựng từ `lab.run_args` (tên `devops-ex-<id>-<alias>`, `lab.close()` cũng dọn): code
+    mount chỉ đọc ở `/var/task`, root filesystem chỉ đọc cộng tmpfs `/tmp`, uid/gid của người chạy test (65534 khi là root),
+    `--cap-drop ALL`, no-new-privileges, cpuset, RAM `memory` (cũng là `AWS_LAMBDA_FUNCTION_MEMORY_SIZE`), timeout `timeout`
+    giây (`AWS_LAMBDA_FUNCTION_TIMEOUT`; quá giờ thì `invoke` trả `{"errorMessage": "Task timed out ..."}`). Không mount socket
+    Docker hay thư mục nào khác, không mang biến môi trường nào của máy.
+
+    Env bị ép, người học không ghi đè được (`env` có `AWS_*`, `LAMBDA_*`, `_*`, biến proxy, `PYTHON*`, `LD_*`, `PATH`, `HOME`,
+    `TZ`, `LANG` thì fail, giống biến dành riêng của Lambda thật): `AWS_ENDPOINT_URL` trỏ `localstack-devops`, credential
+    giả `test`/`test`, `AWS_REGION=us-east-1`, `AWS_CONFIG_FILE`/`AWS_SHARED_CREDENTIALS_FILE=/dev/null`,
+    `AWS_EC2_METADATA_DISABLED=true`, `HTTPS_PROXY`/`HTTP_PROXY` là cổng chết trong container, `NO_PROXY` chỉ có loopback và
+    endpoint, nên boto3 chỉ tới được LocalStack.
+
+    `localstack-devops` chỉ mở trên `127.0.0.1` của máy, container không tới được. LambdaLab không nối network nào vào
+    service dùng chung: nó mở một bộ chuyển tiếp TCP trong tiến trình pytest, nghe trên IP gateway của network lab ở cổng
+    trống, chỉ nhận kết nối từ subnet của lab, chuyển tới `localstack_devops_endpoint()`. Tường lửa chặn container nói
+    chuyện với máy thì skip kèm lý do.
+
+    Thư viện: chỉ thư viện chuẩn và gói có sẵn trong image (`LAMBDA_BUNDLED`: boto3, botocore...), không cài gì thêm;
+    `requirements.txt` trong `handler_dir` chỉ được liệt kê các gói đó.
+    """
+
+    def __init__(self, lab: DockerLab, handler_dir: Path, handler: str, *, env: dict[str, str] | None = None,
+                 memory: str = "256m", timeout: int = LAMBDA_TIMEOUT, alias: str = "lambda") -> None:
+        if not _LAMBDA_HANDLER.match(handler):
+            raise ValueError(f"handler {handler!r} phải dạng module.hàm (vd. app.handler)")
+        if not _IMAGE_ALIAS.match(alias):
+            raise ValueError(f"alias {alias!r} phải là chữ thường, số, '.', '_', '-'")
+        if not 1 <= int(timeout) <= 900:
+            raise ValueError("timeout của Lambda nằm trong 1..900 giây")
+        bad = [str(key) for key in (env or {}) if not _LAMBDA_ENV_KEY.match(str(key)) or _LAMBDA_RESERVED.match(str(key).upper())]
+        if bad:
+            pytest.fail(f"LambdaLab không cho đặt biến {', '.join(sorted(bad))}: AWS_*, LAMBDA_*, proxy... là biến dành riêng, "
+                        "testkit ép để handler chỉ tới được localstack-devops với credential giả")
+        self.lab = lab
+        self.handler_dir = Path(handler_dir).resolve()
+        self.handler = handler
+        self.user_env = {str(key): str(value) for key, value in (env or {}).items()}
+        self.memory = memory
+        self.memory_mb = _memory_mb(memory)
+        self.timeout = int(timeout)
+        self.alias = alias
+        self.endpoint: str | None = None
+        self.url: str | None = None
+        self._forward: _Forward | None = None
+        self._entered = False
+
+    def __enter__(self) -> "LambdaLab":
+        self._entered = True
+        try:
+            self._start()
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def env(self) -> dict[str, str]:
+        endpoint = self.endpoint or "http://127.0.0.1:1"
+        no_proxy = f"127.0.0.1,localhost,{urlsplit(endpoint).hostname}"
+        return {
+            **self.user_env,
+            "AWS_ENDPOINT_URL": endpoint,
+            "AWS_ACCESS_KEY_ID": "test",
+            "AWS_SECRET_ACCESS_KEY": "test",
+            "AWS_REGION": TOFU_REGION,
+            "AWS_DEFAULT_REGION": TOFU_REGION,
+            "AWS_CONFIG_FILE": "/dev/null",
+            "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+            "AWS_EC2_METADATA_DISABLED": "true",
+            "AWS_LAMBDA_FUNCTION_NAME": self.alias,
+            "AWS_LAMBDA_FUNCTION_MEMORY_SIZE": str(self.memory_mb),
+            "AWS_LAMBDA_FUNCTION_TIMEOUT": str(self.timeout),
+            "HTTPS_PROXY": LAMBDA_DEAD_PROXY,
+            "HTTP_PROXY": LAMBDA_DEAD_PROXY,
+            "https_proxy": LAMBDA_DEAD_PROXY,
+            "http_proxy": LAMBDA_DEAD_PROXY,
+            "NO_PROXY": no_proxy,
+            "no_proxy": no_proxy,
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+
+    def run_args(self, host_port: int) -> list[str]:
+        user = f"{os.getuid()}:{os.getgid()}" if os.getuid() else "65534:65534"
+        args = self.lab.run_args(self.alias, LAMBDA_IMAGE, self.handler, mounts=[(self.handler_dir, LAMBDA_TASK_ROOT)],
+                                 publish=[(LAMBDA_RIE_PORT, host_port)], env=self.env(), memory=self.memory, user=user)
+        hardening = ["--read-only", "--tmpfs", f"/tmp:rw,nosuid,nodev,size={LAMBDA_TMP_SIZE}", "--cap-drop", "ALL"]
+        return [*args[:3], *hardening, *args[3:]]
+
+    def _network(self) -> tuple[str, str]:
+        result = _docker("network", "inspect", "-f", "{{range .IPAM.Config}}{{.Gateway}} {{.Subnet}} {{end}}", self.lab.network)
+        fields = result.stdout.split()
+        if result.returncode != 0 or len(fields) < 2:
+            pytest.fail(f"Không đọc được gateway của network {self.lab.network}: {result.stderr.strip()}")
+        return fields[0], fields[1]
+
+    def _start(self) -> None:
+        self.lab._require_entered()
+        if not self.handler_dir.is_dir():
+            pytest.fail(f"Không có thư mục handler {self.handler_dir}")
+        problems = _lambda_requirement_problems(self.handler_dir)
+        if problems:
+            pytest.fail("LambdaLab không cài thư viện; chỉ có thư viện chuẩn và gói có sẵn trong image Lambda "
+                        f"({', '.join(sorted(LAMBDA_BUNDLED))}). Bỏ khỏi requirements.txt:\n- " + "\n- ".join(problems))
+        Exercise.require_image(LAMBDA_IMAGE, hint=f"Tải bằng: {LAMBDA_PULL}")
+        target = urlsplit(_localstack_devops_checked())
+        gateway, subnet = self._network()
+        self._forward = _Forward(gateway, subnet, (target.hostname or "127.0.0.1", target.port or 80))
+        self.endpoint = f"http://{gateway}:{self._forward.port}"
+        name = self.lab._track(self.alias)
+        result = None
+        for _ in range(3):
+            port = free_port()
+            result = subprocess.run(self.run_args(port), capture_output=True, text=True, timeout=120)
+            if result.returncode == 0:
+                self.lab.ports[self.alias] = {LAMBDA_RIE_PORT: port}
+                break
+            _docker("rm", "-f", "-v", name)
+            if not any(text in result.stderr for text in _PORT_TAKEN):
+                break
+        if result is None or result.returncode != 0:
+            pytest.fail(f"docker run Lambda {self.alias} lỗi: {result.stderr.strip() if result else ''}")
+        base = f"http://127.0.0.1:{self.lab.port(self.alias, LAMBDA_RIE_PORT)}"
+        self.lab.wait_http(self.alias, f"{base}/", timeout=60)
+        reach = self.lab.exec(self.alias, "python", "-c", _LAMBDA_PROBE, gateway, str(self._forward.port), timeout=30)
+        if reach.returncode != 0:
+            pytest.skip(f"Container không tới được {self.endpoint} (IP gateway của network lab trên máy): "
+                        f"{(reach.stderr or reach.stdout).strip()[-300:]}. Tường lửa (ufw, firewalld) có thể đang chặn "
+                        "container nói chuyện với máy; xem setup/DEVOPS-TOOLS.md mục LambdaLab")
+        self.url = f"{base}{_LAMBDA_INVOKE_PATH}"
+
+    def invoke(self, event: Any = None, *, timeout: float | None = None) -> Any:
+        """Gọi handler một lần qua HTTP của RIE, trả kết quả đã parse JSON (thường là dict). Handler ném lỗi thì trả
+        `{"errorMessage", "errorType", "stackTrace"}`; quá timeout của Lambda thì `{"errorMessage": "Task timed out ..."}`."""
+        import httpx
+
+        if self.url is None:
+            raise RuntimeError("Dùng LambdaLab bằng `with LambdaLab(lab, ...) as fn:` rồi mới invoke")
+        wait = timeout if timeout is not None else self.timeout + 30
+        try:
+            response = httpx.post(self.url, content=json.dumps({} if event is None else event), timeout=wait, trust_env=False)
+        except httpx.HTTPError as error:
+            pytest.fail(f"Không gọi được Lambda {self.alias}: {error}. {self.lab._log_tail(self.alias)}")
+        try:
+            return response.json()
+        except ValueError:
+            return {"errorMessage": response.text}
+
+    def logs(self) -> str:
+        return self.lab.logs(self.alias)
+
+    def close(self) -> None:
+        self.url = None
+        if self._forward is not None:
+            self._forward.close()
+            self._forward = None
+        if self._entered:
+            try:
+                _docker("rm", "-f", "-v", self.lab.name(self.alias))
+            except (OSError, subprocess.TimeoutExpired):
+                pass
 
 
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
@@ -5395,9 +5737,11 @@ class Exercise:
         return registry_address()
 
     @staticmethod
-    def require_localstack_devops() -> str:
+    def require_localstack_devops(*services: str) -> str:
         """Skip khi `localstack-devops` (profile `devops`) chưa chạy, cổng của nó trùng `localstack` của DE, hoặc cổng đó là
-        server khác (LocalStack của DE bật S3/IAM/STS nhưng tắt DynamoDB); trả endpoint. Test IaC dùng qua `TofuLab`."""
+        server khác (LocalStack của DE bật S3/IAM/STS nhưng tắt DynamoDB); trả endpoint. Test IaC dùng qua `TofuLab`.
+        `services` (vd. `"sqs", "events"`) là service bài cần thêm: container tạo từ cấu hình cũ chưa bật thì skip kèm lệnh
+        tạo lại."""
         if _port("localstack-devops") == _port("localstack"):
             pytest.skip(
                 f"LOCALSTACK_DEVOPS_PORT ({_port('localstack-devops')}) trùng LOCALSTACK_PORT của track DE; bài DevOps không "
@@ -5405,11 +5749,16 @@ class Exercise:
         endpoint = localstack_devops_endpoint()
         if not service_up("localstack-devops"):
             pytest.skip(f"LocalStack của track DevOps chưa chạy. Bật bằng: {LOCALSTACK_DEVOPS_START}")
-        services = (_localstack_health(endpoint) or {}).get("services", {})
-        if any(services.get(name) in (None, "disabled") for name in ("s3", "iam", "sts", "dynamodb")):
+        services_up = (_localstack_health(endpoint) or {}).get("services", {})
+        if any(services_up.get(name) in (None, "disabled") for name in ("s3", "iam", "sts", "dynamodb")):
             pytest.skip(
                 f"Cổng {_port('localstack-devops')} đang mở nhưng không phải localstack-devops (thiếu S3, IAM, STS hay "
                 f"DynamoDB). Đổi LOCALSTACK_DEVOPS_PORT trong setup/.env rồi chạy: {LOCALSTACK_DEVOPS_START}")
+        missing = [name for name in services if services_up.get(name) in (None, "disabled")]
+        if missing:
+            pytest.skip(
+                f"localstack-devops đang chạy chưa bật {', '.join(missing)} (container tạo từ setup/docker-compose.yml cũ). "
+                f"Tạo lại: {LOCALSTACK_DEVOPS_RECREATE}")
         return endpoint
 
     @staticmethod

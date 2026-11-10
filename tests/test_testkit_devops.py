@@ -6,6 +6,7 @@ import os
 import pwd
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -2556,6 +2557,9 @@ def test_localstack_sweep_targets_devops_endpoint_only(monkeypatch):
         def paginate(self, **kwargs):
             return []
 
+        def list_event_buses(self, **kwargs):
+            return {"EventBuses": []}
+
         def list_buckets(self, **kwargs):
             return {"Buckets": [{"Name": "devops-ex-other999-b"}, {"Name": "de-data"}]}
 
@@ -2964,6 +2968,9 @@ def test_localstack_sweep_never_matches_longer_prefix(monkeypatch):
         def paginate(self, **kwargs):
             return []
 
+        def list_event_buses(self, **kwargs):
+            return {"EventBuses": []}
+
         def list_buckets(self, **kwargs):
             return {"Buckets": [{"Name": n} for n in ("devops-ex-abc123456-x", "devops-ex-abc12345x", "devops-ex-abc12345-data",
                                                       "devops-ex-abc12345")]}
@@ -3104,6 +3111,9 @@ def test_localstack_sweep_schedules_key_only_after_alias_removed(monkeypatch, al
             if self.service == "kms":
                 return [{"Aliases": [{"AliasName": "alias/devops-ex-abc12345-state", "TargetKeyId": "k1"}]}]
             return []
+
+        def list_event_buses(self, **kwargs):
+            return {"EventBuses": []}
 
         def list_buckets(self, **kwargs):
             return {"Buckets": []}
@@ -7285,3 +7295,350 @@ def test_promtool_readonly_mount(tmp_path):
     assert testkit.amtool("check-config", "alertmanager.yml", cwd=work).returncode != 0
     names = testkit._docker("ps", "-a", "--filter", "name=devops-ex-", "--format", "{{.Names}}").stdout.split()
     assert not [n for n in names if n.endswith(("-promtool", "-amtool"))]
+
+
+LAMBDA_PROBE_HANDLER = '''import json
+import os
+import urllib.request
+
+import boto3
+from botocore.config import Config
+
+
+def handler(event, context):
+    sqs = boto3.client("sqs")
+    real = boto3.client("sqs", endpoint_url="https://sqs.us-east-1.amazonaws.com", config=Config(retries={"max_attempts": 1}))
+    try:
+        real.list_queues()
+        real_aws = "reachable"
+    except Exception as error:
+        real_aws = type(error).__name__
+    try:
+        urllib.request.urlopen("http://169.254.169.254/latest/meta-data/", timeout=2)
+        metadata = "reachable"
+    except Exception as error:
+        metadata = type(error).__name__
+    session = boto3.session.Session()
+    credentials = session.get_credentials()
+    return {
+        "env": {k: v for k, v in os.environ.items() if k.startswith(("AWS_", "HTTP", "http", "NO_", "no_", "APP_", "DOCKER"))},
+        "endpoint": sqs.meta.endpoint_url,
+        "credentials": [credentials.access_key, credentials.secret_key, credentials.method],
+        "region": session.region_name,
+        "sockets": [p for p in ("/var/run/docker.sock", "/run/docker.sock") if os.path.exists(p)],
+        "uid": os.getuid(),
+        "real_aws": real_aws,
+        "metadata": metadata,
+        "writable_task": os.access("/var/task", os.W_OK),
+    }
+'''
+
+LAMBDA_SQS_HANDLER = '''import json
+import os
+
+import boto3
+
+
+def handler(event, context):
+    if event.get("Records"):
+        return {"orders": [json.loads(r["body"])["order_id"] for r in event["Records"]]}
+    sqs = boto3.client("sqs")
+    url = sqs.get_queue_url(QueueName=os.environ["QUEUE_NAME"])["QueueUrl"]
+    seen = []
+    for message in sqs.receive_message(QueueUrl=url, MaxNumberOfMessages=10, WaitTimeSeconds=2).get("Messages", []):
+        seen.append(json.loads(message["Body"])["order_id"])
+        sqs.delete_message(QueueUrl=url, ReceiptHandle=message["ReceiptHandle"])
+    if event.get("boom"):
+        raise ValueError("hỏng")
+    if event.get("sleep"):
+        import time
+        time.sleep(event["sleep"])
+    return {"orders": seen, "remaining_ms": context.get_remaining_time_in_millis()}
+'''
+
+
+def write_handler(directory: Path, text: str, requirements: str | None = None) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "app.py").write_text(text, encoding="utf-8")
+    if requirements is not None:
+        (directory / "requirements.txt").write_text(requirements, encoding="utf-8")
+    return directory
+
+
+def require_lambda_image():
+    return require_real_docker(testkit.LAMBDA_IMAGE)
+
+
+def test_lambda_image_pinned_by_digest():
+    assert re.fullmatch(r"public\.ecr\.aws/lambda/python:3\.12\.\d{4}\.\d{2}\.\d{2}\.\d{2}@sha256:[0-9a-f]{64}", testkit.LAMBDA_IMAGE)
+    assert testkit.LAMBDA_PULL == f"docker pull {testkit.LAMBDA_IMAGE}"
+    assert "boto3" in testkit.LAMBDA_BUNDLED and "requests" not in testkit.LAMBDA_BUNDLED
+
+
+@pytest.mark.parametrize("key", ["AWS_ENDPOINT_URL", "aws_access_key_id", "AWS_PROFILE", "AWS_LAMBDA_FUNCTION_TIMEOUT", "_HANDLER",
+                                 "LAMBDA_TASK_ROOT", "HTTPS_PROXY", "no_proxy", "PYTHONPATH", "LD_PRELOAD", "PATH", "BAD-KEY",
+                                 "X=Y"])
+def test_lambda_lab_refuses_reserved_env(tmp_path, key):
+    with pytest.raises(pytest.fail.Exception, match="không cho đặt biến"):
+        testkit.LambdaLab(testkit.DockerLab(), tmp_path, "app.handler", env={key: "x"})
+
+
+@pytest.mark.parametrize("handler", ["app", "app.", "../app.handler", "app.handler; rm", "-app.handler"])
+def test_lambda_lab_refuses_bad_handler(tmp_path, handler):
+    with pytest.raises(ValueError):
+        testkit.LambdaLab(testkit.DockerLab(), tmp_path, handler)
+
+
+@pytest.mark.parametrize("text,problems", [
+    ("boto3==1.42.97\nbotocore>=1.40  # có sẵn\n\n# chú thích\nPython-Dateutil\n", 0),
+    ("requests==2.32.0\nboto3\n", 1),
+    ("-r other.txt\n--index-url https://x\n", 2),
+    ("git+https://example.com/x.git\n./local\n", 2),
+])
+def test_lambda_requirements_only_bundled(tmp_path, text, problems):
+    write_handler(tmp_path, "def handler(e, c):\n    return {}\n", text)
+    assert len(testkit._lambda_requirement_problems(tmp_path)) == problems
+
+
+def test_lambda_lab_run_args_hardened(monkeypatch, tmp_path):
+    monkeypatch.setenv("DEVOPS_CPUSET", "12-35")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "host-secret")
+    lab = testkit.DockerLab()
+    fn = testkit.LambdaLab(lab, write_handler(tmp_path / "h", "def handler(e, c):\n    return {}\n"), "app.handler",
+                           env={"APP_TABLE": "orders"}, memory="512m", timeout=7)
+    fn.endpoint = "http://172.30.0.1:40000"
+    argv = fn.run_args(41000)
+    joined = " ".join(argv)
+    assert argv[:3] == ["docker", "run", "-d"] and argv[-2:] == [testkit.LAMBDA_IMAGE, "app.handler"]
+    for flag in ("--read-only", "--cap-drop ALL", "--security-opt no-new-privileges", "--memory 512m", "--cpuset-cpus 12-35",
+                 f"-v {tmp_path / 'h'}:/var/task:ro", "-p 127.0.0.1:41000:8080", f"--network {lab.network}"):
+        assert flag in joined
+    assert "docker.sock" not in joined and "host-secret" not in joined and "--privileged" not in joined
+    assert [a for a in argv if a.startswith("-v")] == ["-v"] and argv.count("-v") == 1
+    env = dict(argv[i + 1].split("=", 1) for i, a in enumerate(argv) if a == "-e")
+    assert env["AWS_ENDPOINT_URL"] == "http://172.30.0.1:40000"
+    assert (env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"]) == ("test", "test")
+    assert env["AWS_CONFIG_FILE"] == env["AWS_SHARED_CREDENTIALS_FILE"] == "/dev/null"
+    assert env["AWS_EC2_METADATA_DISABLED"] == "true" and env["AWS_REGION"] == "us-east-1"
+    assert env["AWS_LAMBDA_FUNCTION_TIMEOUT"] == "7" and env["AWS_LAMBDA_FUNCTION_MEMORY_SIZE"] == "512"
+    assert env["HTTPS_PROXY"] == testkit.LAMBDA_DEAD_PROXY and env["NO_PROXY"] == "127.0.0.1,localhost,172.30.0.1"
+    assert env["APP_TABLE"] == "orders"
+    assert not {k for k in env if k.startswith("AWS_")} - {
+        "AWS_ENDPOINT_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_DEFAULT_REGION", "AWS_CONFIG_FILE",
+        "AWS_SHARED_CREDENTIALS_FILE", "AWS_EC2_METADATA_DISABLED", "AWS_LAMBDA_FUNCTION_NAME", "AWS_LAMBDA_FUNCTION_MEMORY_SIZE",
+        "AWS_LAMBDA_FUNCTION_TIMEOUT"}
+
+
+def test_lambda_lab_refuses_outside_docker_lab_with(tmp_path):
+    fn = testkit.LambdaLab(testkit.DockerLab(), write_handler(tmp_path, "def handler(e, c):\n    return {}\n"), "app.handler")
+    with pytest.raises(RuntimeError):
+        fn.invoke({})
+    with pytest.raises(RuntimeError):
+        with fn:
+            pass
+
+
+def test_lambda_lab_refuses_extra_requirements(tmp_path):
+    require_lambda_image()
+    write_handler(tmp_path / "h", "def handler(e, c):\n    return {}\n", "requests==2.32.0\n")
+    with testkit.DockerLab() as lab:
+        with pytest.raises(pytest.fail.Exception, match="requests"):
+            with testkit.LambdaLab(lab, tmp_path / "h", "app.handler"):
+                pass
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_lambda_lab_no_socket_and_dummy_credentials(monkeypatch, tmp_path):
+    require_lambda_image()
+    for key, value in (("AWS_ACCESS_KEY_ID", "AKIAHOSTLEAK"), ("AWS_SECRET_ACCESS_KEY", "host-secret"), ("AWS_PROFILE", "prod"),
+                       ("AWS_SESSION_TOKEN", "host-token"), ("DOCKER_HOST", "unix:///var/run/docker.sock")):
+        monkeypatch.setenv(key, value)
+    handler = write_handler(tmp_path / "h", LAMBDA_PROBE_HANDLER)
+    with testkit.DockerLab() as lab:
+        with testkit.LambdaLab(lab, handler, "app.handler", env={"APP_MODE": "test"}) as fn:
+            inspect = json.loads(testkit._docker("inspect", lab.name("lambda")).stdout)[0]
+            result = fn.invoke({})
+        name = lab.name("lambda")
+        assert testkit._docker("inspect", name).returncode != 0
+    assert testkit.docker_leftovers(lab.id) == []
+    mounts = inspect["Mounts"]
+    assert [(m["Type"], m["Destination"], m["RW"]) for m in mounts] == [("bind", "/var/task", False)]
+    assert not any("docker.sock" in (m.get("Source") or "") for m in mounts)
+    host = inspect["HostConfig"]
+    assert host["ReadonlyRootfs"] is True and host["CapDrop"] == ["ALL"] and host["Privileged"] is False
+    assert "no-new-privileges" in host["SecurityOpt"]
+    assert all(binding["HostIp"] == "127.0.0.1" for bindings in host["PortBindings"].values() for binding in bindings)
+    config_env = "\n".join(inspect["Config"]["Env"])
+    assert "AKIAHOSTLEAK" not in config_env and "host-secret" not in config_env and "host-token" not in config_env
+    assert result["sockets"] == [] and result["writable_task"] is False and result["uid"] != 0
+    assert result["credentials"][:2] == ["test", "test"] and result["region"] == "us-east-1"
+    env = result["env"]
+    assert "AWS_PROFILE" not in env and "DOCKER_HOST" not in env and env.get("AWS_SESSION_TOKEN", "") == ""
+    assert env["AWS_CONFIG_FILE"] == env["AWS_SHARED_CREDENTIALS_FILE"] == "/dev/null"
+    assert env["AWS_EC2_METADATA_DISABLED"] == "true" and env["APP_MODE"] == "test"
+    assert result["metadata"] != "reachable"
+
+
+def test_lambda_lab_endpoint_forced_to_localstack(monkeypatch, tmp_path):
+    require_lambda_image()
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "https://sqs.us-east-1.amazonaws.com")
+    handler = write_handler(tmp_path / "h", LAMBDA_PROBE_HANDLER)
+    with pytest.raises(pytest.fail.Exception, match="AWS_ENDPOINT_URL"):
+        testkit.LambdaLab(testkit.DockerLab(), handler, "app.handler", env={"AWS_ENDPOINT_URL": "https://example.com"})
+    with testkit.DockerLab() as lab:
+        gateway = testkit._docker("network", "inspect", "-f", "{{range .IPAM.Config}}{{.Gateway}}{{end}}", lab.network).stdout.strip()
+        with testkit.LambdaLab(lab, handler, "app.handler") as fn:
+            result = fn.invoke({})
+            endpoint = fn.endpoint
+    assert testkit.docker_leftovers(lab.id) == []
+    assert endpoint.startswith(f"http://{gateway}:") and result["endpoint"] == endpoint
+    assert result["env"]["AWS_ENDPOINT_URL"] == endpoint
+    assert result["env"]["NO_PROXY"] == f"127.0.0.1,localhost,{gateway}"
+    assert result["real_aws"] in {"ProxyConnectionError", "EndpointConnectionError", "ConnectionClosedError"}
+
+
+def socket_server() -> socket.socket:
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(4)
+    return server
+
+
+def test_lambda_forward_only_accepts_lab_subnet():
+    target = socket_server()
+    forward = testkit._Forward("127.0.0.1", "10.99.0.0/16", ("127.0.0.1", target.getsockname()[1]))
+    try:
+        with socket.create_connection(("127.0.0.1", forward.port), timeout=2) as client:
+            client.settimeout(2)
+            try:
+                assert client.recv(10) == b""
+            except ConnectionResetError:
+                pass
+        target.settimeout(0.5)
+        with pytest.raises(TimeoutError):
+            target.accept()
+    finally:
+        forward.close()
+        target.close()
+    with pytest.raises(OSError):
+        socket.create_connection(("127.0.0.1", forward.port), timeout=2)
+
+
+def test_lambda_forward_relays_both_ways():
+    import threading
+
+    server = socket_server()
+
+    def echo():
+        conn, _ = server.accept()
+        with conn:
+            while data := conn.recv(1024):
+                conn.sendall(data.upper())
+
+    threading.Thread(target=echo, daemon=True).start()
+    forward = testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", server.getsockname()[1]))
+    try:
+        with socket.create_connection(("127.0.0.1", forward.port), timeout=2) as client:
+            client.sendall(b"xin chao")
+            client.shutdown(socket.SHUT_WR)
+            received = b""
+            while chunk := client.recv(1024):
+                received += chunk
+        assert received == b"XIN CHAO"
+    finally:
+        forward.close()
+        server.close()
+    assert forward.sockets == set()
+
+
+def test_lambda_lab_invoke_roundtrip(tmp_path):
+    require_lambda_image()
+    testkit.Exercise.require_localstack_devops("sqs")
+    handler = write_handler(tmp_path / "h", LAMBDA_SQS_HANDLER, "boto3\n")
+    with testkit.DockerLab() as lab:
+        queue = f"{lab.network}-orders"
+        sqs = testkit.localstack_client("sqs")
+        try:
+            url = sqs.create_queue(QueueName=queue)["QueueUrl"]
+            for order in ("o-1", "o-2"):
+                sqs.send_message(QueueUrl=url, MessageBody=json.dumps({"order_id": order}))
+            with testkit.LambdaLab(lab, handler, "app.handler", env={"QUEUE_NAME": queue}, timeout=3) as fn:
+                first = fn.invoke({})
+                event = {"Records": [{"messageId": "m1", "body": json.dumps({"order_id": "o-3"}), "eventSource": "aws:sqs"}]}
+                from_event = fn.invoke(event)
+                failed = fn.invoke({"boom": True})
+                timed_out = fn.invoke({"sleep": 10})
+                after_timeout = fn.invoke({})
+                logs = fn.logs()
+            attributes = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["ApproximateNumberOfMessages"])["Attributes"]
+        finally:
+            swept = testkit.localstack_sweep(lab.network)
+    assert testkit.docker_leftovers(lab.id) == []
+    assert sorted(first["orders"]) == ["o-1", "o-2"] and 0 < first["remaining_ms"] <= 3000
+    assert from_event == {"orders": ["o-3"]}
+    assert failed["errorType"] == "ValueError" and failed["errorMessage"] == "hỏng"
+    assert "Task timed out after 3" in timed_out["errorMessage"]
+    assert after_timeout["orders"] == []
+    assert attributes["ApproximateNumberOfMessages"] == "0"
+    assert "START RequestId" in logs and "REPORT RequestId" in logs
+    assert swept == [f"sqs:{queue}"]
+
+
+def test_localstack_devops_no_docker_socket():
+    import yaml
+
+    data = yaml.safe_load((testkit.ROOT / "setup" / "docker-compose.yml").read_text(encoding="utf-8"))
+    devops = data["services"]["localstack-devops"]
+    services = devops["environment"]["SERVICES"].split(",")
+    assert {"sqs", "dynamodb", "events", "apigateway", "secretsmanager"} <= set(services)
+    assert "lambda" not in services and "ecs" not in services
+    assert not [v for v in devops.get("volumes", []) if "docker.sock" in str(v) or "/var/run" in str(v)]
+    assert not [k for k in devops["environment"] if k.startswith(("LAMBDA_", "DOCKER_"))]
+    assert "privileged" not in devops and "network_mode" not in devops
+    for name, service in data["services"].items():
+        assert not [v for v in service.get("volumes", []) if "docker.sock" in str(v)], name
+
+
+def test_require_localstack_devops_skips_when_service_missing(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: True)
+    health = {"services": {s: "available" for s in ("s3", "iam", "sts", "dynamodb")} | {"sqs": "disabled"}}
+    monkeypatch.setattr(testkit, "_localstack_health", lambda endpoint: health)
+    monkeypatch.delenv("LOCALSTACK_DEVOPS_PORT", raising=False)
+    monkeypatch.delenv("LOCALSTACK_PORT", raising=False)
+    assert testkit.Exercise.require_localstack_devops() == "http://127.0.0.1:14566"
+    with pytest.raises(pytest.skip.Exception, match="chưa bật sqs, events") as info:
+        testkit.Exercise.require_localstack_devops("sqs", "events")
+    assert testkit.LOCALSTACK_DEVOPS_RECREATE in str(info.value) and "rm -s -f localstack-devops" in str(info.value)
+
+
+def test_localstack_sweep_serverless_resources():
+    if not testkit.service_up("localstack-devops"):
+        pytest.skip(f"Cần localstack-devops: {testkit.LOCALSTACK_DEVOPS_START}")
+    testkit.Exercise.require_localstack_devops("sqs", "events", "apigateway")
+    prefix = f"devops-ex-{os.urandom(4).hex()}"
+    keep = f"devops-ex-{os.urandom(4).hex()}"
+    sqs, events = testkit.localstack_client("sqs"), testkit.localstack_client("events")
+    apigateway = testkit.localstack_client("apigateway")
+    keep_url = sqs.create_queue(QueueName=f"{keep}-q")["QueueUrl"]
+    try:
+        url = sqs.create_queue(QueueName=f"{prefix}-orders")["QueueUrl"]
+        sqs.create_queue(QueueName=f"{prefix}-orders.fifo", Attributes={"FifoQueue": "true"})
+        arn = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
+        events.create_event_bus(Name=f"{prefix}-bus")
+        events.put_rule(Name="placed", EventBusName=f"{prefix}-bus", EventPattern='{"source": ["olist.shop"]}')
+        events.put_targets(Rule="placed", EventBusName=f"{prefix}-bus", Targets=[{"Id": "q", "Arn": arn}])
+        events.put_rule(Name=f"{prefix}-nightly", ScheduleExpression="rate(1 day)")
+        events.put_targets(Rule=f"{prefix}-nightly", Targets=[{"Id": "q", "Arn": arn}])
+        apigateway.create_rest_api(name=f"{prefix}-api")
+        removed = testkit.localstack_sweep(prefix)
+        assert sorted(removed) == sorted([
+            f"sqs:{prefix}-orders", f"sqs:{prefix}-orders.fifo", f"events-rule:{prefix}-bus/placed", f"events-bus:{prefix}-bus",
+            f"events-rule:default/{prefix}-nightly", f"apigateway:{prefix}-api"])
+        assert not [u for u in sqs.list_queues().get("QueueUrls", []) if prefix in u]
+        assert not [b for b in events.list_event_buses()["EventBuses"] if b["Name"].startswith(prefix)]
+        assert not [r for r in events.list_rules()["Rules"] if r["Name"].startswith(prefix)]
+        assert not [a for a in apigateway.get_rest_apis()["items"] if a["name"].startswith(prefix)]
+        assert keep_url in sqs.list_queues(QueueNamePrefix=keep).get("QueueUrls", [])
+    finally:
+        sqs.delete_queue(QueueUrl=keep_url)
+        testkit.localstack_sweep(prefix)
