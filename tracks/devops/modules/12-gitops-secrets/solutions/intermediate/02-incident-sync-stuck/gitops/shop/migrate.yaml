@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: devops-track/olist-shop:1.0
+          envFrom:
+            - configMapRef:
+                name: olist-config
+          command:
+            - python
+            - -c
+            - "from olist_shop import db; from olist_shop.settings import Settings; db.init(db.make_engine(Settings().database_url)); print('migrate xong')"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: olist-production
+  namespace: argocd
+spec:
+  project: olist-production
+  source:
+    repoURL: https://git.example.com/olist/gitops.git
+    targetRevision: main
+    path: envs/production
+  destination:
+    server: https://prod-cluster.olist.internal:6443
+    namespace: olist-production
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true

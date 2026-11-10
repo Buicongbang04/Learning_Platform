@@ -1,0 +1,127 @@
+questions:
+  - id: gitops-pull
+    kind: knowledge
+    type: single
+    prompt: "Pipeline CI hiện chạy `kubectl apply` vào production bằng kubeconfig admin lưu trong secret của CI. Chuyển sang GitOps kiểu pull (ArgoCD, Flux) thay đổi điều gì về bảo mật?"
+    options:
+      - { id: a, text: "CI vẫn cần kubeconfig admin để báo ArgoCD sync, chỉ khác là gọi qua API của ArgoCD thay vì gọi thẳng API server" }
+      - { id: b, text: "CI chỉ cần quyền ghi repo Git; agent trong cluster tự kéo thay đổi, credential cluster không rời cluster" }
+      - { id: c, text: "Không đổi gì về bảo mật; khác biệt duy nhất là ArgoCD có giao diện web để xem trạng thái các app" }
+      - { id: d, text: "Cluster phải mở API server ra Internet để Git server gọi webhook vào và đẩy manifest mới xuống" }
+  - id: argocd-or-flux
+    kind: knowledge
+    type: single
+    prompt: "Team platform 3 người, 40 team ứng dụng muốn tự xem trạng thái deploy và bấm sync, cần SSO và phân quyền theo team. Chọn gì hợp hơn?"
+    options:
+      - { id: a, text: "FluxCD, vì Flux có giao diện web và SSO dựng sẵn mạnh hơn ArgoCD, còn ArgoCD chỉ dùng qua CLI" }
+      - { id: b, text: "Tự viết CronJob chạy `kubectl apply -k` mỗi phút từ repo, vì đơn giản và không phụ thuộc công cụ" }
+      - { id: c, text: "ArgoCD bản đầy đủ: UI, SSO qua Dex hay OIDC, RBAC theo AppProject cho từng team, sync và rollback từ UI" }
+      - { id: d, text: "Helm chạy từ máy của từng dev, vì mỗi team tự chịu trách nhiệm release của mình, không cần GitOps" }
+  - id: self-heal-drift
+    kind: knowledge
+    type: single
+    prompt: "Application bật `automated` nhưng không bật `selfHeal`. Người trực `kubectl scale deployment api --replicas=10` lúc đêm. Chuyện gì xảy ra?"
+    options:
+      - { id: a, text: "ArgoCD đưa replicas về giá trị trong Git ngay vì automated đã bao gồm self-heal" }
+      - { id: b, text: "API server từ chối lệnh scale vì object đang do ArgoCD quản lý qua annotation tracking" }
+      - { id: c, text: "Application báo OutOfSync, replicas giữ 10 tới khi có commit mới hay ai đó bấm sync" }
+      - { id: d, text: "ArgoCD xoá Deployment rồi tạo lại từ Git, nên mọi pod của api khởi động lại cùng lúc" }
+  - id: prune-off
+    kind: knowledge
+    type: single
+    prompt: "Bạn xoá `legacy-flags.yaml` khỏi kustomization và merge. Application có `automated: {prune: false}`. ConfigMap `legacy-flags` trên cluster thế nào?"
+    options:
+      - { id: a, text: "Còn nguyên; Application báo OutOfSync, chờ một lần sync có bật prune mới bị xoá" }
+      - { id: b, text: "Bị xoá ngay, vì prune: false chỉ ảnh hưởng object không mang nhãn tracking của ArgoCD" }
+      - { id: c, text: "Bị xoá ở lần sync kế tiếp sau 24 giờ, vì prune: false chỉ làm chậm việc dọn dẹp" }
+      - { id: d, text: "ArgoCD từ chối sync commit mới cho tới khi bạn tự `kubectl delete` ConfigMap đó" }
+  - id: presync-order
+    kind: knowledge
+    type: single
+    prompt: "Job migrate là hook `PreSync`, đọc ConfigMap `olist-config` và gọi Postgres; cả hai là resource thường trong cùng repo. Deploy lần đầu vào namespace trống thì sao?"
+    options:
+      - { id: a, text: "Chạy bình thường vì ArgoCD luôn tạo ConfigMap và Secret trước mọi hook, kể cả PreSync" }
+      - { id: b, text: "Hook chạy trước mọi resource của phase Sync: ConfigMap, Postgres chưa có, hook kẹt" }
+      - { id: c, text: "ArgoCD tự đổi hook sang PostSync khi thấy hook phụ thuộc vào resource chưa tồn tại" }
+      - { id: d, text: "Kustomize báo lỗi lúc render vì Job hook không được tham chiếu ConfigMap thường" }
+  - id: sops-what
+    kind: knowledge
+    type: single
+    prompt: "Tệp `olist-db.enc.yaml` mã hoá bằng SOPS với `encrypted_regex: ^(data|stringData)$`. Ai đọc repo (không có khoá) thấy được gì?"
+    options:
+      - { id: a, text: "Không thấy gì cả, vì SOPS mã hoá toàn bộ tệp thành một khối nhị phân base64" }
+      - { id: b, text: "Thấy giá trị của mật khẩu nhưng không thấy tên khoá, vì tên khoá là phần bí mật" }
+      - { id: c, text: "Thấy kind, tên Secret, tên các khoá; giá trị là ENC[...]; diff trong PR vẫn đọc được" }
+      - { id: d, text: "Thấy hết giá trị ở dạng base64, vì Secret của Kubernetes vốn đã là base64" }
+  - id: sops-recipients
+    kind: knowledge
+    type: single
+    prompt: "`.sops.yaml` chỉ liệt kê public key age của team. Commit Secret đã mã hoá, Application dùng plugin sops-kustomize. Triệu chứng nào sẽ thấy?"
+    options:
+      - { id: a, text: "Sync xong nhưng Secret trên cluster còn giá trị ENC[...], pod đọc chuỗi mã hoá" }
+      - { id: b, text: "Render lỗi trong repo-server vì không khoá nào của ArgoCD giải mã được data key" }
+      - { id: c, text: "ArgoCD tự dùng khoá của team trong `~/.config/sops` của người push commit" }
+      - { id: d, text: "Không lỗi gì vì sops-kustomize bỏ qua tệp không giải mã được và apply tệp còn lại" }
+  - id: key-rotation
+    kind: knowledge
+    type: single
+    prompt: "Khoá riêng age của một người vừa nghỉ việc có thể còn trên laptop cũ. Làm gì cho đúng?"
+    options:
+      - { id: a, text: "Chỉ cần `sops updatekeys` gỡ recipient của người đó; giá trị cũ không còn đọc được" }
+      - { id: b, text: "Xoá khoá khỏi `.sops.yaml` rồi `git filter-repo` để xoá mọi bản mã hoá cũ khỏi lịch sử" }
+      - { id: c, text: "Đổi tên mọi tệp `.enc.yaml` để commit cũ không còn khớp creation_rules, giá trị cũ mất hiệu lực luôn" }
+      - { id: d, text: "Gỡ recipient, `updatekeys`, rồi xoay mọi secret khoá đó từng đọc được (Git còn bản cũ)" }
+  - id: sealed-vs-sops
+    kind: knowledge
+    type: single
+    prompt: "Bạn chọn giữa Sealed Secrets và SOPS + age cho repo GitOps. Điểm khác quan trọng nhất?"
+    options:
+      - { id: a, text: "Sealed Secrets: chỉ controller của một cluster mở được; SOPS mã hoá cho nhiều recipient" }
+      - { id: b, text: "Sealed Secrets lưu giá trị trong etcd ở dạng rõ, còn SOPS lưu giá trị rõ trong Git nên an toàn kém hơn" }
+      - { id: c, text: "SOPS chỉ dùng được với AWS KMS, còn Sealed Secrets chạy được ở mọi cloud và cả cluster local" }
+      - { id: d, text: "Hai công cụ giống nhau, chỉ khác tên CRD; chọn công cụ nào là do sở thích của từng team" }
+  - id: eso-when
+    kind: knowledge
+    type: single
+    prompt: "Công ty đã dùng AWS Secrets Manager, đội bảo mật xoay mật khẩu DB tự động 30 ngày một lần. Đưa secret vào Kubernetes thế nào để không phải sửa Git mỗi lần xoay?"
+    options:
+      - { id: a, text: "Mỗi lần xoay, dev giải mã bằng SOPS, dán giá trị mới, mã hoá lại rồi commit" }
+      - { id: b, text: "External Secrets Operator: Git chỉ chứa tham chiếu tới secret, operator đồng bộ giá trị" }
+      - { id: c, text: "Ghi giá trị vào ConfigMap trong Git vì ConfigMap được ArgoCD đồng bộ nhanh hơn Secret" }
+      - { id: d, text: "Sealed Secrets, vì controller của nó tự đọc AWS Secrets Manager và mã hoá lại mỗi tháng" }
+  - id: vault-token-ttl
+    kind: knowledge
+    type: single
+    prompt: "Token Vault của api có `ttl=15m`, `explicit_max_ttl=1h`, renewable. App gia hạn mỗi 10 phút. Sau 1 giờ 5 phút thì sao?"
+    options:
+      - { id: a, text: "Token vẫn sống vì app gia hạn đều đặn, mỗi lần gia hạn đặt lại mốc 1 giờ" }
+      - { id: b, text: "Token hết hạn ở mốc 1 giờ dù đã gia hạn; app phải đăng nhập lại để lấy token mới" }
+      - { id: c, text: "Vault chuyển token sang chỉ đọc sau 1 giờ, app vẫn đọc được nhưng không ghi được" }
+      - { id: d, text: "Token bị revoke ở phút 15 vì gia hạn không có tác dụng với token có explicit_max_ttl" }
+  - id: kv-v2-paths
+    kind: knowledge
+    type: single
+    prompt: "Policy có `path \"secret/olist/api/*\" { capabilities = [\"read\"] }` trên KV v2 mount ở `secret/`. `vault kv get secret/olist/api/db` trả gì?"
+    options:
+      - { id: a, text: "Đọc được, vì CLI tự ánh xạ path của policy sang path của API cho KV v2" }
+      - { id: b, text: "Đọc được nhưng chỉ phiên bản đầu tiên, vì policy không ghi rõ version" }
+      - { id: c, text: "Permission denied: KV v2 đọc qua `secret/data/...`, policy phải ghi `data/`" }
+      - { id: d, text: "Lỗi cú pháp policy vì KV v2 không chấp nhận ký tự `*` trong path" }
+  - id: secret-leak-first
+    kind: knowledge
+    type: multi
+    prompt: "Mật khẩu DB vừa bị push lên repo công khai 20 phút trước. Những việc nào nên làm ngay, trước khi viết lại lịch sử Git? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Xoay mật khẩu DB và cập nhật nơi dùng nó" }
+      - { id: b, text: "Kiểm log truy cập DB từ thời điểm push" }
+      - { id: c, text: "Chờ xem có ai dùng mật khẩu chưa rồi mới xoay" }
+      - { id: d, text: "Báo kênh sự cố, chỉ định người điều phối" }
+  - id: gitops-fit
+    kind: knowledge
+    type: multi
+    prompt: "Trường hợp nào GitOps kiểu pull (ArgoCD, Flux) là lựa chọn hợp? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Nhiều cluster Kubernetes, cần biết cluster nào đang chạy commit nào" }
+      - { id: b, text: "Cần audit mọi thay đổi production qua pull request có người duyệt" }
+      - { id: c, text: "Một VM chạy cron và script Bash, không có Kubernetes" }
+      - { id: d, text: "Cluster production không được mở API server ra ngoài cho CI" }

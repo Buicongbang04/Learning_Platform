@@ -6675,6 +6675,68 @@ def test_gitops_repo_size_cap(monkeypatch, tmp_path):
     assert testkit.KUBE_GITOPS_MAX_BYTES == 1000 and testkit.KUBE_GITOPS_MAX_FILES == 5
 
 
+def test_close_releases_argocd_hook_finalizer(monkeypatch):
+    fake = ArgoFake(monkeypatch, apps="application.argoproj.io/web\n")
+    hooked = {"items": [
+        {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "migrate", "finalizers": [
+            testkit.KUBE_ARGOCD_HOOK_FINALIZER, "example.com/keep"]}},
+        {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "hook-pod", "finalizers": [testkit.KUBE_ARGOCD_HOOK_FINALIZER]}},
+        {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "plain", "finalizers": ["example.com/keep"]}},
+    ]}
+    original = fake.run_sandboxed
+
+    def run_sandboxed(cmd, **kwargs):
+        if "jobs.batch" in " ".join(map(str, cmd)) and "json" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(hooked), "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab() as lab:
+        pass
+    [listed] = [c for c in fake.sandbox_calls if "get" in c["cmd"] and "jobs.batch" in " ".join(c["cmd"])] or [None]
+    kinds = [c for c in fake.calls_with("patch") if "--type=merge" in c["cmd"]]
+    patches = {c["cmd"][c["cmd"].index("patch") + 1]: json.loads(c["cmd"][-1]) for c in kinds if "finalizers" in c["cmd"][-1]
+               and "application.argoproj.io" not in c["cmd"][c["cmd"].index("patch") + 1]}
+    assert patches == {"job.batch/migrate": {"metadata": {"finalizers": ["example.com/keep"]}},
+                       "pod/hook-pod": {"metadata": {"finalizers": None}}}
+    assert all(c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig) for c in kinds)
+    order = [" ".join(c["cmd"]) for c in fake.sandbox_calls]
+    first_patch = next(i for i, c in enumerate(order) if "job.batch/migrate" in c)
+    namespace_delete = next(i for i, c in enumerate(order) if f"delete namespace {lab.namespace}" in c)
+    assert first_patch < namespace_delete
+    assert "argoproj.io" not in testkit._KUBE_HOOK_KINDS and "jobs.batch" in testkit._KUBE_HOOK_KINDS
+    assert "gateway.networking.k8s.io" not in testkit._KUBE_HOOK_KINDS
+
+
+@KUBE_REQUIRED
+def test_kube_lab_close_releases_stuck_argocd_hook_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    source = tmp_path / "gitops"
+    (source / "app").mkdir(parents=True)
+    (source / "app" / "kustomization.yaml").write_text("resources: [hook.yaml, web.yaml]\n", encoding="utf-8")
+    (source / "app" / "web.yaml").write_text("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web\ndata:\n  v: '1'\n",
+                                            encoding="utf-8")
+    (source / "app" / "hook.yaml").write_text(
+        "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: stuck\n  annotations:\n    argocd.argoproj.io/hook: PreSync\n"
+        "spec:\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: c\n"
+        f"          image: {testkit.KUBE_IMAGES['redis']}\n          envFrom: [{{configMapRef: {{name: missing}}}}]\n",
+        encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        lab.argocd_project()
+        lab.gitops_repo(source)
+        assert apply_as_learner(lab, argo_app(lab.namespace)).returncode == 0
+        deadline = time.monotonic() + 90
+        finalizers = []
+        while time.monotonic() < deadline and testkit.KUBE_ARGOCD_HOOK_FINALIZER not in finalizers:
+            got = lab.kubectl("get", "job", "stuck", "-o", "jsonpath={.metadata.finalizers}", check=False).stdout
+            finalizers = json.loads(got) if got.strip() else []
+            time.sleep(2)
+        assert testkit.KUBE_ARGOCD_HOOK_FINALIZER in finalizers, "ArgoCD phải gắn hook-finalizer cho Job hook đang chạy"
+    assert lab.cleanup_error is None, lab.cleanup_error
+    assert admin_kubectl("get", "namespace", lab.namespace).returncode != 0
+    assert testkit.kube_leftovers(lab.id) == []
+
+
 def test_lab_entry_sweeps_gitops_of_killed_labs(monkeypatch):
     fake = ArgoFake(monkeypatch)
     original = fake.run_sandboxed

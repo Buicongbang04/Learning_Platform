@@ -3295,6 +3295,12 @@ _KUBE_LEARNER_RULES = [
     {"apiGroups": ["metrics.k8s.io"], "resources": ["pods"], "verbs": ["get", "list"]},
     {"apiGroups": ["argoproj.io"], "resources": ["applications"], "verbs": _KUBE_RW},
 ]
+KUBE_ARGOCD_HOOK_FINALIZER = "argocd.argoproj.io/hook-finalizer"
+_KUBE_HOOK_KINDS = ",".join(
+    f"{resource}.{group}" if group else resource
+    for rule in _KUBE_LEARNER_RULES if "create" in rule["verbs"]
+    for group in rule["apiGroups"] for resource in rule["resources"]
+    if "/" not in resource and group not in ("argoproj.io", "gateway.networking.k8s.io"))
 _KUBE_SYSTEM_USER = (
     "((request.userInfo.username.startsWith('system:') && !request.userInfo.username.startsWith('system:serviceaccount:')) || "
     "request.userInfo.username.startsWith('system:serviceaccount:kube-system:') || "
@@ -4590,6 +4596,31 @@ class KubeLab:
         if result.returncode != 0:
             errors.append(f"xoá Application trong {self.namespace}: {_output_tail(result)}")
 
+    def _release_argocd_hooks(self, errors: list[str]) -> None:
+        """ArgoCD gắn finalizer `hook-finalizer` cho object hook (Job PreSync...) và chỉ gỡ khi hook kết thúc. Application bị xoá
+        lúc hook còn chạy thì finalizer ở lại, namespace kẹt Terminating. Gỡ đúng finalizer đó trên object trong namespace của lab
+        (hook được apply bằng token của lab nên chỉ thuộc các kind trong Role của lab)."""
+        listed = self._admin.run("-n", self.namespace, "get", _KUBE_HOOK_KINDS, "-o", "json", "--ignore-not-found")
+        if listed.returncode != 0:
+            errors.append(f"liệt kê hook ArgoCD trong {self.namespace}: {_output_tail(listed)}")
+            return
+        try:
+            items = json.loads(listed.stdout or "{}").get("items") or []
+        except ValueError:
+            items = []
+        for item in items:
+            metadata = item.get("metadata") or {}
+            finalizers = metadata.get("finalizers") or []
+            if KUBE_ARGOCD_HOOK_FINALIZER not in finalizers:
+                continue
+            group = item.get("apiVersion", "").rpartition("/")[0]
+            ref = f"{item.get('kind', '').lower()}{'.' + group if group else ''}/{metadata.get('name')}"
+            rest = [f for f in finalizers if f != KUBE_ARGOCD_HOOK_FINALIZER]
+            result = self._admin.run("-n", self.namespace, "patch", ref, "--type=merge", "-p",
+                                     json.dumps({"metadata": {"finalizers": rest or None}}))
+            if result.returncode != 0:
+                errors.append(f"gỡ {KUBE_ARGOCD_HOOK_FINALIZER} khỏi {ref}: {_output_tail(result)}")
+
     def _remove_gitops(self, errors: list[str]) -> None:
         if self._project:
             result = self._admin.run("-n", KUBE_ARGOCD_NAMESPACE, "delete", "appprojects.argoproj.io", "-l", self.label,
@@ -4832,7 +4863,8 @@ class KubeLab:
             self._wait_shared_ready(errors)
 
     def close(self) -> None:
-        """Gỡ thao tác node của lab, xoá Application của ArgoCD trong namespace của lab (gỡ finalizer nếu ArgoCD không xử lý kịp),
+        """Gỡ thao tác node của lab, xoá Application của ArgoCD trong namespace của lab (gỡ finalizer nếu ArgoCD không xử lý kịp)
+        và gỡ `hook-finalizer` khỏi hook còn dở,
         xoá namespace, chờ rồi xoá PV có `claimRef` trỏ namespace của lab (PV do local-path tạo cho PVC của bài không mang nhãn),
         xoá object cluster-scoped có nhãn của lab, AppProject của lab và repo git của lab trên git server, xoá thư mục PV local
         trong worker."""
@@ -4844,6 +4876,7 @@ class KubeLab:
                 self._restore_nodes(errors)
                 if self._argocd:
                     self._delete_applications(errors)
+                    self._release_argocd_hooks(errors)
                 result = self._admin.run("delete", "namespace", self.namespace, "--ignore-not-found", "--wait=true",
                                          f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
                 if result.returncode != 0:

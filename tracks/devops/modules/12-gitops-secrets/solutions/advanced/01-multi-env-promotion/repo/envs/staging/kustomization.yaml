@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: olist-staging
+resources:
+  - ../../base
+images:
+  - name: devops-track/olist-shop
+    newTag: "1.4.0-rc.2"
+replicas:
+  - name: api
+    count: 1
+configMapGenerator:
+  - name: olist-config
+    behavior: merge
+    literals:
+      - APP_VERSION=1.4.0-rc.2
+      - LOG_LEVEL=DEBUG

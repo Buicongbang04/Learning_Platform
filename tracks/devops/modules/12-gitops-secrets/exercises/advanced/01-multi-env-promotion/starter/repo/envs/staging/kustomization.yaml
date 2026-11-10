@@ -1,0 +1,3 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# TODO: dùng chung ../../base, namespace olist-staging, images: cho devops-track/olist-shop, khác biệt của staging (xem README)

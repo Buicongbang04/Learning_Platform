@@ -1,0 +1,6 @@
+creation_rules:
+  - path_regex: shop/.*\.enc\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: >-
+      TEAM_AGE_RECIPIENT,
+      ARGOCD_AGE_RECIPIENT
