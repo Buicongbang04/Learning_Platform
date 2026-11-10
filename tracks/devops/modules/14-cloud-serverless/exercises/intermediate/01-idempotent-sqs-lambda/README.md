@@ -50,7 +50,8 @@ thể tới hai lần, và cổng thanh toán đôi khi gửi lại cùng `payme
 4. `aws_sqs_queue.payments` có `redrive_policy` tới `aws_sqs_queue.payments_dlq`, `maxReceiveCount` trong 2..5, và
    `visibility_timeout_seconds` ít nhất 6 lần timeout của Lambda (`var.function_timeout`). DLQ giữ message lâu hơn hàng đợi nguồn.
 5. `aws_dynamodb_table.idempotency` bật TTL theo thuộc tính `expires_at`.
-6. Policy của role worker chỉ gồm hành động cần thiết trên đúng hàng đợi, hai bảng và log group của function; không `*`.
+6. Policy của role worker chỉ gồm hành động cần thiết trên đúng hàng đợi, hai bảng và log group của function; liệt kê từng action (không
+   `*` hay `?` trong tên action), không `Resource = "*"`, không `NotAction`/`NotResource`.
 7. `aws_lambda_event_source_mapping.payments` bật `ReportBatchItemFailures`, `batch_size` ≤ 10, `scaling_config.maximum_concurrency`
    trong 2..20.
 
@@ -60,13 +61,15 @@ Giữ nguyên tên tài nguyên và bốn output (`queue_url`, `dlq_url`, `ledge
 -exclude=aws_lambda_function.worker -exclude=aws_lambda_event_source_mapping.payments` lên `localstack-devops`: hàng đợi, DLQ, bảng, role
 được tạo thật. Function Lambda không apply vì LocalStack của track không chạy Lambda (cần socket Docker); thay vào đó `LambdaLab` chạy
 `handler/` trong image Lambda Python 3.12 của AWS (ghim digest, có Runtime Interface Emulator), code gọi DynamoDB trên LocalStack với
-credential giả. Test đóng vai event source mapping: tạo event dạng SQS, gửi batch trùng, batch có record hỏng, và với hàng đợi thật thì
+credential giả. Test đóng vai event source mapping: tạo event dạng SQS, gửi batch trùng, batch có record hỏng, cùng một batch cho hai container
+Lambda invoke song song (như hai môi trường thực thi nhận lại cùng message), và với hàng đợi thật thì
 nhận, invoke, xoá record thành công, để message hỏng quay lại tới khi SQS chuyển nó sang DLQ. Tạo hàng đợi bằng provider 6.12.0 mất khoảng
 25 giây mỗi hàng đợi (provider chờ thuộc tính lan truyền); cả bài chạy khoảng 1,5 phút.
 
 ## Tiêu chí đạt
 
 - Gửi một batch có payment trùng, rồi gửi lại: seller được cộng đúng mỗi payment một lần.
+- Hai Lambda xử lý cùng một batch 10 payment cùng lúc: mỗi payment vẫn chỉ được cộng một lần.
 - Batch có 4 record hỏng lẫn 1 record đúng: `batchItemFailures` đúng 4 record hỏng, record đúng vẫn được cộng.
 - Message hỏng sang DLQ sau `maxReceiveCount` lần nhận; message đúng cộng một lần, hàng đợi rỗng.
 - Plan: DLQ, visibility timeout, TTL, `ReportBatchItemFailures`, `maximum_concurrency`, policy không `*`.

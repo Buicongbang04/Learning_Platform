@@ -17,14 +17,20 @@ Timeout không phải nguyên nhân mà là triệu chứng; tăng timeout lên 
 
 ## Cách sửa (`handler/app.py`)
 
-- **Gọi song song có giới hạn**: `ThreadPoolExecutor(max_workers=8)`, đúng hạn mức 8 request đồng thời của hợp đồng (thread hợp với I/O;
-  không cần asyncio hay thư viện ngoài). 10 đơn còn khoảng 0,8 giây.
+- **Gọi song song có giới hạn**: một `ThreadPoolExecutor(max_workers=8)` tạo ở cấp module, đúng hạn mức 8 request đồng thời của hợp đồng
+  (thread hợp với I/O; không cần asyncio hay thư viện ngoài). 10 đơn còn khoảng 0,8 giây.
 - **Hạn chót theo thời gian còn lại**: chờ các future tối đa `context.get_remaining_time_in_millis()` trừ 500 ms an toàn. Future xong thì
-  là thành công; chưa xong thì record vào `batchItemFailures` để SQS giao lại; handler luôn trả lời trước khi Lambda giết nó.
+  là thành công; chưa xong thì `cancel()` (future chưa chạy bị huỷ) và record vào `batchItemFailures` để SQS giao lại; handler luôn trả lời
+  trước khi Lambda giết nó.
 - **Lỗi theo từng record**: exception của một future chỉ đưa record đó vào `batchItemFailures`.
-- **Timeout cho từng lần gọi** (`CALL_TIMEOUT = 2` giây) để một request treo không giữ thread tới hết invoke.
-- `pool.shutdown(wait=False, cancel_futures=True)`: không chờ thread đang chạy dở (ở Lambda thật môi trường bị đóng băng sau khi trả lời;
-  request dở dang có thể chạy tiếp ở lần invoke sau, nên phía dịch vụ báo giá nên idempotent theo `order_id`).
+- **Timeout cho từng lần gọi** (`CALL_TIMEOUT = 2` giây) để một request treo không giữ thread mãi.
+
+**Vì sao pool ở cấp module, không tạo mới mỗi lần invoke.** Cách hay gặp là tạo pool trong handler rồi `shutdown(wait=False,
+cancel_futures=True)`. Trên Lambda thật, sau khi handler trả lời môi trường bị đóng băng cùng các thread đang gọi dở; lần invoke sau rã đông
+chúng, và pool mới mở thêm 8 request nữa: tổng có thể vượt 8 request đồng thời, dịch vụ báo giá trả `429`. Pool dùng chung theo môi trường
+thực thi giữ trần 8 cho mọi request của môi trường đó, kể cả request còn sót từ lần trước (chúng chiếm chỗ trong pool thay vì chạy song song
+với pool mới). Request sót vẫn có thể hoàn tất sau khi record đã được báo lỗi, nên phía dịch vụ báo giá (hay bước ghi kết quả) nên idempotent
+theo `order_id`. Một cách khác là đặt `CALL_TIMEOUT` nhỏ hơn biên an toàn để mọi request kết thúc trước khi handler trả lời.
 
 ## Phòng ngừa (cho postmortem)
 

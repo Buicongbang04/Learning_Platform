@@ -7,6 +7,8 @@ MAX_IN_FLIGHT = 8
 SAFETY_MS = 500
 CALL_TIMEOUT = 2.0
 
+POOL = ThreadPoolExecutor(max_workers=MAX_IN_FLIGHT)
+
 
 def quote_record(record: dict) -> tuple[str, int]:
     order = json.loads(record["body"])
@@ -15,11 +17,11 @@ def quote_record(record: dict) -> tuple[str, int]:
 
 def handler(event, context):
     records = event.get("Records", [])
-    pool = ThreadPoolExecutor(max_workers=MAX_IN_FLIGHT)
-    futures = {pool.submit(quote_record, record): record["messageId"] for record in records}
+    futures = {POOL.submit(quote_record, record): record["messageId"] for record in records}
     budget = max(context.get_remaining_time_in_millis() - SAFETY_MS, 0) / 1000
     done, pending = wait(futures, timeout=budget)
-    pool.shutdown(wait=False, cancel_futures=True)
+    for future in pending:
+        future.cancel()
     failures, quoted = [], 0
     for future, message_id in futures.items():
         if future in pending:

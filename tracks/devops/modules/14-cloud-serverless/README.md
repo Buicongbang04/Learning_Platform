@@ -392,6 +392,9 @@ ngoài theo cấu hình; trong track, chính `localstack-devops` sẽ gửi requ
 
 ### Chi phí: tính được và chặn được
 
+Mọi giá trong mục này là giá tham khảo tháng 11/2026 ở us-east-1, làm tròn; kiểm lại trên trang giá hay AWS Pricing Calculator trước khi
+dùng.
+
 Lambda tính theo request cộng GB-giây:
 
 $$\text{chi phí Lambda} = \text{số request} \times \text{giá mỗi request} + \text{số request} \times \text{thời gian (giây)} \times \text{memory (GB)} \times \text{giá mỗi GB-giây}$$

@@ -2,6 +2,7 @@ import hashlib
 import json
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import unquote
 
 import pytest
@@ -37,8 +38,10 @@ def stack():
             return
         with DockerLab() as lab:
             env = {"LEDGER_TABLE": state["outputs"]["ledger_table"], "IDEMPOTENCY_TABLE": state["outputs"]["idempotency_table"]}
-            with LambdaLab(lab, ex.path("handler"), "app.handler", env=env, timeout=10) as fn:
+            with LambdaLab(lab, ex.path("handler"), "app.handler", env=env, timeout=10) as fn, \
+                    LambdaLab(lab, ex.path("handler"), "app.handler", env=env, timeout=10, alias="lambda-b") as twin:
                 state["fn"] = fn
+                state["twin"] = twin
                 yield state
 
 
@@ -114,6 +117,36 @@ def test_event_source_mapping_reports_partial_failures(stack):
         "Biến LEDGER_TABLE, IDEMPOTENCY_TABLE của Lambda lấy từ hai bảng"
 
 
+def as_list(value) -> list:
+    if value is None:
+        return []
+    return [value] if isinstance(value, (str, dict)) else list(value)
+
+
+def policy_problems(statements: list[dict]) -> list[str]:
+    problems = []
+    for statement in statements:
+        if statement.get("Effect") != "Allow":
+            continue
+        if "NotAction" in statement or "NotResource" in statement:
+            problems.append("Allow kèm NotAction/NotResource")
+        for action in as_list(statement.get("Action")):
+            if "*" in action or "?" in action:
+                problems.append(f"Action {action} có wildcard")
+        if "*" in as_list(statement.get("Resource")):
+            problems.append("Resource \"*\"")
+    return problems
+
+
+def test_policy_checks_catch_wide_grants():
+    for statement in ({"Effect": "Allow", "Action": "dynamodb:*", "Resource": "arn:aws:dynamodb:us-east-1:1:table/t"},
+                      {"Effect": "Allow", "Action": "dynamodb:Put*", "Resource": "arn:aws:dynamodb:us-east-1:1:table/t"},
+                      {"Effect": "Allow", "Action": "sqs:ReceiveMessage", "Resource": "*"},
+                      {"Effect": "Allow", "NotAction": "iam:*", "Resource": "arn:aws:sqs:us-east-1:1:q"}):
+        assert policy_problems([statement]), f"Bộ kiểm không bắt được {statement}"
+    assert not policy_problems([{"Effect": "Allow", "Action": ["dynamodb:PutItem"], "Resource": "arn:aws:dynamodb:us-east-1:1:table/t"}])
+
+
 def test_worker_policy_scoped(stack):
     need(stack, "outputs")
     iam = localstack_client("iam")
@@ -125,15 +158,7 @@ def test_worker_policy_scoped(stack):
         document = document if isinstance(document, dict) else json.loads(unquote(document))
         found = document.get("Statement", [])
         statements += [found] if isinstance(found, dict) else found
-    problems = []
-    for statement in statements:
-        actions = statement.get("Action", [])
-        resources = statement.get("Resource", [])
-        for action in [actions] if isinstance(actions, str) else actions:
-            if action == "*" or action.endswith(":*"):
-                problems.append(f"Action {action}")
-        if "*" in ([resources] if isinstance(resources, str) else resources):
-            problems.append("Resource \"*\"")
+    problems = policy_problems(statements)
     assert statements, f"Role {role} chưa có inline policy nào"
     assert not problems, f"Policy của worker quá rộng: {problems}"
 
@@ -196,3 +221,17 @@ def test_poison_message_lands_in_dlq(stack):
     dead = sqs.receive_message(QueueUrl=dlq, MaxNumberOfMessages=10, WaitTimeSeconds=2).get("Messages", [])
     assert [m["Body"] for m in dead] == [poison], f"DLQ phải có đúng message hỏng, đang có {len(dead)} message"
     assert ledger(stack, seller) == (1000, 1), f"Payment hợp lệ được cộng đúng một lần: {ledger(stack, seller)}"
+
+
+def test_parallel_deliveries_credit_once(stack):
+    fn, twin = need(stack, "fn"), need(stack, "twin")
+    seller = uuid.uuid4().hex
+    payments = [payment(seller, 100 + i) for i in range(10)]
+    events = [{"Records": [record(p) for p in payments]} for _ in range(2)]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda pair: pair[0].invoke(pair[1]), zip((fn, twin), events)))
+    for result in results:
+        assert failures(result) == set(), f"Payment hợp lệ không được báo lỗi: {result}"
+    expected = (sum(p["amount_cents"] for p in payments), len(payments))
+    assert ledger(stack, seller) == expected, \
+        f"Hai Lambda nhận cùng batch cùng lúc: mỗi payment chỉ được cộng một lần, mong đợi {expected}, đang là {ledger(stack, seller)}"

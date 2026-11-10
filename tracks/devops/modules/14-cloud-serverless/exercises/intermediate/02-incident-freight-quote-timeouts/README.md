@@ -61,8 +61,8 @@ bản sự cố trong `tests/fixtures/incident/` để chứng minh nó tái hi�
 ### Gợi ý 1
 
 Đọc log của function (`fn.logs()` trong test, hay CloudWatch Logs ở AWS thật) cùng số liệu của dịch vụ báo giá
-(`curl http://127.0.0.1:<cổng>/stats` khi container đang chạy). Đo một lần invoke với 1 đơn, 5 đơn, 10 đơn: thời gian tăng theo quy luật
-nào, so với timeout?
+(`curl http://127.0.0.1:<cổng>/stats` khi container đang chạy). So những gì đã thay đổi trong đợt khuyến mãi với những gì vẫn như cũ,
+rồi tìm xem một lần invoke dành thời gian vào đâu.
 
 ### Gợi ý 2
 

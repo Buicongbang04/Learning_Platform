@@ -47,7 +47,7 @@ quan hệ giữa chúng từ phần `configuration` của plan JSON (thuộc tí
 **Cách test chấm.** `tofu init` rồi `tofu plan -out` + `show -json` trên `localstack-devops` qua `TofuLab`. LocalStack community không
 có EC2, VPC hay RDS thật, nhưng plan tạo mới không gọi API của chúng nên vẫn chạy; test **không apply**. Không có tài khoản AWS nào bị
 gọi. Muốn có "RDS" chạy thật trên máy, dùng container Postgres như module 06 (`postgres:16`): cùng engine, cùng cổng 5432, khác ở chỗ
-backup, failover, vá lỗi là việc của bạn. Hướng dẫn tạo thật trên AWS (tốn tiền: NAT gateway khoảng 33 USD/tháng, RDS `db.t4g.micro` khoảng
+backup, failover, vá lỗi là việc của bạn. Hướng dẫn tạo thật trên AWS (tốn tiền, giá tham khảo 11/2026 ở us-east-1: NAT gateway khoảng 33 USD/tháng, RDS `db.t4g.micro` khoảng
 14 USD/tháng kể cả 20 GB ổ) xem bài Advanced 02 và mục 7 của README module.
 
 ## Tiêu chí đạt

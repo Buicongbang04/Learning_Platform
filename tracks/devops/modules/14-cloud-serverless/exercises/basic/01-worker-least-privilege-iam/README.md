@@ -37,8 +37,9 @@ từ Secrets Manager. `starter/infra/main.tf` đã tạo ba tài nguyên đó (t
 1. **Trust policy** (`data.aws_iam_policy_document.trust`): chỉ principal service `ecs-tasks.amazonaws.com` được `sts:AssumeRole`, kèm
    điều kiện `StringEquals` `aws:SourceAccount` bằng ID tài khoản (lấy từ `data.aws_caller_identity`). Có thể thêm `ArnLike`
    `aws:SourceArn`.
-2. **Permission policy** (`data.aws_iam_policy_document.worker`): đúng bảng trên, không `*` ở action hay resource, không `NotAction`,
-   `NotResource`, không `Condition` (parser của test không đánh giá Condition).
+2. **Permission policy** (`data.aws_iam_policy_document.worker`): đúng bảng trên, liệt kê từng action (không `*` hay `?` trong tên action,
+   kể cả `s3:Put*`), không `Resource = "*"`, không `NotAction`, `NotResource`, không `Condition` (parser của test không đánh giá
+   Condition).
 3. **Permissions boundary**: một `aws_iam_policy` tên `"${var.prefix}-worker-boundary"` gắn vào `permissions_boundary` của role.
    Boundary cho phép đủ những gì worker cần, nhưng chỉ trên tài nguyên mang tiền tố `var.prefix`, và không cho bất kỳ hành động IAM hay
    STS nào. Không cần `Condition`.
@@ -46,8 +47,10 @@ từ Secrets Manager. `starter/infra/main.tf` đã tạo ba tài nguyên đó (t
 **Cách test chấm.** Qua `TofuLab`, test chạy `tofu init` và `tofu apply` trên `localstack-devops`, đọc lại role, inline policy, managed
 policy gắn kèm và boundary bằng API IAM của LocalStack, rồi đánh giá từng cặp (hành động, ARN) bằng một parser policy viết trong test: khớp
 wildcard `*` và `?`, action không phân biệt hoa thường, `Deny` thắng `Allow`, quyền hiệu lực là giao của identity policy và boundary. Test
-kiểm 6 việc worker phải làm được, 17 việc không được làm (gửi message, xoá hàng đợi, đọc báo cáo, ghi ngoài `revenue/`, bucket tên gần
-giống, secret khác, IAM, STS, KMS...), trust policy và boundary.
+kiểm 6 việc worker phải làm được, 21 việc không được làm (gửi message, xoá hàng đợi, đọc báo cáo, ghi ngoài `revenue/`, đổi ACL, bucket
+tên gần giống, secret khác, `iam:PassRole` và `sts:AssumeRole` trên ARN role cụ thể, `kms:Decrypt` trên ARN key và alias...), trust policy
+và boundary (thử IAM, STS và tài nguyên ngoài tiền tố trên ARN cụ thể). Mỗi phép kiểm đánh giá trên ARN thật, không trên `"*"`, và có test
+đột biến chứng minh bộ kiểm bắt được policy lỏng (thêm `iam:PassRole` trên `role/*`, boundary `Allow *` trên `arn:aws:*:*:*:*`...).
 
 **Giới hạn của cách chấm.** LocalStack bản community có `iam:SimulatePrincipalPolicy` nhưng đã kiểm ngày 2026-11-11 trên 4.4.0: không hiểu
 wildcard trong action (`sqs:Receive*` bị báo deny), sai khi có statement `Deny` ở resource khác, không có `SimulateCustomPolicy`, và

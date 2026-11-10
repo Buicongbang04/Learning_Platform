@@ -121,6 +121,13 @@ def arns(role: dict) -> dict[str, str]:
         "bucket": f"arn:aws:s3:::{p}-reports",
         "secret": role["secret"],
         "admin_secret": f"arn:aws:secretsmanager:{REGION}:{account}:secret:{p}/olist/admin-AbCdEf",
+        "role_self": f"arn:aws:iam::{account}:role/{p}-worker",
+        "role_admin": f"arn:aws:iam::{account}:role/{p}-admin",
+        "kms_key": f"arn:aws:kms:{REGION}:{account}:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+        "kms_alias": f"arn:aws:kms:{REGION}:{account}:alias/{p}-reports",
+        "prod_bucket": "arn:aws:s3:::olist-prod-data/orders.csv",
+        "prod_queue": f"arn:aws:sqs:{REGION}:{account}:olist-prod-jobs",
+        "prod_secret": f"arn:aws:secretsmanager:{REGION}:{account}:secret:olist-prod/db-AbCdEf",
     }
 
 
@@ -146,10 +153,25 @@ FORBIDDEN = [
     ("secretsmanager:PutSecretValue", "secret"),
     ("secretsmanager:DeleteSecret", "secret"),
     ("secretsmanager:ListSecrets", "*"),
-    ("iam:PassRole", "*"),
-    ("iam:CreateRole", "*"),
-    ("sts:AssumeRole", "*"),
-    ("kms:Decrypt", "*"),
+    ("s3:PutObjectAcl", "report"),
+    ("iam:PassRole", "role_admin"),
+    ("iam:PassRole", "role_self"),
+    ("iam:CreateRole", "role_admin"),
+    ("iam:PutRolePolicy", "role_self"),
+    ("sts:AssumeRole", "role_admin"),
+    ("kms:Decrypt", "kms_key"),
+    ("kms:Decrypt", "kms_alias"),
+]
+BOUNDARY_FORBIDDEN = [
+    ("iam:CreateRole", "role_admin"),
+    ("iam:PutRolePolicy", "role_self"),
+    ("iam:AttachRolePolicy", "role_self"),
+    ("iam:DeleteRolePermissionsBoundary", "role_self"),
+    ("iam:PassRole", "role_admin"),
+    ("sts:AssumeRole", "role_admin"),
+    ("s3:PutObject", "prod_bucket"),
+    ("sqs:ReceiveMessage", "prod_queue"),
+    ("secretsmanager:GetSecretValue", "prod_secret"),
 ]
 
 
@@ -186,18 +208,47 @@ def test_trust_policy_only_ecs_tasks_from_this_account(role):
         "Trust policy cần Condition StringEquals aws:SourceAccount bằng ID tài khoản (chống confused deputy)"
 
 
-def test_no_wildcard_grants(role):
-    found = condition_problems(role["identity"], "Permission policy")
-    assert role["identity"], "Role chưa có permission policy nào"
-    for policy in role["identity"]:
+def wildcard_problems(identity: list[dict]) -> list[str]:
+    found = condition_problems(identity, "Permission policy")
+    for policy in identity:
         for statement in as_list(policy.get("Statement")):
             if statement.get("Effect") != "Allow":
                 continue
             for action in as_list(statement.get("Action")):
-                if action == "*" or action.endswith(":*"):
-                    found.append(f"Action {action!r} cấp mọi hành động của service")
+                if "*" in action or "?" in action:
+                    found.append(f"Action {action!r} có wildcard; liệt kê từng action")
             if "*" in as_list(statement.get("Resource")):
                 found.append(f"Statement {statement.get('Sid', '')!r} có Resource \"*\"")
+    return found
+
+
+def identity_problems(identity: list[dict], boundary: dict | None, targets: dict[str, str]) -> list[str]:
+    found = []
+    for action, target in NEEDED:
+        got = effective(identity, boundary, action, targets[target])
+        if got != "allowed":
+            found.append(f"Worker cần {action} trên {targets[target]}, đang {got}")
+    for action, target in FORBIDDEN:
+        resource = targets.get(target, target)
+        if effective(identity, boundary, action, resource) == "allowed":
+            found.append(f"Worker không được {action} trên {resource}")
+    return found
+
+
+def boundary_problems(boundary: dict, targets: dict[str, str]) -> list[str]:
+    found = condition_problems([boundary], "Boundary")
+    for action, target in BOUNDARY_FORBIDDEN:
+        if decide([boundary], action, targets[target]) == "allowed":
+            found.append(f"Boundary vẫn cho {action} trên {targets[target]}")
+    for action, target in NEEDED:
+        if decide([boundary], action, targets[target]) != "allowed":
+            found.append(f"Boundary chặn mất quyền worker cần: {action}")
+    return found
+
+
+def test_no_wildcard_grants(role):
+    assert role["identity"], "Role chưa có permission policy nào"
+    found = wildcard_problems(role["identity"])
     assert not found, "\n".join(found)
 
 
@@ -218,16 +269,55 @@ def test_worker_cannot_do_more(role, action, target):
 def test_permissions_boundary_attached_and_scoped(role):
     expected = f"arn:aws:iam::{role['account']}:policy/{role['prefix']}-worker-boundary"
     assert role["boundary_arn"] == expected, f"Role cần permissions boundary {expected}, đang là {role['boundary_arn']}"
-    boundary = role["boundary"]
-    found = condition_problems([boundary], "Boundary")
-    for action, resource in (("iam:CreateRole", "*"), ("iam:PutRolePolicy", "*"), ("iam:AttachRolePolicy", "*"),
-                             ("sts:AssumeRole", "*"), ("s3:PutObject", "arn:aws:s3:::olist-prod-data/x"),
-                             ("sqs:ReceiveMessage", f"arn:aws:sqs:{REGION}:{role['account']}:olist-prod-jobs"),
-                             ("secretsmanager:GetSecretValue",
-                              f"arn:aws:secretsmanager:{REGION}:{role['account']}:secret:olist-prod/db-AbCdEf")):
-        if decide([boundary], action, resource) == "allowed":
-            found.append(f"Boundary vẫn cho {action} trên {resource}")
-    for action, target in NEEDED:
-        if decide([boundary], action, arns(role)[target]) != "allowed":
-            found.append(f"Boundary chặn mất quyền worker cần: {action}")
+    found = boundary_problems(role["boundary"], arns(role))
     assert not found, "\n".join(found)
+
+
+SAMPLE = {"prefix": "devops-ex-00000000", "account": "000000000000",
+          "secret": "arn:aws:secretsmanager:us-east-1:000000000000:secret:devops-ex-00000000/olist/db-Q1w2E3"}
+GOOD_IDENTITY = {"Statement": [
+    {"Effect": "Allow", "Action": ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"],
+     "Resource": "arn:aws:sqs:us-east-1:000000000000:devops-ex-00000000-jobs"},
+    {"Effect": "Allow", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::devops-ex-00000000-reports/revenue/*"},
+    {"Effect": "Allow", "Action": "secretsmanager:GetSecretValue", "Resource": SAMPLE["secret"]},
+]}
+GOOD_BOUNDARY = {"Statement": [
+    {"Effect": "Allow", "Action": ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"],
+     "Resource": "arn:aws:sqs:us-east-1:000000000000:devops-ex-00000000-*"},
+    {"Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject"], "Resource": "arn:aws:s3:::devops-ex-00000000-*/*"},
+    {"Effect": "Allow", "Action": "secretsmanager:GetSecretValue",
+     "Resource": "arn:aws:secretsmanager:us-east-1:000000000000:secret:devops-ex-00000000/*"},
+]}
+
+
+def test_checks_pass_good_sample():
+    targets = arns(SAMPLE)
+    assert not wildcard_problems([GOOD_IDENTITY])
+    assert not identity_problems([GOOD_IDENTITY], GOOD_BOUNDARY, targets)
+    assert not boundary_problems(GOOD_BOUNDARY, targets)
+
+
+@pytest.mark.parametrize("extra", [
+    {"Effect": "Allow", "Action": "iam:PassRole", "Resource": "arn:aws:iam::000000000000:role/*"},
+    {"Effect": "Allow", "Action": "kms:Decrypt", "Resource": "arn:aws:kms:us-east-1:000000000000:key/*"},
+    {"Effect": "Allow", "Action": "sts:AssumeRole", "Resource": "arn:aws:iam::*:role/*"},
+    {"Effect": "Allow", "Action": "s3:PutObjectAcl", "Resource": "arn:aws:s3:::devops-ex-00000000-reports/revenue/*"},
+], ids=["passrole", "kms", "assume", "put-acl"])
+def test_checks_catch_extra_identity_grant(extra):
+    identity = {"Statement": [*GOOD_IDENTITY["Statement"], extra]}
+    open_boundary = {"Statement": [*GOOD_BOUNDARY["Statement"], extra]}
+    assert identity_problems([identity], open_boundary, arns(SAMPLE)), f"Bộ kiểm không bắt được {extra}"
+
+
+def test_checks_catch_wildcard_action():
+    identity = {"Statement": [{"Effect": "Allow", "Action": "s3:Put*", "Resource": "arn:aws:s3:::devops-ex-00000000-reports/revenue/*"}]}
+    assert any("wildcard" in p for p in wildcard_problems([identity]))
+
+
+@pytest.mark.parametrize("extra", [
+    {"Effect": "Allow", "Action": "*", "Resource": "arn:aws:*:*:*:*"},
+    {"Effect": "Allow", "Action": "iam:*", "Resource": "arn:aws:iam::000000000000:role/devops-ex-00000000-*"},
+], ids=["all", "iam-prefix"])
+def test_checks_catch_open_boundary(extra):
+    boundary = {"Statement": [*GOOD_BOUNDARY["Statement"], extra]}
+    assert boundary_problems(boundary, arns(SAMPLE)), f"Bộ kiểm không bắt được boundary {extra}"
