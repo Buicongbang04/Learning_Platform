@@ -47,11 +47,14 @@ hard được; nâng bằng root là đổi đúng thứ khách nói không đ�
    giải nén từ bundle vào thư mục riêng của installer, không ai ghi vào: nhất quán giữa các đợt không mất gì. Ghi điều này
    vào ticket gửi product (nên mặc định theo `ulimit -n` thay vì "mọi tệp").
 4. Cài đè giữ bản cũ tới phút cuối: dựng bản mới trong thư mục stage, đổi tên `$HOME/fieldsync` cũ sang stage, đổi tên bản
-   mới vào chỗ; lỗi thì trả bản cũ về. `trap` dọn stage khi thoát.
+   mới vào chỗ; lỗi thì trả bản cũ về. `trap EXIT` (kể cả khi bị INT/TERM giữa hai lần `mv`) trả bản cũ về chỗ nếu
+   `$HOME/fieldsync` đang trống rồi mới dọn stage.
 
 Các cách khác cũng đạt test: gọi `python3 "$src/bin/fieldsync"` (chạy interpreter từ `/usr/bin`, đọc script như dữ liệu)
 và vẫn để stage trong `/tmp` (đạt, nhưng chỉ đúng với công cụ là script: binary thật trong bundle sẽ vẫn gãy); dùng
-`TMPDIR` trỏ vào `$HOME`; `--max-open` nhỏ cố định (vd. 100: luôn an toàn, chậm hơn không đáng kể); `sudo prlimit --pid $$
---nofile=4096:4096` (máy `factory` có sudo, không đổi tệp cấu hình nào nên test vẫn đạt, nhưng đây là nâng giới hạn bằng
-root mà khách không cho phép trên giấy: phải hỏi trước). Không đạt: sửa `/etc/fstab`, `mount -o remount,exec /tmp`, thêm
+`TMPDIR` trỏ vào `$HOME`; `--max-open` nhỏ cố định (vd. 100: luôn an toàn, chậm hơn không đáng kể).
+
+Qua test nhưng sai với khách này: `sudo prlimit --pid $$ --nofile=4096:4096`. Máy `factory` có sudo và lệnh không đổi
+tệp cấu hình nào nên test vẫn đạt, nhưng đó là nới giới hạn bằng root, đúng điều Mục tiêu nói không làm (IT xưởng không
+đổi giới hạn tài nguyên cho từng phần mềm). Không đạt: sửa `/etc/fstab`, `mount -o remount,exec /tmp`, thêm
 tệp vào `limits.d`, đổi `DefaultLimitNOFILE`.

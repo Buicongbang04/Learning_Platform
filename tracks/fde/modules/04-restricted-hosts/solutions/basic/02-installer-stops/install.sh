@@ -14,7 +14,13 @@ case $bundle in
 esac
 
 work=$(mktemp -d "$HOME/.fieldsync-stage.XXXXXX")
-trap 'rm -rf "$work"' EXIT
+cleanup() {
+    if [ ! -e "$prefix" ] && [ -d "$work/previous" ]; then
+        mv "$work/previous" "$prefix" && log "đã trả bản cũ về $prefix"
+    fi
+    rm -rf "$work"
+}
+trap cleanup EXIT
 trap 'exit 130' INT TERM
 if findmnt -no OPTIONS --target "$work" 2>/dev/null | tr ',' '\n' | grep -qx noexec; then
     die "$work nằm trên filesystem noexec; đặt HOME/thư mục cài ở chỗ chạy được chương trình"

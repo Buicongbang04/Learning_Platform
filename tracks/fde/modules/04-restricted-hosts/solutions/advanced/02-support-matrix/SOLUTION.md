@@ -46,11 +46,11 @@ không phân biệt Podman rootless trên cgroup v1; hứa SELinux "cần tắt"
 | OS | Mức | Hết hỗ trợ của nhà phát hành (nguồn) | glibc | Ghi chú | Bằng chứng |
 | --- | --- | --- | --- | --- | --- |
 | Ubuntu 22.04 | S | Standard 06/2027, ESM 04/2032 (ubuntu.com/about/release-cycle) | 2.35 | Máy đối chứng | `lab-open`, module 02–03 |
-| Ubuntu 24.04 | S (từ bản 1.2 khi có CI), hiện C | Standard 06/2029 | 2.39 | Chưa kiểm cài đặt | Chưa đo |
+| Ubuntu 24.04 | S (từ bản 1.2 khi có CI), hiện C | Standard 05/2029 | 2.39 | Chưa kiểm cài đặt | Chưa đo |
 | Ubuntu 20.04 | C | Standard hết 31/05/2025; chỉ còn ESM (Ubuntu Pro) | 2.31 | Python hệ thống 3.8, thiếu `venv`; Docker distro không có compose plugin | `hospital`: module 03 intermediate, module 04 intermediate 02 |
 | Rocky Linux 8 / RHEL 8 | S cho Podman rootless (mục 3) | 31/05/2029 (`SUPPORT_END` trong `/etc/os-release`, đo trên golden) | 2.28 | Không có `python3` mặc định; cgroup v1 | `bank`, `lawfirm-hardened`: module 04 basic 01, intermediate 01 |
 | Rocky Linux 9 / RHEL 9 | C | 31/05/2032 (access.redhat.com/support/policy/updates/errata) | 2.34 | cgroup v2: giới hạn tài nguyên rootless có tác dụng; chưa kiểm | Chưa đo |
-| Debian 12 | C | Security thường hết 10/06/2026, LTS tới 30/06/2028 (wiki.debian.org/LTS) | 2.36 | Đang ở pha LTS: khuyên khách lên Debian 13 | `factory`: module 04 basic 02 |
+| Debian 12 | C | Security thường hết 11/07/2026, LTS tới 30/06/2028 (wiki.debian.org/LTS) | 2.36 | Đang ở pha LTS: khuyên khách lên Debian 13 | `factory`: module 04 basic 02 |
 | Debian 13 | C | ~08/2028 thường, LTS 06/2030 | 2.41 | Chưa kiểm | Chưa đo |
 | Debian 11 | **U** | LTS hết 31/08/2026 | 2.31 | `REQUIREMENTS.yaml` còn ghi `min: "11"`: product cần sửa | — |
 | CentOS 7 / RHEL 7 | **U** | 30/06/2024 | 2.17 | Podman 1.x, kernel 3.10 | — |

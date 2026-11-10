@@ -34,7 +34,7 @@ ghim sha256, phần `0. Cài đặt` của module 03) để chạy compose của
 
 IT đã thử triển khai theo hướng dẫn của team và báo lại:
 
-> Container khởi động được rồi thoát ngay, log chỉ có một dòng `Permission denied`. Bên em không tắt SELinux đâu nhé.
+> Container khởi động được rồi thoát ngay, log chỉ có một dòng `Permission denied`.
 
 Test dựng image `notice` từ BusyBox tĩnh đã ghim (phần `0. Cài đặt` của README module), boot `lawfirm-hardened` (2048 MB,
 cổng 18081 của VM forward ra host), chép vào `/home/fde/notice-bundle/`: `notice-image.tar` (docker-archive), binary
@@ -75,5 +75,5 @@ chạy khi bạn không đăng nhập không?
 
 ### Gợi ý 3
 
-Khi `Permission denied` xảy ra với một tệp mà quyền `rw` cho phép, quyền tệp không phải lớp kiểm soát duy nhất trên máy
-này. Bạn không đọc được log audit ở đây; phần 4 của README module nói cách chẩn đoán khi đó.
+Quyền tệp cho phép mà vẫn bị từ chối: trên máy này còn lớp kiểm soát truy cập nào khác, và bạn xem nó bằng gì khi không
+có root?
