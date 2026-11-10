@@ -6684,16 +6684,21 @@ def test_close_releases_argocd_hook_finalizer(monkeypatch):
         {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "plain", "finalizers": ["example.com/keep"]}},
     ]}
     original = fake.run_sandboxed
+    hook_lists = []
 
     def run_sandboxed(cmd, **kwargs):
         if "jobs.batch" in " ".join(map(str, cmd)) and "json" in cmd:
+            hook_lists.append({"cmd": list(map(str, cmd)), "env": dict(kwargs["env"])})
             return subprocess.CompletedProcess(cmd, 0, json.dumps(hooked), "")
         return original(cmd, **kwargs)
 
     monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
     with testkit.KubeLab() as lab:
         pass
-    [listed] = [c for c in fake.sandbox_calls if "get" in c["cmd"] and "jobs.batch" in " ".join(c["cmd"])] or [None]
+    [listed] = [c for c in hook_lists if "get" in c["cmd"]] or [None]
+    assert listed is not None, "close() phải liệt kê hook trong namespace của lab"
+    assert listed["cmd"][listed["cmd"].index("-n") + 1] == lab.namespace
+    assert listed["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig)
     kinds = [c for c in fake.calls_with("patch") if "--type=merge" in c["cmd"]]
     patches = {c["cmd"][c["cmd"].index("patch") + 1]: json.loads(c["cmd"][-1]) for c in kinds if "finalizers" in c["cmd"][-1]
                and "application.argoproj.io" not in c["cmd"][c["cmd"].index("patch") + 1]}
@@ -7064,6 +7069,37 @@ def test_obs_stack_skips_without_images(monkeypatch):
         with testkit.DockerLab() as lab:
             testkit.ObsStack(lab)
     assert f"Chưa có image {missing}" in str(info.value) and testkit.OBS_PULL in str(info.value)
+
+
+@pytest.mark.parametrize("message,skipped", [
+    (f"docker build api lỗi (mã 1). 40 dòng cuối:\n{(BUILD_LOGS / 'pip-offline.log').read_text(encoding='utf-8')}", True),
+    (f"docker build api lỗi (mã 1). 40 dòng cuối:\n{(BUILD_LOGS / 'pip-retry-then-missing-package.log').read_text(encoding='utf-8')}", False),
+    ("docker compose up lỗi: api unhealthy\napi-1 | psycopg.OperationalError: Could not resolve host postgres", False),
+])
+def test_obs_stack_skips_only_on_build_network_failure(monkeypatch, message, skipped):
+    monkeypatch.setattr(testkit, "_docker", lambda *a, **k: subprocess.CompletedProcess(a, 0, "", ""))
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+
+    def compose(self, file, **kwargs):
+        pytest.fail(message)
+
+    monkeypatch.setattr(testkit.DockerLab, "compose", compose)
+    expected = pytest.skip.Exception if skipped else pytest.fail.Exception
+    with pytest.raises(expected) as info:
+        with testkit.DockerLab() as lab:
+            testkit.ObsStack(lab)
+    assert ("cần mạng" in str(info.value)) is skipped
+
+
+@pytest.mark.parametrize("where", ["observability/prometheus", "observability/prometheus/prometheus.yml"])
+def test_obs_stage_symlink_over_default_fails_clearly(tmp_path, where):
+    project = tmp_path / "project"
+    target = project / where
+    target.parent.mkdir(parents=True)
+    (tmp_path / "elsewhere").mkdir()
+    target.symlink_to(tmp_path / "elsewhere")
+    with pytest.raises(pytest.fail.Exception, match="không chép được project"):
+        testkit._obs_stage(tmp_path / "stage", project)
 
 
 def require_obs_images():

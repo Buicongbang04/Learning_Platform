@@ -2393,7 +2393,11 @@ def _obs_stage(stage: Path, project: Path | None) -> Path:
         project = Path(project).resolve()
         if not project.is_dir():
             pytest.fail(f"ObsStack: không có thư mục project {project}")
-        shutil.copytree(project, stage, symlinks=True, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+        try:
+            shutil.copytree(project, stage, symlinks=True, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+        except (shutil.Error, OSError) as error:
+            pytest.fail(f"ObsStack: không chép được project {project} đè lên cấu hình mặc định ({error}). Tệp hay thư mục "
+                        f"trong {OBS_CONFIG_DIR}/ phải là tệp thật cùng kiểu với mặc định, không phải symlink")
         found = next((stage / name for name in OBS_PROJECT_FILES if (stage / name).is_file()), None)
         if found is not None:
             try:
@@ -2467,6 +2471,10 @@ class ObsStack:
 
     Mỗi lab một project compose, nên một lab chỉ dựng một `ObsStack` và không gọi `lab.compose` riêng. Các hàm truy vấn
     nhận `timeout` (giây): lớn hơn 0 thì hỏi lại tới khi có kết quả khác rỗng hoặc hết giờ.
+
+    `memory` là giới hạn RAM của **mỗi** container trong project, gồm cả service của người học (api, worker, postgres...),
+    vì compose của testkit chỉ có một giá trị cho mọi service. Service có `build:` lỗi vì mất mạng ở lần build đầu (pip,
+    apt; xét bằng `build_failed_on_network`) thì skip kèm lời nhắc chạy lại khi có mạng; lỗi build khác vẫn fail.
     """
 
     def __init__(self, lab: DockerLab, *, project: Path | None = None, env: dict | None = None,
@@ -2478,7 +2486,13 @@ class ObsStack:
         try:
             file = _obs_stage(stage, project)
             start = time.monotonic()
-            self.project = lab.compose(file, env=env, memory=memory, timeout=timeout)
+            try:
+                self.project = lab.compose(file, env=env, memory=memory, timeout=timeout)
+            except pytest.fail.Exception as error:
+                if str(error).startswith("docker build ") and build_failed_on_network(str(error)):
+                    pytest.skip("ObsStack: build image của project cần mạng ở lần đầu để tải gói (BuildKit giữ cache cho "
+                                "lần sau). Kiểm kết nối mạng rồi chạy lại.")
+                raise
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         self.urls = {name: f"http://127.0.0.1:{self.project.port(name, port)}" for name, (port, _) in OBS_READY.items()}
@@ -4852,7 +4866,9 @@ class KubeLab:
     def _release_argocd_hooks(self, errors: list[str]) -> None:
         """ArgoCD gắn finalizer `hook-finalizer` cho object hook (Job PreSync...) và chỉ gỡ khi hook kết thúc. Application bị xoá
         lúc hook còn chạy thì finalizer ở lại, namespace kẹt Terminating. Gỡ đúng finalizer đó trên object trong namespace của lab
-        (hook được apply bằng token của lab nên chỉ thuộc các kind trong Role của lab)."""
+        (hook được apply bằng token của lab nên chỉ thuộc các kind trong Role của lab). Chỉ xét các kind trong
+        `_KUBE_HOOK_KINDS`: hook là custom resource thuộc CRD trong nhóm `api_group` của lab **không** được gỡ finalizer ở
+        đây; bài dùng hook kiểu đó phải tự dọn trước khi đóng lab."""
         listed = self._admin.run("-n", self.namespace, "get", _KUBE_HOOK_KINDS, "-o", "json", "--ignore-not-found")
         if listed.returncode != 0:
             errors.append(f"liệt kê hook ArgoCD trong {self.namespace}: {_output_tail(listed)}")

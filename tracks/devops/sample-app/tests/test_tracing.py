@@ -202,3 +202,40 @@ def test_log_has_trace_id(endpoint, engine, fake_redis, capsys):
     assert exported and json.loads(exported[0].body.string_value)["request_id"] == "req-otel", \
         "Log xuất qua OTLP (tới Loki) giữ nguyên dòng JSON"
 
+
+
+BAD_PAYLOADS = {
+    "deep-nesting": "[" * 200000,
+    "list": json.dumps([1]),
+    "traceparent-int": json.dumps({"job_id": "j", "otel": {"traceparent": 5}}),
+    "baggage-int": json.dumps({"job_id": "j", "otel": {"baggage": 5}}),
+    "carrier-list": json.dumps({"job_id": "j", "otel": [1]}),
+}
+
+
+@pytest.fixture(params=["tracing-on", "tracing-off"])
+def worker_tracer(request, monkeypatch, collector):
+    if request.param == "tracing-on":
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.endpoint)
+    else:
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+    tracer = tracing.setup("olist-shop-worker")
+    yield tracer
+    tracer.shutdown()
+
+
+@pytest.mark.parametrize("payload", BAD_PAYLOADS)
+def test_bad_job_payload_counted_as_failed(worker_tracer, fake_redis, engine, payload):
+    before = worker.REGISTRY.get_sample_value("jobs_failed_total") or 0.0
+    fake_redis.rpush(worker.QUEUE, BAD_PAYLOADS[payload])
+    assert worker.run_once(fake_redis, engine, worker_tracer) == 1
+    assert worker.REGISTRY.get_sample_value("jobs_failed_total") == before + 1
+
+
+@pytest.mark.parametrize("carrier", [{"traceparent": 5}, {"baggage": 5}, {"traceparent": "khong-hop-le"}])
+def test_bad_carrier_does_not_block_valid_job(worker_tracer, fake_redis, engine, olist_dir, carrier):
+    seed.load(engine, olist_dir)
+    before = worker.REGISTRY.get_sample_value("jobs_processed_total") or 0.0
+    fake_redis.rpush(worker.QUEUE, json.dumps({"job_id": "j", "type": "recompute_revenue", "otel": carrier}))
+    assert worker.run_once(fake_redis, engine, worker_tracer) == 1
+    assert worker.REGISTRY.get_sample_value("jobs_processed_total") == before + 1

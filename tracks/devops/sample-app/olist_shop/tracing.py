@@ -90,12 +90,16 @@ class Tracer:
         return propagate.extract(carrier)
 
     def extract_job(self, raw: bytes | str):
+        """Context trace trong trường `otel` của job; payload hỏng (không phải JSON, lồng quá sâu, carrier sai kiểu) thì
+        trả None để job vẫn được xử lý và đếm lỗi như cũ."""
+        if self._tracer is None:
+            return None
         try:
             job = json.loads(raw)
-        except (TypeError, ValueError):
+            carrier = job.get(CARRIER) if isinstance(job, dict) else None
+            return self.extract(carrier) if isinstance(carrier, dict) else None
+        except Exception:
             return None
-        carrier = job.get(CARRIER) if isinstance(job, dict) else None
-        return self.extract(carrier) if isinstance(carrier, dict) else None
 
     def instrument_engine(self, engine) -> None:
         if self._tracer is None:
