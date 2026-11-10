@@ -861,7 +861,7 @@ TOOL_DENYLIST_GOOD = {
     "testkit-act-run": 'testkit.act_run(project, event="push", secrets={"DEPLOY_TOKEN": "x"}, timeout=300)\n',
     "run-sandboxed-shell-c": 'run_sandboxed(["bash", "-c", "tofu init && tofu plan"], writable=[t], cwd=t, env={})\n',
     "run-sandboxed-sops": 'run_sandboxed(["sops", "decrypt", "s.yaml"], writable=[t], cwd=t, env=sops_env(t / "h", key))\n',
-    "run-sandboxed-vault": 'run_sandboxed(["vault", "kv", "get", "secret/app"], writable=[t], cwd=t, env=vault_env(token))\n',
+    "run-sandboxed-vault": 'run_sandboxed(["vault", "kv", "get", "secret/app"], writable=[t], cwd=t, env=vault_env(token, t / "h"))\n',
     "age-keypair": 'key, public = age_keypair(tmp_path / "keys")\n',
     "other-argv": 'subprocess.run(["git", "status"])\nsubprocess.run(["bash", "-c", "echo docker"])\n',
     "nice-python": 'subprocess.run(["nice", "-n", "15", "python3", "x.py"])\n',

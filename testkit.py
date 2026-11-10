@@ -29,7 +29,7 @@ Trong test:
     with KubeLab() as lab: lab.apply_learner(ex.path("k8s")); lab.kubectl("get", "deploy", "api", "-o", "json")  # bài Kubernetes: namespace riêng trên devops-lab
     kind_node_exec("devops-lab-control-plane", "etcdctl", "version")  # lệnh cố định của testkit trong node kind, argv không qua shell
     key, public = age_keypair(tmp_path / "keys"); env = sops_env(tmp_path / "home", key)  # bài SOPS: sops chạy trong run_sandboxed
-    ex.require_vault_devops(); env = vault_env(VAULT_DEV_TOKEN)  # bài Vault: vault CLI chạy trong run_sandboxed, Vault dev của lab
+    ex.require_vault_devops(); env = vault_env(VAULT_DEV_TOKEN, tmp_path / "vault-home")  # bài Vault: vault CLI chạy trong run_sandboxed, Vault dev của lab
 """
 
 from __future__ import annotations
@@ -307,6 +307,7 @@ def _docker(*args: str, timeout: float = 60) -> subprocess.CompletedProcess:
 
 
 _ANONYMOUS_VOLUME = re.compile(r"[0-9a-f]{64}")
+_ANONYMOUS_LABEL = "com.docker.volume.anonymous"
 _VOLUME_MOUNTS = '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}} {{end}}{{end}}'
 
 
@@ -988,7 +989,10 @@ class DockerLab:
                 pass
         if volumes:
             try:
-                _docker("volume", "rm", *volumes)
+                anonymous = set(_docker("volume", "ls", "-q", "-f", f"label={_ANONYMOUS_LABEL}").stdout.split())
+                volumes = [v for v in volumes if v in anonymous]
+                if volumes:
+                    _docker("volume", "rm", *volumes)
             except (OSError, subprocess.TimeoutExpired):
                 pass
         self._delete_pushed()
@@ -2283,13 +2287,16 @@ def _key_outside(path: Path, outside) -> Path:
 
 
 def sops_env(home: Path, key_file: Path, *, outside=()) -> dict[str, str]:
-    """Env cho `sops` trong `run_sandboxed`: `HOME` và `XDG_CONFIG_HOME` tạm (không đọc `~/.config/sops`), `GNUPGHOME` trong
-    `home` (tạo nếu chưa có), `SOPS_AGE_KEY_FILE` là khoá của lab. Không mang `SOPS_*`, `AGE_*`, `GNUPGHOME` của máy. `key_file` nằm trong repo
-    hay trong một thư mục của `outside` (project của người học) thì ValueError. Khoá dưới /tmp (như `tmp_path`) bị tmpfs của
-    sandbox che: truyền `readonly=[key_file.parent]` cho `run_sandboxed`."""
+    """Env cho `sops` trong `run_sandboxed`: `HOME` và `XDG_CONFIG_HOME` tạm (không đọc `~/.config/sops`), `GNUPGHOME` là
+    `home/.gnupg`, `SOPS_AGE_KEY_FILE` là khoá của lab; tạo `home`, `home/.config` và `home/.gnupg` (quyền 0700). Không mang
+    `SOPS_*`, `AGE_*`, `GNUPGHOME` của máy. `key_file` nằm trong repo hay trong một thư mục của `outside` (project của người
+    học), kể cả qua symlink hay `..`, thì ValueError. Khoá dưới /tmp (như `tmp_path`) bị tmpfs của sandbox che: truyền
+    `readonly=[key_file.parent]` cho `run_sandboxed`."""
     home = Path(home).resolve()
     key = _key_outside(key_file, outside)
     (home / ".config").mkdir(parents=True, exist_ok=True)
+    (home / ".gnupg").mkdir(mode=0o700, exist_ok=True)
+    (home / ".gnupg").chmod(0o700)
     return {"HOME": str(home), "XDG_CONFIG_HOME": f"{home}/.config", "GNUPGHOME": f"{home}/.gnupg", "SOPS_AGE_KEY_FILE": str(key)}
 
 
@@ -2314,11 +2321,17 @@ def vault_devops_address() -> str:
     return f"http://{'127.0.0.1' if host == 'localhost' else host}:{_port('vault-devops')}"
 
 
-def vault_env(token: str) -> dict[str, str]:
-    """Env cho `vault` CLI: `VAULT_ADDR` của `vault-devops` và `token` truyền vào; không mang `VAULT_*` của máy."""
+def vault_env(token: str, home: Path) -> dict[str, str]:
+    """Env cho `vault` CLI: `VAULT_ADDR` của `vault-devops`, `token` truyền vào, `HOME` là thư mục tạm `home` (tạo nếu chưa
+    có) để `vault login` ghi `.vault-token` ở đó, không vào project của người học; không mang `VAULT_*` của máy. `home` nằm
+    trong repo thì ValueError."""
     if not token:
         raise ValueError("vault_env cần token của lab")
-    return {"VAULT_ADDR": vault_devops_address(), "VAULT_TOKEN": token}
+    home = Path(home).resolve()
+    if home.is_relative_to(ROOT):
+        raise ValueError(f"HOME của vault phải nằm ngoài repo: {home}")
+    home.mkdir(parents=True, exist_ok=True)
+    return {"VAULT_ADDR": vault_devops_address(), "VAULT_TOKEN": token, "HOME": str(home)}
 
 
 def _vault_health(address: str) -> dict | None:

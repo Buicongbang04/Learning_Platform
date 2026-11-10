@@ -101,7 +101,7 @@ docker compose -f setup/docker-compose.yml --profile devops up -d --wait vault-d
 docker compose -f setup/docker-compose.yml --profile devops rm -s -f -v vault-devops
 ```
 
-Vault ở `http://127.0.0.1:18200`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `DEVOPS_VAULT_PORT` trong `setup/.env`. Token root của dev mode là chuỗi cố định cho lab `devops-lab-root` (không phải bí mật, đổi bằng `DEVOPS_VAULT_TOKEN`). Image khai báo `VOLUME /vault/file` và `/vault/logs`, nên lệnh tắt có `-v` để xoá luôn hai volume ẩn danh đi kèm. Test không đọc `VAULT_ADDR`, `VAULT_TOKEN` hay `~/.vault-token` của máy: `vault_env` dựng env từ đầu.
+Vault ở `http://127.0.0.1:18200`, chỉ mở trên `127.0.0.1`; đổi cổng bằng `DEVOPS_VAULT_PORT` trong `setup/.env`. Token root của dev mode là chuỗi cố định cho lab `devops-lab-root` (không phải bí mật, đổi bằng `DEVOPS_VAULT_TOKEN`). Image khai báo `VOLUME /vault/file` và `/vault/logs`, nên lệnh tắt có `-v` để xoá luôn hai volume ẩn danh đi kèm. Test không đọc `VAULT_ADDR`, `VAULT_TOKEN` hay `~/.vault-token` của máy: `vault_env` dựng env từ đầu, với `HOME` tạm riêng nên `vault login` không ghi `.vault-token` vào project của bạn.
 
 ## Cluster kind devops-lab
 

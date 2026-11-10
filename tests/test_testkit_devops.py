@@ -5850,25 +5850,35 @@ ANON_B = "0123456789abcdef" * 4
 
 
 class VolumeDocker(FakeDocker):
-    def __init__(self, mounts: str):
+    def __init__(self, mounts: str, anonymous: str = ""):
         super().__init__()
         self.mounts = mounts
+        self.anonymous = anonymous
 
     def __call__(self, cmd, **kwargs):
         self.calls.append(list(cmd))
-        stdout = self.mounts if cmd[1] == "inspect" else ""
+        stdout = ""
+        if cmd[1] == "inspect":
+            stdout = self.mounts
+        elif cmd[1:3] == ["volume", "ls"]:
+            stdout = self.anonymous
         return subprocess.CompletedProcess(cmd, 0, stdout, "")
 
 
 def test_docker_lab_close_removes_anonymous_volumes_unit(monkeypatch):
-    fake = VolumeDocker(f"{ANON_A} \n{ANON_B} devops-track-localstack-data act-toolcache\n")
+    named_hex = "f" * 64
+    fake = VolumeDocker(f"{ANON_A} \n{ANON_B} {named_hex} devops-track-localstack-data act-toolcache\n",
+                        anonymous=f"{ANON_A}\n{ANON_B}\n{'e' * 64}\n")
     monkeypatch.setattr(testkit.subprocess, "run", fake)
     with testkit.DockerLab() as lab:
         lab.start("db", "postgres:16.15-alpine")
     removed = [c for c in fake.calls if c[1] == "rm"]
     assert removed == [["docker", "rm", "-f", "-v", lab.name("db")]]
     volumes = [c for c in fake.calls if c[1:3] == ["volume", "rm"]]
-    assert volumes == [["docker", "volume", "rm", ANON_A, ANON_B]], "Chỉ xoá volume ẩn danh (64 ký tự hex) của container lab"
+    assert volumes == [["docker", "volume", "rm", ANON_A, ANON_B]], (
+        "Chỉ xoá volume ẩn danh (64 ký tự hex, có nhãn com.docker.volume.anonymous) của container lab")
+    listed = ["docker", "volume", "ls", "-q", "-f", "label=com.docker.volume.anonymous"]
+    assert listed in fake.calls and fake.calls.index(listed) < fake.calls.index(volumes[0])
     inspect = next(c for c in fake.calls if c[1] == "inspect")
     assert inspect[-1] == lab.name("db") and fake.calls.index(inspect) < fake.calls.index(removed[0])
 
@@ -5921,6 +5931,37 @@ def test_sops_env_isolated_and_key_outside_repo(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match="ngoài"):
         testkit.sops_env(home, project / "keys" / "age.txt", outside=[project])
     assert testkit.sops_env(home, key, outside=[project])["SOPS_AGE_KEY_FILE"] == str(key.resolve())
+    assert (home / ".gnupg").is_dir() and ((home / ".gnupg").stat().st_mode & 0o777) == 0o700
+    assert env["GNUPGHOME"] == str((home / ".gnupg").resolve())
+
+
+def _escape_into_root(tmp_path):
+    up = "../" * len(tmp_path.resolve().parts)
+    return Path(f"{tmp_path}/{up}{str(testkit.ROOT).lstrip('/')}/tracks/devops/keys")
+
+
+def test_key_placement_rejects_symlink_and_dotdot_into_repo(tmp_path):
+    link = tmp_path / "link"
+    link.symlink_to(testkit.ROOT / "tracks")
+    project = tmp_path / "repo"
+    project.mkdir()
+    project_link = tmp_path / "keys-link"
+    project_link.symlink_to(project)
+    dotdot = _escape_into_root(tmp_path)
+    assert ".." in dotdot.parts and dotdot.resolve().is_relative_to(testkit.ROOT)
+    home = tmp_path / "home"
+    for key_dir in (link / "devops", dotdot):
+        with pytest.raises(ValueError, match="ngoài"):
+            testkit.sops_env(home, key_dir / "age.txt")
+        with pytest.raises(ValueError, match="ngoài"):
+            testkit.age_keypair(key_dir)
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.sops_env(home, project_link / "age.txt", outside=[project])
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.age_keypair(project_link / "keys", outside=[project])
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.sops_env(home, tmp_path / "x" / ".." / "repo" / "age.txt", outside=[project_link])
+    assert not (testkit.ROOT / "tracks" / "devops" / "keys").exists()
 
 
 def test_sandbox_hides_sops_vault_and_gpg_credentials():
@@ -5948,7 +5989,7 @@ def test_age_keypair_in_sandbox(monkeypatch, tmp_path):
     keys = tmp_path / "keys"
     key, public = testkit.age_keypair(keys)
     assert key.parent == keys.resolve() and key.is_file()
-    assert (key.stat().st_mode & 0o077) == 0, "Khoá riêng chỉ chủ sở hữu đọc được"
+    assert (key.stat().st_mode & 0o777) == 0o600, "Khoá riêng chỉ chủ sở hữu đọc, ghi được"
     assert re.fullmatch(r"age1[0-9a-z]{58}", public)
     assert f"# public key: {public}" in key.read_text(encoding="utf-8")
     assert calls and Path(calls[0][0][0]).name == "age-keygen" and calls[0][1]["writable"] == [keys.resolve()]
@@ -6006,15 +6047,32 @@ def test_vault_service_loopback_profile_devops(monkeypatch):
     assert testkit.vault_devops_address() == "http://127.0.0.1:18200"
 
 
-def test_vault_env_drops_host_vars(monkeypatch):
+def test_vault_env_drops_host_vars(monkeypatch, tmp_path):
     for key, value in {"VAULT_ADDR": "https://vault.that.example:8200", "VAULT_TOKEN": "hvs.that",
                        "VAULT_NAMESPACE": "admin", "VAULT_CACERT": "/etc/that.pem"}.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("DEVOPS_VAULT_PORT", "28200")
-    env = testkit.vault_env("lab-token")
-    assert env == {"VAULT_ADDR": "http://127.0.0.1:28200", "VAULT_TOKEN": "lab-token"}
+    home = tmp_path / "vault-home"
+    env = testkit.vault_env("lab-token", home)
+    assert env == {"VAULT_ADDR": "http://127.0.0.1:28200", "VAULT_TOKEN": "lab-token", "HOME": str(home.resolve())}
+    assert home.is_dir()
     with pytest.raises(ValueError):
-        testkit.vault_env("")
+        testkit.vault_env("", home)
+    with pytest.raises(ValueError, match="ngoài repo"):
+        testkit.vault_env("lab-token", testkit.ROOT / "tracks" / "devops")
+    with pytest.raises(TypeError):
+        testkit.vault_env("lab-token")
+
+
+@SANDBOX_REQUIRED
+def test_vault_env_home_keeps_token_file_out_of_project(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    env = testkit.vault_env("lab-token", tmp_path / "vault-home")
+    result = testkit.run_sandboxed(["sh", "-c", 'printf x > "$HOME/.vault-token"'], writable=[project, tmp_path / "vault-home"],
+                                   cwd=project, env=env)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "vault-home" / ".vault-token").is_file() and not (project / ".vault-token").exists()
 
 
 def test_require_vault_devops_skips_when_down(monkeypatch):
