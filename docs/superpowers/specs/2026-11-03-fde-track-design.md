@@ -349,3 +349,106 @@ Ghi lại chỗ bản dựng Phase 1 (module 00–03, capstone m00–m03) khác 
   lên GitHub Release); repo capstone lấy qua `fetch_release.sh` từ `QUILLO_RELEASE_DIR` và kiểm sha256 đã ghim trong
   `release.lock`. `.gitignore` của repo capstone chặn `*.tar`. Câu "đưa bundle vào repo public" ở §7 đọc là "phát hành
   bundle công khai (Release), không commit".
+
+## 13. As built (Phase 2)
+
+Ghi lại chỗ bản dựng Phase 2 (module 04–10, capstone m04–m10, hạ tầng `fdekit` và sản phẩm `quillo` đi kèm) khác thiết
+kế ở trên hoặc chốt những điểm thiết kế để ngỏ. Khi mâu thuẫn, mục này thắng (và thắng cả §12 nếu hai mục trái nhau).
+
+### Quyết định của plan Phase 2 (cần người học duyệt)
+
+1. **SSO/ACL không đổi schema.** ACL theo tiền tố thư mục (`QUILLO_ACL`), mô phỏng quyền mirror từ cấu trúc file share;
+   OIDC bật bằng cấu hình. Cả `1.0.0` lẫn `1.1.0` có SSO, nên m09 vẫn là nâng cấp `1.0.0` → `1.1.0` đúng §6. Bundle
+   `1.0.0` dựng lại khác sha (bundle vốn không tái lập từng byte; bộ chấm đã truyền `QUILLO_RELEASE_SHA256`).
+2. **Từ m06, "production" của khách là k3s** (`lawfirm-prod`): m06–m10 nối tiếp trên đó bằng snapshot dẫn xuất dựng từ
+   lời giải tham chiếu (§3). m04 dùng máy Rocky siết bảo mật riêng (`lawfirm-hardened`) vì Ubuntu của công ty luật không
+   có SELinux.
+3. **Keycloak và Samba chạy như container phía host** qua `guestfwd` (giống proxy/registry Phase 1), không thành VM
+   phụ, để giữ ngân sách RAM.
+4. **Hồ sơ `factory`** (Debian 12, 3 GB RAM, `/tmp` noexec, `nofile` 1024, `netem`) phục vụ module 04, 05, 08.
+5. **Podman rootless chạy compose bằng `docker-compose` v5.6.1 đã ghim** qua Podman socket của user, vì máy air-gapped
+   không cài được `podman-compose`.
+6. **Chart quillo mặc định không có securityContext/resources/NetworkPolicy** (như nhiều chart vendor), để PSA
+   restricted, quota và default-deny của khách là chỗ hỏng thật ở module 06/m06.
+7. **Bài GPU thật chỉ qua PC và là tuỳ chọn**, vì driver NVIDIA trên laptop hiện không chạy; mọi phần bắt buộc của
+   module 05 chạy bằng CPU và dữ liệu `nvidia-smi` đã ghi lại.
+8. **Thứ tự giữ nguyên §9** (trụ 2 ở Phase 3), không đưa discovery lên trước.
+
+### Hạ tầng `fdekit` và hồ sơ
+
+- **Snapshot dẫn xuất** (`fdekit.derived(name)`, `fdekit.DERIVED`, CLI `python -m fdekit derive <tên> [--force|--list]`,
+  đăng ký ở `setup/fde/derived/<tên>.py` với `PROFILE`, `INPUTS`, `SITE`, `MEMORY_MB`, `build`). `derived()` **chỉ trả
+  đường dẫn**, không bao giờ dựng trong test: thiếu snapshot hay snapshot cũ thì skip kèm đúng lệnh `derive`; tên chưa
+  đăng ký là `ValueError` (để lệnh trong thông báo skip luôn chạy được). Khoá cache gồm sha golden, sha tệp đăng ký và
+  sha mọi đầu vào, nên sửa lời giải tham chiếu, bundle hay hồ sơ thì snapshot cũ bị phát hiện. `vm()`/`customer_site()`
+  nhận `base=` để boot từ snapshot.
+- **Snapshot chỉ chứa đĩa VM** (Ruling R4). Dịch vụ phía host (registry, proxy, Keycloak, Samba) của `customer_site` luôn
+  dựng mới và **rỗng** mỗi lần chạy; image mà bài sau cần phải nằm trong kho runtime của VM (containerd của k3s,
+  Podman, Docker) với `pullPolicy: IfNotPresent`, hoặc test đẩy lại từ host/VM vào registry.
+- **`require_pc()`/`PC`** (`FDE_PC_SSH`, `PC.ssh`, `PC.gpu`, `PC.workdir`, `PC.cleanup`): chưa đặt biến thì skip kèm
+  hướng dẫn, không bao giờ tự dò hay kết nối PC. Chỉ ghi/xoá `~/fde-ex-<run_id>` trên PC.
+- **`customer_site(base=, extra_services=)`** (`registry`, `keycloak`, `fileshare`); `Site` có thêm `keycloak`,
+  `keycloak_host`, `keycloak_admin`, `keycloak_client` (`("quillo", secret)`), `fileshare`, `fileshare_host`,
+  `fileshare_creds`, `fileshare_dir`; `fdekit.keycloak_token()`, `KEYCLOAK_ADDR` (`10.0.2.102:8080`), `FILESHARE_ADDR`
+  (`10.0.2.103:445`). Container `fde-ex-<run_id>-keycloak`/`-fileshare` được `leftovers`/`clean` xử lý cùng run id,
+  kể cả sau `SIGKILL`.
+- **Keycloak:** issuer cố định `http://10.0.2.102:8080/realms/lawfirm` (`KC_HOSTNAME`), dù token lấy qua cổng host hay
+  từ VM. Client `quillo` có mapper audience và bật password grant; **không** có mapper `groups`, đó là cấu hình
+  Keycloak mặc định và là chỗ hỏng thật duy nhất có chủ ý. Console admin từ host chuyển hướng sang `10.0.2.102`
+  (không với tới): dùng admin REST API qua `keycloak_host` (token realm `master`); `keycloak_admin` chưa được dùng ở
+  Phase 2 task nào ngoài việc cấp mật khẩu admin. Samba: share `contracts` chỉ đọc, SMB2/3. Golden Ubuntu/Rocky thiếu
+  `smbclient`/`cifs-utils` và `lawfirm-prod`/`lawfirm-hardened` không có sudo, nên connector (m07) dùng SMB userland (vd.
+  `smbprotocol` đóng trong wheelhouse), không mount.
+- **Ba hồ sơ mới** `factory`, `lawfirm-hardened`, `lawfirm-prod` và các trường YAML tuỳ chọn `memory_mb`, `tmp_noexec`,
+  `nofile`, `netem`, `k8s` (bắt buộc khi và chỉ khi runtime `k3s`); `Profile.facts` vẫn 13 khoá.
+- **`lawfirm-prod`:**
+  - Route mặc định **tĩnh** qua `10.0.2.2` (`/etc/netplan/60-fde-default-route.yaml`) chỉ để k3s chạy, vì mạng
+    `restrict=on` của QEMU không phát gateway; VM vẫn không tới internet hay loopback host (test kiểm cả hai).
+  - Default-deny được bảo vệ bằng **ValidatingAdmissionPolicy** `quillo-protect-default-deny` (từ chối UPDATE/DELETE
+    NetworkPolicy tên `default-deny` của ServiceAccount `quillo/fde`), vì RBAC không chặn theo tên: `kubectl auth can-i
+    delete networkpolicy default-deny` **vẫn trả `yes`** còn lệnh thật bị admission từ chối. `fde` vẫn tạo/sửa/xoá
+    NetworkPolicy tên khác.
+  - Namespace `quillo`: PSA `restricted`, ResourceQuota (`requests.cpu` 3, `requests.memory` 4Gi, `limits.memory` 5Gi,
+    `pods` 12), LimitRange chỉ `max`: container phải tự khai báo requests/limits. Tổng CPU requests của quillo phải
+    **≤ 1,0** vì node chỉ có 2 vCPU (k3s và hệ thống chiếm phần còn lại).
+  - Build snapshot chạy bằng user `fde` không sudo nên không `k3s ctr import` được: image vào VM bằng cách pull qua
+    registry trong lúc dựng, `IfNotPresent` về sau.
+  - `quillo-models` **không** có trong bundle (Ruling R5): image dẫn xuất lúc cài bằng `python3 ops/models_image.py .
+    <out.tar>` (stdlib, tất định, sha ghi trong `manifest.json` mục `derived`), vì bản đóng sẵn làm bundle 1,67 GiB
+    vượt ngân sách 1,5 GB và làm hỏng kiểm tra đĩa của m02. Bài và lời giải k8s phải chạy lệnh này trước khi đẩy
+    image.
+
+### Sản phẩm `quillo`
+
+- **OIDC:** `QUILLO_OIDC_ISSUER`, `QUILLO_OIDC_CLIENT_ID`, `QUILLO_OIDC_CLIENT_SECRET_FILE` (thiếu một trong ba thì
+  api không lên). Chấp nhận RS*/PS*/ES*, kiểm `iss`, `aud`/`azp`, `exp` (lệch 60 s), `sub`. IdP không với tới (chưa
+  từng tải được JWKS) thì 503. Realm chỉ cho redirect URI `localhost:8000`. Nhóm SSO được cache trong cookie phiên 8 giờ
+  (đổi nhóm ở IdP chưa có hiệu lực ngay). `GET /api/me` cho biết quillo thấy nhóm gì.
+- **ACL** `QUILLO_ACL`: lọc trong chính câu truy vấn vector. Tên thư mục trong ACL là tên **đã làm sạch** như lưu
+  (ký tự ngoài `A-Za-z0-9._ -` thành `_`); tài liệu không khớp thư mục nào chỉ admin thấy.
+- **`/metrics`**, **extension** (`QUILLO_EXTENSIONS`, `QUILLO_EXTENSIONS_PATH`, `register(app, ctx)`;
+  `ExtensionContext`: `settings`, `ask`, `db_query`, `templates`, `require_user`). `db_query` chỉ đọc, một câu lệnh,
+  timeout 5 s, **không áp ACL** và không phải ranh giới bảo mật; extension là mã tin cậy.
+- **Helm chart** (`chart/quillo-<version>.tgz`; values `image.registry`, `podSecurityContext`,
+  `containerSecurityContext`, `resources.*`, `networkPolicy.*`, `oidc.*`, `acl`, `extensions.*`, `persistence.*`,
+  `models.*`, `auth.existingSecret`) mặc định trống securityContext/resources/NetworkPolicy (quyết định 6); values mẫu
+  qua PSA restricted và quota nằm ở `chart/examples/values-restricted.yaml`, ngoài bundle.
+- **Ops:** `ops/backup.sh` (`pg_dump -Fc` trong container db, `.dump` kèm `.sha256`, tệp không đọc được bởi người khác,
+  từ chối khi đĩa đích nhỏ hơn 2 lần cỡ DB), `ops/restore.sh` (kiểm sha256, từ chối khi DB đang có tài liệu trừ
+  `--force`, `--single-transaction`), `ops/models_image.py`. Cài lại bằng `install.sh` tham chiếu đã sửa kiểm tra đĩa.
+- Bundle `1.0.0` dựng lại nên `capstone/solutions/project/delivery/release.lock` có sha mới (Ruling R1).
+
+### Capstone và chấm
+
+- **m08 dưới `SOLUTION=1`** chạy mọi kịch bản với báo cáo tham chiếu của đúng kịch bản đó
+  (`reports/incident-m08-<scenario>.md` trong repo tham chiếu, test chọn theo kịch bản), vì `SOLUTION=1` phải pass
+  không người trông (Ruling R2). Đường của người học vẫn là quy trình hai bước (seed rồi nộp báo cáo); milestone và
+  README phải giải thích sự khác biệt này.
+- **Secret lọt vào bundle hỗ trợ/báo cáo sự cố** chấm bằng secret ngẫu nhiên gieo mỗi lần chạy (module 08, m08).
+- **Rollback không được mất dữ liệu:** sau 1.1.0 → 1.0.0, số tài liệu/chunk không đổi và `/api/ask` vẫn trả trích
+  dẫn cũ (module 09, m09).
+- **Quy trình review** (Ruling R3, bản sửa): `code-review` mức `medium` và `security-review` cho task chạm
+  mạng/SSH/secret/installer/OIDC gộp vào một ghế reviewer của task như hai lăng kính bổ sung; `code-review`,
+  `requesting-code-review` và `security-review` toàn nhánh vẫn chạy riêng ở cuối phase.
+- **Validator:** `test_phase2_present` kiểm module 04–10 và milestone m04–m10 có mặt trên đĩa; đỏ cho tới khi Task 15
+  xong.
