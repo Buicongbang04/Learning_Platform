@@ -28,6 +28,30 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
+## Binary dùng chung với track MLOps
+
+act, kind và kubectl của track DevOps cài vào `~/.local/bin`, đúng chỗ track MLOps cài bản của nó. Trên một máy chỉ có một bản
+của mỗi công cụ: cài sau thì ghi đè bản cài trước, gỡ là gỡ luôn bản track kia đang dùng.
+
+| Binary | Track DevOps (đã kiểm / tối thiểu) | Track MLOps (đã kiểm / tối thiểu) | Ai ghi vào `~/.local/bin` |
+|---|---|---|---|
+| act | 0.2.94 / 0.2.94 | 0.2.89 / 0.2.80 | Module 07 của DevOps, module 08 của MLOps |
+| kind | 0.30.0 / 0.30 | 0.33.0 | Module 10 của DevOps, `setup/mlops/kind/up.sh` (cài khi checksum của bản đang có không khớp 0.33.0) |
+| kubectl | 1.34.13 / 1.33 | 1.35.8 | Module 10 của DevOps, `setup/mlops/kind/up.sh` (như trên) |
+
+Hệ quả:
+
+- act: bản 0.2.94 của DevOps đạt mức tối thiểu của MLOps. Ngược lại, sau khi cài 0.2.89 theo MLOps, mọi bài DevOps chạy act (module
+  07, capstone m04) skip với thông báo `act 0.2.89 cũ hơn 0.2.94`; cài lại 0.2.94 theo module 07 là hết.
+- kubectl 1.35.8 vẫn trong mức lệch một minor với API server 1.34 của `devops-lab`, và đạt `KUBECTL_MIN_VERSION` nên test DevOps
+  chạy tiếp.
+- kind 0.33.0 qua được kiểm phiên bản tối thiểu của test DevOps (0.30), nhưng **chưa được kiểm** với `setup/kind/devops-lab.yaml`
+  và node image `kindest/node:v1.34.0` ghim cho kind 0.30.0 (tạo cluster, kindnet thực thi NetworkPolicy, nạp image). Gặp lỗi khi
+  tạo hay dùng `devops-lab` bằng kind 0.33.0 thì cài lại 0.30.0 theo module 10. `up.sh` của MLOps sẽ lại ghi đè bằng 0.33.0 ở lần
+  chạy sau.
+- Lệnh gỡ `rm -f ~/.local/bin/act`, `rm -f ~/.local/bin/kind ~/.local/bin/kubectl` trong module 07, 10 xoá cả bản track MLOps đang
+  dùng. Còn học MLOps thì đừng gỡ, hoặc cài lại theo hướng dẫn của track đó.
+
 ## Dịch vụ phụ trợ: Mailpit
 
 Module 04 cần một máy chủ SMTP giả để kiểm thư gửi ra. Mailpit nằm trong profile `devops` của `setup/docker-compose.yml` và không thuộc profile `all`, nên bật `all` của track Data Engineer không kéo nó lên.
@@ -191,7 +215,7 @@ Traffic vào Traefik chỉ qua Service ClusterIP trong cluster; test gọi từ 
 `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -f setup/kind/gateway/10-traefik.yaml` rồi `delete -f` tệp CRD (xoá CRD là xoá
 mọi HTTPRoute).
 
-Test không bao giờ tạo hay xoá cluster. `require_cluster` skip với thông báo riêng khi Docker tắt, khi chưa có cluster, khi node đang dừng (kèm lệnh `docker start`) và khi API server chưa trả `ok` cho `/readyz` trong 5 giây. Mỗi lần chạy, test lấy kubeconfig bằng `kind get kubeconfig --name devops-lab` vào thư mục tạm, không đọc `KUBECONFIG` hay `~/.kube` của bạn, nên cluster thật mà `~/.kube/config` đang trỏ tới không bao giờ bị đụng. Mỗi test làm việc trong namespace riêng `devops-ex-<id>` (nhãn `devops-ex=<id>`, Pod Security `baseline`) bằng token của một ServiceAccount chỉ có quyền trong namespace đó (không impersonate, không xin token cho ServiceAccount khác), và xoá namespace khi xong. Trong lúc có test chạy, cluster từ chối PersistentVolume hostPath của mọi user không phải thành phần hệ thống, kể cả admin; PV `local` chỉ testkit tạo, trong thư mục `/srv/devops-lab-pv` của worker. Test bị ngắt giữa chừng có thể để lại namespace; xem và xoá bằng:
+Test không bao giờ tạo hay xoá cluster. `require_cluster` skip khi kind cũ hơn 0.30 hay kubectl cũ hơn 1.33, và skip với thông báo riêng khi Docker tắt, khi chưa có cluster, khi node đang dừng (kèm lệnh `docker start`) và khi API server chưa trả `ok` cho `/readyz` trong 5 giây. Mỗi lần chạy, test lấy kubeconfig bằng `kind get kubeconfig --name devops-lab` vào thư mục tạm, không đọc `KUBECONFIG` hay `~/.kube` của bạn, nên cluster thật mà `~/.kube/config` đang trỏ tới không bao giờ bị đụng. Mỗi test làm việc trong namespace riêng `devops-ex-<id>` (nhãn `devops-ex=<id>`, Pod Security `baseline`) bằng token của một ServiceAccount chỉ có quyền trong namespace đó (không impersonate, không xin token cho ServiceAccount khác), và xoá namespace khi xong. Trong lúc có test chạy, cluster từ chối PersistentVolume hostPath của mọi user không phải thành phần hệ thống, kể cả admin; PV `local` chỉ testkit tạo, trong thư mục `/srv/devops-lab-pv` của worker. Test bị ngắt giữa chừng có thể để lại namespace; xem và xoá bằng:
 
 ```bash
 KUBECONFIG=~/.kube/devops-lab.yaml kubectl get namespaces,clusterroles,clusterrolebindings,validatingadmissionpolicies,validatingadmissionpolicybindings -l devops-ex

@@ -1269,7 +1269,7 @@ def _act_workflow_files(repo: Path) -> list[Path]:
     return sorted([*folder.rglob("*.yml"), *folder.rglob("*.yaml")]) if folder.is_dir() else []
 
 
-def _act_skipped_locally(condition) -> bool:
+def act_skipped_locally(condition) -> bool:
     """True khi `if:` chắc chắn sai dưới act: biểu thức (bỏ `${{ }}` và khoảng trắng) đúng bằng `!env.ACT`, hoặc là chuỗi
     `&&` ở cấp trên cùng có một vế đúng bằng `!env.ACT` và mọi vế có ngoặc khác đúng bằng một hàm trạng thái
     (`always()`, `success()`, `failure()`, `cancelled()`, `!cancelled()`). Chuỗi trong nháy đơn được thay bằng chỗ giữ trước
@@ -1326,7 +1326,7 @@ def _act_step_problem(where: str, step) -> str | None:
         return f"{where}: `uses: {uses}` (image Docker hoặc action cục bộ) không được dùng trong bài chấm bằng act, kể cả có `if:`"
     if _act_remote_action(uses) is None:
         return f"{where}: `uses: {uses}` không phải dạng owner/repo[/đường-dẫn]@ref hợp lệ"
-    if _act_skipped_locally(step.get("if")):
+    if act_skipped_locally(step.get("if")):
         return None
     return (f"{where}: action {uses} không chạy được khi chấm; chỉ dùng bước run: và {allowed}, hoặc gắn đúng "
             "`if: ${{ !env.ACT }}` (có thể nối thêm điều kiện bằng `&&`) để bước đó chỉ chạy trên GitHub")
@@ -1349,7 +1349,7 @@ def _act_guarded_stubs(repo: Path, root: Path) -> list[str]:
                 if not isinstance(step, dict) or not step.get("uses"):
                     continue
                 allowed = str(step["uses"]).split("@", 1)[0] in ACT_ALLOWED_ACTIONS
-                if not allowed and not _act_skipped_locally(step.get("if")):
+                if not allowed and not act_skipped_locally(step.get("if")):
                     continue
                 parsed = _act_remote_action(step["uses"])
                 if parsed is None:
@@ -2996,6 +2996,7 @@ KIND_CONFIG = ROOT / "setup" / "kind" / "devops-lab.yaml"
 KIND_NODE_IMAGE = "kindest/node:v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a"
 KUBECTL_VERSION = "1.34.13"
 KUBECTL_MIN_VERSION = "1.33"
+KIND_MIN_VERSION = "0.30"
 HELM_VERSION = "3.22.1"
 HELM_MIN_VERSION = "3.18"
 KUBE_READY_TIMEOUT = 5
@@ -3337,7 +3338,8 @@ def _kube_node_undo_present(admin: "_KubeAdmin") -> list[dict]:
 def _kube_check_node_leftovers(admin: "_KubeAdmin") -> None:
     """Một lab bị giết (SIGKILL) giữa bài thao tác node để lại cordon, taint mà `close()` chưa kịp hoàn tác. Có tệp trạng thái và
     khoá node đang rảnh thì giữ khoá, đọc lại tệp, hoàn tác những thao tác còn trên cluster rồi chạy tiếp; chỉ skip kèm đúng lệnh hoàn
-    tác khi chính việc hoàn tác lỗi. Khoá đang bị giữ (một bài thao tác node đang chạy) thì không đụng gì."""
+    tác khi chính việc hoàn tác lỗi. Khoá đang bị giữ (một bài thao tác node đang chạy, hay một tiến trình khác đang hoàn tác) thì
+    không đụng gì và không chờ: `require_cluster` của tiến trình này chạy tiếp trong khi worker có thể còn cordon vài giây."""
     import fcntl
 
     lock, state = _kube_node_paths()
@@ -3356,8 +3358,8 @@ def _kube_check_node_leftovers(admin: "_KubeAdmin") -> None:
 
 
 def _require_cluster_up(name: str) -> None:
-    Exercise.require_tool("kind")
-    Exercise.require_tool("kubectl")
+    Exercise.require_tool("kind", KIND_MIN_VERSION)
+    Exercise.require_tool("kubectl", KUBECTL_MIN_VERSION)
     if not docker_ready():
         pytest.skip(KUBE_SKIP_DOCKER.format(name=name))
     listed = _run_tool(["kind", "get", "clusters"], env=_docker_env())

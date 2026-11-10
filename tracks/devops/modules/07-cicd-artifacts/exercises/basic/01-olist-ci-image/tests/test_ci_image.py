@@ -70,7 +70,7 @@ def uses_step(job: dict, action: str) -> dict | None:
 
 
 def guarded(step: dict) -> bool:
-    return testkit._act_skipped_locally(step.get("if"))
+    return testkit.act_skipped_locally(step.get("if"))
 
 
 def push_only_on_push(value) -> bool:

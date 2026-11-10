@@ -1,6 +1,6 @@
 # CI/CD và artifact
 
-Module DE 08 dạy bạn viết một workflow GitHub Actions chạy lint và test cho job dữ liệu. Module này đi tiếp ở mức người thiết kế
+[Module DE 08, mục 4 CI/CD](../../../data-engineer/modules/08-devops-for-data/README.md) dạy bạn viết một workflow GitHub Actions chạy lint và test cho job dữ liệu. Module này đi tiếp ở mức người thiết kế
 và vận hành pipeline cho cả tổ chức: pipeline là một hệ thống production có quyền ghi vào registry và môi trường thật, nên phải
 được thiết kế (stage, cache, artifact, môi trường, phê duyệt), bảo mật (quyền tối thiểu, OIDC, ghim action, dữ liệu không tin cậy),
 thử được trên máy (act), và nối với hai việc ở hai đầu: quản lý artifact (tag bất biến, digest, promotion, SBOM, chữ ký) và chiến
@@ -70,6 +70,10 @@ act version 0.2.94
 
 Đừng dùng script `install.sh` của repo act kiểu `curl ... | bash`: nó tải bản mới nhất, không ghim phiên bản.
 
+`~/.local/bin/act` dùng chung với track MLOps: module 08 của MLOps cài act 0.2.89 vào đúng đường dẫn này (MLOps cần từ 0.2.80,
+nên bản 0.2.94 ở đây dùng được cho cả hai). Cài 0.2.89 sau bản này thì mọi bài act của DevOps skip vì `act 0.2.89 cũ hơn 0.2.94`;
+cài lại theo lệnh trên. Xem [Binary dùng chung với track MLOps](../../../../setup/DEVOPS-TOOLS.md#binary-dùng-chung-với-track-mlops).
+
 **Image runner.** Lần đầu chạy, act hỏi chọn image cho nhãn `ubuntu-latest` (Large khoảng 18 GB, Medium `catthehacker/ubuntu:act-*`
 khoảng 1,5 GB, Micro `node:*-slim`). Image Micro nhỏ nhưng thiếu gần hết công cụ, nên mỗi lần chạy job phải tải uv, Python và
 wheel từ Internet: chậm, và mất mạng là không chấm được. Track build **một lần** một image runner riêng từ
@@ -137,7 +141,8 @@ dòng cuối lệnh build ở trên in ra):
 bạn cho mọi bước của workflow (module 06, mục 3).
 
 Gỡ: `rm -f ~/.local/bin/act && rm -rf ~/.cache/act ~/.cache/devops-track/act`, cộng `~/.actrc` nếu bạn đã tạo theo hướng dẫn
-trên. Volume `act-toolcache` do act tạo dùng chung giữa mọi lần chạy; xoá bằng `docker volume rm act-toolcache` khi không
+trên. `rm -f ~/.local/bin/act` xoá luôn act mà track MLOps đang dùng (cùng một tệp); còn học MLOps thì giữ lại binary, chỉ xoá
+cache. Volume `act-toolcache` do act tạo dùng chung giữa mọi lần chạy; xoá bằng `docker volume rm act-toolcache` khi không
 còn dùng act.
 
 ### actionlint

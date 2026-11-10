@@ -2123,7 +2123,7 @@ jobs:
     "cancelled() && !env.ACT",
 ])
 def test_act_guard_accepts(condition):
-    assert testkit._act_skipped_locally(condition)
+    assert testkit.act_skipped_locally(condition)
 
 
 @pytest.mark.parametrize("condition", [
@@ -2153,7 +2153,7 @@ def test_act_guard_accepts(condition):
     "${{ env['ACT'] && !env.ACT }}",
 ])
 def test_act_guard_refuses_bypasses(condition):
-    assert not testkit._act_skipped_locally(condition)
+    assert not testkit.act_skipped_locally(condition)
 
 
 @pytest.mark.parametrize("uses", [
@@ -3887,8 +3887,11 @@ API_RESOURCES = (
 class KubeFake:
     """Giả lập docker, kind (subprocess.run thật của testkit) và kubectl, helm (run_sandboxed) cho test KubeLab không cần cluster."""
 
-    def __init__(self, monkeypatch, *, docker_ok=True, clusters="devops-lab\n", nodes=None, ready=True, labels=None):
+    def __init__(self, monkeypatch, *, docker_ok=True, clusters="devops-lab\n", nodes=None, ready=True, labels=None,
+                 kind_version="kind v0.30.0 go1.24.6 linux/amd64", kubectl_version="Client Version: v1.34.13"):
         self.docker_ok = docker_ok
+        self.kind_version = kind_version
+        self.kubectl_version = kubectl_version
         self.clusters = clusters
         self.nodes = nodes if nodes is not None else {
             "devops-lab-control-plane": "running", "devops-lab-worker": "running", "devops-lab-worker2": "running"}
@@ -3905,6 +3908,10 @@ class KubeFake:
         cmd = [str(part) for part in cmd]
         self.host_calls.append((cmd, kwargs.get("env")))
         done = lambda code=0, out="", err="": subprocess.CompletedProcess(cmd, code, out, err)
+        if cmd == ["kind", "version"]:
+            return done(out=self.kind_version)
+        if cmd == ["kubectl", "version", "--client"]:
+            return done(out=self.kubectl_version)
         if cmd[:2] == ["docker", "info"]:
             return done(0 if self.docker_ok else 1, err="" if self.docker_ok else "Cannot connect to the Docker daemon")
         if cmd[:3] == ["kind", "get", "clusters"]:
@@ -3992,6 +3999,28 @@ def test_require_cluster_ready_through_temp_kubeconfig(monkeypatch, tmp_path):
     assert call["cmd"][:4] == ["kubectl", "get", "--raw", "/readyz"] and "--request-timeout=5s" in call["cmd"]
     assert call["env"]["KUBECONFIG"] != str(tmp_path / "sentinel")
     assert all(env is None or "KUBECONFIG" not in env for _, env in fake.host_calls)
+
+
+@pytest.mark.parametrize("kwargs, needle", [
+    ({"kind_version": "kind v0.29.0 go1.24.2 linux/amd64"}, f"kind 0.29.0 cũ hơn {testkit.KIND_MIN_VERSION}"),
+    ({"kubectl_version": "Client Version: v1.32.4"}, f"kubectl 1.32.4 cũ hơn {testkit.KUBECTL_MIN_VERSION}"),
+    ({"kubectl_version": "error: unknown"}, f"Không đọc được phiên bản của kubectl (bài này cần từ {testkit.KUBECTL_MIN_VERSION})"),
+])
+def test_require_cluster_skips_old_kind_or_kubectl(monkeypatch, kwargs, needle):
+    fake = KubeFake(monkeypatch, **kwargs)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_cluster()
+    assert_skip(info, needle)
+    assert not any(cmd[:2] == ["docker", "info"] for cmd, _ in fake.host_calls)
+    assert fake.sandbox_calls == []
+
+
+def test_require_cluster_accepts_min_versions(monkeypatch):
+    fake = KubeFake(monkeypatch, kind_version=f"kind v{testkit.KIND_MIN_VERSION}.0 go1.24.6 linux/amd64",
+                    kubectl_version=f"Client Version: v{testkit.KUBECTL_MIN_VERSION}.0")
+    testkit.Exercise.require_cluster()
+    assert ["kind", "version"] in [cmd for cmd, _ in fake.host_calls]
+    assert ["kubectl", "version", "--client"] in [cmd for cmd, _ in fake.host_calls]
 
 
 def test_require_cluster_not_ready(monkeypatch):
@@ -5766,7 +5795,7 @@ def test_require_cluster_without_state_file_never_takes_lock_or_touches_state(mo
     assert not any(c[1:3] == ["get", "nodes"] for c in cluster.cmds())
 
 
-def test_state_written_by_other_process_after_check_is_kept(monkeypatch, tmp_path):
+def test_state_rewritten_before_lock_is_reread_and_undone(monkeypatch, tmp_path):
     import fcntl
 
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))

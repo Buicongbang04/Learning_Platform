@@ -5,7 +5,8 @@ bạn quản: bạn khai báo "4 pod API, mỗi pod 256 MiB, chỉ nhận traffi
 chết, tự rollout. Module này đi từ bên trong ra: control plane quyết định thế nào, mỗi loại workload sinh ra để giải bài toán gì, gói
 tin đi từ client tới container qua những lớp nào, dữ liệu sống ở đâu, và người vận hành cluster làm gì với etcd và kubeadm. Mức mục
 tiêu là phần core của CKA v1.37 cộng các mục CKAD hay gặp; module 11 lo phần production (RBAC, NetworkPolicy, scheduling, autoscaling,
-Helm, Kustomize, troubleshooting sâu, nâng cấp).
+Helm, Kustomize, troubleshooting sâu, nâng cấp). Nếu đã học track Data Engineer, [module DE 08, mục 3 Kubernetes cho job dữ liệu](../../../data-engineer/modules/08-devops-for-data/README.md)
+đã giới thiệu Pod, Deployment, CronJob ở mức người dùng; module này không nhắc lại mà đi xuống lớp người vận hành cluster.
 
 Bài tập chạy trên cluster kind `devops-lab` dùng chung của track (1 control plane, 2 worker), mỗi test trong một namespace riêng
 với quyền bị giới hạn (mục 0).
@@ -66,7 +67,16 @@ Kustomize Version: v5.7.1
 
 SHA-256 đã kiểm: kind `517ab7fc89ddeed5fa65abf71530d90648d9638ef0c4cde22c2c11f8097b8889`, kubectl
 `b4bb494e9466a7a94bb851414548bc0d3e2f8da90757e6eccc3371e648648591`. Máy ARM đổi `amd64` thành `arm64` ở cả tệp và checksum. kubectl
-chỉ được lệch một minor với API server; node image 1.34 nên kubectl 1.33 tới 1.35 đều dùng được, bản 1.34.13 khớp nhất. Gỡ:
+chỉ được lệch một minor với API server; node image 1.34 nên kubectl 1.33 tới 1.35 đều dùng được, bản 1.34.13 khớp nhất. Test kiểm
+phiên bản trước khi chạm cluster: kind cũ hơn 0.30 hay kubectl cũ hơn 1.33 thì skip kèm lời nhắc.
+
+`~/.local/bin/kind` và `~/.local/bin/kubectl` dùng chung với track MLOps: `setup/mlops/kind/up.sh` ghi đè chúng bằng kind 0.33.0 và
+kubectl 1.35.8 khi checksum bản đang có không khớp. kubectl 1.35.8 vẫn dùng được với `devops-lab`. kind 0.33.0 qua được kiểm phiên
+bản của test nhưng **chưa được kiểm** với cấu hình và node image của `devops-lab`; gặp lỗi thì cài lại 0.30.0 bằng lệnh trên. Xem
+[Binary dùng chung với track MLOps](../../../../setup/DEVOPS-TOOLS.md#binary-dùng-chung-với-track-mlops).
+
+Gỡ (dòng `rm -f ~/.local/bin/kind ~/.local/bin/kubectl` xoá luôn bản track MLOps đang dùng; còn học MLOps thì chỉ xoá cache trong
+`~/.cache/devops-track/dl`):
 
 ```bash
 rm -f ~/.local/bin/kind ~/.local/bin/kubectl ~/.cache/devops-track/dl/kind-linux-amd64* ~/.cache/devops-track/dl/kubectl*
@@ -172,7 +182,7 @@ Helper `KubeLab` của testkit, mỗi test một lab:
    hay `~/.kube` của bạn.
 2. Bằng quyền admin, tạo namespace `devops-ex-<id>` có Pod Security `enforce=baseline`, một ServiceAccount với **Role riêng** trong
    namespace đó (workload, Service, ConfigMap, Secret, PVC, Job...; không impersonate, không xin token cho ServiceAccount khác,
-   không escalate/bind), quyền đọc cả cluster, và ba ValidatingAdmissionPolicy của lab. Kubeconfig của lab chỉ có token của
+   không escalate/bind), quyền đọc cả cluster, và bốn ValidatingAdmissionPolicy của lab (chung, RBAC, route, PV). Kubeconfig của lab chỉ có token của
    ServiceAccount đó.
 3. Manifest của bạn đi qua `lab.apply_learner`: kiểm tĩnh trước (namespace khác, privileged, hostPath, hostNetwork, hostPort,
    PersistentVolume, StorageClass... bị từ chối kèm lý do), rồi apply đúng các object đã kiểm bằng token của lab. Script của bạn
@@ -379,6 +389,17 @@ của pod template (tên có hậu tố `pod-template-hash`) và chuyển dần 
   status` thoát lỗi. Không tự rollback.
 - `revisionHistoryLimit`: số ReplicaSet cũ giữ lại để `kubectl rollout undo`.
 - Change-cause: annotation `kubernetes.io/change-cause` hiện trong `kubectl rollout history`.
+
+Tag `1.1` chưa có trong node. Tạo nó từ image `1.0` và nạp vào hai worker giống mục 0 (cách tarball chạy được cả khi Docker bật
+containerd image store), rồi mới đổi image:
+
+```bash
+docker tag devops-track/olist-shop:1.0 devops-track/olist-shop:1.1 &&
+mkdir -p ~/.cache/devops-track/kind-images &&
+docker save --platform linux/amd64 -o ~/.cache/devops-track/kind-images/olist-shop_1.1.tar devops-track/olist-shop:1.1 &&
+nice -n 15 kind load image-archive ~/.cache/devops-track/kind-images/olist-shop_1.1.tar --name devops-lab --nodes devops-lab-worker,devops-lab-worker2 &&
+rm -f ~/.cache/devops-track/kind-images/olist-shop_1.1.tar
+```
 
 ```bash
 kubectl set image deployment/api api=devops-track/olist-shop:1.1
@@ -806,7 +827,8 @@ truoc-su-co
 Lệnh `timeout ... until` đầu chờ kubelet dừng hẳn hai container (không chờ là đổi thư mục khi etcd còn ghi); lệnh sau chờ API server trả
 `ok`. Cả khối mất khoảng 40 giây trên máy viết bài. `test ! -e /var/lib/etcd-truoc-restore` và `test ! -e "$LAB/restored"` dừng chuỗi
 ngay từ đầu, trước khi xoá ConfigMap hay đụng manifest, nếu thứ của lần chạy trước còn đó (nếu không, `mv` sẽ lồng thư mục và khối
-quay lui sẽ trả về dữ liệu của lần trước). Muốn làm lại lab thì chạy xong khối dọn ở cuối mục trước.
+quay lui sẽ trả về dữ liệu của lần trước). Muốn làm lại lab thì chạy xong khối "Dọn sau lab" ở cuối mục "Lab: backup rồi restore etcd của devops-lab" này (ngay sau
+**Phương án cuối**), rồi làm lại từ Bước 2.
 
 **Nếu chuỗi lệnh dừng giữa chừng** sau khi manifest đã bị chuyển đi, etcd và API server vẫn tắt: `kubectl` báo `connection refused`. Quay
 về data dir trước restore (khối này đã kiểm: chạy ngay sau một lần restore thành công, cluster về đúng trạng thái trước restore):

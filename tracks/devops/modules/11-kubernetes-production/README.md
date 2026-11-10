@@ -540,6 +540,30 @@ helm package olist-api && helm push olist-api-0.1.0.tgz oci://registry.example/c
 `--wait` chờ mọi Deployment Ready; Helm 3 có `--atomic` để tự rollback khi `--wait` hết giờ (CI hay dùng). Chart phân phối qua
 registry OCI (cùng registry chứa image, module 07) hay repo HTTP.
 
+### Cài chart của bên thứ ba (lab tay, không chấm)
+
+CKA hỏi "dùng Helm để cài thành phần của cluster": phần lớn add-on (ingress controller, cert-manager, metrics-server, Prometheus)
+được phát hành thành chart, và việc của bạn là đọc values rồi cài đúng một phiên bản ghim. Lab này **cần Internet** (index của repo,
+tệp chart, image `ghcr.io/stefanprodan/podinfo` do kubelet kéo về node), không có test chấm, và không có chart nào vendor sẵn trong
+repo. Chart `podinfo` nhỏ, không cần quyền cluster, chạy được dưới Pod Security `baseline`. Bản `6.7.1` dưới đây chưa được kiểm trên máy
+viết bài: nếu `helm search repo` không liệt kê nó, chọn một bản có trong danh sách và ghim bản đó.
+
+```bash
+export KUBECONFIG=~/.kube/devops-lab.yaml &&
+helm repo add podinfo https://stefanprodan.github.io/podinfo &&
+helm repo update podinfo &&
+helm search repo podinfo/podinfo --versions | head -5 &&
+helm show chart podinfo/podinfo --version 6.7.1 &&
+helm show values podinfo/podinfo --version 6.7.1 > /tmp/podinfo-values.yaml &&
+helm install demo podinfo/podinfo --version 6.7.1 -n lab11 --set replicaCount=1 --wait --timeout 3m &&
+helm list -n lab11 && kubectl -n lab11 get deploy,svc -l app.kubernetes.io/instance=demo
+```
+
+Luôn có `--version`: thiếu nó Helm cài bản mới nhất lúc chạy, hai lần cài cách nhau một tuần ra hai cluster khác nhau. `helm show values`
+là "API" của chart; ghi đè bằng `-f values.yaml` của bạn (đưa vào Git) thay vì một chuỗi `--set` dài. Chart nằm trên registry OCI thì bỏ
+`repo add`: `helm install demo oci://<registry>/<chart> --version <bản>`. `helm repo add` ghi vào `~/.config/helm`, `~/.cache/helm` của
+bạn (test không đọc chúng). Dọn: `helm uninstall demo -n lab11 && helm repo remove podinfo`.
+
 ### Kustomize
 
 Kustomize không có ngôn ngữ template: YAML thuần cộng các "phép biến đổi" khai báo trong `kustomization.yaml`.

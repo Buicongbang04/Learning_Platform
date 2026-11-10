@@ -130,14 +130,18 @@ Từ module 10, bài cần Kubernetes dùng chung một cluster kind tên `devop
 khung lệnh như sau:
 
 ```bash
-nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --name devops-lab
-docker update --cpuset-cpus "$DEVOPS_CPUSET" devops-lab-control-plane
-kubectl cluster-info --context kind-devops-lab
-kind delete cluster --name devops-lab
+nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --config setup/kind/devops-lab.yaml --kubeconfig ~/.kube/devops-lab.yaml
+for node in $(kind get nodes --name devops-lab); do docker update --cpuset-cpus "$DEVOPS_CPUSET" "$node"; done
+kubectl --kubeconfig ~/.kube/devops-lab.yaml cluster-info
+kind delete cluster --name devops-lab --kubeconfig ~/.kube/devops-lab.yaml
 ```
 
+`--kubeconfig ~/.kube/devops-lab.yaml` ở cả lệnh tạo và xoá giữ kind tránh xa `~/.kube/config` và current-context của bạn.
+kind, kubectl (module 10) và act (module 07) cài vào `~/.local/bin`, cùng chỗ với bản mà track MLOps cài; xem
+[Binary dùng chung với track MLOps](../../setup/DEVOPS-TOOLS.md#binary-dùng-chung-với-track-mlops) trước khi cài hay gỡ.
+
 `$DEVOPS_CPUSET` là dải core bạn chọn ở mục [Ghim CPU](#ghim-cpu-trên-máy-dùng-chung) bên dưới. Nếu bạn không
-ghim (máy ít core, `DEVOPS_CPUSET` rỗng hoặc chưa đặt), bỏ `taskset -c "$DEVOPS_CPUSET"` và bỏ dòng `docker update`:
+ghim (máy ít core, `DEVOPS_CPUSET` rỗng hoặc chưa đặt), bỏ `taskset -c "$DEVOPS_CPUSET"` và bỏ dòng `for ... docker update`:
 `taskset` và `docker update` đều báo lỗi khi nhận dải rỗng hoặc dải vượt quá số core của máy.
 
 Test cần cluster tự skip khi `devops-lab` chưa chạy. Xoá cluster khi học xong để trả tài nguyên cho máy.

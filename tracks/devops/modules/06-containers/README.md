@@ -1,6 +1,6 @@
 # Containers
 
-Module DE 08 dạy bạn viết Dockerfile để đóng gói một job dữ liệu và dựng vài service bằng compose. Module này đi tiếp ở mức
+[Module DE 08, mục 2 Docker](../../../data-engineer/modules/08-devops-for-data/README.md) dạy bạn viết Dockerfile để đóng gói một job dữ liệu và dựng vài service bằng compose. Module này đi tiếp ở mức
 người vận hành nền tảng: hiểu container là gì dưới lớp vỏ (namespace, cgroup, OCI, runtime), build image nhỏ và tái lập được,
 chạy chúng với ít quyền nhất có thể, xử lý đúng vòng đời tiến trình, quản lý image qua registry bằng digest, SBOM và chữ ký,
 và quét lỗ hổng bằng trivy theo một chính sách thay vì nhìn con số đỏ.

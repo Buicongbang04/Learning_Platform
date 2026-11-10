@@ -1,6 +1,6 @@
 # Provisioning bằng IaC: OpenTofu tới mức Terraform Associate
 
-Module DE 08 (mục 5) đã cho bạn viết một cấu hình Terraform tạo bucket cho data lake, chạy `validate`, và so sánh vài công cụ IaC.
+[Module DE 08, mục 5 Infrastructure as Code](../../../data-engineer/modules/08-devops-for-data/README.md) đã cho bạn viết một cấu hình Terraform tạo bucket cho data lake, chạy `validate`, và so sánh vài công cụ IaC.
 Module này đi tiếp tới mức người **vận hành** IaC cho cả tổ chức: state là cơ sở dữ liệu quan trọng nhất của hạ tầng, nên phải
 được khoá, mã hoá, chia nhỏ, refactor không làm mất tài nguyên; module phải có giao diện, version và test; mọi thay đổi đi qua plan
 được review và chính sách tự động. Bài tập chạy thật trên một LocalStack riêng, không cần tài khoản AWS.

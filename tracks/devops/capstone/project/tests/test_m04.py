@@ -74,7 +74,7 @@ def action(step: dict) -> str:
 
 
 def guarded(step: dict) -> bool:
-    return testkit._act_skipped_locally(step.get("if"))
+    return testkit.act_skipped_locally(step.get("if"))
 
 
 def has_write(permissions) -> bool:
