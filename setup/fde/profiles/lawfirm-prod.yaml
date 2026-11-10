@@ -1,0 +1,18 @@
+description: Công ty luật (production) — Ubuntu 22.04, k3s air-gapped do IT khách quản; fde không sudo, chỉ có kubeconfig trong namespace quillo (PSA restricted, ResourceQuota, default-deny); có registry nội bộ.
+image: ubuntu-22.04
+disk_gb: 30
+sudo: false
+egress: none
+tls_inspection: false
+selinux: n/a
+runtime: k3s
+services: [registry]
+memory_mb: 5120
+k8s:
+  namespace: quillo
+  kubeconfig: /home/fde/.kube/config
+facts:
+  kernel_major: "5.15"
+  glibc: "2.35"
+  disk_free_gb_max: 27
+  gpu: null

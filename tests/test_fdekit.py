@@ -345,7 +345,7 @@ def test_facts_cover_survey_keys():
         assert facts["os_version"] == fdekit.IMAGES[profile.image].os_version
         assert (facts["sudo"], facts["selinux"], facts["runtime"], facts["egress"]) == (
             profile.sudo, profile.selinux, profile.runtime, profile.egress)
-        assert (facts["cpus"], facts["mem_mb"]) == (fdekit.SITE_CPUS, fdekit.SITE_MEMORY_MB)
+        assert (facts["cpus"], facts["mem_mb"]) == (fdekit.SITE_CPUS, profile.memory_mb)
         assert facts["disk_free_gb_max"] < profile.disk_gb
         assert facts["proxy_url"] == ("http://10.0.2.100:3128" if profile.egress == "proxy" else None)
 
@@ -685,12 +685,14 @@ echo "sudo=$(sudo -n true 2>/dev/null && echo yes || echo no)"
 echo "selinux=$(command -v getenforce >/dev/null && getenforce | tr A-Z a-z || echo n/a)"
 echo "docker=$(command -v docker >/dev/null && echo yes || echo no)"
 echo "podman=$(command -v podman >/dev/null && echo yes || echo no)"
+echo "k3s=$(command -v k3s >/dev/null && echo yes || echo no)"
 echo "gpu=$(ls /dev/nvidia0 2>/dev/null || echo none)"
 echo "proxy=$(grep -h '^https_proxy=' /etc/environment 2>/dev/null | cut -d= -f2 | tr -d '\"')"
 """
 
 
-@pytest.mark.parametrize("name", ["lab-open", "hospital", "bank", "lawfirm-staging"])
+@pytest.mark.parametrize("name", ["lab-open", "hospital", "bank", "lawfirm-staging", "factory", "lawfirm-hardened",
+                                  "lawfirm-prod"])
 def test_facts_match_vm(name):
     profile = fdekit.PROFILES[name]
     facts = profile.facts
@@ -778,3 +780,306 @@ def test_fetch_model_downloads_once_and_verifies(tmp_path, monkeypatch):
     path = fdekit.fetch_model("embed-small")
     assert fdekit.fetch_model("embed-small") == path and path.read_bytes() == payload
     assert urls == ["https://huggingface.co/o/r/resolve/" + "0" * 40 + "/m.gguf"]
+
+
+PHASE1_PROFILES = ("lab-open", "hospital", "bank", "lawfirm-staging")
+
+
+def test_profiles_phase2():
+    assert {"factory", "lawfirm-hardened", "lawfirm-prod"} <= set(fdekit.PROFILES)
+    factory = fdekit.PROFILES["factory"]
+    assert factory.memory_mb == 3072 and factory.facts["mem_mb"] == 3072
+    assert (factory.image, factory.disk_gb, factory.sudo, factory.egress, factory.tls_inspection, factory.runtime) == (
+        "debian-12", 12, True, "proxy", False, "docker")
+    assert (factory.tmp_noexec, factory.nofile, factory.netem) == (True, 1024, "delay 150ms 50ms loss 3%")
+    assert factory.services == ["proxy"] and factory.facts["gpu"] is None
+    hardened = fdekit.PROFILES["lawfirm-hardened"]
+    assert (hardened.image, hardened.disk_gb, hardened.sudo, hardened.egress, hardened.selinux, hardened.runtime) == (
+        "rocky-8", 20, False, "none", "enforcing", "podman")
+    assert hardened.services == ["registry"] and hardened.memory_mb == 5120
+    prod = fdekit.PROFILES["lawfirm-prod"]
+    assert (prod.image, prod.disk_gb, prod.sudo, prod.egress, prod.runtime) == ("ubuntu-22.04", 30, False, "none", "k3s")
+    assert prod.services == ["registry"] and prod.memory_mb == 5120
+    assert prod.k8s == {"namespace": "quillo", "kubeconfig": "/home/fde/.kube/config"}
+
+
+def test_old_profiles_unchanged():
+    assert fdekit.PROFILES["bank"].memory_mb == 2048 and fdekit.PROFILES["bank"].netem is None
+    for name in PHASE1_PROFILES:
+        profile = fdekit.PROFILES[name]
+        assert (profile.memory_mb, profile.tmp_noexec, profile.nofile, profile.netem, profile.k8s) == (
+            2048, False, None, None, None), name
+        assert profile.facts["mem_mb"] == fdekit.SITE_MEMORY_MB
+        assert fdekit._prepare_env(profile) == {}
+
+
+def test_profile_loader_validates_phase2_fields(tmp_path):
+    loaded = fdekit._load_profile(_profile_yaml(tmp_path, memory_mb=3072, tmp_noexec=True, nofile=1024,
+                                                netem="delay 150ms 50ms loss 3%"))
+    assert (loaded.memory_mb, loaded.facts["mem_mb"], loaded.nofile) == (3072, 3072, 1024)
+    assert fdekit._prepare_env(loaded) == {"FDE_TMP_NOEXEC": "1", "FDE_NOFILE": "1024",
+                                           "FDE_NETEM": "delay 150ms 50ms loss 3%"}
+    for overrides, message in (
+        ({"netem": "delay 1ms; reboot"}, "netem"),
+        ({"nofile": 0}, "nofile"),
+        ({"memory_mb": 256}, "memory_mb"),
+        ({"runtime": "k3s"}, "k8s"),
+        ({"k8s": {"namespace": "quillo", "kubeconfig": "/home/fde/.kube/config"}}, "k8s"),
+        ({"runtime": "k3s", "k8s": {"namespace": "Quillo!", "kubeconfig": "/home/fde/.kube/config"}}, "k8s"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            fdekit._load_profile(_profile_yaml(tmp_path, **overrides))
+
+
+def _fake_golden(tmp_path, monkeypatch, profile="lab-open"):
+    monkeypatch.setattr(fdekit, "CACHE", tmp_path / "cache")
+    monkeypatch.setattr(fdekit, "require_kvm", lambda: None)
+    golden = fdekit.golden_path(profile)
+    golden.parent.mkdir(parents=True)
+    golden.write_bytes(b"golden-v1")
+    return golden
+
+
+def _replace(path, data):
+    part = path.with_name(path.name + ".part")
+    part.write_bytes(data)
+    os.replace(part, path)
+
+
+def _never_boot(*args, **kwargs):
+    raise AssertionError("derived() không được dựng snapshot")
+
+
+def test_derived_key_changes_with_inputs(tmp_path, monkeypatch):
+    golden = _fake_golden(tmp_path, monkeypatch)
+    monkeypatch.setattr(fdekit, "vm", _never_boot)
+    monkeypatch.setattr(fdekit, "customer_site", _never_boot)
+    script = tmp_path / "install.sh"
+    script.write_text("echo v1\n")
+    tree = tmp_path / "bundle"
+    (tree / "sub").mkdir(parents=True)
+    (tree / "sub" / "a.txt").write_text("a")
+
+    def key(*inputs):
+        return fdekit.DerivedSpec("demo", "lab-open", lambda target: None, tuple(inputs)).key()
+
+    base = key(script, tree, "quillo 1.0.0")
+    assert re.fullmatch(r"[0-9a-f]{12}", base)
+    assert key(script, tree, "quillo 1.0.0") == base
+    script.write_text("echo v2\n")
+    changed = key(script, tree, "quillo 1.0.0")
+    assert changed != base
+    script.write_text("echo v1\n")
+    assert key(script, tree, "quillo 1.0.0") == base
+    assert key(tree, script, "quillo 1.0.0") != base
+    assert key(script, tree, "quillo 1.1.0") != base
+    (tree / "sub" / "a.txt").write_text("b")
+    assert key(script, tree, "quillo 1.0.0") != base
+    (tree / "sub" / "a.txt").write_text("a")
+    _replace(golden, b"golden-v2")
+    assert key(script, tree, "quillo 1.0.0") != base
+    _replace(golden, b"golden-v1")
+    assert key(script, tree, "quillo 1.0.0") == base
+
+    snapshot = fdekit._derived_root() / f"demo-{base}.qcow2"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_bytes(b"qcow")
+    assert snapshot.is_relative_to(fdekit.CACHE / "derived")
+    assert fdekit.derived("demo", "lab-open", lambda target: None, inputs=[script, tree, "quillo 1.0.0"]) == snapshot
+    script.write_text("echo v3\n")
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo", "lab-open", lambda target: None, inputs=[script, tree, "quillo 1.0.0"])
+    assert "đã cũ" in str(info.value) and "uv run python -m fdekit derive demo" in str(info.value)
+
+
+def test_stale_derived_skips_with_command(tmp_path, monkeypatch):
+    _fake_golden(tmp_path, monkeypatch)
+    monkeypatch.setattr(fdekit, "vm", _never_boot)
+    monkeypatch.setattr(fdekit, "customer_site", _never_boot)
+    monkeypatch.setattr(fdekit, "_build_derived", _never_boot)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo", "lab-open", lambda target: None, inputs=["x"])
+    assert "uv run python -m fdekit derive demo" in str(info.value)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo", "lab-open", lambda target: None, inputs=[tmp_path / "missing.sh"])
+    assert "missing.sh" in str(info.value) and "fdekit derive demo" in str(info.value)
+
+
+def test_derived_without_golden_skips_with_prepare(tmp_path, monkeypatch):
+    monkeypatch.setattr(fdekit, "CACHE", tmp_path)
+    monkeypatch.setattr(fdekit, "require_kvm", lambda: None)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo", "lab-open", lambda target: None, inputs=[])
+    assert "uv run python -m fdekit prepare lab-open" in str(info.value)
+
+
+def test_derived_registry():
+    spec = fdekit.DERIVED["selftest"]
+    assert spec.profile in fdekit.PROFILES and callable(spec.build)
+    assert spec.source == fdekit.DERIVED_DIR / "selftest.py"
+    assert spec.key_inputs[0] == spec.source
+    for name, item in fdekit.DERIVED.items():
+        assert item.name == name and item.profile in fdekit.PROFILES
+        assert (fdekit.DERIVED_DIR / f"{name}.py").is_file()
+
+
+def test_derived_registered_uses_registry(tmp_path, monkeypatch):
+    _fake_golden(tmp_path, monkeypatch, fdekit.DERIVED["selftest"].profile)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("selftest")
+    assert "uv run python -m fdekit derive selftest" in str(info.value)
+    with pytest.raises(ValueError, match="selftest"):
+        fdekit.derived("selftest", "bank", lambda target: None, inputs=[])
+
+
+def test_derived_loader_validates(tmp_path):
+    good = tmp_path / "demo.py"
+    good.write_text('from pathlib import Path\nPROFILE = "lab-open"\nINPUTS = [Path("tracks/fde/product"), "a/b:1"]\n'
+                    'SITE = True\nMEMORY_MB = 3072\n'
+                    'def build(target):\n    pass\n')
+    spec = fdekit._load_derived(good)
+    assert (spec.name, spec.profile, spec.site, spec.memory_mb) == ("demo", "lab-open", True, 3072)
+    assert spec.inputs == (fdekit.ROOT / "tracks/fde/product", "a/b:1")
+    for body, message in (
+        ('PROFILE = "nope"\nINPUTS = []\nSITE = False\nMEMORY_MB = None\ndef build(t):\n    pass\n', "PROFILE"),
+        ('PROFILE = "lab-open"\nINPUTS = []\nSITE = False\nMEMORY_MB = None\n', "build"),
+        ('PROFILE = "lab-open"\nINPUTS = "x"\nSITE = False\nMEMORY_MB = None\ndef build(t):\n    pass\n', "INPUTS"),
+    ):
+        bad = tmp_path / "bad.py"
+        bad.write_text(body)
+        with pytest.raises(ValueError, match=message):
+            fdekit._load_derived(bad)
+
+
+def test_cli_derive_unknown_and_list(capsys):
+    assert fdekit.main(["derive", "no-such-snapshot"]) == 2
+    assert "selftest" in capsys.readouterr().err
+    assert fdekit.main(["derive", "--list"]) == 0
+    assert "selftest" in capsys.readouterr().out
+
+
+PC_SKIP = "Bài GPU tuỳ chọn: đặt FDE_PC_SSH=user@host trong setup/.env (xem setup/fde/README.md mục PC GPU)"
+
+
+def test_require_pc_skips_when_unset(monkeypatch):
+    monkeypatch.delenv("FDE_PC_SSH", raising=False)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.require_pc()
+    assert str(info.value.msg) == PC_SKIP
+    monkeypatch.setenv("FDE_PC_SSH", "  ")
+    with pytest.raises(pytest.skip.Exception):
+        fdekit.require_pc()
+    monkeypatch.setenv("FDE_PC_SSH", "-oProxyCommand=evil")
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.require_pc()
+    assert "FDE_PC_SSH" in str(info.value)
+
+
+def test_pc_ssh_and_gpu_without_network(monkeypatch):
+    monkeypatch.setenv("FDE_PC_SSH", "fde-lab@pc-3060.lan")
+    pc = fdekit.require_pc()
+    assert pc.target == "fde-lab@pc-3060.lan" and pc.workdir == f"fde-ex-{pc.run_id}"
+    calls = []
+    smi = ("NVIDIA GeForce RTX 3060, 12288, 580.95.05\n"
+           "| NVIDIA-SMI 580.95.05    Driver Version: 580.95.05    CUDA Version: 13.0     |\n")
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, smi if "nvidia-smi" in argv[-1] else "", "")
+
+    monkeypatch.setattr(fdekit.subprocess, "run", fake_run)
+    assert pc.gpu() == {"name": "NVIDIA GeForce RTX 3060", "memory_mb": 12288, "driver": "580.95.05", "cuda": "13.0"}
+    argv = calls[-1]
+    assert argv[0] == "ssh" and "BatchMode=yes" in argv and argv[-2] == "fde-lab@pc-3060.lan"
+    assert "--query-gpu=name,memory.total,driver_version" in argv[-1]
+    pc.cleanup()
+    assert calls[-1][-1] == f"rm -rf -- ~/fde-ex-{pc.run_id}"
+
+
+def test_factory_quirks():
+    facts = fdekit.PROFILES["factory"].facts
+    with fdekit.customer_site("factory") as s:
+        assert "noexec" in s.vm.ssh("findmnt -no OPTIONS /tmp").stdout
+        assert s.vm.ssh("ulimit -n").stdout.strip() == "1024"
+        assert s.vm.ssh("ulimit -Hn").stdout.strip() == "1024"
+        qdisc = s.vm.ssh("/usr/sbin/tc qdisc show")
+        assert "netem" in qdisc.stdout and "delay 150ms" in qdisc.stdout, qdisc.stdout
+        assert int(s.vm.ssh("nproc").stdout) == facts["cpus"]
+        mem_kb = int(s.vm.ssh("awk '/^MemTotal/ {print $2}' /proc/meminfo").stdout)
+        assert 0.8 * facts["mem_mb"] <= mem_kb / 1024 <= facts["mem_mb"]
+        assert s.vm.ssh("docker compose version", timeout=90).returncode == 0
+        _fails(s.vm, "cp /bin/true /tmp/t && /tmp/t")
+        assert s.proxy_ca is not None
+        plain = s.vm.ssh("curl -sS --max-time 60 -o /dev/null -w '%{http_code}' https://pypi.org/simple/pip/", timeout=120)
+        assert plain.stdout.strip() == "200", "proxy của factory không TLS inspection: CA hệ thống phải đủ"
+
+
+def test_lawfirm_hardened_quirks():
+    with fdekit.customer_site("lawfirm-hardened") as s:
+        _fails(s.vm, "sudo -n true")
+        assert s.vm.ssh("getenforce").stdout.strip() == "Enforcing"
+        assert s.vm.ssh("loginctl show-user fde -p Linger").stdout.strip() == "Linger=yes"
+        assert s.vm.ssh("systemctl --user is-active podman.socket").stdout.strip() != "active"
+        info = s.vm.ssh("podman info --format '{{.Host.Security.Rootless}}'", timeout=120)
+        assert info.stdout.strip() == "true", info.stderr
+        out = s.vm.ssh("curl -sS --max-time 10 -o /dev/null -w '%{http_code}' http://10.0.2.101:5000/v2/")
+        assert out.stdout.strip() == "200", out.stderr
+        _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+
+
+PSA_POD = """apiVersion: v1
+kind: Pod
+metadata:
+  name: psa-probe
+spec:
+  containers:
+  - name: busybox
+    image: docker.io/rancher/mirrored-library-busybox:1.37.0
+    command: ["sleep", "3600"]
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}
+"""
+
+
+def test_lawfirm_prod_rbac():
+    prod = fdekit.PROFILES["lawfirm-prod"]
+    with fdekit.customer_site("lawfirm-prod") as s:
+        def kubectl(args, **kwargs):
+            return s.vm.ssh(f"kubectl {args}", timeout=60, **kwargs)
+
+        _fails(s.vm, "sudo -n true")
+        assert s.vm.ssh("helm version --short").returncode == 0
+        assert s.vm.ssh(f"test -f {prod.k8s['kubeconfig']} && stat -c %a {prod.k8s['kubeconfig']}").stdout.strip() == "600"
+        assert kubectl("auth can-i create deployments -n quillo").stdout.strip() == "yes"
+        assert kubectl("auth can-i create clusterrole").stdout.strip() == "no"
+        assert kubectl("auth can-i create deployments -n kube-system").stdout.strip() == "no"
+        assert kubectl("auth can-i get nodes").stdout.strip() == "no"
+        assert kubectl("auth can-i delete resourcequota -n quillo").stdout.strip() == "no"
+        labels = kubectl("get ns quillo -o jsonpath={.metadata.labels}")
+        assert "restricted" in labels.stdout, labels.stderr
+        quota = kubectl("get resourcequota -n quillo -o jsonpath='{.items[0].spec.hard}'").stdout
+        for item in ('"requests.cpu":"3"', '"requests.memory":"4Gi"', '"limits.memory":"5Gi"', '"pods":"12"'):
+            assert item in quota, quota
+        assert "default" not in kubectl("get limitrange -n quillo -o json").stdout.replace('"namespace": "default"', "")
+        policy = kubectl("get networkpolicy default-deny -n quillo -o jsonpath='{.spec.policyTypes}'").stdout
+        assert "Ingress" in policy and "Egress" in policy
+        rejected = s.vm.ssh(f"printf %s {shlex.quote(PSA_POD)} | kubectl apply -n quillo -f -", timeout=60)
+        assert rejected.returncode != 0 and "PodSecurity" in rejected.stderr and "restricted" in rejected.stderr, (
+            rejected.stdout + rejected.stderr)
+        _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+        assert s.vm.ssh("test -r /etc/rancher/k3s/k3s.yaml").returncode != 0
+
+
+def test_derived_boot_roundtrip(capsys):
+    spec = fdekit.DERIVED["selftest"]
+    fdekit.require_golden(spec.profile)
+    assert fdekit.main(["derive", "selftest", "--force"]) == 0, capsys.readouterr().err
+    path = fdekit.derived("selftest")
+    assert path.name == f"selftest-{spec.key()}.qcow2"
+    assert [p.name for p in fdekit._derived_root().glob("selftest-*.qcow2")] == [path.name]
+    with fdekit.vm(spec.profile, base=path, memory_mb=1024) as m:
+        assert m.ssh("cat /home/fde/marker").stdout.strip() == "selftest"
+        assert m.ssh("id -un").stdout.strip() == "fde"
+        run_id = m.run_id
+    assert fdekit.leftovers(run_id) == []

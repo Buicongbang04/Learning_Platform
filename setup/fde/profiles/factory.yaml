@@ -1,0 +1,18 @@
+description: Nhà máy — Debian 12, 3 GB RAM, ra internet qua proxy (không TLS inspection) trên đường truyền chập chờn (netem); /tmp noexec, nofile 1024; Docker CE + plugin compose.
+image: debian-12
+disk_gb: 12
+sudo: true
+egress: proxy
+tls_inspection: false
+selinux: n/a
+runtime: docker
+services: [proxy]
+memory_mb: 3072
+tmp_noexec: true
+nofile: 1024
+netem: delay 150ms 50ms loss 3%
+facts:
+  kernel_major: "6.1"
+  glibc: "2.36"
+  disk_free_gb_max: 10
+  gpu: null
