@@ -80,19 +80,19 @@ Mỗi dòng ghi giá phải trả nếu sai.
   chấm rubric, còn Phase 2 chỉ có postmortem không chấm trong bài sự cố.
 - Cập nhật bảng track trong README gốc khi xong.
 
-## 5. Còn treo, cần người dùng quyết
+## 5. Đã xử lý ngoài track và còn treo
 
-- **MLOps `mlopskit.act_run`:** chạy act với env và HOME thật, không có `GITHUB_TOKEN` giả, nên có thể lộ token `gh` như lỗi DevOps
-  đã sửa. Nằm ngoài track DevOps, đã báo người dùng.
+- **MLOps `mlopskit.act_run`:** đã sửa theo yêu cầu người dùng (HOME tạm, bỏ `GITHUB_*`/`GH_*`/`DOCKER_*`/`XDG_*` của máy,
+  `GITHUB_TOKEN` giả, `gh` giả đầu PATH), kèm test; module 08 của MLOps với `SOLUTION=1` vẫn pass.
 - **Binary dùng chung với MLOps trong `~/.local/bin`:**
 
   | Binary | DevOps | MLOps |
   | --- | --- | --- |
-  | act | 0.2.94 | 0.2.89 |
+  | act | 0.2.94 | 0.2.94 (đã nâng) |
   | kind | 0.30.0 | 0.33.0 |
   | kubectl | 1.34.13 | 1.35.8 |
 
-  Đã ghi trong `setup/DEVOPS-TOOLS.md`. Muốn hết xung đột thì nâng tài liệu MLOps lên act 0.2.94. kind 0.33 với `devops-lab` chưa
+  Đã ghi trong `setup/DEVOPS-TOOLS.md`. act của MLOps đã nâng lên 0.2.94 theo yêu cầu người dùng. kind 0.33 với `devops-lab` chưa
   kiểm.
 - **Volume Docker ẩn danh** tạo 2026-11-01 lúc 06:52 và 14:04, không rõ nguồn, để nguyên.
 

@@ -70,9 +70,8 @@ act version 0.2.94
 
 Đừng dùng script `install.sh` của repo act kiểu `curl ... | bash`: nó tải bản mới nhất, không ghim phiên bản.
 
-`~/.local/bin/act` dùng chung với track MLOps: module 08 của MLOps cài act 0.2.89 vào đúng đường dẫn này (MLOps cần từ 0.2.80,
-nên bản 0.2.94 ở đây dùng được cho cả hai). Cài 0.2.89 sau bản này thì mọi bài act của DevOps skip vì `act 0.2.89 cũ hơn 0.2.94`;
-cài lại theo lệnh trên. Xem [Binary dùng chung với track MLOps](../../../../setup/DEVOPS-TOOLS.md#binary-dùng-chung-với-track-mlops).
+`~/.local/bin/act` dùng chung với track MLOps: module 08 của MLOps cài cùng bản 0.2.94 vào đúng đường dẫn này. Máy còn act cũ hơn
+(ví dụ 0.2.89 theo hướng dẫn MLOps cũ) thì mọi bài act của DevOps skip vì `act 0.2.89 cũ hơn 0.2.94`; cài lại theo lệnh trên. Xem [Binary dùng chung với track MLOps](../../../../setup/DEVOPS-TOOLS.md#binary-dùng-chung-với-track-mlops).
 
 **Image runner.** Lần đầu chạy, act hỏi chọn image cho nhãn `ubuntu-latest` (Large khoảng 18 GB, Medium `catthehacker/ubuntu:act-*`
 khoảng 1,5 GB, Micro `node:*-slim`). Image Micro nhỏ nhưng thiếu gần hết công cụ, nên mỗi lần chạy job phải tải uv, Python và

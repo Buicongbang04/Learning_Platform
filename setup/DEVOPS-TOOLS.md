@@ -35,14 +35,14 @@ của mỗi công cụ: cài sau thì ghi đè bản cài trước, gỡ là g�
 
 | Binary | Track DevOps (đã kiểm / tối thiểu) | Track MLOps (đã kiểm / tối thiểu) | Ai ghi vào `~/.local/bin` |
 |---|---|---|---|
-| act | 0.2.94 / 0.2.94 | 0.2.89 / 0.2.80 | Module 07 của DevOps, module 08 của MLOps |
+| act | 0.2.94 / 0.2.94 | 0.2.94 / 0.2.80 | Module 07 của DevOps, module 08 của MLOps |
 | kind | 0.30.0 / 0.30 | 0.33.0 | Module 10 của DevOps, `setup/mlops/kind/up.sh` (cài khi checksum của bản đang có không khớp 0.33.0) |
 | kubectl | 1.34.13 / 1.33 | 1.35.8 | Module 10 của DevOps, `setup/mlops/kind/up.sh` (như trên) |
 
 Hệ quả:
 
-- act: bản 0.2.94 của DevOps đạt mức tối thiểu của MLOps. Ngược lại, sau khi cài 0.2.89 theo MLOps, mọi bài DevOps chạy act (module
-  07, capstone m04) skip với thông báo `act 0.2.89 cũ hơn 0.2.94`; cài lại 0.2.94 theo module 07 là hết.
+- act: hai track cài cùng bản 0.2.94 nên không giẫm lên nhau. Máy còn act cũ hơn 0.2.94 (ví dụ 0.2.89 theo hướng dẫn MLOps cũ) thì
+  mọi bài DevOps chạy act (module 07, capstone m04) skip với thông báo `act 0.2.89 cũ hơn 0.2.94`; cài lại theo module 07 là hết.
 - kubectl 1.35.8 vẫn trong mức lệch một minor với API server 1.34 của `devops-lab`, và đạt `KUBECTL_MIN_VERSION` nên test DevOps
   chạy tiếp.
 - kind 0.33.0 qua được kiểm phiên bản tối thiểu của test DevOps (0.30), nhưng **chưa được kiểm** với `setup/kind/devops-lab.yaml`
