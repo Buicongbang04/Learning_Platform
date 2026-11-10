@@ -1,4 +1,6 @@
+import base64
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -363,7 +365,10 @@ def test_profile_network_defaults():
 
 
 def test_site_images_pinned():
-    for image in (fdekit.MITMPROXY_IMAGE, fdekit.REGISTRY_IMAGE):
+    assert set(fdekit.SITE_IMAGES) == {"proxy", "registry", "keycloak", "fileshare"}
+    assert fdekit.SITE_IMAGES["keycloak"] == fdekit.KEYCLOAK_IMAGE
+    assert fdekit.SITE_IMAGES["fileshare"] == fdekit.SAMBA_IMAGE
+    for image in fdekit.SITE_IMAGES.values():
         name, digest = image.split("@sha256:")
         assert ":" in name and not name.endswith((":latest", ":2", ":12"))
         assert len(digest) == 64
@@ -1175,3 +1180,126 @@ def test_derived_boot_roundtrip(capsys):
         assert m.ssh("id -un").stdout.strip() == "fde"
         run_id = m.run_id
     assert fdekit.leftovers(run_id) == []
+
+
+def test_keycloak_realm_has_no_groups_mapper():
+    realm = json.loads(fdekit.KEYCLOAK_REALM_FILE.read_text(encoding="utf-8"))
+    assert realm["realm"] == "lawfirm"
+    assert {g["name"] for g in realm["groups"]} == {"legal", "finance", "it"}
+    members = {u["username"]: set(u["groups"]) for u in realm["users"]}
+    assert members == {"an": {"/legal"}, "binh": {"/finance"}, "chi": {"/legal", "/finance"}}
+    [client] = realm["clients"]
+    assert client["clientId"] == "quillo" and client["publicClient"] is False
+    assert client["secret"] == "${FDE_QUILLO_CLIENT_SECRET}"
+    text = json.dumps(realm)
+    assert "group-membership" not in text and '"groups"' not in json.dumps(client)
+    assert set(fdekit.KEYCLOAK_PASSWORDS) == {"an", "binh", "chi"}
+    assert fdekit.KEYCLOAK_ADDR == "10.0.2.102:8080" and fdekit.FILESHARE_ADDR == "10.0.2.103:445"
+
+
+def test_profile_loader_accepts_site_services(tmp_path):
+    data = yaml.safe_load((fdekit.PROFILE_DIR / "lawfirm-staging.yaml").read_text())
+    data["services"] = ["registry", "keycloak", "fileshare"]
+    path = tmp_path / "lawfirm-sso.yaml"
+    path.write_text(yaml.safe_dump(data))
+    assert fdekit._load_profile(path).services == ["registry", "keycloak", "fileshare"]
+    data["services"] = ["ldap"]
+    path.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValueError):
+        fdekit._load_profile(path)
+
+
+@pytest.mark.parametrize("extra", [("ldap",), ("proxy",)])
+def test_customer_site_rejects_bad_extra_services(extra, monkeypatch):
+    monkeypatch.setattr(fdekit, "require_golden", lambda profile: pytest.fail("phải từ chối trước khi tìm golden"))
+    with pytest.raises(ValueError):
+        with fdekit.customer_site("lawfirm-staging", extra_services=extra):
+            pass
+
+
+def _claims(token):
+    payload = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+
+
+def test_keycloak_issuer_same_from_host_and_vm():
+    with fdekit.customer_site("lawfirm-staging", extra_services=("keycloak",)) as s:
+        assert s.keycloak == "http://10.0.2.102:8080"
+        assert s.keycloak_host.startswith("http://127.0.0.1:")
+        assert s.keycloak_admin[0] == "admin" and len(s.keycloak_admin[1]) >= 16
+        assert s.fileshare is None and s.fileshare_dir is None
+        token = fdekit.keycloak_token(s, "an", fdekit.KEYCLOAK_PASSWORDS["an"])
+        out = s.vm.ssh("curl -sS --max-time 10 http://10.0.2.102:8080/realms/lawfirm/.well-known/openid-configuration")
+        assert out.returncode == 0, out.stderr
+        discovery = json.loads(out.stdout)
+        assert _claims(token)["iss"] == discovery["issuer"] == "http://10.0.2.102:8080/realms/lawfirm"
+        jwks = s.vm.ssh(f"curl -sS --max-time 10 {shlex.quote(discovery['jwks_uri'])}")
+        assert '"keys"' in jwks.stdout, jwks.stderr
+
+
+def test_token_has_no_groups_claim_by_default():
+    with fdekit.customer_site("lawfirm-staging", extra_services=("keycloak",)) as s:
+        for user in ("an", "binh", "chi"):
+            claims = _claims(fdekit.keycloak_token(s, user, fdekit.KEYCLOAK_PASSWORDS[user]))
+            assert claims["preferred_username"] == user
+            assert claims["azp"] == "quillo"
+            assert "groups" not in claims
+        with pytest.raises(requests.HTTPError):
+            fdekit.keycloak_token(s, "an", "sai-mat-khau")
+
+
+def test_fileshare_listing_from_vm():
+    with fdekit.customer_site("lawfirm-staging", extra_services=("fileshare",)) as s:
+        assert s.fileshare == "//10.0.2.103/contracts"
+        assert s.fileshare_host[0] == "127.0.0.1"
+        user, password = s.fileshare_creds
+        assert user == "svc-quillo" and len(password) >= 16
+        assert s.keycloak is None
+        (s.fileshare_dir / "legal").mkdir()
+        (s.fileshare_dir / "legal" / "nda.txt").write_text("bảo mật\n", encoding="utf-8")
+        opts = shlex.quote(f"ro,ip=10.0.2.103,username={user},password={password},vers=3.0")
+        mounted = s.vm.ssh(f"sudo -n mkdir -p /mnt/c && sudo -n mount -t cifs //10.0.2.103/contracts /mnt/c -o {opts}",
+                           timeout=60)
+        assert mounted.returncode == 0, mounted.stderr
+        assert s.vm.ssh("cat /mnt/c/legal/nda.txt").stdout == "bảo mật\n"
+        (s.fileshare_dir / "finance").mkdir()
+        (s.fileshare_dir / "finance" / "q3.csv").write_text("a;b\n")
+        assert s.vm.ssh("ls /mnt/c/finance").stdout.split() == ["q3.csv"]
+        _fails(s.vm, "sudo -n touch /mnt/c/legal/x.txt")
+        s.vm.ssh("sudo -n umount /mnt/c")
+        bad = shlex.quote("ro,ip=10.0.2.103,username=svc-quillo,password=sai,vers=3.0")
+        _fails(s.vm, f"sudo -n mount -t cifs //10.0.2.103/contracts /mnt/c -o {bad}")
+
+
+SERVICES_CHILD = """
+import time
+import fdekit
+with fdekit.customer_site("lawfirm-staging", extra_services=("keycloak", "fileshare")) as s:
+    print(s.vm.run_id, flush=True)
+    time.sleep(600)
+"""
+
+
+def test_site_services_cleaned_after_sigkill():
+    fdekit.require_golden("lawfirm-staging")
+    run_id = ""
+    child = subprocess.Popen(
+        [sys.executable, "-c", SERVICES_CHILD], cwd=fdekit.ROOT, stdout=subprocess.PIPE, text=True,
+        env={**os.environ, "PYTHONPATH": str(fdekit.ROOT)},
+    )
+    try:
+        run_id = child.stdout.readline().strip()
+        assert len(run_id) == 8, "tiến trình con không mở được customer_site"
+        names = set(fdekit._containers(f"fde-ex-{run_id}"))
+        assert {f"fde-ex-{run_id}-{svc}" for svc in ("registry", "keycloak", "fileshare")} <= names
+        os.kill(child.pid, signal.SIGKILL)
+        child.wait(timeout=10)
+        deadline = time.monotonic() + 20
+        while fdekit.leftovers(run_id) and time.monotonic() < deadline:
+            time.sleep(0.5)
+        assert fdekit.leftovers(run_id) == []
+    finally:
+        if child.poll() is None:
+            child.kill()
+        if len(run_id) == 8:
+            fdekit.clean(run_id)

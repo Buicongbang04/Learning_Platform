@@ -97,6 +97,14 @@ docker pull mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e
 docker pull registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
 ```
 
+Bài bật Keycloak hoặc file share bằng `extra_services` (mục "Keycloak và file share của khách") cần thêm hai image
+dưới đây; chưa có thì test skip kèm đúng lệnh pull:
+
+```bash
+docker pull quay.io/keycloak/keycloak:26.8.1-1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+docker pull ghcr.io/servercontainers/samba:smbd-only-a3.24.3-s4.23.8-r0@sha256:04fb3bd3da742ddb988f621e8c38b0dcbc26e7b4c438c9836abb43d937bc27e6
+```
+
 **Lưu ý an toàn:** lúc dựng golden VM chạy với `restrict` tắt, tức là trong vài phút dựng, VM vừa ra internet vừa
 với tới mọi dịch vụ đang nghe `127.0.0.1` trên host qua `10.0.2.2`. Chỉ chạy các script trong `setup/fde/cloud-init/`
 của repo này (đọc trước nếu bạn sửa), không dựng golden từ image lạ.
@@ -144,10 +152,16 @@ hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
 | `s.proxy_ca` | tệp PEM CA của mitmproxy, sinh mới mỗi lần chạy trong thư mục lab; **không** được trust sẵn trong VM |
 | `s.registry` | địa chỉ registry nhìn từ VM: `10.0.2.101:5000` (HTTP) |
 | `s.registry_host` | địa chỉ registry nhìn từ host (`127.0.0.1:<cổng ngẫu nhiên>`) để đẩy image vào |
+| `s.keycloak` / `s.keycloak_host` | Keycloak nhìn từ VM (`http://10.0.2.102:8080`) / từ host (`http://127.0.0.1:<cổng>`) |
+| `s.keycloak_admin` | (user, mật khẩu) admin realm `master`, mật khẩu sinh mới mỗi lần chạy |
+| `s.keycloak_client` | (`quillo`, client secret) của client confidential `quillo`, secret sinh mới mỗi lần chạy |
+| `s.fileshare` / `s.fileshare_host` | share SMB nhìn từ VM (`//10.0.2.103/contracts`) / từ host (`("127.0.0.1", <cổng>)`) |
+| `s.fileshare_creds` | (`svc-quillo`, mật khẩu sinh mới mỗi lần chạy) |
+| `s.fileshare_dir` | thư mục phía host là nội dung của share (test đặt tệp vào đây) |
 
 - Mỗi run id có **một** tiến trình canh: nó chạy QEMU và khi tiến trình pytest chết thì dọn cả QEMU, container,
   network lẫn thư mục lab (chỉ gọi `docker` khi run đó có dựng container).
-- Dịch vụ phía host chạy bằng `testkit.DockerLab`, container tên `fde-ex-<run_id>-proxy`/`-registry` trong network
+- Dịch vụ phía host chạy bằng `testkit.DockerLab`, container tên `fde-ex-<run_id>-<dịch vụ>` trong network
   `fde-ex-<run_id>`, cổng chỉ publish trên `127.0.0.1`. Image ghim tag + digest:
   `mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d…` (phát hành 2026-05-12) và `registry:2.8.3@sha256:a3d8aaa6…`
   (2025-02-14); giá trị đầy đủ ở `fdekit.MITMPROXY_IMAGE`/`REGISTRY_IMAGE`.
@@ -156,6 +170,35 @@ hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
 - Egress `none`/`proxy` ⇒ `restrict=on`: không route ra internet, không DNS (resolver `10.0.2.3` của QEMU cũng bị chặn),
   không tới loopback host qua `10.0.2.2`; chỉ còn SSH/`forwards` và các `guestfwd` ở trên. Egress `open` ⇒ restrict tắt.
   `vm(profile)` tự suy `restrict` và `sudo` từ hồ sơ.
+
+### Keycloak và file share của khách
+
+`customer_site(profile, extra_services=("keycloak", "fileshare"))` bật thêm hai dịch vụ của "IT khách" cho một bài mà
+không cần hồ sơ mới (`extra_services` nhận `registry`, `keycloak`, `fileshare`; `proxy` đi theo egress của hồ sơ nên
+không bật thêm được). Hồ sơ cũng có thể khai báo chúng trong `services`.
+
+- **Keycloak** `quay.io/keycloak/keycloak:26.8.1-1@sha256:a78d6b79…` (2026-10-23), `start-dev --import-realm`, giới hạn
+  1024 MB. Trong VM ở `10.0.2.102:8080` (HTTP). `KC_HOSTNAME=http://10.0.2.102:8080` nên issuer luôn là
+  `http://10.0.2.102:8080/realms/lawfirm`, dù token lấy qua cổng host hay từ trong VM (đã kiểm: `iss` của token lấy qua
+  host bằng `issuer` trong discovery đọc từ VM). Sẵn sàng (discovery của realm trả 200) sau **~18–20 s** đo trên máy
+  16 lõi; `customer_site` chạy container trước rồi boot VM song song, chỉ chờ Keycloak sau khi VM đã lên, nên không cần
+  snapshot dẫn xuất cho dữ liệu Keycloak.
+- Realm `lawfirm` (`setup/fde/keycloak/lawfirm-realm.json`): client confidential `quillo` (code flow + PKCE S256, bật
+  thêm password grant để test lấy token; mapper audience `quillo` nên `aud` là `quillo`), nhóm `legal`, `finance`, `it`;
+  user `an` ∈ legal, `binh` ∈ finance, `chi` ∈ legal + finance. Mật khẩu user cố định trong tệp realm, **chỉ dùng trong
+  lab** (`fdekit.KEYCLOAK_PASSWORDS`). Client secret và mật khẩu admin sinh mới mỗi lần chạy, truyền vào container qua tệp
+  trong thư mục lab (0700) mount chỉ đọc, không nằm trên dòng lệnh `docker run`.
+- Như mặc định của Keycloak, token **không** có claim `groups` (không có mapper group membership). Đây là cấu hình thật
+  của IdP khách, không phải lỗi của lab.
+- `fdekit.keycloak_token(site, user, password)` lấy access token bằng password grant qua cổng host; chỉ dùng cho test.
+- **File share** `ghcr.io/servercontainers/samba:smbd-only-a3.24.3-s4.23.8-r0@sha256:04fb3bd3…` (2026-10-22, Samba
+  4.23.8 trên Alpine, image đa kiến trúc được cập nhật hằng tháng), giới hạn 256 MB. Trong VM ở `10.0.2.103:445`, chỉ
+  SMB2/SMB3 (không NetBIOS, `guestfwd` chỉ TCP), share `contracts` **chỉ đọc** cho user `svc-quillo`, không cho khách
+  vô danh. Nội dung share là `s.fileshare_dir` phía host, sẵn sàng sau dưới 1 s. Trong VM Ubuntu có thể mount bằng
+  module `cifs` của kernel, không cần gói `cifs-utils`:
+  `sudo mount -t cifs //10.0.2.103/contracts /mnt/c -o ro,ip=10.0.2.103,username=svc-quillo,password=…,vers=3.0`.
+- Container `fde-ex-<run_id>-keycloak`/`-fileshare` được dọn cùng run id như proxy/registry, kể cả khi pytest bị
+  `SIGKILL` (tiến trình canh xoá chúng trong vài giây).
 
 ### "Tật" của khách (cố ý, không phải lỗi của lab)
 

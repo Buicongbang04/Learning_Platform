@@ -11,6 +11,7 @@ import io
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
 import signal
@@ -101,12 +102,28 @@ PROXY_ADDR = "10.0.2.100:3128"
 REGISTRY_ADDR = "10.0.2.101:5000"
 MITMPROXY_IMAGE = "mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f"
 REGISTRY_IMAGE = "registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373"
-SITE_IMAGES = {"proxy": MITMPROXY_IMAGE, "registry": REGISTRY_IMAGE}
+KEYCLOAK_ADDR = "10.0.2.102:8080"
+FILESHARE_ADDR = "10.0.2.103:445"
+KEYCLOAK_IMAGE = ("quay.io/keycloak/keycloak:26.8.1-1"
+                  "@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b")
+SAMBA_IMAGE = ("ghcr.io/servercontainers/samba:smbd-only-a3.24.3-s4.23.8-r0"
+               "@sha256:04fb3bd3da742ddb988f621e8c38b0dcbc26e7b4c438c9836abb43d937bc27e6")
+SITE_IMAGES = {"proxy": MITMPROXY_IMAGE, "registry": REGISTRY_IMAGE, "keycloak": KEYCLOAK_IMAGE,
+               "fileshare": SAMBA_IMAGE}
+EXTRA_SERVICES = ("registry", "keycloak", "fileshare")
+KEYCLOAK_REALM_FILE = SETUP / "keycloak" / "lawfirm-realm.json"
+KEYCLOAK_REALM = "lawfirm"
+KEYCLOAK_CLIENT_ID = "quillo"
+KEYCLOAK_MEMORY = "1024m"
+KEYCLOAK_WAIT = 150
+FILESHARE_USER = "svc-quillo"
+FILESHARE_SHARE = "contracts"
+FILESHARE_MEMORY = "256m"
 
 Egress = Literal["open", "proxy", "none"]
 SELinux = Literal["enforcing", "permissive", "disabled", "n/a"]
 Runtime = Literal["docker", "podman", "k3s", "none"]
-Service = Literal["proxy", "registry"]
+Service = Literal["proxy", "registry", "keycloak", "fileshare"]
 _CHOICES = {
     "egress": ("open", "proxy", "none"),
     "selinux": ("enforcing", "permissive", "disabled", "n/a"),
@@ -152,7 +169,8 @@ def _load_profile(path: Path) -> Profile:
     if data["image"] not in IMAGES:
         raise ValueError(f"{path}: image {data['image']!r} không có trong IMAGES")
     services = list(data.get("services") or [])
-    if not set(services) <= {"proxy", "registry"} or ("proxy" in services) != (data["egress"] == "proxy"):
+    if (not set(services) <= set(SITE_IMAGES) or len(set(services)) != len(services)
+            or ("proxy" in services) != (data["egress"] == "proxy")):
         raise ValueError(f"{path}: services {services} không khớp egress {data['egress']}")
     if data.get("tls_inspection", False) and data["egress"] != "proxy":
         raise ValueError(f"{path}: tls_inspection chỉ dùng với egress proxy")
@@ -221,6 +239,14 @@ def _prepare_env(spec: Profile) -> dict[str, str]:
 
 
 PROFILES: dict[str, Profile] = {path.stem: _load_profile(path) for path in sorted(PROFILE_DIR.glob("*.yaml"))}
+
+
+def _realm_passwords() -> dict[str, str]:
+    realm = json.loads(KEYCLOAK_REALM_FILE.read_text(encoding="utf-8"))
+    return {user["username"]: user["credentials"][0]["value"] for user in realm["users"]}
+
+
+KEYCLOAK_PASSWORDS: dict[str, str] = _realm_passwords()
 
 
 def require_kvm() -> None:
@@ -995,13 +1021,23 @@ def vm(profile: str | None, *, memory_mb: int | None = None, cpus: int = 2, forw
 
 @dataclass
 class Site:
-    """Một "khách hàng" đang chạy: VM theo hồ sơ cùng dịch vụ phía host (proxy, registry) của đúng run id này."""
+    """Một "khách hàng" đang chạy: VM theo hồ sơ cùng dịch vụ phía host (proxy, registry, keycloak, fileshare) của đúng
+    run id này. Địa chỉ không có hậu tố `_host` là địa chỉ nhìn từ VM; `_host` là cổng 127.0.0.1 phía host.
+    `keycloak_client` là (client id, client secret) của client `quillo`, secret sinh mới mỗi lần chạy."""
 
     vm: VM
     profile: Profile
     proxy_ca: Path | None = None
     registry: str | None = None
     registry_host: str | None = None
+    keycloak: str | None = None
+    keycloak_host: str | None = None
+    keycloak_admin: tuple[str, str] | None = None
+    keycloak_client: tuple[str, str] | None = None
+    fileshare: str | None = None
+    fileshare_host: tuple[str, int] | None = None
+    fileshare_creds: tuple[str, str] | None = None
+    fileshare_dir: Path | None = None
 
 
 class _SiteLab(testkit.DockerLab):
@@ -1011,11 +1047,121 @@ class _SiteLab(testkit.DockerLab):
         self.network = f"{PREFIX}{run_id}"
 
 
-def _require_site_images(spec: Profile) -> None:
+def _require_site_images(services: Sequence[str]) -> None:
     if not testkit.docker_ready():
-        pytest.skip("Hồ sơ khách này cần Docker phía host (daemon đang chạy) cho proxy/registry (testkit.DockerLab)")
-    for service in spec.services:
+        pytest.skip(f"Cần Docker phía host (daemon đang chạy) cho {', '.join(services)} (testkit.DockerLab)")
+    for service in services:
         testkit.Exercise.require_image(SITE_IMAGES[service])
+
+
+def _site_services(spec: Profile, extra_services: Sequence[str]) -> list[str]:
+    if isinstance(extra_services, str):
+        raise ValueError(f"extra_services là dãy tên dịch vụ, vd. (\"keycloak\",), nhận chuỗi {extra_services!r}")
+    unknown = [name for name in extra_services if name not in EXTRA_SERVICES]
+    if unknown:
+        raise ValueError(f"extra_services {unknown} không hợp lệ; chọn trong {EXTRA_SERVICES} "
+                         "(proxy đi theo egress của hồ sơ)")
+    services = list(spec.services)
+    services += [name for name in dict.fromkeys(extra_services) if name not in services]
+    return services
+
+
+def _mount_dir(path: Path) -> Path:
+    path.mkdir(mode=0o755)
+    path.chmod(0o755)
+    return path
+
+
+def _start_keycloak(lab: _SiteLab, run_dir: Path) -> tuple[int, tuple[str, str], tuple[str, str]]:
+    """Chạy Keycloak `start-dev --import-realm` với realm `lawfirm`; chưa chờ sẵn sàng (xem `_wait_keycloak`). Mật khẩu
+    admin và client secret của `quillo` sinh mới, nằm trong tệp env ở thư mục lab (0700) được mount chỉ đọc, không qua
+    dòng lệnh `docker run` hay `docker inspect`."""
+    admin = ("admin", secrets.token_urlsafe(18))
+    client = (KEYCLOAK_CLIENT_ID, secrets.token_urlsafe(24))
+    root = _mount_dir(run_dir / "keycloak")
+    imports = _mount_dir(root / "import")
+    shutil.copyfile(KEYCLOAK_REALM_FILE, imports / KEYCLOAK_REALM_FILE.name)
+    (root / "env").write_text(
+        f"export KC_BOOTSTRAP_ADMIN_USERNAME={admin[0]}\n"
+        f"export KC_BOOTSTRAP_ADMIN_PASSWORD={admin[1]}\n"
+        f"export FDE_QUILLO_CLIENT_SECRET={client[1]}\n")
+    command = ". /etc/fde-keycloak/env && exec /opt/keycloak/bin/kc.sh start-dev --import-realm"
+    lab.start("keycloak", KEYCLOAK_IMAGE, "-c", command, entrypoint="/bin/sh", ports=(8080,),
+              mounts=((root / "env", "/etc/fde-keycloak/env"), (imports, "/opt/keycloak/data/import")),
+              env={"KC_HOSTNAME": f"http://{KEYCLOAK_ADDR}"}, memory=KEYCLOAK_MEMORY, pids_limit=1024)
+    return lab.port("keycloak", 8080), admin, client
+
+
+def _wait_keycloak(lab: _SiteLab, url: str, timeout: float = KEYCLOAK_WAIT) -> None:
+    import requests
+
+    discovery = f"{url}/realms/{KEYCLOAK_REALM}/.well-known/openid-configuration"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            response = requests.get(discovery, timeout=3)
+            if response.status_code == 200:
+                return
+        except requests.RequestException:
+            pass
+        if not lab.running("keycloak"):
+            pytest.fail(f"Container keycloak đã dừng. Log:\n{lab.logs('keycloak')[-3000:]}")
+        time.sleep(0.5)
+    pytest.fail(f"Keycloak chưa trả {discovery} sau {timeout:.0f} s. Log:\n{lab.logs('keycloak')[-3000:]}")
+
+
+_SMB_CONF = f"""[global]
+   server role = standalone server
+   security = user
+   passdb backend = smbpasswd
+   map to guest = never
+   restrict anonymous = 2
+   server min protocol = SMB2_10
+   disable netbios = yes
+   smb ports = 445
+   load printers = no
+   printcap name = /dev/null
+   log level = 1
+
+[{FILESHARE_SHARE}]
+   path = /shares/{FILESHARE_SHARE}
+   valid users = {FILESHARE_USER}
+   read only = yes
+   browseable = yes
+   guest ok = no
+"""
+
+_SMB_START = f"""set -eu
+pw=$(sed -n 's/^password = //p' /etc/fde-samba/auth)
+adduser -D -H -s /bin/false {FILESHARE_USER}
+mkdir -p /var/lib/samba/private /run/samba
+printf '%s\\n%s\\n' "$pw" "$pw" | smbpasswd -c /etc/fde-samba/smb.conf -s -a {FILESHARE_USER} >/dev/null
+exec smbd -s /etc/fde-samba/smb.conf -F --no-process-group --debug-stdout
+"""
+
+
+def _start_fileshare(lab: _SiteLab, run_dir: Path) -> tuple[int, tuple[str, str], Path]:
+    """Samba chỉ SMB2/3 trên 445, share `contracts` chỉ đọc cho `svc-quillo` (mật khẩu sinh mới mỗi lần chạy), nội dung
+    là thư mục `fileshare` trong thư mục lab, mount chỉ đọc vào container."""
+    creds = (FILESHARE_USER, secrets.token_urlsafe(18))
+    share = _mount_dir(run_dir / "fileshare")
+    conf = _mount_dir(run_dir / "samba")
+    (conf / "smb.conf").write_text(_SMB_CONF)
+    (conf / "start.sh").write_text(_SMB_START)
+    (conf / "auth").write_text(f"username = {creds[0]}\npassword = {creds[1]}\n")
+    lab.start("fileshare", SAMBA_IMAGE, "/etc/fde-samba/start.sh", entrypoint="/bin/sh", ports=(445,),
+              mounts=((conf, "/etc/fde-samba"), (share, f"/shares/{FILESHARE_SHARE}")), memory=FILESHARE_MEMORY)
+    deadline = time.monotonic() + 60
+    while True:
+        probe = lab.exec("fileshare", "smbclient", f"//127.0.0.1/{FILESHARE_SHARE}", "-s", "/etc/fde-samba/smb.conf",
+                         "-A", "/etc/fde-samba/auth", "-c", "ls")
+        if probe.returncode == 0:
+            break
+        if not lab.running("fileshare") or time.monotonic() > deadline:
+            pytest.fail(f"Samba chưa phục vụ share {FILESHARE_SHARE}: {probe.stdout}{probe.stderr}\n"
+                        f"{lab.logs('fileshare')[-2000:]}")
+        time.sleep(0.3)
+    return lab.port("fileshare", 445), creds, share
 
 
 def _start_proxy(lab: _SiteLab, run_dir: Path, *, tls_inspection: bool) -> Path:
@@ -1065,43 +1211,61 @@ def _wait_k8s(machine: VM, spec: Profile, timeout: float = K8S_WAIT) -> None:
 
 @contextmanager
 def customer_site(profile: str, *, memory_mb: int | None = None, forwards: Sequence[int] = (),
-                  base: Path | None = None) -> Iterator[Site]:
+                  base: Path | None = None, extra_services: Sequence[str] = ()) -> Iterator[Site]:
     """Dựng "khách hàng" theo hồ sơ: container proxy (mitmproxy, CA riêng mỗi lần chạy; TLS inspection theo hồ sơ)
     và/hoặc registry nội bộ phía host (chỉ 127.0.0.1, tên `fde-ex-<run_id>-*`), rồi VM với egress theo hồ sơ. Trong VM:
     proxy ở `10.0.2.100:3128`, registry ở `10.0.2.101:5000`. Một tiến trình canh cho cả run id: mọi thứ bị dọn khi ra,
     kể cả khi pytest bị SIGKILL. `memory_mb` mặc định `Profile.memory_mb`; `base` (vd. snapshot từ `derived`) thay cho
     golden, dịch vụ phía host vẫn dựng mới (registry rỗng). Hồ sơ k3s: chờ API server trả `/readyz` qua kubeconfig
-    của `fde` trước khi trả `Site`."""
+    của `fde` trước khi trả `Site`.
+
+    `extra_services` bật thêm dịch vụ phía host cho một bài mà không cần hồ sơ mới: `registry`, `keycloak` (IdP OIDC,
+    realm `lawfirm`, `10.0.2.102:8080` trong VM, issuer `http://10.0.2.102:8080/realms/lawfirm` dù gọi từ host hay VM),
+    `fileshare` (Samba, `//10.0.2.103/contracts` trong VM, nội dung là `Site.fileshare_dir` phía host). Keycloak được
+    chờ tới khi trả discovery của realm."""
     spec = _profile(profile)
+    services = _site_services(spec, extra_services)
     if memory_mb is None:
         memory_mb = spec.memory_mb
     require_golden(profile)
     _require_ssh_tools()
-    _require_memory(memory_mb)
-    if spec.services:
-        _require_site_images(spec)
+    _require_memory(memory_mb + (1024 if "keycloak" in services else 0))
+    if services:
+        _require_site_images(services)
     run_id = uuid.uuid4().hex[:8]
     _ACTIVE.add(run_id)
     try:
         run_dir = _new_run_dir(run_id)
         _GUARDS[run_id] = _spawn_guard(run_dir)
-        if spec.services:
+        if services:
             (run_dir / "containers").touch()
         with _SiteLab(run_id) as lab:
             guestfwds: dict[str, int] = {}
-            proxy_ca = registry = registry_host = None
-            if "proxy" in spec.services:
-                proxy_ca = _start_proxy(lab, run_dir, tls_inspection=spec.tls_inspection)
+            site: dict = {}
+            if "proxy" in services:
+                site["proxy_ca"] = _start_proxy(lab, run_dir, tls_inspection=spec.tls_inspection)
                 guestfwds[PROXY_ADDR] = lab.port("proxy", 8080)
-            if "registry" in spec.services:
+            if "registry" in services:
                 host_port = _start_registry(lab)
                 guestfwds[REGISTRY_ADDR] = host_port
-                registry, registry_host = REGISTRY_ADDR, f"127.0.0.1:{host_port}"
+                site.update(registry=REGISTRY_ADDR, registry_host=f"127.0.0.1:{host_port}")
+            if "keycloak" in services:
+                host_port, admin, client = _start_keycloak(lab, run_dir)
+                guestfwds[KEYCLOAK_ADDR] = host_port
+                site.update(keycloak=f"http://{KEYCLOAK_ADDR}", keycloak_host=f"http://127.0.0.1:{host_port}",
+                            keycloak_admin=admin, keycloak_client=client)
+            if "fileshare" in services:
+                host_port, creds, share = _start_fileshare(lab, run_dir)
+                guestfwds[FILESHARE_ADDR] = host_port
+                site.update(fileshare=f"//{FILESHARE_ADDR.split(':')[0]}/{FILESHARE_SHARE}",
+                            fileshare_host=("127.0.0.1", host_port), fileshare_creds=creds, fileshare_dir=share)
             with vm(profile, memory_mb=memory_mb, cpus=SITE_CPUS, forwards=forwards, guestfwds=guestfwds, base=base,
                     run_id=run_id) as machine:
                 if spec.k8s is not None:
                     _wait_k8s(machine, spec)
-                yield Site(machine, spec, proxy_ca, registry, registry_host)
+                if "keycloak" in services:
+                    _wait_keycloak(lab, site["keycloak_host"])
+                yield Site(machine, spec, **site)
     finally:
         try:
             guard = _GUARDS.pop(run_id, None)
@@ -1110,6 +1274,23 @@ def customer_site(profile: str, *, memory_mb: int | None = None, forwards: Seque
             clean(run_id)
         finally:
             _ACTIVE.discard(run_id)
+
+
+def keycloak_token(site: Site, user: str, password: str) -> str:
+    """Access token của `user` trong realm `lawfirm` lấy bằng password grant của client `quillo` qua cổng phía host. Chỉ
+    dùng cho test (luồng thật của quillo là authorization code + PKCE); sai mật khẩu thì `requests.HTTPError`."""
+    import requests
+
+    if site.keycloak_host is None or site.keycloak_client is None:
+        raise ValueError("Site này không bật keycloak; dùng customer_site(..., extra_services=(\"keycloak\",))")
+    response = requests.post(
+        f"{site.keycloak_host}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token",
+        data={"grant_type": "password", "client_id": site.keycloak_client[0], "client_secret": site.keycloak_client[1],
+              "username": user, "password": password, "scope": "openid"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
 
 
 _RELAY_NAME = "guestfwd-relay.py"
