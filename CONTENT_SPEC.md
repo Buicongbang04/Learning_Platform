@@ -397,7 +397,7 @@ lớn các quy tắc này. Chi tiết API xem docstring trong `testkit.py`, khô
 ### Kubernetes
 
 - Cluster `devops-lab` cấu hình ở `setup/kind/devops-lab.yaml` (`KIND_NODE_IMAGE` = `kindest/node:v1.34.0` ghim digest, mặc
-  định của kind 0.30.0; 1 control plane + 2 worker; API server và cổng ingress `18080`/`18443` chỉ trên `127.0.0.1`). Người
+  định của kind 0.30.0; 1 control plane + 2 worker; API server và cổng ingress `18180`/`18543` chỉ trên `127.0.0.1`). Người
   học tạo, ghim CPU, tắt, bật, xoá theo `setup/DEVOPS-TOOLS.md`; test không bao giờ tạo hay xoá cluster.
 - kubectl bản đã kiểm `KUBECTL_VERSION` (1.34.13), tối thiểu `KUBECTL_MIN_VERSION` (1.33); helm `HELM_VERSION` (3.22.1),
   tối thiểu `HELM_MIN_VERSION` (3.18). Phần `## 0. Cài đặt` của module 10, 11 dùng đúng các bản này.

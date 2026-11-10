@@ -67,7 +67,7 @@ Endpoint ở `http://127.0.0.1:14566`, chỉ mở trên `127.0.0.1`; đổi cổ
 
 ## Cluster kind devops-lab
 
-Module 10, 11 và capstone m06 chạy trên một cluster kind tên `devops-lab`, cấu hình ở `setup/kind/devops-lab.yaml`: một control plane và hai worker, node image `kindest/node:v1.34.0` ghim theo digest (mặc định của kind 0.30.0), API server và cổng 80/443 của ingress (`18080`, `18443`) chỉ mở trên `127.0.0.1`, control plane có nhãn `ingress-ready=true`. CNI là kindnet mặc định của kind, bản này thực thi NetworkPolicy (đã kiểm: policy deny-all chặn kết nối giữa hai pod), nên không cần Calico.
+Module 10, 11 và capstone m06 chạy trên một cluster kind tên `devops-lab`, cấu hình ở `setup/kind/devops-lab.yaml`: một control plane và hai worker, node image `kindest/node:v1.34.0` ghim theo digest (mặc định của kind 0.30.0), API server và cổng 80/443 của ingress (`18180`, `18543`) chỉ mở trên `127.0.0.1`, control plane có nhãn `ingress-ready=true`. CNI là kindnet mặc định của kind, bản này thực thi NetworkPolicy (đã kiểm: policy deny-all chặn kết nối giữa hai pod), nên không cần Calico.
 
 Cài kind, kubectl, helm vào `~/.local/bin` (kiểm checksum trước khi cài; module 10 dạy lại kind và kubectl, module 11 dạy helm):
 

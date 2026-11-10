@@ -10,11 +10,11 @@ nodes:
       ingress-ready: "true"
     extraPortMappings:
       - containerPort: 80
-        hostPort: 18080
+        hostPort: 18180
         listenAddress: "127.0.0.1"
         protocol: TCP
       - containerPort: 443
-        hostPort: 18443
+        hostPort: 18543
         listenAddress: "127.0.0.1"
         protocol: TCP
   - role: worker

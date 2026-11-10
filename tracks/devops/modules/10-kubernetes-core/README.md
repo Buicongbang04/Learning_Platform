@@ -75,7 +75,7 @@ rm -f ~/.local/bin/kind ~/.local/bin/kubectl ~/.cache/devops-track/dl/kind-linux
 ### Cluster devops-lab
 
 Cấu hình ở `setup/kind/devops-lab.yaml`: một control plane và hai worker, node image ghim digest, API server và cổng ingress
-`18080`/`18443` chỉ mở trên `127.0.0.1`. Tạo cluster từ thư mục gốc của repo, **luôn** kèm `--kubeconfig ~/.kube/devops-lab.yaml`
+`18180`/`18543` chỉ mở trên `127.0.0.1`. Tạo cluster từ thư mục gốc của repo, **luôn** kèm `--kubeconfig ~/.kube/devops-lab.yaml`
 để kind không ghi vào `~/.kube/config` và không đổi current-context của bạn (nếu `~/.kube/config` đang trỏ cluster công ty, nó vẫn
 nguyên). Mỗi node là một container Docker; `nice` và `taskset` chỉ áp cho lệnh `kind`, còn container node phải ghim bằng `docker
 update` ngay sau khi tạo (xem mục Ghim CPU trong `setup/DEVOPS-TOOLS.md`; không ghim thì bỏ `taskset -c "$DEVOPS_CPUSET"`):
