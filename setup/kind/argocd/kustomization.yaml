@@ -4,7 +4,9 @@ resources:
   - 01-namespaces.yaml
   - 00-argocd-v3.5.6-core-install.yaml
   - 10-sops-cmp.yaml
+  - 11-repo-tools.yaml
   - 30-git-server.yaml
+  - 40-repo-server-egress.yaml
 transformers:
   - namespace.yaml
 patches:
@@ -18,7 +20,8 @@ patches:
         name: argocd-cmd-params-cm
       data:
         application.namespaces: devops-ex-*
-        reposerver.parallelism.limit: "2"
+        reposerver.parallelism.limit: "4"
+        reposerver.enable.git.submodule: "false"
         controller.status.processors: "4"
         controller.operation.processors: "2"
         controller.kubectl.parallelism.limit: "4"
@@ -117,10 +120,31 @@ patches:
             containers:
               - name: argocd-repo-server
                 imagePullPolicy: Never
+                env:
+                  - name: PATH
+                    value: /devops-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+                  - name: GIT_ALLOW_PROTOCOL
+                    value: git
+                  - name: ARGOCD_EXEC_TIMEOUT
+                    value: 30s
+                  - name: HTTP_PROXY
+                    value: http://127.0.0.1:1
+                  - name: HTTPS_PROXY
+                    value: http://127.0.0.1:1
+                  - name: http_proxy
+                    value: http://127.0.0.1:1
+                  - name: https_proxy
+                    value: http://127.0.0.1:1
+                  - name: NO_PROXY
+                    value: ""
                 resources:
                   requests:
                     cpu: 25m
                     memory: 64Mi
+                volumeMounts:
+                  - name: devops-repo-tools
+                    mountPath: /devops-tools
+                    readOnly: true
               - name: sops-kustomize
                 image: quay.io/argoproj/argocd:v3.5.6
                 imagePullPolicy: Never
@@ -128,6 +152,26 @@ patches:
                 env:
                   - name: SOPS_AGE_KEY_FILE
                     value: /sops-age/keys.txt
+                  - name: GIT_CONFIG_COUNT
+                    value: "1"
+                  - name: GIT_CONFIG_KEY_0
+                    value: protocol.allow
+                  - name: GIT_CONFIG_VALUE_0
+                    value: never
+                  - name: GIT_ALLOW_PROTOCOL
+                    value: none
+                  - name: ARGOCD_EXEC_TIMEOUT
+                    value: 30s
+                  - name: HTTP_PROXY
+                    value: http://127.0.0.1:1
+                  - name: HTTPS_PROXY
+                    value: http://127.0.0.1:1
+                  - name: http_proxy
+                    value: http://127.0.0.1:1
+                  - name: https_proxy
+                    value: http://127.0.0.1:1
+                  - name: NO_PROXY
+                    value: ""
                 securityContext:
                   runAsNonRoot: true
                   runAsUser: 999
@@ -141,8 +185,10 @@ patches:
                   requests:
                     cpu: 10m
                     memory: 32Mi
+                    ephemeral-storage: 16Mi
                   limits:
                     memory: 512Mi
+                    ephemeral-storage: 1Gi
                 volumeMounts:
                   - name: var-files
                     mountPath: /var/run/argocd
@@ -163,8 +209,13 @@ patches:
               - name: devops-sops-cmp
                 configMap:
                   name: devops-sops-cmp
+              - name: devops-repo-tools
+                configMap:
+                  name: devops-repo-tools
+                  defaultMode: 0555
               - name: cmp-tmp
-                emptyDir: {}
+                emptyDir:
+                  sizeLimit: 512Mi
               - name: custom-tools
                 emptyDir: {}
               - name: sops-age

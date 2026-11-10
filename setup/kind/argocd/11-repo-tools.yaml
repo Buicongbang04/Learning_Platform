@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devops-repo-tools
+  labels:
+    app.kubernetes.io/part-of: argocd
+data:
+  kustomize: |
+    #!/bin/sh
+    export GIT_ALLOW_PROTOCOL=none GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.allow GIT_CONFIG_VALUE_0=never
+    exec /usr/local/bin/kustomize "$@"

@@ -286,7 +286,7 @@ test không bao giờ cài, thiếu thì `ex.require_argocd()` skip kèm lệnh 
 | Image `quay.io/argoproj/argocd:v3.5.6` | application-controller, repo-server, sidecar CMP và git server dùng chung image này | Kéo theo digest `sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335` rồi gắn tag |
 | Image `public.ecr.aws/docker/library/redis:8.2.3-alpine` | Cache của ArgoCD, đúng tag trong manifest của release | Digest `sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba` |
 | Image `ghcr.io/getsops/sops:v3.13.3-alpine` | Init container chép binary `sops` (cùng bản `SOPS_VERSION`) cho sidecar CMP | Digest `sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea` |
-| `01-namespaces.yaml`, `10-sops-cmp.yaml`, `20-default-project.yaml`, `30-git-server.yaml`, `kustomization.yaml`, `namespace.yaml` (track viết) | Namespace `argocd`, `devops-git` (Pod Security `restricted`); plugin CMP; AppProject `default` khoá trống; git server; patch cấu hình, tài nguyên, `imagePullPolicy: Never` | `SHA256SUMS` |
+| `01-namespaces.yaml`, `10-sops-cmp.yaml`, `11-repo-tools.yaml`, `20-default-project.yaml`, `30-git-server.yaml`, `40-repo-server-egress.yaml`, `kustomization.yaml`, `namespace.yaml` (track viết) | Namespace `argocd`, `devops-git` (Pod Security `restricted`); plugin CMP; wrapper `kustomize` tắt git; AppProject `default` khoá trống; git server; NetworkPolicy egress của repo-server; patch cấu hình, tài nguyên, `imagePullPolicy: Never` | `SHA256SUMS` |
 
 Lựa chọn và lý do:
 
@@ -314,6 +314,16 @@ Lựa chọn và lý do:
   cho repo-server của ArgoCD kết nối, nên pod của lab không đọc được repo của lab khác. Repo nằm trong `emptyDir`: pod git khởi
   động lại (drain worker, máy khởi động lại) là mất repo của lab đang chạy; lab sau đẩy lại từ đầu.
 - **AppProject `default` khoá trống**: không Application nào dùng được; mỗi lab dùng AppProject `devops-ex-<id>` do testkit tạo.
+- **Repo-server không ra được ngoài cluster**: NetworkPolicy `argocd-repo-server-egress` (cả pod, gồm sidecar giữ khoá age) chỉ cho
+  DNS của `kube-system` (53 UDP/TCP), git server (`devops-git`, 9418) và `argocd-redis` (6379). Cộng thêm, để lỗi trả về ngay thay vì
+  chờ hết thời gian: `HTTP(S)_PROXY=http://127.0.0.1:1` (proxy chết) cho repo-server và sidecar, nên `resources: - https://...`
+  trong kustomize hay dependency Helm/`oci://` lỗi trong khoảng 1 giây; sidecar tắt mọi giao thức git (`protocol.allow=never`,
+  `GIT_ALLOW_PROTOCOL=none`); container repo-server chính chỉ cho git `git://` (để lấy repo của lab) và gọi `kustomize` qua wrapper
+  `/devops-tools/kustomize` tắt git (kustomize 5.8 vốn không coi `git://` là remote base; wrapper là lớp dự phòng); submodule tắt
+  (`reposerver.enable.git.submodule: "false"`); mỗi lần render tối đa 30 giây (`ARGOCD_EXEC_TIMEOUT`), 4 lần render song song.
+- **Sidecar CMP chỉ nhận recipient age**: tệp `*.enc.yaml` có khoá `kms`, `gcp_kms`, `azure_kv`, `hc_vault`, `pgp` hay `key_groups`
+  bị từ chối trước khi giải mã (sops sẽ gọi ra ngoài để lấy khoá); sidecar giới hạn 1 GiB ephemeral storage, `/tmp` của nó tối đa
+  512 MiB.
 
 Chạy từ thư mục gốc của repo, sau khi đã tạo cluster:
 
@@ -331,7 +341,8 @@ done
 [ "$ok" = 1 ] &&
 (cd setup/kind/argocd && sha256sum --check SHA256SUMS) &&
 kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/argocd &&
-kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd/appprojects.argoproj.io --timeout=60s &&
+{ kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd/appprojects.argoproj.io --timeout=60s ||
+  { sleep 3 && kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd/appprojects.argoproj.io --timeout=60s; }; } &&
 kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side --force-conflicts -f setup/kind/argocd/20-default-project.yaml
 ```
 
@@ -363,9 +374,16 @@ Giới hạn cần biết:
 - Manifest ArgoCD render (kể cả Secret đã giải mã, dạng base64) được cache trong redis của namespace `argocd`; NetworkPolicy của
   release chỉ cho controller và repo-server kết nối redis.
 - Một lần sync tự động đang lỗi được ArgoCD thử lại với backoff trên đúng commit cũ; commit mới chỉ được sync khi thao tác đó kết
-  thúc (hết lượt thử hay bị huỷ bằng `kubectl patch application <tên> --type merge -p
-  '{"status":{"operationState":{"phase":"Terminating"}}}'`).
+  thúc (hết lượt thử hay bị admin huỷ bằng `kubectl --kubeconfig ~/.kube/devops-lab.yaml -n <namespace> patch application <tên>
+  --type merge -p '{"status":{"operationState":{"phase":"Terminating"}}}'`; token của lab không sửa được `status`).
 - Mọi lab dùng chung một khoá age: ranh giới giữa các lab là AppProject (repo riêng) chứ không phải khoá.
+- Ai ghi được Application: chỉ ServiceAccount trong namespace của lab (Role của lab, cả khi ArgoCD sync app-of-apps bằng
+  impersonation) và admin. Policy `devops-ex-<id>-argocd` kiểm mọi ServiceAccount của namespace đó; admin và controller của ArgoCD
+  không bị kiểm. ArgoCD 3.5.6 **không** đối chiếu `operation.sync.source` với `sourceRepos` của project (đã thử bằng admin: lab A
+  render được repo của lab B), nên policy của lab từ chối `operation.sync.source`, `sources`, `manifests` và mọi lần tạo, sửa
+  `status`; đừng tạo Application hộ người học bằng quyền admin.
+- Repo của mỗi lần `gitops_repo` tối đa 2000 tệp và 20 MiB. Lab bị giết trước `close()` để lại repo và AppProject: lab mở sau đó tự
+  xoá repo, bundle và AppProject `devops-ex-<id>` không còn namespace tương ứng.
 
 Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/argocd` (xoá CRD là xoá mọi Application và AppProject; Secret
 và ConfigMap khoá age nằm trong namespace `argocd` nên bị xoá cùng).

@@ -6624,3 +6624,216 @@ def test_argocd_sops_secret_decrypted_on_sync_real(tmp_path):
         described = lab.kubectl("describe", "application.argoproj.io", "web").stdout
         assert value not in described
     assert testkit.kube_leftovers(lab.id) == []
+
+
+@pytest.mark.parametrize("change,needle", [
+    ({"operation": {"sync": {"source": {"repoURL": "git://git.devops-git.svc.cluster.local/devops-ex-0000beef.git"}}}},
+     "operation.sync.source"),
+    ({"operation": {"sync": {"sources": [{"repoURL": "https://github.com/x/y.git"}]}}}, "operation.sync.sources"),
+    ({"operation": {"sync": {"manifests": ["apiVersion: v1\nkind: ConfigMap\n"]}}}, "operation.sync.manifests"),
+    ({"status": {"health": {"status": "Healthy"}, "sync": {"status": "Synced"}}}, "status"),
+])
+def test_application_operation_source_and_status_refused(change, needle):
+    namespace = "devops-ex-abc12345"
+    ok = {**argo_app(namespace), "operation": {"sync": {"revision": "main", "prune": True}}}
+    assert testkit.kube_manifest_problems([ok], lab_id="abc12345", namespace=namespace) == []
+    problems = testkit.kube_manifest_problems([{**argo_app(namespace), **change}], lab_id="abc12345", namespace=namespace)
+    assert any(needle in p for p in problems), problems
+
+
+def test_application_policy_refuses_operation_source_and_status(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["metadata"]["name"] == f"{lab.namespace}-argocd"
+                  and i["kind"] == "ValidatingAdmissionPolicy")
+    expressions = [v["expression"] for v in policy["spec"]["validations"]]
+    [operation] = [e for e in expressions if "object.operation" in e]
+    for key in ("source", "sources", "manifests"):
+        assert f"!has(object.operation.sync.{key})" in operation
+    assert "object.operation == oldObject.operation" in operation
+    [status] = [e for e in expressions if "object.status" in e]
+    assert "request.operation == 'CREATE' ? !has(object.status)" in status and "object.status == oldObject.status" in status
+
+
+def test_gitops_repo_size_cap(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_BYTES", 1000)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_FILES", 5)
+    big = tmp_path / "big"
+    big.mkdir()
+    (big / "blob.yaml").write_bytes(b"x" * 1001)
+    many = tmp_path / "many"
+    many.mkdir()
+    for index in range(6):
+        (many / f"f{index}.yaml").write_text("a: 1\n", encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        for source in (big, many):
+            with pytest.raises(pytest.fail.Exception, match="tối đa"):
+                lab.gitops_repo(source)
+        assert lab._git_repo is None
+    assert testkit.KUBE_GITOPS_MAX_BYTES == 1000 and testkit.KUBE_GITOPS_MAX_FILES == 5
+
+
+def test_lab_entry_sweeps_gitops_of_killed_labs(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    alive, dead = "devops-ex-1111aaaa", "devops-ex-2222bbbb"
+
+    def run(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        answer = None
+        if joined.endswith("get namespaces -o name"):
+            answer = f"namespace/default\nnamespace/{alive}\nnamespace/argocd\n"
+        elif "get appprojects.argoproj.io -l devops-ex -o name" in joined:
+            answer = f"appproject.argoproj.io/{alive}\nappproject.argoproj.io/{dead}\n"
+        elif "ls -1A /srv/git /tmp" in joined:
+            answer = f"/srv/git:\n{alive}.git\n{dead}.git\nnot-a-lab.git\n\n/tmp:\n{dead}.bundle\n"
+        if answer is None:
+            return original(cmd, **kwargs)
+        fake.sandbox_calls.append({"cmd": list(map(str, cmd)), "env": dict(kwargs["env"]), "writable": [], "readonly": [],
+                                   "cwd": None, "input": None})
+        return subprocess.CompletedProcess(cmd, 0, answer, "")
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    with testkit.KubeLab():
+        pass
+    deleted = [c["cmd"] for c in fake.sandbox_calls if "delete" in c["cmd"] and "appprojects.argoproj.io" in c["cmd"]
+               and "-l" not in c["cmd"]]
+    assert deleted == [[deleted[0][0], "-n", "argocd", "delete", "appprojects.argoproj.io", dead, "--ignore-not-found"]]
+    removed = [c["cmd"] for c in fake.sandbox_calls if "rm" in c["cmd"] and "-rf" in c["cmd"]]
+    assert len(removed) == 1
+    assert removed[0][-2:] == [f"/srv/git/{dead}.git", f"/tmp/{dead}.bundle"]
+    assert not any(alive in part or "not-a-lab" in part for part in removed[0])
+
+
+def cmp_script() -> str:
+    import yaml
+
+    config = yaml.safe_load((testkit.KUBE_ARGOCD_DIR / "10-sops-cmp.yaml").read_text(encoding="utf-8"))
+    plugin = yaml.safe_load(config["data"]["plugin.yaml"])
+    command = plugin["spec"]["generate"]["command"]
+    assert command == ["sh", "-c"]
+    return plugin["spec"]["generate"]["args"][0]
+
+
+@pytest.mark.parametrize("metadata,refused", [
+    ("sops:\n    kms:\n        - arn: arn:aws:kms:us-east-1:1:key/x\n    age: []\n", True),
+    ("sops:\n    hc_vault:\n        - vault_address: http://vault.example:8200\n", True),
+    ("sops:\n    gcp_kms:\n        - resource_id: projects/x\n", True),
+    ("sops:\n    azure_kv:\n        - vault_url: https://x.vault.azure.net\n", True),
+    ("sops:\n    pgp:\n        - fp: ABCD\n", True),
+    ('{"sops": {"key_groups": [{"kms": [{"arn": "x"}]}]}}\n', True),
+    ("sops:\n    age:\n        - recipient: " + RECIPIENT + "\n          enc: x\n", False),
+])
+def test_cmp_accepts_only_age_recipients(tmp_path, metadata, refused):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "secret.enc.yaml").write_text("data:\n    password: ENC[AES256_GCM,data:x]\n" + metadata, encoding="utf-8")
+    result = subprocess.run(["sh", "-c", cmp_script()], cwd=repo, capture_output=True, text=True, timeout=30,
+                            env={"PATH": "/usr/bin:/bin"})
+    assert result.returncode != 0
+    assert ("Chỉ nhận tệp SOPS mã hoá bằng recipient age" in result.stderr) == refused, result.stderr
+
+
+def test_argocd_repo_server_egress_and_git_locked_down():
+    import yaml
+
+    folder = testkit.KUBE_ARGOCD_DIR
+    policy = yaml.safe_load((folder / "40-repo-server-egress.yaml").read_text(encoding="utf-8"))
+    spec = policy["spec"]
+    assert policy["metadata"]["namespace"] == "argocd" and spec["policyTypes"] == ["Egress"]
+    assert spec["podSelector"] == {"matchLabels": {"app.kubernetes.io/name": "argocd-repo-server"}}
+    allowed = {(rule["to"][0].get("podSelector", {}).get("matchLabels", {}).popitem()[1],
+                tuple(sorted((p["port"], p["protocol"]) for p in rule["ports"]))) for rule in spec["egress"]}
+    assert allowed == {("kube-dns", ((53, "TCP"), (53, "UDP"))), ("git", ((9418, "TCP"),)), ("argocd-redis", ((6379, "TCP"),))}
+    kustomization = yaml.safe_load((folder / "kustomization.yaml").read_text(encoding="utf-8"))
+    params = next(yaml.safe_load(p["patch"]) for p in kustomization["patches"] if p["target"]["name"] == "argocd-cmd-params-cm")
+    assert params["data"]["reposerver.enable.git.submodule"] == "false"
+    repo = next(yaml.safe_load(p["patch"]) for p in kustomization["patches"] if p["target"]["name"] == "argocd-repo-server")
+    pod = repo["spec"]["template"]["spec"]
+    containers = {c["name"]: c for c in pod["containers"]}
+    sidecar_env = {e["name"]: e["value"] for e in containers["sops-kustomize"]["env"]}
+    assert sidecar_env["GIT_CONFIG_KEY_0"] == "protocol.allow" and sidecar_env["GIT_CONFIG_VALUE_0"] == "never"
+    assert sidecar_env["GIT_ALLOW_PROTOCOL"] == "none"
+    main_env = {e["name"]: e["value"] for e in containers["argocd-repo-server"]["env"]}
+    assert main_env["GIT_ALLOW_PROTOCOL"] == "git" and main_env["PATH"].startswith("/devops-tools:")
+    assert {"name": "devops-repo-tools", "mountPath": "/devops-tools", "readOnly": True} in containers["argocd-repo-server"]["volumeMounts"]
+    tools = yaml.safe_load((folder / "11-repo-tools.yaml").read_text(encoding="utf-8"))["data"]["kustomize"]
+    assert "GIT_ALLOW_PROTOCOL=none" in tools and "GIT_CONFIG_VALUE_0=never" in tools and 'exec /usr/local/bin/kustomize "$@"' in tools
+    for env in (main_env, sidecar_env):
+        assert {env[k] for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")} == {"http://127.0.0.1:1"}
+        assert env["NO_PROXY"] == ""
+    assert containers["sops-kustomize"]["resources"]["limits"]["ephemeral-storage"] == "1Gi"
+    tmp = next(v for v in pod["volumes"] if v["name"] == "cmp-tmp")
+    assert tmp["emptyDir"]["sizeLimit"] == "512Mi"
+
+
+def first_condition(lab, app: str, needles, timeout: float = 90) -> tuple[str, float]:
+    started = time.monotonic()
+    text = ""
+    while time.monotonic() - started < timeout:
+        got = json.loads(admin_kubectl("-n", lab.namespace, "get", "applications.argoproj.io", app, "-o", "json").stdout)
+        status = got.get("status") or {}
+        text = " ".join([c.get("message", "") for c in status.get("conditions") or []]
+                        + [(status.get("operationState") or {}).get("message") or ""])
+        if any(n in text for n in needles):
+            return text, time.monotonic() - started
+        time.sleep(1)
+    return text, time.monotonic() - started
+
+
+@KUBE_REQUIRED
+def test_argocd_operation_status_and_remote_bases_refused_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    with testkit.KubeLab() as a, testkit.KubeLab() as b:
+        a.argocd_project()
+        b.argocd_project()
+        b.gitops_repo(gitops_tree(tmp_path / "b", "cua-lab-b"))
+        a.gitops_repo(gitops_tree(tmp_path / "a", "1"))
+        attack = argo_app(a.namespace)
+        attack["metadata"]["name"] = "steal"
+        attack["operation"] = {"sync": {"source": {"repoURL": b.repo_url, "path": "app", "targetRevision": "main"}}}
+        result = apply_as_learner(a, attack)
+        assert result.returncode != 0 and f"{a.namespace}-argocd" in result.stderr, result.stderr
+        app = argo_app(a.namespace)
+        app["spec"].pop("syncPolicy")
+        assert apply_as_learner(a, app).returncode == 0
+        a.argocd_wait("web", sync="OutOfSync", health=None, timeout=60)
+        for patch in ({"operation": {"sync": {"sources": [{"repoURL": b.repo_url, "path": "app"}]}}},
+                      {"operation": {"sync": {"manifests": ["apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\n"]}}},
+                      {"status": {"health": {"status": "Healthy"}, "sync": {"status": "Synced", "revision": a.gitops_revision}}}):
+            result = a.kubectl("patch", "applications.argoproj.io", "web", "--type=merge", "-p", json.dumps(patch), check=False)
+            assert result.returncode != 0 and f"{a.namespace}-argocd" in result.stderr, (patch, result.stderr)
+        result = a.kubectl("patch", "applications.argoproj.io", "web", "--type=merge", "-p",
+                           json.dumps({"operation": {"sync": {"revision": "main"}}}), check=False)
+        assert result.returncode == 0, result.stderr
+        a.argocd_wait("web", timeout=60)
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "1"
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout != "cua-lab-b"
+        remote = tmp_path / "remote"
+        (remote / "app").mkdir(parents=True)
+        (remote / "app" / "kustomization.yaml").write_text(f"resources:\n  - git::{b.repo_url}//app?ref=main\n", encoding="utf-8")
+        a.gitops_repo(remote)
+        text, seconds = first_condition(a, "web", ("kustomize build",))
+        assert seconds < 25 and "kustomize build" in text and "timeout after" not in text, text
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "1"
+        print(f"Remote base trỏ repo của lab khác (git://) bị từ chối sau {seconds:.1f}s")
+        (remote / "app" / "kustomization.yaml").write_text(
+            "resources:\n  - https://github.com/kubernetes-sigs/kustomize//examples/helloWorld?ref=v5.0.0\n", encoding="utf-8")
+        a.gitops_repo(remote)
+        text, seconds = first_condition(a, "web", ("helloWorld",))
+        assert seconds < 25 and "timeout after" not in text, text
+        print(f"Remote base (built-in kustomize) bị từ chối sau {seconds:.1f}s: {text[:200]}")
+        a.kubectl("patch", "applications.argoproj.io", "web", "--type=merge", "-p",
+                  json.dumps({"spec": {"source": {"plugin": {"name": testkit.KUBE_ARGOCD_CMP}}}}))
+        (remote / "app" / "kustomization.yaml").write_text(
+            "resources:\n  - https://raw.githubusercontent.com/kubernetes-sigs/kustomize/v5.0.0/examples/helloWorld/deployment.yaml\n",
+            encoding="utf-8")
+        a.gitops_repo(remote)
+        text, seconds = first_condition(a, "web", ("CMP processing failed",))
+        assert seconds < 25 and "CMP processing failed" in text and "timeout after" not in text, text
+        print(f"Remote URL (CMP) bị từ chối sau {seconds:.1f}s: {text[:200]}")
+        assert a.kubectl("get", "deployment", "--ignore-not-found", "-o", "name").stdout.strip() == ""
+    for lab in (a, b):
+        assert testkit.kube_leftovers(lab.id) == []

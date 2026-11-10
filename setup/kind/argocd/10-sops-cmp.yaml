@@ -19,6 +19,11 @@ data:
             if [ -z "$(find . -type f -name '*.enc.yaml' -print -quit)" ]; then
               exec kustomize build --load-restrictor LoadRestrictionsRootOnly .
             fi
+            other=$(find . -type f -name '*.enc.yaml' -exec grep -lE '(^|[^A-Za-z0-9_])"?(kms|gcp_kms|azure_kv|hc_vault|hc_vault_transit_uri|pgp|key_groups)"?[[:space:]]*:' {} + || true)
+            if [ -n "$other" ]; then
+              echo "Chỉ nhận tệp SOPS mã hoá bằng recipient age; tệp có khoá kms, gcp_kms, azure_kv, hc_vault, pgp hay key_groups bị từ chối: $other" >&2
+              exit 1
+            fi
             find . -type f -name '*.enc.yaml' -print0 | xargs -0 -r -n1 /custom-tools/sops --decrypt --in-place
             if ! kustomize build --load-restrictor LoadRestrictionsRootOnly . 2>/dev/null; then
               echo "kustomize build lỗi sau khi giải mã tệp *.enc.yaml; output bị ẩn để không lộ giá trị Secret. Chạy kustomize build trên bản đã giải mã ở máy của bạn để xem lỗi" >&2
