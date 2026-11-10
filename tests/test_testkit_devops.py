@@ -6725,8 +6725,14 @@ def cmp_script() -> str:
     ("sops:\n    pgp:\n        - fp: ABCD\n", True),
     ('{"sops": {"key_groups": [{"kms": [{"arn": "x"}]}]}}\n', True),
     ("sops:\n    age:\n        - recipient: " + RECIPIENT + "\n          enc: x\n", False),
+    ("sops:\n    'hc_vault':\n        - vault_address: http://vault.example:8200\n", False),
+    ("sops:\n    ? hc_vault\n    : - vault_address: http://vault.example:8200\n", False),
+    ('{"sops": {"hc_\\x76ault": [{"vault_address": "http://vault.example:8200"}]}}\n', False),
 ])
 def test_cmp_accepts_only_age_recipients(tmp_path, metadata, refused):
+    """Kiểm tên khoá trong script CMP chỉ là lớp từ chối sớm, kiểu denylist: ba cách viết cuối (khoá trong nháy đơn, khoá tường
+    minh `? hc_vault`, escape trong chuỗi JSON) lọt qua grep. Ranh giới thật để sops không gọi ra ngoài là NetworkPolicy egress
+    của repo-server cộng proxy chết (`test_argocd_repo_server_egress_and_git_locked_down`)."""
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "secret.enc.yaml").write_text("data:\n    password: ENC[AES256_GCM,data:x]\n" + metadata, encoding="utf-8")
@@ -6837,3 +6843,43 @@ def test_argocd_operation_status_and_remote_bases_refused_real(tmp_path):
         assert a.kubectl("get", "deployment", "--ignore-not-found", "-o", "name").stdout.strip() == ""
     for lab in (a, b):
         assert testkit.kube_leftovers(lab.id) == []
+
+
+def test_gitops_repo_caps_total_history(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_REPO_BYTES", 150_000)
+    source = tmp_path / "gitops"
+    source.mkdir()
+    with testkit.KubeLab() as lab:
+        (source / "blob.bin").write_bytes(os.urandom(100_000))
+        lab.gitops_repo(source)
+        first = lab.gitops_revision
+        (source / "blob.bin").write_bytes(os.urandom(100_000))
+        with pytest.raises(pytest.fail.Exception, match="cho cả lab"):
+            lab.gitops_repo(source)
+        assert lab.gitops_revision == first
+        assert lab._git_repo.out("rev-parse", "HEAD") == first
+        assert not list(lab._admin.home.glob("*.bundle"))
+
+
+def test_gitops_repo_counts_bytes_read_not_reported_size(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_BYTES", 1000)
+    source = tmp_path / "gitops"
+    source.mkdir()
+    grown = source / "grown.yaml"
+    grown.write_bytes(b"x" * 5000)
+    real_stat = Path.stat
+
+    def small_stat(self, *args, **kwargs):
+        result = real_stat(self, *args, **kwargs)
+        if self == grown:
+            return os.stat_result((result.st_mode, *tuple(result)[1:6], 10, *tuple(result)[7:]))
+        return result
+
+    monkeypatch.setattr(Path, "stat", small_stat)
+    assert grown.stat().st_size == 10
+    with testkit.KubeLab() as lab:
+        with pytest.raises(pytest.fail.Exception, match="vượt 1000 byte"):
+            lab.gitops_repo(source)
+        assert lab._git_repo is None

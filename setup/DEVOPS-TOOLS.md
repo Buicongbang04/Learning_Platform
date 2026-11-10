@@ -321,8 +321,10 @@ Lựa chọn và lý do:
   `GIT_ALLOW_PROTOCOL=none`); container repo-server chính chỉ cho git `git://` (để lấy repo của lab) và gọi `kustomize` qua wrapper
   `/devops-tools/kustomize` tắt git (kustomize 5.8 vốn không coi `git://` là remote base; wrapper là lớp dự phòng); submodule tắt
   (`reposerver.enable.git.submodule: "false"`); mỗi lần render tối đa 30 giây (`ARGOCD_EXEC_TIMEOUT`), 4 lần render song song.
-- **Sidecar CMP chỉ nhận recipient age**: tệp `*.enc.yaml` có khoá `kms`, `gcp_kms`, `azure_kv`, `hc_vault`, `pgp` hay `key_groups`
-  bị từ chối trước khi giải mã (sops sẽ gọi ra ngoài để lấy khoá); sidecar giới hạn 1 GiB ephemeral storage, `/tmp` của nó tối đa
+- **Sidecar CMP từ chối sớm tệp không dùng age**: tệp `*.enc.yaml` có khoá `kms`, `gcp_kms`, `azure_kv`, `hc_vault`, `pgp` hay
+  `key_groups` viết theo cách thường gặp bị từ chối trước khi giải mã, kèm thông báo dễ hiểu. Đây chỉ là kiểm theo tên (denylist,
+  `grep`), lọt được bằng khoá trong nháy đơn, khoá tường minh `? hc_vault` hay escape `"hc_\x76ault"`; ranh giới thật để sops không
+  gọi ra ngoài là NetworkPolicy egress cộng proxy chết ở trên. Sidecar giới hạn 1 GiB ephemeral storage, `/tmp` của nó tối đa
   512 MiB.
 
 Chạy từ thư mục gốc của repo, sau khi đã tạo cluster:
@@ -381,8 +383,11 @@ Giới hạn cần biết:
   impersonation) và admin. Policy `devops-ex-<id>-argocd` kiểm mọi ServiceAccount của namespace đó; admin và controller của ArgoCD
   không bị kiểm. ArgoCD 3.5.6 **không** đối chiếu `operation.sync.source` với `sourceRepos` của project (đã thử bằng admin: lab A
   render được repo của lab B), nên policy của lab từ chối `operation.sync.source`, `sources`, `manifests` và mọi lần tạo, sửa
-  `status`; đừng tạo Application hộ người học bằng quyền admin.
-- Repo của mỗi lần `gitops_repo` tối đa 2000 tệp và 20 MiB. Lab bị giết trước `close()` để lại repo và AppProject: lab mở sau đó tự
+  `status`; đừng tạo Application hộ người học bằng quyền admin. Vì Application không có subresource `status`, token của lab
+  dùng được `kubectl apply`, `patch`, `annotate`, nhưng `kubectl replace` hay `apply --force` (gửi lại cả object, thiếu `status`
+  hiện có) bị từ chối.
+- Mỗi lần `gitops_repo` tối đa 2000 tệp và 20 MiB (đếm theo byte đọc được lúc chép), cả lịch sử repo của một lab (bundle) tối đa
+  40 MiB. Lab bị giết trước `close()` để lại repo và AppProject: lab mở sau đó tự
   xoá repo, bundle và AppProject `devops-ex-<id>` không còn namespace tương ứng.
 
 Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/argocd` (xoá CRD là xoá mọi Application và AppProject; Secret

@@ -3202,6 +3202,7 @@ KUBE_SKIP_ARGOCD = (
 _KUBE_AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{58}")
 KUBE_GITOPS_MAX_BYTES = 20 * 1024 * 1024
 KUBE_GITOPS_MAX_FILES = 2000
+KUBE_GITOPS_MAX_REPO_BYTES = 40 * 1024 * 1024
 _KUBE_OPERATION_SOURCES = ("source", "sources", "manifests")
 _KUBE_ARGO_APP = re.compile(r"[a-z0-9]([-a-z0-9]{0,51}[a-z0-9])?")
 KUBE_NODE_LOCK_TIMEOUT = 900
@@ -4405,8 +4406,9 @@ class KubeLab:
     def gitops_repo(self, path: Path) -> str:
         """Chép tệp thường trong thư mục `path` (bỏ `.git`, không nhận symlink, không nhận tệp có khoá riêng age) vào một repo git
         mới của lab (`GitRepo`, `SAFE_GIT_CONFIG`, tác giả và ngày cố định), commit, rồi bằng quyền admin đẩy lên repo riêng
-        `<namespace>.git` của git server (tối đa `KUBE_GITOPS_MAX_FILES` tệp, `KUBE_GITOPS_MAX_BYTES` byte; `kubectl cp` bundle vào
-        pod rồi `git fetch` vào repo bare; git server chỉ cho đọc, không
+        `<namespace>.git` của git server (mỗi lần tối đa `KUBE_GITOPS_MAX_FILES` tệp và `KUBE_GITOPS_MAX_BYTES` byte, đếm theo byte
+        thật đọc được lúc chép chứ không theo kích thước khai báo; bundle của cả lịch sử tối đa `KUBE_GITOPS_MAX_REPO_BYTES`;
+        `kubectl cp` bundle vào pod rồi `git fetch` vào repo bare; git server chỉ cho đọc, không
         ai push được qua mạng). Gọi lại với nội dung mới là thêm một commit lên `main` (lịch sử giữ nguyên) và yêu cầu mọi
         Application của lab refresh ngay. `gitops_revision` là SHA của commit vừa đẩy. Trả `repo_url`; `close()` xoá repo."""
         self._require_entered()
@@ -4423,11 +4425,24 @@ class KubeLab:
                 pytest.fail(f"gitops_repo: {rel} là symlink; repo GitOps của bài chỉ nhận tệp thường")
             if item.is_file():
                 files.append(rel)
-        total = sum((source / rel).stat().st_size for rel in files)
-        if len(files) > KUBE_GITOPS_MAX_FILES or total > KUBE_GITOPS_MAX_BYTES:
-            pytest.fail(f"gitops_repo: {len(files)} tệp, {total} byte; repo GitOps của bài tối đa {KUBE_GITOPS_MAX_FILES} tệp và "
-                        f"{KUBE_GITOPS_MAX_BYTES // (1024 * 1024)} MiB (git server dùng chung, lưu trong emptyDir)")
-        leaked = [str(rel) for rel in files if b"AGE-SECRET-KEY-" in (source / rel).read_bytes()]
+        limit = (f"repo GitOps của bài tối đa {KUBE_GITOPS_MAX_FILES} tệp và {KUBE_GITOPS_MAX_BYTES // (1024 * 1024)} MiB mỗi lần "
+                 "(git server dùng chung, lưu trong emptyDir)")
+        if len(files) > KUBE_GITOPS_MAX_FILES:
+            pytest.fail(f"gitops_repo: {len(files)} tệp; {limit}")
+        contents: dict[Path, bytes] = {}
+        remaining = KUBE_GITOPS_MAX_BYTES
+        for rel in files:
+            try:
+                fd = os.open(source / rel, os.O_RDONLY | os.O_NOFOLLOW)
+            except OSError as error:
+                pytest.fail(f"gitops_repo: không đọc được {rel} như tệp thường ({error.strerror})")
+            with os.fdopen(fd, "rb") as handle:
+                data = handle.read(remaining + 1)
+            if len(data) > remaining:
+                pytest.fail(f"gitops_repo: vượt {KUBE_GITOPS_MAX_BYTES} byte khi chép tới {rel}; {limit}")
+            remaining -= len(data)
+            contents[rel] = data
+        leaked = [str(rel) for rel, data in contents.items() if b"AGE-SECRET-KEY-" in data]
         if leaked:
             pytest.fail(f"gitops_repo: {', '.join(leaked)} chứa khoá riêng age (AGE-SECRET-KEY-...); khoá riêng không bao giờ được "
                         "commit vào repo, chỉ public key (age1...) nằm trong .sops.yaml")
@@ -4445,14 +4460,21 @@ class KubeLab:
             for child in work.iterdir():
                 if child.name != ".git":
                     shutil.rmtree(child) if child.is_dir() and not child.is_symlink() else child.unlink()
-        for rel in files:
+        for rel, data in contents.items():
             (work / rel).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source / rel, work / rel)
+            (work / rel).write_bytes(data)
         repo = self._git_repo
         repo.out("add", "--all")
         repo.out("commit", "--quiet", "--allow-empty", "-m", f"{self.namespace}: {source.name}")
         bundle = self._admin.home / f"{self.namespace}.bundle"
         repo.out("bundle", "create", str(bundle), "main")
+        if bundle.stat().st_size > KUBE_GITOPS_MAX_REPO_BYTES:
+            size = bundle.stat().st_size
+            bundle.unlink()
+            if self.gitops_revision:
+                repo.out("reset", "--quiet", "--soft", self.gitops_revision)
+            pytest.fail(f"gitops_repo: lịch sử repo của lab đã {size} byte, vượt {KUBE_GITOPS_MAX_REPO_BYTES // (1024 * 1024)} MiB "
+                        "cho cả lab (mỗi lần gọi là thêm một commit); gom thay đổi lại hay dùng lab mới")
         pod, remote, incoming = pods[0], f"{KUBE_GIT_ROOT}/{self.namespace}.git", f"/tmp/{self.namespace}.bundle"
         self._git_pushed = True
         try:
