@@ -272,6 +272,10 @@ trong ngân sách 300 s: nó boot từ một **snapshot dẫn xuất** dựng m�
   cần có sẵn thì để trong VM (containerd/Podman/Docker của VM), không phải trong registry.
 - `selftest` (`lab-open` có `/home/fde/marker`) là snapshot tự kiểm của `test_derived_boot_roundtrip`: test gọi
   `python -m fdekit derive selftest --force` qua `fdekit.main` (đi đúng đường CLI) rồi boot từ kết quả.
+- `05-gpu-field-factory`, `05-gpu-field-lab` (module 05): `factory` và `lab-open` (5120 MB) đang chạy quillo 1.0.0 bằng
+  compose (`~/quillo-1.0.0`, `llm-small`), có thêm `llm-medium` ở `~/models/`. Dựng từ bundle
+  `tracks/fde/product/dist/quillo-1.0.0.tar` bằng `setup/fde/derived/05-gpu-field-quillo.sh` (đầu vào của khoá: bundle,
+  script, sha256 của `llm-medium`); netem của `factory` bị tắt trong lúc chép và bật lại ở lần boot sau.
 
 ## PC GPU
 
