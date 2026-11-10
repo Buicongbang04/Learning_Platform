@@ -180,10 +180,16 @@ hơn; `test_facts_match_vm` sẽ báo nếu `facts` cần cập nhật.
   `https://127.0.0.1:6443`, API server chỉ với tới từ trong VM). Quyền: Role `fde-deployer` (pods, services, configmaps,
   secrets, PVC, serviceaccounts, deployments, statefulsets, jobs, networkpolicies, ingresses, PDB, HPA trong `quillo`)
   và RoleBinding tới ClusterRole `view` trong `quillo`; không có quyền cluster nào (`auth can-i get nodes` = no).
+  ResourceQuota, LimitRange, nhãn namespace chỉ đọc. Route mặc định qua `10.0.2.2` chỉ để k3s chạy: VM vẫn không tới
+  được internet hay dịch vụ `127.0.0.1` của host (`test_lawfirm_prod_rbac` kiểm cả hai).
   Namespace `quillo` gắn nhãn PSA `enforce=restricted` (cả `warn`, `audit`), `ResourceQuota` (`requests.cpu: 3`,
   `requests.memory: 4Gi`, `limits.memory: 5Gi`, `pods: 12`, nên pod thiếu requests/limits bị từ chối), `LimitRange`
   chỉ đặt `max` cho Pod (cpu 2, memory 3Gi) và PVC (10Gi) — kiểu `Pod` không sinh default nên container vẫn phải tự
-  khai báo resources; NetworkPolicy `default-deny` chặn mọi ingress/egress trừ DNS tới CoreDNS. `registries.yaml`
+  khai báo resources; NetworkPolicy `default-deny` chặn mọi ingress/egress trừ DNS tới CoreDNS. `fde` được tạo, sửa,
+  xoá NetworkPolicy **của mình** (tên bất kỳ khác `default-deny`) để mở đúng luồng cần; riêng `default-deny` do IT
+  giữ: ValidatingAdmissionPolicy `quillo-protect-default-deny` từ chối UPDATE/DELETE policy tên `default-deny` khi
+  người gọi là ServiceAccount `quillo/fde` (RBAC không chặn theo tên được, nên `kubectl auth can-i delete
+  networkpolicy` vẫn trả `yes`, nhưng lệnh thật bị admission từ chối; không có `deletecollection`). `registries.yaml`
   mirror `docker.io` và `10.0.2.101:5000` về registry nội bộ HTTP. `helm`, `kubectl` có trong `PATH`.
 
 ## Một VM của bài tập trông thế nào
@@ -217,7 +223,8 @@ trong ngân sách 300 s: nó boot từ một **snapshot dẫn xuất** dựng m�
 - Trong test: `fdekit.derived("<tên>")` trả đường dẫn để boot `fdekit.vm(profile, base=path)` hoặc
   `fdekit.customer_site(profile, base=path)`. Không bao giờ dựng: thiếu golden thì skip kèm lệnh `prepare`, chưa có
   snapshot thì skip "Chưa có snapshot dẫn xuất … Chạy một lần: uv run python -m fdekit derive <tên>", có bản với khoá
-  khác thì skip "… đã cũ … Chạy lại: …".
+  khác thì skip "… đã cũ … Chạy lại: …". Tên chưa có tệp đăng ký là `ValueError` (CLI chỉ dựng được tên đã đăng
+  ký, nên không có snapshot "tự do" mà lệnh skip chỉ tới lại không chạy được).
 - Chỉ đĩa VM nằm trong snapshot: dịch vụ phía host (registry, proxy) của `customer_site` luôn dựng mới và rỗng. Image
   cần có sẵn thì để trong VM (containerd/Podman/Docker của VM), không phải trong registry.
 - `selftest` (`lab-open` có `/home/fde/marker`) là snapshot tự kiểm của `test_derived_boot_roundtrip`: test gọi

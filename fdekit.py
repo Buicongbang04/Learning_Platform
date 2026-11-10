@@ -1395,10 +1395,8 @@ def _derived_spec(name: str, profile: str | None, build: Callable[[VM | Site], N
             raise ValueError(f"derived('{name}') khác đăng ký trong {spec.source} ở {', '.join(clash or ['site'])}; "
                              f"gọi fdekit.derived('{name}') không kèm tham số")
         return spec
-    if profile is None or inputs is None:
-        raise ValueError(f"Snapshot dẫn xuất '{name}' chưa đăng ký trong {DERIVED_DIR}; cần profile và inputs")
-    _profile(profile)
-    return DerivedSpec(name, profile, build, tuple(map(_resolve_input, inputs)), memory_mb, site)
+    raise ValueError(f"Snapshot dẫn xuất '{name}' chưa đăng ký: tạo {DERIVED_DIR / (name + '.py')} (PROFILE, INPUTS, "
+                     f"SITE, MEMORY_MB, build) để `python -m fdekit derive {name}` dựng được")
 
 
 def derived(name: str, profile: str | None = None, build: Callable[[VM | Site], None] | None = None, *,
@@ -1406,7 +1404,8 @@ def derived(name: str, profile: str | None = None, build: Callable[[VM | Site], 
     """Đường dẫn qcow2 của snapshot dẫn xuất `name` (`CACHE/derived/<name>-<key>.qcow2`) để boot bằng
     `vm(profile, base=...)`/`customer_site(profile, base=...)`. Không bao giờ dựng: thiếu golden, thiếu đầu vào, chưa
     dựng hay đã cũ (đầu vào đổi nên khoá đổi) thì skip kèm đúng lệnh cần chạy. Tên đã đăng ký trong
-    `setup/fde/derived/` thì chỉ cần `derived(name)`; truyền tham số khác đăng ký là lỗi."""
+    `setup/fde/derived/` thì chỉ cần `derived(name)`; truyền tham số khác đăng ký là lỗi. Tên chưa đăng ký là
+    `ValueError` (CLI chỉ dựng được tên đã đăng ký)."""
     spec = _derived_spec(name, profile, build, inputs, memory_mb, site)
     require_golden(spec.profile)
     command = _derive_command(name)
@@ -1475,6 +1474,12 @@ class PC:
 
     target: str
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+
+    def __post_init__(self) -> None:
+        if not _RUN_ID.fullmatch(self.run_id):
+            raise ValueError(f"run id phải là 8 ký tự hex, nhận {self.run_id!r}")
+        if not _PC_TARGET.fullmatch(self.target):
+            raise ValueError(f"PC target phải có dạng user@host, nhận {self.target!r}")
 
     @property
     def workdir(self) -> str:

@@ -291,7 +291,7 @@ metadata:
   namespace: $ns
 rules:
   - apiGroups: [""]
-    resources: [pods, pods/log, pods/exec, pods/portforward, pods/attach, services, endpoints, configmaps, secrets,
+    resources: [pods, pods/log, pods/exec, pods/portforward, pods/attach, services, configmaps, secrets,
                 persistentvolumeclaims, serviceaccounts]
     verbs: [get, list, watch, create, update, patch, delete, deletecollection]
   - apiGroups: [apps]
@@ -337,6 +337,37 @@ subjects:
   - kind: ServiceAccount
     name: $LAB_USER
     namespace: $ns
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: $ns-protect-default-deny
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [networking.k8s.io]
+        apiVersions: ["*"]
+        operations: [UPDATE, DELETE]
+        resources: [networkpolicies]
+  matchConditions:
+    - name: tenant-service-account
+      expression: request.userInfo.username == "system:serviceaccount:$ns:$LAB_USER"
+  validations:
+    - expression: request.name != "default-deny"
+      message: NetworkPolicy default-deny do IT khách quản; thêm NetworkPolicy riêng để mở luồng cần thiết
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: $ns-protect-default-deny
+spec:
+  policyName: $ns-protect-default-deny
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: $ns
 YAML
     local token="" i
     for i in $(seq 60); do

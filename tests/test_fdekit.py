@@ -6,8 +6,11 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
 
@@ -850,6 +853,18 @@ def _never_boot(*args, **kwargs):
     raise AssertionError("derived() không được dựng snapshot")
 
 
+def _register_demo(tmp_path, monkeypatch, *inputs):
+    """Đăng ký snapshot 'demo' qua đúng đường nạp của fdekit (tệp setup/fde/derived/demo.py giả trong tmp)."""
+    source = tmp_path / "derived" / "demo.py"
+    source.parent.mkdir(exist_ok=True)
+    source.write_text('PROFILE = "lab-open"\nINPUTS = []\nSITE = False\nMEMORY_MB = None\n'
+                      'def build(target):\n    target.ssh("true", check=True)\n')
+    spec = fdekit._load_derived(source)
+    spec = fdekit.DerivedSpec(spec.name, spec.profile, spec.build, tuple(inputs), spec.memory_mb, spec.site, source)
+    monkeypatch.setitem(fdekit.DERIVED, "demo", spec)
+    return spec
+
+
 def test_derived_key_changes_with_inputs(tmp_path, monkeypatch):
     golden = _fake_golden(tmp_path, monkeypatch)
     monkeypatch.setattr(fdekit, "vm", _never_boot)
@@ -861,7 +876,7 @@ def test_derived_key_changes_with_inputs(tmp_path, monkeypatch):
     (tree / "sub" / "a.txt").write_text("a")
 
     def key(*inputs):
-        return fdekit.DerivedSpec("demo", "lab-open", lambda target: None, tuple(inputs)).key()
+        return _register_demo(tmp_path, monkeypatch, *inputs).key()
 
     base = key(script, tree, "quillo 1.0.0")
     assert re.fullmatch(r"[0-9a-f]{12}", base)
@@ -880,36 +895,53 @@ def test_derived_key_changes_with_inputs(tmp_path, monkeypatch):
     assert key(script, tree, "quillo 1.0.0") != base
     _replace(golden, b"golden-v1")
     assert key(script, tree, "quillo 1.0.0") == base
+    spec = _register_demo(tmp_path, monkeypatch, script, tree, "quillo 1.0.0")
+    spec.source.write_text(spec.source.read_text().replace('"true"', '"echo build-v2"'))
+    assert spec.key() != base
+    spec.source.write_text(spec.source.read_text().replace('"echo build-v2"', '"true"'))
+    assert spec.key() == base
 
     snapshot = fdekit._derived_root() / f"demo-{base}.qcow2"
     snapshot.parent.mkdir(parents=True)
     snapshot.write_bytes(b"qcow")
     assert snapshot.is_relative_to(fdekit.CACHE / "derived")
-    assert fdekit.derived("demo", "lab-open", lambda target: None, inputs=[script, tree, "quillo 1.0.0"]) == snapshot
+    assert fdekit.derived("demo") == snapshot
     script.write_text("echo v3\n")
     with pytest.raises(pytest.skip.Exception) as info:
-        fdekit.derived("demo", "lab-open", lambda target: None, inputs=[script, tree, "quillo 1.0.0"])
+        fdekit.derived("demo")
     assert "đã cũ" in str(info.value) and "uv run python -m fdekit derive demo" in str(info.value)
 
 
-def test_stale_derived_skips_with_command(tmp_path, monkeypatch):
+def test_stale_derived_skips_with_command(tmp_path, monkeypatch, capsys):
     _fake_golden(tmp_path, monkeypatch)
     monkeypatch.setattr(fdekit, "vm", _never_boot)
     monkeypatch.setattr(fdekit, "customer_site", _never_boot)
     monkeypatch.setattr(fdekit, "_build_derived", _never_boot)
+    _register_demo(tmp_path, monkeypatch, "x")
     with pytest.raises(pytest.skip.Exception) as info:
-        fdekit.derived("demo", "lab-open", lambda target: None, inputs=["x"])
-    assert "uv run python -m fdekit derive demo" in str(info.value)
+        fdekit.derived("demo")
+    assert "Chưa có" in str(info.value) and "uv run python -m fdekit derive demo" in str(info.value)
+    assert fdekit.main(["derive", "--list"]) == 0
+    assert "demo\tlab-open\tchưa dựng" in capsys.readouterr().out
+    _register_demo(tmp_path, monkeypatch, tmp_path / "missing.sh")
     with pytest.raises(pytest.skip.Exception) as info:
-        fdekit.derived("demo", "lab-open", lambda target: None, inputs=[tmp_path / "missing.sh"])
+        fdekit.derived("demo")
     assert "missing.sh" in str(info.value) and "fdekit derive demo" in str(info.value)
+
+
+def test_derived_requires_registration(tmp_path, monkeypatch):
+    _fake_golden(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match=r"setup/fde/derived/not-registered\.py"):
+        fdekit.derived("not-registered", "lab-open", lambda target: None, inputs=[])
+    assert fdekit.main(["derive", "not-registered"]) == 2
 
 
 def test_derived_without_golden_skips_with_prepare(tmp_path, monkeypatch):
     monkeypatch.setattr(fdekit, "CACHE", tmp_path)
     monkeypatch.setattr(fdekit, "require_kvm", lambda: None)
+    _register_demo(tmp_path, monkeypatch)
     with pytest.raises(pytest.skip.Exception) as info:
-        fdekit.derived("demo", "lab-open", lambda target: None, inputs=[])
+        fdekit.derived("demo")
     assert "uv run python -m fdekit prepare lab-open" in str(info.value)
 
 
@@ -994,6 +1026,9 @@ def test_pc_ssh_and_gpu_without_network(monkeypatch):
     assert "--query-gpu=name,memory.total,driver_version" in argv[-1]
     pc.cleanup()
     assert calls[-1][-1] == f"rm -rf -- ~/fde-ex-{pc.run_id}"
+    for bad in ("../x", "deadbeef\n", "DEADBEEF"):
+        with pytest.raises(ValueError, match="run id"):
+            fdekit.PC("fde-lab@pc", bad)
 
 
 def test_factory_quirks():
@@ -1025,6 +1060,45 @@ def test_lawfirm_hardened_quirks():
         out = s.vm.ssh("curl -sS --max-time 10 -o /dev/null -w '%{http_code}' http://10.0.2.101:5000/v2/")
         assert out.stdout.strip() == "200", out.stderr
         _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+
+
+ALLOW_POLICY = """apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quillo-allow-web
+spec:
+  podSelector:
+    matchLabels:
+      app: quillo
+  policyTypes: [Ingress]
+  ingress:
+  - ports:
+    - port: 8080
+"""
+
+
+@contextmanager
+def _host_http_server():
+    hits = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append(self.client_address)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"host-only")
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address[1], hits
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 PSA_POD = """apiVersion: v1
@@ -1068,7 +1142,25 @@ def test_lawfirm_prod_rbac():
         assert rejected.returncode != 0 and "PodSecurity" in rejected.stderr and "restricted" in rejected.stderr, (
             rejected.stdout + rejected.stderr)
         _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+        assert s.vm.ssh("ip route show default").stdout.startswith("default via 10.0.2.2")
+        with _host_http_server() as (port, hits):
+            assert requests.get(f"http://127.0.0.1:{port}/", timeout=5).status_code == 200
+            hits.clear()
+            _fails(s.vm, f"curl -sS --max-time 5 http://10.0.2.2:{port}/")
+            assert hits == [], "VM lawfirm-prod với tới dịch vụ 127.0.0.1 của host"
         assert s.vm.ssh("test -r /etc/rancher/k3s/k3s.yaml").returncode != 0
+        deny = kubectl("delete networkpolicy default-deny -n quillo")
+        assert deny.returncode != 0 and "default-deny do IT khách quản" in deny.stderr, deny.stdout + deny.stderr
+        patch = kubectl("""patch networkpolicy default-deny -n quillo --type=json -p '[{"op":"replace","path":"/spec/policyTypes","value":["Ingress"]}]'""")
+        assert patch.returncode != 0 and "default-deny do IT khách quản" in patch.stderr, patch.stdout + patch.stderr
+        assert kubectl("auth can-i deletecollection networkpolicies -n quillo").stdout.strip() == "no"
+        assert kubectl("auth can-i create networkpolicies -n quillo").stdout.strip() == "yes"
+        created = s.vm.ssh(f"printf %s {shlex.quote(ALLOW_POLICY)} | kubectl apply -n quillo -f -", timeout=60)
+        assert created.returncode == 0, created.stderr
+        assert kubectl("label networkpolicy quillo-allow-web -n quillo tier=web").returncode == 0
+        assert kubectl("delete networkpolicy quillo-allow-web -n quillo").returncode == 0
+        policy = kubectl("get networkpolicy default-deny -n quillo -o jsonpath='{.spec.policyTypes}'").stdout
+        assert "Ingress" in policy and "Egress" in policy
 
 
 def test_derived_boot_roundtrip(capsys):
