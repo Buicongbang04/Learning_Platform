@@ -1,0 +1,80 @@
+name: quillo
+
+x-api: &api
+  image: quillo-api:${QUILLO_VERSION:?Set QUILLO_VERSION in .env}
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+  environment:
+    QUILLO_DATABASE_URL: postgresql://quillo:${QUILLO_DB_PASSWORD:?Set QUILLO_DB_PASSWORD in .env}@db:5432/quillo
+    QUILLO_ADMIN_TOKEN: ${QUILLO_ADMIN_TOKEN:?Set QUILLO_ADMIN_TOKEN in .env}
+    QUILLO_LLM_URL: http://llm:8080
+    QUILLO_EMBED_URL: http://embed:8080
+    QUILLO_MAX_UPLOAD_MB: ${QUILLO_MAX_UPLOAD_MB:-20}
+    QUILLO_LOG_LEVEL: ${QUILLO_LOG_LEVEL:-INFO}
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quillo
+      POSTGRES_DB: quillo
+      POSTGRES_PASSWORD: ${QUILLO_DB_PASSWORD:?Set QUILLO_DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quillo -d quillo"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11718
+    restart: unless-stopped
+    user: "65534:65534"
+    command: ["-m", "/models/${QUILLO_LLM_FILE:-qwen2.5-0.5b-instruct-q4_k_m.gguf}", "--alias", "${QUILLO_LLM_MODEL:-llm-small}",
+              "-c", "4096", "-t", "${QUILLO_LLM_THREADS:-2}"]
+    volumes:
+      - ./models:/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  embed:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11718
+    restart: unless-stopped
+    user: "65534:65534"
+    command: ["-m", "/models/nomic-embed-text-v1.5.Q8_0.gguf", "--embeddings", "--pooling", "mean",
+              "-c", "2048", "-b", "2048", "-ub", "2048", "-t", "${QUILLO_EMBED_THREADS:-2}"]
+    volumes:
+      - ./models:/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  api:
+    <<: *api
+    ports:
+      - "${QUILLO_BIND:-127.0.0.1}:${QUILLO_PORT:-18080}:8080"
+    depends_on:
+      db: {condition: service_healthy}
+      llm: {condition: service_healthy}
+      embed: {condition: service_healthy}
+
+  worker:
+    <<: *api
+    command: ["python", "-m", "quillo.ingest", "--watch", "/data/inbox"]
+    healthcheck: {disable: true}
+    volumes:
+      - ./inbox:/data/inbox
+    depends_on:
+      api: {condition: service_healthy}
+
+volumes:
+  db-data:

@@ -1,0 +1,105 @@
+questions:
+- id: exact-dups
+  kind: data
+  type: single
+  prompt: Khử trùng lặp chính xác bằng `dedup_key` (bỏ qua system prompt) loại khỏi 121 178 mẫu khoảng bao nhiêu mẫu?
+  options:
+  - id: a
+    text: Khoảng 150 mẫu
+  - id: b
+    text: Khoảng 3 700 mẫu
+  - id: c
+    text: Khoảng 10 500 mẫu
+  - id: d
+    text: Khoảng 40 000 mẫu
+- id: length-share
+  kind: data
+  type: single
+  prompt: Sau khử trùng chính xác, khoảng bao nhiêu phần trăm mẫu dài từ 16 tới 512 token theo chat template của Qwen2.5?
+  options:
+  - id: a
+    text: Khoảng 30%
+  - id: b
+    text: Khoảng 60%
+  - id: c
+    text: Khoảng 85%
+  - id: d
+    text: Khoảng 99%
+- id: random-leak
+  kind: data
+  type: single
+  prompt: Chia ngẫu nhiên 5% làm validation thì bao nhiêu mẫu validation có bản gần trùng (cùng nhóm MinHash) trong train?
+  options:
+  - id: a
+    text: Không mẫu nào
+  - id: b
+    text: Khoảng 600 mẫu
+  - id: c
+    text: Khoảng 60 mẫu
+  - id: d
+    text: Khoảng 3 000 mẫu
+- id: biggest-group
+  kind: data
+  type: single
+  prompt: Ba mẫu in ra của nhóm gần trùng lớn nhất cho thấy điều gì?
+  options:
+  - id: a
+    text: Cùng một câu hỏi được dịch lại nhiều lần
+  - id: b
+    text: Cùng khuôn câu hỏi, chỉ khác tên thực thể
+  - id: c
+    text: Các mẫu có system prompt chỉ là một dấu `"`
+  - id: d
+    text: Các bài toán số học có cùng đáp số
+- id: ngram-after-split
+  kind: data
+  type: single
+  prompt: So số mẫu validation (trong 500 mẫu) có từ 50% 13-gram trở lên nằm trong train giữa hai cách chia. Kết quả nào đúng?
+  options:
+  - id: a
+    text: Chia theo nhóm đưa con số về 0
+  - id: b
+    text: Chia theo nhóm làm con số tăng gấp đôi
+  - id: c
+    text: Chia ngẫu nhiên cho con số bằng 0
+  - id: d
+    text: Hai cách chia cho con số cùng cỡ
+- id: license
+  kind: knowledge
+  type: single
+  prompt: Thẻ Hugging Face của OpenOrca-Viet ghi Apache-2.0. Vì sao vẫn phải đọc thêm trước khi dùng thương mại?
+  options:
+  - id: a
+    text: Apache-2.0 cấm dùng dữ liệu cho mục đích thương mại
+  - id: b
+    text: Dữ liệu tiếng Việt không được bảo hộ bản quyền ở bất kỳ nước nào
+  - id: c
+    text: Giấy phép trên thẻ chỉ áp dụng cho tệp README của repo
+  - id: d
+    text: Câu trả lời do GPT-4, PaLM-2, Claude sinh, có điều khoản riêng
+- id: why-group-split
+  kind: knowledge
+  type: single
+  prompt: Vì sao chia train/validation theo nhóm gần trùng thay vì theo từng mẫu?
+  options:
+  - id: a
+    text: Để loss validation không lạc quan vì bản gần trùng
+  - id: b
+    text: Để tập validation luôn lớn hơn tập train một chút
+  - id: c
+    text: Để mỗi system prompt chỉ xuất hiện ở một phía
+  - id: d
+    text: Để train nhanh hơn nhờ tập train có ít mẫu hơn hẳn
+- id: drop-or-truncate
+  kind: knowledge
+  type: single
+  prompt: Mẫu dài hơn giới hạn token. Vì sao bỏ mẫu thường an toàn hơn cắt cụt nó khi SFT?
+  options:
+  - id: a
+    text: Cắt cụt làm tokenizer báo lỗi với văn bản tiếng Việt
+  - id: b
+    text: Mẫu dài hơn giới hạn luôn là mẫu trùng lặp với mẫu khác
+  - id: c
+    text: Mất đuôi câu trả lời và token kết thúc, model học trả lời dở
+  - id: d
+    text: GPU không chạy được chuỗi dài hơn 512 token khi train LoRA

@@ -1,0 +1,61 @@
+questions:
+  - id: lookup-group
+    kind: data
+    type: single
+    prompt: "Agent dựng tay đúng bao nhiêu trong 6 task nhóm `tra-1` (chỉ cần tra một lần)?"
+    options:
+      - { id: a, text: "0 task" }
+      - { id: b, text: "1 đến 5 task" }
+      - { id: c, text: "Cả 6 task" }
+  - id: pair-diff
+    kind: data
+    type: single
+    prompt: "Tổng số task đúng của agent dựng tay và của `create_react_agent` có `handle_tool_errors` chênh nhau bao nhiêu?"
+    options:
+      - { id: a, text: "0 đến 3 task" }
+      - { id: b, text: "4 đến 8 task" }
+      - { id: c, text: "Hơn 8 task" }
+  - id: calc-group
+    kind: data
+    type: single
+    prompt: "Agent dựng tay đúng bao nhiêu trong 6 task nhóm `tinh` (tính toán từ số liệu tra được)?"
+    options:
+      - { id: a, text: "0 đến 2 task" }
+      - { id: b, text: "3 hoặc 4 task" }
+      - { id: c, text: "5 hoặc 6 task" }
+  - id: toolnode-default
+    kind: knowledge
+    type: single
+    prompt: "Ở `langgraph-prebuilt` 1.1.1, `ToolNode(tools)` không truyền `handle_tool_errors` xử lý một `ValueError` do tool ném ra khi chạy thế nào?"
+    options:
+      - { id: a, text: "Trả một ToolMessage chứa thông điệp lỗi để model tự sửa" }
+      - { id: b, text: "Ném lại exception, lần chạy của đồ thị dừng với lỗi đó" }
+      - { id: c, text: "Bỏ qua tool call đó, không tạo ToolMessage nào" }
+      - { id: d, text: "Tự gọi lại tool tối đa ba lần rồi mới báo lỗi" }
+  - id: system-not-in-state
+    kind: knowledge
+    type: single
+    prompt: "Vì sao node `agent` gửi `SystemMessage` cho model ở mỗi lượt nhưng không ghi nó vào state?"
+    options:
+      - { id: a, text: "Vì reducer add_messages từ chối mọi SystemMessage và ném lỗi khi gặp nó" }
+      - { id: b, text: "Vì prompt là cấu hình: đổi prompt không phải sửa thread đã lưu, checkpoint không phình" }
+      - { id: c, text: "Vì ChatOllama luôn tự thêm system prompt mặc định của Qwen vào đầu mọi lượt gọi" }
+      - { id: d, text: "Vì ToolNode báo lỗi khi gặp SystemMessage trong state" }
+  - id: budget-vs-recursion
+    kind: knowledge
+    type: multi
+    prompt: "Chọn mọi phát biểu đúng về ngân sách bước trong state so với `recursion_limit`."
+    options:
+      - { id: a, text: "Hết ngân sách trong state là một kết quả bình thường, vẫn có trace và câu trả lời None" }
+      - { id: b, text: "Chạm recursion_limit làm invoke ném GraphRecursionError, mất kết quả của lần chạy" }
+      - { id: c, text: "recursion_limit đếm số lượt gọi model, không đếm superstep" }
+      - { id: d, text: "Ở LangGraph 1.2.16, recursion_limit mặc định đủ lớn để một agent lỗi gọi model hàng nghìn lần" }
+  - id: protocol-not-framework
+    kind: knowledge
+    type: single
+    prompt: "Muốn chạy giao thức ReAct văn bản của module 16 (Thought / Action / Action Input) bằng LangGraph thì làm gì?"
+    options:
+      - { id: a, text: "Không làm được: StateGraph chỉ chạy được với chat model đã bind_tools và giao thức native tool calling của server" }
+      - { id: b, text: "Đặt parser của module 16 trong node agent (model không bind_tools), node tự gọi tool và ghi observation" }
+      - { id: c, text: "Dùng create_react_agent với tham số protocol='react'" }
+      - { id: d, text: "Đổi ChatOllama sang chế độ json_mode để server tự tách Thought, Action và Action Input" }

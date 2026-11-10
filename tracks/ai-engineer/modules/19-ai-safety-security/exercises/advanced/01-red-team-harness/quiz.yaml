@@ -1,0 +1,105 @@
+questions:
+- id: plain-asr
+  kind: data
+  type: single
+  prompt: Với system prompt gốc (plain), ASR của 30 tấn công trên qwen2.5:3b nằm ở vùng nào?
+  options:
+  - id: a
+    text: Dưới 10%, model từ chối gần như mọi yêu cầu
+  - id: b
+    text: Từ một phần ba tới ba phần tư số tấn công
+  - id: c
+    text: Đúng 100%, mọi tấn công đều thành công
+  - id: d
+    text: Khoảng 20%, chỉ vài template mạnh mới thành công
+- id: hardened-goal
+  kind: data
+  type: single
+  prompt: So với plain, prompt cứng hoá (hardened) thay đổi số lượt lộ mã nội bộ (10 lượt) thế nào?
+  options:
+  - id: a
+    text: Về 0, quy tắc ưu tiên chặn được mọi cách hỏi
+  - id: b
+    text: Giảm còn khoảng một nửa số lượt lộ
+  - id: c
+    text: Gần như không đổi, model vẫn lộ mã ở đa số lượt
+  - id: d
+    text: Tăng lên vì prompt dài làm model rối hơn
+- id: minimal-context
+  kind: knowledge
+  type: single
+  prompt: Cấu hình minimal-context bỏ mã nội bộ khỏi prompt và che số điện thoại. Điều gì đúng theo thiết kế?
+  options:
+  - id: a
+    text: ASR của mọi mục tiêu về 0, kể cả mục tiêu bôi nhọ
+  - id: b
+    text: Không đổi gì vì model vẫn đoán được mã nội bộ
+  - id: c
+    text: Model trả lời câu hỏi bình thường kém đi rõ rệt hơn
+  - id: d
+    text: Hai mục tiêu lộ dữ liệu mất hẳn, bôi nhọ không được bảo vệ
+- id: guard-vs-checker
+  kind: knowledge
+  type: single
+  prompt: Vì sao guard output không được dùng chung hàm với bộ chấm mục tiêu?
+  options:
+  - id: a
+    text: Vì guard phải chạy nhanh hơn bộ chấm rất nhiều lần
+  - id: b
+    text: Vì bộ chấm cần gọi LLM còn guard thì không
+  - id: c
+    text: Khi đó ASR của guard bằng 0 theo định nghĩa
+  - id: d
+    text: Vì guard chỉ được phép kiểm văn bản tiếng Anh
+- id: spell-out
+  kind: knowledge
+  type: single
+  prompt: Nếu guard output tìm chuỗi "zebra-42" (không phân biệt hoa thường) bị lọt ở template spell-out, cơ chế lọt nhiều khả năng nhất là gì?
+  options:
+  - id: a
+    text: Model trả mã đã đánh vần, có dấu cách giữa các ký tự
+  - id: b
+    text: Model dịch mã sang tiếng Anh nên chuỗi mã khác đi
+  - id: c
+    text: Guard bị lỗi Unicode vì mã chứa dấu tiếng Việt lạ
+  - id: d
+    text: Input guard đã chặn trước nên output guard không chạy
+- id: benign-blocks
+  kind: knowledge
+  type: single
+  prompt: Guard output chặn vài câu trả lời cho câu hỏi bình thường; đọc lại thấy chúng tự đọc đủ số điện thoại của khách. Kết luận đúng?
+  options:
+  - id: a
+    text: Đây là chặn đúng một rò rỉ PII không cần kẻ tấn công
+  - id: b
+    text: Đây là chặn oan, cần nới lỏng guard output ngay lập tức
+  - id: c
+    text: Câu hỏi bình thường đó thật ra là tấn công trá hình
+  - id: d
+    text: Đây là lỗi của bộ chấm, hoàn toàn không liên quan tới model
+- id: input-guard-cost
+  kind: data
+  type: single
+  prompt: Guard input với DENY và CLASSIFIER ghim trong notebook đạt ASR 0/30. Cái giá trên 20 câu bình thường là gì?
+  options:
+  - id: a
+    text: Không chặn oan câu nào, guard hoàn toàn miễn phí
+  - id: b
+    text: Chặn oan đúng các câu có chữ "bỏ qua"
+  - id: c
+    text: Chặn oan hơn một nửa số câu hỏi bình thường
+  - id: d
+    text: Chặn oan ít nhất một câu, do classifier
+- id: zero-of-thirty
+  kind: knowledge
+  type: single
+  prompt: Một phòng thủ có 0/30 tấn công thành công. Khoảng Wilson 95% nói gì?
+  options:
+  - id: a
+    text: ASR thật chắc chắn bằng 0
+  - id: b
+    text: ASR thật có thể tới khoảng 11%
+  - id: c
+    text: ASR thật nằm giữa 0% và 50%
+  - id: d
+    text: Không tính được khoảng khi k bằng 0

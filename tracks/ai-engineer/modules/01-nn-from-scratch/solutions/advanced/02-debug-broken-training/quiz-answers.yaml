@@ -1,0 +1,7 @@
+broken-acc: [b]
+fixed-acc: [c]
+broken-gradcheck: [d]
+fixed-gradcheck: [c]
+ln3: [a]
+integer-ratio: [b]
+check-passes: [c]

@@ -1,0 +1,6 @@
+non-embedding-count: [c]
+tokens-per-param: [a]
+budget-split: [d]
+six-nd: [b]
+free-c: [c]
+overtrain: [a]

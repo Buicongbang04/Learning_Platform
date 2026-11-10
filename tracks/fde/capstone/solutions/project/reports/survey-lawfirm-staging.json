@@ -1,0 +1,17 @@
+{
+  "os_id": "ubuntu",
+  "os_version": "22.04",
+  "kernel_major": "5.15",
+  "glibc": "2.35",
+  "cpus": 2,
+  "mem_mb": 4913,
+  "disk_free_gb_max": 27.2,
+  "gpu": null,
+  "proxy_url": null,
+  "sudo": true,
+  "selinux": "n/a",
+  "runtime": "docker",
+  "egress": "none",
+  "docker_compose": null,
+  "insecure_registries": []
+}

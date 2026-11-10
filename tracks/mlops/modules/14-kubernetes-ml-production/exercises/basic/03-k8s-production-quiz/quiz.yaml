@@ -1,0 +1,73 @@
+questions:
+  - id: autoscale-signal
+    kind: knowledge
+    type: single
+    prompt: "Service model chạy trên GPU, mỗi request chờ feature store ~30 ms. Khi traffic tăng, p95 tăng nhưng CPU của pod chỉ ~20%. HPA đang scale theo CPU 70% nên không thêm replica. Tín hiệu nào hợp lý hơn để autoscale?"
+    options:
+      - { id: a, text: "Hạ mục tiêu CPU xuống 10% để HPA phản ứng sớm hơn với mọi đợt tăng traffic buổi tối" }
+      - { id: b, text: "Số request đang xử lý (in-flight) mỗi pod, mục tiêu lấy từ số đo capacity của một pod" }
+      - { id: c, text: "Bộ nhớ của pod, vì model lớn" }
+      - { id: d, text: "p95 latency của service, vì đó đúng là con số người dùng cảm nhận và SLO đang đo" }
+  - id: scale-to-zero-source
+    kind: knowledge
+    type: single
+    prompt: "Bạn muốn worker suy luận về 0 replica khi không có việc. Metric nào dùng được làm trigger để KEDA đưa nó từ 0 lên 1?"
+    options:
+      - { id: a, text: "Số request mỗi giây do chính pod worker xuất ở /metrics, scrape bằng Prometheus" }
+      - { id: b, text: "CPU trung bình của Deployment worker đọc từ metrics-server qua HPA thông thường" }
+      - { id: c, text: "Độ dài hàng đợi (hoặc lag Kafka) của nơi gửi việc cho worker" }
+      - { id: d, text: "Số pod Ready của Deployment worker" }
+  - id: cold-start-parts
+    kind: knowledge
+    type: multi
+    prompt: "Đo được cold start 0 → 1 của worker là 38 giây, pollingInterval 30, nạp model 6 giây, image đã có trên node. Những thay đổi nào giảm được cold start?"
+    options:
+      - { id: a, text: "Giảm pollingInterval của ScaledObject" }
+      - { id: b, text: "Tăng maxReplicaCount" }
+      - { id: c, text: "Nạp model từ cache trên node hoặc định dạng nạp nhanh hơn" }
+      - { id: d, text: "Giảm cooldownPeriod" }
+  - id: port-forward-load
+    kind: knowledge
+    type: single
+    prompt: "Bạn chạy k6 qua kubectl port-forward svc/eta tới InferenceService 3 replica và thấy thông lượng bằng đúng lúc 1 replica. Giải thích đúng nhất?"
+    options:
+      - { id: a, text: "KServe RawDeployment chỉ dùng một replica cho tới khi HPA bật" }
+      - { id: b, text: "port-forward nối vào một pod, nên mọi request dồn vào pod đó" }
+      - { id: c, text: "k6 giới hạn mỗi VU một request mỗi giây" }
+      - { id: d, text: "Service ClusterIP chỉ chia tải khi có Ingress" }
+  - id: triton-batching
+    kind: knowledge
+    type: single
+    prompt: "Sau khi bật dynamic_batching cho model trên Triton, dấu hiệu nào ở :8002/metrics cho thấy request thật sự được gộp?"
+    options:
+      - { id: a, text: "nv_inference_exec_count nhỏ hơn hẳn nv_inference_request_success" }
+      - { id: b, text: "nv_inference_request_failure bằng 0 suốt thời gian chạy tải với nhiều client" }
+      - { id: c, text: "nv_inference_queue_duration_us bằng 0" }
+      - { id: d, text: "Số instance trong instance_group được Triton tự tăng lên khi hàng đợi dài ra" }
+  - id: gpu-extended
+    kind: knowledge
+    type: multi
+    prompt: "Những phát biểu nào đúng về GPU trên Kubernetes?"
+    options:
+      - { id: a, text: "nvidia.com/gpu là extended resource do device plugin quảng bá; khai ở limits, số nguyên" }
+      - { id: b, text: "Time-slicing cô lập bộ nhớ GPU giữa các pod như MIG" }
+      - { id: c, text: "ResourceQuota giới hạn GPU của namespace bằng requests.nvidia.com/gpu" }
+      - { id: d, text: "Pod xin nvidia.com/gpu: 0.5 để hai pod dùng chung một card" }
+  - id: kueue-pending
+    kind: knowledge
+    type: single
+    prompt: "Job có nhãn kueue.x-k8s.io/queue-name đã tạo 10 phút, kubectl get pods không thấy pod nào, node còn nhiều tài nguyên trống. Nhìn vào đâu trước?"
+    options:
+      - { id: a, text: "kubectl describe node để tìm taint hoặc áp lực tài nguyên làm pod không xếp được" }
+      - { id: b, text: "Log của kube-scheduler trong namespace kube-system, tìm lý do không xếp được pod" }
+      - { id: c, text: "kubectl describe workload của Job đó: condition QuotaReserved và message" }
+      - { id: d, text: "kubectl logs của pod Job" }
+  - id: borrow-reclaim
+    kind: knowledge
+    type: single
+    prompt: "team-a và team-b cùng cohort, mỗi đội nominalQuota 4 GPU. team-a đang mượn 2 GPU của team-b. team-b gửi job 2 GPU. ClusterQueue của team-b có preemption.reclaimWithinCohort: Never. Chuyện gì xảy ra?"
+    options:
+      - { id: a, text: "Kueue đẩy job đang mượn của team-a ra để trả lại quota cho team-b" }
+      - { id: b, text: "Job của team-b chờ tới khi team-a trả phần mượn (job mượn chạy xong)" }
+      - { id: c, text: "Job của team-b được admit vượt quota danh nghĩa" }
+      - { id: d, text: "Kueue từ chối tạo Job của team-b" }

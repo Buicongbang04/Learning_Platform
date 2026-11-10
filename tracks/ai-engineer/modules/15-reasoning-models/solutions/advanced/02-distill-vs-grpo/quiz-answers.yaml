@@ -1,0 +1,8 @@
+teacher-gap: [c]
+teacher-coverage: [b]
+teacher-filter: [b]
+student-format: [c]
+ranking: [b]
+one-variable: [d]
+license: [c]
+eval-mode: [b]

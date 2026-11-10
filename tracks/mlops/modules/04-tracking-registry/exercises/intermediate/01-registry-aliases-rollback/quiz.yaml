@@ -1,0 +1,55 @@
+questions:
+  - id: why-server-store
+    kind: knowledge
+    type: single
+    prompt: "Năm người cùng ghi run vào một thư mục mlruns trên ổ chung. Lý do chính để chuyển sang MLflow server với database làm backend store là gì?"
+    options:
+      - { id: a, text: "Ghi đồng thời an toàn và truy vấn được, đồng thời Model Registry cần backend database" }
+      - { id: b, text: "Database chứa được các tệp model nhị phân lớn hơn mà một thư mục thông thường không chứa nổi" }
+      - { id: c, text: "Database tự động làm cho mọi lần huấn luyện chạy nhanh hơn nhờ bộ nhớ đệm kết quả cũ" }
+      - { id: d, text: "Database là cách duy nhất để MLflow ghi được tag git_commit lên từng run đã chạy" }
+  - id: pick-tool-selfhost
+    kind: knowledge
+    type: single
+    prompt: "Đội 4 người, dữ liệu không được rời mạng nội bộ, cần tracking cộng thêm registry có alias, ngân sách phần mềm bằng 0. Chọn gì?"
+    options:
+      - { id: a, text: "Weights & Biases bản cloud, vì có bảng điều khiển đẹp nhất trong các công cụ" }
+      - { id: b, text: "MLflow tự host với Postgres và MinIO, vì mã nguồn mở và có sẵn registry" }
+      - { id: c, text: "Một bảng tính chia sẻ để cả đội ghi tay thông số và kết quả của mỗi lần train" }
+      - { id: d, text: "Comet bản cloud, vì đội không phải vận hành bất kỳ máy chủ nào" }
+  - id: pick-tool-saas
+    kind: knowledge
+    type: single
+    prompt: "Nhóm nghiên cứu deep learning 6 người làm việc từ xa, chạy hàng trăm run mỗi tuần, muốn so sánh biểu đồ giữa các run và không có ai rảnh để vận hành server. Dữ liệu huấn luyện công khai. Lựa chọn hợp lý nhất?"
+    options:
+      - { id: a, text: "Tự dựng MLflow trên một máy ảo và giao hẳn cho một người trực nó mỗi ngày trong tuần" }
+      - { id: b, text: "In log ra stdout rồi đọc lại bằng grep sau mỗi lần train kết thúc xong" }
+      - { id: c, text: "Dịch vụ SaaS như W&B, Neptune hay Comet: họ lo hạ tầng, có sẵn so sánh run" }
+      - { id: d, text: "Chỉ dùng TensorBoard cục bộ trên máy của riêng từng thành viên trong nhóm" }
+  - id: serve-by-alias
+    kind: knowledge
+    type: single
+    prompt: "Service cần luôn nạp model đã được duyệt cho production, và đội muốn đổi model mà không phải deploy lại service. Cách làm đúng?"
+    options:
+      - { id: a, text: "Đặt tên model vào biến môi trường của từng máy chủ, sửa tay sau mỗi lần duyệt model" }
+      - { id: b, text: "Ghi cứng số version vào mã nguồn rồi deploy lại mỗi khi có model mới được duyệt" }
+      - { id: c, text: "Sao chép tệp model vào image ngay lúc build và đặt tên tệp theo ngày huấn luyện" }
+      - { id: d, text: "Nạp theo alias models:/taxi-eta@champion; chỉ người được duyệt mới đổi alias" }
+  - id: resolve-then-load
+    kind: knowledge
+    type: single
+    prompt: "Vì sao load_by_alias phân giải alias ra số version trước rồi mới nạp models:/<tên>/<version>, thay vì nạp thẳng models:/<tên>@champion rồi báo version sau?"
+    options:
+      - { id: a, text: "Vì nạp theo số version nhanh hơn nạp theo alias gấp nhiều lần trên mọi loại server hiện nay" }
+      - { id: b, text: "Vì alias chỉ dùng được để đọc các tag của version, chứ không nạp được model thật" }
+      - { id: c, text: "Alias có thể đổi giữa hai bước, nên version báo cáo có thể lệch version đã nạp" }
+      - { id: d, text: "Vì MLflow cấm nạp model bằng alias khi server đang dùng Postgres làm backend" }
+  - id: rollback-mechanics
+    kind: knowledge
+    type: multi
+    prompt: "Chọn các điều đúng về rollback bằng alias trong registry."
+    options:
+      - { id: a, text: "Rollback là đổi alias về version cũ, không cần train lại và không cần xoá version lỗi" }
+      - { id: b, text: "Ghi sẵn version cũ lên version mới (tag previous_champion) giúp rollback không phụ thuộc trí nhớ của người trực" }
+      - { id: c, text: "Phải xoá version lỗi khỏi registry thì client mới thôi nạp nó" }
+      - { id: d, text: "Service đang chạy sẽ tự nạp lại version cũ ngay lập tức mà không cần restart hay refresh nào" }

@@ -1,0 +1,425 @@
+{
+  "id": "fde",
+  "name": "Forward Deployed Engineer",
+  "icon": "plane-takeoff",
+  "status": "active",
+  "order": 8,
+  "description": "21 module (00–20) theo bốn trụ học sâu ngang nhau: triển khai tại hiện trường trên VM \"máy khách\" (khảo sát, đóng gói, air-gapped, proxy, máy bị khoá, GPU, K8s của khách, tích hợp, xử lý sự cố, chứng minh hệ thống không bịa), làm việc với khách (discovery, scoping, ROI, giao tiếp), DSA và System Design mức phỏng vấn senior, Cloud & IaC; cộng mục Cloud lab có phí tuỳ chọn. Capstone triển khai trợ lý hợp đồng (CUAD) cho một công ty luật, làm trong repo riêng của bạn.",
+  "source": "https://roadmap.sh/forward-deployed-engineer",
+  "modules": [
+    {
+      "id": "00-introduction",
+      "title": "FDE là gì",
+      "summary": "Nguồn gốc FDE (Palantir \"Delta/Echo\"), FDE ở các công ty AI hiện nay, khác Solutions Engineer / Sales Engineer / Consultant / SWE, một tuần làm việc tại khách, bản đồ đồ nghề đã học, sản phẩm quillo và các hồ sơ khách của track, vòng phỏng vấn FDE.",
+      "topics": [
+        "Nguồn gốc FDE",
+        "FDE vs SE / Consultant / SWE",
+        "Một tuần tại khách",
+        "Bốn trụ",
+        "Bản đồ đồ nghề",
+        "Lab VM khách hàng"
+      ]
+    },
+    {
+      "id": "01-site-survey",
+      "title": "Khảo sát môi trường khách",
+      "summary": "Checklist trước khi đến; đọc máy lạ không cần root (OS, kernel, glibc, CPU/RAM/đĩa/inode, GPU, mạng, proxy, NTP, SELinux, ulimit, quyền); script site-survey xuất JSON + Markdown; preflight so với yêu cầu tối thiểu của sản phẩm.",
+      "topics": [
+        "Checklist trước khi đến",
+        "Đọc máy lạ không cần root",
+        "Script site-survey",
+        "Preflight",
+        "Báo cáo khoảng cách"
+      ]
+    },
+    {
+      "id": "02-packaging-delivery",
+      "title": "Đóng gói cho môi trường lạ",
+      "summary": "Bundle cài được ở mọi nơi: image tarball, wheelhouse offline bằng uv, binary tĩnh, model weights; manifest sha256, ký bundle, SBOM; installer idempotent có preflight, rollback, log; versioning và cấu hình theo khách.",
+      "topics": [
+        "Bundle offline",
+        "docker save / OCI",
+        "Wheelhouse uv",
+        "Manifest & ký",
+        "Installer idempotent",
+        "Versioning"
+      ]
+    },
+    {
+      "id": "03-airgapped-proxy",
+      "title": "Air-gapped, proxy và cert công ty",
+      "summary": "Cài không có internet: registry nội bộ, mirror gói, chuyển bundle qua \"USB\", kiểm toàn vẹn; proxy công ty (HTTP(S)_PROXY, NO_PROXY, Docker daemon), TLS inspection và CA nội bộ trong trust store hệ thống, Python, container.",
+      "topics": [
+        "Air-gapped",
+        "Registry nội bộ",
+        "Mirror apt/dnf/pip",
+        "Proxy công ty",
+        "TLS inspection",
+        "CA nội bộ"
+      ]
+    },
+    {
+      "id": "04-restricted-hosts",
+      "title": "Máy bị khoá và máy cũ",
+      "summary": "Không có root: Podman rootless, systemd --user, cài vào $HOME; SELinux enforcing, firewall; OS cũ (Rocky 8, Ubuntu 20.04) với glibc và Python hệ thống cũ; đĩa gần đầy, /tmp noexec, ulimit; Windows/WSL ở mức nhận biết.",
+      "topics": [
+        "Không root",
+        "Podman rootless",
+        "systemd --user",
+        "SELinux",
+        "OS cũ / glibc",
+        "Đĩa đầy, noexec"
+      ]
+    },
+    {
+      "id": "05-gpu-field",
+      "title": "GPU ở máy khách",
+      "summary": "Ma trận driver ↔ CUDA ↔ container toolkit, chẩn đoán nvidia-smi và CDI, định cỡ LLM theo VRAM, fallback CPU, benchmark và báo cáo năng lực phần cứng, so sánh vLLM / llama.cpp / Ollama khi triển khai on-prem.",
+      "topics": [
+        "Driver ↔ CUDA",
+        "Container toolkit / CDI",
+        "Định cỡ theo VRAM",
+        "Fallback CPU",
+        "Benchmark",
+        "vLLM / llama.cpp"
+      ]
+    },
+    {
+      "id": "06-k8s-at-customer",
+      "title": "Cài lên Kubernetes của khách",
+      "summary": "Khách có cluster nhưng bạn không có cluster-admin: cài trong namespace, Helm chart với values theo khách, image từ registry nội bộ, PSA/securityContext, quota, NetworkPolicy chặn sẵn; k3s air-gapped; OpenShift ở mức khác biệt cần biết.",
+      "topics": [
+        "Namespace-scoped",
+        "Helm values theo khách",
+        "PSA / securityContext",
+        "Quota",
+        "NetworkPolicy",
+        "k3s air-gapped"
+      ]
+    },
+    {
+      "id": "07-customer-integration",
+      "title": "Tích hợp hệ thống và dữ liệu của khách",
+      "summary": "SSO qua OIDC/SAML (Keycloak), LDAP/AD; kết nối DB, file share, S3-compatible, export hệ thống cũ mà dữ liệu không rời máy; secret theo chính sách khách; security questionnaire, data residency, PII.",
+      "topics": [
+        "SSO OIDC / SAML",
+        "LDAP / AD",
+        "Connector dữ liệu",
+        "Secret theo chính sách",
+        "Security questionnaire",
+        "Data residency / PII"
+      ]
+    },
+    {
+      "id": "08-field-troubleshooting",
+      "title": "Xử lý sự cố tại hiện trường",
+      "summary": "Chẩn đoán có hệ thống khi chỉ có quyền hạn chế: khách gõ lệnh qua screen-share, chỉ đọc log được gửi lại; journalctl, ss, strace, tcpdump, curl -v, openssl s_client, DNS; support bundle che secret; tái hiện lỗi ở lab; escalation có bằng chứng.",
+      "topics": [
+        "Chẩn đoán có hệ thống",
+        "Quyền hạn chế",
+        "Công cụ mạng & TLS",
+        "Support bundle",
+        "Tái hiện ở lab",
+        "Escalation"
+      ]
+    },
+    {
+      "id": "09-production-trust",
+      "title": "Chứng minh hệ thống không hỏng, không \"bịa\"",
+      "summary": "Eval suite trên dữ liệu của khách (groundedness, citation, refusal), guardrails, red-team prompt injection qua tài liệu, giám sát ship cùng sản phẩm, backup/restore, nâng cấp tại chỗ và rollback, SLO cho on-prem, acceptance test cùng khách.",
+      "topics": [
+        "Eval trên dữ liệu khách",
+        "Guardrails",
+        "Prompt injection",
+        "Backup / restore",
+        "Nâng cấp & rollback",
+        "Acceptance test"
+      ]
+    },
+    {
+      "id": "10-rapid-prototyping",
+      "title": "Prototype full-stack nhanh cho khách",
+      "summary": "Tuỳ biến sản phẩm theo workflow của khách trong vài ngày: thêm màn hình, endpoint, connector, prompt và retrieval theo domain; demo-driven development; throwaway vs productize; giữ fork tối thiểu, feature flag theo khách.",
+      "topics": [
+        "Demo-driven",
+        "Tuỳ biến theo domain",
+        "Throwaway vs productize",
+        "Fork tối thiểu",
+        "Feature flag"
+      ]
+    },
+    {
+      "id": "11-discovery-requirements",
+      "title": "Discovery và requirements gathering",
+      "summary": "Phỏng vấn discovery (câu hỏi mở, 5 whys, quan sát workflow thật), enterprise workflow mapping as-is/to-be, tách yêu cầu thật khỏi giải pháp khách tự nghĩ, ràng buộc ẩn; stakeholder simulator đóng vai khách có yêu cầu ẩn.",
+      "topics": [
+        "Phỏng vấn discovery",
+        "5 whys",
+        "Workflow mapping",
+        "Ràng buộc ẩn",
+        "Stakeholder simulator"
+      ]
+    },
+    {
+      "id": "12-scoping-sequencing",
+      "title": "Scoping, sequencing và trade-off",
+      "summary": "Technical scoping, chia giai đoạn pilot → production, sequencing theo rủi ro và phụ thuộc, ước lượng có khoảng; scope/speed/quality và nói \"không\"; MoSCoW, phần kỹ thuật của SOW, tiêu chí nghiệm thu, change request.",
+      "topics": [
+        "Technical scoping",
+        "Pilot → production",
+        "Ước lượng có khoảng",
+        "MoSCoW",
+        "SOW kỹ thuật",
+        "Change request"
+      ]
+    },
+    {
+      "id": "13-business-roi",
+      "title": "Business acumen, ROI & AI impact",
+      "summary": "Khách kiếm tiền và tốn tiền ở đâu, đo baseline trước khi triển khai, mô hình ROI (giờ công, lỗi giảm, chi phí GPU/hạ tầng/vận hành), TCO on-prem vs cloud, đo AI impact sau triển khai, trình bày cho CFO/CTO.",
+      "topics": [
+        "Business acumen",
+        "Baseline",
+        "Mô hình ROI",
+        "TCO on-prem vs cloud",
+        "AI impact"
+      ]
+    },
+    {
+      "id": "14-communication-stakeholders",
+      "title": "Giao tiếp, stakeholder và feedback loop",
+      "summary": "Bản đồ stakeholder, status update, báo tin xấu, escalation; technical writing (design doc, runbook, README bàn giao, exec summary); demo cho khách; product feedback loop có bằng chứng và đóng vòng với khách.",
+      "topics": [
+        "Bản đồ stakeholder",
+        "Báo tin xấu",
+        "Runbook & bàn giao",
+        "Exec summary",
+        "Product feedback loop"
+      ]
+    },
+    {
+      "id": "15-dsa-core",
+      "title": "DSA I: nền tảng phỏng vấn",
+      "summary": "Big-O, arrays/strings, hashing, two pointers, sliding window, stack/queue, binary search, linked list, intervals, prefix sum; khoảng 25 bài chấm bằng test đúng sai và test hiệu năng. Học song song từ đầu được.",
+      "topics": [
+        "Big-O",
+        "Hashing",
+        "Two pointers / sliding window",
+        "Binary search",
+        "Stack / queue",
+        "Intervals / prefix sum"
+      ]
+    },
+    {
+      "id": "16-dsa-advanced",
+      "title": "DSA II: cây, đồ thị, DP",
+      "summary": "Tree/BST, heap, graph (BFS/DFS, topo sort, Dijkstra, union-find), trie, backtracking, DP (1D/2D/knapsack/interval), greedy; khoảng 25 bài, có đề thực tế kiểu FDE như parse log, gộp sự kiện, lịch phụ thuộc.",
+      "topics": [
+        "Tree / heap",
+        "Graph / topo sort",
+        "Union-find",
+        "Trie / backtracking",
+        "Dynamic programming",
+        "Greedy"
+      ]
+    },
+    {
+      "id": "17-system-design-core",
+      "title": "System Design I",
+      "summary": "Khung trả lời, ước lượng, cache, queue, DB/sharding/replication, consistency, rate limit, idempotency và các đề kinh điển; ôn nhanh phần đã học ở DevOps/DE có link.",
+      "topics": [
+        "Khung trả lời",
+        "Ước lượng",
+        "Cache / queue",
+        "Sharding / replication",
+        "Consistency",
+        "Rate limit / idempotency"
+      ]
+    },
+    {
+      "id": "18-system-design-fde",
+      "title": "System Design II: thiết kế cho khách",
+      "summary": "Thiết kế bị ràng buộc bởi khách: on-prem/hybrid/BYOC, single-tenant vs multi-tenant, kênh cập nhật air-gapped, RAG trên tài liệu có phân quyền, GPU inference dùng chung, data residency; bộ đề mức senior có rubric.",
+      "topics": [
+        "On-prem / hybrid / BYOC",
+        "Single vs multi-tenant",
+        "Cập nhật air-gapped",
+        "RAG có phân quyền",
+        "GPU dùng chung",
+        "Rubric senior"
+      ]
+    },
+    {
+      "id": "19-cloud-iac",
+      "title": "Cloud & IaC cho FDE (miễn phí)",
+      "summary": "Triển khai vào tài khoản cloud của khách (BYOC): cross-account IAM role, VPC/subnet/private endpoint, peering, KMS; Terraform với LocalStack, module tái dùng theo khách, state và quyền.",
+      "topics": [
+        "BYOC",
+        "Cross-account IAM",
+        "VPC / private endpoint",
+        "KMS",
+        "Terraform + LocalStack",
+        "Module theo khách"
+      ]
+    },
+    {
+      "id": "20-fde-interview",
+      "title": "Vòng phỏng vấn FDE",
+      "summary": "Cấu trúc vòng phỏng vấn FDE, decomposition interview, nhập vai khách với stakeholder simulator, behavioral (STAR, câu chuyện hiện trường), take-home, tổng hợp portfolio từ capstone.",
+      "topics": [
+        "Decomposition interview",
+        "Nhập vai khách",
+        "Behavioral / STAR",
+        "Take-home",
+        "Portfolio"
+      ]
+    },
+    {
+      "id": "c1-aws-byoc",
+      "title": "Triển khai vào tài khoản AWS \"của khách\"",
+      "summary": "Có phí, tuỳ chọn. Hai account vendor và customer, cross-account role, Terraform dựng VPC private cùng EC2/ECS; sản phẩm không có public IP, truy cập qua SSM. Budget alarm trước, destroy bắt buộc.",
+      "topics": [
+        "AWS Organizations",
+        "Cross-account role",
+        "VPC private",
+        "SSM",
+        "Budget alarm",
+        "destroy"
+      ],
+      "section": "cloud-lab"
+    },
+    {
+      "id": "c2-gcp-azure",
+      "title": "Cùng bài trên GCP hoặc Azure",
+      "summary": "Có phí, tuỳ chọn. Làm lại C1 trên GCP hoặc Azure và ghi lại khác biệt IAM/networking cần biết khi khách dùng cloud khác.",
+      "topics": [
+        "GCP IAM",
+        "Azure RBAC",
+        "Networking khác biệt",
+        "Budget alarm",
+        "destroy"
+      ],
+      "section": "cloud-lab"
+    },
+    {
+      "id": "c3-cloud-gpu-inference",
+      "title": "GPU trên cloud cho khách",
+      "summary": "Có phí, tuỳ chọn. Thuê GPU theo giờ (spot), deploy LLM serving, đo chi phí mỗi token so với on-prem, tắt tự động để không bị tính tiền ngoài ý muốn.",
+      "topics": [
+        "Spot GPU",
+        "LLM serving",
+        "Chi phí / token",
+        "Tắt tự động"
+      ],
+      "section": "cloud-lab"
+    }
+  ],
+  "capstone": {
+    "title": "Trợ lý hợp đồng cho công ty luật",
+    "readme": "capstone/README.md",
+    "milestones": [
+      {
+        "id": "m00",
+        "title": "Tạo repo capstone riêng: cấu trúc, Makefile, README case study, .gitignore chặn secret",
+        "after": "00-introduction",
+        "doc": "capstone/milestones/m00-own-repo.md"
+      },
+      {
+        "id": "m01",
+        "title": "Khảo sát VM của khách bằng script site-survey, báo cáo khoảng cách so với yêu cầu sản phẩm",
+        "after": "01-site-survey",
+        "doc": "capstone/milestones/m01-site-survey.md"
+      },
+      {
+        "id": "m02",
+        "title": "Bundle offline cho đúng khách này, installer có preflight dựa trên báo cáo m01",
+        "after": "02-packaging-delivery",
+        "doc": "capstone/milestones/m02-offline-bundle.md"
+      },
+      {
+        "id": "m03",
+        "title": "Cài qua môi trường air-gapped với registry nội bộ, xác minh toàn vẹn bundle",
+        "after": "03-airgapped-proxy",
+        "doc": "capstone/milestones/m03-airgapped-install.md"
+      },
+      {
+        "id": "m04",
+        "title": "Chạy dưới ràng buộc bảo mật của khách: không root, SELinux",
+        "after": "04-restricted-hosts",
+        "doc": "capstone/milestones/m04-restricted-host.md"
+      },
+      {
+        "id": "m05",
+        "title": "Định cỡ model theo phần cứng, CPU fallback, (tuỳ chọn) chạy trên PC GPU",
+        "after": "05-gpu-field",
+        "doc": "capstone/milestones/m05-model-sizing.md"
+      },
+      {
+        "id": "m06",
+        "title": "Cài bằng Helm vào namespace k3s của khách, không cluster-admin",
+        "after": "06-k8s-at-customer",
+        "doc": "capstone/milestones/m06-helm-namespace.md"
+      },
+      {
+        "id": "m07",
+        "title": "SSO qua Keycloak, nạp CUAD qua connector từ file share, phân quyền tài liệu",
+        "after": "07-customer-integration",
+        "doc": "capstone/milestones/m07-sso-connector.md"
+      },
+      {
+        "id": "m08",
+        "title": "Sự cố ở hiện trường: chẩn đoán qua support bundle và lệnh nhờ khách gõ, báo cáo sự cố",
+        "after": "08-field-troubleshooting",
+        "doc": "capstone/milestones/m08-field-incident.md"
+      },
+      {
+        "id": "m09",
+        "title": "Eval trên nhãn CUAD, red-team prompt injection, nâng cấp v1.0 → v1.1 và rollback, acceptance test",
+        "after": "09-production-trust",
+        "doc": "capstone/milestones/m09-eval-upgrade.md"
+      },
+      {
+        "id": "m10",
+        "title": "Tuỳ biến cho workflow pháp chế (bảng rà soát điều khoản rủi ro), giữ fork tối thiểu",
+        "after": "10-rapid-prototyping",
+        "doc": "capstone/milestones/m10-legal-workflow.md"
+      },
+      {
+        "id": "m11",
+        "title": "Discovery với stakeholder simulator, tài liệu yêu cầu chấm theo yêu cầu ẩn hỏi ra được",
+        "after": "11-discovery-requirements",
+        "doc": "capstone/milestones/m11-discovery.md"
+      },
+      {
+        "id": "m12",
+        "title": "Scoping doc, kế hoạch pilot → production và tiêu chí nghiệm thu",
+        "after": "12-scoping-sequencing",
+        "doc": "capstone/milestones/m12-scoping.md"
+      },
+      {
+        "id": "m13",
+        "title": "Báo cáo ROI dựa trên số đo thật từ m09",
+        "after": "13-business-roi",
+        "doc": "capstone/milestones/m13-roi-report.md"
+      },
+      {
+        "id": "m14",
+        "title": "Gói bàn giao: runbook, README vận hành, exec summary, product feedback",
+        "after": "14-communication-stakeholders",
+        "doc": "capstone/milestones/m14-handover.md"
+      },
+      {
+        "id": "m15",
+        "title": "Design doc mở rộng cho 5 công ty con: multi-site, cập nhật air-gapped, GPU dùng chung",
+        "after": "18-system-design-fde",
+        "doc": "capstone/milestones/m15-multi-site-design.md"
+      },
+      {
+        "id": "m16",
+        "title": "Đánh giá độc lập mức senior: khách mới, tự đi trọn vòng survey → cài → sự cố → bàn giao",
+        "after": "20-fde-interview",
+        "doc": "capstone/milestones/m16-senior-assessment.md"
+      }
+    ]
+  }
+}

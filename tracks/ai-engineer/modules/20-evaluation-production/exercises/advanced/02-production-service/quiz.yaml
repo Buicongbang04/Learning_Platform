@@ -1,0 +1,46 @@
+questions:
+  - id: queue-vs-model
+    kind: knowledge
+    type: single
+    prompt: Khi tải tăng, span llm.chat dài ra nhưng prompt_eval_duration + eval_duration của Ollama gần như đứng yên. Kết luận?
+    options:
+      - { id: a, text: "Model chậm đi khi GPU nóng máy, cần quantize mạnh hơn và giảm số luồng CPU" }
+      - { id: b, text: "Phần tăng là thời gian chờ trong server: cần thêm replica hoặc batching" }
+      - { id: c, text: "Retrieval chậm lại nên LLM phải đợi tài liệu" }
+      - { id: d, text: "Trace đo sai, nên tin số của Ollama hơn" }
+  - id: selfhost-cost
+    kind: knowledge
+    type: single
+    prompt: Chi phí self-host mỗi 1 000 request nên chia giá GPU theo thông lượng nào?
+    options:
+      - { id: a, text: "Thông lượng tối đa đo được khi đẩy tải tới khi lỗi" }
+      - { id: b, text: "Thông lượng ở mức tải vẫn đạt SLO, có headroom" }
+      - { id: c, text: "Thông lượng của một request chạy một mình" }
+      - { id: d, text: "Tốc độ decode token/giây trong model card" }
+  - id: noisy-p95
+    kind: knowledge
+    type: single
+    prompt: p95 ở mức tải 0.3 cao hơn ở mức 0.45, mỗi mức 30 request, khoảng tin cậy chồng nhau. Báo cáo nên viết gì?
+    options:
+      - { id: a, text: "Server chạy tốt hơn khi tải cao hơn" }
+      - { id: b, text: "Khác biệt nằm trong nhiễu; cần nhiều request hơn trước khi kết luận" }
+      - { id: c, text: "Bỏ mức 0.3 khỏi báo cáo vì nó lệch khỏi xu hướng chung của ba mức tải" }
+      - { id: d, text: "Lấy trung bình hai mức làm con số chính thức" }
+  - id: cache-benefit
+    kind: knowledge
+    type: multi
+    prompt: Trong trường hợp nào prompt caching dễ cho lợi ích đo được rõ?
+    options:
+      - { id: a, text: "Prefix cố định dài hàng nghìn token" }
+      - { id: b, text: "Prefill đắt: chạy CPU hoặc model lớn" }
+      - { id: c, text: "API tính tiền token đọc từ cache rẻ hơn" }
+      - { id: d, text: "Đặt dấu thời gian ở đầu system prompt" }
+  - id: burn-alert
+    kind: knowledge
+    type: single
+    prompt: SLO 95% request tốt; trong một giờ có 20% request xấu. Burn rate và hành động hợp lý?
+    options:
+      - { id: a, text: "Burn rate 4; báo người trực nếu cửa sổ ngắn cũng xác nhận" }
+      - { id: b, text: "Burn rate 0.2; chưa cần làm gì" }
+      - { id: c, text: "Burn rate 20; tắt toàn bộ dịch vụ ngay lập tức cho tới khi tìm ra nguyên nhân" }
+      - { id: d, text: "Burn rate 1; mở ticket xử lý trong tháng" }

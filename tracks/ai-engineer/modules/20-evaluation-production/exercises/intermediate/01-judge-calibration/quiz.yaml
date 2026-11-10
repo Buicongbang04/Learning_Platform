@@ -1,0 +1,83 @@
+questions:
+  - id: kappa-3b
+    kind: data
+    type: single
+    prompt: Cohen's kappa giữa judge qwen2.5:3b và nhãn gold trên 150 câu pointwise nằm trong khoảng nào?
+    options:
+      - { id: a, text: "Dưới 0.2, gần như đoán mò" }
+      - { id: b, text: "Từ 0.3 tới 0.65" }
+      - { id: c, text: "Từ 0.7 tới 0.9" }
+      - { id: d, text: "Trên 0.95, khớp gần hoàn toàn" }
+  - id: direction-3b
+    kind: data
+    type: single
+    prompt: Judge qwen2.5:3b sai theo hướng nào nhiều hơn?
+    options:
+      - { id: a, text: "Dễ dãi: false pass cao hơn false fail rõ rệt" }
+      - { id: b, text: "Khắt khe: false fail cao hơn false pass rõ rệt" }
+      - { id: c, text: "Hai loại sai gần bằng nhau" }
+      - { id: d, text: "Không sai câu nào ở nhãn đúng" }
+  - id: false-fail-class
+    kind: data
+    type: single
+    prompt: False fail của judge 3B (từ chối nhãn đúng) cao nhất ở lớp gold nào, tính theo tỉ lệ trên số câu đúng của lớp đó?
+    options:
+      - { id: a, text: "negative" }
+      - { id: b, text: "positive" }
+      - { id: c, text: "Đều nhau ở ba lớp" }
+      - { id: d, text: "Không có false fail nào" }
+      - { id: e, text: "neutral" }
+  - id: judge-7b
+    kind: data
+    type: single
+    prompt: So với judge 3B, judge qwen2.5:7b (cell tuỳ chọn) đổi kappa và ECE thế nào?
+    options:
+      - { id: a, text: "Kappa cao hơn hơn 0.1, ECE thấp hơn" }
+      - { id: b, text: "Kappa gần như bằng, ECE cao hơn" }
+      - { id: c, text: "Kappa thấp hơn, vì 7B chạy CPU kém chính xác" }
+      - { id: d, text: "Kappa bằng 1.0, ECE bằng 0" }
+  - id: pair-consistency
+    kind: data
+    type: single
+    prompt: Ở điều kiện gốc của phần pairwise Zalo Legal, judge 3B giữ nguyên lựa chọn khi đổi chỗ hai đoạn ở khoảng bao nhiêu cặp?
+    options:
+      - { id: a, text: "Trên 90% số cặp" }
+      - { id: b, text: "Khoảng 70% tới 85% số cặp" }
+      - { id: c, text: "Dưới một nửa số cặp" }
+      - { id: d, text: "Không cặp nào" }
+  - id: pair-position
+    kind: data
+    type: single
+    prompt: Trong các verdict không hoà của phần pairwise, judge 3B nghiêng về vị trí nào?
+    options:
+      - { id: a, text: "Đoạn đứng trước, rõ rệt" }
+      - { id: b, text: "Đoạn đứng sau, rõ rệt" }
+      - { id: c, text: "Không nghiêng, khoảng 50/50" }
+      - { id: d, text: "Luôn chọn hoà nên không xác định" }
+  - id: padding
+    kind: data
+    type: single
+    prompt: Độn chữ khuôn mẫu vô nghĩa vào đoạn sai hoặc đoạn đúng làm tỉ lệ thắng của điều luật đúng đổi thế nào?
+    options:
+      - { id: a, text: "Đoạn nào được độn thắng gần như mọi cặp" }
+      - { id: b, text: "Chênh vài cặp trên 60, không thấy tác động rõ" }
+      - { id: c, text: "Đoạn được độn thua gần như mọi cặp" }
+      - { id: d, text: "Judge trả JSON hỏng ở mọi cặp có độn chữ" }
+  - id: threshold-split
+    kind: knowledge
+    type: single
+    prompt: Vì sao chọn ngưỡng trên nửa đầu rồi báo accuracy trên nửa sau, thay vì làm cả hai trên cùng 150 câu?
+    options:
+      - { id: a, text: "Vì Ollama giới hạn 75 lượt gọi mỗi lần chạy notebook" }
+      - { id: b, text: "Ngưỡng tối ưu trên chính tập đo luôn thắng 0.5, nên con số bị thổi phồng" }
+      - { id: c, text: "Vì ECE chỉ tính được trên đúng một nửa của tập dữ liệu" }
+      - { id: d, text: "Vì nửa sau toàn câu khó hơn nên cần báo riêng" }
+  - id: why-kappa
+    kind: knowledge
+    type: single
+    prompt: Judge luôn trả "yes" trên một tập có 90% nhãn ứng viên đúng. Accuracy và kappa của nó là?
+    options:
+      - { id: a, text: "Accuracy 0.9, kappa 0" }
+      - { id: b, text: "Accuracy 0.9, kappa 0.9" }
+      - { id: c, text: "Accuracy 0.5, kappa 0.5" }
+      - { id: d, text: "Accuracy 0.1, kappa âm" }

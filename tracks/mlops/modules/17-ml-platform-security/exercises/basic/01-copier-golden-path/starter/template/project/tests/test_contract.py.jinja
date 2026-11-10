@@ -1,0 +1,11 @@
+import numpy as np
+
+from model import train
+
+
+def test_model_trains_and_predicts():
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(200, 3))
+    y = X @ np.array([1.0, -2.0, 0.5])
+    predictions = train(X, y).predict(X)
+    assert predictions.shape == (200,)

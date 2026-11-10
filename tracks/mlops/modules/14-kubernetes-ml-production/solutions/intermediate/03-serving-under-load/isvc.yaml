@@ -1,0 +1,46 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: eta-load
+  annotations:
+    serving.kserve.io/autoscalerClass: none
+spec:
+  predictor:
+    automountServiceAccountToken: false
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
+    minReplicas: 1
+    maxReplicas: 1
+    containers:
+      - name: kserve-container
+        image: ml-lab:dev
+        imagePullPolicy: IfNotPresent
+        env:
+          - {name: ROLE, value: predictor}
+          - {name: MODEL_NAME, value: eta}
+          - {name: SERVICE_MS, value: "20"}
+          - {name: CONCURRENCY, value: "1"}
+          - {name: MODEL_LOAD_SECONDS, value: "2"}
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /v1/models/eta
+            port: 8080
+          periodSeconds: 2
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: "1"
+            memory: 128Mi

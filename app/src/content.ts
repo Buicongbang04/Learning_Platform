@@ -1,4 +1,5 @@
 import { parse as parseYaml } from "yaml";
+import { moduleNumber, moduleSection, type ModuleSection } from "./sections";
 
 /* Nội dung đọc thẳng từ thư mục tracks/ ở gốc repo. Quy ước: CONTENT_SPEC.md. */
 
@@ -26,6 +27,7 @@ export type Exercise = {
 export type Module = {
   id: string;
   number: string;
+  section: ModuleSection;
   title: string;
   summary: string;
   topics: string[];
@@ -54,7 +56,7 @@ type TrackJson = {
   status?: "active" | "soon";
   order?: number;
   description?: string;
-  modules?: { id: string; title: string; summary?: string; topics?: string[] }[];
+  modules?: { id: string; title: string; summary?: string; topics?: string[]; section?: ModuleSection }[];
   capstone?: { title: string; readme: string; milestones: Milestone[] };
 };
 
@@ -167,7 +169,8 @@ function buildTracks(): Track[] {
         .sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.slug.localeCompare(b.slug));
       return {
         id: meta.id,
-        number: /^(\d+)/.exec(meta.id)?.[1] ?? "",
+        number: moduleNumber(meta.id),
+        section: moduleSection(meta),
         title: meta.title,
         summary: meta.summary ?? "",
         topics: meta.topics ?? [],

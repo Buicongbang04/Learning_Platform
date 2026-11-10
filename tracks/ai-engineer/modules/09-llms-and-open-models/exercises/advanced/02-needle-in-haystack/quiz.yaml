@@ -1,0 +1,105 @@
+questions:
+- id: n-fillers
+  kind: data
+  type: single
+  prompt: Cell filler có sẵn (Wikipedia `train-00002`, bài 400 tới 3 000 ký tự) lấy được bao nhiêu bài?
+  options:
+  - id: a
+    text: '4'
+  - id: b
+    text: '200'
+  - id: c
+    text: '235'
+  - id: d
+    text: '380'
+- id: truncated-cells
+  kind: data
+  type: single
+  prompt: Với filler và seed của notebook, ở `num_ctx` mặc định, những ô nào có `prompt_eval_count` nhỏ hơn số token bạn đếm cho prompt?
+  options:
+  - id: a
+    text: Không ô nào
+  - id: b
+    text: Chỉ các ô 12 000 token
+  - id: c
+    text: Các ô 6 000 và 12 000 token
+  - id: d
+    text: Mọi ô từ 3 000 token trở lên
+- id: template-overhead
+  kind: data
+  type: single
+  prompt: Khi prompt không bị cắt, `prompt_eval_count` lớn hơn số token bạn đếm cho nội dung prompt khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: Khoảng 3
+  - id: c
+    text: Khoảng 29
+  - id: d
+    text: Khoảng 300
+- id: which-survives
+  kind: knowledge
+  type: single
+  prompt: Prompt 12 000 token, câu hỏi ở cuối, `num_ctx` 4 096. Theo cơ chế cắt, needle ở vị trí nào dễ sống sót nhất?
+  options:
+  - id: a
+    text: depth 0, đầu văn bản
+  - id: b
+    text: depth 0.5, giữa văn bản
+  - id: c
+    text: depth 1, ngay trước câu hỏi
+  - id: d
+    text: Mọi vị trí có cùng khả năng sống sót
+- id: no-error
+  kind: knowledge
+  type: single
+  prompt: Khi Ollama cắt prompt vì vượt `num_ctx`, dấu hiệu đáng tin nhất trong response là gì?
+  options:
+  - id: a
+    text: HTTP 413 kèm thông báo lỗi prompt quá dài
+  - id: b
+    text: prompt_eval_count bằng đúng num_ctx
+  - id: c
+    text: done_reason là "length"
+  - id: d
+    text: Trường "truncated" bằng true
+- id: easy-test
+  kind: knowledge
+  type: single
+  prompt: Đúng 100% bài needle đơn ở 12 000 token nghĩa là gì?
+  options:
+  - id: a
+    text: Model hiểu và suy luận tốt trên mọi thông tin trong 12 000 token
+  - id: b
+    text: Model tìm được một câu khớp, chưa nói gì về suy luận cả tài liệu
+  - id: c
+    text: Không cần RAG cho tài liệu dưới 12 000 token nữa
+  - id: d
+    text: Context length thật của model là 12 000 token
+- id: wrong-answer-style
+  kind: knowledge
+  type: single
+  prompt: Trong bản tham chiếu, khi needle đã bị cắt mất, `qwen2.5:3b` phản ứng thế nào?
+  options:
+  - id: a
+    text: Trả lời "không tìm thấy mã số trong văn bản"
+  - id: b
+    text: Trả một con số khác bằng giọng tự tin
+  - id: c
+    text: Trả về chuỗi rỗng
+  - id: d
+    text: Hỏi lại người dùng mã số nằm ở đâu
+- id: unique-codes
+  kind: knowledge
+  type: single
+  prompt: Vì sao mỗi ô của lưới dùng một mã số khác nhau?
+  options:
+  - id: a
+    text: Ollama cache câu trả lời theo nội dung của prompt đã gửi
+  - id: b
+    text: Để phân biệt đọc được needle với đoán một số quen
+  - id: c
+    text: Để prompt dài đúng số token mục tiêu
+  - id: d
+    text: Vì một mã chỉ chèn được vào một haystack

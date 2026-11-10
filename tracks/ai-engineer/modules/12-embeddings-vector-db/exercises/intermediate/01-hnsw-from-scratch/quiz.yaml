@@ -1,0 +1,105 @@
+questions:
+- id: dist-per-query
+  kind: data
+  type: single
+  prompt: Ở ef = 40 (recall ANN@10 khoảng 0.96), HNSW tự viết tính trung bình bao nhiêu khoảng cách mỗi câu trên 20 000 điều?
+  options:
+  - id: a
+    text: Khoảng 60 phép
+  - id: b
+    text: Khoảng 580 phép
+  - id: c
+    text: Khoảng 5 200 phép
+  - id: d
+    text: Đúng 20 000 phép
+- id: ivf-cost
+  kind: data
+  type: single
+  prompt: Để đạt recall ANN@10 cỡ 0.96 như HNSW tự viết ở ef = 40, IVF tự viết (nlist = 128) phải quét khoảng bao nhiêu vector mỗi câu?
+  options:
+  - id: a
+    text: Khoảng 300, ít hơn HNSW
+  - id: b
+    text: Khoảng 600, ngang HNSW
+  - id: c
+    text: Khoảng 5 000, gần 9 lần HNSW
+  - id: d
+    text: Cả 20 000, như là quét hết toàn bộ
+- id: own-vs-faiss
+  kind: data
+  type: single
+  prompt: Cùng M = 16, efConstruction = 100, ef = 40 trên 20 000 điều, recall ANN@10 của HNSW tự viết so với FAISS HNSW thế nào?
+  options:
+  - id: a
+    text: Tự viết thấp hơn khoảng 0.2
+  - id: b
+    text: Gần bằng nhau, chênh dưới 0.02
+  - id: c
+    text: Tự viết cao hơn khoảng 0.2
+  - id: d
+    text: FAISS đạt đúng 1.0, tự viết thì không
+- id: build-ratio
+  kind: data
+  type: single
+  prompt: Dựng HNSW tự viết trên 20 000 vector chậm hơn FAISS HNSW cùng tham số cỡ bao nhiêu lần?
+  options:
+  - id: a
+    text: Gần như bằng nhau
+  - id: b
+    text: Khoảng 2 lần
+  - id: c
+    text: Khoảng 100 lần
+  - id: d
+    text: Khoảng 100 000 lần
+- id: heuristic-real
+  kind: data
+  type: single
+  prompt: Trên 5 000 vector bge-m3 thật, ef = 40, recall ANN@10 của cách chọn m láng giềng gần nhất (không heuristic) khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.50
+  - id: b
+    text: Khoảng 0.75
+  - id: c
+    text: Khoảng 0.95
+  - id: d
+    text: Đúng 1.00
+- id: why-heuristic
+  kind: knowledge
+  type: single
+  prompt: Trên dữ liệu sinh có cụm tách mạnh, vì sao chọn m láng giềng gần nhất làm recall chững lại dù tăng ef?
+  options:
+  - id: a
+    text: Mọi cạnh nằm trong cụm, đồ thị rời thành các đảo
+  - id: b
+    text: Chọn m gần nhất làm bậc vượt quá giới hạn 2M
+  - id: c
+    text: Các tầng trên không còn nút nào để đi xuống
+  - id: d
+    text: Khoảng cách cosine không còn đúng trong cụm dày
+- id: ef-knob
+  kind: knowledge
+  type: single
+  prompt: Muốn tăng recall của một index HNSW đang phục vụ mà không dựng lại, bạn đổi tham số nào?
+  options:
+  - id: a
+    text: M, số láng giềng mỗi nút
+  - id: b
+    text: efConstruction lúc chèn
+  - id: c
+    text: efSearch lúc tìm
+  - id: d
+    text: m_L, hệ số chọn tầng
+- id: fair-cost
+  kind: knowledge
+  type: single
+  prompt: Vì sao so code Python tự viết với FAISS bằng số phép tính khoảng cách công bằng hơn bằng ms/câu?
+  options:
+  - id: a
+    text: Không phụ thuộc ngôn ngữ, SIMD hay cách đo theo lô
+  - id: b
+    text: Số phép tính khoảng cách luôn tỉ lệ đúng với recall
+  - id: c
+    text: FAISS không đo được thời gian của từng câu hỏi
+  - id: d
+    text: Thời gian trên CPU dùng chung là không đo được

@@ -1,0 +1,79 @@
+questions:
+- id: exposed-tasks
+  kind: data
+  type: single
+  prompt: Với injection "review" hoặc "price", đi theo đường ngắn nhất, bao nhiêu trong 8 task buộc agent mở một trang sách có đoạn injection?
+  options:
+  - id: a
+    text: "2"
+  - id: b
+    text: "4"
+  - id: c
+    text: "6"
+  - id: d
+    text: "8"
+- id: asr-denominator
+  kind: knowledge
+  type: single
+  prompt: Tính tỉ lệ tấn công thành công (ASR) trên mẫu số nào thì có nghĩa?
+  options:
+  - id: a
+    text: Mọi task, kể cả task không mở trang có injection
+  - id: b
+    text: Các task có thao tác nhạy cảm trong yêu cầu
+  - id: c
+    text: Các task agent hoàn thành đúng yêu cầu
+  - id: d
+    text: Các task mà agent đã thấy đoạn injection
+- id: guard-guarantee
+  kind: knowledge
+  type: single
+  prompt: '`guard` bằng code bảo đảm được điều gì mà chỉ thị trong prompt không bảo đảm được?'
+  options:
+  - id: a
+    text: Không có lần đổi email sang địa chỉ người dùng không nêu
+  - id: b
+    text: Model không bao giờ đọc được đoạn injection nằm trên trang
+  - id: c
+    text: Agent hoàn thành mọi task với ít bước hơn trước
+  - id: d
+    text: Câu trả lời cuối không chứa thông tin từ trang độc
+- id: breakout
+  kind: knowledge
+  type: single
+  prompt: Vì sao `delimit` phải xoá các chuỗi OPEN/CLOSE có sẵn trong nội dung trang trước khi bọc?
+  options:
+  - id: a
+    text: Để nội dung ngắn hơn, tiết kiệm token cho mỗi lượt gọi
+  - id: b
+    text: Vì model không đọc được ký tự < và > trong prompt
+  - id: c
+    text: Để trang không tự đóng vùng dữ liệu rồi ra lệnh
+  - id: d
+    text: Vì cây phần tử không được chứa ký tự đặc biệt nào
+- id: legit-email
+  kind: data
+  type: single
+  prompt: Một guard đơn giản chặn MỌI lần bấm "Lưu email". Task nào trong 8 task bị nó làm hỏng?
+  options:
+  - id: a
+    text: w03, thêm 2 cuốn Tắt đèn vào giỏ
+  - id: b
+    text: w05, đặt mua Nhà giả kim giao tới Huế
+  - id: c
+    text: w08, đổi email sang minh.moi@example.com
+  - id: d
+    text: Không task nào, vì không task nào cần đổi email
+- id: guard-limit
+  kind: knowledge
+  type: single
+  prompt: Kiểu tấn công nào `guard` của bài KHÔNG chặn được?
+  options:
+  - id: a
+    text: Trang bảo agent đổi email sang địa chỉ lạ
+  - id: b
+    text: Trang bảo agent đặt hàng khi người dùng chỉ hỏi giá
+  - id: c
+    text: Trang bảo agent chép thông tin vào câu trả lời cuối
+  - id: d
+    text: Trang bảo agent đặt hàng giao tới địa chỉ lạ

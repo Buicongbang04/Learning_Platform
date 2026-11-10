@@ -1,0 +1,35 @@
+import argparse
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from model import COLUMNS, TARGET, clean, export, features, load, train
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Train và xuất model safetensors")
+    parser.add_argument("--data", type=Path, required=True, help="tệp yellow_tripdata_YYYY-MM.parquet")
+    parser.add_argument("--out", type=Path, default=Path("build"))
+    parser.add_argument("--sample", type=int, default=300_000)
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args(argv)
+    raw = pd.read_parquet(args.data, columns=COLUMNS)
+    df = clean(raw.sample(n=min(args.sample, len(raw)), random_state=args.seed))
+    cut = int(len(df) * 0.8)
+    train_df, test_df = df.iloc[:cut], df.iloc[cut:]
+    model = train(features(train_df), train_df[TARGET].to_numpy())
+    model_dir = export(model, args.out / "model")
+    predicted = load(model_dir)(test_df)
+    actual = test_df[TARGET].to_numpy()
+    metrics = {"mae": float(np.mean(np.abs(predicted - actual))),
+               "baseline_mae": float(np.mean(np.abs(np.median(train_df[TARGET]) - actual))),
+               "n_train": int(len(train_df)), "n_test": int(len(test_df))}
+    (args.out / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(metrics))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

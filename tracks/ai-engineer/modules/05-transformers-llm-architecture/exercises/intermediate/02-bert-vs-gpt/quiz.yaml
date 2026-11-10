@@ -1,0 +1,79 @@
+questions:
+- id: masked-count
+  kind: data
+  type: single
+  prompt: Ở cách 1 (che 15% cùng lúc) trên validation, có khoảng bao nhiêu vị trí bị che?
+  options:
+  - id: a
+    text: Khoảng 2 800 vị trí
+  - id: b
+    text: Khoảng 28 000 vị trí
+  - id: c
+    text: Khoảng 190 000 vị trí
+  - id: d
+    text: Khoảng 1 500 vị trí
+- id: many-masks-winner
+  kind: data
+  type: single
+  prompt: Ở cách 1 (che 15% cùng lúc), model nào có accuracy cao hơn trong lần chạy của bạn?
+  options:
+  - id: a
+    text: GPT, dù chỉ nhìn bên trái
+  - id: b
+    text: BERT, vì nhìn được hai phía
+  - id: c
+    text: Hai model bằng nhau tới chữ số thứ ba
+  - id: d
+    text: Cả hai đều đúng trên 80% vị trí
+- id: bert-generate
+  kind: data
+  type: single
+  prompt: Khi bắt BERT sinh văn bản bằng cách nối `[MASK]` vào cuối rồi đoán, kết quả thế nào?
+  options:
+  - id: a
+    text: Câu trôi chảy, tốt ngang GPT
+  - id: b
+    text: Lặp và vô nghĩa sau vài token
+  - id: c
+    text: Lỗi vì BERT không nhận chuỗi chứa `[MASK]`
+  - id: d
+    text: Luôn sinh đúng câu mở đầu lặp lại
+- id: mask-8010
+  kind: knowledge
+  type: single
+  prompt: Vì sao BERT chỉ thay 80% vị trí được chọn bằng `[MASK]`, còn 10% token ngẫu nhiên và 10% giữ nguyên?
+  options:
+  - id: a
+    text: Để giảm số token phải tính loss mỗi bước
+  - id: b
+    text: Khi dùng thật không có `[MASK]`, model cần biểu diễn tốt cho token thật
+  - id: c
+    text: Để model học sinh văn bản từ trái sang phải
+  - id: d
+    text: Vì vocab không đủ chỗ cho token `[MASK]`
+- id: signal
+  kind: knowledge
+  type: single
+  prompt: Cùng số bước và batch, vì sao BERT học chậm hơn GPT?
+  options:
+  - id: a
+    text: Attention hai chiều tốn compute gấp đôi
+  - id: b
+    text: Chỉ khoảng 15% token có loss mỗi bước
+  - id: c
+    text: BERT không dùng được weight tying
+  - id: d
+    text: Mask hai chiều làm gradient biến mất
+- id: choose
+  kind: knowledge
+  type: single
+  prompt: Cần phân loại 50 triệu bình luận mỗi ngày trên CPU, độ trễ thấp. Lựa chọn hợp lý nhất?
+  options:
+  - id: a
+    text: Encoder nhỏ kiểu BERT fine-tune cho phân loại
+  - id: b
+    text: LLM decoder 70B qua API, prompt từng bình luận
+  - id: c
+    text: Encoder-decoder sinh nhãn dạng văn bản tự do
+  - id: d
+    text: Train GPT mini từ số 0 rồi prompt

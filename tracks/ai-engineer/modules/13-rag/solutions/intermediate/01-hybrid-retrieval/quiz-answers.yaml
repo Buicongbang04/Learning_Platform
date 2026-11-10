@@ -1,0 +1,8 @@
+bm25-full-mrr: [c]
+hybrid-vs-dense: [b]
+only-dense: [c]
+long-articles: [b]
+rrf-ranks: [b]
+weak-branch: [a]
+l2-once: [b]
+cache-ids: [c]

@@ -1,0 +1,92 @@
+questions:
+- id: broken-acc
+  kind: data
+  type: single
+  prompt: Notebook gốc (chưa sửa gì), `train(0)` cho test accuracy bao nhiêu?
+  options:
+  - id: a
+    text: '0.5000'
+  - id: b
+    text: '0.3333'
+  - id: c
+    text: '0.9500'
+  - id: d
+    text: '0.0000'
+- id: fixed-acc
+  kind: data
+  type: single
+  prompt: Sửa cả 4 bug, `train(0)` cho test accuracy bao nhiêu?
+  options:
+  - id: a
+    text: '0.9500'
+  - id: b
+    text: '0.9833'
+  - id: c
+    text: '1.0000'
+  - id: d
+    text: '0.3333'
+- id: broken-gradcheck
+  kind: data
+  type: single
+  prompt: Notebook gốc, `max_gradient_error()` trả về bao nhiêu?
+  options:
+  - id: a
+    text: '1.15e-08'
+  - id: b
+    text: '7.14e-01'
+  - id: c
+    text: '6.00e+00'
+  - id: d
+    text: '1.00e+00'
+- id: fixed-gradcheck
+  kind: data
+  type: single
+  prompt: Sửa cả 4 bug, `max_gradient_error()` cỡ nào?
+  options:
+  - id: a
+    text: Khoảng 1e-2
+  - id: b
+    text: Khoảng 1e-5
+  - id: c
+    text: Khoảng 1e-8
+  - id: d
+    text: Đúng bằng 0
+- id: ln3
+  kind: knowledge
+  type: single
+  prompt: Bài phân loại 3 lớp cân bằng, loss đứng quanh 1.10 từ epoch đầu tới epoch cuối. Con số đó gợi ý gì?
+  options:
+  - id: a
+    text: 'Model chỉ đoán được tỉ lệ lớp: ln 3, input vô dụng'
+  - id: b
+    text: Learning rate quá nhỏ nên loss giảm rất chậm từ đầu
+  - id: c
+    text: Model đã hội tụ tới loss nhỏ nhất có thể của dữ liệu
+  - id: d
+    text: Momentum 0.9 giữ tham số dao động quanh điểm khởi tạo
+- id: integer-ratio
+  kind: knowledge
+  type: single
+  prompt: Gradient giải tích gấp đúng N lần gradient số ở mọi tham số, N là batch size của phép check. Nghi ngờ đầu tiên?
+  options:
+  - id: a
+    text: Bước sai phân eps quá lớn so với tham số
+  - id: b
+    text: Loss lấy trung bình nhưng gradient lấy tổng
+  - id: c
+    text: Softmax chưa trừ max nên bị tràn số
+  - id: d
+    text: Khởi tạo He làm gradient phình theo N
+- id: check-passes
+  kind: knowledge
+  type: single
+  prompt: Gradient check qua nhưng accuracy vẫn 33%. Kết luận nào đúng?
+  options:
+  - id: a
+    text: Phải tăng epoch hoặc lr vì gradient đã đúng
+  - id: b
+    text: Hàm gradient check có bug, nên bỏ qua kết quả
+  - id: c
+    text: 'Backward đã đúng; lỗi nằm ở vòng train'
+  - id: d
+    text: Dữ liệu xoắn ốc quá khó với MLP hai tầng ẩn

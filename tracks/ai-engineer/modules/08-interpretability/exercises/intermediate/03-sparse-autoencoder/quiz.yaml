@@ -1,0 +1,105 @@
+questions:
+- id: toy-l0
+  kind: data
+  type: single
+  prompt: Trên dữ liệu đồ chơi (trung bình 1.5 đặc trưng thật bật mỗi mẫu), SAE ReLU + L1 0.05 có L0 khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 1.5
+  - id: b
+    text: Khoảng 3
+  - id: c
+    text: Khoảng 12
+  - id: d
+    text: Khoảng 60
+- id: toy-recover
+  kind: data
+  type: single
+  prompt: Trên dữ liệu đồ chơi, SAE nào tìm lại 30 hướng thật tốt hơn (cosine tốt nhất trung bình và nhỏ nhất)?
+  options:
+  - id: a
+    text: TopK k=3, cả trung bình lẫn nhỏ nhất đều cao hơn
+  - id: b
+    text: ReLU + L1, cả trung bình lẫn nhỏ nhất đều cao hơn
+  - id: c
+    text: Hai SAE gần như bằng nhau ở cả hai con số
+  - id: d
+    text: Không SAE nào vượt được cosine trung bình 0.5
+- id: best-sae
+  kind: data
+  type: single
+  prompt: Trên GPT-2 (cùng số bước train), SAE nào vừa có FVU thấp nhất vừa có CE khi ghép vào thấp nhất?
+  options:
+  - id: a
+    text: TopK k=32
+  - id: b
+    text: L1 hệ số 2.0
+  - id: c
+    text: L1 hệ số 5.0
+  - id: d
+    text: Mỗi thước đo một SAE khác nhau
+- id: l1-strong
+  kind: data
+  type: single
+  prompt: SAE L1 hệ số 5.0 trên GPT-2 có FVU trên tập đánh giá ở mức nào?
+  options:
+  - id: a
+    text: Dưới 0.2, tái dựng gần hết
+  - id: b
+    text: Khoảng 0.3 tới 0.5
+  - id: c
+    text: Từ 0.8 trở lên, gần như không tái dựng được
+  - id: d
+    text: Đúng bằng 0 vì L0 rất nhỏ
+- id: dead
+  kind: data
+  type: single
+  prompt: SAE nào có tỉ lệ latent chết (trên tập đánh giá) cao nhất?
+  options:
+  - id: a
+    text: TopK k=32
+  - id: b
+    text: L1 hệ số 2.0
+  - id: c
+    text: L1 hệ số 5.0
+  - id: d
+    text: Cả ba đều bằng 0
+- id: decoder-norm
+  kind: knowledge
+  type: single
+  prompt: Vì sao phạt L1 phải nhân với norm hàng decoder (hoặc chuẩn hoá decoder)?
+  options:
+  - id: a
+    text: Để SAE không giảm L1 bằng cách thu nhỏ f và phóng to decoder
+  - id: b
+    text: Để gradient của encoder không bị nổ khi d_sae lớn hơn d_in
+  - id: c
+    text: Vì Adam cần mọi tham số có cùng thang mới hội tụ được
+  - id: d
+    text: Để FVU luôn nằm trong khoảng từ 0 tới 1 trên mọi dữ liệu
+- id: baseline-choice
+  kind: knowledge
+  type: single
+  prompt: Vì sao CE recovered tính với zero ablation thường cao hơn khi tính với mean ablation?
+  options:
+  - id: a
+    text: Zero ablation làm CE tệ hơn nhiều nên mẫu số lớn hơn
+  - id: b
+    text: Mean ablation dùng dữ liệu train nên bị rò rỉ thông tin
+  - id: c
+    text: Zero ablation không đi qua LayerNorm nên CE không đổi
+  - id: d
+    text: Hai cách luôn cho cùng một con số nếu SAE đủ lớn
+- id: top-examples
+  kind: knowledge
+  type: single
+  prompt: Sáu ví dụ kích hoạt mạnh nhất của một latent đều đứng trước " at". Điều gì còn phải kiểm?
+  options:
+  - id: a
+    text: Không cần kiểm gì, sáu ví dụ đã đủ để đặt tên latent
+  - id: b
+    text: Ví dụ kích hoạt yếu, và tắt latent có đổi dự đoán không
+  - id: c
+    text: Chỉ cần kiểm latent có chết trên tập train hay không
+  - id: d
+    text: Chỉ cần train lại SAE với seed khác để xem latent còn không

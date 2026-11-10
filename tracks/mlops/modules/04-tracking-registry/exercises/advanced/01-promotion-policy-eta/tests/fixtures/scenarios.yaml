@@ -1,0 +1,95 @@
+policy:
+  min_improvement: 0.01
+  slice_tolerance: 0.05
+  min_slice_n: 200
+  max_latency_ratio: 1.2
+  lineage: "git_dirty phải là false; phải có data_version và git_commit"
+champion:
+  version: 5
+  mae: 200.0
+  latency_p95_ms: 40.0
+  slices:
+    airport: { mae: 300.0, n: 5000 }
+    night: { mae: 250.0, n: 3000 }
+    short: { mae: 90.0, n: 20000 }
+    long_haul: { mae: 600.0, n: 400 }
+challengers:
+  S1:
+    story: "Thêm feature thời tiết, train lại trên dữ liệu mới"
+    mae: 185.0
+    latency_p95_ms: 44.0
+    git_dirty: false
+    slices:
+      airport: { mae: 290.0, n: 5000 }
+      night: { mae: 240.0, n: 3000 }
+      short: { mae: 82.0, n: 20000 }
+      long_haul: { mae: 590.0, n: 400 }
+  S2:
+    story: "Tăng độ sâu cây, MAE tổng giảm mạnh"
+    mae: 180.0
+    latency_p95_ms: 41.0
+    git_dirty: false
+    slices:
+      airport: { mae: 355.0, n: 5000 }
+      night: { mae: 240.0, n: 3000 }
+      short: { mae: 75.0, n: 20000 }
+      long_haul: { mae: 580.0, n: 400 }
+  S3:
+    story: "Tinh chỉnh siêu tham số, nhanh hơn rõ rệt"
+    mae: 198.5
+    latency_p95_ms: 30.0
+    git_dirty: false
+    slices:
+      airport: { mae: 299.0, n: 5000 }
+      night: { mae: 249.0, n: 3000 }
+      short: { mae: 89.5, n: 20000 }
+      long_haul: { mae: 598.0, n: 400 }
+  S4:
+    story: "Bản thử trên máy cá nhân, kết quả rất đẹp"
+    mae: 175.0
+    latency_p95_ms: 41.0
+    git_dirty: true
+    slices:
+      airport: { mae: 280.0, n: 5000 }
+      night: { mae: 230.0, n: 3000 }
+      short: { mae: 78.0, n: 20000 }
+      long_haul: { mae: 560.0, n: 400 }
+  S5:
+    story: "Đổi loss sang Huber, đỡ nhạy với chuyến dài"
+    mae: 190.0
+    latency_p95_ms: 42.0
+    git_dirty: false
+    slices:
+      airport: { mae: 295.0, n: 5000 }
+      night: { mae: 245.0, n: 3000 }
+      short: { mae: 80.0, n: 20000 }
+      long_haul: { mae: 700.0, n: 400 }
+  S6:
+    story: "Ensemble ba model"
+    mae: 190.0
+    latency_p95_ms: 52.0
+    git_dirty: false
+    slices:
+      airport: { mae: 295.0, n: 5000 }
+      night: { mae: 245.0, n: 3000 }
+      short: { mae: 82.0, n: 20000 }
+      long_haul: { mae: 590.0, n: 400 }
+  S7:
+    story: "Pipeline đánh giá mới, báo cáo thiếu một slice"
+    mae: 192.0
+    latency_p95_ms: 41.0
+    git_dirty: false
+    slices:
+      airport: { mae: 295.0, n: 5000 }
+      short: { mae: 82.0, n: 20000 }
+      long_haul: { mae: 590.0, n: 400 }
+  S8:
+    story: "Cùng S5 nhưng chạy trên tập đánh giá chỉ có 150 chuyến dài"
+    mae: 190.0
+    latency_p95_ms: 42.0
+    git_dirty: false
+    slices:
+      airport: { mae: 295.0, n: 5000 }
+      night: { mae: 245.0, n: 3000 }
+      short: { mae: 80.0, n: 20000 }
+      long_haul: { mae: 700.0, n: 150 }

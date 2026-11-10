@@ -1,0 +1,8 @@
+default-interrupt: [c]
+ollama-throughput: [b]
+ollama-ttft: [a]
+open-loop-queue: [b]
+prefix-hit: [c]
+prefix-alternate: [b]
+closed-loop: [b]
+success-column: [a, b, c]

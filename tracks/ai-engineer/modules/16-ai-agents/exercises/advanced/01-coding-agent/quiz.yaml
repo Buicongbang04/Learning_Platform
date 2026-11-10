@@ -1,0 +1,92 @@
+questions:
+- id: hidden-tests
+  kind: knowledge
+  type: single
+  prompt: Vì sao `grade` chỉ chép mã nguồn của agent sang thư mục sạch mà không chép thư mục `tests/` của agent?
+  options:
+  - id: a
+    text: Agent có thể sửa test cho pass thay vì sửa mã
+  - id: b
+    text: Thư mục tests/ quá lớn, chép mất nhiều thời gian
+  - id: c
+    text: Pytest không chạy được hai thư mục tests/ cùng lúc
+  - id: d
+    text: Test thấy được dùng định dạng khác test ẩn
+- id: killpg
+  kind: knowledge
+  type: single
+  prompt: Khi test quá thời gian, vì sao phải giết cả nhóm tiến trình (`os.killpg`) chứ không chỉ `proc.kill()`?
+  options:
+  - id: a
+    text: proc.kill() không dừng được tiến trình Python đang chạy
+  - id: b
+    text: unshare chỉ nhận tín hiệu gửi cho cả nhóm
+  - id: c
+    text: killpg nhanh hơn kill khoảng mười lần khi máy bận
+  - id: d
+    text: Test có thể sinh tiến trình con chạy tiếp sau đó
+- id: visible-vs-edge
+  kind: knowledge
+  type: single
+  prompt: Vì sao bộ test agent được thấy chỉ giữ rất nhỏ (1 test mỗi task), thay vì đưa luôn cả test ẩn cho agent chạy?
+  options:
+  - id: a
+    text: Để pytest trong sandbox chạy nhanh hơn ở mỗi bước
+  - id: b
+    text: Để agent có tín hiệu kiểm tra mà không khớp được đề chấm
+  - id: c
+    text: Vì context của model 3B không chứa nổi nhiều test
+  - id: d
+    text: Vì test ẩn cần mạng nên không chạy được cho agent
+- id: most-hidden
+  kind: data
+  type: single
+  prompt: Task nào có nhiều test ẩn nhất (đếm cả các trường hợp của parametrize)?
+  options:
+  - id: a
+    text: 04-parse-duration
+  - id: b
+    text: 06-merge-intervals
+  - id: c
+    text: 05-roman
+  - id: d
+    text: 12-vn-phone
+- id: visible-vs-hidden
+  kind: knowledge
+  type: single
+  prompt: Agent báo xong, test thấy được pass nhưng test ẩn fail. Điều đó cho thấy gì?
+  options:
+  - id: a
+    text: Sandbox chặn mạng nên test ẩn không chạy được
+  - id: b
+    text: Test ẩn bị lỗi vì viết cho phiên bản Python khác
+  - id: c
+    text: Mã chỉ đúng với trường hợp test thấy được kiểm
+  - id: d
+    text: Model đã sửa tệp trong thư mục hidden/ của task này
+- id: pass-hat-k
+  kind: knowledge
+  type: single
+  prompt: Agent sẽ chạy tự động mỗi đêm và phải đúng mọi lần. Thước đo nào phản ánh đúng yêu cầu đó?
+  options:
+  - id: a
+    text: pass@k với k lớn, ít nhất một lần đúng
+  - id: b
+    text: Số bước trung bình của các lần đúng
+  - id: c
+    text: pass^k, mọi lần trong k lần đều đúng
+  - id: d
+    text: Tỉ lệ test thấy được pass sau lần đầu
+- id: minimal-env
+  kind: knowledge
+  type: single
+  prompt: Vì sao `run_pytest` dựng môi trường tối thiểu thay vì truyền nguyên `os.environ` cho tiến trình con?
+  options:
+  - id: a
+    text: Để mã model viết không đọc được key, token của bạn
+  - id: b
+    text: Để pytest chạy nhanh hơn khi ít biến môi trường
+  - id: c
+    text: Vì unshare không nhận quá 100 biến môi trường một lần
+  - id: d
+    text: Vì PYTHONPATH gốc làm pytest không tìm thấy thư mục test

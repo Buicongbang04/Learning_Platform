@@ -1,0 +1,13 @@
+decision: keep
+reasons:
+  - "MAE tháng 2019-12 là 212.3 s so với 196.4 s của 2019-11 (+8.1%), vẫn trong dải 192 tới 212 s của nửa sau 2019, và tháng 2020-01 đã quay lại 199.1 s"
+  - "PSI trip_distance 0.0023 và PSI giờ đón 0.0022, đều rất xa ngưỡng 0.1: tháng 12 đông đúc hơn theo mùa lễ nhưng phân phối đầu vào gần như không đổi so với tháng train 2019-06"
+  - "Thí nghiệm train lại trên 2019-11 (make experiments, nhãn đã công bố tại as_of 2020-01) chỉ giảm MAE tháng 12 từ 212.3 s xuống 208.1 s (-2%), không đáng rủi ro và chi phí của một lần promote; giữ model, theo dõi bias (đang -22 s)"
+evidence:
+  psi_trip_distance: 0.00234
+  mae_before: 196.35
+  mae_after: 212.27
+  as_of: "2020-01"
+  psi_pickup_hour: 0.0022
+  mae_band_2019_h2: [192.6, 212.3]
+  mae_retrained_on_2019_11: 208.1

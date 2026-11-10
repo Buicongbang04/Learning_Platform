@@ -1,0 +1,92 @@
+questions:
+- id: min-per-class
+  kind: data
+  type: single
+  prompt: Tập train (3 680 ảnh, 37 giống). Giống ít ảnh train nhất có bao nhiêu ảnh?
+  options:
+  - id: a
+    text: '37'
+  - id: b
+    text: '88'
+  - id: c
+    text: '93'
+  - id: d
+    text: '100'
+- id: no-normalize
+  kind: data
+  type: single
+  prompt: Linear probe trên cùng backbone nhưng quên Normalize ImageNet (chỉ chia 255). Test accuracy thay đổi thế nào?
+  options:
+  - id: a
+    text: Gần như không đổi, dưới 1 điểm
+  - id: b
+    text: Tụt khoảng 10 điểm
+  - id: c
+    text: Tụt về mức đoán mò, khoảng 3%
+  - id: d
+    text: Tăng nhẹ vì feature không bị dịch
+- id: scratch-loss
+  kind: data
+  type: single
+  prompt: Train ResNet-18 từ đầu 3 epoch. Loss train ở epoch cuối gần giá trị nào nhất?
+  options:
+  - id: a
+    text: Khoảng 0.4, ngang bản fine-tune
+  - id: b
+    text: Khoảng 3, chưa xa mức đoán mò ln 37 ≈ 3.6
+  - id: c
+    text: Gần 0, model đã học thuộc tập train
+  - id: d
+    text: Tăng dần qua từng epoch, phân kỳ
+- id: eval-image-stats
+  kind: data
+  type: single
+  prompt: Ảnh test đầu tiên sau transform eval (Normalize ImageNet). Mean và std của tensor đó là gì?
+  options:
+  - id: a
+    text: Mean khoảng -0.25, std khoảng 1.6
+  - id: b
+    text: Mean đúng 0, std đúng 1
+  - id: c
+    text: Mean khoảng 0.45, std khoảng 0.23
+  - id: d
+    text: Mean khoảng 115, std khoảng 60
+- id: bn-order
+  kind: knowledge
+  type: single
+  prompt: Khi chỉ train head, vì sao set_bn_eval(model) phải được gọi sau model.train() ở mỗi epoch?
+  options:
+  - id: a
+    text: Vì set_bn_eval chỉ có tác dụng khi autograd của các tham số BatchNorm đang bật
+  - id: b
+    text: Vì model.train() đặt lại mọi module con, kể cả BatchNorm, về chế độ train
+  - id: c
+    text: Vì optimizer chỉ đọc chế độ của model ở đầu epoch
+  - id: d
+    text: Không cần, requires_grad=False đã giữ running stats cố định
+- id: lr-groups
+  kind: knowledge
+  type: single
+  prompt: Vì sao fine-tune dùng lr cho backbone nhỏ hơn head khoảng 10 lần?
+  options:
+  - id: a
+    text: Head khởi tạo ngẫu nhiên cần bước lớn; backbone đã tốt, bước lớn sẽ xoá feature pretrain
+  - id: b
+    text: Backbone có nhiều tham số hơn head nên tổng gradient của nó lớn hơn rất nhiều lần
+  - id: c
+    text: Để running mean/var của BatchNorm trong backbone không bị cập nhật theo dữ liệu mới
+  - id: d
+    text: Vì AdamW không cho phép cùng lr trên hai nhóm tham số
+- id: when-probe
+  kind: knowledge
+  type: single
+  prompt: Kết quả nào cho thấy nên dừng ở linear probe thay vì fine-tune toàn bộ?
+  options:
+  - id: a
+    text: Probe đã gần mục tiêu và fine-tune chỉ hơn trong dao động giữa các lần chạy
+  - id: b
+    text: Probe thua hẳn bản train từ đầu với cùng kiến trúc, cùng bộ dữ liệu và cùng ngân sách
+  - id: c
+    text: Miền dữ liệu đích rất khác ảnh tự nhiên của ImageNet
+  - id: d
+    text: Có GPU lớn, nhiều thời gian train và muốn thử mọi cấu hình có thể có

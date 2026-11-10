@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-autoscale
+spec:
+  scaleTargetRef:
+    name: batch-worker
+  minReplicaCount: 0
+  maxReplicaCount: 4
+  pollingInterval: 5
+  cooldownPeriod: 20
+  triggers:
+    - type: metrics-api
+      metadata:
+        url: "http://batch-queue.__NAMESPACE__.svc.cluster.local:8080/pending"
+        format: json
+        valueLocation: pending
+        targetValue: "10"
+        activationTargetValue: "0"

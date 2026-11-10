@@ -1,0 +1,105 @@
+questions:
+- id: probe-vs-baselines
+  kind: data
+  type: single
+  prompt: Trên toàn bộ tập test UIT-VSFC, embedding bge-m3 + logistic regression đứng ở đâu so với hai mốc của module 04?
+  options:
+  - id: a
+    text: Thua TF-IDF + LogReg (0.716) hơn 0.03
+  - id: b
+    text: Ngang TF-IDF, chênh chưa tới 0.01
+  - id: c
+    text: Hơn TF-IDF rõ, ngang hoặc nhỉnh hơn BiLSTM
+  - id: d
+    text: Hơn BiLSTM (0.755) trên 0.1 điểm
+- id: neutral-worst
+  kind: data
+  type: single
+  prompt: Bộ phân loại nào có F1 lớp neutral (5% tập test) thấp nhất?
+  options:
+  - id: a
+    text: Embedding + LogReg
+  - id: b
+    text: kNN với k = 10
+  - id: c
+    text: Centroid mỗi lớp
+  - id: d
+    text: Cả ba bằng nhau
+- id: leak-share
+  kind: data
+  type: single
+  prompt: Bao nhiêu câu test có một câu train với cosine từ 0.95 trở lên?
+  options:
+  - id: a
+    text: Gần như không câu nào
+  - id: b
+    text: Khoảng 3%
+  - id: c
+    text: Khoảng một phần tư
+  - id: d
+    text: Hơn một nửa
+- id: leak-f1
+  kind: data
+  type: single
+  prompt: macro-F1 của LogReg trên nhóm câu test có bản sao (cosine từ 0.95) so với phần còn lại?
+  options:
+  - id: a
+    text: Thấp hơn khoảng 0.1
+  - id: b
+    text: Gần như bằng nhau
+  - id: c
+    text: Cao hơn khoảng 0.1
+  - id: d
+    text: Cao hơn khoảng 0.4
+- id: topic-auroc
+  kind: data
+  type: single
+  prompt: Tham chiếu là câu train chủ đề giảng viên; AUROC phát hiện câu test chủ đề cơ sở vật chất khoảng bao nhiêu (k = 10)?
+  options:
+  - id: a
+    text: Khoảng 0.50
+  - id: b
+    text: Khoảng 0.70
+  - id: c
+    text: Khoảng 0.94
+  - id: d
+    text: Đúng 1.00
+- id: recommend-same-law
+  kind: data
+  type: single
+  prompt: Gợi ý 5 điều gần nhất cho điều đúng của 300 câu hỏi ghim. Tỉ lệ điều gợi ý cùng văn bản với điều gốc là bao nhiêu?
+  options:
+  - id: a
+    text: Dưới 1%, như ngẫu nhiên
+  - id: b
+    text: Khoảng 20%
+  - id: c
+    text: Khoảng 60%
+  - id: d
+    text: Đúng 100%
+- id: knn-minority
+  kind: knowledge
+  type: single
+  prompt: Vì sao kNN bỏ phiếu hay bỏ sót lớp hiếm như neutral?
+  options:
+  - id: a
+    text: Láng giềng của câu hiếm vẫn thường thuộc lớp đông
+  - id: b
+    text: kNN không dùng được với vector đã chuẩn hoá
+  - id: c
+    text: Lớp hiếm có vector dài hơn nên cosine thấp hơn
+  - id: d
+    text: kNN chỉ hỗ trợ được bài toán phân loại có hai lớp
+- id: auroc-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao đo phát hiện bất thường bằng AUROC thay vì accuracy ở một ngưỡng?
+  options:
+  - id: a
+    text: AUROC luôn cao hơn accuracy nên dễ báo cáo
+  - id: b
+    text: Không cần chọn ngưỡng, không bị lớp đông chi phối
+  - id: c
+    text: Accuracy không tính được khi điểm là số thực
+  - id: d
+    text: AUROC đo được cả độ trễ của bộ phát hiện

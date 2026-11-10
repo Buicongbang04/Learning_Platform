@@ -1,0 +1,55 @@
+import json
+import re
+import struct
+
+import numpy as np
+import pandas as pd
+
+from model import FEATURES, ROOT, export, features, load, metadata, train
+
+REQUIRED_TAGS = {"owner": r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", "team": r"^(eta|pricing|fraud|search|ads)$",
+                 "cost_center": r"^CC-[0-9]{4}$"}
+
+
+def trips(n: int = 400, seed: int = 0) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    pickup = pd.Timestamp("2019-03-01") + pd.to_timedelta(rng.integers(0, 86_400 * 28, n), unit="s")
+    fare = rng.uniform(3, 60, n)
+    payment = rng.choice([1, 2], n, p=[0.7, 0.3])
+    return pd.DataFrame({"tpep_pickup_datetime": pickup, "tpep_dropoff_datetime": pickup + pd.Timedelta(minutes=12),
+                         "PULocationID": rng.integers(1, 264, n), "DOLocationID": rng.integers(1, 264, n),
+                         "trip_distance": fare / 3, "payment_type": payment, "fare_amount": fare,
+                         "tip_amount": np.where(payment == 1, 0.18 * fare, 0.0)})
+
+
+def test_required_tags_present():
+    tags = metadata().get("tags") or {}
+    bad = [key for key, rule in REQUIRED_TAGS.items() if not re.fullmatch(rule, str(tags.get(key) or ""))]
+    assert not bad, f"tag bắt buộc thiếu hoặc sai dạng: {bad}"
+
+
+def test_registry_name_follows_convention():
+    meta = metadata()
+    assert meta["registry_name"] == f"{meta['tags']['team']}-{meta['name']}"
+
+
+def test_export_is_safetensors_and_json_only(tmp_path):
+    df = trips()
+    model = train(features(df), df["tip_amount"].to_numpy())
+    out = export(model, tmp_path / "model")
+    for path in out.iterdir():
+        data = path.read_bytes()
+        if path.suffix == ".safetensors":
+            (size,) = struct.unpack("<Q", data[:8])
+            assert isinstance(json.loads(data[8:8 + size]), dict)
+        else:
+            assert isinstance(json.loads(data), dict)
+    tags = json.loads((out / "metadata.json").read_text(encoding="utf-8"))["tags"]
+    assert tags == metadata()["tags"]
+    expected = np.clip(model.predict(features(df)), 0, None)
+    assert np.allclose(load(out)(df), expected)
+    assert len(json.loads((out / "config.json").read_text(encoding="utf-8"))["features"]) == len(FEATURES)
+
+
+def test_project_root_has_metadata():
+    assert (ROOT / "mlproject.yaml").is_file()

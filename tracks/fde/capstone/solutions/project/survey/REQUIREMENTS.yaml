@@ -1,0 +1,11 @@
+# Yêu cầu tối thiểu của máy khách cho một node quillo (compose: db + llm + embed + api + worker, model llm-small, CPU).
+min_cpus: 2
+min_mem_mb: 4096
+min_disk_free_gb: 10
+os:
+  - {id: ubuntu, min: "20.04"}
+  - {id: rocky, min: "8"}
+  - {id: debian, min: "11"}
+runtime: [docker>=20.10, podman>=4.0]
+ports: [18080]
+gpu: optional

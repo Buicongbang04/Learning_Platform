@@ -1,0 +1,5 @@
+data_path: data/yellow_tripdata_2019-01.parquet
+model_dir: models
+seed: 0
+max_iter: 100
+log_level: INFO

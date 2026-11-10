@@ -1,0 +1,108 @@
+service: eta
+window_days: 30
+markets: [manhattan, queens, brooklyn]
+slos:
+  - name: availability
+    kind: events
+    sli: "tỉ lệ request /predict trả 2xx trên tổng request hợp lệ, theo market"
+    measured_at: "ingress của từng market (Envoy/KServe), không phải log trong service"
+    target: 0.995
+  - name: latency
+    kind: events
+    sli: "tỉ lệ request /predict trả lời trong 150 ms, gồm cả gọi feature store"
+    measured_at: "histogram ở ingress của từng market"
+    target: 0.99
+  - name: quality
+    kind: events
+    sli: "tỉ lệ dự đoán có sai số tuyệt đối không quá 30% thời gian thật cộng 300 giây, chấm khi nhãn về"
+    measured_at: "job join nhãn, theo market và theo thời điểm nhãn về"
+    target: 0.9
+    budget_events:
+      manhattan: 710970
+      queens: 46893
+      brooklyn: 7383
+  - name: freshness
+    kind: time
+    sli: "tỉ lệ phút mà feature zone_speed_15m của market không cũ hơn 900 giây"
+    measured_at: "gauge last success của feature pipeline, theo partition market"
+    target: 0.99
+    budget_minutes: 432
+prometheus:
+  groups:
+    - name: eta-market-slo-recording
+      rules:
+        - record: market:eta_quality_bad_ratio:rate5m
+          expr: |
+            sum by (market) (rate(eta_quality_checks_total{job="eta",outcome="bad"}[5m]))
+              /
+            sum by (market) (rate(eta_quality_checks_total{job="eta"}[5m]))
+        - record: market:eta_quality_bad_ratio:rate30m
+          expr: |
+            sum by (market) (rate(eta_quality_checks_total{job="eta",outcome="bad"}[30m]))
+              /
+            sum by (market) (rate(eta_quality_checks_total{job="eta"}[30m]))
+        - record: market:eta_quality_bad_ratio:rate1h
+          expr: |
+            sum by (market) (rate(eta_quality_checks_total{job="eta",outcome="bad"}[1h]))
+              /
+            sum by (market) (rate(eta_quality_checks_total{job="eta"}[1h]))
+        - record: market:eta_quality_bad_ratio:rate6h
+          expr: |
+            sum by (market) (rate(eta_quality_checks_total{job="eta",outcome="bad"}[6h]))
+              /
+            sum by (market) (rate(eta_quality_checks_total{job="eta"}[6h]))
+        - record: market:eta_feature_stale
+          expr: |
+            max by (market) (
+              (time() - eta_feature_last_success_timestamp_seconds{job="feature-pipeline",feature_view="zone_speed_15m"}) > bool 900
+            )
+        - record: market:eta_feature_stale_ratio:avg5m
+          expr: avg_over_time(market:eta_feature_stale[5m])
+        - record: market:eta_feature_stale_ratio:avg1h
+          expr: avg_over_time(market:eta_feature_stale[1h])
+    - name: eta-market-slo-alerts
+      rules:
+        - alert: ETAMarketQualityFastBurn
+          expr: |
+            market:eta_quality_bad_ratio:rate1h > (5 * 0.1)
+              and
+            market:eta_quality_bad_ratio:rate5m > (5 * 0.1)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ETA ở market {{ $labels.market }} đốt budget chất lượng gấp 5 lần: hết 1/6 budget 30 ngày sau 1 ngày"
+            runbook_url: "https://runbooks.example.com/eta/market-quality-fast-burn"
+        - alert: ETAMarketQualitySlowBurn
+          expr: |
+            market:eta_quality_bad_ratio:rate6h > (2 * 0.1)
+              and
+            market:eta_quality_bad_ratio:rate30m > (2 * 0.1)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ETA ở market {{ $labels.market }} đốt budget chất lượng gấp 2 lần trong 6 giờ"
+            runbook_url: "https://runbooks.example.com/eta/market-quality-slow-burn"
+        - alert: ETAMarketFeatureStale
+          expr: |
+            market:eta_feature_stale_ratio:avg1h > (14.4 * 0.01)
+              and
+            market:eta_feature_stale_ratio:avg5m > (14.4 * 0.01)
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "zone_speed_15m của market {{ $labels.market }} cũ hơn 15 phút: đốt 2% budget freshness 30 ngày mỗi giờ"
+            runbook_url: "https://runbooks.example.com/eta/market-feature-stale"
+        - alert: ETAMarketLabelsMissing
+          expr: |
+            (sum by (market) (increase(eta_requests_total{job="eta"}[2h])) > 0)
+              unless on (market)
+            (sum by (market) (increase(eta_quality_checks_total{job="eta"}[2h])) > 0)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Market {{ $labels.market }} có request nhưng 2 giờ không có nhãn nào được chấm: SLO chất lượng đang mù"
+            runbook_url: "https://runbooks.example.com/eta/market-labels-missing"

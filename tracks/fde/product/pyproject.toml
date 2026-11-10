@@ -1,0 +1,18 @@
+[project]
+name = "quillo"
+version = "1.1.0"
+description = "Quillo: trợ lý hỏi đáp tài liệu nội bộ (RAG) chạy hoàn toàn on-prem"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.143.1",
+    "uvicorn==0.54.0",
+    "httpx==0.28.1",
+    "psycopg[binary]==3.3.6",
+    "jinja2==3.1.6",
+    "python-multipart==0.0.32",
+    "pypdf==6.21.1",
+]
+
+[tool.uv]
+package = false

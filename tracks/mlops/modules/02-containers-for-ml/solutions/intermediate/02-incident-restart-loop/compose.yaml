@@ -1,0 +1,15 @@
+services:
+  api:
+    build: ./service
+    restart: unless-stopped
+    environment:
+      MODEL_PATH: /models/model.joblib
+    volumes:
+      - ./models:/models:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "8000"

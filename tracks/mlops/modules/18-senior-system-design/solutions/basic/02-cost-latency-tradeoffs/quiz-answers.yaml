@@ -1,0 +1,6 @@
+cache-tail: [b]
+batch-vs-realtime: [c]
+distill-when: [a]
+levers: [a, b, c]
+quality-budget: [d]
+precompute-staleness: [c]

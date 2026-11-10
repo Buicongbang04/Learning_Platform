@@ -26,6 +26,8 @@ uv sync                   # tạo .venv, cài Python 3.12 nếu thiếu và toà
 uv run python -c "import duckdb, pyspark, kafka; print('ok')"
 ```
 
+Tùy chọn cho module 10 và 20 của track AI Engineer: `uv sync --group llama` cài `llama-cpp-python`. Gói này build từ source nên cần `gcc`, `g++`, `cmake` (Debian/Ubuntu: `sudo apt install build-essential cmake`), mất khoảng 4 phút. Không có toolchain thì bỏ qua và dùng Ollama hoặc binary `llama.cpp` server; `uv sync` thường vẫn chạy bình thường.
+
 Mọi lệnh Python dùng `uv run ...` (không cần activate venv). Muốn activate: `source .venv/bin/activate`.
 
 ## 3. Docker
@@ -209,6 +211,28 @@ uv run pytest tracks/data-engineer/modules/02-data-modeling -q
 
 Bài cần dịch vụ Docker sẽ **skip** kèm lệnh bật dịch vụ nếu dịch vụ chưa chạy. Đổi host/cổng
 bằng biến môi trường (`POSTGRES_PORT`, `POSTGRES_DSN`, `KAFKA_BOOTSTRAP`…, xem `testkit.py`).
+
+### Cấu hình LLM (track AI Engineer)
+
+`llmkit.py` đọc cấu hình từ biến môi trường hoặc `setup/.env` (không commit key). Mặc định dùng Ollama local:
+
+```bash
+ollama serve                 # nếu chưa chạy
+ollama pull qwen2.5:3b       # model chat mặc định
+ollama pull bge-m3           # model embedding mặc định (1024 chiều)
+```
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` hoặc `openai_compat` (OmniRoute, Gemini) |
+| `OLLAMA_HOST` | `http://localhost:11434` | đặt `http://<ip-PC>:11434` nếu Ollama chạy trên PC khác |
+| `LLM_BASE_URL` | (trống) | với `openai_compat`, ví dụ `https://generativelanguage.googleapis.com/v1beta/openai` |
+| `LLM_API_KEY` | (trống) | key gửi qua header `Authorization: Bearer` |
+| `LLM_MODEL` | `qwen2.5:3b` | model chat |
+| `EMBED_MODEL` | `bge-m3` | model embedding |
+| `LLM_TIMEOUT` | `120` | giây chờ mỗi request |
+
+Test không cần LLM thật: dùng `llmkit.FakeLLM` (xem docstring đầu `llmkit.py`).
 
 ## 10. Xử lý sự cố
 

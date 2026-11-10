@@ -1,0 +1,105 @@
+questions:
+- id: resid-switch
+  kind: data
+  type: single
+  prompt: Trong bảng patching residual, từ `resid_pre` của tầng nào hiệu ứng ở vị trí cuối vượt hiệu ứng ở vị trí S2?
+  options:
+  - id: a
+    text: Tầng 3
+  - id: b
+    text: Tầng 6
+  - id: c
+    text: Tầng 9
+  - id: d
+    text: Tầng 11
+- id: mlp0
+  kind: data
+  type: single
+  prompt: Patch output MLP tầng 0 (mọi vị trí, clean vào corrupted) cho hiệu ứng chuẩn hoá khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Gần 0
+  - id: b
+    text: Khoảng 0.3
+  - id: c
+    text: Khoảng 0.9
+  - id: d
+    text: Trên 1.2
+- id: negative-head
+  kind: data
+  type: single
+  prompt: Head nào có hiệu ứng patching âm mạnh nhất?
+  options:
+  - id: a
+    text: '9.9'
+  - id: b
+    text: '10.7'
+  - id: c
+    text: '5.5'
+  - id: d
+    text: '10.0'
+- id: dla-vs-patch
+  kind: data
+  type: single
+  prompt: Head 9.6 có direct logit attribution và hiệu ứng patching ra sao?
+  options:
+  - id: a
+    text: Cả hai đều dương và lớn hơn 0.5
+  - id: b
+    text: DLA khoảng +1, patching gần 0
+  - id: c
+    text: DLA gần 0, patching khoảng +0.3
+  - id: d
+    text: Cả hai đều âm, khoảng -0.5
+- id: late-attn
+  kind: data
+  type: single
+  prompt: Patch output attention của tầng 10 và 11 (clean vào corrupted) cho hiệu ứng thế nào?
+  options:
+  - id: a
+    text: Âm, chúng làm logit difference giảm
+  - id: b
+    text: Gần 1, chúng khôi phục gần hết đáp án
+  - id: c
+    text: Đúng bằng 0 ở cả hai tầng cuối này
+  - id: d
+    text: Khoảng 0.5 ở cả hai tầng này
+- id: zero-before
+  kind: knowledge
+  type: single
+  prompt: Vì sao patch residual ở mọi vị trí trước S2 cho hiệu ứng đúng bằng 0 ở mọi tầng?
+  options:
+  - id: a
+    text: Vì logit difference chỉ được đo ở vị trí cuối của câu
+  - id: b
+    text: Vì input trùng nhau và attention chỉ nhìn về trước
+  - id: c
+    text: Vì LayerNorm xoá hết khác biệt ở các vị trí đầu câu
+  - id: d
+    text: Vì GPT-2 bỏ qua token đầu `<|endoftext|>`
+- id: metric
+  kind: knowledge
+  type: single
+  prompt: Vì sao dùng logit difference thay cho xác suất của IO làm thước đo patching?
+  options:
+  - id: a
+    text: Xác suất không tính được chính xác khi vocab có 50 257 token
+  - id: b
+    text: Tuyến tính theo stream cuối, không bão hoà như softmax
+  - id: c
+    text: Logit difference luôn nằm trong khoảng từ 0 tới 1
+  - id: d
+    text: Paper gốc dùng nó nên không so được nếu đổi sang thước đo khác
+- id: noising
+  kind: knowledge
+  type: single
+  prompt: Denoising (clean vào corrupted) và noising (corrupted vào clean) trả lời hai câu hỏi nào?
+  options:
+  - id: a
+    text: Denoising hỏi đủ chưa, noising hỏi có cần không
+  - id: b
+    text: Cả hai cùng hỏi một câu, chỉ khác dấu kết quả
+  - id: c
+    text: Denoising cho head, còn noising chỉ dùng cho MLP
+  - id: d
+    text: Denoising đo tương quan, noising đo nhân quả

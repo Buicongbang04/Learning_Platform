@@ -1,0 +1,105 @@
+questions:
+- id: near-dups
+  kind: data
+  type: single
+  prompt: Ở ngưỡng cosine char n-gram 0.9, giữa train và test của deepset có những cặp gần trùng nào?
+  options:
+  - id: a
+    text: Không có cặp nào, hai tập tách hoàn toàn sạch
+  - id: b
+    text: Khoảng 30 cặp, phần lớn là injection trùng nhau
+  - id: c
+    text: Vài cặp, đều là câu bình thường
+  - id: d
+    text: Vài cặp, nhãn ở hai phía lại mâu thuẫn nhau
+- id: char-vs-word
+  kind: data
+  type: single
+  prompt: Trên tập test, so AUC của TF-IDF ký tự với TF-IDF từ (cùng logistic regression)?
+  options:
+  - id: a
+    text: Cả hai dưới 0.7, gần đoán ngẫu nhiên
+  - id: b
+    text: Từ cao hơn ký tự rõ rệt
+  - id: c
+    text: Hai mô hình bằng nhau tuyệt đối
+  - id: d
+    text: Ký tự cao hơn từ
+- id: best-test
+  kind: data
+  type: single
+  prompt: Mô hình nào có AUC cao nhất (theo con số đo được) trên tập test deepset?
+  options:
+  - id: a
+    text: TF-IDF theo từ, 1 tới 2 gram
+  - id: b
+    text: TF-IDF theo ký tự, 2 tới 5 gram
+  - id: c
+    text: Embedding bge-m3 cộng logistic regression
+  - id: d
+    text: TF-IDF từ và ký tự bằng nhau, cao hơn embedding
+- id: vi-word
+  kind: data
+  type: single
+  prompt: Trên 40 câu tiếng Việt tự viết, TF-IDF theo từ bắt được bao nhiêu trong 20 injection ở ngưỡng 0.5?
+  options:
+  - id: a
+    text: Gần như không câu nào
+  - id: b
+    text: Khoảng một nửa số câu
+  - id: c
+    text: Gần như tất cả các câu
+  - id: d
+    text: Đúng như trên tập test tiếng Anh
+- id: vi-embedding
+  kind: data
+  type: single
+  prompt: Trên 40 câu tiếng Việt, bge-m3 cộng logistic regression ở ngưỡng 0.5 hành xử thế nào?
+  options:
+  - id: a
+    text: Bỏ sót đa số injection nhưng không chặn oan câu bình thường nào
+  - id: b
+    text: Bắt gần hết injection nhưng chặn oan nhiều câu thường
+  - id: c
+    text: Bắt hết injection và không chặn oan câu bình thường nào
+  - id: d
+    text: Không chạy được vì bge-m3 không hỗ trợ văn bản tiếng Việt
+- id: oof-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao oof_scores nhận một hàm tạo model (make_model) thay vì một model đã tạo sẵn?
+  options:
+  - id: a
+    text: Để tiết kiệm bộ nhớ RAM khi dữ liệu train quá lớn so với máy
+  - id: b
+    text: Vì scikit-learn không cho phép fit một model hai lần liên tiếp nhau
+  - id: c
+    text: Mỗi fold fit lại cả vectorizer, validation không lọt vào lúc học
+  - id: d
+    text: Vì StratifiedKFold chỉ nhận một hàm, hoàn toàn không nhận object
+- id: base-rate
+  kind: knowledge
+  type: single
+  prompt: Classifier có recall 0.9 và FPR 2%. Lưu lượng thật có 0.5% injection. Precision ở production xấp xỉ bao nhiêu?
+  options:
+  - id: a
+    text: Khoảng 0.98, như đo trên tập cân bằng
+  - id: b
+    text: Khoảng 0.18, đa số cảnh báo là chặn oan
+  - id: c
+    text: Khoảng 0.90, đúng bằng recall đo trên tập test
+  - id: d
+    text: Khoảng 0.50, vì base rate không ảnh hưởng
+- id: threshold-direction
+  kind: knowledge
+  type: single
+  prompt: Vì sao threshold_for_fpr trả ngưỡng NHỎ NHẤT có FPR không quá giới hạn?
+  options:
+  - id: a
+    text: Trong các ngưỡng đạt FPR, ngưỡng nhỏ nhất có recall cao nhất
+  - id: b
+    text: Vì ngưỡng nhỏ hơn luôn luôn cho precision cao hơn ngưỡng lớn
+  - id: c
+    text: Vì logistic regression chỉ cho ra điểm nhỏ hơn 0.5 với dữ liệu này
+  - id: d
+    text: Để khớp với ngưỡng mặc định 0.5 trong predict của scikit-learn

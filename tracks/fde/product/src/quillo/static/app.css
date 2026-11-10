@@ -1,0 +1,16 @@
+body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1d2330; }
+header { display: flex; gap: .75rem; align-items: center; padding: .75rem 1.25rem; background: #1d2330; color: #fff; }
+header .inline { margin-left: auto; }
+main { max-width: 52rem; margin: 1.5rem auto; padding: 0 1rem; }
+.card { background: #fff; border: 1px solid #dde1e7; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+label { display: block; font-weight: 600; margin-bottom: .4rem; }
+textarea, input[type=password], input[name=tags] { width: 100%; box-sizing: border-box; padding: .5rem; margin-bottom: .5rem; }
+button { padding: .45rem 1rem; border-radius: 6px; border: 1px solid #3355cc; background: #3355cc; color: #fff; cursor: pointer; }
+table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
+td, th { text-align: left; padding: .35rem; border-bottom: 1px solid #eceff3; }
+blockquote { margin: .25rem 0 .75rem; padding-left: .75rem; border-left: 3px solid #dde1e7; color: #4a5263; font-size: .9rem; }
+.muted { color: #6b7385; }
+.error { color: #b42318; }
+.ok { color: #067647; }
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }

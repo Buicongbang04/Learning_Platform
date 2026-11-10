@@ -1,0 +1,49 @@
+groups:
+  - name: eta-slo-recording
+    rules:
+      - record: eta:http_error_ratio:rate5m
+        expr: |
+          sum(rate(http_requests_total{job="eta-service",route="/predict",status=~"5.."}[5m]))
+            /
+          sum(rate(http_requests_total{job="eta-service",route="/predict"}[5m]))
+      - record: eta:http_error_ratio:rate30m
+        expr: |
+          sum(rate(http_requests_total{job="eta-service",route="/predict",status=~"5.."}[30m]))
+            /
+          sum(rate(http_requests_total{job="eta-service",route="/predict"}[30m]))
+      - record: eta:http_error_ratio:rate1h
+        expr: |
+          sum(rate(http_requests_total{job="eta-service",route="/predict",status=~"5.."}[1h]))
+            /
+          sum(rate(http_requests_total{job="eta-service",route="/predict"}[1h]))
+      - record: eta:http_error_ratio:rate6h
+        expr: |
+          sum(rate(http_requests_total{job="eta-service",route="/predict",status=~"5.."}[6h]))
+            /
+          sum(rate(http_requests_total{job="eta-service",route="/predict"}[6h]))
+  - name: eta-slo-alerts
+    rules:
+      - alert: ETAErrorBudgetFastBurn
+        expr: |
+          eta:http_error_ratio:rate1h > (14.4 * 0.005)
+            and
+          eta:http_error_ratio:rate5m > (14.4 * 0.005)
+        for: 2m
+        labels:
+          severity: critical
+          service: eta
+        annotations:
+          summary: "Đang đốt error budget 14.4 lần nhanh hơn mức cho phép: hết 2% budget 30 ngày sau 1 giờ"
+          runbook_url: "https://runbooks.example.com/eta/error-budget-fast-burn"
+      - alert: ETAErrorBudgetSlowBurn
+        expr: |
+          eta:http_error_ratio:rate6h > (6 * 0.005)
+            and
+          eta:http_error_ratio:rate30m > (6 * 0.005)
+        for: 15m
+        labels:
+          severity: warning
+          service: eta
+        annotations:
+          summary: "Đang đốt error budget 6 lần nhanh hơn mức cho phép: hết 5% budget 30 ngày sau 6 giờ"
+          runbook_url: "https://runbooks.example.com/eta/error-budget-slow-burn"

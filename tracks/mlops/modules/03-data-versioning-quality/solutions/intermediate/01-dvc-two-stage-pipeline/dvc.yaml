@@ -1,0 +1,21 @@
+stages:
+  prepare:
+    cmd: python prepare.py
+    deps:
+      - prepare.py
+      - data/raw/trips.csv
+    params:
+      - prepare.min_distance
+    outs:
+      - data/clean.csv
+  split:
+    cmd: python split.py
+    deps:
+      - split.py
+      - data/clean.csv
+    params:
+      - split.seed
+      - split.test_size
+    outs:
+      - data/train.csv
+      - data/test.csv

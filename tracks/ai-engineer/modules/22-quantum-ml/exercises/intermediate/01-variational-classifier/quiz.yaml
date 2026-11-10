@@ -1,0 +1,105 @@
+questions:
+- id: l1-test
+  kind: data
+  type: single
+  prompt: Mạch 1 layer (L = 1), lần chia seed 0, sau 100 bước lr 0.3. Test accuracy là bao nhiêu?
+  options:
+  - id: a
+    text: '0.500'
+  - id: b
+    text: '0.620'
+  - id: c
+    text: '0.910'
+  - id: d
+    text: '0.980'
+- id: l1-why
+  kind: knowledge
+  type: single
+  prompt: Vì sao mạch 1 layer (đo Z trên wire 0) học kém trên moons?
+  options:
+  - id: a
+    text: Output không phụ thuộc x₁, mọi gate wire 1 ngoài light cone
+  - id: b
+    text: Một layer gặp barren plateau nên gradient gần như bằng 0
+  - id: c
+    text: Learning rate 0.3 quá lớn cho mạch có ít tham số như vậy
+  - id: d
+    text: MSE không hợp với nhãn ±1, phải dùng cross-entropy mới học
+- id: zero-grads
+  kind: data
+  type: single
+  prompt: Với mạch L = 4 sau khi train, bao nhiêu trong 4 tham số của layer cuối có gradient đúng bằng 0?
+  options:
+  - id: a
+    text: '0'
+  - id: b
+    text: '1'
+  - id: c
+    text: '3'
+  - id: d
+    text: '4'
+- id: fd-shots
+  kind: data
+  type: single
+  prompt: Đạo hàm của cos θ tại θ = 0.8, mỗi kỳ vọng 1000 shots, lặp 200 lần. Độ lệch chuẩn của sai phân trung tâm ε = 1e-2 khoảng bao nhiêu?
+  options:
+  - id: a
+    text: '0.015'
+  - id: b
+    text: '0.15'
+  - id: c
+    text: '1.65'
+  - id: d
+    text: '16.5'
+- id: ps-exact
+  kind: knowledge
+  type: single
+  prompt: Vì sao parameter-shift cho đạo hàm chính xác chứ không xấp xỉ như sai phân hữu hạn?
+  options:
+  - id: a
+    text: Kỳ vọng là a + b cos θ + c sin θ theo từng tham số
+  - id: b
+    text: Bước dịch π/2 đủ nhỏ để sai số Taylor bậc hai biến mất
+  - id: c
+    text: Simulator trả kỳ vọng chính xác nên sai phân nào cũng đúng
+  - id: d
+    text: PennyLane tự hiệu chỉnh sai số cắt cụt khi dịch tham số
+- id: five-splits
+  kind: data
+  type: single
+  prompt: Trên 5 lần chia (seed 0..4), VQC L = 4 so với SVM RBF thế nào?
+  options:
+  - id: a
+    text: VQC 0.980 ± 0.010, cao hơn SVM RBF 0.960 ± 0.016
+  - id: b
+    text: VQC 0.946 ± 0.022, thấp hơn SVM RBF 0.968 ± 0.016
+  - id: c
+    text: VQC 0.968 ± 0.016, bằng đúng SVM RBF 0.968 ± 0.016
+  - id: d
+    text: VQC 0.834 ± 0.021, thấp hơn SVM RBF 0.968 ± 0.016
+- id: circuits-per-step
+  kind: knowledge
+  type: single
+  prompt: Trên phần cứng, một bước gradient của mạch 16 tham số (parameter-shift, kèm giá trị loss) trên 200 mẫu cần bao nhiêu mạch?
+  options:
+  - id: a
+    text: '200'
+  - id: b
+    text: '3 200'
+  - id: c
+    text: '6 600'
+  - id: d
+    text: '33'
+- id: weak-baseline
+  kind: knowledge
+  type: single
+  prompt: MLP 16 neuron mặc định đạt 0.812, MLP 32-32 đạt 0.968. Bài học cho việc báo cáo kết quả QML là gì?
+  options:
+  - id: a
+    text: Baseline phải được tuning cùng ngân sách với mô hình mới
+  - id: b
+    text: MLP không phải baseline phù hợp cho dữ liệu hai chiều nhỏ
+  - id: c
+    text: Nên chọn baseline có ít tham số bằng mô hình lượng tử
+  - id: d
+    text: Chỉ cần so với logistic regression vì nó luôn ổn định

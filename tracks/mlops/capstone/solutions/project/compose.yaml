@@ -1,0 +1,76 @@
+name: eta
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.serve
+    environment:
+      MLFLOW_TRACKING_URI: ${ETA_MLFLOW_URI:-http://mlflow:5000}
+      MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD: "false"
+      ETA_MODEL_NAME: ${ETA_MODEL_NAME:-eta}
+      ETA_MODEL_PATH: ${ETA_MODEL_PATH:-}
+      ETA_CANARY_WEIGHT: ${ETA_CANARY_WEIGHT:-0}
+      ETA_SHADOW: ${ETA_SHADOW:-0}
+      ETA_PREDICTION_LOG: ${ETA_PREDICTION_LOG:-}
+      ETA_ADMIN_TOKEN: ${ETA_ADMIN_TOKEN:-}
+    volumes:
+      - ${ETA_MODEL_DIR:-./models}:/models:ro
+    ports:
+      - "127.0.0.1:${ETA_API_PORT:-28080}:8000"
+    networks:
+      - default
+      - mlops
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    stop_grace_period: 15s
+    cpuset: "${DEVOPS_CPUSET:-}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+    ports:
+      - "127.0.0.1:${ETA_PROMETHEUS_PORT:-29190}:9090"
+    networks:
+      - default
+      - mlops
+    mem_limit: 256m
+    cpuset: "${DEVOPS_CPUSET:-}"
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${ETA_GRAFANA_PORT:-23100}:3000"
+    mem_limit: 256m
+    cpuset: "${DEVOPS_CPUSET:-}"
+
+networks:
+  mlops:
+    name: ${MLOPS_NETWORK:-mlops_default}
+    external: true

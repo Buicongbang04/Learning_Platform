@@ -1,0 +1,8 @@
+slowest-load: [c]
+fastest-query: [b]
+lance-index: [b]
+oracle-filter: [b]
+post-filter-short: [c]
+chroma-default: [c]
+qdrant-ids: [b]
+postfilter-why: [b]

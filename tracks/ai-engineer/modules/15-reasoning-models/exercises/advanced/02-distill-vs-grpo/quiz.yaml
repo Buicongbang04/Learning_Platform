@@ -1,0 +1,105 @@
+questions:
+- id: teacher-gap
+  kind: data
+  type: single
+  prompt: Trên 500 câu ghim, model thầy 3B (greedy) so với model trò 0.5B sau distill thế nào?
+  options:
+  - id: a
+    text: Trò sau distill đã đuổi kịp thầy, chênh dưới 3 điểm
+  - id: b
+    text: Thầy hơn trò khoảng 10 điểm phần trăm
+  - id: c
+    text: Thầy hơn trò hơn 30 điểm phần trăm
+  - id: d
+    text: Trò sau distill vượt thầy nhờ khung chặt hơn
+- id: teacher-coverage
+  kind: data
+  type: single
+  prompt: Tỉ lệ câu train có ít nhất một lời giải đúng, thầy (2 mẫu) so với trò tự sinh (4 mẫu)?
+  options:
+  - id: a
+    text: Hai bên gần như bằng nhau
+  - id: b
+    text: Thầy cao hơn khoảng 20 điểm
+  - id: c
+    text: Trò cao hơn vì có 4 mẫu
+  - id: d
+    text: Thầy cao hơn khoảng 60 điểm
+- id: teacher-filter
+  kind: data
+  type: single
+  prompt: Trong các lời giải đúng đáp số của thầy, bộ lọc đúng khung chặt giữ lại khoảng bao nhiêu?
+  options:
+  - id: a
+    text: Gần như tất cả
+  - id: b
+    text: Khoảng hai phần ba
+  - id: c
+    text: Khoảng một phần năm
+  - id: d
+    text: Không lời giải nào
+- id: student-format
+  kind: data
+  type: single
+  prompt: Tỉ lệ đúng khung chặt của trò sau distill so với của chính thầy?
+  options:
+  - id: a
+    text: Thấp hơn thầy, vì trò yếu hơn
+  - id: b
+    text: Bằng đúng tỉ lệ của thầy
+  - id: c
+    text: Cao hơn thầy rõ rệt
+  - id: d
+    text: Gần 0, trò không học được khung
+- id: ranking
+  kind: data
+  type: single
+  prompt: Xếp ba nhánh (tự học, distill, GRPO) theo accuracy trên 500 câu, kết luận trung thực là gì?
+  options:
+  - id: a
+    text: Distill thắng rõ hai nhánh kia, hơn trên 10 điểm
+  - id: b
+    text: Cả ba tăng vài điểm, chênh nhau trong nhiễu
+  - id: c
+    text: GRPO thắng rõ, hai nhánh SFT làm model tệ đi
+  - id: d
+    text: Tự học thắng vì dữ liệu cùng phân phối với trò
+- id: one-variable
+  kind: knowledge
+  type: single
+  prompt: Vì sao nhánh distill dùng đúng SFTConfig, bộ lọc và 800 câu train của nhánh tự học?
+  options:
+  - id: a
+    text: Vì đổi cấu hình làm khoảng tin cậy hẹp lại
+  - id: b
+    text: Vì TRL không cho đổi SFTConfig giữa hai lần train
+  - id: c
+    text: Để tiết kiệm thời gian sinh lời giải của thầy
+  - id: d
+    text: Để chỉ nguồn lời giải khác nhau, so được nhân quả
+- id: license
+  kind: knowledge
+  type: single
+  prompt: Model trò distill từ Qwen2.5-3B-Instruct. Điều gì cần kiểm trước khi phát hành thương mại?
+  options:
+  - id: a
+    text: Trò phải được train thêm bằng GRPO trước
+  - id: b
+    text: Số tham số của trò phải nhỏ hơn của thầy
+  - id: c
+    text: Giấy phép của thầy, vì 3B dùng qwen-research
+  - id: d
+    text: Không cần gì vì dữ liệu do máy tự sinh ra
+- id: eval-mode
+  kind: knowledge
+  type: single
+  prompt: Ngay sau trainer.train(), trò sinh chuỗi vô nghĩa từ token thứ hai, accuracy 0 dù loss bình thường. Kiểm gì trước?
+  options:
+  - id: a
+    text: Learning rate quá cao làm hỏng trọng số
+  - id: b
+    text: Model còn ở chế độ train, chưa gọi eval()
+  - id: c
+    text: Dữ liệu SFT bị nhiễm bẩn với tập đo
+  - id: d
+    text: Thầy 3B sinh lời giải sai định dạng

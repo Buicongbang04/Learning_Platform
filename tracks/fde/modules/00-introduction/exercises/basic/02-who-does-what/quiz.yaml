@@ -1,0 +1,73 @@
+questions:
+  - id: demo-before-contract
+    kind: knowledge
+    type: single
+    prompt: "Khách đang trong vòng mua hàng, chưa ký hợp đồng. Họ cần một buổi demo trên tài liệu mẫu và bản trả lời bộ security questionnaire chuẩn để trình ban mua sắm. Ai dẫn việc này?"
+    options:
+      - { id: a, text: "FDE" }
+      - { id: b, text: "SE (presales)" }
+      - { id: c, text: "Support" }
+      - { id: d, text: "Product (PM)" }
+  - id: pilot-ca-rotated
+    kind: knowledge
+    type: single
+    prompt: "Pilot ở bệnh viện do bạn triển khai đang chạy. Đêm qua IT bệnh viện đổi CA của proxy, worker không tải được tài liệu nữa. Cần đọc log tại máy khách và sửa cấu hình triển khai riêng của bệnh viện trước giờ làm việc. Ai làm?"
+    options:
+      - { id: a, text: "FDE" }
+      - { id: b, text: "SE (presales)" }
+      - { id: c, text: "Support" }
+      - { id: d, text: "Product (PM)" }
+  - id: known-issue
+    kind: knowledge
+    type: single
+    prompt: "Một khách đã chạy production ổn định 8 tháng báo một lỗi đã có trong knowledge base; cách sửa là nâng lên bản vá 1.1.3 theo runbook có sẵn. Ai nhận ticket này?"
+    options:
+      - { id: a, text: "FDE" }
+      - { id: b, text: "SE (presales)" }
+      - { id: c, text: "Support" }
+      - { id: d, text: "Product (PM)" }
+  - id: three-customers-same-ask
+    kind: knowledge
+    type: single
+    prompt: "Ba khách ở ba ngành khác nhau cùng xin tính năng \"phân quyền theo phòng ban\". Cần quyết định có đưa vào roadmap sản phẩm chung không, ưu tiên ở quý nào. Ai quyết?"
+    options:
+      - { id: a, text: "FDE" }
+      - { id: b, text: "SE (presales)" }
+      - { id: c, text: "Support" }
+      - { id: d, text: "Product (PM)" }
+  - id: legacy-connector
+    kind: knowledge
+    type: single
+    prompt: "Pilot cần chạy trên dữ liệu thật trong 2 tuần, nhưng dữ liệu nằm trong hệ thống hồ sơ cũ của khách, chỉ xuất được CSV mỗi đêm. Chưa biết khách nào khác cần connector này. Ai viết connector đó?"
+    options:
+      - { id: a, text: "FDE" }
+      - { id: b, text: "SE (presales)" }
+      - { id: c, text: "Support" }
+      - { id: d, text: "Product (PM)" }
+  - id: noexec-reports
+    kind: knowledge
+    type: single
+    prompt: "Bốn báo cáo từ hiện trường cho thấy installer hỏng ở mọi máy có /tmp mount noexec. Ai quyết định đưa bản sửa vào bản phát hành chung và lịch thông báo cho mọi khách?"
+    options:
+      - { id: a, text: "FDE" }
+      - { id: b, text: "SE (presales)" }
+      - { id: c, text: "Support" }
+      - { id: d, text: "Product (PM)" }
+  - id: demo-not-our-workflow
+    kind: knowledge
+    type: single
+    prompt: "Sau buổi demo, giám đốc khối nói: \"Hay đấy, nhưng không khớp cách đội tôi làm.\" Cần ngồi cạnh đội của họ hai ngày, quan sát workflow thật rồi dựng lại prototype trên dữ liệu của họ. Ai làm?"
+    options:
+      - { id: a, text: "FDE" }
+      - { id: b, text: "SE (presales)" }
+      - { id: c, text: "Support" }
+      - { id: d, text: "Product (PM)" }
+  - id: bring-back-to-product
+    kind: knowledge
+    type: multi
+    prompt: "Kết thúc pilot ở một khách, FDE nên mang những gì về cho team product?"
+    options:
+      - { id: a, text: "Các lỗi cài đặt gặp ở môi trường khách, kèm cách tái hiện ở lab" }
+      - { id: b, text: "Toàn bộ nhánh code riêng của khách để merge nguyên vào main" }
+      - { id: c, text: "Yêu cầu tính năng đã gộp, ghi rõ bao nhiêu khách cần và vì sao" }
+      - { id: d, text: "Bản sao dữ liệu thật của khách để team product tự debug" }

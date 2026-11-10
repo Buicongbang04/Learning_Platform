@@ -1,0 +1,20 @@
+severity: SEV2
+trigger: mdl-207
+started_at: "13:05"
+detected_at: "13:09"
+mitigated_at: "13:49"
+time_to_detect_min: 4
+time_to_mitigate_min: 44
+decision: rollback
+impact:
+  failed_requests: 6385
+  budget_consumed_pct: 2.96
+roles:
+  incident_commander: my
+  comms: son
+  ops: hai
+next_steps:
+  - "Cổng promotion chạy model ứng viên trên mẫu có passenger_count trống trước khi deploy (chủ: chủ model ETA)"
+  - "Canary tự rollback khi tỉ lệ 5xx của bản mới vượt 2% trong 3 phút (chủ: đội serving)"
+  - "Runbook ETA thêm bước đầu: đối chiếu thời điểm lỗi với deploys.log trước khi thử restart (chủ: on-call ETA)"
+  - "Viết postmortem không đổ lỗi trong 5 ngày làm việc (chủ: ops của sự cố)"

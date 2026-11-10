@@ -1,0 +1,92 @@
+questions:
+- id: norm-effect
+  kind: data
+  type: single
+  prompt: Cùng bản nhận dạng của small beam 5, WER khi không chuẩn hoá so với sau `normalize_vi` khác nhau thế nào?
+  options:
+  - id: a
+    text: Gần như bằng nhau, Whisper đã viết thường và bỏ dấu câu
+  - id: b
+    text: Không chuẩn hoá cao hơn khoảng 0.05 tới 0.1 điểm WER
+  - id: c
+    text: Không chuẩn hoá thấp hơn, vì dấu câu được tính là từ đúng
+  - id: d
+    text: Không chuẩn hoá cao gấp ba lần, trên 0.6 điểm WER
+- id: long-words
+  kind: data
+  type: single
+  prompt: Nhận dạng 50 câu nối thành một audio dài với cấu hình mặc định beam 5 (không VAD), số từ model viết ra so với số từ thật thế nào?
+  options:
+  - id: a
+    text: Nhiều hơn hẳn, vì model lặp đi lặp lại các câu đã nghe
+  - id: b
+    text: Bằng đúng số từ thật, chỉ sai ở dấu thanh và chính tả
+  - id: c
+    text: Ít hơn hẳn số từ thật (hơn 10%), có đoạn bị bỏ sót
+  - id: d
+    text: Khoảng một nửa, vì VAD cắt bỏ phần lớn audio
+- id: tts-digits
+  kind: data
+  type: single
+  prompt: CER vòng TTS → STT của 10 câu tài chính, đưa nguyên chữ số so với chuẩn hoá số trước TTS, thế nào?
+  options:
+  - id: a
+    text: Hai cách gần bằng nhau, chênh lệch nhỏ hơn 0.03 điểm CER
+  - id: b
+    text: Chuẩn hoá số làm CER tăng vì câu dài hơn
+  - id: c
+    text: Đưa chữ số cao hơn vài lần, chuẩn hoá về khoảng 0.1
+  - id: d
+    text: Cả hai trên 0.8, vì TTS không đọc được câu nào có số tiền
+- id: vad-short
+  kind: data
+  type: single
+  prompt: Với 50 câu ngắn (mỗi câu vài giây tới 25 giây), bật VAD cho small beam 5 thay đổi WER thế nào?
+  options:
+  - id: a
+    text: Giảm WER một nửa vì bỏ được khoảng im lặng ở đầu mỗi câu
+  - id: b
+    text: Gần như không đổi, chênh lệch nằm trong nhiễu
+  - id: c
+    text: Tăng gấp đôi vì VAD cắt mất chữ đầu mỗi câu
+  - id: d
+    text: Làm model không chạy được trên CPU int8
+- id: mms-digits
+  kind: knowledge
+  type: single
+  prompt: Đưa "45.000 đồng" thẳng vào `mms-tts-vie` thì điều gì xảy ra với phần số?
+  options:
+  - id: a
+    text: Tokenizer bỏ im lặng các ký tự không có trong vocab, số biến mất
+  - id: b
+    text: Model đọc lần lượt từng chữ số theo tiếng Anh, four five zero zero zero
+  - id: c
+    text: Tokenizer báo lỗi và dừng, bạn phải bắt ngoại lệ đó
+  - id: d
+    text: Model tự đọc đúng thành bốn mươi lăm nghìn nhờ dữ liệu train
+- id: corpus-wer
+  kind: knowledge
+  type: single
+  prompt: Vì sao WER mức corpus cộng lỗi rồi mới chia, thay vì lấy trung bình WER từng câu?
+  options:
+  - id: a
+    text: Để câu ngắn không có trọng số bằng câu dài khi tính trung bình
+  - id: b
+    text: Vì WER của từng câu luôn bằng 0 với mọi câu ngắn hơn năm từ
+  - id: c
+    text: Vì jiwer không cho tính WER cho từng câu riêng lẻ được
+  - id: d
+    text: Để WER không bao giờ vượt quá 1 kể cả khi model chèn thêm từ
+- id: roundtrip-limit
+  kind: knowledge
+  type: single
+  prompt: CER vòng TTS → STT thấp nói lên điều gì về giọng TTS?
+  options:
+  - id: a
+    text: Giọng tự nhiên, ngữ điệu đúng, người nghe chắc chắn sẽ hài lòng
+  - id: b
+    text: Model STT trong vòng thử nghiệm không còn lỗi nào
+  - id: c
+    text: Lời đọc đủ rõ để máy nghe ra; không nói gì về độ tự nhiên
+  - id: d
+    text: Giọng có thể dùng thương mại ngay mà không cần kiểm giấy phép model

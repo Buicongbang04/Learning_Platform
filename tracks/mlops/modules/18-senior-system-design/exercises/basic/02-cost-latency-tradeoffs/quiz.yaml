@@ -1,0 +1,55 @@
+questions:
+  - id: cache-tail
+    kind: knowledge
+    type: single
+    prompt: "Service gợi ý có p99 200 ms, SLO đòi p99 dưới 80 ms. Đội đề xuất cache kết quả theo user, ước tính hit rate 85%. Nhận xét nào đúng?"
+    options:
+      - { id: a, text: "Đạt SLO, vì latency trung bình giảm khoảng sáu lần so với hiện tại" }
+      - { id: b, text: "Chưa đạt: 15% miss vẫn đi qua model nên p99 gần như không đổi" }
+      - { id: c, text: "Đạt SLO nếu tăng TTL của cache lên 24 giờ để hit rate cao hơn nữa" }
+      - { id: d, text: "Chưa đánh giá được khi chưa biết giá theo giờ của cụm Redis cache" }
+  - id: batch-vs-realtime
+    kind: knowledge
+    type: single
+    prompt: "Model chấm điểm rủi ro cho 3 triệu khách hàng, mỗi ngày chỉ khoảng 40 nghìn khách đăng nhập, quyết định cần dùng giao dịch trong 5 phút gần nhất. Chọn gì?"
+    options:
+      - { id: a, text: "Batch mỗi đêm cho cả 3 triệu khách, vì rẻ và vận hành đơn giản nhất" }
+      - { id: b, text: "Batch mỗi giờ cho cả 3 triệu khách để feature luôn đủ tươi khi cần" }
+      - { id: c, text: "Realtime: số người hỏi ít và quyết định đòi feature tươi vài phút" }
+      - { id: d, text: "Bỏ model, dùng luật tĩnh để khỏi tốn chi phí phục vụ model nào cả" }
+  - id: distill-when
+    kind: knowledge
+    type: single
+    prompt: "Distill model 1 tỉ tham số thành model 60 triệu tham số tốn 9 000 USD một lần, tiết kiệm 300 USD mỗi ngày, chất lượng giảm 1%. Điều gì quyết định có nên làm không?"
+    options:
+      - { id: a, text: "Hoà vốn sau 30 ngày; 1% có nằm trong budget chất lượng hay không" }
+      - { id: b, text: "Model nhỏ luôn đáng làm, vì nhanh hơn thì người dùng luôn thích hơn" }
+      - { id: c, text: "Không bao giờ nên làm, vì mọi mức giảm chất lượng đều không chấp nhận" }
+      - { id: d, text: "Chỉ cần so số tham số của hai model, không cần tính chi phí hay SLO" }
+  - id: levers
+    kind: knowledge
+    type: multi
+    prompt: "LLM nội bộ tốn quá nhiều tiền GPU. Những đòn bẩy nào giảm chi phí mà không đổi model chính?"
+    options:
+      - { id: a, text: "Semantic cache cho câu hỏi lặp lại" }
+      - { id: b, text: "Router gửi câu dễ sang model nhỏ, câu khó sang model lớn" }
+      - { id: c, text: "Continuous batching và giới hạn số token sinh ra" }
+      - { id: d, text: "Tăng temperature để model trả lời nhanh hơn" }
+  - id: quality-budget
+    kind: knowledge
+    type: single
+    prompt: "Đội đang ở 99.7% SLO chất lượng (mục tiêu 99%), còn nhiều budget. Phương án rẻ hơn 40% làm chất lượng giảm 0.3 điểm. Senior nghĩ gì?"
+    options:
+      - { id: a, text: "Không bao giờ đánh đổi chất lượng lấy tiền, dù budget còn nhiều" }
+      - { id: b, text: "Hạ SLO chất lượng xuống 98% để có thêm chỗ an toàn về sau" }
+      - { id: c, text: "Đổi ngay cho toàn bộ traffic, vì sau khi đổi vẫn còn trên SLO" }
+      - { id: d, text: "Budget dư là để tiêu có chủ đích: canary kèm tiêu chí rollback" }
+  - id: precompute-staleness
+    kind: knowledge
+    type: single
+    prompt: "Bảng ETA tính sẵn mỗi 6 giờ cho từng cặp vùng. Chủ sản phẩm phàn nàn ETA sai giờ cao điểm. Câu hỏi đầu tiên nên hỏi là gì?"
+    options:
+      - { id: a, text: "Model hiện tại có đủ nhiều tham số để học giờ cao điểm không?" }
+      - { id: b, text: "Có nên chuyển phần tính bảng sang GPU đắt hơn cho nhanh không?" }
+      - { id: c, text: "Độ cũ tối đa 6 giờ có chấp nhận được lúc giờ cao điểm không?" }
+      - { id: d, text: "Có nên thêm một lớp cache phía trước bảng đã tính sẵn không?" }
