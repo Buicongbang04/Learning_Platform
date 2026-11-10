@@ -1,0 +1,129 @@
+questions:
+  - id: edge-latency
+    kind: knowledge
+    type: single
+    prompt: "Olist Shop muốn chạy logic nhỏ (đổi tiền tệ, A/B test, chặn bot) ngay sát người dùng ở Brazil, châu Âu và Mỹ, mỗi request vài mili giây CPU, cold start gần như không có, không quản server. Chọn gì?"
+    options:
+      - { id: a, text: "AWS Lambda ở us-east-1 sau API Gateway REST, bật provisioned concurrency cho cả ba vùng" }
+      - { id: b, text: "Cloudflare Workers: chạy trên isolate V8 ở hàng trăm PoP, khởi động tính bằng mili giây" }
+      - { id: c, text: "Một VM Hetzner ở Đức chạy Nginx với Lua, đặt CDN phía trước để cache mọi response" }
+      - { id: d, text: "Azure Functions gói Premium ở Brazil South, gọi chéo vùng cho người dùng châu Âu và Mỹ" }
+  - id: preview-per-pr
+    kind: knowledge
+    type: single
+    prompt: "Team frontend 4 người viết storefront bằng Next.js, muốn mỗi pull request có một URL preview riêng, deploy bằng git push, API route chạy dạng function, không ai làm hạ tầng. Chọn gì?"
+    options:
+      - { id: a, text: "Vercel: dựng từ git, preview deployment cho từng PR, API route thành function tự động" }
+      - { id: b, text: "Tự dựng cluster Kubernetes trên EC2 kèm ArgoCD và ApplicationSet để mỗi PR là một namespace riêng" }
+      - { id: c, text: "Alibaba Function Compute ở Hàng Châu, vì nhiều region và giá theo request thấp" }
+      - { id: d, text: "Contabo VPS chạy `next start` bằng systemd, mỗi PR một cổng khác trên cùng máy" }
+  - id: marketing-site
+    kind: knowledge
+    type: single
+    prompt: "Trang marketing tĩnh của Olist Shop (Hugo), cần form liên hệ, redirect, vài function nhỏ gửi email; team marketing tự sửa nội dung qua git. Chi phí gần như bằng 0 ở lưu lượng hiện tại. Chọn gì?"
+    options:
+      - { id: a, text: "Netlify: site tĩnh từ git, có sẵn form, redirect và function, gói miễn phí đủ dùng" }
+      - { id: b, text: "Một RDS Postgres Multi-AZ để lưu form, EC2 sau ALB để phục vụ trang tĩnh" }
+      - { id: c, text: "Heroku dyno chạy Hugo server cả ngày, thêm add-on Postgres để lưu form liên hệ" }
+      - { id: d, text: "GKE Autopilot với Ingress, cert-manager và HPA, chạy Hugo server trong một Deployment ba replica" }
+  - id: microsoft-shop
+    kind: knowledge
+    type: single
+    prompt: "Một đối tác của Olist dùng toàn bộ Microsoft 365, đăng nhập bằng Entra ID, code .NET, hợp đồng Enterprise Agreement với Microsoft. Họ cần function xử lý file hoá đơn thả vào storage. Nền tảng nào tự nhiên nhất?"
+    options:
+      - { id: a, text: "AWS Lambda với S3 trigger, rồi đồng bộ người dùng Entra ID sang IAM user từng người" }
+      - { id: b, text: "Azure Functions với Blob trigger, managed identity và Entra ID, tính vào hợp đồng sẵn có" }
+      - { id: c, text: "Cloudflare Workers đọc file từ R2, vì không phụ thuộc nhà cung cấp cloud nào cả" }
+      - { id: d, text: "DigitalOcean Functions, vì giá đơn giản và có sẵn tích hợp Entra ID cho .NET" }
+  - id: bigquery-team
+    kind: knowledge
+    type: single
+    prompt: "Đội dữ liệu đã dồn hết vào BigQuery và Cloud Storage. Mỗi khi có tệp CSV đơn hàng mới trong bucket, cần một function nạp nó vào BigQuery. Chọn gì?"
+    options:
+      - { id: a, text: "Lambda ở AWS đọc từ GCS qua Internet bằng service account key dài hạn lưu trong biến môi trường" }
+      - { id: b, text: "Một cron job trên laptop của trưởng nhóm, mỗi phút liệt kê bucket rồi gọi `bq load`" }
+      - { id: c, text: "Cloud Run functions (GCP) với trigger Eventarc khi object mới được tạo trong bucket" }
+      - { id: d, text: "Heroku Scheduler chạy script Python mỗi giờ, dùng add-on để lưu trạng thái tệp đã nạp" }
+  - id: steady-eu-vm
+    kind: knowledge
+    type: single
+    prompt: "Olist Shop chạy ổn định 24/7 khoảng 150 request/giây, khách chủ yếu ở châu Âu, team có người vận hành Linux tốt, muốn chi phí máy thấp nhất có thể và chấp nhận tự lo HA. Chọn gì?"
+    options:
+      - { id: a, text: "Lambda cho từng endpoint với provisioned concurrency 24/7 để tránh cold start" }
+      - { id: b, text: "Heroku Performance dyno, vì không phải vận hành gì và giá cố định mỗi tháng" }
+      - { id: c, text: "Vercel Functions cho toàn bộ API, vì không bao giờ phải nghĩ tới máy chủ" }
+      - { id: d, text: "Hetzner Cloud: VM và load balancer ở Đức hoặc Phần Lan, giá theo giờ thấp" }
+  - id: hobby-vps
+    kind: knowledge
+    type: single
+    prompt: "Một bạn học muốn VPS nhiều RAM nhất cho mỗi đồng để tự chạy kind và stack observability, không cần SLA, chấp nhận hỗ trợ chậm và mạng có lúc kém. Chọn gì?"
+    options:
+      - { id: a, text: "Contabo: VPS cấu hình lớn giá rất thấp, đổi lại hỗ trợ và ổn định không bằng hãng lớn" }
+      - { id: b, text: "EC2 On-Demand loại r7i.2xlarge ở us-east-1, nhớ tắt máy mỗi khi không học để tiết kiệm tiền" }
+      - { id: c, text: "Azure Container Apps gói Dedicated, vì có nhiều RAM và được Microsoft hỗ trợ" }
+      - { id: d, text: "Netlify Functions, vì gói miễn phí đủ RAM để chạy kind cùng Prometheus" }
+  - id: one-day-prototype
+    kind: knowledge
+    type: single
+    prompt: "Nhà sáng lập muốn demo một app Rails cho nhà đầu tư trong một ngày: git push là chạy, Postgres và Redis gắn bằng add-on, không ai trong team biết hạ tầng; chi phí cao hơn một chút không quan trọng. Chọn gì?"
+    options:
+      - { id: a, text: "Tự viết module OpenTofu tạo VPC, ECS Fargate, RDS và ElastiCache trên AWS" }
+      - { id: b, text: "Heroku: buildpack từ git push, add-on Postgres và Redis, scale bằng số dyno" }
+      - { id: c, text: "Hetzner dedicated server, cài Postgres và Redis bằng tay rồi chạy Rails bằng Puma" }
+      - { id: d, text: "Cloudflare Workers, vì chạy được Rails trực tiếp trong isolate V8 không cần sửa" }
+  - id: china-market
+    kind: knowledge
+    type: single
+    prompt: "Olist mở bán cho khách ở Trung Quốc đại lục: cần độ trễ thấp trong nước, hạ tầng đặt trong nước, hồ sơ ICP để chạy website. Nhà cung cấp nào thường được chọn?"
+    options:
+      - { id: a, text: "DigitalOcean, vì droplet ở Singapore đủ gần và không cần thủ tục giấy phép" }
+      - { id: b, text: "Heroku, vì region Tokyo phục vụ được khách Trung Quốc với độ trễ chấp nhận được" }
+      - { id: c, text: "Alibaba Cloud: nhiều region trong đại lục, hỗ trợ thủ tục ICP, CDN trong nước" }
+      - { id: d, text: "Vercel, vì mạng edge toàn cầu tự động có PoP và giấy phép ICP ở Trung Quốc" }
+  - id: long-job
+    kind: knowledge
+    type: single
+    prompt: "Job tính lại doanh thu theo bang chạy 40 phút, CPU cao, mỗi đêm một lần. Một kỹ sư đề xuất đưa nó vào Lambda. Bạn trả lời thế nào?"
+    options:
+      - { id: a, text: "Được, chỉ cần đặt timeout của Lambda lên 3600 giây và memory 10 GB" }
+      - { id: b, text: "Được, nhưng phải bật provisioned concurrency để job không bị cold start giữa chừng" }
+      - { id: c, text: "Được, chia thành 40 Lambda chạy nối nhau, mỗi function gọi đồng bộ function sau rồi chờ kết quả" }
+      - { id: d, text: "Không hợp: Lambda tối đa 15 phút; chạy dạng container (ECS/Fargate task, Cloud Run job)" }
+  - id: fan-out
+    kind: knowledge
+    type: single
+    prompt: "Khi đơn hàng được tạo, ba service độc lập (tồn kho, email, phân tích) đều phải nhận event; mỗi service tự retry và có DLQ riêng. Thiết kế nào đúng?"
+    options:
+      - { id: a, text: "Một hàng đợi SQS chung, ba service cùng poll; message nào service nào nhận trước thì xử lý" }
+      - { id: b, text: "EventBridge rule (hoặc SNS) chuyển event vào ba hàng đợi SQS, mỗi service một hàng đợi" }
+      - { id: c, text: "API gọi đồng bộ lần lượt ba service, service nào lỗi thì trả 500 cho khách hàng" }
+      - { id: d, text: "Ghi event vào một bảng DynamoDB, ba service quét toàn bảng mỗi phút để tìm dòng mới" }
+  - id: partner-api
+    kind: knowledge
+    type: single
+    prompt: "Olist mở API nhận đơn cho các sàn đối tác: mỗi đối tác một API key, hạn mức request theo ngày, kiểm schema request trước khi tới backend. Trên AWS chọn gì làm cửa vào?"
+    options:
+      - { id: a, text: "Lambda Function URL, vì rẻ nhất và có sẵn API key theo đối tác lẫn usage plan" }
+      - { id: b, text: "API Gateway HTTP API, vì có usage plan và API key theo đối tác ngay từ đầu" }
+      - { id: c, text: "API Gateway REST API: usage plan, API key, throttling theo khách, request validation" }
+      - { id: d, text: "Mở thẳng ALB ra Internet, kiểm API key bằng một bảng tra trong code của backend" }
+  - id: lambda-customer-duties
+    kind: knowledge
+    type: multi
+    prompt: "Theo shared responsibility model, với một Lambda xử lý thanh toán, những việc nào là của Olist (khách hàng AWS)? Chọn mọi đáp án đúng."
+    options:
+      - { id: a, text: "Quyền của execution role và resource policy của function" }
+      - { id: b, text: "Lỗ hổng trong code và thư viện đóng gói kèm function" }
+      - { id: c, text: "Phân loại dữ liệu và bật mã hoá cho bảng, bucket mà function ghi vào" }
+      - { id: d, text: "Vá kernel và hypervisor của máy chạy môi trường thực thi Lambda" }
+      - { id: e, text: "Bảo vệ vật lý trung tâm dữ liệu của region us-east-1" }
+  - id: cut-bill
+    kind: knowledge
+    type: multi
+    prompt: "Hoá đơn AWS của môi trường staging tăng gấp đôi. Những việc nào giảm chi phí mà không làm hỏng chức năng? Chọn mọi đáp án đúng."
+    options:
+      - { id: a, text: "Gắn tag Owner, Environment và lọc Cost Explorer theo tag để biết tiền đi đâu" }
+      - { id: b, text: "Tắt staging ngoài giờ làm việc (EC2, RDS, NAT gateway nếu có thể) bằng lịch" }
+      - { id: c, text: "Đặt retention cho CloudWatch Logs thay vì giữ vĩnh viễn" }
+      - { id: d, text: "Chuyển instance sang thế hệ Graviton (arm64) khi app chạy được trên ARM" }
+      - { id: e, text: "Xoá budget alarm để không nhận email làm phiền mỗi lần vượt ngưỡng" }
