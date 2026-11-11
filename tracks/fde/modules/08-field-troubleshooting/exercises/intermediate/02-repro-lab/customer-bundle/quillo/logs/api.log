@@ -1,16 +1,16 @@
 api-1  | INFO:     Started server process [1]
 api-1  | INFO:     Waiting for application startup.
+api-1  | {"ts": "2026-11-11T07:32:34+0000", "level": "INFO", "logger": "quillo.api", "msg": "quillo sẵn sàng", "version": "1.0.0", "schema": 1}
 api-1  | INFO:     Application startup complete.
 api-1  | INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
-api-1  | {"ts": "2026-11-11T07:10:53+0000", "level": "INFO", "logger": "quillo.api", "msg": "quillo sẵn sàng", "version": "1.0.0", "schema": 1}
-api-1  | {"ts": "2026-11-11T07:11:02+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 11}
-api-1  | {"ts": "2026-11-11T07:11:02+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 9}
-api-1  | {"ts": "2026-11-11T07:11:02+0000", "level": "ERROR", "logger": "quillo.api", "msg": "IdP lỗi", "path": "/oidc/login", "error": "IdP: không lấy được https://sso.benhvien.local/realms/benhvien/.well-known/openid-configuration: ConnectError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')"}
-api-1  | {"ts": "2026-11-11T07:11:02+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/oidc/login", "status": 503, "ms": 27}
-api-1  | {"ts": "2026-11-11T07:11:06+0000", "level": "ERROR", "logger": "quillo.api", "msg": "IdP lỗi", "path": "/oidc/login", "error": "IdP: không lấy được https://sso.benhvien.local/realms/benhvien/.well-known/openid-configuration: ConnectError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')"}
-api-1  | {"ts": "2026-11-11T07:11:06+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/oidc/login", "status": 503, "ms": 21}
-api-1  | {"ts": "2026-11-11T07:11:10+0000", "level": "ERROR", "logger": "quillo.api", "msg": "IdP lỗi", "path": "/oidc/login", "error": "IdP: không lấy được https://sso.benhvien.local/realms/benhvien/.well-known/openid-configuration: ConnectError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')"}
-api-1  | {"ts": "2026-11-11T07:11:10+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/oidc/login", "status": 503, "ms": 20}
-api-1  | {"ts": "2026-11-11T07:11:12+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
-api-1  | {"ts": "2026-11-11T07:11:14+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/login", "status": 200, "ms": 8}
-api-1  | {"ts": "2026-11-11T07:11:15+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 9}
+api-1  | {"ts": "2026-11-11T07:32:43+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 11}
+api-1  | {"ts": "2026-11-11T07:32:43+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 6}
+api-1  | {"ts": "2026-11-11T07:32:43+0000", "level": "ERROR", "logger": "quillo.api", "msg": "IdP lỗi", "path": "/oidc/login", "error": "IdP: không lấy được https://sso.benhvien.local/realms/benhvien/.well-known/openid-configuration: ConnectError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')"}
+api-1  | {"ts": "2026-11-11T07:32:43+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/oidc/login", "status": 503, "ms": 21}
+api-1  | {"ts": "2026-11-11T07:32:47+0000", "level": "ERROR", "logger": "quillo.api", "msg": "IdP lỗi", "path": "/oidc/login", "error": "IdP: không lấy được https://sso.benhvien.local/realms/benhvien/.well-known/openid-configuration: ConnectError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')"}
+api-1  | {"ts": "2026-11-11T07:32:47+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/oidc/login", "status": 503, "ms": 20}
+api-1  | {"ts": "2026-11-11T07:32:51+0000", "level": "ERROR", "logger": "quillo.api", "msg": "IdP lỗi", "path": "/oidc/login", "error": "IdP: không lấy được https://sso.benhvien.local/realms/benhvien/.well-known/openid-configuration: ConnectError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')"}
+api-1  | {"ts": "2026-11-11T07:32:51+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/oidc/login", "status": 503, "ms": 22}
+api-1  | {"ts": "2026-11-11T07:32:53+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 13}
+api-1  | {"ts": "2026-11-11T07:32:55+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/login", "status": 200, "ms": 8}
+api-1  | {"ts": "2026-11-11T07:32:56+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}

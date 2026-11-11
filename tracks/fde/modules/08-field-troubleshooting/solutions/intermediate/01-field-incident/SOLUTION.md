@@ -51,9 +51,12 @@ Cách sửa: proxy cho `dockerd` (systemd drop-in) nếu mục đích là pull i
 - **Bằng chứng trực tiếp:** `direct` trong `scenarios.py` là cặp (nguồn, mẫu): đĩa đầy chấp nhận `100% /` từ
   `system/df.txt`, `No space left on device`/`DiskFull`/`could not extend file` từ log `db`/`worker`/`api`, và những dấu
   vết đó (thêm `/var/backups/his`) từ output lệnh khách; proxy chỉ chấp nhận biến proxy **của container hay Docker
-  client** (`HTTP_PROXY=http…`, `"httpProxy"`, viết đúng hoa thường) từ output lệnh khách. Biến proxy hệ thống
-  (`/etc/environment`, chữ thường) có ở bệnh viện dù có sự cố hay không, nên không tính; bundle cũng không còn thu tệp đó.
-  Đoạn trích từ output một lệnh mà chính câu lệnh chứa đoạn trích (`ls '/No space left on device'`) không tính.
+  client** từ output lệnh khách, không phân biệt hoa thường: `http_proxy=`, `HTTPS_PROXY=`, `NO_PROXY=` (giá trị không
+  trong ngoặc kép, như `docker inspect` in) hay `"httpProxy"`, `"httpsProxy"`, `"noProxy"` (như `config.json`). Biến
+  proxy hệ thống (`/etc/environment`, dạng `http_proxy="…"`) có ở bệnh viện dù có sự cố hay không, nên không tính; bundle
+  cũng không thu tệp đó. Chống "lệnh in lại tham số": với bằng chứng từ lệnh khách, test lấy **đúng phần khớp mẫu** trong
+  đoạn trích và bỏ qua nếu phần đó có trong câu lệnh (vd. `ls '/No space left on device'` rồi trích
+  `No space left on device': No such` vẫn không tính).
   Một báo cáo chỉ có `502` và `/healthz 503` đúng triệu chứng mà chưa chỉ ra nguyên nhân.
 - **Lệnh đã thật sự hỏi:** ở chế độ người học, test đọc `.fde-lab/08-field-incident/ask-log.jsonl` (mỗi dòng có seed,
   chỉ ghi nối): số lệnh khách đã gõ cho seed đó ≤ 4 và `customer_commands` ⊆ các lệnh đó. `ask_customer` từ chối lệnh
@@ -65,5 +68,6 @@ Cách sửa: proxy cho `dockerd` (systemd drop-in) nếu mục đích là pull i
 
 Biến thể sai đã thử (mỗi biến thể 2 lần, đều trượt): báo cáo của sự cố này nộp cho sự cố kia; báo cáo đúng `cause` nhưng
 chỉ có bằng chứng triệu chứng; đoạn trích chứa giờ của lần điều tra; bằng chứng "trực tiếp" do lệnh khách lặp lại đối số
-(`ls /HTTP_PROXY=…`, `ls '/No space left on device'`); biến proxy hệ thống (`cat /etc/environment`) thay cho biến của
-container. Ở chế độ người học: nhật ký có 5 lệnh cho seed, hoặc `customer_commands` có lệnh chưa hỏi, đều trượt.
+(`ls /HTTP_PROXY=…`, `ls '/No space left on device'`, kể cả khi đoạn trích kéo dài sang `': No such`); biến proxy hệ
+thống (`cat /etc/environment`) thay cho biến của container. Ngược lại, trích `no_proxy=localhost,127.0.0.1` (chữ thường)
+từ `docker inspect` của container được chấp nhận (đã kiểm 2 lần). Ở chế độ người học: nhật ký có 5 lệnh cho seed, hoặc `customer_commands` có lệnh chưa hỏi, đều trượt.

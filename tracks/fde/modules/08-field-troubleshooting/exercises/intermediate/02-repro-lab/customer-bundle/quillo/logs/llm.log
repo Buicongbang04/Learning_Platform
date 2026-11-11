@@ -8,12 +8,12 @@ llm-1  | 0.00.696.143 I srv    load_model: initializing, n_slots = 4, n_ctx_slot
 llm-1  | 0.00.700.751 I srv  llama_server: model loaded
 llm-1  | 0.00.700.932 I srv  llama_server: listening on http://0.0.0.0:8080
 llm-1  | 0.16.839.368 I srv    operator(): operator(): cleaning up before exit...
-llm-1  | 0.00.004.491 I srv  llama_server: initializing ...
-llm-1  | 0.00.061.830 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
-llm-1  | 0.00.068.953 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
-llm-1  | 0.00.071.172 I srv    load_model: loading model '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'
-llm-1  | 0.01.423.994 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
-llm-1  | 0.03.560.836 I cmn          init: llama threadpool init, n_threads = 2
-llm-1  | 0.03.635.077 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 4096, kv_unified = 'true'
-llm-1  | 0.03.639.406 I srv  llama_server: model loaded
-llm-1  | 0.03.639.435 I srv  llama_server: listening on http://0.0.0.0:8080
+llm-1  | 0.00.002.560 I srv  llama_server: initializing ...
+llm-1  | 0.00.047.566 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+llm-1  | 0.00.051.472 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+llm-1  | 0.00.056.090 I srv    load_model: loading model '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'
+llm-1  | 0.01.018.896 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+llm-1  | 0.01.293.765 I cmn          init: llama threadpool init, n_threads = 2
+llm-1  | 0.01.488.137 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 4096, kv_unified = 'true'
+llm-1  | 0.01.491.899 I srv  llama_server: model loaded
+llm-1  | 0.01.491.906 I srv  llama_server: listening on http://0.0.0.0:8080

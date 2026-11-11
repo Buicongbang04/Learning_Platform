@@ -105,16 +105,20 @@ def grade(scene: fieldkit.Scene, scenario, incident: dict, bundle: dict[str, str
         if source.startswith("bundle:"):
             name = source.split(":", 1)[1].strip().lstrip("/")
             assert name in bundle, f"evidence[{i}]: bundle không có tệp {name!r} (có {sorted(bundle)})"
-            haystack, canonical, echoed = bundle[name], f"bundle:{name}", False
+            haystack, canonical, command = bundle[name], f"bundle:{name}", ""
         else:
             index = int(source.split(":", 1)[1]) - 1
             haystack, canonical = outputs[index], f"customer:{index + 1}"
-            echoed = needle in incident["customer_commands"][index]
+            command = incident["customer_commands"][index].lower()
         assert find_line(haystack, needle), (
             f"evidence[{i}]: không thấy {needle!r} trong một dòng của {source} khi dựng lại cảnh (đoạn trích phải "
             "nằm nguyên trong một dòng và không chứa phần đổi theo lần chạy: thời gian, PID, id, cổng)")
-        if not echoed:
-            direct = direct or any(src.search(canonical) and text.search(needle) for src, text in scenario.direct)
+        for src, text in scenario.direct:
+            if not src.search(canonical):
+                continue
+            for match in text.finditer(needle):
+                if not command or match.group(0).lower() not in command:
+                    direct = True
     assert incident["cause"] in scenario.accepted, \
         f"cause {incident['cause']!r} không giải thích được sự cố này; xem lại bằng chứng"
     assert direct, "Không bằng chứng nào chỉ thẳng vào nguyên nhân (mới là triệu chứng); thêm dấu vết của nguyên nhân"

@@ -64,9 +64,9 @@ db-1  | 2026-11-11 05:33:33.942 UTC [1] LOG:  database system is shut down
 db-1  | 
 db-1  | PostgreSQL Database directory appears to contain a database; Skipping initialization
 db-1  | 
-db-1  | 2026-11-11 07:10:41.111 UTC [1] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
-db-1  | 2026-11-11 07:10:41.113 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
-db-1  | 2026-11-11 07:10:41.113 UTC [1] LOG:  listening on IPv6 address "::", port 5432
-db-1  | 2026-11-11 07:10:41.124 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-db-1  | 2026-11-11 07:10:41.139 UTC [29] LOG:  database system was shut down at 2026-11-11 05:33:33 UTC
-db-1  | 2026-11-11 07:10:41.355 UTC [1] LOG:  database system is ready to accept connections
+db-1  | 2026-11-11 07:32:21.380 UTC [1] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+db-1  | 2026-11-11 07:32:21.381 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+db-1  | 2026-11-11 07:32:21.381 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+db-1  | 2026-11-11 07:32:21.392 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+db-1  | 2026-11-11 07:32:21.398 UTC [29] LOG:  database system was shut down at 2026-11-11 05:33:33 UTC
+db-1  | 2026-11-11 07:32:21.405 UTC [1] LOG:  database system is ready to accept connections

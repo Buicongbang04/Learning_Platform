@@ -32,7 +32,7 @@ SHELL_META = re.compile(r"[|;&$<>`\\\n\r]|\$\(")
 SECRET_PATH = re.compile(r"(^|/|=)(\.env|\.ssh|oidc|shadow|gshadow|sudoers[^/]*|environ|private|[^/]*\.key|"
                          r"[^/]*secret[^/]*|[^/]*\.pem|\.bash_history)($|/)")
 CURL_VALUE_OPTS = {"-m", "--max-time", "--connect-timeout", "-w", "--write-out", "--noproxy", "-H", "--header", "-A",
-                   "--user-agent", "--retry", "--resolve", "--cacert", "--capath", "-x", "--proxy", "--interface"}
+                   "--user-agent", "--retry", "--cacert", "--capath", "--interface"}
 READ_ONLY = {"df", "du", "free", "uptime", "uname", "ps", "ss", "getent", "ls", "stat", "cat", "head", "tail", "grep",
              "wc", "find", "id", "date", "hostname", "lsblk", "findmnt", "dmesg", "ip", "journalctl", "systemctl",
              "docker", "curl", "openssl", "nproc", "mount"}
@@ -47,6 +47,18 @@ IP_SUB = {"addr", "address", "a", "route", "r", "link", "l", "neigh", "rule"}
 def has_short(args: list[str], letters: str) -> bool:
     """Có cờ ngắn (kể cả gộp, vd. `-tf`) chứa một trong các chữ cái `letters`."""
     return any(a.startswith("-") and not a.startswith("--") and set(a[1:].split("=")[0]) & set(letters) for a in args)
+
+
+def date_sets(arg: str) -> bool:
+    """Cờ ngắn của `date` có `-s` (đặt giờ); dừng ở cờ nhận giá trị (`-d`, `-f`, `-I…`, `-r`)."""
+    if not arg.startswith("-") or arg.startswith("--"):
+        return False
+    for letter in arg[1:]:
+        if letter == "s":
+            return True
+        if letter in "dfIr":
+            return False
+    return False
 
 
 def check_command(command: str) -> tuple[list[str] | None, str]:
@@ -114,10 +126,11 @@ def check_command(command: str) -> tuple[list[str] | None, str]:
         if not targets or any(not re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?(/|$)", u) for u in targets):
             return None, "curl chỉ tới http(s)://127.0.0.1 hoặc http(s)://localhost của chính máy đó"
         long_bad = ("--output", "--remote-name", "--upload", "--data", "--json", "--form", "--config", "--request",
-                    "--cookie-jar", "--dump-header", "--trace", "--stderr", "--libcurl", "--etag-save", "--create-dirs")
-        if any(a.startswith(long_bad) or (a.startswith("-") and not a.startswith("--") and set(a[1:]) & set("oOTdFKXcDJ"))
+                    "--cookie-jar", "--dump-header", "--trace", "--stderr", "--libcurl", "--etag-save", "--create-dirs",
+                    "--resolve", "--connect-to", "--proxy", "--preproxy", "--socks")
+        if any(a.startswith(long_bad) or (a.startswith("-") and not a.startswith("--") and set(a[1:]) & set("oOTdFKXcDJx"))
                for a in args):
-            return None, "curl chỉ GET/HEAD, không ghi tệp, không gửi dữ liệu"
+            return None, "curl chỉ GET/HEAD tới đúng máy đó, không ghi tệp, không gửi dữ liệu, không đổi đường đi"
     elif name == "openssl":
         if args[:1] not in (["s_client"], ["x509"], ["version"]):
             return None, "openssl chỉ s_client, x509, version"
@@ -135,9 +148,9 @@ def check_command(command: str) -> tuple[list[str] | None, str]:
     elif name == "tail" and (has_short(args, "fF") or any(a.startswith("--follow") for a in args)):
         return None, "tail không -f"
     elif name == "grep" and (has_short(args, "rR") or any(a.startswith(("--recursive", "--dereference-recursive"))
-                                                          for a in args)):
+                                                          or a.endswith("recurse") for a in args)):
         return None, "grep không đệ quy (-r): chỉ đọc tệp cụ thể"
-    elif name == "date" and (has_short(args, "s") or any(a.startswith("--set") for a in args)):
+    elif name == "date" and any(a.startswith("--set") or date_sets(a) for a in args):
         return None, "date chỉ xem"
     elif name == "hostname" and any(a not in ("-f", "-i", "-I", "-s", "-d", "-A", "--fqdn", "--short") for a in args):
         return None, "hostname chỉ xem (-f, -i, -I, -s, -d, -A)"

@@ -60,9 +60,9 @@ che secret**. Họ chỉ gõ:
   `find` không `-exec`, `-delete`, `-fprint…`; `curl` chỉ GET/HEAD tới `127.0.0.1`/`localhost`, không ghi tệp, không
   gửi dữ liệu; `openssl` chỉ `s_client`, `x509`, `version` và không ghi tệp; `ss` không `-K`; `mount` không đối số;
   `hostname` chỉ cờ xem; `tail`/`dmesg`/`journalctl`/`docker … logs` không theo dõi (kể cả cờ gộp như `-tf`),
-  `dmesg` không xoá; `grep` không đệ quy; `date` không đặt giờ; `docker compose` không `-o`/`--output`; `journalctl`
+  `dmesg` không xoá; `grep` không đệ quy; `date` không đặt giờ (`-s`, `--set`); `docker compose` không `-o`/`--output`; `journalctl`
   không `--setup-keys`, `--update-catalog`, `--new-id128`; `curl` chỉ nhận đích dạng `http(s)://127.0.0.1…` hoặc
-  `http(s)://localhost…`;
+  `http(s)://localhost…`, không `--resolve`, `-x`/`--proxy`, `--connect-to`; `grep` không `-d recurse`;
 - không mở đường dẫn có `.env`, `.ssh`, `oidc`, `shadow`, `sudoers`, `secret`, `environ`, `private`, `*.key`, `*.pem`,
   `.bash_history` (xét mọi đối số của lệnh).
 
@@ -127,9 +127,15 @@ kích thước, tên tài liệu), nên đoạn trích bằng chứng chỉ đư
 - `cause` giải thích được sự cố của seed đó (mỗi sự cố có tập nguyên nhân chấp nhận được; với vài sự cố có nhiều hơn một
   cách gọi tên hợp lý).
 - Ít nhất một bằng chứng là **dấu vết trực tiếp của nguyên nhân** (thứ mà khi nguyên nhân biến mất thì nó cũng biến
-  mất), không chỉ là triệu chứng (mã lỗi HTTP, trạng thái health, "không có trích dẫn"). Không tính là dấu vết trực
-  tiếp: thứ có trong mọi bundle của khách này dù có sự cố hay không (cấu hình chung của máy), và đoạn trích từ output một
-  lệnh mà chính câu lệnh đó đã chứa đoạn trích (vd. thông báo lỗi lặp lại đối số bạn gõ).
+  mất), không chỉ là triệu chứng (mã lỗi HTTP, trạng thái health, "không có trích dẫn"). Test so phần dấu vết trong
+  đoạn trích (không phân biệt hoa thường) theo nguồn:
+  - dấu vết về **tài nguyên** (mức dùng đĩa, lỗi hết chỗ…) được tính từ tệp tài nguyên hay log của dịch vụ liên quan
+    trong bundle, hoặc từ output lệnh nhờ khách gõ;
+  - dấu vết về **cấu hình** (biến môi trường, cấu hình của runtime…) chỉ được tính khi đến từ output lệnh nhờ khách gõ,
+    và không tính cấu hình chung của cả máy vốn đã có sẵn ở khách này dù có sự cố hay không (vd. biến proxy hệ thống
+    viết trong `/etc/environment` dạng `tên="giá trị"`);
+  - không tính phần dấu vết mà chính câu lệnh của bạn đã chứa và output chỉ in lại (vd. thông báo lỗi lặp lại tham số
+    bạn gõ), dù đoạn trích dài hơn phần đó.
 
 ## Gợi ý
 

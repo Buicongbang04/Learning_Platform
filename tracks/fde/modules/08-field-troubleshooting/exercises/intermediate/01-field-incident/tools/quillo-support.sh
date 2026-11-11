@@ -7,14 +7,13 @@
 # của khách (biến môi trường, tệp cấu hình hệ thống).
 set -u
 
-dir=/dev/shm/quillo-support.$$
-rm -rf "$dir"
-mkdir -m 0700 "$dir" || exit 1
+dir=$(mktemp -d "${QUILLO_SUPPORT_TMP:-/dev/shm}/quillo-support.XXXXXX") || exit 1
 trap 'rm -rf "$dir"' EXIT
 trap 'exit 130' INT TERM HUP
 root=quillo-support-$(hostname)-$(date -u +%Y%m%dT%H%M%SZ)
 out=$dir/$root
 mkdir -p "$out/system" "$out/network" "$out/quillo/logs"
+: >"$out/errors.txt"
 
 known() {
     [ -f .env ] && sed -n "s/^$1=//p" .env | head -n 1
@@ -27,7 +26,7 @@ password=$(known QUILLO_DB_PASSWORD)
 save() {
     target=$1
     shift
-    "$@" >"$out/$target.raw" 2>&1
+    "$@" >"$out/$target.raw" 2>&1 || echo "$target: $* thoát $?" >>"$out/errors.txt"
     sed -e "s/$token/<QUILLO_ADMIN_TOKEN>/g" -e "s/$password/<QUILLO_DB_PASSWORD>/g" \
         "$out/$target.raw" >"$out/$target"
     rm -f "$out/$target.raw"

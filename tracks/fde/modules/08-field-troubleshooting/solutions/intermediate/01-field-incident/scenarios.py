@@ -74,7 +74,7 @@ SCENARIOS = {
         "trạng thái báo degraded. IT đã kiểm: docker ps thấy hai container model vẫn Up (healthy), không ai đụng vào "
         "quillo cả.",
         frozenset({"proxy-misrouting", "config-error"}),
-        ((re.compile(r"^customer:"), re.compile(r"HTTPS?_PROXY=http|\"https?Proxy\"")),),
+        ((re.compile(r"^customer:"), re.compile(r"(?i)\b(https?|no)_proxy=(?!\")|\"(https?|no)proxy\"")),),
         proxy_into_containers,
     ),
 }
