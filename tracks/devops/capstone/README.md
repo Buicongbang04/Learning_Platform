@@ -72,9 +72,9 @@ flowchart TD
 | [M06](milestones/m06-kubernetes-helm.md) | 11 Kubernetes production | M03, M05 | Helm chart tự viết, HPA, NetworkPolicy, RBAC trên kind | pytest |
 | [M07](milestones/m07-gitops-secrets.md) | 12 GitOps & secrets | M06 | ArgoCD đồng bộ chart từ Git, secret mã hoá bằng SOPS | pytest |
 | [M08](milestones/m08-observability.md) | 13 Observability | M06, M07 | metrics, logs, traces; dashboard Grafana và alert rule | pytest |
-| [M09](milestones/m09-game-day.md) | 16 SRE & vận hành | toàn bộ | SLO, game day với sự cố bơm vào, khôi phục, postmortem; tuỳ chọn deploy AWS thật | rubric tự đánh giá |
+| [M09](milestones/m09-game-day.md) | 16 SRE & vận hành | toàn bộ | SLO, burn-rate alert, runbook, game day với sự cố bơm vào, khôi phục, postmortem; tuỳ chọn deploy AWS thật | pytest (phần chấm được) và rubric tự đánh giá |
 
-Milestone M01–M08 đã có cùng module 00–13; M09 được thêm cùng module 16.
+Đủ chín milestone, M09 làm sau module 16.
 
 ## Cách chấm
 
@@ -82,13 +82,14 @@ Làm theo cách của capstone track Data Engineer:
 
 - Mỗi milestone là một tệp markdown trong `milestones/` gồm **Mục tiêu**, **Việc cần làm**, **Kết quả nộp** và
   **Tiêu chí đạt** (checklist).
-- Code của bạn nằm ở [`project/`](project/). **M01–M08** có test pytest trong `capstone/project/tests`, chạy công
+- Code của bạn nằm ở [`project/`](project/). **M01–M09** có test pytest trong `capstone/project/tests`, chạy công
   cụ thật (bash, nginx trong container, docker, act, tofu, ansible, kind, helm…) và tự skip khi thiếu công cụ hoặc
   cluster. Test skip không tính là đạt.
 - `solutions/` giữ bản tham chiếu cho phần chấm được. Chỉ mở sau khi đã tự làm.
-- **M09** không có test: đây là bài đánh giá độc lập, bạn tự chấm theo rubric trong tệp milestone (SLO đặt có cơ
-  sở, phát hiện và khôi phục sự cố trong thời gian mục tiêu, postmortem không đổ lỗi, hành động khắc phục có
-  người và hạn). Script bơm lỗi chọn ngẫu nhiên theo seed lúc chạy; đừng đọc nó trước game day.
+- **M09** là bài đánh giá độc lập: test chỉ chấm phần chấm được (SLO và burn-rate rule qua `promtool`, runbook đủ mục,
+  hệ thống khôi phục sau một lỗi bơm theo seed lấy từ thời gian chạy); game day và postmortem bạn tự chấm theo rubric
+  trong tệp milestone (SLO đặt có cơ sở, phát hiện và khôi phục trong thời gian mục tiêu, postmortem không đổ lỗi, hành
+  động khắc phục có người và hạn). Đừng đọc test M09 và `FaultInjector` trước game day.
 
 ```bash
 uv run pytest tracks/devops/capstone/project/tests -q -rs

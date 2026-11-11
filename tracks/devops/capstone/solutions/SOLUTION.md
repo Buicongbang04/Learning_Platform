@@ -297,6 +297,42 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 - **Dashboard chỉ dùng uid datasource đã provision.** `${DS_PROMETHEUS}` là thứ của dashboard export để import tay; provision từ tệp
   thì biến đó không bao giờ được thay. Panel logs lọc `level` ERROR, WARNING và Grafana có derived field `trace_id` sang Jaeger.
 
+## M09: `project/sre/`, `project/observability/prometheus/rules/slo.yml`
+
+- **Objective 99,5%, 216 phút.** Một instance, Postgres và Redis không có bản sao: mỗi lần restart Postgres có kế hoạch đã tốn vài phút.
+  99,9% (43 phút) chỉ hứa được khi có failover tự động. `rationale` ghi đúng lý do đó, và ghi khoảng mù: SLI đếm ở server nên API chết
+  hẳn thì không request nào bị đếm là xấu; `up == 0` (alert M08 và entry `api-unreachable`) che chỗ đó, blackbox probe từ ngoài sẽ che
+  tốt hơn.
+- **SLI chỉ đếm request của khách.** `/metrics` (12 lần mỗi phút từ Prometheus), `/healthz`, `/readyz` luôn 200 trừ lúc sự cố, nên
+  để chúng trong mẫu số làm tỉ lệ lỗi nhỏ đi đúng lúc ít traffic nhất (ban đêm). Kịch bản ẩn số 1 đẩy traffic giả ở ba path đó bằng
+  traffic thật để bắt chỗ này. `path!~` thay vì liệt kê path của khách: thêm route mới thì SLI tự có, không âm thầm bỏ sót.
+- **Sáu recording rule, mỗi cửa sổ một rule, mỗi rule tự tính tử số và mẫu số.** Không lấy trung bình của tỉ lệ 1 phút (`avg_over_time`
+  trên `olist:api_errors:ratio_rate1m`): trung bình của tỉ lệ khác tỉ lệ của tổng khi traffic không đều. `or on() vector(0)` như M08,
+  để alert có số 0 mà so khi chưa có 5xx; kịch bản 6 không có series 5xx nào nên bắt được rule thiếu nó.
+- **Ngưỡng viết `(14.4 * 0.005)` thay vì `0.072`.** Đọc là thấy hệ số và budget; đổi objective thì sửa một số ở ba chỗ (hay sinh tệp
+  bằng script như Basic 02 của module 16). Test sinh kịch bản theo objective trong `slo.yaml`, nên tệp rule lệch objective thì fail.
+- **Ba mức, không có mức 3d/6h.** Mức 1 lần budget trong 3 ngày là ticket chậm nhất; với một service nội bộ, review budget hằng tuần
+  (policy) làm việc đó rẻ hơn một alert. Không `for`: cửa sổ ngắn đã lọc spike, `for` chỉ làm page chậm thêm.
+- **Test của mình dùng tỉ lệ 12,5% thay vì 10%** cho `promql_expr_test`: 125/1000 có mẫu số là luỹ thừa của 2 lần tử số nên phép chia ra
+  đúng `0.125`; 100/1000 cho `9.999999999999999E-02` và promtool so chính xác.
+- **Runbook theo thứ tự phụ thuộc.** `api-unreachable` (`up == 0`), rồi `api-network-slow`, rồi Postgres (5xx rồi chậm ở route tra
+  đơn), rồi Redis (5xx rồi chậm ở `/jobs/recompute`). Lý do: API chậm thì mọi route chậm, nên nếu đọc entry Postgres trước sẽ restart
+  nhầm database. Phân biệt API chậm với Postgres chậm bằng `scrape_duration_seconds{job="olist-api"}`: `/metrics` không chạm database,
+  nên scrape chậm nghĩa là chính API hay mạng của nó chậm. Mỗi route tách riêng cho biết thành phần: tra đơn chỉ dùng Postgres, đẩy job
+  chỉ dùng Redis.
+- **Cửa sổ `[30s]` trong detect, không dùng alert.** Alert burn rate 1h cần khoảng 43 phút lỗi 20 lần budget mới bắn; game day 4 phút
+  không đợi được. Runbook phát hiện bằng triệu chứng gần thời gian thực, alert SLO lo việc gọi người. `[30s]` với scrape 5 giây đủ 6
+  mẫu, và trở lại im lặng chừng 30 giây sau khi khôi phục. Đã chạy lời giải với seed phủ đủ bảy cặp (lỗi, service) mà game day chọn
+  được trên compose M03 này: entry đúng thành phần luôn chạy đầu tiên, phát hiện sau 4 tới 19 giây, khoẻ lại 19 tới 32 giây sau khi
+  bơm. Chậm nhất là mạng Postgres chậm: p95 trên cửa sổ 30 giây cần đủ mẫu chậm mới vượt ngưỡng.
+- **`restart` cho Postgres và Redis, `start` cho API.** `docker compose restart` chạy được cả container đang dừng lẫn đang chạy, và
+  container chạy lại có network namespace mới; `kill` từ ngoài không được `restart: unless-stopped` dựng lại (Docker coi là dừng có chủ
+  đích), nên mọi lỗi đều cần một hành động. Dữ liệu nằm trong volume, job xếp hàng còn trong AOF của Redis.
+- **`slo-burn` là mục người đọc, không phải entry.** `runbook_url` của alert burn rate trỏ vào một trang phân loại: alert theo triệu
+  chứng không nói thành phần nào hỏng, trang đó dẫn người trực đi các entry theo thứ tự, kiểm deploy gần nhất trước khi restart.
+- **Postmortem mẫu** ở `sre/POSTMORTEM.md` là của một lần chạy thật lời giải này (seed và số liệu lấy từ output của test), viết theo
+  khung trong đề.
+
 ## Rubric cho phần tự đánh giá
 
 | Mục | Đạt | Chưa đạt |
@@ -317,3 +353,7 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 | README "GitOps" | Lý do Application nhiều nguồn và cái giá, quy trình lên version và rollback có số đo, ai giữ khoá nào, runbook xoay mật khẩu Postgres không gián đoạn, so với Sealed Secrets/ESO/Vault | Chép application.yaml |
 | Vòng thật M08 | Dựng stack bằng tay, lần từ log lỗi sang trace có span DB, dừng worker và đo thời gian tới khi alert tới Alertmanager, chạy lại và thấy alert hết | Chỉ chạy test |
 | README "Observability" | Bảng alert có ngưỡng và lý do, việc đầu tiên khi bị page, cái giá của duration từ spanmetrics, alert còn thiếu cho độ dài hàng đợi, ảnh dashboard lúc sự cố | Liệt kê tệp cấu hình |
+| SLO M09 | Objective có lý do theo người dùng và hạ tầng thật, SLI loại traffic của Prometheus và health check, nêu khoảng mù khi API chết và thứ che nó, có error budget policy | Chọn 99,99% "cho đẹp", SLI đếm cả `/metrics` |
+| Alert và runbook M09 | Giải thích được hai cửa sổ và ngưỡng 14,4/6/3; entry nhắm một thành phần, thứ tự theo phụ thuộc; Leo thang có điều kiện dừng và người cần gọi | Một entry "có 5xx thì restart mọi thứ" |
+| Game day M09 | Giả thuyết trạng thái ổn định, blast radius, điều kiện dừng viết trước; entry đúng thành phần chạy đầu tiên; khoẻ lại trong 3 phút; ít nhất ba seed mới | Đọc test hay `FaultInjector` trước, chạy lại một seed quen cho tới khi pass |
+| Postmortem M09 | Timeline khớp output của test, tác động có phút budget đã tiêu, nguyên nhân theo hệ thống, ba action item có người, hạn và loại, bảng các game day | Chỉ có "đã restart, hết lỗi"; câu đổ lỗi cho người |

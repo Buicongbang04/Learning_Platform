@@ -1,0 +1,70 @@
+groups:
+  - name: olist-slo-api-availability
+    rules:
+      - record: olist:slo_api_errors:ratio_rate5m
+        expr: |
+          (sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz", status=~"5.."}[5m])) or on() vector(0))
+          /
+          sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz"}[5m]))
+      - record: olist:slo_api_errors:ratio_rate30m
+        expr: |
+          (sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz", status=~"5.."}[30m])) or on() vector(0))
+          /
+          sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz"}[30m]))
+      - record: olist:slo_api_errors:ratio_rate1h
+        expr: |
+          (sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz", status=~"5.."}[1h])) or on() vector(0))
+          /
+          sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz"}[1h]))
+      - record: olist:slo_api_errors:ratio_rate2h
+        expr: |
+          (sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz", status=~"5.."}[2h])) or on() vector(0))
+          /
+          sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz"}[2h]))
+      - record: olist:slo_api_errors:ratio_rate6h
+        expr: |
+          (sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz", status=~"5.."}[6h])) or on() vector(0))
+          /
+          sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz"}[6h]))
+      - record: olist:slo_api_errors:ratio_rate1d
+        expr: |
+          (sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz", status=~"5.."}[1d])) or on() vector(0))
+          /
+          sum(rate(http_requests_total{job="olist-api", path!~"/metrics|/healthz|/readyz"}[1d]))
+
+      - alert: OlistApiErrorBudgetBurn
+        expr: |
+          olist:slo_api_errors:ratio_rate1h > (14.4 * 0.005)
+          and
+          olist:slo_api_errors:ratio_rate5m > (14.4 * 0.005)
+        labels:
+          severity: page
+          long_window: 1h
+          service: api
+        annotations:
+          summary: "SLO api-availability đốt error budget nhanh gấp 14,4 lần (2% budget 30 ngày trong 1 giờ)"
+          runbook_url: https://github.com/OWNER/olist-shop-platform/blob/main/sre/RUNBOOK.md#slo-burn
+      - alert: OlistApiErrorBudgetBurn
+        expr: |
+          olist:slo_api_errors:ratio_rate6h > (6 * 0.005)
+          and
+          olist:slo_api_errors:ratio_rate30m > (6 * 0.005)
+        labels:
+          severity: page
+          long_window: 6h
+          service: api
+        annotations:
+          summary: "SLO api-availability đốt error budget nhanh gấp 6 lần (5% budget 30 ngày trong 6 giờ)"
+          runbook_url: https://github.com/OWNER/olist-shop-platform/blob/main/sre/RUNBOOK.md#slo-burn
+      - alert: OlistApiErrorBudgetBurn
+        expr: |
+          olist:slo_api_errors:ratio_rate1d > (3 * 0.005)
+          and
+          olist:slo_api_errors:ratio_rate2h > (3 * 0.005)
+        labels:
+          severity: ticket
+          long_window: 1d
+          service: api
+        annotations:
+          summary: "SLO api-availability đốt error budget gấp 3 lần mức cho phép trong 1 ngày (10% budget)"
+          runbook_url: https://github.com/OWNER/olist-shop-platform/blob/main/sre/RUNBOOK.md#slo-burn
