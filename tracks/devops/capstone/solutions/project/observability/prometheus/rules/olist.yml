@@ -1,0 +1,56 @@
+groups:
+  - name: olist-red
+    rules:
+      - record: olist:api_requests:rate1m
+        expr: sum(rate(http_requests_total{job="olist-api"}[1m]))
+      - record: olist:api_errors:ratio_rate1m
+        expr: |
+          (sum(rate(http_requests_total{job="olist-api", status=~"5.."}[1m])) or on() vector(0))
+          /
+          sum(rate(http_requests_total{job="olist-api"}[1m]))
+      - record: olist:api_latency_seconds:p95_1m
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="olist-api"}[1m])))
+      - record: olist:worker_jobs:rate1m
+        expr: |
+          sum(rate(jobs_processed_total{job="olist-worker"}[1m]))
+          +
+          sum(rate(jobs_failed_total{job="olist-worker"}[1m]))
+      - record: olist:worker_errors:ratio_rate1m
+        expr: |
+          sum(rate(jobs_failed_total{job="olist-worker"}[1m]))
+          /
+          (sum(rate(jobs_processed_total{job="olist-worker"}[1m])) + sum(rate(jobs_failed_total{job="olist-worker"}[1m])))
+      - record: olist:worker_duration_seconds:p95_1m
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{
+            service_name="olist-shop-worker", span_name="process olist:jobs"}[1m]))) / 1000
+
+  - name: olist-alerts
+    rules:
+      - alert: OlistApiHighErrorRate
+        expr: olist:api_errors:ratio_rate1m > 0.05
+        for: 5m
+        labels:
+          severity: page
+          service: api
+        annotations:
+          summary: "API Olist Shop trả 5xx cho {{ $value | humanizePercentage }} request trong 5 phút"
+          runbook_url: https://example.invalid/runbooks/olist-api-errors
+      - alert: OlistApiSlow
+        expr: olist:api_latency_seconds:p95_1m > 0.5
+        for: 10m
+        labels:
+          severity: ticket
+          service: api
+        annotations:
+          summary: "p95 latency của API là {{ $value | humanizeDuration }}, quá 500 ms trong 10 phút"
+          runbook_url: https://example.invalid/runbooks/olist-api-latency
+      - alert: OlistWorkerDown
+        expr: max(up{job="olist-worker"}) == 0
+        for: 30s
+        labels:
+          severity: page
+          service: worker
+        annotations:
+          summary: "Prometheus không scrape được worker: job recompute không ai xử lý"
+          runbook_url: https://example.invalid/runbooks/olist-worker-down

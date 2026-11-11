@@ -12,6 +12,8 @@ dưới đây. Đề từng milestone ở [`../milestones/`](../milestones/), t�
 | `infra/` | [M05](../milestones/m05-iac-config.md) | Cấu hình OpenTofu: state S3 mã hoá, KMS, bucket backup, cây tham số SSM, instance role |
 | `ansible/` | [M05](../milestones/m05-iac-config.md) | `site.yml`, `inventory/hosts.yml`, role `olist_worker` |
 | `chart/olist-shop/` | [M06](../milestones/m06-kubernetes-helm.md) | Helm chart cho `api` và `worker`: HPA, PDB, NetworkPolicy, RBAC, HTTPRoute |
+| `gitops/` | [M07](../milestones/m07-gitops-secrets.md) | `application.yaml` (ArgoCD, nhiều nguồn), `values-lab.yaml`, `.sops.yaml`, `seal-db.sh`, `secrets/kustomization.yaml` |
+| `observability/` | [M08](../milestones/m08-observability.md) | Recording và alert rule kèm test `promtool`, route Alertmanager, dashboard Grafana; thêm `OTEL_EXPORTER_OTLP_ENDPOINT` vào `container/compose.yaml` |
 | `tests/` | mọi milestone | Không sửa: test chấm bài |
 
 `.gitignore` ở đây đã chặn `backups/` (bản sao lưu thật), `nginx/tls/` (cert và private key thật), state và thư mục `.terraform/` của
@@ -28,7 +30,7 @@ uv run pytest tracks/devops/capstone/project/tests -q -rs -k m01
 
 Chưa làm milestone nào thì test **fail** với thông báo "Chưa có tệp ...", không phải lỗi của test. Test skip khi máy
 thiếu công cụ (bwrap, curl, jq, openssl, shellcheck, Docker hoặc image, trivy, act, registry local, tofu,
-LocalStack riêng của track, ansible, helm, cluster kind `devops-lab`) và lý do skip cho
+LocalStack riêng của track, ansible, helm, cluster kind `devops-lab`, ArgoCD, sops, age, image của stack observability) và lý do skip cho
 biết cần cài gì; skip không tính là đạt. Trên máy dùng chung, thêm `nice -n 15 ${DEVOPS_CPUSET:+taskset -c "$DEVOPS_CPUSET"}` trước `uv run`.
 
 Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và chạy được bằng
@@ -38,4 +40,4 @@ Bản tham chiếu nằm ở [`../solutions/`](../solutions/SOLUTION.md) và ch�
 
 Mục này là của bạn: sau M01, ghi ba lệnh vận hành, exit code của từng lệnh và cách khôi phục từ backup; sau M02, thêm
 mục "Edge" với các quyết định cấu hình Nginx; sau M03, mục "Container"; sau M04, mục "Pipeline"; sau M05, mục "Hạ tầng
-và cấu hình"; sau M06, mục "Kubernetes". Xem phần "Kết quả nộp" của từng milestone.
+và cấu hình"; sau M06, mục "Kubernetes"; sau M07, mục "GitOps"; sau M08, mục "Observability". Xem phần "Kết quả nộp" của từng milestone.

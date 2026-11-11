@@ -248,7 +248,54 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
   xử lý sự cố (scale worker), không có `patch deployments` (đổi image là việc của pipeline), không `pods/exec`, không đọc
   Secret.
 - **Probe của worker là `/metrics`.** Worker không có HTTP API; cổng metrics chỉ mở sau khi tạo xong bảng, nên vừa là readiness
-  vừa là liveness đủ dùng. Kiểm "còn xử lý job" thật sự là alert theo độ dài hàng đợi ở M08.
+  vừa là liveness đủ dùng. Kiểm "còn xử lý job" thật sự là việc của alert: M08 page khi worker mất scrape, và README M08 bàn alert theo độ dài hàng đợi còn thiếu.
+
+## M07: `project/gitops/`
+
+- **Một Application, ba nguồn cùng repo.** Nguồn `ref: values` chỉ để trỏ tới `gitops/values-lab.yaml`, nguồn `chart/olist-shop` render
+  bằng Helm có sẵn của ArgoCD, nguồn `gitops/secrets` qua plugin `sops-kustomize`. Không đưa chart qua plugin: sidecar CMP của lab
+  không có Helm (có chủ đích, để repo của một lab không chạy chương trình cạnh khoá age), còn Kustomize `helmCharts` cần `--enable-helm`.
+  Hai Application riêng cũng được, nhưng "commit X đã lên chưa" phải xem hai chỗ và không có thứ tự giữa Secret và Deployment; một
+  Application cho một history, một nút rollback.
+- **Version chỉ ở `values-lab.yaml`.** Application không mang `image.tag`: đổi version là một commit vào repo, đúng một dòng, review
+  được, `git revert` được. `route.host` thì ở `valuesObject` của Application vì nó gắn với môi trường (namespace), không đổi theo bản
+  phát hành.
+- **Chart M06 dùng nguyên.** ArgoCD dùng tracking bằng annotation (mặc định từ v3) nên nhãn `app.kubernetes.io/instance: shop` của
+  chart không bị ghi đè; `releaseName: shop` giữ tên object như M06. Chart không có giá trị ngẫu nhiên, nên revert render ra đúng pod
+  template cũ và Deployment dùng lại ReplicaSet cũ (rollback nhanh, không pull lại, history sạch).
+- **`seal-db.sh` đọc mật khẩu từ stdin, dựng cả Secret.** Tham số dòng lệnh hiện trong `ps` của mọi user và trong history của shell.
+  Bốn khoá (`POSTGRES_*` cho Postgres, `DATABASE_URL` cho app) sinh từ một giá trị nên không bao giờ lệch nhau. Bản rõ chỉ đi qua
+  pipe vào `sops encrypt /dev/stdin` (`printf` là builtin, không thành tiến trình mới); kết quả ghi ra tệp tạm `umask 077` cùng thư mục
+  rồi `mv`, nên lỗi giữa chừng không để lại tệp nửa vời. Mật khẩu chỉ nhận ký tự an toàn cho URL để khỏi phải percent-encode.
+- **Hai recipient trong `.sops.yaml`.** Khoá team để người sửa Secret giải mã được ở máy mình; khoá ArgoCD để cluster giải mã lúc
+  sync. Thêm người là `sops updatekeys`, không phải chia sẻ khoá riêng. `encrypted_regex: ^(data|stringData)$` giữ `kind`, `metadata`
+  đọc được khi review PR.
+- **`retry` có giới hạn.** Sync lỗi được thử lại tối đa 3 lần với backoff; không có `retry` thì một lần sync lỗi (vd. Secret sai) giữ
+  Application ở commit cũ cho tới khi hết lượt thử, commit sửa phải chờ.
+
+## M08: `project/observability/`, `project/container/compose.yaml`
+
+- **Telemetry bật bằng một biến.** `OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}`: compose M03 chạy y như cũ khi
+  không có Collector (app không import OpenTelemetry khi biến rỗng), và bật trace, log OTLP khi có. Không ghi cứng `otel-collector`:
+  staging của M04 không có service đó.
+- **RED là recording rule, dashboard và alert đọc cùng tên.** Một định nghĩa "tỉ lệ lỗi" cho cả hai, đổi một chỗ. Mỗi rule gom về một
+  series không nhãn vì lab có một instance; nhiều instance thì giữ `by (instance)` ở rule và gom khi vẽ.
+- **`or on() vector(0)` ở tỉ lệ lỗi.** Counter `http_requests_total{status="503"}` chỉ xuất hiện sau lỗi 503 đầu tiên; trước đó tử số
+  rỗng, cả phép chia rỗng, panel "No data" và alert không có gì để so. Với `vector(0)`, tỉ lệ là 0 khi có traffic, vẫn rỗng khi không có
+  traffic nào (mẫu số rỗng), đúng nghĩa.
+- **Duration của worker lấy từ trace.** Worker chỉ có hai counter; histogram `traces_span_metrics_duration_milliseconds` của Collector
+  (span `process olist:jobs`) cho p95 mà không phải sửa app. Cái giá: số liệu phụ thuộc Collector và sampling (sampling 10% vẫn đúng
+  phân vị nhưng ít mẫu), và đơn vị là mili giây nên phải chia 1000.
+- **`OlistWorkerDown` dùng `max(up{job="olist-worker"}) == 0`, `for: 30s`.** `max` bỏ nhãn `instance` để một alert cho cả worker;
+  30 giây là 6 lần scrape lỡ liên tiếp, đủ để một lần restart không đánh thức ai. Worker mất hẳn khỏi service discovery (không còn
+  series `up`) thì alert này im; ở Kubernetes cần thêm `absent(up{job=...})`.
+- **Page cho triệu chứng người dùng thấy, ticket cho thứ chờ được.** Tỉ lệ lỗi 5xx và worker chết là page; p95 chậm 10 phút là ticket.
+  Alertmanager route theo `severity`, mức độ lạ (thiếu nhãn, viết hoa) về `olist-default`, không bao giờ đánh thức người trực. Inhibit
+  rule chặn ticket của worker khi `OlistWorkerDown` đang bắn (`equal: [service]`), để một sự cố chỉ ra một thông báo.
+- **Test rule dùng series 20 giây.** `rate` trên cửa sổ `[1m]` với mẫu 15 giây ngoại suy theo hệ số 4/3 và cho
+  `4.999999999999999` thay vì `5`; promtool so chính xác. Mẫu 20 giây cho hệ số 3/2, ra số đúng.
+- **Dashboard chỉ dùng uid datasource đã provision.** `${DS_PROMETHEUS}` là thứ của dashboard export để import tay; provision từ tệp
+  thì biến đó không bao giờ được thay. Panel logs lọc `level` ERROR, WARNING và Grafana có derived field `trace_id` sang Jaeger.
 
 ## Rubric cho phần tự đánh giá
 
@@ -266,3 +313,7 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 | README "Hạ tầng và cấu hình" | Sơ đồ tofu → SSM → Ansible, lý do write-only và cái giá, runbook xoay mật khẩu không gián đoạn | Liệt kê tài nguyên |
 | Vòng thật M06 | Cài chart vào namespace `restricted`, gọi qua Gateway, drain một worker và thấy PDB giữ `api`, upgrade rồi rollback | Chỉ chạy test |
 | README "Kubernetes" | Bảng luồng mạng được phép, lý do không HPA cho worker, con số cho min/max replica và PDB, khác biệt khi lên EKS/GKE | Chép values.yaml |
+| Vòng thật M07 | Mã hoá bằng hai khoá, giải mã bằng khoá thứ hai, render chart với `values-lab.yaml`, quan sát ArgoCD rollout rồi revert trong lúc test chạy, đo thời gian từ commit tới pod mới | Chỉ chạy test |
+| README "GitOps" | Lý do Application nhiều nguồn và cái giá, quy trình lên version và rollback có số đo, ai giữ khoá nào, runbook xoay mật khẩu Postgres không gián đoạn, so với Sealed Secrets/ESO/Vault | Chép application.yaml |
+| Vòng thật M08 | Dựng stack bằng tay, lần từ log lỗi sang trace có span DB, dừng worker và đo thời gian tới khi alert tới Alertmanager, chạy lại và thấy alert hết | Chỉ chạy test |
+| README "Observability" | Bảng alert có ngưỡng và lý do, việc đầu tiên khi bị page, cái giá của duration từ spanmetrics, alert còn thiếu cho độ dài hàng đợi, ảnh dashboard lúc sự cố | Liệt kê tệp cấu hình |
