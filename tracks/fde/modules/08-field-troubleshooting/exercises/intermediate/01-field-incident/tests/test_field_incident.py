@@ -117,7 +117,8 @@ def grade(scene: fieldkit.Scene, scenario, incident: dict, bundle: dict[str, str
             if not src.search(canonical):
                 continue
             for match in text.finditer(needle):
-                if not command or match.group(0).lower() not in command:
+                span = match.group(0)
+                if not command or span.startswith("/") or span.lower() not in command:
                     direct = True
     assert incident["cause"] in scenario.accepted, \
         f"cause {incident['cause']!r} không giải thích được sự cố này; xem lại bằng chứng"

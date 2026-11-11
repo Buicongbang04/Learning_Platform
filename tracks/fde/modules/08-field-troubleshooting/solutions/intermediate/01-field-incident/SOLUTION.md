@@ -56,7 +56,10 @@ Cách sửa: proxy cho `dockerd` (systemd drop-in) nếu mục đích là pull i
   proxy hệ thống (`/etc/environment`, dạng `http_proxy="…"`) có ở bệnh viện dù có sự cố hay không, nên không tính; bundle
   cũng không thu tệp đó. Chống "lệnh in lại tham số": với bằng chứng từ lệnh khách, test lấy **đúng phần khớp mẫu** trong
   đoạn trích và bỏ qua nếu phần đó có trong câu lệnh (vd. `ls '/No space left on device'` rồi trích
-  `No space left on device': No such` vẫn không tính).
+  `No space left on device': No such` vẫn không tính). Ngoại lệ: phần khớp là đường dẫn (bắt đầu bằng `/`) vẫn được
+  tính dù có trong câu lệnh, vì `du -sh /var/backups/his` hay `ls -la /var/backups/his` là cách hỏi đúng; tấn công "in
+  lại tham số" dùng chuỗi không phải đường dẫn nên vẫn bị chặn. Dòng log trích qua `grep "<lỗi>"` nhờ khách gõ không được
+  tính (README nói rõ: trích dòng log từ bundle).
   Một báo cáo chỉ có `502` và `/healthz 503` đúng triệu chứng mà chưa chỉ ra nguyên nhân.
 - **Lệnh đã thật sự hỏi:** ở chế độ người học, test đọc `.fde-lab/08-field-incident/ask-log.jsonl` (mỗi dòng có seed,
   chỉ ghi nối): số lệnh khách đã gõ cho seed đó ≤ 4 và `customer_commands` ⊆ các lệnh đó. `ask_customer` từ chối lệnh

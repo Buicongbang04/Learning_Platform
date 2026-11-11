@@ -128,14 +128,19 @@ kích thước, tên tài liệu), nên đoạn trích bằng chứng chỉ đư
   cách gọi tên hợp lý).
 - Ít nhất một bằng chứng là **dấu vết trực tiếp của nguyên nhân** (thứ mà khi nguyên nhân biến mất thì nó cũng biến
   mất), không chỉ là triệu chứng (mã lỗi HTTP, trạng thái health, "không có trích dẫn"). Test so phần dấu vết trong
-  đoạn trích (không phân biệt hoa thường) theo nguồn:
+  đoạn trích theo nguồn:
   - dấu vết về **tài nguyên** (mức dùng đĩa, lỗi hết chỗ…) được tính từ tệp tài nguyên hay log của dịch vụ liên quan
     trong bundle, hoặc từ output lệnh nhờ khách gõ;
   - dấu vết về **cấu hình** (biến môi trường, cấu hình của runtime…) chỉ được tính khi đến từ output lệnh nhờ khách gõ,
     và không tính cấu hình chung của cả máy vốn đã có sẵn ở khách này dù có sự cố hay không (vd. biến proxy hệ thống
-    viết trong `/etc/environment` dạng `tên="giá trị"`);
+    viết trong `/etc/environment` dạng `tên="giá trị"`); tên biến/khoá cấu hình được so không phân biệt hoa thường
+    (`http_proxy` hay `HTTP_PROXY`), các dấu vết khác so đúng chữ;
   - không tính phần dấu vết mà chính câu lệnh của bạn đã chứa và output chỉ in lại (vd. thông báo lỗi lặp lại tham số
-    bạn gõ), dù đoạn trích dài hơn phần đó.
+    bạn gõ), dù đoạn trích dài hơn phần đó. Đường dẫn tệp/thư mục (bắt đầu bằng `/`) là ngoại lệ: trích
+    `/đường/dẫn` từ output `du`, `ls`, `df` có tham số chính là đường dẫn đó vẫn được tính. Hệ quả: dòng log hãy trích từ
+    log trong bundle, không từ output `grep "<lỗi>" …` nhờ khách gõ; và đừng đưa tên biến/khoá vào câu lệnh
+    (`grep -i proxy …`) khi muốn dùng output làm dấu vết cấu hình: dùng lệnh in cả cấu hình (vd. `docker inspect`,
+    `cat <tệp cấu hình>`).
 
 ## Gợi ý
 
