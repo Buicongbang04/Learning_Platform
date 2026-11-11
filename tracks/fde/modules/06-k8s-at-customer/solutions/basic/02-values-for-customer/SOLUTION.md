@@ -45,9 +45,9 @@ worker, llm, embed dùng `Recreate`, db là StatefulSet).
 | embed | 100m | 384Mi | 512Mi |
 | **Tổng** | **700m ≤ 800m** | **2304Mi ≤ 3072Mi** | **3968Mi ≤ 4096Mi** |
 
-`values-restricted.yaml` mẫu của sản phẩm (đi kèm mã nguồn) qua được PSA và quota rỗng, nhưng ở khách này trượt hai
-chỗ: registry thiếu `/vendors/quillo`, và CPU: llm 500m + embed 250m ⇒ 1100m cho quillo + 200m của agent = 1300m >
-1000m. Values mẫu là điểm xuất phát, không phải lời giải: số trong nó được tính cho một namespace trống.
+`chart/examples/values-hardened.yaml` của sản phẩm (đi kèm mã nguồn) chỉ là ví dụ chung: registry giả
+`registry.example.internal:5000`, không có `runAsUser` cho db/llm/embed, và requests (llm 1 CPU, tổng 1750m) vượt luật
+1000m của khách. Values mẫu là điểm xuất phát, không phải lời giải: số trong nó được tính cho một namespace trống.
 
 `limits.memory` còn 128Mi: đủ cho lần nâng cấp api, **không** đủ để tăng replica api lên 2. Ghi điều này vào ghi chú
 bàn giao cho IT.

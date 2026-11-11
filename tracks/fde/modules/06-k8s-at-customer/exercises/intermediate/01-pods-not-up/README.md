@@ -44,7 +44,7 @@ IT đã làm theo hướng dẫn cài của vendor (chính là `starter/deploy.s
 > Helm báo `STATUS: deployed` nhưng pod không lên, `kubectl get pods` không có pod nào của quillo.
 
 Sửa `starter/deploy.sh` và `starter/values.yaml`; được thêm tệp của bạn (script, công cụ đã ghim…) vào `starter/`. Test
-boot `lawfirm-prod` (`customer_site`, registry phía host luôn mới), chép bundle vào `/home/fde/quillo-1.0.0.tar`, chép
+boot `lawfirm-prod` (mỗi lần chạy test dựng lại môi trường khách từ đầu), chép bundle vào `/home/fde/quillo-1.0.0.tar`, chép
 **mọi tệp** trong `starter/` vào `/home/fde/deploy/`, rồi chạy `cd /home/fde && sh /home/fde/deploy/deploy.sh` (≤180 s)
 và kiểm bằng `kubectl` của `fde` cùng `kubectl port-forward svc/quillo-api 18080:8080` chạy trong VM.
 

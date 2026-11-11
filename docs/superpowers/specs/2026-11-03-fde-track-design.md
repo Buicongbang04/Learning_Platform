@@ -431,8 +431,9 @@ kế ở trên hoặc chốt những điểm thiết kế để ngỏ. Khi mâu 
   timeout 5 s, **không áp ACL** và không phải ranh giới bảo mật; extension là mã tin cậy.
 - **Helm chart** (`chart/quillo-<version>.tgz`; values `image.registry`, `podSecurityContext`,
   `containerSecurityContext`, `resources.*`, `networkPolicy.*`, `oidc.*`, `acl`, `extensions.*`, `persistence.*`,
-  `models.*`, `auth.existingSecret`) mặc định trống securityContext/resources/NetworkPolicy (quyết định 6); values mẫu
-  qua PSA restricted và quota nằm ở `chart/examples/values-restricted.yaml`, ngoài bundle.
+  `models.*`, `auth.existingSecret`) mặc định trống securityContext/resources/NetworkPolicy (quyết định 6); ví dụ values
+  chung cho cluster siết chặt (registry giả, không ứng với hồ sơ khách nào) nằm ở `chart/examples/values-hardened.yaml`,
+  ngoài bundle.
 - **Ops:** `ops/backup.sh` (`pg_dump -Fc` trong container db, `.dump` kèm `.sha256`, tệp không đọc được bởi người khác,
   từ chối khi đĩa đích nhỏ hơn 2 lần cỡ DB), `ops/restore.sh` (kiểm sha256, từ chối khi DB đang có tài liệu trừ
   `--force`, `--single-transaction`), `ops/models_image.py`. Cài lại bằng `install.sh` tham chiếu đã sửa kiểm tra đĩa.
