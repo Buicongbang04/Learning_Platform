@@ -101,6 +101,9 @@ dependencies = [
     "pypdf==6.21.1",
     "python-multipart==0.0.32",
     "jinja2==3.1.6",
+    # FDE module 07: client SMB2/3 thuần Python cho connector file share (máy khách không có smbclient/cifs-utils).
+    # smbprotocol 1.17.0 phát hành 2026-07-07, kéo theo pyspnego (0.12.4, 2026-10-06).
+    "smbprotocol==1.17.0",
 ]
 
 [dependency-groups]

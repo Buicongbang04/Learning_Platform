@@ -82,8 +82,8 @@ uv run pytest tracks/fde/product -q
   dựng một lần cho cả phiên test (fixture `bundle`).
 - IdP OIDC trong test là `tests/fake_idp.py` (discovery, JWKS, authorize/token có PKCE, khoá RSA sinh mới mỗi lần).
   `test_keycloak_end_to_end` thì dùng Keycloak thật: `fdekit.customer_site("lab-open", extra_services=("keycloak",))`,
-  cài bundle trong VM với `compose.sso.yaml`, rồi thêm mapper `groups` cho client `quillo` qua admin REST API (realm
-  mẫu cố ý không có mapper này). Thiếu golden/KVM/image Keycloak thì skip kèm lệnh.
+  cài bundle trong VM với `compose.sso.yaml`, rồi đóng vai IT khách cấu hình thêm client `quillo` qua admin REST API
+  (xem mã test). Thiếu golden/KVM/image Keycloak thì skip kèm lệnh.
 - `test_chart.py` chạy `helm lint`/`helm template` trong container `alpine/helm:3.22.1` (ghim digest) với values mặc
   định và values trong `chart/examples/`.
 - `test_backup.py` chạy `ops/*.sh` với `--exec "docker exec -i <container pgvector của test>"`.
@@ -247,13 +247,12 @@ sequenceDiagram
   `nonce`) rồi cấp cookie phiên 8 giờ mang tên và nhóm lúc đăng nhập. `redirect_uri` là `<URL quillo>/oidc/callback`
   (sau reverse proxy thì chạy uvicorn với `--proxy-headers`); IdP phải cho phép đúng URL này.
 - Nhóm lấy từ claim `QUILLO_OIDC_GROUPS_CLAIM` (mặc định `groups`); `/legal` (Keycloak "full path") được hiểu là
-  `legal`. Token không có claim này thì người dùng không thuộc nhóm nào: đăng nhập được nhưng không thấy tài liệu nào.
-  Xem `GET /api/me` để biết quillo thấy nhóm gì.
+  `legal`. Xem `GET /api/me` để biết quillo thấy người gọi là ai, thuộc nhóm nào.
 - `QUILLO_ACL="legal:legal/,finance:finance/"`: nhóm `legal` xem tài liệu có đường dẫn bắt đầu bằng `legal/`. Đường
   dẫn tài liệu là đường dẫn tương đối: worker giữ thư mục con trong inbox (`inbox/legal/nda-01.pdf` → `legal/nda-01.pdf`,
   chuyển xong vào `done/legal/`, sâu tối đa 8 cấp), upload qua API/UI nhận field `folder`. Mỗi phần của đường dẫn được
-  làm sạch như tên tệp (ký tự ngoài `A-Za-z0-9._ -` thành `_`, vd. `Hợp đồng/` thành `H_p _ng/`), nên ACL phải ghi
-  tên đã làm sạch (`GET /api/documents` cho thấy đường dẫn thật đã lưu). Tài liệu không khớp thư mục nào (kể cả tài liệu
+  làm sạch như tên tệp (mỗi đoạn ký tự ngoài `A-Za-z0-9._ -` thành một `_`); `QUILLO_ACL` so tiền tố với đường dẫn
+  đã lưu, mà `GET /api/documents` (token quản trị) cho thấy. Tài liệu không khớp thư mục nào (kể cả tài liệu
   ở gốc inbox) **chỉ admin thấy**. ACL nằm trong chính câu truy vấn vector (`WHERE` + HNSW quét tiếp tới khi đủ
   `top_k`), không lọc sau khi đã lấy `top_k`, nên vừa không lộ đoạn của nhóm khác (kể cả vào prompt của LLM) vừa không
   trả thiếu đoạn. Người dùng SSO chỉ upload được vào thư mục mình xem được (403), kể cả khi nội dung trùng một

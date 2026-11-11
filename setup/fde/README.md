@@ -187,8 +187,8 @@ không bật thêm được). Hồ sơ cũng có thể khai báo chúng trong `s
   user `an` ∈ legal, `binh` ∈ finance, `chi` ∈ legal + finance. Mật khẩu user cố định trong tệp realm, **chỉ dùng trong
   lab** (`fdekit.KEYCLOAK_PASSWORDS`). Client secret và mật khẩu admin sinh mới mỗi lần chạy, truyền vào container qua tệp
   trong thư mục lab (0700) mount chỉ đọc, không nằm trên dòng lệnh `docker run`.
-- Như mặc định của Keycloak, token **không** có claim `groups` (không có mapper group membership). Đây là cấu hình thật
-  của IdP khách, không phải lỗi của lab.
+- Client `quillo` giữ đúng cấu hình IT khách đã tạo (xem tệp realm), không phải lỗi của lab; bài nào cần đổi cấu hình
+  IdP thì test đóng vai IT, đổi qua admin REST API (`s.keycloak_admin`, realm `master`).
 - `fdekit.keycloak_token(site, user, password)` lấy access token bằng password grant qua cổng host; chỉ dùng cho test.
 - **File share** `ghcr.io/servercontainers/samba:smbd-only-a3.24.3-s4.23.8-r0@sha256:04fb3bd3…` (2026-10-22, Samba
   4.23.8 trên Alpine, image đa kiến trúc được cập nhật hằng tháng), giới hạn 256 MB. Trong VM ở `10.0.2.103:445`, chỉ
@@ -272,6 +272,9 @@ trong ngân sách 300 s: nó boot từ một **snapshot dẫn xuất** dựng m�
   compose (`~/quillo-1.0.0`, `llm-small`), có thêm `llm-medium` ở `~/models/`. Dựng từ bundle
   `tracks/fde/product/dist/quillo-1.0.0.tar` bằng `setup/fde/derived/05-gpu-field-quillo.sh` (đầu vào của khoá: bundle,
   script, sha256 của `llm-medium`); netem của `factory` bị tắt trong lúc chép và bật lại ở lần boot sau.
+- `07-customer-integration-quillo` (module 07): `lab-open` (3072 MB) đang chạy quillo 1.0.0 bằng compose
+  (`~/quillo-1.0.0`, `QUILLO_BIND=0.0.0.0` để cổng forward của QEMU tới được api), chưa bật SSO, inbox rỗng. Dựng từ
+  bundle bằng `setup/fde/derived/07-customer-integration-quillo.sh` (đầu vào của khoá: bundle, script).
 
 ## PC GPU
 
