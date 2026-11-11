@@ -36,6 +36,8 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | Stack observability (image Docker ghim digest: OTel Collector contrib 0.163.2, Jaeger 2.22.0, Loki 3.7.9, Prometheus v3.5.0, Alertmanager v0.34.1, Grafana 13.2.5; xem [Stack observability](#stack-observability)) | 13 Observability (chạy trong container bằng `testkit.ObsStack`, không cài lên máy) | Đúng tag và digest đã ghim | [Stack observability](#stack-observability) |
 | promtool, amtool | 13 Observability (chạy trong image Prometheus, Alertmanager ghim qua `testkit.promtool`/`amtool`, không cần cài; muốn gõ tay thì dùng `docker run` ở [Stack observability](#stack-observability)) | Đúng bản trong image | [Stack observability](#stack-observability) |
 | logcli (tuỳ chọn) | 13 Observability (bản đã kiểm 3.7.9, cùng bản Loki của stack, kiểm SHA-256 theo `SHA256SUMS` của release; không bài nào cần, chỉ để chạy LogQL từ terminal) | 3.0 | [Cài đặt](../tracks/devops/modules/13-observability/README.md#0-cài-đặt) |
+| Image Lambda `public.ecr.aws/lambda/python:3.12.2026.10.22.03` ghim digest (có Runtime Interface Emulator, chạy handler qua `LambdaLab`, xem [Lambda local: LambdaLab](#lambda-local-lambdalab)) | 14 Cloud & serverless | Đúng tag đã ghim | [Cài đặt](../tracks/devops/modules/14-cloud-serverless/README.md#0-cài-đặt) |
+| AWS CLI v2 (`aws`, tuỳ chọn) | 14 Cloud & serverless (bản đã kiểm 2.38.6, cài vào `~/.local/aws-cli` từ zip chính thức, kiểm chữ ký PGP của AWS CLI Team và SHA-256; test không cần, chỉ để chạy tay trên LocalStack hay làm lab AWS thật) | 2.x | [Cài đặt](../tracks/devops/modules/14-cloud-serverless/README.md#0-cài-đặt) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
 
