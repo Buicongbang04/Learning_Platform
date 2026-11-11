@@ -6,7 +6,8 @@ Lời giải ở `jwt_check.py` cạnh tệp này:
 SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/07-customer-integration/exercises/basic/01-jwt-check -q
 ```
 
-Đo 2026-11-11 trên máy của repo: 11 test ~24 s (boot `lab-open` + Keycloak ~18 s, phần còn lại < 6 s).
+Đo 2026-11-11 trên máy của repo: 13 test ~38 s (boot `lab-open` + Keycloak ~20 s, hai lần chờ 5,5 s của quy tắc tải
+lại JWKS).
 
 ## Cách làm
 
@@ -15,10 +16,15 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/07-customer-integration/e
    `alg: none` (không có chữ ký) và nhầm thuật toán `HS256` + khoá công khai (kẻ tấn công ký HMAC bằng PEM công khai mà
    ai cũng tải được từ JWKS; thư viện cũ nào "chọn thuật toán theo header" sẽ dùng PEM đó làm secret HMAC và chấp nhận).
 3. **Chọn khoá theo `kid` trong JWKS**, bỏ khoá `use: enc` (Keycloak công bố cả khoá `RSA-OAEP` để mã hoá). `alg` của
-   token phải trùng `alg` của khoá. Không thấy `kid` ⇒ tải lại JWKS **một lần** (IdP vừa xoay khoá) rồi mới kết luận
-   `unknown_key`. Cache theo URL; giữa hai lần tải lại có khoảng nghỉ tối thiểu (1 s) để token rác với `kid` ngẫu nhiên
-   không biến resource server thành công cụ dội IdP. Bản production nên giới hạn chặt hơn (vd. một lần mỗi 5 phút cho
-   cùng `kid` lạ) và có TTL cho cache để khoá bị IdP gỡ thì cũng bị gỡ ở đây.
+   token phải hợp với khoá: trùng `alg` của JWK nếu có, không thì theo `kty`/`crv` (Entra ID không ghi `alg`). Cache
+   theo URL, chia hai đường:
+   - `kid` đã biết: chỉ đọc dict dưới khoá ngắn, không I/O, không bao giờ chờ.
+   - `kid` lạ: tải lại JWKS **một lần** (IdP vừa xoay khoá), *single-flight* (một khoá riêng cho việc tải, lấy không
+     chặn: luồng khác đang tải thì trả `unknown_key` ngay) và **ngoài** khoá cache; không quá một lần mỗi 5 s, trong
+     khoảng đó trả `unknown_key` ngay. Token rác với `kid` ngẫu nhiên vì thế không biến resource server thành công cụ dội
+     IdP, cũng không làm nghẽn token hợp lệ. Bản đầu của lời giải này ngủ chờ khoảng nghỉ **trong khi giữ khoá cache**:
+     40 token rác đủ làm mọi request hợp lệ chờ hàng chục giây và tải JWKS 40 lần (`test_unknown_kid_flood` bắt được).
+   - Bản production thêm TTL cho cache để khoá bị IdP gỡ thì cũng bị gỡ ở đây, và giới hạn theo nguồn request.
 4. **Kiểm chữ ký** bằng `jwt.decode(..., algorithms=[alg])` nhưng tắt các kiểm claim của PyJWT, vì bài cần `now`
    truyền vào được (PyJWT luôn dùng đồng hồ máy). Sau chữ ký mới kiểm `iss` (so nguyên chuỗi), `aud` (chuỗi hoặc mảng),
    `exp` + 60 s, `nbf`/`iat` − 60 s.

@@ -70,6 +70,9 @@ cần gì, vì sao, phạm vi ảnh hưởng (chỉ client `quillo`, chỉ nhóm
 
 ## Bài học hiện trường
 
+- Làm sạch tên là phép **mất thông tin**: `Tài chính` và `Tái chỉnh` cùng thành `T_i ch_nh`, nên một tiền tố ACL có thể
+  khớp hai thư mục khác nhau ở nguồn. Trước khi chốt ACL, liệt kê đường dẫn đã lưu (`GET /api/documents`) và kiểm không
+  có hai thư mục nguồn nào gộp vào cùng một tiền tố; có thì đổi tên ở tầng connector hoặc báo khách.
 - "Đăng nhập được nhưng không thấy gì" gần như luôn là **authorization**, không phải authentication: token hợp lệ, phần
   ánh xạ danh tính → quyền thiếu ở một trong hai đầu.
 - Group claim là thứ phải **xin** IdP của khách (Keycloak: mapper; Entra ID: `groupMembershipClaims` và giới hạn ~200 nhóm

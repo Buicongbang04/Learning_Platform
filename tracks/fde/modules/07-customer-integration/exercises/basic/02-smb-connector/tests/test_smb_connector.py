@@ -19,7 +19,8 @@ C = "Tài chính/Hoá đơn T10.txt"
 D = "README.txt"
 E = "Pháp chế/Biên bản họp.txt"
 F = "Tài chính/2024/Q4/Bảng kê.txt"
-G = "Pháp chế/khóa.txt"
+G = "Pháp chế/Mật/khóa.txt"
+H = "done/bao-cao.txt"
 IGNORED = ["Pháp chế/Hợp đồng 2024/~$NDA-02.docx", "Tài chính/Thumbs.db", "desktop.ini", "Pháp chế/.DS_Store"]
 USER_FILE = "Tài chính/tay.txt"
 
@@ -130,11 +131,17 @@ def test_incremental_sync(tmp_path):
         assert after.get(B) == before[B], "Lần 3: chỉ đổi mtime, nội dung giữ nguyên thì không giao lại"
         assert after.get(C, (b"",))[0] == files[C], "Lần 3: inbox phải có nội dung mới của tệp đã sửa"
         assert after.get(F, (b"",))[0] == files[F], "Lần 3: tệp mới trong thư mục con mới phải có trong inbox"
-        assert G not in after, "Lần 3: tệp không đọc được thì không có gì trong inbox"
+        assert not (inbox / G).parent.exists(), "Lần 3: tệp không đọc được thì không tạo gì trong inbox, kể cả thư mục"
 
         (share / G).chmod(0o644)
-        expect("Lần 4 (tệp lỗi đã đọc được)", conn.run("Lần 4"), 0, added=[G])
-        assert tree(inbox)[G][0] == (share / G).read_bytes()
+        write(share, H, body(H), old + 60)
         before = tree(inbox)
+        expect("Lần 4 (tệp lỗi đã đọc được; share có thư mục done/ ở gốc)", conn.run("Lần 4"), 1, added=[G], errors=[H])
+        after = tree(inbox)
+        assert after[G][0] == (share / G).read_bytes()
+        assert after.get(f"done/{A}") == before[f"done/{A}"] and H not in after, \
+            "Lần 4: tệp done/... trên share không được ghi vào done/ của inbox"
+        before = tree(inbox)
+        (share / H).unlink()
         expect("Lần 5 (không có gì đổi)", conn.run("Lần 5"), 0)
         assert tree(inbox) == before, "Lần 5: không có gì đổi ở share thì inbox phải giữ nguyên từng tệp"

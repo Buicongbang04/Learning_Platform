@@ -49,8 +49,9 @@ Quy tắc:
    trong inbox thì gỡ nó khỏi inbox.
 6. Connector chỉ đụng tệp nó giao: không bao giờ sửa/xoá `inbox/done/`, `inbox/failed/` hay tệp người khác thả vào
    inbox.
-7. Một tệp không đọc được ⇒ ghi vào `errors`, các tệp khác vẫn xử lý; lần chạy sau thử lại tệp đó. Có `errors` thì thoát
-   `1`, không thì `0`.
+7. Một tệp không giao được ⇒ ghi vào `errors`, không để lại gì trong inbox (kể cả thư mục rỗng), các tệp khác vẫn xử
+   lý; lần chạy sau thử lại tệp đó. Có `errors` thì thoát `1`, không thì `0`. Hai trường hợp không giao được: tệp không
+   đọc được, và tệp nằm dưới thư mục `done/` hay `failed/` ở **gốc** share (trùng thư mục riêng của worker trong inbox).
 8. Không có gì đổi ở share ⇒ báo cáo bốn mảng rỗng và inbox giữ nguyên từng tệp (nội dung, mtime, inode).
 
 Test dựng share Samba thật (`fdekit.customer_site("lab-open", memory_mb=1024, extra_services=("fileshare",))`, SMB3,
@@ -68,10 +69,12 @@ ngẫu nhiên mỗi lần chạy test. Cả bài ~15 s trên máy của repo.
 - Lần 2: worker đã chuyển 2 tệp sang `done/`, người dùng thả một tệp vào `inbox/Tài chính/`, một tệp không đổi bị tước
   quyền đọc trên share ⇒ báo cáo rỗng, thoát `0`, inbox không đổi.
 - Lần 3: một tệp sửa nội dung, một tệp chỉ đổi mtime, hai tệp bị xoá ở nguồn (một đã sang `done/`, một còn chờ), một
-  tệp mới ở thư mục con mới, một tệp mới không đọc được ⇒ đúng `added`/`updated`/`deleted`/`errors`, thoát `1`; tệp còn
-  chờ bị gỡ, `done/` và tệp của người dùng nguyên vẹn, tệp chỉ đổi mtime không bị giao lại.
-- Lần 4: tệp lỗi đọc được rồi ⇒ chỉ nó trong `added`, thoát `0`.
-- Lần 5: báo cáo rỗng, inbox không đổi.
+  tệp mới ở thư mục con mới, một tệp mới không đọc được trong một thư mục mới ⇒ đúng `added`/`updated`/`deleted`/`errors`,
+  thoát `1`; tệp còn chờ bị gỡ, `done/` và tệp của người dùng nguyên vẹn, tệp chỉ đổi mtime không bị giao lại, thư mục
+  của tệp lỗi không xuất hiện trong inbox.
+- Lần 4: tệp lỗi đọc được rồi, share có thêm `done/bao-cao.txt` ở gốc ⇒ `added` chỉ có tệp kia, `errors` là
+  `done/bao-cao.txt`, thoát `1`, `inbox/done/` không đổi.
+- Lần 5 (`done/bao-cao.txt` đã bị gỡ khỏi share): báo cáo rỗng, inbox không đổi.
 
 ## Gợi ý
 

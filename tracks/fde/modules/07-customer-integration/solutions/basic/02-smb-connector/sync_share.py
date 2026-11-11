@@ -90,17 +90,17 @@ def sync(args: argparse.Namespace, password: str) -> dict:
         old = known.get(rel)
         if old and old["mtime"] == meta["mtime"] and old["size"] == meta["size"]:
             continue
-        target = inside(inbox, rel)
-        target.parent.mkdir(parents=True, exist_ok=True)
         try:
-            temp, digest = fetch(root, args.port, rel, target.parent)
-        except (SMBException, OSError) as error:
+            target = inside(inbox, rel)
+            temp, digest = fetch(root, args.port, rel, inbox)
+        except (SMBException, OSError, ValueError) as error:
             report["errors"].append(rel)
-            print(f"không đọc được {rel}: {type(error).__name__}", file=sys.stderr)
+            print(f"không giao được {rel}: {type(error).__name__}", file=sys.stderr)
             continue
         if old and old["sha256"] == digest:
             temp.unlink()
         else:
+            target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(temp, target)
             report["updated" if old else "added"].append(rel)
         known[rel] = meta | {"sha256": digest}

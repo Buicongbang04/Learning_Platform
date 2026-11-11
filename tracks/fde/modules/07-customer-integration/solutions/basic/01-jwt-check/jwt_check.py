@@ -11,7 +11,8 @@ import requests
 
 ALGORITHMS = frozenset({"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"})
 LEEWAY = 60
-MIN_REFETCH = 1.0
+REFETCH_INTERVAL = 5.0
+EC_CURVES = {"ES256": "P-256", "ES384": "P-384", "ES512": "P-521"}
 
 
 class TokenError(Exception):
@@ -20,32 +21,57 @@ class TokenError(Exception):
         self.reason = reason
 
 
+def _fits(raw: dict, alg: str) -> bool:
+    """Khoá dùng được cho `alg` của token: theo `alg` của JWK nếu có, không thì theo `kty`/`crv` (Entra ID bỏ `alg`)."""
+    if raw.get("alg"):
+        return raw["alg"] == alg
+    if raw.get("kty") == "RSA":
+        return alg[:2] in {"RS", "PS"}
+    return raw.get("kty") == "EC" and EC_CURVES.get(alg) == raw.get("crv")
+
+
 class _Keys:
+    """JWKS theo URL. Kid đã biết: chỉ đọc cache, không bao giờ chờ mạng. Kid lạ: tải lại một lần (single-flight, ngoài
+    khoá cache), không quá một lần mỗi REFETCH_INTERVAL; trong khoảng đó hoặc khi luồng khác đang tải thì trả None ngay."""
+
     def __init__(self) -> None:
         self.lock = threading.Lock()
-        self.cache: dict[str, tuple[dict[str, jwt.PyJWK], float]] = {}
+        self.fetching: dict[str, threading.Lock] = {}
+        self.cache: dict[str, tuple[dict[str, dict], float]] = {}
 
-    def _fetch(self, url: str) -> dict[str, jwt.PyJWK]:
+    @staticmethod
+    def _fetch(url: str) -> dict[str, dict]:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        keys = {}
-        for raw in response.json().get("keys", []):
-            if raw.get("use", "sig") != "sig" or "kid" not in raw or raw.get("alg") not in ALGORITHMS:
-                continue
-            try:
-                keys[raw["kid"]] = jwt.PyJWK(raw)
-            except jwt.PyJWTError:
-                continue
-        return keys
+        return {raw["kid"]: raw for raw in response.json().get("keys", [])
+                if isinstance(raw, dict) and raw.get("use", "sig") == "sig" and "kid" in raw
+                and raw.get("kty") in {"RSA", "EC"}}
 
-    def get(self, url: str, kid: str) -> jwt.PyJWK | None:
+    def get(self, url: str, kid: str) -> dict | None:
         with self.lock:
-            keys, fetched = self.cache.get(url, ({}, 0.0))
-            if kid not in keys:
-                time.sleep(max(0.0, fetched + MIN_REFETCH - time.monotonic()))
-                keys, fetched = self._fetch(url), time.monotonic()
-                self.cache[url] = (keys, fetched)
-            return keys.get(kid)
+            keys, attempted = self.cache.get(url, ({}, float("-inf")))
+            if kid in keys:
+                return keys[kid]
+            if time.monotonic() - attempted < REFETCH_INTERVAL:
+                return None
+            gate = self.fetching.setdefault(url, threading.Lock())
+        if not gate.acquire(blocking=not keys):
+            return None
+        try:
+            with self.lock:
+                keys, attempted = self.cache.get(url, ({}, float("-inf")))
+                if kid in keys or time.monotonic() - attempted < REFETCH_INTERVAL:
+                    return keys.get(kid)
+                self.cache[url] = (keys, time.monotonic())
+            try:
+                fresh = self._fetch(url)
+            except (requests.RequestException, ValueError):
+                return keys.get(kid)
+            with self.lock:
+                self.cache[url] = (fresh, time.monotonic())
+            return fresh.get(kid)
+        finally:
+            gate.release()
 
 
 _KEYS = _Keys()
@@ -72,10 +98,14 @@ def check(token: str, *, issuer: str, audience: str, jwks_url: str, now: float |
     key = _KEYS.get(jwks_url, str(header.get("kid", "")))
     if key is None:
         raise TokenError("unknown_key", "kid không có trong JWKS của IdP")
-    if key.algorithm_name != alg:
-        raise TokenError("algorithm", "alg của token khác alg của khoá")
+    if not _fits(key, alg):
+        raise TokenError("algorithm", "alg của token không hợp với khoá")
     try:
-        claims = jwt.decode(token, key=key.key, algorithms=[alg],
+        public = jwt.PyJWK(key, algorithm=alg).key
+    except jwt.PyJWTError as error:
+        raise TokenError("unknown_key", "khoá trong JWKS không dùng được") from error
+    try:
+        claims = jwt.decode(token, key=public, algorithms=[alg],
                             options={"verify_exp": False, "verify_nbf": False, "verify_iat": False,
                                      "verify_aud": False, "verify_iss": False})
     except jwt.InvalidSignatureError as error:

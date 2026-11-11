@@ -52,9 +52,10 @@ tục trong lúc script chạy. Cả bài ~10 s.
   thân; có `push_report.log`; token không lộ (mục 5), không traceback.
 - `test_send_failures_do_not_leak` (4 ca: 401 có lặp token trong thân, 500 có lặp token, server đóng kết nối, cổng
   không mở): thoát `1`, có thông báo trên stderr, đúng 1 request (ca có server), token không lộ, không traceback.
-- `test_config_errors`: thiếu `AUDIT_TOKEN_FILE`; tệp không có; tệp rỗng; chỉ có `AUDIT_TOKEN` trong môi trường; tệp
-  token quyền `0644` ⇒ thoát `2`, không request nào tới dịch vụ, token không lộ ở stdout/stderr/tệp (ca có
-  `AUDIT_TOKEN` trong môi trường thì không quét `/proc`, vì chính test đã đặt nó ở đó).
+- `test_config_errors`: thiếu `AUDIT_TOKEN_FILE`; tệp không có; tệp rỗng; chỉ có `AUDIT_TOKEN` trong môi trường;
+  `AUDIT_TOKEN_FILE` hợp lệ nhưng môi trường có cả `AUDIT_TOKEN`; tệp token quyền `0644` ⇒ thoát `2`, không request
+  nào tới dịch vụ, token không lộ ở stdout/stderr/tệp (hai ca có `AUDIT_TOKEN` trong môi trường thì không quét `/proc`,
+  vì chính test đã đặt nó ở đó).
 
 ## Gợi ý
 

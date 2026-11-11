@@ -1,10 +1,7 @@
 Nguồn: hệ thống hợp đồng
-Số hợp đồng: HD-2021-0275
+Số hợp đồng: HD-2021-0992
 Khách hàng: Công ty Cổ phần Đầu tư Xây dựng Hưng Thịnh
 Loại hợp đồng: Dịch vụ pháp lý thường xuyên
 Ngày ký: 2021-04-17
 Giá trị: 3876500000 VND
 Ghi chú:
-Thanh toán 2 đợt:
-- Đợt 1: 50% khi ký
-- Đợt 2: 50% khi nghiệm thu

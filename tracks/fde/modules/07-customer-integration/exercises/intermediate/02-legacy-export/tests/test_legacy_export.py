@@ -36,9 +36,12 @@ VN_NOTES = ["", "Gia hạn tự động 12 tháng; báo trước 30 ngày", 'Kh�
             "Đã điều chỉnh phụ lục số 02 ngày 15/08/2024", "Liên hệ: chị Hằng – phòng pháp chế, sđt nội bộ 214"]
 FR_CUSTOMERS = ["Société Générale Vietnam", "Müller & Söhne GmbH", "Œuvres Françaises SARL",
                 "Café Crème Import–Export", "Banco Español de Crédito", "Brasserie Saint-Étienne"]
+FR_ONLY_1252 = ["Transportes São Gonçalo Ltda", "Škoda Auto a.s.", "Ristorante Fiorentìno", "Hôtel Ýmir & Þór",
+                "Žabka Polska", "Bodegas Peñalòn"]
 FR_NOTES = ["", "Honoraires forfaitaires : 5 000 € HT", "Dossier « urgent » – voir note du 12/03",
             "Le client a demandé une révision\r\ndu contrat de distribution", "Contact : M. Lefèvre (Œnologie)",
-            "“Due diligence” terminée, rapport envoyé"]
+            "“Due diligence” terminée, rapport envoyé", "Réunion à Lisboa avec João Gonçalves",
+            "Voir dossier Šimek (Brno)"]
 
 
 def to_cp1258(text: str) -> bytes:
@@ -82,13 +85,14 @@ def make_exports(folder: Path, rng: random.Random, contracts: int = 8, partners:
     rows = [["Số HĐ", "Khách hàng", "Loại hợp đồng", "Ngày ký", "Giá trị (VNĐ)", "Ghi chú"]]
     total = 0
     numbers = rng.sample(range(1, 999), contracts)
+    vn_notes = rng.sample(VN_NOTES, len(VN_NOTES))
     for i, number in enumerate(numbers):
         day = some_date(rng)
         ref = f"HD-{day.year}-{number:04d}"
         amount = rng.randrange(20, 5000) * 1_000_000 + rng.choice([0, 500_000])
         total += amount
         customer, kind = rng.choice(VN_CUSTOMERS), rng.choice(VN_TYPES)
-        note = VN_NOTES[i % len(VN_NOTES)] if i < len(VN_NOTES) else rng.choice(VN_NOTES)
+        note = vn_notes[i] if i < len(vn_notes) else rng.choice(VN_NOTES)
         rows.append([ref, customer, kind, legacy_date(day, rng), f"{amount:,}".replace(",", "."), note])
         body = (f"Nguồn: hệ thống hợp đồng\nSố hợp đồng: {ref}\nKhách hàng: {customer}\nLoại hợp đồng: {kind}\n"
                 f"Ngày ký: {day.isoformat()}\nGiá trị: {amount} VND\nGhi chú:\n")
@@ -96,13 +100,15 @@ def make_exports(folder: Path, rng: random.Random, contracts: int = 8, partners:
     rows.append(["", f"Tổng cộng: {contracts} hợp đồng", "", "", f"{total:,}".replace(",", "."), ""])
     (folder / "HOPDONG.CSV").write_bytes(to_cp1258(csv_text(rows)))
     rows = [["Réf", "Client", "Ouverture", "Honoraires (EUR)", "Remarques"]]
+    customers = rng.sample(FR_CUSTOMERS, partners - 1) + [rng.choice(FR_ONLY_1252)]
+    rng.shuffle(customers)
+    fr_notes = rng.sample(FR_NOTES, partners)
     for i, number in enumerate(rng.sample(range(1, 9999), partners)):
         day = some_date(rng)
         ref = f"P-{number:04d}"
         cents = rng.randrange(50_000, 9_000_000)
         fee = f"{cents // 100}.{cents % 100:02d}"
-        customer = FR_CUSTOMERS[i % len(FR_CUSTOMERS)] if i < len(FR_CUSTOMERS) else rng.choice(FR_CUSTOMERS)
-        note = FR_NOTES[(i + 1) % len(FR_NOTES)]
+        customer, note = customers[i], fr_notes[i]
         rows.append([ref, customer, day.strftime("%d/%m/%Y"), fee.replace(".", ","), note])
         body = (f"Nguồn: văn phòng đối tác\nMã hồ sơ: {ref}\nKhách hàng: {customer}\nNgày mở: {day.isoformat()}\n"
                 f"Phí: {fee} EUR\nGhi chú:\n")

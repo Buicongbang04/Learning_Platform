@@ -55,8 +55,9 @@ UTF-8, xuống dòng `\n`:
 Test (cả bài ~20 s trên máy của repo):
 
 1. Chạy bộ chuyển đổi của bạn (trên host, sandbox `testkit.run_sandboxed`) với `samples/` và so với `samples/expected/`.
-2. Sinh **hai bộ export mới** cùng định dạng, cùng hai hệ thống (bản ghi, ngày, số tiền, ghi chú ngẫu nhiên mỗi lần chạy
-   test), chạy bộ chuyển đổi hai lần mỗi bộ, so kết quả với bản ghi gốc.
+2. Sinh **hai bộ export mới** cùng định dạng, cùng hai hệ thống (số bản ghi, khách hàng, ngày, số tiền, ghi chú chọn
+   ngẫu nhiên mỗi lần chạy test từ dữ liệu của hai hệ thống, có thể khác các tên trong `samples/`), chạy bộ chuyển đổi
+   hai lần mỗi bộ, so kết quả với bản ghi gốc.
 3. Boot `lab-open` có quillo 1.0.0 (snapshot dẫn xuất `07-customer-integration-quillo`), đặt các tệp bạn sinh ra vào
    inbox của quillo (giữ thư mục), chờ worker nạp.
 

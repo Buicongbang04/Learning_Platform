@@ -39,16 +39,22 @@ Viết `check(token, *, issuer, audience, jwks_url, now=None)` trong `starter/jw
 | `expired` | Thiếu `exp`, hoặc thời điểm kiểm muộn hơn `exp` quá 60 giây |
 | `not_yet_valid` | `nbf` hoặc `iat` (nếu có) muộn hơn thời điểm kiểm quá 60 giây |
 
-- `jwks_url` là URL của JWKS (`.../protocol/openid-connect/certs`). Không tải lại JWKS ở **mọi** lần gọi; nhưng khi
-  IdP xoay khoá (token mới mang `kid` chưa thấy), token mới phải được nhận ngay, và token cũ còn hạn ký bằng khoá cũ
-  (vẫn còn trong JWKS) cũng vậy.
+- `jwks_url` là URL của JWKS (`.../protocol/openid-connect/certs`). Quy tắc tải JWKS:
+  - `kid` đã có trong JWKS đã tải: kiểm ngay, không tải lại, không bao giờ phải chờ một lần tải JWKS đang diễn ra.
+  - `kid` lạ: tải lại JWKS, nhưng **không quá một lần mỗi 5 giây** cho mỗi `jwks_url` (kể cả khi nhiều luồng gọi `check`
+    cùng lúc); trong khoảng đó, hoặc khi luồng khác đang tải, trả `unknown_key` ngay, không chờ.
+  - Khi IdP xoay khoá (token mới mang `kid` chưa thấy), token mới phải được nhận ở lần kiểm đầu tiên sau 5 giây kể từ
+    lần tải trước; token cũ còn hạn ký bằng khoá cũ (vẫn còn trong JWKS) vẫn hợp lệ.
+  - Khoá trong JWKS có thể không ghi `alg` (Entra ID làm vậy): khi đó khoá RSA dùng cho `RS*`/`PS*`, khoá EC cho `ES*`
+    theo đường cong.
 - `now` là thời điểm kiểm (giây epoch, `float`); `None` thì lấy giờ hiện tại. Độ lệch đồng hồ cho phép: 60 giây theo
   cả hai chiều.
 
 IdP là Keycloak của công ty luật: realm `lawfirm`, issuer `http://10.0.2.102:8080/realms/lawfirm`, client `quillo`
 (token cấp cho client này có `aud` chứa `quillo`). Test boot `lab-open` (1024 MB) cùng Keycloak phía host
 (`fdekit.customer_site("lab-open", memory_mb=1024, extra_services=("keycloak",))`), lấy token thật cho user `an`, `binh`,
-`chi`, gọi `check` với `jwks_url` là JWKS của Keycloak qua cổng host (đi qua một proxy đếm request của test). Cả bài ~25 s trên máy của repo. Tự boot để thử:
+`chi`, gọi `check` với `jwks_url` là JWKS của Keycloak qua cổng host (đi qua một proxy đếm request
+của test). Cả bài ~40 s trên máy của repo. Tự boot để thử:
 
 ```python
 import fdekit
@@ -76,8 +82,12 @@ with fdekit.customer_site("lab-open", memory_mb=1024, extra_services=("keycloak"
   `signature`.
 - `test_malformed_rejected`: chuỗi rỗng, `abc`, `a.b`, `a.b.c`, ký tự ngoài base64url, token thật thêm phần thứ tư ⇒
   `malformed`.
-- `test_key_rotation`: test thêm khoá RSA mới ưu tiên cao hơn cho realm (như IT xoay khoá); token mới (kid mới) và token
-  cũ đều hợp lệ.
+- `test_jwks_without_alg`: JWKS (qua proxy của test) bỏ trường `alg` của mọi khoá ⇒ token hợp lệ vẫn được nhận.
+- `test_unknown_kid_flood`: 5,5 s sau lần tải trước, 8 luồng gửi 40 token ký bằng khoá lạ với `kid` ngẫu nhiên trong lúc
+  proxy JWKS trả lời chậm 1 s ⇒ cả 40 bị từ chối `unknown_key`, JWKS được tải tối đa 1 lần, và mỗi lần kiểm token `kid`
+  đã biết chạy song song mất ≤ 0,5 s.
+- `test_key_rotation`: test thêm khoá RSA mới ưu tiên cao hơn cho realm (như IT xoay khoá), chờ 5,5 s; token mới (kid
+  mới) và token cũ đều hợp lệ.
 
 ## Gợi ý
 

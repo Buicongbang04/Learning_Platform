@@ -82,8 +82,8 @@ uv run pytest tracks/fde/product -q
   dựng một lần cho cả phiên test (fixture `bundle`).
 - IdP OIDC trong test là `tests/fake_idp.py` (discovery, JWKS, authorize/token có PKCE, khoá RSA sinh mới mỗi lần).
   `test_keycloak_end_to_end` thì dùng Keycloak thật: `fdekit.customer_site("lab-open", extra_services=("keycloak",))`,
-  cài bundle trong VM với `compose.sso.yaml`, rồi đóng vai IT khách cấu hình thêm client `quillo` qua admin REST API
-  (xem mã test). Thiếu golden/KVM/image Keycloak thì skip kèm lệnh.
+  cài bundle trong VM với `compose.sso.yaml`, rồi kiểm đăng nhập và ACL với token thật của các user trong realm. Thiếu
+  golden/KVM/image Keycloak thì skip kèm lệnh.
 - `test_chart.py` chạy `helm lint`/`helm template` trong container `alpine/helm:3.22.1` (ghim digest) với values mặc
   định và values trong `chart/examples/`.
 - `test_backup.py` chạy `ops/*.sh` với `--exec "docker exec -i <container pgvector của test>"`.

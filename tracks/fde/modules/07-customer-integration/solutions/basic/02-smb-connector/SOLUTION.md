@@ -21,8 +21,10 @@ SOLUTION=1 nice -n 15 uv run pytest tracks/fde/modules/07-customer-integration/e
 3. **Cổng gác rẻ trước, băm sau.** mtime + kích thước trùng ⇒ bỏ qua, không mở tệp. Đổi ⇒ đọc và băm sha256 trong lúc
    chép; sha trùng bản đã giao ⇒ chỉ cập nhật mtime trong state (ai đó mở rồi lưu lại không sửa gì, hay công cụ sao lưu
    chạm mtime).
-4. **Ghi an toàn**: chép vào tệp tạm `.<tên>.part` ngay trong thư mục đích (worker bỏ qua tên bắt đầu bằng `.`), xong
-   mới `os.replace` (nguyên tử trong cùng filesystem). State ghi bằng tệp tạm + `fsync` + `os.replace` **sau mỗi tệp**:
+4. **Ghi an toàn**: chép vào tệp tạm `.<tên>.part` ở gốc inbox (worker bỏ qua tên bắt đầu bằng `.`), đọc xong mới tạo
+   thư mục đích và `os.replace` (nguyên tử trong cùng filesystem): tệp đọc lỗi không để lại thư mục rỗng nào. Đường dẫn
+   `done/…`, `failed/…` ở gốc share là lỗi của **tệp đó** (ghi vào đó là ghi vào thư mục riêng của worker), không phải
+   lỗi cả lượt. State ghi bằng tệp tạm + `fsync` + `os.replace` **sau mỗi tệp**:
    chết giữa chừng thì lần sau chỉ làm lại tệp dở dang.
 5. **Xoá đúng tệp**: tệp có trong state mà không còn trong share ⇒ `deleted`; chỉ gỡ khỏi inbox khi tệp ở đúng đường dẫn
    đó còn đúng sha connector đã giao (người khác thả tệp trùng tên thì để yên). Không đụng `done/`, `failed/`. Tài liệu

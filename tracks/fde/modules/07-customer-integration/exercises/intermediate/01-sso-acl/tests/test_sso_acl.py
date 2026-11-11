@@ -1,6 +1,7 @@
 """Hiện trường SSO + ACL. Chạy thẳng tệp này từ gốc repo (`PYTHONPATH=. uv run python <tệp> [--apply-idp]`) để dựng
 đúng cảnh của test và tự điều tra: VM, Keycloak, quillo với cấu hình trong starter/ (hoặc solutions/ khi SOLUTION=1)."""
 
+import hashlib
 import io
 import json
 import re
@@ -90,9 +91,13 @@ def parse_request(path: Path) -> list[dict]:
                             "(name, protocol, protocolMapper, config chỉ gồm chuỗi)")
         elif change["type"] == "add-default-client-scope" and not isinstance(change.get("scope"), str):
             pytest.fail(f"{where}: cần \"scope\" là tên client scope")
-        elif change["type"] == "set-redirect-uris" and not (
-                isinstance(change.get("uris"), list) and all(isinstance(u, str) for u in change["uris"])):
-            pytest.fail(f"{where}: cần \"uris\" là mảng chuỗi")
+        elif change["type"] == "set-redirect-uris":
+            uris = change.get("uris")
+            if not isinstance(uris, list) or not uris or not all(isinstance(u, str) for u in uris):
+                pytest.fail(f"{where}: cần \"uris\" là mảng chuỗi không rỗng")
+            if any("*" in u or not re.match(r"^https?://[^/?#]+/", u) for u in uris):
+                pytest.fail(f"{where}: IT không nhận redirect URI có ký tự đại diện '*' hay URI không đầy đủ "
+                            f"(scheme://host/đường dẫn): {uris}")
     return changes
 
 
@@ -128,10 +133,12 @@ class Scene:
         old = time.time() - 86400
         with tarfile.open(fileobj=buffer, mode="w") as tar:
             for group, paths in FOLDERS.items():
+                self.docs[group] = set()
                 for path in paths:
                     text = (f"{Path(path).stem}. Mã tài liệu {secrets.token_hex(3).upper()}. "
                             + TOPICS[group].format(n=2 + secrets.randbelow(5), m=100 + secrets.randbelow(900)))
                     data = text.encode()
+                    self.docs[group].add(hashlib.sha256(data).hexdigest()[:16])
                     info = tarfile.TarInfo(path)
                     info.size, info.mtime, info.mode = len(data), old, 0o644
                     tar.addfile(info, io.BytesIO(data))
@@ -152,13 +159,8 @@ class Scene:
             time.sleep(2)
         if len(stored) < len(wanted):
             pytest.fail(f"Worker chưa nạp đủ {len(wanted)} tài liệu sau 120 s: {stored}")
-        by_name = {d["filename"]: d["doc_id"] for d in stored}
-        for group, paths in FOLDERS.items():
-            self.docs[group] = set()
-            for path in paths:
-                match = [doc for name, doc in by_name.items() if name.rsplit("/", 1)[-1] == clean(Path(path).name)]
-                assert match, f"Không thấy tài liệu {path} trong {sorted(by_name)}"
-                self.docs[group].add(match[0])
+        missing = set().union(*self.docs.values()) - {d["doc_id"] for d in stored}
+        assert not missing, f"Worker không nạp đúng nội dung các tài liệu đã đặt: {stored}"
 
     def documents(self, token: str) -> list[dict]:
         response = requests.get(f"{self.api}/api/documents", headers={"Authorization": f"Bearer {token}"}, timeout=30)
@@ -215,10 +217,6 @@ class Scene:
 
     def token(self, user: str) -> str:
         return fdekit.keycloak_token(self.site, user, fdekit.KEYCLOAK_PASSWORDS[user])
-
-
-def clean(name: str) -> str:
-    return re.sub(r"[^A-Za-z0-9._ -]+", "_", name)
 
 
 def submission() -> tuple[list[str], list[dict]]:

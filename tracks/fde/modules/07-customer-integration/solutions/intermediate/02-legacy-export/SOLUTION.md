@@ -45,6 +45,8 @@ trong cấu hình, kiểm bằng vài bản ghi đã đối chiếu; đừng dò
 
 - Giải mã `cp1258` nhưng không NFC: `test_samples` trượt ở ký tự thứ ~40 của tài liệu đầu (`'Số' vs 'Số'`).
 - `DOITAC.CSV` bằng `latin-1`: trượt ở tài liệu có `€`/`“`/`Œ`.
+- Đọc **cả hai** tệp bằng `cp1258` (hai bảng mã trùng nhau ở `€`, `“ ”`, `é`…): trượt ở khách hàng/ghi chú có `ã`, `ì`,
+  `ò`, `Š`, `Ý`… (mỗi bộ export của test có ít nhất một tên như vậy, vd. `São Gonçalo` thành `Săo Gonçalo`).
 - `pandas.read_csv(sep=";", encoding="cp1258")` rồi `pd.to_datetime` mặc định: trượt ngay vì thiếu NFC; sửa NFC rồi thì
   còn ngày, vì `to_datetime("03/05/2024")` mặc định đọc tháng trước (5 tháng 3) nếu không `dayfirst=True`/`format=`.
 

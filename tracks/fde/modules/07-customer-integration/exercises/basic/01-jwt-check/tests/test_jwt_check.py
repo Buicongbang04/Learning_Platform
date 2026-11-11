@@ -4,6 +4,7 @@ import hmac
 import json
 import secrets
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import jwt
@@ -19,6 +20,7 @@ ex = Exercise(__file__)
 ISSUER = "http://10.0.2.102:8080/realms/lawfirm"
 AUDIENCE = "quillo"
 LEEWAY = 60
+REFETCH = 5
 
 
 def b64(data: bytes) -> str:
@@ -43,6 +45,7 @@ class Lab:
         self.site = site
         self.upstream = f"{site.keycloak_host}/realms/{fdekit.KEYCLOAK_REALM}/protocol/openid-connect/certs"
         self.fetches = 0
+        self.delay = 0.0
         lab = self
 
         class Counting(BaseHTTPRequestHandler):
@@ -51,12 +54,17 @@ class Lab:
 
             def do_GET(self) -> None:
                 lab.fetches += 1
+                time.sleep(lab.delay)
                 upstream = requests.get(lab.upstream, timeout=30)
+                body = upstream.content
+                if "noalg" in self.path:
+                    keys = upstream.json()["keys"]
+                    body = json.dumps({"keys": [{k: v for k, v in key.items() if k != "alg"} for key in keys]}).encode()
                 self.send_response(upstream.status_code)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(upstream.content)))
+                self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
-                self.wfile.write(upstream.content)
+                self.wfile.write(body)
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Counting)
         self.jwks_url = f"http://127.0.0.1:{self.server.server_address[1]}/realms/lawfirm/protocol/openid-connect/certs"
@@ -138,6 +146,51 @@ def test_jwks_not_fetched_per_call(mod, lab):
     assert lab.fetches == before, f"5 lần kiểm token cùng kid mà tải JWKS {lab.fetches - before} lần; JWKS phải được cache"
 
 
+def test_jwks_without_alg(mod, lab):
+    token = lab.token("binh")
+    claims = check(mod, lab, token, jwks_url=lab.jwks_url + "?noalg=1")
+    assert claims["preferred_username"] == "binh", "JWKS không ghi alg cho khoá (như Entra ID) vẫn phải kiểm được"
+
+
+def test_unknown_kid_flood(mod, lab):
+    header, claims, _ = parts(lab.token("an"))
+    known = [lab.token(user) for user in ("an", "binh", "chi")]
+    check(mod, lab, known[0])
+    attacker = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    flood = [jwt.encode(claims, attacker, algorithm="RS256", headers={"kid": f"k-{secrets.token_hex(8)}"})
+             for _ in range(40)]
+    time.sleep(REFETCH + 0.5)
+    before = lab.fetches
+    lab.delay = 1.0
+    reasons: list[str] = []
+    slowest = 0.0
+
+    def attack(tokens: list[str]) -> None:
+        for token in tokens:
+            try:
+                check(mod, lab, token)
+                reasons.append("accepted")
+            except mod.TokenError as error:
+                reasons.append(error.reason)
+
+    try:
+        workers = [threading.Thread(target=attack, args=(flood[i::8],)) for i in range(8)]
+        for worker in workers:
+            worker.start()
+        for _ in range(4):
+            for token in known:
+                started = time.monotonic()
+                check(mod, lab, token)
+                slowest = max(slowest, time.monotonic() - started)
+        for worker in workers:
+            worker.join(timeout=60)
+    finally:
+        lab.delay = 0.0
+    assert set(reasons) == {"unknown_key"} and len(reasons) == len(flood), f"Token kid lạ phải bị từ chối unknown_key: {set(reasons)}"
+    assert lab.fetches - before <= 1, f"40 token kid lạ làm tải JWKS {lab.fetches - before} lần, tối đa 1 lần mỗi {REFETCH} s"
+    assert slowest <= 0.5, f"Token kid đã biết phải kiểm ngay cả khi đang bị dội kid lạ; chậm nhất {slowest:.2f} s"
+
+
 def test_tampered_payload_rejected(mod, lab):
     header, claims, sig = parts(lab.token("binh"))
     for change in ({"preferred_username": "an"}, {"groups": ["legal"]}, {"exp": claims["exp"] + 86400}):
@@ -203,6 +256,7 @@ def test_key_rotation(mod, lab):
     old = lab.token("chi")
     assert check(mod, lab, old)["preferred_username"] == "chi"
     lab.rotate_key()
+    time.sleep(REFETCH + 0.5)
     new = lab.token("chi")
     assert parts(new)[0]["kid"] != parts(old)[0]["kid"], "Keycloak phải ký token mới bằng khoá mới"
     assert check(mod, lab, new)["preferred_username"] == "chi", "Token ký bằng khoá mới (sau khi IdP xoay khoá) bị từ chối"

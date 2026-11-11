@@ -59,7 +59,8 @@ Bạn nộp hai tệp trong `starter/`:
    IT chỉ nhận tối đa 5 thay đổi, mỗi thay đổi có `why` không rỗng, và chỉ ba loại, tất cả chỉ trên client `quillo`:
    `add-protocol-mapper` (kèm `"mapper"`: một ProtocolMapperRepresentation `openid-connect` của Keycloak admin REST API,
    `config` chỉ gồm chuỗi), `add-default-client-scope` (kèm `"scope"`: tên một client scope có sẵn trong realm),
-   `set-redirect-uris` (kèm `"uris"`: mảng URL). IT không đổi user, nhóm, realm hay client khác.
+   `set-redirect-uris` (kèm `"uris"`: mảng URL đầy đủ dạng `scheme://host/đường-dẫn`, **không** có ký tự đại diện `*`;
+   thay toàn bộ danh sách hiện có). IT không đổi user, nhóm, realm hay client khác.
 
 Test làm lại đúng cảnh trên rồi áp bài của bạn, theo thứ tự:
 

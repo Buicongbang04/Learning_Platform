@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from fake_idp import CLIENT_SECRET
 from quillo.app import create_app
 from quillo.config import ConfigError, Settings
-from quillo_support import AUTH, TOKEN, bearer, sso_settings, upload
+from quillo_support import AUTH, TOKEN, bearer, it_change_request, sso_settings, upload
 
 NY = "This agreement is governed by the law of the State of New York. " * 3
 
@@ -129,9 +129,6 @@ def test_authorize_url_has_pkce_and_nonce(sso_client, idp):
     assert len(query["code_challenge"]) == 43 and len(query["state"]) >= 20 and len(query["nonce"]) >= 20
 
 
-GROUPS_MAPPER = {"name": "groups", "protocol": "openid-connect", "protocolMapper": "oidc-group-membership-mapper",
-                 "config": {"claim.name": "groups", "full.path": "true", "id.token.claim": "true",
-                            "access.token.claim": "true", "userinfo.token.claim": "true"}}
 VM_SETUP = """set -eu
 cd /home/fde && tar xf quillo.tar && rm quillo.tar && cd quillo-1.0.0
 for i in images/pgvector.tar images/llama-cpp-server.tar images/quillo-api.tar; do docker load -q -i "$i" >/dev/null; done
@@ -150,16 +147,6 @@ ENV
 docker compose -f compose.yaml -f compose.sso.yaml up -d --wait api >/dev/null
 docker compose -f compose.yaml -f compose.sso.yaml up -d worker >/dev/null
 """
-
-
-def keycloak_admin(site) -> tuple[str, dict]:
-    import requests
-
-    response = requests.post(f"{site.keycloak_host}/realms/master/protocol/openid-connect/token", timeout=30,
-                             data={"grant_type": "password", "client_id": "admin-cli",
-                                   "username": site.keycloak_admin[0], "password": site.keycloak_admin[1]})
-    response.raise_for_status()
-    return f"{site.keycloak_host}/admin/realms/lawfirm", bearer(response.json()["access_token"])
 
 
 def test_keycloak_end_to_end(bundle):
@@ -189,12 +176,7 @@ def test_keycloak_end_to_end(bundle):
             return response.json()
 
         assert ask("an")["citations"] == []
-        admin_url, admin_auth = keycloak_admin(site)
-        [client] = requests.get(f"{admin_url}/clients", params={"clientId": "quillo"}, headers=admin_auth,
-                                timeout=30).json()
-        added = requests.post(f"{admin_url}/clients/{client['id']}/protocol-mappers/models", headers=admin_auth,
-                              json=GROUPS_MAPPER, timeout=30)
-        assert added.status_code == 201, added.text
+        it_change_request(site)
         an = ask("an")
         assert an["citations"] and {c["doc_id"] for c in an["citations"]} == {legal_id}
         assert legal_id not in {c["doc_id"] for c in ask("binh")["citations"]}

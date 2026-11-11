@@ -189,6 +189,8 @@ def test_config_errors(lab):
         empty.chmod(0o600)
         cases.append(("tệp token rỗng", missing | {"AUDIT_TOKEN_FILE": str(empty)}, True))
         cases.append(("chỉ có AUDIT_TOKEN trong env", missing | {"AUDIT_TOKEN": lab.token}, False))
+        cases.append(("AUDIT_TOKEN_FILE hợp lệ nhưng có cả AUDIT_TOKEN trong env",
+                      missing | {"AUDIT_TOKEN_FILE": str(lab.secret_file), "AUDIT_TOKEN": lab.token}, False))
         for label, env, watch_procs in cases:
             done, watch = lab.run(env, watch_procs=watch_procs)
             assert done.returncode == 2, f"{label}: phải thoát 2, thoát {done.returncode}\n{done.stderr[-1500:]}"
