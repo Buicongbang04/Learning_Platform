@@ -8524,13 +8524,15 @@ class FakeFaultDocker:
         if args[0] == "ps":
             return subprocess.CompletedProcess(args, 0, "\n".join(self.infos), "")
         if args[0] == "inspect":
-            found = [self.infos[n] for n in args[1:] if n in self.infos]
+            found = [self.by_ref(n) for n in args[1:] if n in self.infos or any(i["Id"] == n for i in self.infos.values())]
             return subprocess.CompletedProcess(args, 0 if found else 1, json.dumps(found), "" if found else "No such object")
-        if args[0] in ("kill", "stop"):
-            self.infos[args[-1]]["State"]["Running"] = False
-        if args[0] == "start":
-            self.infos[args[-1]]["State"]["Running"] = True
+        if args[0] in ("kill", "stop", "start"):
+            info = self.by_ref(args[-1])
+            info["State"]["Running"] = args[0] == "start"
         return subprocess.CompletedProcess(args, 0, "", "")
+
+    def by_ref(self, ref: str) -> dict:
+        return self.infos.get(ref) or next(i for i in self.infos.values() if i["Id"] == ref)
 
     def mutations(self) -> list[tuple[str, ...]]:
         return [c for c in self.calls if c[0] not in ("ps", "inspect")]
@@ -8609,15 +8611,18 @@ def test_fault_injector_only_touches_lab_resources(monkeypatch):
     for name in (f"{lab.network}-decoy", f"{lab.network}-other-lab", "de-learning-redis", f"{lab.network}-unlabelled"):
         with pytest.raises(RuntimeError, match="từ chối"):
             testkit.FaultInjector(lab, seed=1)._inspect(name)
+    start = len(fake.calls)
     for code in ("kill", "redis-stop", "disk-full"):
         injector = testkit.FaultInjector(lab, seed=3, faults=[code])
         assert injector.inject() == code
         assert injector.revert() == []
     own = {f"{lab.network}-api-1", f"{lab.network}-worker-1", f"{lab.network}-redis-1", f"{lab.network}-postgres-1"}
+    own |= {f"id-{name}" for name in own}
     touched = [c for c in fake.mutations()]
     assert touched and all(any(arg in own for arg in call) for call in touched), touched
-    listed = [c for c in fake.calls if c[0] == "inspect" and len(c) > 2]
-    assert listed and all(n.startswith(f"{lab.network}-") for c in listed for n in c[1:]), listed
+    listed = [c for c in fake.calls[start:] if c[0] == "inspect"]
+    assert listed and all(n in own or n.startswith(f"{lab.network}-") for c in listed for n in c[1:]), \
+        "Chỉ inspect container mang tiền tố của lab"
     assert not [c for c in touched if f"{lab.network}-prometheus-1" in c]
 
 
@@ -8683,7 +8688,8 @@ def test_fault_injector_kube_stays_in_lab_namespace(monkeypatch):
     calls = [" ".join(c) for c in fake.calls]
     assert "delete pod api-7d9-a --grace-period=0 --force --wait=false" in calls
     assert "scale deployment/redis --replicas=0" in calls and "scale deployment/redis --replicas=1" in calls
-    assert any(c.startswith("exec api-7d9-a -c main -- dd if=/dev/zero of=/scratch/") for c in calls)
+    assert any(c.startswith("exec api-7d9-a -c main -- dd if=/dev/zero of=/scratch/") and c.endswith("count=17") for c in calls), \
+        "Ghi theo sizeLimit 16Mi cộng 1 MiB"
     assert any(c.startswith("exec api-7d9-a -c main -- rm -f /scratch/") for c in calls)
     assert sum(c.startswith("patch deployment/api --type merge") for c in calls) == 2
     patched = [json.loads(c[-1]) for c in fake.calls if c[:2] == ("patch", "configmap")]
@@ -8993,3 +8999,46 @@ def test_fault_injector_fails_loudly_when_docker_ps_fails(monkeypatch):
     with pytest.raises(pytest.fail.Exception, match="không đọc được container của lab: Cannot connect"):
         testkit.FaultInjector(lab, seed=1).plan()
     assert len(calls) == 3
+
+
+def test_fault_injector_refuses_shared_network_namespace(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    for name, mode in ((f"{lab.network}-api-1", "host"), (f"{lab.network}-worker-1", "container:abc")):
+        fake.infos[name]["HostConfig"]["NetworkMode"] = mode
+    plans = {testkit.FaultInjector(lab, seed=s, faults=["net-delay"]).plan() for s in range(50)}
+    assert {service for _, service in plans} == {"redis", "postgres"}, "Không trễ mạng vào container dùng chung namespace"
+    injector = testkit.FaultInjector(lab, seed=1, faults=["kill"], services=["api"])
+    with pytest.raises(pytest.fail.Exception, match="từ chối .*network mode host"):
+        injector.inject()
+    assert fake.mutations() == []
+
+
+def test_fault_injector_skips_vanished_containers_and_repolls(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    gone = f"{lab.network}-promtool"
+    polls = []
+
+    def flaky(*args, timeout=60):
+        if args[0] == "ps":
+            polls.append(1)
+            if len(polls) <= 2:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            return subprocess.CompletedProcess(args, 0, "\n".join([gone, *fake.infos]), "")
+        if args[:2] == ("inspect", gone):
+            return subprocess.CompletedProcess(args, 1, "[]", f"Error: No such object: {gone}")
+        return fake(*args, timeout=timeout)
+
+    monkeypatch.setattr(testkit, "_docker", flaky)
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    assert testkit.FaultInjector(lab, seed=1).plan()[1] in {"api", "worker", "redis", "postgres"}
+    assert len(polls) >= 3, "Danh sách rỗng tạm thời phải được hỏi lại trước khi fail"
+
+
+
+def test_fault_injector_netem_image_must_come_from_setup(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+    injector = testkit.FaultInjector(lab, seed=1, faults=["net-delay"])
+    with pytest.raises(pytest.fail.Exception, match="không phải bản build từ setup/netem"):
+        injector.inject()
+    assert not [c for c in fake.mutations() if c[0] != "image"]

@@ -233,6 +233,13 @@ mạng cần quyền `NET_ADMIN`; quyền này chỉ cấp cho container phụ `
 của bài không bao giờ có thêm capability. Lần đầu dùng, kernel tự nạp module `sch_netem` (xem bằng `lsmod | grep netem`, gỡ bằng
 `sudo modprobe -r sch_netem` khi không còn qdisc nào dùng nó). Gỡ image: `docker image rm devops-track/netem:1.0`.
 
+Image netem build tại máy nên không ghim digest được; testkit nhận nó khi có tag `devops-track/netem:1.0` **và** nhãn
+`org.opencontainers.image.title=devops-track/netem` của `setup/netem/Dockerfile`. Kho gói của Alpine chỉ giữ bản mới nhất của mỗi gói
+trong một nhánh: khi `iproute2-tc` lên bản vá, `apk add iproute2-tc=7.0.0-r0` lỗi `unable to select packages` dù base vẫn ghim digest.
+Cách cập nhật: xem bản hiện có bằng `docker run --rm alpine:3.24.3@sha256:be26... sh -c 'apk update -q && apk policy iproute2-tc'`, đổi
+số bản trong Dockerfile, build lại cùng tag, chạy `test_fault_injector_reverts_on_close` rồi ghi bản mới vào bảng trên. Image đã build
+vẫn dùng tiếp được, không cần build lại chỉ vì kho đổi.
+
 ## Cluster kind devops-lab
 
 Module 10, 11 và capstone m06 chạy trên một cluster kind tên `devops-lab`, cấu hình ở `setup/kind/devops-lab.yaml`: một control plane và hai worker, node image `kindest/node:v1.34.0` ghim theo digest (mặc định của kind 0.30.0), API server và cổng 80/443 của ingress (`18180`, `18543`) chỉ mở trên `127.0.0.1`, control plane có nhãn `ingress-ready=true`. CNI là kindnet mặc định của kind, bản này thực thi NetworkPolicy (đã kiểm: policy deny-all chặn kết nối giữa hai pod), nên không cần Calico.

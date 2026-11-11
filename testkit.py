@@ -6017,6 +6017,7 @@ FAULT_FILL_FILE = ".devops-ex-fault-fill"
 FAULT_CONFIG_SUFFIX = ".devops-ex-invalid"
 FAULT_RESTART_ANNOTATION = "devops-ex/fault-restart"
 FAULT_REDIS = "redis"
+FAULT_PLAN_WAIT = 5
 _FAULT_PATH = re.compile(r"/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 _FAULT_SIZE = re.compile(r"^(\d+)([kKmMgG]?)$")
 _FAULT_KUBE_SIZE = re.compile(r"^(\d+)(Ki|Mi|Gi|k|M|G)?$")
@@ -6032,6 +6033,11 @@ def _fault_size(text: str, pattern: re.Pattern) -> int | None:
         return None
     unit = match.group(2) or ""
     return int(match.group(1)) * _FAULT_UNITS[unit if pattern is _FAULT_KUBE_SIZE else unit.lower()]
+
+
+def _fault_shared_network(info: dict) -> bool:
+    mode = str((info.get("HostConfig") or {}).get("NetworkMode") or "")
+    return mode == "host" or mode.startswith("container:")
 
 
 def _fault_docker_tmpfs(info: dict) -> list[tuple[str, int]]:
@@ -6065,7 +6071,9 @@ class FaultInjector:
     DockerLab (`FAULT_DOCKER_CODES`): `kill` (`docker kill`, hoàn tác `docker start`), `redis-stop` (`docker stop` service tên
     `redis`), `disk-full` (ghi đầy tmpfs **có `size=`** không quá `FAULT_FILL_LIMIT` bằng `dd` trong container, tệp
     `FAULT_FILL_FILE`; hoàn tác xoá tệp), `net-delay` (thêm `delay_ms` mili giây bằng `tc qdisc ... netem` trên mọi interface
-    trừ `lo`, hoàn tác `tc qdisc del`). `net-delay` chạy `tc` trong container phụ `devops-ex-<id>-fault-netem-<n>` (image
+    trừ `lo`, hoàn tác `tc qdisc del`; không bao giờ với container có network mode `host` hay `container:*`). Lệnh `kill`,
+    `stop`, `start`, `exec` đi theo ID container đã inspect, không theo tên. Image `FAULT_NETEM_IMAGE` được nhận khi có tag và nhãn
+    `org.opencontainers.image.title` của `setup/netem/Dockerfile` (không kiểm digest: image build tại máy). `net-delay` chạy `tc` trong container phụ `devops-ex-<id>-fault-netem-<n>` (image
     `FAULT_NETEM_IMAGE`, build bằng `FAULT_NETEM_BUILD`, thiếu thì skip) dùng chung network namespace của **đúng** container
     đích (`--network container:<id>`), `--cap-drop ALL --cap-add NET_ADMIN`, no-new-privileges, `--read-only`, cpuset, RAM 32m,
     `--rm`: chỉ container phụ có NET_ADMIN, chỉ trong namespace mạng của container đích, chạy xong là thoát; container của bài
@@ -6073,8 +6081,9 @@ class FaultInjector:
 
     KubeLab (`FAULT_KUBE_CODES`): mọi lệnh đi qua `lab.kubectl` (token `devops-ex-learner`, chỉ namespace của lab), không bao giờ
     dùng kubeconfig admin hay `node_action`, không chạm node. `kill` xoá một pod đang chạy của Deployment/StatefulSet (controller
-    tạo lại); `redis-stop` scale workload `redis` về 0 (hoàn tác scale lại); `disk-full` ghi đầy `emptyDir` có `sizeLimit` không
-    quá `FAULT_FILL_LIMIT` (hoàn tác xoá tệp nếu pod còn); `bad-config` thêm `FAULT_CONFIG_SUFFIX` vào mọi giá trị của một
+    tạo lại); `redis-stop` scale workload `redis` về 0 (hoàn tác scale lại); `disk-full` ghi `sizeLimit` cộng 1 MiB vào `emptyDir` có `sizeLimit`
+    không quá `FAULT_FILL_LIMIT` (`medium: Memory` thì đầy tmpfs; emptyDir trên đĩa nằm trên đĩa của node và kubelet evict pod khi
+    vượt `sizeLimit`; hoàn tác xoá tệp nếu pod còn); `bad-config` thêm `FAULT_CONFIG_SUFFIX` vào mọi giá trị của một
     ConfigMap mà workload dùng (env, envFrom, volume) rồi rollout lại workload đó bằng annotation `FAULT_RESTART_ANNOTATION`
     (hoàn tác ghi lại giá trị cũ và rollout lần nữa). `net-delay` không có trên KubeLab: pod dưới Pod Security baseline không
     được NET_ADMIN.
@@ -6128,18 +6137,21 @@ class FaultInjector:
         for attempt in range(3):
             listed = _docker("ps", "-a", "--filter", f"label={DOCKER_LABEL}", "--filter", f"name={lab.network}-", "--format",
                              "{{.Names}}")
-            names = sorted(n for n in listed.stdout.split() if n.startswith(f"{lab.network}-"))
-            result = _docker("inspect", *names) if names and listed.returncode == 0 else None
-            if listed.returncode == 0 and (result is None or result.returncode == 0):
+            if listed.returncode == 0:
                 break
             time.sleep(1)
-        if listed.returncode != 0 or (result is not None and result.returncode != 0):
-            problem = (result.stderr if result is not None and result.returncode != 0 else listed.stderr).strip()
-            pytest.fail(f"FaultInjector: không đọc được container của lab: {problem}")
-        if not names:
-            return {}
+        else:
+            pytest.fail(f"FaultInjector: không đọc được container của lab: {listed.stderr.strip()}")
+        infos = []
+        for name in sorted(n for n in listed.stdout.split() if n.startswith(f"{lab.network}-")):
+            result = _docker("inspect", name)
+            if result.returncode != 0:
+                if "no such" in result.stderr.lower():
+                    continue
+                pytest.fail(f"FaultInjector: không đọc được container {name}: {result.stderr.strip()}")
+            infos += json.loads(result.stdout)
         services: dict[str, dict] = {}
-        for info in json.loads(result.stdout):
+        for info in infos:
             name = info["Name"].lstrip("/")
             if not self._owned(info):
                 continue
@@ -6176,7 +6188,9 @@ class FaultInjector:
         for service, info in sorted(self._containers().items()):
             if not (info.get("State") or {}).get("Running"):
                 continue
-            found += [("kill", service), ("net-delay", service)]
+            found.append(("kill", service))
+            if not _fault_shared_network(info):
+                found.append(("net-delay", service))
             if _fault_docker_tmpfs(info):
                 found.append(("disk-full", service))
             if service == self.redis:
@@ -6208,7 +6222,7 @@ class FaultInjector:
         return {r for r in refs if r}
 
     @staticmethod
-    def _empty_dirs(workload: dict) -> list[tuple[str, str]]:
+    def _empty_dirs(workload: dict) -> list[tuple[str, str, int]]:
         spec = ((workload.get("spec") or {}).get("template") or {}).get("spec") or {}
         sized = {}
         for volume in spec.get("volumes") or []:
@@ -6221,7 +6235,7 @@ class FaultInjector:
             for mount in container.get("volumeMounts") or []:
                 path = mount.get("mountPath", "")
                 if mount.get("name") in sized and not mount.get("readOnly") and _FAULT_PATH.fullmatch(path) and ".." not in path.split("/"):
-                    found.append((container.get("name"), path))
+                    found.append((container.get("name"), path, sized[mount["name"]]))
         return sorted(found)
 
     def _kube_workloads(self, objects: list[dict]) -> list[tuple[str, dict]]:
@@ -6258,6 +6272,10 @@ class FaultInjector:
         import random
 
         found = self.candidates()
+        deadline = time.monotonic() + FAULT_PLAN_WAIT
+        while not found and time.monotonic() < deadline:
+            time.sleep(1)
+            found = self.candidates()
         if not found:
             seen = "" if self.kube else "; container của lab đang thấy: " + (", ".join(
                 f"{name} ({'chạy' if (info.get('State') or {}).get('Running') else 'dừng'})"
@@ -6291,13 +6309,22 @@ class FaultInjector:
     def _inject_docker(self, code: str, service: str) -> None:
         if code == "net-delay":
             Exercise.require_image(FAULT_NETEM_IMAGE, f"Build image tc của FaultInjector bằng: {FAULT_NETEM_BUILD}")
+            title = _docker("image", "inspect", "--format", '{{index .Config.Labels "org.opencontainers.image.title"}}',
+                            FAULT_NETEM_IMAGE).stdout.strip()
+            if title != FAULT_NETEM_IMAGE.split(":")[0]:
+                pytest.fail(f"Image {FAULT_NETEM_IMAGE} không phải bản build từ setup/netem (nhãn title {title!r}). "
+                            f"Build lại bằng: {FAULT_NETEM_BUILD}")
         info = self._containers()[service]
         name, cid = info["Name"].lstrip("/"), info["Id"]
-        if self._inspect(name)["Id"] != cid:
+        current = self._inspect(name)
+        if current is None or current["Id"] != cid:
             pytest.fail(f"FaultInjector: container {name} vừa đổi")
+        if _fault_shared_network(current):
+            pytest.fail(f"FaultInjector từ chối {name}: network mode {current['HostConfig'].get('NetworkMode')} dùng chung "
+                        "network namespace với máy host hay container khác")
         if code in ("kill", "redis-stop"):
             self._undo.append(("start", name, cid))
-            result = _docker("kill", name) if code == "kill" else _docker("stop", "-t", "5", name)
+            result = _docker("kill", cid) if code == "kill" else _docker("stop", "-t", "5", cid)
         elif code == "net-delay":
             self._undo.append(("netem", name, cid))
             result = self._netem(cid, _FAULT_NETEM_ADD.format(ms=self.delay_ms))
@@ -6305,7 +6332,7 @@ class FaultInjector:
             path, size = _fault_docker_tmpfs(info)[0]
             target = f"{path}/{FAULT_FILL_FILE}"
             self._undo.append(("unfill", name, cid, target))
-            result = _docker("exec", "-u", "0", name, "dd", "if=/dev/zero", f"of={target}", "bs=1048576",
+            result = _docker("exec", "-u", "0", cid, "dd", "if=/dev/zero", f"of={target}", "bs=1048576",
                              f"count={size // 1048576 + 1}", timeout=120)
             if result.returncode != 0 and "space" in (result.stderr or "").lower():
                 result = subprocess.CompletedProcess(result.args, 0, result.stdout, result.stderr)
@@ -6335,12 +6362,12 @@ class FaultInjector:
             self._undo.append(("scale", resource, replicas))
             lab.kubectl("scale", resource, "--replicas=0")
         else:
-            container, path = self._empty_dirs(workload)[0]
+            container, path, size = self._empty_dirs(workload)[0]
             pod = running[0]["metadata"]["name"]
             target = f"{path}/{FAULT_FILL_FILE}"
             self._undo.append(("unfill-pod", pod, container, target))
             lab.kubectl("exec", pod, "-c", container, "--", "dd", "if=/dev/zero", f"of={target}", "bs=1048576",
-                        f"count={FAULT_FILL_LIMIT // 1048576 + 1}", check=False, timeout=120)
+                        f"count={size // 1048576 + 1}", check=False, timeout=120)
 
     def _rollout(self, workloads: list[str], stage: str) -> None:
         patch = json.dumps({"spec": {"template": {"metadata": {"annotations": {FAULT_RESTART_ANNOTATION: f"{self.seed}-{stage}"}}}}})
@@ -6375,13 +6402,13 @@ class FaultInjector:
             return None
         running = (info.get("State") or {}).get("Running")
         if action == "start" and not running:
-            result = _docker("start", name)
+            result = _docker("start", cid)
             return None if result.returncode == 0 else f"docker start {name}: {result.stderr.strip()}"
         if action == "netem" and running:
             result = self._netem(cid, _FAULT_NETEM_DEL)
             return None if result.returncode == 0 else f"gỡ netem khỏi {name}: {result.stderr.strip()}"
         if action == "unfill" and running:
-            result = _docker("exec", "-u", "0", name, "rm", "-f", step[3])
+            result = _docker("exec", "-u", "0", cid, "rm", "-f", step[3])
             return None if result.returncode == 0 else f"xoá {step[3]} trong {name}: {result.stderr.strip()}"
         return None
 
