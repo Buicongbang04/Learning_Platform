@@ -37,7 +37,7 @@ thoát `0` khi mọi mục PASS, `1` khi có mục FAIL.
   "admin_token": "…",
   "top_k": 2,
   "latency_samples": 4,
-  "latency_question": "…",
+  "latency_questions": ["…", "…"],
   "p95_max_seconds": 3.2,
   "questions": [{"question": "…", "expect_folder": "legal/"}],
   "users": [{"name": "an", "token": "<access token SSO>", "folders": ["legal/"], "probe": "<câu hỏi về tài liệu ngoài quyền>"}]
@@ -49,7 +49,7 @@ Mọi `/api/ask` gửi `{"question", "top_k"}` với `top_k` của cấu hình. 
 | `id` | PASS khi |
 | --- | --- |
 | `health` | `GET /healthz` trả 200, `status` là `ok` và mọi giá trị trong `checks` là `true`. Khi FAIL, `detail` phải nêu tên các check bị `false` |
-| `latency` | gửi đúng `latency_samples` lần `latency_question` bằng `admin_token`, lần nào cũng 200, và p95 thời gian trả lời (xếp tăng dần, lấy phần tử thứ `ceil(0.95 × n)`, đếm từ 1) ≤ `p95_max_seconds` |
+| `latency` | gửi đúng `latency_samples` câu bằng `admin_token`, câu thứ `i` (đếm từ 0) là `latency_questions[i mod số câu]`, lần nào cũng 200, và p95 thời gian trả lời (xếp tăng dần, lấy phần tử thứ `ceil(0.95 × n)`, đếm từ 1) ≤ `p95_max_seconds` |
 | `citations` | với mỗi phần tử của `questions` (hỏi bằng `admin_token`): trả 200 và có ít nhất một trích dẫn thuộc tài liệu có đường dẫn (`filename` trong `GET /api/documents`) bắt đầu bằng `expect_folder` |
 | `acl` | với mỗi người trong `users`: `GET /api/documents` bằng token của họ trả 200, không rỗng, mọi tài liệu có đường dẫn bắt đầu bằng một trong `folders`; và hỏi `probe` bằng token đó trả 200 với mọi trích dẫn thuộc danh sách tài liệu họ vừa thấy |
 

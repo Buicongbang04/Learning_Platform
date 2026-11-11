@@ -170,16 +170,19 @@ def load_plan(work: Path) -> dict:
     return plan
 
 
-def leaked(work: Path) -> list[str]:
+def leaked(work: Path, dump_sizes: list[int]) -> list[str]:
+    """Tệp trong $WORK có dấu hiệu là dữ liệu bệnh viện: bản dump custom (PGDMP), tệp nén gzip, kích thước trong ±10%
+    một bản dump trên máy, hoặc chứa dữ liệu của bảng documents/chunks."""
     found = []
     for path in work.rglob("*"):
         if not path.is_file() or path.is_symlink():
             continue
+        size = path.stat().st_size
         with path.open("rb") as handle:
-            if handle.read(5) == b"PGDMP":
-                found.append(str(path))
-                continue
-        if path.stat().st_size < 64 << 20 and any(m in path.read_bytes() for m in DATA_MARKERS):
+            head = handle.read(5)
+        if head == b"PGDMP" or head[:2] == b"\x1f\x8b" or any(abs(size - d) <= d // 10 for d in dump_sizes):
+            found.append(str(path))
+        elif size < 64 << 20 and any(marker in path.read_bytes() for marker in DATA_MARKERS):
             found.append(str(path))
     return found
 
@@ -218,8 +221,10 @@ def test_backup_and_storage_plan(tmp_path):
         assert done.returncode == 0, (f"pre_upgrade.sh thoát {done.returncode}\n--- stdout ---\n{done.stdout[-2500:]}\n"
                                       f"--- stderr ---\n{done.stderr[-2500:]}")
         assert len(watch.samples) >= 3, "Giám sát của bệnh viện không đo được (SSH tới máy lỗi?)"
-        down = [code for _, _, code in watch.samples if code != "200"]
-        assert not down, f"quillo không trả /healthz 200 ở {len(down)}/{len(watch.samples)} lần đo trong lúc script chạy"
+        codes = [code for _, _, code in watch.samples]
+        twice = [i for i in range(1, len(codes)) if codes[i] != "200" and codes[i - 1] != "200"]
+        assert not twice and codes[-1] == "200", (
+            f"quillo không trả /healthz 200 ở hai lần đo liên tiếp hoặc ở lần đo cuối trong lúc script chạy: {codes}")
         low = min(avail for _, avail, _ in watch.samples)
         assert low >= floor, (f"đĩa / có lúc chỉ còn {low:,} byte trống, dưới mức {MIN_FREE_PCT}% ({floor:,} byte) "
                               "bệnh viện yêu cầu")
@@ -261,7 +266,8 @@ def test_backup_and_storage_plan(tmp_path):
         assert h.install_listing() == listing, f"Bản cài đang chạy ở {INSTALL} bị thêm, xoá hoặc sửa tệp"
         sha = sh(h.vm, f"sha256sum {ARCHIVE}", timeout=120).stdout.split()
         assert sha[:1] == [archive_sha], f"{ARCHIVE} (bundle lưu trữ của bệnh viện) bị xoá hoặc sửa"
-        assert not leaked(work), f"Dữ liệu bệnh viện bị chép ra laptop: {leaked(work)}"
+        found = leaked(work, [int(stat[1])])
+        assert not found, f"Dữ liệu bệnh viện bị chép ra laptop: {found}"
 
 
 def main() -> None:

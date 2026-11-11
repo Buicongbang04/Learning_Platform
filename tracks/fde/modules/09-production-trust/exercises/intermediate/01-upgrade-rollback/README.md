@@ -49,8 +49,9 @@ Test làm theo thứ tự:
 Quy định của IT bệnh viện trong cửa sổ bảo trì: trong lúc mỗi script chạy, đĩa `/` không bao giờ dùng quá 85%
 (Available ≥ 15% của Size theo `df -B1 --output=size,avail /`, test đo mỗi 2 s qua một phiên SSH riêng); không xoá hay
 sửa `/home/fde/quillo-1.0.0.tar` (bản lưu trữ của phiên bản 1.0.0); không đổi `QUILLO_ADMIN_TOKEN`,
-`QUILLO_DB_PASSWORD` trong `.env`; dữ liệu bệnh viện không rời máy (không tệp nào trong `$WORK` là bản dump hay chứa dữ
-liệu của bảng `documents`/`chunks`). Bản backup trước nâng cấp phải nằm trong `/home/fde/backups/` trên máy, định dạng
+`QUILLO_DB_PASSWORD` trong `.env`; dữ liệu bệnh viện không rời máy (không tệp nào trong `$WORK` là bản dump `pg_dump` custom,
+tệp nén gzip, tệp có kích thước trong ±10% một bản dump trong `/home/fde/backups/`, hay chứa dữ liệu của bảng
+`documents`/`chunks`). Bản backup trước nâng cấp phải nằm trong `/home/fde/backups/` trên máy, định dạng
 của `ops/backup.sh` (`<tên>.dump` + `<tên>.dump.sha256`).
 
 Chạy thẳng tệp test (`PYTHONPATH=. uv run python tracks/fde/modules/09-production-trust/exercises/intermediate/01-upgrade-rollback/tests/test_upgrade_rollback.py`)

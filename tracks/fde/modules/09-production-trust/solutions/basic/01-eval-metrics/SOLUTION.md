@@ -18,7 +18,7 @@ Mã: `eval_metrics.py` cạnh tệp này.
 | Chỉ số | Giá trị | Đọc thế nào |
 | --- | --- | --- |
 | `citation_precision` | 0,18 | Thấp chủ yếu vì quillo 1.0.0 trả **mọi** đoạn đã đưa vào prompt khi model không tự trích `[n]` (README sản phẩm, mục API). Đó là đặc điểm của sản phẩm, không phải của model: báo cho khách con số này kèm lý do, và đưa cho đội sản phẩm như một đề xuất |
-| `clause_recall` | 0,62 | 13/21 câu có nhãn có ít nhất một trích dẫn chạm điều khoản đúng. 7/8 câu trượt là do truy hồi (top 3) không đưa đoạn chứa điều khoản vào prompt; câu còn lại model từ chối dù đoạn đúng không có trong prompt |
+| `clause_recall` | 0,62 | 13/21 câu có nhãn có ít nhất một trích dẫn chạm điều khoản đúng. Cả 8 câu trượt đều do truy hồi (top 3) không đưa đoạn chứa điều khoản vào prompt; ở một câu (trần trách nhiệm của Centrack) model còn trả "No". Ngược lại, `ability-agreement-date` được tính là tìm ra dù câu trả lời chỉ là `[1]`: trích dẫn đúng chỗ nhưng người dùng không nhận được câu trả lời nào, nên recall theo trích dẫn đánh giá cao hơn trải nghiệm thật |
 | `correct_refusal_rate` | 0,17 | 2/12 câu không nhãn được trả "No"; 10 câu còn lại model 0.5B bịa hoặc dán nguyên đoạn văn. Đây là rủi ro lớn nhất cần nói với công ty luật |
 | `false_refusal_rate` | 0,05 | 1/21: hỏi trần trách nhiệm ở hợp đồng Centrack, model trả "No" dù hợp đồng có điều khoản |
 

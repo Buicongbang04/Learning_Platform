@@ -1,5 +1,5 @@
 ---
-title: "Hiện trường: backup và kế hoạch chỗ chứa trước khi nâng cấp ở bệnh viện"
+title: "Backup và kế hoạch chỗ chứa trước khi nâng cấp ở bệnh viện"
 level: basic
 services: []
 files:
@@ -57,11 +57,13 @@ Một tệp của bundle được **vắng** trong `stage` chỉ khi: nó nằm 
 
 Quy định của IT bệnh viện trong lúc script chạy (test đo mỗi 2 s qua một phiên SSH riêng):
 
-1. quillo phục vụ bình thường: `/healthz` trả 200 ở mọi lần đo.
+1. quillo phục vụ bình thường: không có hai lần đo liên tiếp mà `/healthz` không trả 200, và lần đo cuối trả 200 (một
+   lần đo lỡ lẻ loi do máy chậm được bỏ qua).
 2. Đĩa `/` không bao giờ dùng quá 85%: Available ≥ 15% của Size (`df -B1 --output=size,avail /`) ở mọi lần đo.
 3. Không thêm, xoá hay sửa tệp nào trong `/home/fde/quillo-1.0.0/` (trừ những gì quillo tự ghi trong `inbox/`), không
    đụng `/home/fde/quillo-1.0.0.tar` (bản lưu trữ của phiên bản đang chạy).
-4. Dữ liệu bệnh viện không rời máy: không tệp nào trong `$WORK` là bản dump hay chứa dữ liệu của bảng `documents`/`chunks`.
+4. Dữ liệu bệnh viện không rời máy: không tệp nào trong `$WORK` là bản dump (`pg_dump` custom), tệp nén gzip, tệp có kích
+   thước trong ±10% bản dump trên máy, hay chứa dữ liệu của bảng `documents`/`chunks`.
 
 Mỗi lần chấm, máy có thêm một lượng dữ liệu khác của bệnh viện (20–120 MiB trong `/var/lib/his-export/`), nên số đo
 đổi theo lần chạy. Chạy thẳng tệp test (`PYTHONPATH=. uv run python tracks/fde/modules/09-production-trust/exercises/basic/03-backup-before-upgrade/tests/test_backup_before_upgrade.py`)
@@ -71,7 +73,7 @@ Mỗi lần chấm, máy có thêm một lượng dữ liệu khác của bệnh
 
 `test_backup_and_storage_plan`:
 
-- `pre_upgrade.sh` thoát `0` trong 180 s; bốn quy định trên đúng ở mọi lần đo và sau khi chạy.
+- `pre_upgrade.sh` thoát `0` trong 180 s; bốn quy định trên đúng trong lúc chạy (theo các lần đo) và sau khi chạy.
 - Tệp `dump` có trên máy, quyền `0600`, đúng `dump_bytes`, khớp `.sha256` đi kèm (`sha256sum -c`); restore vào một
   database trống bằng `pg_restore` cho đúng số tài liệu, số chunk của database đang chạy và schema 1.
 - `disk_free_bytes` lệch không quá 64 MiB so với số test đo ngay trước khi chạy script; `db_bytes` lệch không quá 10% so

@@ -191,12 +191,10 @@ stateDiagram-v2
   schema mới. Bước *thu* (xoá cột, đổi kiểu) để tới một bản sau, khi không còn ai cần quay lại. Nhờ đó rollback chỉ là đổi
   artifact về bản cũ, giữ nguyên dữ liệu ghi trong lúc chạy bản mới. Đọc ghi chú phát hành để biết bản nào có bước thu:
   đó là **điểm không quay lại**, và từ đó đường lui duy nhất là restore (mất dữ liệu sau backup).
-- **Hai bộ artifact cùng tồn tại tới khi nghiệm thu.** Image cũ, cấu hình cũ, bundle cũ phải còn trên máy (máy air-gapped
-  không pull lại được).
-- **Chỉ chở phần khác.** Bundle offline chứa mọi thứ cho lần cài đầu; lần nâng cấp chỉ cần phần đổi. So manifest hai bản,
-  nhưng nhớ rằng tệp tar của cùng một image có thể khác sha256 giữa hai lần `docker save`: so **image ID** (digest config)
-  mới biết image có thật sự đổi không. Stream (`tar -xOf … | ssh … docker load`) thay vì chép rồi giải nén khi đĩa chật;
-  `docker load` vẫn cần chỗ tạm trong thư mục dữ liệu của Docker.
+- **Giữ đường lui tới khi nghiệm thu.** Liệt kê rollback cần những gì của bản cũ và kiểm chúng còn dùng được trên máy
+  của khách tại thời điểm cần rollback, không chỉ lúc bắt đầu.
+- **Tài nguyên là một phép tính.** Đo những gì lần nâng cấp sẽ đặt lên máy (đĩa, RAM, thời gian dừng) so với những gì
+  máy còn và mức khách yêu cầu giữ, trước khi chọn cách chuyển bản mới lên máy.
 - **Script chịu được dừng giữa chừng.** Mỗi bước để máy ở trạng thái cũ hoặc mới (ghi tệp tạm rồi `mv`), chạy lại không
   làm hỏng gì, và rollback chạy được từ bất kỳ điểm nào, không chỉ từ "nâng cấp xong đẹp".
 - **Giữ những gì khách đã cấu hình**: secret trong `.env`, đường dẫn cài đặt mà giám sát và backup đêm của khách trỏ vào.

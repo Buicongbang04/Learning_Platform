@@ -50,10 +50,11 @@ def p95(values: list[float]) -> float:
 
 def check_latency(q: Quillo, cfg: dict) -> tuple[dict, float | None]:
     durations, errors = [], []
-    for _ in range(cfg["latency_samples"]):
+    questions = cfg["latency_questions"]
+    for i in range(cfg["latency_samples"]):
         started = time.monotonic()
         try:
-            status = q.ask(cfg["admin_token"], cfg["latency_question"], cfg["top_k"]).status_code
+            status = q.ask(cfg["admin_token"], questions[i % len(questions)], cfg["top_k"]).status_code
         except requests.RequestException as error:
             status = type(error).__name__
         durations.append(time.monotonic() - started)

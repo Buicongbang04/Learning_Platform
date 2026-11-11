@@ -25,6 +25,12 @@ RUN_TIMEOUT = 150
 MIN_P95 = 0.05
 ACL = "legal:legal/,finance:finance/"
 WRONG_ACL = "legal:legal/,legal:finance/,finance:finance/"
+LATENCY_QUESTIONS = [
+    "How many days of written notice does the consultant need to terminate?",
+    "How long must the receiving party keep information confidential?",
+    "What is the total operating cost in the budget 2027?",
+    "How many invoices were paid late in quarter three?",
+]
 GROUPS_MAPPER = {"name": "groups", "protocol": "openid-connect", "protocolMapper": "oidc-group-membership-mapper",
                  "config": {"claim.name": "groups", "full.path": "false", "access.token.claim": "true",
                             "id.token.claim": "true", "userinfo.token.claim": "true"}}
@@ -121,9 +127,9 @@ class Scene:
     def token(self, user: str) -> str:
         return fdekit.keycloak_token(self.site, user, fdekit.KEYCLOAK_PASSWORDS[user])
 
-    def baseline_p95(self, question: str) -> float:
+    def baseline_p95(self, questions: list[str]) -> float:
         durations = []
-        for _ in range(3):
+        for question in questions[:3]:
             started = time.monotonic()
             response = requests.post(f"{self.api}/api/ask", headers={"Authorization": f"Bearer {self.admin}"},
                                      json={"question": question, "top_k": TOP_K}, timeout=120)
@@ -137,7 +143,7 @@ class Scene:
             "admin_token": self.admin,
             "top_k": TOP_K,
             "latency_samples": SAMPLES,
-            "latency_question": "How many days of written notice does the consultant need to terminate?",
+            "latency_questions": LATENCY_QUESTIONS,
             "p95_max_seconds": threshold,
             "questions": [
                 {"question": "What penalty applies for each breach of the non-disclosure agreement?",
@@ -203,7 +209,7 @@ def test_acceptance_against_real_quillo(tmp_path):
         scene.add_groups_mapper()
         scene.configure(ACL)
         cfg = scene.config(1.0)
-        base = scene.baseline_p95(cfg["latency_question"])
+        base = scene.baseline_p95(cfg["latency_questions"])
         threshold = round(max(2 * base, 1.0), 2)
 
         code, report = scene.run(scene.config(threshold), "healthy")

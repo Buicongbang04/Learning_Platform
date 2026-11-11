@@ -63,19 +63,20 @@ cạnh tệp, rồi restore vào một database tạm cùng server và so số b
 Đưa họ RPO/RTO đo được từ lần diễn tập (backup mất bao lâu, restore mất bao lâu, mất dữ liệu từ thời điểm nào). Diễn tập
 lặp lại định kỳ, và bản backup ở lại trong hạ tầng của họ.
 
-## Máy khách đĩa nhỏ, bạn phải backup và nâng cấp trong cùng cửa sổ bảo trì. Bạn lên kế hoạch thế nào?
+## Khách muốn nâng cấp ngay trong giờ hành chính "vì chỉ mất 5 phút". Bạn trả lời thế nào?
 
-Đo trước: dung lượng trống, kích thước database, kích thước từng thứ lần nâng cấp cần, và mức trống tối thiểu mà giám sát
-của khách yêu cầu (database chạy trên cùng đĩa; hết đĩa giữa chừng là sự cố). Rồi tính: chỉ chở phần thật sự đổi (so
-manifest, so image ID chứ không chỉ sha256 của tệp tar), stream thay vì chép rồi giải nén, dọn tệp tạm ngay, không đụng
-thứ khách yêu cầu giữ. Không đưa dữ liệu khách ra laptop để "lấy chỗ". Kế hoạch là một bảng cộng trừ khách đọc được.
+Năm phút là thời gian của lần chạy suôn sẻ, không phải của lần hỏng. Trước khi nhận lời, liệt kê những gì phải còn
+nguyên sau nâng cấp (dữ liệu, cấu hình, tài khoản, đường dẫn mà hệ thống khác của khách trỏ vào), đo tài nguyên của máy so
+với những gì lần nâng cấp cần, viết thứ tự các bước kèm điểm dừng an toàn, và diễn tập cả nâng cấp lẫn rollback trên một
+máy giống máy khách. Đề xuất cửa sổ bảo trì đủ cho trường hợp phải rollback, báo người dùng trước, và có tiêu chí rõ để
+quyết định rollback. Nếu khách vẫn muốn làm trong giờ hành chính, ghi rủi ro vào biên bản và để người có thẩm quyền duyệt.
 
 ## Nâng cấp xong, người dùng đã ghi dữ liệu mới, rồi phát hiện lỗi. Rollback thế nào?
 
 Rollback khác restore. Nếu migration của bản mới chỉ mở rộng schema (expand), bản cũ chạy được trên schema mới: đổi
 artifact về bản cũ, giữ nguyên database, dữ liệu ghi sau nâng cấp còn nguyên. Restore bản backup trước nâng cấp thì mất
-toàn bộ dữ liệu đó; chỉ dùng khi dữ liệu hỏng. Điều kiện để rollback nhanh: artifact cũ còn trên máy (máy air-gapped không
-pull lại được), cấu hình cũ được giữ, và rollback đã diễn tập trước khi cần.
+toàn bộ dữ liệu đó; chỉ dùng khi dữ liệu hỏng. Điều kiện để rollback nhanh: biết trước rollback cần những gì của bản cũ và chúng ở
+đâu, và rollback đã diễn tập trước khi cần.
 
 ## "Điểm không quay lại" của một lần nâng cấp là gì và bạn xử lý nó thế nào với khách?
 

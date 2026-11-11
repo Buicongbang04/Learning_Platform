@@ -6,7 +6,7 @@
    làm `/api/ask` lỗi) không được làm script dừng hay làm mục khác báo sai. Script luôn ghi `report.json` đủ 4 mục.
 2. **`health` đọc `checks`**, không chỉ mã HTTP: `/healthz` trả 503 kèm `{"db": true, "llm": true, "embed": false}`;
    `detail` nêu đúng thành phần `false`. Đó là dòng đầu tiên IT khách đọc khi gọi bạn.
-3. **`latency` đo đủ số mẫu cấu hình**, đếm lỗi riêng (một câu lỗi là FAIL, không phải "bỏ qua mẫu đó"), p95 theo phân vị
+3. **`latency` đo đủ số mẫu cấu hình**, xoay vòng qua `latency_questions`, đếm lỗi riêng (một câu lỗi là FAIL, không phải "bỏ qua mẫu đó"), p95 theo phân vị
    nearest-rank đúng như README (với 4 mẫu, p95 là mẫu lớn nhất). Báo `p95_seconds` ra report để buổi nghiệm thu ghi lại
    con số, không chỉ PASS/FAIL.
 4. **`citations` map `doc_id` → đường dẫn** bằng `GET /api/documents` (token quản trị) rồi kiểm có trích dẫn trong thư mục
@@ -32,7 +32,8 @@ thật sự so với ngưỡng thay vì luôn PASS.
 ## Những điều nên nói với khách ở buổi nghiệm thu
 
 - Lần hỏi đầu chậm hơn các lần sau với **cùng** câu hỏi (llama.cpp giữ cache prompt): đo p95 bằng một câu lặp lại cho ra
-  con số đẹp hơn thực tế. Bộ acceptance thật nên có nhiều câu hỏi khác nhau, và ngưỡng nên thống nhất trên cùng cách đo.
+  con số đẹp hơn thực tế. Vì vậy cấu hình có danh sách `latency_questions` và script xoay vòng qua đó; với 4 mẫu và 4 câu
+  khác nhau, không câu nào lặp. Ngưỡng nên thống nhất trên cùng bộ câu và cách đo.
 - Ngưỡng "2 × mốc đo lúc nghiệm thu" là cam kết tương đối: đổi phần cứng hay model thì đo lại mốc và ghi vào biên bản.
 - Token SSO trong cấu hình là của tài khoản kiểm thử do khách cấp, hết hạn sau vài phút; script không lưu token, và
   `report.json` không chứa token hay nội dung tài liệu (chỉ đường dẫn thư mục và số đếm).
