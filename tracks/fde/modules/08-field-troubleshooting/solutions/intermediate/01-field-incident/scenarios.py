@@ -1,5 +1,9 @@
 """Các sự cố của bài 08/intermediate/01 (chỉ nằm trong solutions/): nguyên nhân thật, cách test dựng lại, tập nguyên nhân
-chấp nhận và mẫu "bằng chứng trực tiếp". Cả hai do hồ sơ `hospital` gây ra: đĩa 8 GB và proxy công ty."""
+chấp nhận và mẫu "bằng chứng trực tiếp". Cả hai do hồ sơ `hospital` gây ra: đĩa 8 GB và proxy công ty.
+
+`direct` là các cặp (mẫu nguồn, mẫu nội dung): một bằng chứng chỉ là dấu vết trực tiếp khi nguồn của nó khớp mẫu nguồn
+và đoạn trích khớp mẫu nội dung tương ứng. Nguồn có ở mọi bundle của bệnh viện bất kể sự cố (vd. biến proxy của hệ thống)
+không bao giờ được tính."""
 
 import re
 from dataclasses import dataclass
@@ -14,7 +18,7 @@ class Scenario:
     name: str
     ticket: str
     accepted: frozenset[str]
-    direct: re.Pattern
+    direct: tuple[tuple[re.Pattern, re.Pattern], ...]
     build: Callable
 
 
@@ -57,7 +61,11 @@ SCENARIOS = {
         "Từ sáng nay, kết quả xét nghiệm mới khoa thả vào thư mục chung không lên quillo: hỏi về ca mới thì không có "
         "trích dẫn nào, hỏi tài liệu cũ vẫn được. Trang trạng thái của quillo vẫn báo ok. Hôm qua mọi thứ bình thường.",
         frozenset({"disk-full"}),
-        re.compile(r"No space left on device|DiskFull|could not extend file|100% /|/var/backups/his"),
+        ((re.compile(r"^bundle:system/df\.txt$"), re.compile(r"100% /")),
+         (re.compile(r"^bundle:quillo/logs/(db|worker|api)\.log$"),
+          re.compile(r"No space left on device|DiskFull|could not extend file")),
+         (re.compile(r"^customer:"),
+          re.compile(r"No space left on device|DiskFull|could not extend file|100% /|/var/backups/his"))),
         disk_full,
     ),
     "proxy-docker-config": Scenario(
@@ -66,7 +74,7 @@ SCENARIOS = {
         "trạng thái báo degraded. IT đã kiểm: docker ps thấy hai container model vẫn Up (healthy), không ai đụng vào "
         "quillo cả.",
         frozenset({"proxy-misrouting", "config-error"}),
-        re.compile(r"(?i)https?_proxy|httpproxy|10\.0\.2\.100:3128"),
+        ((re.compile(r"^customer:"), re.compile(r"HTTPS?_PROXY=http|\"https?Proxy\"")),),
         proxy_into_containers,
     ),
 }

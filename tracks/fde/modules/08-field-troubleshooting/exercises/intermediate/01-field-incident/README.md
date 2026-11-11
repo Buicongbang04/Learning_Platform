@@ -59,11 +59,17 @@ che secret**. Họ chỉ gõ:
   `list-units`, `list-timers`, `cat`; `journalctl` không `-f`, `--vacuum…`, `--rotate`, `--flush`; `ip` chỉ xem;
   `find` không `-exec`, `-delete`, `-fprint…`; `curl` chỉ GET/HEAD tới `127.0.0.1`/`localhost`, không ghi tệp, không
   gửi dữ liệu; `openssl` chỉ `s_client`, `x509`, `version` và không ghi tệp; `ss` không `-K`; `mount` không đối số;
-  `hostname` chỉ cờ xem; `tail`/`dmesg` không theo dõi, `dmesg` không xoá;
-- không mở đường dẫn có `.env`, `.ssh`, `oidc`, `shadow`, `sudoers`, `secret`, `environ`, `*.key`, `*.pem`,
-  `.bash_history`.
+  `hostname` chỉ cờ xem; `tail`/`dmesg`/`journalctl`/`docker … logs` không theo dõi (kể cả cờ gộp như `-tf`),
+  `dmesg` không xoá; `grep` không đệ quy; `date` không đặt giờ; `docker compose` không `-o`/`--output`; `journalctl`
+  không `--setup-keys`, `--update-catalog`, `--new-id128`; `curl` chỉ nhận đích dạng `http(s)://127.0.0.1…` hoặc
+  `http(s)://localhost…`;
+- không mở đường dẫn có `.env`, `.ssh`, `oidc`, `shadow`, `sudoers`, `secret`, `environ`, `private`, `*.key`, `*.pem`,
+  `.bash_history` (xét mọi đối số của lệnh).
 
-Mỗi lệnh chạy tối đa 30 s. Mọi lệnh bạn nhờ được ghi ở `.fde-lab/08-field-incident/ask-log.jsonl`.
+Mỗi lệnh chạy tối đa 30 s. Trước khi dán output, khách che token quản trị và mật khẩu database của bản cài quillo.
+**Mỗi seed khách gõ giúp tối đa 4 lệnh**, tính cả các lần dựng lại cảnh với cùng seed; lệnh thứ 5 bị từ chối (lệnh bị từ
+chối vì sai quy tắc không tính). Mọi lệnh bạn nhờ được ghi kèm seed vào `.fde-lab/08-field-incident/ask-log.jsonl` (chỉ
+ghi nối, không bị xoá khi dựng lại cảnh); muốn điều tra lại từ đầu thì dùng một seed khác.
 
 **Bước 2: nộp và chấm.** Viết `starter/incident.yaml` cho đúng cảnh của seed đó:
 
@@ -87,7 +93,7 @@ next_steps:                      # ít nhất 1: ai làm gì, kiểm lại thế
 | `memory-pressure` | Thiếu RAM: tiến trình bị OOM kill, swap/page cache thrash |
 | `dns` | Không phân giải được tên cần thiết |
 | `firewall-blocked` | Kết nối bị chặn hoặc bỏ gói giữa hai thành phần |
-| `proxy-misrouting` | Lưu lượng đi sai đường so với proxy: lưu lượng nội bộ bị đẩy qua proxy, hoặc lưu lượng ra ngoài không đi qua proxy khi cần |
+| `proxy-misrouting` | Cấu hình proxy (có, thiếu hay sai) làm một kết nối không đi đúng đường cần đi |
 | `tls-trust` | Chứng chỉ không được tin (CA chưa trust, sai tên, hết hạn) |
 | `credentials` | Mật khẩu, token, khoá sai hoặc hết hạn |
 | `permission` | Quyền tệp, SELinux, `noexec`, user không đủ quyền |
@@ -111,6 +117,8 @@ kích thước, tên tài liệu), nên đoạn trích bằng chứng chỉ đư
 
 `test_incident_report[seed]`:
 
+- Nhật ký `.fde-lab/08-field-incident/ask-log.jsonl` của seed đó có **không quá 4** lệnh khách đã gõ, và **mọi** lệnh
+  trong `customer_commands` có trong nhật ký đó (nguyên văn): bạn chỉ dẫn được lệnh mình đã thật sự nhờ khách gõ.
 - `incident.yaml` đúng định dạng: `cause` thuộc bảng trên, `summary` ≥ 40 ký tự, `next_steps` là danh sách chuỗi
   không rỗng, `customer_commands` ≤ 4 lệnh và lệnh nào cũng được khách chấp nhận theo quy tắc trên, `evidence` có 2–6
   mục, mỗi mục có `source` dạng `bundle:<tệp>` hoặc `customer:<số>` trỏ tới một lệnh có trong `customer_commands`,
@@ -119,7 +127,9 @@ kích thước, tên tài liệu), nên đoạn trích bằng chứng chỉ đư
 - `cause` giải thích được sự cố của seed đó (mỗi sự cố có tập nguyên nhân chấp nhận được; với vài sự cố có nhiều hơn một
   cách gọi tên hợp lý).
 - Ít nhất một bằng chứng là **dấu vết trực tiếp của nguyên nhân** (thứ mà khi nguyên nhân biến mất thì nó cũng biến
-  mất), không chỉ là triệu chứng (mã lỗi HTTP, trạng thái health, "không có trích dẫn").
+  mất), không chỉ là triệu chứng (mã lỗi HTTP, trạng thái health, "không có trích dẫn"). Không tính là dấu vết trực
+  tiếp: thứ có trong mọi bundle của khách này dù có sự cố hay không (cấu hình chung của máy), và đoạn trích từ output một
+  lệnh mà chính câu lệnh đó đã chứa đoạn trích (vd. thông báo lỗi lặp lại đối số bạn gõ).
 
 ## Gợi ý
 

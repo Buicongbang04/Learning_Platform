@@ -105,13 +105,16 @@ def grade(scene: fieldkit.Scene, scenario, incident: dict, bundle: dict[str, str
         if source.startswith("bundle:"):
             name = source.split(":", 1)[1].strip().lstrip("/")
             assert name in bundle, f"evidence[{i}]: bundle không có tệp {name!r} (có {sorted(bundle)})"
-            haystack = bundle[name]
+            haystack, canonical, echoed = bundle[name], f"bundle:{name}", False
         else:
-            haystack = outputs[int(source.split(":", 1)[1]) - 1]
+            index = int(source.split(":", 1)[1]) - 1
+            haystack, canonical = outputs[index], f"customer:{index + 1}"
+            echoed = needle in incident["customer_commands"][index]
         assert find_line(haystack, needle), (
             f"evidence[{i}]: không thấy {needle!r} trong một dòng của {source} khi dựng lại cảnh (đoạn trích phải "
             "nằm nguyên trong một dòng và không chứa phần đổi theo lần chạy: thời gian, PID, id, cổng)")
-        direct = direct or bool(scenario.direct.search(needle))
+        if not echoed:
+            direct = direct or any(src.search(canonical) and text.search(needle) for src, text in scenario.direct)
     assert incident["cause"] in scenario.accepted, \
         f"cause {incident['cause']!r} không giải thích được sự cố này; xem lại bằng chứng"
     assert direct, "Không bằng chứng nào chỉ thẳng vào nguyên nhân (mới là triệu chứng); thêm dấu vết của nguyên nhân"
@@ -150,7 +153,34 @@ def test_incident_report(forced, tmp_path):
     if not raw.isdigit():
         pytest.skip(f"Bước 1: dựng cảnh và điều tra (README mục Đề bài), rồi chấm bằng {SEED_ENV}=<seed> uv run pytest …")
     seed = int(raw)
+    incident = load_incident(ex.path("incident.yaml"))
+    check_asked(seed, incident.get("customer_commands") or [], WORKDIR / "ask-log.jsonl")
     run_case(tmp_path, seed, fieldkit.pick_scenario(seed, names), ex.path("incident.yaml"))
+
+
+def asked(log_path: Path, seed: int) -> list[str]:
+    """Lệnh khách đã gõ (được chấp nhận) trong các buổi điều tra của seed này, theo nhật ký của ask_customer."""
+    commands = []
+    if log_path.is_file():
+        for line in log_path.read_text(encoding="utf-8").splitlines():
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(record, dict) and record.get("seed") == seed and record.get("allowed") is True:
+                commands.append(record.get("command"))
+    return commands
+
+
+def check_asked(seed: int, commands: list[str], log_path: Path) -> None:
+    done = asked(log_path, seed)
+    if len(done) > MAX_COMMANDS:
+        pytest.fail(f"Với seed {seed} bạn đã nhờ khách gõ {len(done)} lệnh (nhật ký {log_path.relative_to(ROOT)}), "
+                    f"tối đa {MAX_COMMANDS}; điều tra lại bằng seed khác")
+    missing = [c for c in commands if c not in done]
+    if missing:
+        pytest.fail(f"customer_commands phải là lệnh bạn đã thật sự nhờ khách gõ cho seed {seed} qua ask_customer.py; "
+                    f"không thấy trong nhật ký: {missing}")
 
 
 def serve(scene: fieldkit.Scene, sock_path: Path, log_path: Path, stop: threading.Event) -> None:
@@ -160,7 +190,7 @@ def serve(scene: fieldkit.Scene, sock_path: Path, log_path: Path, stop: threadin
     sock_path.chmod(0o600)
     server.listen(4)
     server.settimeout(0.5)
-    count = 0
+    count = len(asked(log_path, scene.seed))
     while not stop.is_set():
         try:
             conn, _ = server.accept()
@@ -175,14 +205,22 @@ def serve(scene: fieldkit.Scene, sock_path: Path, log_path: Path, stop: threadin
                 raw += chunk
             try:
                 command = json.loads(raw)["command"]
-            except (ValueError, KeyError, TypeError):
-                continue
-            allowed, output = scene.customer_runs(command)
-            count += allowed
-            fieldkit.log_line(log_path, {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "n": count if allowed else None,
-                                         "command": command, "allowed": allowed})
-            reply = {"allowed": allowed, "output": output, "count": count, "limit": MAX_COMMANDS}
-            conn.sendall(json.dumps(reply, ensure_ascii=False).encode() + b"\n")
+                if count >= MAX_COMMANDS:
+                    allowed, output = False, f"khách đã gõ giúp {MAX_COMMANDS} lệnh cho sự cố này, không gõ thêm"
+                else:
+                    allowed, output = scene.customer_runs(command)
+                    count += allowed
+                    fieldkit.log_line(log_path, {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "seed": scene.seed,
+                                                 "n": count if allowed else None, "command": command,
+                                                 "allowed": allowed})
+                reply = {"allowed": allowed, "output": output, "count": count, "limit": MAX_COMMANDS}
+            except BaseException as error:
+                reply = {"allowed": False, "output": f"lỗi khi chuyển lệnh tới khách: {error}", "count": count,
+                         "limit": MAX_COMMANDS}
+            try:
+                conn.sendall(json.dumps(reply, ensure_ascii=False).encode() + b"\n")
+            except OSError:
+                pass
     server.close()
     sock_path.unlink(missing_ok=True)
 
@@ -196,7 +234,7 @@ def main() -> None:
     seed = args.seed if args.seed is not None else random.SystemRandom().randrange(10**6)
     name = fieldkit.pick_scenario(seed, sorted(scenarios()))
     WORKDIR.mkdir(parents=True, exist_ok=True)
-    for old in ("bundle", "bundle.tar.gz", "ask-log.jsonl", "ticket.txt"):
+    for old in ("bundle", "bundle.tar.gz", "ticket.txt"):
         target = WORKDIR / old
         if target.is_dir():
             for path in sorted(target.rglob("*"), reverse=True):

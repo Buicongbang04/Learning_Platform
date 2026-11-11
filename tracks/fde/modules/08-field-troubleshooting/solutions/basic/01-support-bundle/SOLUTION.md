@@ -40,7 +40,7 @@ Mã: `support_bundle.sh` cạnh tệp này.
 
 ## Kiểm thử của bài
 
-Test gieo 11 secret ngẫu nhiên mỗi lượt (cấu hình 3, `Environment=` của unit 2, log giữa và cuối, `Authorization`,
-private key, env và log của container, một tệp dữ liệu) và so **từng đoạn 10 ký tự** của mỗi secret với mọi tệp trong
-bundle, nên che một nửa giá trị (`abcd****`) vẫn trượt. Các biến thể sai đã thử (mỗi biến thể chạy 2 lần, đều trượt): bỏ
+Test gieo 12 secret ngẫu nhiên mỗi lượt (cấu hình 3, `Environment=` của unit 2, log giữa và cuối, `Authorization: Bearer`
+và `Basic`, private key, env và log của container, một tệp dữ liệu) và so **từng đoạn 10 ký tự** của mọi secret đã gieo
+(lượt 2 so cả secret của lượt 1, vì journal còn giữ dòng cũ) với mọi tệp trong bundle, nên che một nửa giá trị (`abcd****`) vẫn trượt. Các biến thể sai đã thử (mỗi biến thể chạy 2 lần, đều trượt): bỏ
 quy tắc userinfo; xoá dòng có secret thay vì che; `docker inspect` không che; chép cả log.

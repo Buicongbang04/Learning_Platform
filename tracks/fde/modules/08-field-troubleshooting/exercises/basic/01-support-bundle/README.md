@@ -23,6 +23,10 @@ nào, vì bundle sẽ nằm trong hệ thống ticket của hai công ty nhiều
 
 ## Đề bài
 
+Bài này dạy cách che secret mà bạn **không biết trước** giá trị. Đừng mở công cụ support bundle của quillo
+(`exercises/intermediate/01-field-incident/tools/quillo-support.sh`) để tham khảo: nó là công cụ của nhà cung cấp, chỉ
+che đúng hai secret mà quillo tự biết, nên không giải được bài này và làm hỏng việc luyện tập.
+
 Viết `starter/support_bundle.sh` (POSIX `sh`, không bash; được dùng công cụ có sẵn trên Ubuntu 22.04). Cách chạy:
 `sh support_bundle.sh <tệp ra .tar.gz>`, bằng user `support`: không sudo, thuộc nhóm `adm`, `systemd-journal`,
 `docbridge` và (thường là) `docker`.
@@ -77,8 +81,9 @@ Quy tắc:
 6. Thoát `0`, chạy ≤ 60 s, bundle ≤ 5 MB.
 
 Test dựng máy rồi chạy script **hai lượt**, mỗi lượt gieo secret ngẫu nhiên mới vào mọi chỗ ở quy tắc 1 (cấu hình, môi
-trường của unit, dòng journal, log ứng dụng ở giữa và ở cuối, biến môi trường và log của container, private key, một tệp
-trong thư mục dữ liệu), đổi cổng, nội dung log và các giá trị khác; lượt 2 rút `support` khỏi nhóm `docker`. Cả bài
+trường của unit, dòng journal, log ứng dụng ở giữa và ở cuối, header `Authorization: Bearer` và `Basic`, biến môi trường
+và log của container, private key, một tệp trong thư mục dữ liệu), đổi cổng, nội dung log và các giá trị khác; lượt 2
+rút `support` khỏi nhóm `docker` và kiểm bundle không chứa secret của **cả hai** lượt. Cả bài
 ~30 s trên máy của repo.
 
 ## Tiêu chí đạt

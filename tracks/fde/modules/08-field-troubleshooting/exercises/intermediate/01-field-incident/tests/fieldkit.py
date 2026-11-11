@@ -29,14 +29,10 @@ OUTPUT_LIMIT = 200_000
 CAUSES = ("disk-full", "memory-pressure", "dns", "firewall-blocked", "proxy-misrouting", "tls-trust", "credentials",
           "permission", "resource-limit", "config-error", "product-bug")
 SHELL_META = re.compile(r"[|;&$<>`\\\n\r]|\$\(")
-SECRET_PATH = re.compile(r"(^|/)(\.env|\.ssh|oidc|shadow|gshadow|sudoers[^/]*|environ|[^/]*\.key|[^/]*secret[^/]*|"
-                         r"[^/]*\.pem|\.bash_history)($|/)")
-REDACT = [
-    (re.compile(r"([A-Za-z][A-Za-z0-9+.-]*://[^/:@\s]*):[^@/\s]*@"), r"\1:***@"),
-    (re.compile(r"(Authorization:\s*(?:Bearer|Basic|Token|Negotiate))\s+[^\s\"]+", re.I), r"\1 ***"),
-    (re.compile(r"([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api_key|private_key)[A-Za-z0-9_.-]*\s*[=:]\s*\"?)"
-                r"[^\"\s,;]+", re.I), r"\1***"),
-]
+SECRET_PATH = re.compile(r"(^|/|=)(\.env|\.ssh|oidc|shadow|gshadow|sudoers[^/]*|environ|private|[^/]*\.key|"
+                         r"[^/]*secret[^/]*|[^/]*\.pem|\.bash_history)($|/)")
+CURL_VALUE_OPTS = {"-m", "--max-time", "--connect-timeout", "-w", "--write-out", "--noproxy", "-H", "--header", "-A",
+                   "--user-agent", "--retry", "--resolve", "--cacert", "--capath", "-x", "--proxy", "--interface"}
 READ_ONLY = {"df", "du", "free", "uptime", "uname", "ps", "ss", "getent", "ls", "stat", "cat", "head", "tail", "grep",
              "wc", "find", "id", "date", "hostname", "lsblk", "findmnt", "dmesg", "ip", "journalctl", "systemctl",
              "docker", "curl", "openssl", "nproc", "mount"}
@@ -48,10 +44,9 @@ SYSTEMCTL_SUB = {"status", "show", "is-active", "is-failed", "list-units", "list
 IP_SUB = {"addr", "address", "a", "route", "r", "link", "l", "neigh", "rule"}
 
 
-def redact(text: str) -> str:
-    for pattern, replacement in REDACT:
-        text = pattern.sub(replacement, text)
-    return text
+def has_short(args: list[str], letters: str) -> bool:
+    """Có cờ ngắn (kể cả gộp, vd. `-tf`) chứa một trong các chữ cái `letters`."""
+    return any(a.startswith("-") and not a.startswith("--") and set(a[1:].split("=")[0]) & set(letters) for a in args)
 
 
 def check_command(command: str) -> tuple[list[str] | None, str]:
@@ -85,16 +80,19 @@ def check_command(command: str) -> tuple[list[str] | None, str]:
             return None, "docker stats phải có --no-stream"
         if args[:1] == ["events"] and not any(a.startswith("--until") for a in args):
             return None, "docker events phải có --until"
-        if any(a in ("-f", "--follow") for a in args) and args[:1] in (["logs"], ["compose"], ["container"]):
+        if args[:1] in (["logs"], ["compose"], ["container"]) and ("--follow" in args or has_short(args, "f")):
             return None, "không theo dõi log liên tục (-f)"
+        if args[:1] == ["compose"] and (has_short(args, "o") or any(a.startswith("--output") for a in args)):
+            return None, "docker compose không ghi tệp (-o/--output)"
     elif name == "systemctl":
         sub = [a for a in args if not a.startswith("-")][:1]
         if not sub or sub[0] not in SYSTEMCTL_SUB:
             return None, f"systemctl chỉ được: {', '.join(sorted(SYSTEMCTL_SUB))}"
     elif name == "journalctl":
-        if any(a.startswith(("--vacuum", "--rotate", "--flush", "--sync", "--relinquish", "-f", "--follow"))
-               for a in args):
-            return None, "journalctl chỉ đọc, không -f, --vacuum…, --rotate…"
+        if has_short(args, "f") or any(a.startswith(("--vacuum", "--rotate", "--flush", "--sync", "--relinquish",
+                                                          "--follow", "--setup-keys", "--update-catalog", "--new-id128"))
+                                         for a in args):
+            return None, "journalctl chỉ đọc, không -f, --vacuum…, --rotate…, --setup-keys…"
     elif name == "ip":
         sub = [a for a in args if not a.startswith("-")]
         if sub and (sub[0] not in IP_SUB or any(a in ("add", "del", "delete", "change", "replace", "set", "flush")
@@ -105,9 +103,16 @@ def check_command(command: str) -> tuple[list[str] | None, str]:
                for a in args):
             return None, "find không được -exec/-delete/-fprint…"
     elif name == "curl":
-        urls = [a for a in args if "://" in a]
-        if not urls or any(not re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?(/|$)", u) for u in urls):
-            return None, "curl chỉ tới 127.0.0.1/localhost của chính máy đó"
+        targets, skip = [], False
+        for a in args:
+            if skip:
+                skip = False
+            elif a in CURL_VALUE_OPTS:
+                skip = True
+            elif not a.startswith("-"):
+                targets.append(a)
+        if not targets or any(not re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?(/|$)", u) for u in targets):
+            return None, "curl chỉ tới http(s)://127.0.0.1 hoặc http(s)://localhost của chính máy đó"
         long_bad = ("--output", "--remote-name", "--upload", "--data", "--json", "--form", "--config", "--request",
                     "--cookie-jar", "--dump-header", "--trace", "--stderr", "--libcurl", "--etag-save", "--create-dirs")
         if any(a.startswith(long_bad) or (a.startswith("-") and not a.startswith("--") and set(a[1:]) & set("oOTdFKXcDJ"))
@@ -127,14 +132,15 @@ def check_command(command: str) -> tuple[list[str] | None, str]:
         return None, "dmesg chỉ đọc"
     elif name == "mount" and args:
         return None, "mount chỉ để xem (không đối số)"
-    elif name in ("tail",) and any(a in ("-f", "-F", "--follow") for a in args):
+    elif name == "tail" and (has_short(args, "fF") or any(a.startswith("--follow") for a in args)):
         return None, "tail không -f"
-    elif name == "date" and any(a in ("-s", "--set") for a in args):
+    elif name == "grep" and (has_short(args, "rR") or any(a.startswith(("--recursive", "--dereference-recursive"))
+                                                          for a in args)):
+        return None, "grep không đệ quy (-r): chỉ đọc tệp cụ thể"
+    elif name == "date" and (has_short(args, "s") or any(a.startswith("--set") for a in args)):
         return None, "date chỉ xem"
     elif name == "hostname" and any(a not in ("-f", "-i", "-I", "-s", "-d", "-A", "--fqdn", "--short") for a in args):
         return None, "hostname chỉ xem (-f, -i, -I, -s, -d, -A)"
-    elif name == "journalctl" and any(a.startswith(("--setup-keys", "--update-catalog", "--new-id128")) for a in args):
-        return None, "journalctl chỉ đọc"
     return argv, ""
 
 
@@ -152,6 +158,7 @@ class Scene:
         self.rng = random.Random(seed)
         self.api = f"http://127.0.0.1:{site.vm.port(18080)}"
         self.admin = ""
+        self.hidden: list[str] = []
 
     def sh(self, cmd: str, timeout: float = 60) -> subprocess.CompletedProcess:
         for attempt in range(3):
@@ -182,6 +189,8 @@ class Scene:
         while time.monotonic() < deadline:
             if self.health()[0] == 200:
                 self.admin = self.must(f"sed -n 's/^QUILLO_ADMIN_TOKEN=//p' {QUILLO}/.env", "token quản trị").strip()
+                password = self.must(f"sed -n 's/^QUILLO_DB_PASSWORD=//p' {QUILLO}/.env", "mật khẩu db").strip()
+                self.hidden = [value for value in (self.admin, password) if value]
                 return
             time.sleep(2)
         logs = self.sh(f"cd {QUILLO} && docker compose ps -a", timeout=60).stdout
@@ -248,7 +257,8 @@ class Scene:
         return files
 
     def customer_runs(self, command: str) -> tuple[bool, str]:
-        """Khách gõ một lệnh (đã qua check_command) trong thư mục cài quillo; output đã che secret như khách che."""
+        """Khách gõ một lệnh (đã qua check_command) trong thư mục cài quillo; trước khi dán, khách che hai secret của bản
+        cài (token quản trị và mật khẩu database trong .env)."""
         argv, reason = check_command(command)
         if argv is None:
             return False, reason
@@ -257,7 +267,10 @@ class Scene:
             argv = ["sudo", "-n", *argv[1:]]
         line = f"cd {QUILLO} && timeout {COMMAND_TIMEOUT} {shlex.join(argv)} 2>&1"
         done = self.sh(line, timeout=COMMAND_TIMEOUT + 30)
-        output = redact(done.stdout)[:OUTPUT_LIMIT]
+        output = done.stdout
+        for value in self.hidden:
+            output = output.replace(value, "***")
+        output = output[:OUTPUT_LIMIT]
         if done.returncode == 124:
             output += f"\n(khách: lệnh chạy quá {COMMAND_TIMEOUT} s, đã dừng)"
         return True, output

@@ -118,6 +118,7 @@ class Customer:
         self.m = m
         self.work = work
         self.secrets: dict[str, str] = {}
+        self.seen: dict[str, str] = {}
         self.values: dict[str, str] = {}
 
     def install(self) -> None:
@@ -145,9 +146,10 @@ class Customer:
     def round(self, *, docker_access: bool) -> None:
         s = {name: secret(prefix) for name, prefix in (
             ("conf_password", "Pw"), ("conf_token", "Tk"), ("conf_proxy", "Px"), ("unit_env", "Sm"),
-            ("journal_dsn", "Dj"), ("log_url", "Ul"), ("log_bearer", "Br"), ("tls_key", "Ky"),
+            ("journal_dsn", "Dj"), ("log_url", "Ul"), ("log_bearer", "Br"), ("log_basic", "Bs"), ("tls_key", "Ky"),
             ("docker_env", "Ca"), ("docker_log", "Rd"), ("data", "Hs"))}
         self.secrets = s
+        self.seen.update({f"{name} ({len(self.seen) // len(s) + 1})": value for name, value in s.items()})
         port = str(20000 + secrets.randbelow(9000))
         self.values = {"port": port, "batch": str(10 + secrets.randbelow(490)), "cache_size": str(secrets.randbelow(900) + 64),
                        "journal_marker": secrets.token_hex(8), "log_marker": secrets.token_hex(8),
@@ -181,6 +183,7 @@ class Customer:
             "tra 503, thu lai\\n')\n"
             f"w('2026-11-10T23:59:58 WARN upstream https://svc-sync:{s['log_url']}@files.nhamay.local/api tra 503\\n')\n"
             f"w('2026-11-10T23:59:59 ERROR quillo tu choi: Authorization: Bearer {s['log_bearer']} (401)\\n')\n"
+            f"w('2026-11-10T23:59:59 WARN erp gateway: Authorization: Basic {s['log_basic']} (403)\\n')\n"
             f"w('2026-11-11T00:00:00 INFO marker {v['log_tail_marker']}\\n')\n")
         (self.work / "gen.py").write_text(generator)
         self.m.put(self.work / "gen.py", "/home/fde/gen.py")
@@ -258,7 +261,7 @@ def check_no_leak(files: dict[str, bytes], customer: Customer, label: str) -> No
         assert b"\0" not in data, f"{label}: {name} không phải tệp văn bản (có byte NUL / archive lồng)"
         assert not data.startswith((b"\x1f\x8b", b"PK\x03\x04", b"\xfd7zXZ", b"BZh")), f"{label}: {name} là archive lồng"
         assert b"PRIVATE KEY" not in data, f"{label}: {name} chứa private key"
-        for kind, value in customer.secrets.items():
+        for kind, value in customer.seen.items():
             for start in range(len(value) - LEAK_WINDOW + 1):
                 piece = value[start:start + LEAK_WINDOW].encode()
                 assert piece not in data, (f"{label}: secret gieo ngẫu nhiên ({kind}) lộ trong {name} "
@@ -306,6 +309,8 @@ def check_required(files: dict[str, bytes], customer: Customer, label: str, *, d
         f"{label}: docbridge/docbridge.log phải kết thúc bằng dòng cuối cùng hiện tại của log ứng dụng"
     assert "@files.nhamay.local/api tra 503" in app_text, \
         f"{label}: docbridge/docbridge.log phải giữ dòng có URL upstream (che userinfo), không xoá dòng"
+    assert "Authorization: Basic" in app_text and "(403)" in app_text, \
+        f"{label}: docbridge/docbridge.log phải giữ dòng Authorization Basic (che credential), không xoá dòng"
     assert "Authorization: Bearer" in app_text and "(401)" in app_text, \
         f"{label}: docbridge/docbridge.log phải giữ dòng Authorization (che token), không xoá dòng"
     if not docker_access:

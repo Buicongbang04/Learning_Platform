@@ -44,7 +44,7 @@ Server:
  Architecture: x86_64
  CPUs: 2
  Total Memory: 2.844GiB
- Name: fde-ex-660aa175
+ Name: fde-ex-413004ec
  ID: feed703b-6bc1-412a-94c7-d36ccce88f5f
  Docker Root Dir: /var/lib/docker
  Debug Mode: false

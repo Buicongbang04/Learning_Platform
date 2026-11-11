@@ -36,7 +36,7 @@ def main(argv: list[str]) -> int:
         print(f"IT bệnh viện: không gõ lệnh này được ({reply['output']})")
         return 1
     print(reply["output"], end="" if reply["output"].endswith("\n") else "\n")
-    print(f"--- lệnh thứ {reply['count']} bạn nhờ khách (incident.yaml chỉ được dẫn tối đa {reply['limit']})",
+    print(f"--- lệnh thứ {reply['count']}/{reply['limit']} khách gõ giúp cho seed này (ghi trong ask-log.jsonl)",
           file=sys.stderr)
     return 0
 

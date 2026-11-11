@@ -58,9 +58,9 @@ trong `Trying …` là của proxy, và mã HTTP ở bước CONNECT là của p
 
 ## Một dịch vụ trả "502 Bad Gateway" mà dịch vụ đó không bao giờ trả 502. Bạn suy ra gì?
 
-Có thứ gì đó đứng giữa client và dịch vụ trả lời thay: reverse proxy, load balancer, sidecar, hay một forward proxy mà
-client không định đi qua. Tìm xem client thực sự gửi request tới đâu (biến proxy của **tiến trình** client, cấu hình
-service mesh, DNS trỏ đi đâu) và log của thứ đứng giữa. Song song, kiểm dịch vụ đích trực tiếp từ cùng mạng với client;
+Có thứ gì đó đứng giữa client và dịch vụ trả lời thay (reverse proxy, load balancer, sidecar, gateway). Tìm xem client
+thực sự gửi request tới đâu (cấu hình của chính client, DNS trỏ đi đâu, các thành phần mạng trên đường đi) và log của
+thứ đứng giữa. Song song, kiểm dịch vụ đích trực tiếp từ cùng mạng với client;
 nếu nó trả lời bình thường thì vấn đề nằm trên đường đi, không phải ở dịch vụ.
 
 ## Khi nào bạn dùng `strace` hay `tcpdump` ở máy khách, và cần lưu ý gì?
