@@ -1,0 +1,1000 @@
+{
+ "source": "CUAD v1 (The Atticus Project, CC BY 4.0), data/raw/cuad/CUAD_v1/CUAD_v1.json",
+ "system": "quillo 1.0.0, llm-small (Qwen2.5-0.5B-Instruct Q4_K_M), top_k 3, CPU",
+ "items": [
+  {
+   "id": "ability-governing-law",
+   "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+   "clause": "Governing Law",
+   "question": "Which law governs the Ability services agreement?",
+   "gold": [
+    [
+     21980,
+     22719
+    ]
+   ],
+   "seconds": 5.33,
+   "answer": "The law governing the Ability services agreement is the laws of the State of Israel.",
+   "citations": [
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1000
+    },
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 1,
+     "start": 852,
+     "end": 1847
+    },
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 2,
+     "start": 1701,
+     "end": 2706
+    }
+   ]
+  },
+  {
+   "id": "ability-expiration-date",
+   "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+   "clause": "Expiration Date",
+   "question": "When does the Ability services agreement expire?",
+   "gold": [
+    [
+     9692,
+     9862
+    ]
+   ],
+   "seconds": 3.06,
+   "answer": "November 1, 2019",
+   "citations": [
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1000
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 11,
+     "start": 10047,
+     "end": 11050
+    },
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 11,
+     "start": 9388,
+     "end": 10385
+    }
+   ]
+  },
+  {
+   "id": "ability-agreement-date",
+   "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+   "clause": "Agreement Date",
+   "question": "On what date was the Ability services agreement signed?",
+   "gold": [
+    [
+     306,
+     321
+    ]
+   ],
+   "seconds": 3.03,
+   "answer": "[1]",
+   "citations": [
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1000
+    }
+   ]
+  },
+  {
+   "id": "ability-termination-for-convenience",
+   "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+   "clause": "Termination For Convenience",
+   "question": "Can a party terminate the Ability services agreement for convenience, and with how much notice?",
+   "gold": [
+    [
+     9867,
+     10290
+    ]
+   ],
+   "seconds": 6.23,
+   "answer": "[1] no right under this Agreement to offset any amounts owed (or to become due and owing) to the other Party, whether under this Agreement, the Purchase Agreement or otherwise, against any other amount owed (or to become due and owing) to it by the other Party.",
+   "citations": [
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 11,
+     "start": 9388,
+     "end": 10385
+    }
+   ]
+  },
+  {
+   "id": "ability-insurance",
+   "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+   "clause": "Insurance",
+   "question": "What insurance must be maintained under the Ability services agreement?",
+   "gold": [],
+   "seconds": 10.06,
+   "answer": "10.4 Representations and warranties. Each of the parties represents and warrants to the other party that, (i) the Agreement constitutes a valid, legal and binding obligation of such party and is enforceable against such party in accordance with its terms, (ii) it has the power and authority to execute the Agreement and perform all its terms, and (iii) the execution and performance of this Agreement shall not violate any charter documents of such party, contravene any provisions of law as applicable to such party (including any order, decree, injunction of any competent court) or conflict with the provisions of any material agreement or contract executed by such party. The provisions of this Section 10.4 shall survive the termination of this Agreement.",
+   "citations": [
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 27,
+     "start": 22998,
+     "end": 23997
+    },
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1000
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 26,
+     "start": 22148,
+     "end": 23143
+    }
+   ]
+  },
+  {
+   "id": "ability-cap-on-liability",
+   "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+   "clause": "Cap On Liability",
+   "question": "Is liability capped in the Ability services agreement, and at what amount?",
+   "gold": [],
+   "seconds": 8.26,
+   "answer": "Yes, liability is capped in the Ability services agreement. The clause states: \"i-on's liability for damages to the Customer for any cause whatsoever, regardless of the form of action, and whether in contract or in tort, including negligence, shall be limited to one (1) month's fees and the remaining portion of any prepaid fees.\"",
+   "citations": [
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 13,
+     "start": 11200,
+     "end": 12203
+    },
+    {
+     "contract": "ABILITYINC_06_15_2020-EX-4.25-SERVICES AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1000
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 12,
+     "start": 10907,
+     "end": 11910
+    }
+   ]
+  },
+  {
+   "id": "centrack-governing-law",
+   "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+   "clause": "Governing Law",
+   "question": "Which law governs the Centrack web site hosting agreement?",
+   "gold": [
+    [
+     14093,
+     14380
+    ]
+   ],
+   "seconds": 5.95,
+   "answer": "The law governing the Centrack web site hosting agreement is Florida law.",
+   "citations": [
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1069
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 14,
+     "start": 12620,
+     "end": 13614
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 16,
+     "start": 14316,
+     "end": 15176
+    }
+   ]
+  },
+  {
+   "id": "centrack-expiration-date",
+   "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+   "clause": "Expiration Date",
+   "question": "When does the Centrack web site hosting agreement expire?",
+   "gold": [
+    [
+     10363,
+     10558
+    ]
+   ],
+   "seconds": 5.95,
+   "answer": "The Centrack web site hosting agreement expires on April 1, 1999.",
+   "citations": [
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 11,
+     "start": 10047,
+     "end": 11050
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1069
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 14,
+     "start": 12620,
+     "end": 13614
+    }
+   ]
+  },
+  {
+   "id": "centrack-agreement-date",
+   "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+   "clause": "Agreement Date",
+   "question": "On what date was the Centrack web site hosting agreement signed?",
+   "gold": [
+    [
+     292,
+     314
+    ]
+   ],
+   "seconds": 0.66,
+   "answer": "6th day of April, 1999",
+   "citations": [
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1069
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 14,
+     "start": 12620,
+     "end": 13614
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 16,
+     "start": 14316,
+     "end": 15176
+    }
+   ]
+  },
+  {
+   "id": "centrack-cap-on-liability",
+   "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+   "clause": "Cap On Liability",
+   "question": "Is liability capped in the Centrack web site hosting agreement, and at what amount?",
+   "gold": [
+    [
+     11273,
+     11693
+    ]
+   ],
+   "seconds": 4.99,
+   "answer": "No",
+   "citations": [
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 14,
+     "start": 12620,
+     "end": 13614
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1069
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 16,
+     "start": 14316,
+     "end": 15176
+    }
+   ]
+  },
+  {
+   "id": "centrack-insurance",
+   "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+   "clause": "Insurance",
+   "question": "What insurance must be maintained under the Centrack web site hosting agreement?",
+   "gold": [],
+   "seconds": 4.84,
+   "answer": "The Centrack web site hosting agreement requires that work i-on does in the development and maintenance of Web content and applications for Centrack International is governed by separate agreement(s).",
+   "citations": [
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 14,
+     "start": 12620,
+     "end": 13614
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 16,
+     "start": 14316,
+     "end": 15176
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1069
+    }
+   ]
+  },
+  {
+   "id": "centrack-non-compete",
+   "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+   "clause": "Non-Compete",
+   "question": "Does the Centrack web site hosting agreement restrict a party from competing?",
+   "gold": [],
+   "seconds": 0.48,
+   "answer": "No",
+   "citations": [
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 14,
+     "start": 12620,
+     "end": 13614
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1069
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 16,
+     "start": 14316,
+     "end": 15176
+    }
+   ]
+  },
+  {
+   "id": "gulf-governing-law",
+   "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+   "clause": "Governing Law",
+   "question": "Which law governs the Gulf South Medical Supply affiliate agreement?",
+   "gold": [
+    [
+     13227,
+     13307
+    ]
+   ],
+   "seconds": 8.97,
+   "answer": "The Gulf South Medical Supply affiliate agreement is governed by the laws of the State of Delaware.",
+   "citations": [
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1084
+    },
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 14,
+     "start": 12808,
+     "end": 14587
+    },
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 1,
+     "start": 939,
+     "end": 2064
+    }
+   ]
+  },
+  {
+   "id": "gulf-agreement-date",
+   "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+   "clause": "Agreement Date",
+   "question": "On what date was the Gulf South Medical Supply affiliate agreement signed?",
+   "gold": [
+    [
+     13360,
+     13434
+    ],
+    [
+     14559,
+     14605
+    ]
+   ],
+   "seconds": 4.84,
+   "answer": "14th day of December, 1997",
+   "citations": [
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1084
+    },
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 19,
+     "start": 21528,
+     "end": 23685
+    },
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 18,
+     "start": 19792,
+     "end": 21774
+    }
+   ]
+  },
+  {
+   "id": "gulf-expiration-date",
+   "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+   "clause": "Expiration Date",
+   "question": "When does the Gulf South Medical Supply affiliate agreement expire?",
+   "gold": [],
+   "seconds": 10.59,
+   "answer": "The Gulf South Medical Supply affiliate agreement expires on April 1, 1999.",
+   "citations": [
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1084
+    },
+    {
+     "contract": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SITE HOSTING AGREEMENT",
+     "chunk": 11,
+     "start": 10047,
+     "end": 11050
+    },
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 19,
+     "start": 21528,
+     "end": 23685
+    }
+   ]
+  },
+  {
+   "id": "gulf-insurance",
+   "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+   "clause": "Insurance",
+   "question": "What insurance must be maintained under the Gulf South Medical Supply affiliate agreement?",
+   "gold": [],
+   "seconds": 7.41,
+   "answer": "The Gulf South Medical Supply affiliate agreement requires that the undersigned maintain policies of insurance as may be requested by Franchisor, subject to applicable law, in relation to the Smaaash Centres.",
+   "citations": [
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 0,
+     "start": 0,
+     "end": 1084
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 27,
+     "start": 22998,
+     "end": 23997
+    },
+    {
+     "contract": "GULFSOUTHMEDICALSUPPLYINC_12_24_1997-EX-4-AFFILIATE AGREEMENT",
+     "chunk": 1,
+     "start": 939,
+     "end": 2064
+    }
+   ]
+  },
+  {
+   "id": "azul-governing-law",
+   "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+   "clause": "Governing Law",
+   "question": "Which law governs the Azul maintenance agreement?",
+   "gold": [
+    [
+     11185,
+     11879
+    ]
+   ],
+   "seconds": 12.24,
+   "answer": "Arbitration",
+   "citations": [
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 0,
+     "start": 0,
+     "end": 1088
+    },
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 18,
+     "start": 15673,
+     "end": 16714
+    },
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 4,
+     "start": 3589,
+     "end": 4623
+    }
+   ]
+  },
+  {
+   "id": "azul-expiration-date",
+   "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+   "clause": "Expiration Date",
+   "question": "When does the Azul maintenance agreement expire?",
+   "gold": [
+    [
+     4529,
+     4772
+    ]
+   ],
+   "seconds": 4.28,
+   "answer": "January 6th, 2016",
+   "citations": [
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 0,
+     "start": 0,
+     "end": 1088
+    },
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 19,
+     "start": 16558,
+     "end": 16870
+    },
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 4,
+     "start": 3589,
+     "end": 4623
+    }
+   ]
+  },
+  {
+   "id": "azul-agreement-date",
+   "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+   "clause": "Agreement Date",
+   "question": "On what date was the Azul maintenance agreement signed?",
+   "gold": [
+    [
+     801,
+     818
+    ]
+   ],
+   "seconds": 4.76,
+   "answer": "December 18th, 2015",
+   "citations": [
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 19,
+     "start": 16558,
+     "end": 16870
+    },
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 0,
+     "start": 0,
+     "end": 1088
+    },
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 4,
+     "start": 3589,
+     "end": 4623
+    }
+   ]
+  },
+  {
+   "id": "azul-insurance",
+   "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+   "clause": "Insurance",
+   "question": "What insurance must be maintained under the Azul maintenance agreement?",
+   "gold": [],
+   "seconds": 12.91,
+   "answer": "[1] (Azul maintenance agreement.txt) understandings, commitments and/or representations whatsoever oral or written. 6.2 In case of any inconsistency between the terms of the GMA and this Amendment regarding the subject-matter, the latter shall prevail. To the extent not inconsistent with this Amendment, all terms and conditions of the GMA shall remain valid and binding. 6.3 This Amendment shall not be varied or modified except by a written document duly signed by duly authorized representatives of both Parties. AZUL-ATR Amendment N° 1 Global Maintenance Agreement Page 8/9 Source: AZUL SA, F-1/A, 3/3/2017 Execution version IN WITNESS WHEREOF, the duly authorized representatives of the Parties hereto have agreed to execute this Amendment in two (2) original copies in the English language. On behalf of: /s/ Renato Covelo On behalf of: AZUL LINHAS AÉREAS BRASILEIRAS S/A (the Company) AVIONS DE TRANSPORT REGIONAL (the Repairer) Signed by: Renato Covelo Signed by: M. Castoriwa Function: Attorney In Fact Function: VP Commercial",
+   "citations": [
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 18,
+     "start": 15673,
+     "end": 16714
+    }
+   ]
+  },
+  {
+   "id": "azul-cap-on-liability",
+   "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+   "clause": "Cap On Liability",
+   "question": "Is liability capped in the Azul maintenance agreement, and at what amount?",
+   "gold": [],
+   "seconds": 14.15,
+   "answer": "[1] (Azul maintenance agreement.txt) understandings, commitments and/or representations whatsoever oral or written. 6.2 In case of any inconsistency between the terms of the GMA and this Amendment regarding the subject-matter, the latter shall prevail. To the extent not inconsistent with this Amendment, all terms and conditions of the GMA shall remain valid and binding. 6.3 This Amendment shall not be varied or modified except by a written document duly signed by duly authorized representatives of both Parties. AZUL-ATR Amendment N° 1 Global Maintenance Agreement Page 8/9 Source: AZUL SA, F-1/A, 3/3/2017 Execution version IN WITNESS WHEREOF, the duly authorized representatives of the Parties hereto have agreed to execute this Amendment in two (2) original copies in the English language. On behalf of: /s/ Renato Covelo On behalf of: AZUL LINHAS AÉREAS BRILEASIRAS S/A (the Company) AVIONS DE TRANSPORT REGIONAL (the Repairer) Signed by: Renato Covelo Signed by: M. Castoriwa Function: Attorney In Fact Function: VP Commercial",
+   "citations": [
+    {
+     "contract": "AzulSa_20170303_F-1A_EX-10.3_9943903_EX-10.3_Maintenance Agreement2",
+     "chunk": 18,
+     "start": 15673,
+     "end": 16714
+    }
+   ]
+  },
+  {
+   "id": "simplicity-governing-law",
+   "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+   "clause": "Governing Law",
+   "question": "Which law governs the Simplicity Esports franchise agreement?",
+   "gold": [
+    [
+     23947,
+     24230
+    ]
+   ],
+   "seconds": 12.18,
+   "answer": "The law governing the Simplicity Esports franchise agreement is the laws of the United States.",
+   "citations": [
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 32,
+     "start": 27259,
+     "end": 28265
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 8,
+     "start": 6809,
+     "end": 7815
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 14,
+     "start": 11927,
+     "end": 12928
+    }
+   ]
+  },
+  {
+   "id": "simplicity-expiration-date",
+   "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+   "clause": "Expiration Date",
+   "question": "When does the Simplicity Esports franchise agreement expire?",
+   "gold": [
+    [
+     6188,
+     6328
+    ]
+   ],
+   "seconds": 20.97,
+   "answer": "8.2 Termination by Franchisor with Notice. Franchisor may terminate this Agreement upon thirty (30) days written notice to Franchisee upon the occurrence of any of the following: (a) Franchisee fails to make any payment required under or in connection with this Agreement; (b) Franchisee ceases to operate or otherwise abandon the Smaaash Centres without the consent of Franchisor, or otherwise forfeit the right to do or transact business in the Territory; (c) Franchisee fails to use its best efforts to market and promote Smaaash Centres and the services and products offered by Smaaash Centres within the Territory and such failure is not cured within thirty (30) days of Franchisor's notification to Franchisee of such failure.",
+   "citations": [
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 20,
+     "start": 17030,
+     "end": 18028
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 8,
+     "start": 6809,
+     "end": 7815
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 32,
+     "start": 27259,
+     "end": 28265
+    }
+   ]
+  },
+  {
+   "id": "simplicity-agreement-date",
+   "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+   "clause": "Agreement Date",
+   "question": "On what date was the Simplicity Esports franchise agreement signed?",
+   "gold": [
+    [
+     118,
+     145
+    ]
+   ],
+   "seconds": 7.75,
+   "answer": "20t h day of November, 2018",
+   "citations": [
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 0,
+     "start": 0,
+     "end": 997
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 8,
+     "start": 6809,
+     "end": 7815
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 33,
+     "start": 28118,
+     "end": 28529
+    }
+   ]
+  },
+  {
+   "id": "simplicity-insurance",
+   "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+   "clause": "Insurance",
+   "question": "What insurance must be maintained under the Simplicity Esports franchise agreement?",
+   "gold": [
+    [
+     22998,
+     23160
+    ]
+   ],
+   "seconds": 6.81,
+   "answer": "During the Term, Franchisee shall maintain policies of insurance as may be requested by Franchisor, subject to applicable law, in relation to the Smaaash Centres.",
+   "citations": [
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 32,
+     "start": 27259,
+     "end": 28265
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 27,
+     "start": 22998,
+     "end": 23997
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 26,
+     "start": 22148,
+     "end": 23143
+    }
+   ]
+  },
+  {
+   "id": "simplicity-cap-on-liability",
+   "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+   "clause": "Cap On Liability",
+   "question": "Is liability capped in the Simplicity Esports franchise agreement, and at what amount?",
+   "gold": [],
+   "seconds": 8.23,
+   "answer": "10.12 Expenses. The Franchisee shall bear all the costs and expenses in relation to the execution of this Agreement and the consummation of all the transactions hereunder.",
+   "citations": [
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 32,
+     "start": 27259,
+     "end": 28265
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 5,
+     "start": 4251,
+     "end": 5257
+    },
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 8,
+     "start": 6809,
+     "end": 7815
+    }
+   ]
+  },
+  {
+   "id": "simplicity-termination-for-convenience",
+   "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+   "clause": "Termination For Convenience",
+   "question": "Can a party terminate the Simplicity Esports franchise agreement for convenience, and with how much notice?",
+   "gold": [],
+   "seconds": 10.6,
+   "answer": "[2] (Simplicity Esports franchise agreement.txt) of the foregoing, a party may terminate this Agreement for \"Cause\"if: (a) the other party to this Agreement is in breach of one or more of its material obligations; or (b) the other party to this Agreement becomes insolvent, generally cannot pay its obligations when due or otherwise suffers a substantial deterioration of its financial situation, or if insolvency/bankruptcy proceedings are initiated against such party or such party initiates any dissolution or liquidation of its business and/or assets.",
+   "citations": [
+    {
+     "contract": "SimplicityEsportsGamingCompany_20181130_8-K_EX-10.1_11444071_EX-10.1_Franchise Agreement",
+     "chunk": 22,
+     "start": 18738,
+     "end": 19737
+    }
+   ]
+  },
+  {
+   "id": "legacy-governing-law",
+   "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+   "clause": "Governing Law",
+   "question": "Which law governs the Legacy Education endorsement agreement?",
+   "gold": [
+    [
+     15869,
+     16026
+    ]
+   ],
+   "seconds": 8.21,
+   "answer": "English",
+   "citations": [
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 18,
+     "start": 15552,
+     "end": 16583
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 6,
+     "start": 5155,
+     "end": 6174
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 9,
+     "start": 7746,
+     "end": 8754
+    }
+   ]
+  },
+  {
+   "id": "legacy-expiration-date",
+   "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+   "clause": "Expiration Date",
+   "question": "When does the Legacy Education endorsement agreement expire?",
+   "gold": [
+    [
+     2747,
+     2885
+    ]
+   ],
+   "seconds": 7.22,
+   "answer": "24 months",
+   "citations": [
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 6,
+     "start": 5155,
+     "end": 6174
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 9,
+     "start": 7746,
+     "end": 8754
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 20,
+     "start": 17294,
+     "end": 18313
+    }
+   ]
+  },
+  {
+   "id": "legacy-agreement-date",
+   "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+   "clause": "Agreement Date",
+   "question": "On what date was the Legacy Education endorsement agreement signed?",
+   "gold": [
+    [
+     94,
+     125
+    ]
+   ],
+   "seconds": 6.53,
+   "answer": "8",
+   "citations": [
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 22,
+     "start": 19025,
+     "end": 19913
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 18,
+     "start": 15552,
+     "end": 16583
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 0,
+     "start": 0,
+     "end": 1006
+    }
+   ]
+  },
+  {
+   "id": "legacy-non-compete",
+   "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+   "clause": "Non-Compete",
+   "question": "Does the Legacy Education endorsement agreement restrict a party from competing?",
+   "gold": [
+    [
+     10164,
+     10473
+    ]
+   ],
+   "seconds": 3.99,
+   "answer": "yes",
+   "citations": [
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 22,
+     "start": 19025,
+     "end": 19913
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 20,
+     "start": 17294,
+     "end": 18313
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 9,
+     "start": 7746,
+     "end": 8754
+    }
+   ]
+  },
+  {
+   "id": "legacy-insurance",
+   "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+   "clause": "Insurance",
+   "question": "What insurance must be maintained under the Legacy Education endorsement agreement?",
+   "gold": [],
+   "seconds": 4.86,
+   "answer": "[1]",
+   "citations": [
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 20,
+     "start": 17294,
+     "end": 18313
+    }
+   ]
+  },
+  {
+   "id": "legacy-cap-on-liability",
+   "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+   "clause": "Cap On Liability",
+   "question": "Is liability capped in the Legacy Education endorsement agreement, and at what amount?",
+   "gold": [],
+   "seconds": 3.16,
+   "answer": "No",
+   "citations": [
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 6,
+     "start": 5155,
+     "end": 6174
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 20,
+     "start": 17294,
+     "end": 18313
+    },
+    {
+     "contract": "LegacyEducationAllianceInc_20141110_8-K_EX-10.9_8828866_EX-10.9_Endorsement Agreement",
+     "chunk": 9,
+     "start": 7746,
+     "end": 8754
+    }
+   ]
+  }
+ ]
+}

@@ -280,6 +280,11 @@ trong ngân sách 300 s: nó boot từ một **snapshot dẫn xuất** dựng m�
   `~/.docker/cli-plugins/docker-compose` của `fde` (máy không có plugin compose). Dựng từ bundle bằng
   `setup/fde/derived/08-field-troubleshooting-hospital.sh` (đầu vào của khoá: bundle, script, sha256 của binary compose
   trong `data/raw/fde-tools/docker-compose-v5.6.1/`); ~85 s, đĩa còn trống ~3,8 GB.
+- `09-production-trust-hospital` (module 09): `hospital` (3072 MB) chạy quillo 1.0.0 bằng compose, cài đúng theo mục "Cài
+  từ bundle" của README sản phẩm (bundle `~/quillo-1.0.0.tar` và `~/quillo-1.0.0/images/` vẫn còn trên máy, binary compose
+  như snapshot 08, `QUILLO_BIND=0.0.0.0`), 12 hợp đồng CUAD đã nạp vào `vat-tu/` qua inbox (362 chunk). Dựng bằng
+  `setup/fde/derived/09-production-trust-hospital.sh` (đầu vào của khoá: bundle, script, sha256 binary compose,
+  `CUAD_v1.json`, danh sách hợp đồng); ~265 s.
 
 ## PC GPU
 

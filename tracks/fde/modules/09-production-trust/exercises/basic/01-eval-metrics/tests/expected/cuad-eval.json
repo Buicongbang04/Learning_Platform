@@ -1,0 +1,46 @@
+{
+  "items": 33,
+  "answerable": 21,
+  "unanswerable": 12,
+  "citation_precision": 0.1795,
+  "clause_recall": 0.619,
+  "correct_refusal_rate": 0.1667,
+  "false_refusal_rate": 0.0476,
+  "per_clause": {
+    "Agreement Date": {
+      "items": 6,
+      "answerable": 6,
+      "found": 5
+    },
+    "Cap On Liability": {
+      "items": 5,
+      "answerable": 1,
+      "found": 0
+    },
+    "Expiration Date": {
+      "items": 6,
+      "answerable": 5,
+      "found": 3
+    },
+    "Governing Law": {
+      "items": 6,
+      "answerable": 6,
+      "found": 3
+    },
+    "Insurance": {
+      "items": 6,
+      "answerable": 1,
+      "found": 1
+    },
+    "Non-Compete": {
+      "items": 2,
+      "answerable": 1,
+      "found": 0
+    },
+    "Termination For Convenience": {
+      "items": 2,
+      "answerable": 1,
+      "found": 1
+    }
+  }
+}
