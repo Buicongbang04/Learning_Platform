@@ -42,8 +42,7 @@ MILESTONE_AFTER = {
     "m08": "13-observability",
     "m09": "16-sre-operations",
 }
-PHASE1_MODULES = MODULE_IDS[:6]
-PHASE1_MILESTONES = ["m01", "m02"]
+SPEC_EXERCISE_TARGET = 120
 
 LEVELS = ("basic", "intermediate", "advanced")
 EXERCISE_HEADINGS = ["Mục tiêu", "Đề bài", "Tiêu chí đạt", "Gợi ý"]
@@ -583,11 +582,27 @@ def test_milestone_docs_on_disk():
     assert_clean([e for p in docs if p.is_file() for e in check_milestone_doc(p)])
 
 
-def test_phase1_modules_present():
-    missing = [m for m in PHASE1_MODULES if not (MODULES_DIR / m).is_dir()]
+def test_all_modules_and_milestones_present():
+    missing = [m for m in MODULE_IDS if not (MODULES_DIR / m).is_dir()]
     docs = {m["id"]: TRACK / m["doc"] for m in load_track()["capstone"]["milestones"]}
-    missing += [docs[m].relative_to(ROOT).as_posix() for m in PHASE1_MILESTONES if not docs[m].is_file()]
-    assert not missing, f"Phase 1 còn thiếu: {missing}"
+    missing += [m for m in MILESTONE_AFTER if m not in docs or not docs[m].is_file()]
+    tests = TRACK / "capstone" / "project" / "tests"
+    missing += [f"capstone/project/tests/test_{m}.py" for m in MILESTONE_AFTER if not (tests / f"test_{m}.py").is_file()]
+    assert not missing, f"Track DevOps còn thiếu: {missing}"
+    assert len(MODULE_IDS) == 17 and len(MILESTONE_AFTER) == 9
+
+
+def exercise_total() -> int:
+    return sum(len(exercise_dirs(MODULES_DIR / m)) for m in MODULE_IDS)
+
+
+def test_exercise_total_matches_readmes():
+    total = exercise_total()
+    assert 17 * 5 <= total <= 17 * 9
+    assert abs(total - SPEC_EXERCISE_TARGET) <= 0.15 * SPEC_EXERCISE_TARGET, f"{total} bài, spec nhắm khoảng {SPEC_EXERCISE_TARGET}"
+    row = next(line for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines() if line.startswith("| [DevOps]"))
+    assert f"{total} bài" in row and "Đầy đủ" in row and "9 milestone" in row, f"README gốc phải ghi {total} bài: {row}"
+    assert f"{total} bài tập" in (TRACK / "README.md").read_text(encoding="utf-8"), f"README track phải ghi {total} bài tập"
 
 
 README_OK = (
