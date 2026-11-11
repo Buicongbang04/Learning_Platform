@@ -42,10 +42,12 @@ Bảng luồng **được mở** (mọi luồng khác phải bị chặn):
 | lawfirm-gateway | api | 8080 |
 
 Viết `starter/networkpolicy.yaml`: một hay nhiều object `NetworkPolicy` (ngăn bằng `---`), namespace `quillo` hoặc bỏ
-trống, tên khác `default-deny` và `reporting-egress`.
+trống, tên khác `default-deny`, `reporting-egress` và `fde-test-control-egress`.
 
-Test boot `lawfirm-prod`, tạo `reporting-egress` và bảy pod thử BusyBox (năm thành phần quillo, `lawfirm-gateway`,
-`reporting`), mỗi pod nghe cổng 8080 và 5432; áp tệp của bạn bằng `kubectl apply -n quillo -f`, rồi từ từng pod thử
+Test boot `lawfirm-prod` (cùng registry nội bộ `10.0.2.101:5000`), tạo `reporting-egress` và bảy pod thử BusyBox (năm
+thành phần quillo, `lawfirm-gateway`, `reporting`), mỗi pod nghe cổng 8080 và 5432, cùng một pod đối chứng của test có
+policy riêng `fde-test-control-egress` cho phép tới `10.0.2.101:5000` (để chắc đích ngoài namespace thật sự với tới
+được); áp tệp của bạn bằng `kubectl apply -n quillo -f`, rồi từ từng pod thử
 `nc -z -w 2 <IP pod đích> <cổng>` theo một danh sách luồng: mọi luồng trong bảng, và các luồng ngoài bảng như worker →
 llm, api → db cổng 8080, gateway → db, reporting → api/db/embed, db/llm/embed → nơi khác, api → gateway, pod quillo →
 `10.0.2.101:5000` (ngoài namespace). Đo trên máy của repo: ~50 s.
@@ -56,6 +58,7 @@ llm, api → db cổng 8080, gateway → db, reporting → api/db/embed, db/llm/
 
 - Tệp chỉ chứa NetworkPolicy hợp lệ, đúng namespace và tên như trên; `kubectl apply` chấp nhận.
 - Mọi luồng trong bảng kết nối được (thử lại vài vòng trong ~15 s để policy kịp áp).
+- Pod đối chứng tới được `10.0.2.101:5000` trước khi áp tệp của bạn (không thì test báo lỗi môi trường).
 - Mọi luồng ngoài bảng mà test thử đều không kết nối được ở **mọi** vòng.
 - Sau cùng, `default-deny` và `reporting-egress` giữ nguyên `spec`.
 

@@ -51,13 +51,13 @@ Thành công thì in ra stdout **đúng một object JSON** rồi thoát `0`:
 Không hỏi được API server (sai địa chỉ, token hết hạn, mạng đứt…) thì **không** được in báo cáo: stdout rỗng, thoát mã
 khác `0`, lý do ghi ra stderr. Một báo cáo toàn `false` vì không kết nối được là báo cáo sai.
 
-Test boot `lawfirm-prod` (cho test có sudo để đóng vai IT), chép script vào `/home/fde/can-i/` và chạy bốn lần, mỗi lần
+Test boot `lawfirm-prod`, giữ riêng kubeconfig admin của IT phía host rồi bỏ mọi sudo của `fde`, chép script vào `/home/fde/can-i/` và chạy bốn lần, mỗi lần
 một tệp kiểm tra khác (chọn ngẫu nhiên, đảo thứ tự các dòng của `checks.txt`):
 
 1. Kubeconfig của `fde` như IT giao.
 2. Bản sao kubeconfig có context trỏ namespace `default` (qua `KUBECONFIG`).
 3. Bản sao kubeconfig trỏ một cổng API server không tồn tại.
-4. Sau khi IT (test, bằng sudo) sửa Role của `fde` và thêm một ClusterRoleBinding.
+4. Sau khi IT (test, bằng kubeconfig admin) sửa Role của `fde` và thêm một ClusterRoleBinding.
 
 Đo trên máy của repo: cả bài ~30 s.
 

@@ -1,8 +1,10 @@
 import json
 import random
+import secrets
 import shlex
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -107,12 +109,33 @@ def check_report(m, env: str, rows, user: str, namespace: str, attempt: str) -> 
         f"{attempt}: can_install phải là {expected['can_install']}, nhận {report.get('can_install')!r}")
 
 
-def test_can_i_on_lawfirm_prod():
+def drop_sudo(m, admin: Path) -> None:
+    raw = sh(m, "sudo -n cat /etc/rancher/k3s/k3s.yaml")
+    assert raw.returncode == 0 and "client-key-data" in raw.stdout, f"Test không đọc được kubeconfig admin: {raw.stderr}"
+    admin.write_text(raw.stdout)
+    admin.chmod(0o600)
+    done = sh(m, "sudo -n rm -f /etc/sudoers.d/90-cloud-init-users")
+    assert done.returncode == 0, f"Test không bỏ được sudo của fde: {done.stderr}"
+    assert sh(m, "sudo -n true").returncode != 0, "fde vẫn còn sudo"
+
+
+def as_it(m, admin: Path, cmd: str) -> subprocess.CompletedProcess:
+    remote = f"/tmp/it-admin-{secrets.token_hex(6)}.yaml"
+    m.put(admin, remote)
+    try:
+        return sh(m, f"chmod 600 {remote} && {cmd.replace('KUBECTL', f'kubectl --kubeconfig {remote}')}")
+    finally:
+        sh(m, f"rm -f {remote}")
+
+
+def test_can_i_on_lawfirm_prod(tmp_path):
     rng = random.Random()
     rows = read_checks()
     user = "system:serviceaccount:quillo:fde"
     with fdekit.vm("lawfirm-prod", sudo=True) as m:
         wait_api(m)
+        admin = tmp_path / "admin.yaml"
+        drop_sudo(m, admin)
         assert sh(m, f"mkdir -p {WORK}").returncode == 0
         m.put(ex.path("can_i.sh"), f"{WORK}/can_i.sh")
 
@@ -137,11 +160,11 @@ def test_can_i_on_lawfirm_prod():
         assert run.stdout.strip() == "", (
             f"lần 3 (API server không với tới được): stdout phải rỗng, không được in báo cáo:\n{run.stdout[:800]}")
 
-        role = json.loads(sh(m, "sudo -n k3s kubectl -n quillo get role fde-deployer -o json").stdout)
+        role = json.loads(as_it(m, admin, "KUBECTL -n quillo get role fde-deployer -o json").stdout)
         role["rules"][0]["resources"] = SECRETS_GONE
         role.pop("status", None)
-        done = sh(m, f"printf %s {shlex.quote(json.dumps(role))} | sudo -n k3s kubectl apply -f - && "
-                     f"printf %s {shlex.quote(NODE_READER)} | sudo -n k3s kubectl apply -f -")
+        done = as_it(m, admin, f"printf %s {shlex.quote(json.dumps(role))} | KUBECTL apply -f - && "
+                               f"printf %s {shlex.quote(NODE_READER)} | KUBECTL apply -f -")
         assert done.returncode == 0, f"Test không đổi được RBAC: {done.stderr}"
         text, picked = checks_file(rows, rng)
         if not any(args == "create secrets" for _, args in picked):

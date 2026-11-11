@@ -19,9 +19,9 @@ quyền, ghi rõ "RBAC cho phép" khác "cluster chấp nhận".
 
 Helm chỉ báo API server đã nhận các object (Deployment, StatefulSet…). Pod do controller tạo sau đó và bị admission từ
 chối lúc đó, nên lỗi nằm ở event của ReplicaSet/StatefulSet: `kubectl get events --sort-by=.lastTimestamp`,
-`kubectl describe rs`. Thủ phạm thường gặp: PodSecurity, ResourceQuota ("must specify"), LimitRange ("No limit is
-specified"), webhook policy. Về sau dùng `helm upgrade --install --wait --timeout` để Helm thất bại có lý do thay vì
-"deployed" giả.
+`kubectl describe rs`. Message của event nêu admission plugin hay policy nào từ chối và vì sao; đối chiếu với chính
+sách của namespace rồi mới sửa values. Về sau dùng `helm upgrade --install --wait --timeout` để Helm thất bại có lý do
+thay vì "deployed" giả.
 
 ## Vì sao `kubectl apply --dry-run=server` một Deployment vi phạm PSA lại thành công?
 
@@ -75,8 +75,8 @@ có thực thi NetworkPolicy không. Thử bằng pod mang đúng nhãn và `nc 
 
 Mang binary, tarball image air-gap và `install.sh` của đúng một bản, ghim và kiểm sha256 ở cả hai đầu. Đặt image vào thư
 mục image của agent và viết `registries.yaml` cho registry nội bộ **trước** khi khởi động; cài bằng
-`INSTALL_K3S_SKIP_DOWNLOAD=true`. Đọc phần điều kiện của tài liệu air-gap (mạng của node, cổng) và kiểm sau khi cài:
-node `Ready`, pod hệ thống chạy, `INTERNAL-IP` đúng mạng, một ứng dụng thử kéo từ registry nội bộ và gọi được qua
+`INSTALL_K3S_SKIP_DOWNLOAD=true`. Kiểm sau khi cài theo cách khách sẽ dùng:
+node `Ready`, pod hệ thống chạy, một ứng dụng thử kéo từ registry nội bộ và gọi được qua
 Service. Giao lại: script cài chạy lại được, phiên bản, cách backup dữ liệu cluster, cách nâng cấp (cùng quy trình với
 bản mới), và nói rõ một node là không HA.
 

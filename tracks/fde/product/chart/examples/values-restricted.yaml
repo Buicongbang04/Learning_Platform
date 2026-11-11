@@ -1,12 +1,4 @@
-# Values mẫu cho cluster của khách kiểu lawfirm-prod: namespace PSA "restricted", ResourceQuota (requests.cpu 3,
-# requests.memory 4Gi, limits.memory 5Gi), LimitRange (mỗi pod tối đa cpu 2, memory 3Gi; PVC tối đa 10Gi),
-# image kéo từ registry nội bộ. Dùng: helm upgrade --install quillo quillo-<version>.tgz -n quillo -f <tệp này>.
-#
-# PSA restricted đòi mọi container (kể cả initContainer): runAsNonRoot, không leo quyền, bỏ mọi capability,
-# seccompProfile RuntimeDefault. Image pgvector và llama.cpp mặc định chạy root nên phải đặt runAsUser.
-# Tổng 5 pod: requests cpu 1 / memory 2Gi, limits memory 3,375Gi. requests.cpu giữ thấp vì node chỉ có 2 vCPU và
-# pod hệ thống của k3s đã giữ một phần: tổng requests vượt phần còn lại thì pod Pending "Insufficient cpu" dù quota
-# còn chỗ. llm, embed, worker dùng strategy Recreate; api rolling update cần thêm một pod api (512Mi) lúc chuyển.
+# Values dùng cho tracks/fde/product/tests/test_chart.py.
 
 image:
   registry: 10.0.2.101:5000

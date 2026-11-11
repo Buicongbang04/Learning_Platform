@@ -258,9 +258,6 @@ flowchart TD
 - **`install.sh`** với `INSTALL_K3S_SKIP_DOWNLOAD=true` chỉ tạo unit systemd, symlink `kubectl`/`crictl` và start;
   `INSTALL_K3S_VERSION` để ghi đúng bản. Chạy lại là restart với cấu hình hiện tại: script cài của bạn nên viết cấu hình
   trước, chạy lại được, và không xoá `/var/lib/rancher/k3s/server` (dữ liệu cluster).
-- **Mạng của node**: k3s tự dò IP node, interface cho flannel và đường cho ClusterIP từ bảng định tuyến của máy. Máy
-  air-gapped thường được cấu hình mạng khác máy lab nơi bạn thử quickstart; đọc kỹ phần điều kiện về mạng trong tài liệu
-  air-gap trước khi cài, và kiểm `INTERNAL-IP` của node sau khi cài.
 - k3s một node không phải HA: ghi rõ cho khách (backup etcd/SQLite bằng `k3s etcd-snapshot` hay sao lưu
   `/var/lib/rancher/k3s/server/db`, kế hoạch nâng cấp bằng cùng quy trình air-gap với bản mới).
 

@@ -1,5 +1,5 @@
 # quillo 1.0.0 trên namespace quillo của lawfirm-prod: PSA restricted, ResourceQuota + LimitRange, default-deny,
-# image từ registry nội bộ.
+# image từ registry nội bộ. Tổng requests.cpu 600m (+100m cho pod api lúc rolling update) trên node 2 vCPU dùng chung.
 
 image:
   registry: 10.0.2.101:5000
@@ -36,10 +36,10 @@ resources:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: "1", memory: 512Mi}
   llm:
-    requests: {cpu: 500m, memory: 1Gi}
+    requests: {cpu: 250m, memory: 1Gi}
     limits: {cpu: "2", memory: 1536Mi}
   embed:
-    requests: {cpu: 250m, memory: 384Mi}
+    requests: {cpu: 100m, memory: 384Mi}
     limits: {cpu: "1", memory: 512Mi}
   models:
     requests: {cpu: 50m, memory: 64Mi}

@@ -59,7 +59,7 @@ có khoá advisory, ghi vào bảng `schema_migrations`; chạy lại không là
 | `migrations/` | `0001_init.sql`, `0002_v1_1_tags.sql` |
 | `Dockerfile`, `requirements.lock` | Image `quillo-api` (Python 3.12 slim ghim digest, pip `--require-hashes`, user 10001) |
 | `compose.yaml`, `.env.example` | Triển khai một node; `compose.sso.yaml`, `compose.extensions.yaml` là tệp ghép thêm khi bật SSO/extension |
-| `chart/quillo/` | Helm chart (chart version = bản phát hành); `chart/examples/values-restricted.yaml` là values mẫu cho cluster PSA restricted + quota (không nằm trong bundle) |
+| `chart/quillo/` | Helm chart (chart version = bản phát hành); `chart/examples/` chứa values dùng cho test của chart (không nằm trong bundle) |
 | `ops/backup.sh`, `ops/restore.sh` | Sao lưu/khôi phục database (compose, Podman hay `kubectl exec`) |
 | `ops/models_image.py` | Dựng image `quillo-models` (cho initContainer của chart) từ chính bundle, không cần Docker |
 | `REQUIREMENTS.yaml` | Yêu cầu tối thiểu của máy khách (chuẩn để bài survey/preflight so sánh) |
@@ -84,8 +84,8 @@ uv run pytest tracks/fde/product -q
   `test_keycloak_end_to_end` thì dùng Keycloak thật: `fdekit.customer_site("lab-open", extra_services=("keycloak",))`,
   cài bundle trong VM với `compose.sso.yaml`, rồi thêm mapper `groups` cho client `quillo` qua admin REST API (realm
   mẫu cố ý không có mapper này). Thiếu golden/KVM/image Keycloak thì skip kèm lệnh.
-- `test_chart.py` chạy `helm lint`/`helm template` trong container `alpine/helm:3.22.1` (ghim digest, cùng bản helm với
-  golden `lawfirm-prod`) và kiểm values mẫu restricted theo luật PSA restricted, quota và LimitRange của `lawfirm-prod`.
+- `test_chart.py` chạy `helm lint`/`helm template` trong container `alpine/helm:3.22.1` (ghim digest) với values mặc
+  định và values trong `chart/examples/`.
 - `test_backup.py` chạy `ops/*.sh` với `--exec "docker exec -i <container pgvector của test>"`.
 
 ## Dựng bundle offline
@@ -329,10 +329,7 @@ chart/quillo-1.0.0.tgz -n quillo -f values-<khách>.yaml`.
 | `models.*` | GGUF của bundle | initContainer chép GGUF từ `quillo-models:<version>` (dựng bằng `ops/models_image.py`) vào emptyDir của pod llm/embed |
 | `auth.existingSecret` | `""` | Secret có `admin-token`, `db-password`; rỗng thì chart tạo `<release>-auth` một lần (giữ qua upgrade, không xoá khi uninstall) |
 
-Như phần lớn chart của vendor, mặc định **không** đặt securityContext, resources hay NetworkPolicy: chạy được trên
-cluster dễ dãi, nhưng namespace có PSA `restricted`, ResourceQuota hay NetworkPolicy default-deny sẽ từ chối hoặc chặn
-pod. `chart/examples/values-restricted.yaml` (đi kèm mã nguồn, không nằm trong bundle) là values mẫu qua được PSA
-restricted và quota kiểu `lawfirm-prod`.
+Mỗi khách một tệp values riêng, điền các khoá trên theo cluster đích; `helm show values` in đủ values mặc định.
 
 ## Backup và restore
 

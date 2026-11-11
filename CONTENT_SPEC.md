@@ -672,7 +672,7 @@ Mỗi hồ sơ là `setup/fde/profiles/<hồ sơ>.yaml`, nạp vào `fdekit.PROF
 
 Trường tuỳ chọn của YAML (Phase 2, bỏ trống thì giữ hành vi Phase 1): `memory_mb` (RAM boot mặc định, cũng là
 `facts.mem_mb`), `tmp_noexec`, `nofile`, `netem`, `k8s` (`namespace`, `kubeconfig`; bắt buộc khi và chỉ khi runtime
-`k3s`). `lawfirm-prod` có route mặc định tĩnh qua `10.0.2.2` chỉ để k3s chạy; egress vẫn bị QEMU chặn. Quyền `fde`,
+`k3s`). Mạng của `lawfirm-prod` do IT cấu hình cho k3s; egress vẫn bị QEMU chặn. Quyền `fde`,
 quota và chính sách của `lawfirm-prod` ghi ở `setup/fde/README.md`.
 
 Egress `none`/`proxy` ⇒ VM không route ra internet, không DNS, không tới loopback host qua `10.0.2.2`; chỉ còn SSH, các
@@ -744,9 +744,8 @@ Phase 2 thêm các khả năng sau, **không đổi schema** (có ở cả `1.0.
 - **Extension:** `QUILLO_EXTENSIONS` + `QUILLO_EXTENSIONS_PATH`, hàm `register(app, ctx)` với `ExtensionContext`
   (`settings`, `ask`, `db_query`, `templates`, `require_user`); là mã tin cậy, `db_query` chỉ đọc không phải ranh giới
   bảo mật và không áp ACL.
-- **Helm chart** `chart/quillo-<version>.tgz` trong bundle: mặc định **không** có securityContext, resources hay
-  NetworkPolicy (như chart vendor, để PSA/quota/default-deny của khách là chỗ hỏng thật); values mẫu
-  `chart/examples/values-restricted.yaml` nằm ngoài bundle.
+- **Helm chart** `chart/quillo-<version>.tgz` trong bundle, values mặc định tối thiểu (bảng values ở README sản phẩm);
+  values dùng cho test của chart ở `chart/examples/`, ngoài bundle.
 - **Ops:** `ops/backup.sh`, `ops/restore.sh` (Compose, Podman, `--kubectl`) và `ops/models_image.py` (dựng image
   `quillo-models` từ bundle lúc cài, không cần Docker). Chi tiết ở `tracks/fde/product/README.md`.
 

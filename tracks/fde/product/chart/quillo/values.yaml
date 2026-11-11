@@ -1,6 +1,4 @@
-# Giá trị mặc định chạy được trên cluster dễ dãi (không PSA, không quota). Cluster có PSA "restricted", ResourceQuota
-# hay NetworkPolicy default-deny cần đặt podSecurityContext, containerSecurityContext, resources, networkPolicy:
-# xem chart/examples/values-restricted.yaml đi kèm mã nguồn quillo.
+# Giá trị mặc định tối thiểu. Ý nghĩa từng khoá: mục "Helm chart" trong README của quillo.
 
 image:
   # Registry nội bộ, vd. 10.0.2.101:5000. Rỗng: dùng tên gốc (quillo-api:<version>, ghcr.io/ggml-org/llama.cpp...).

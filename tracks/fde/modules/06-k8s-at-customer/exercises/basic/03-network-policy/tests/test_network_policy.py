@@ -12,7 +12,6 @@ from testkit import Exercise
 
 ex = Exercise(__file__)
 WORK = "/home/fde/netpol"
-K8S_WAIT = 180
 READY_WAIT = 90
 ROUNDS = 4
 REGISTRY = ("10.0.2.101", 5000)
@@ -26,7 +25,7 @@ DENIED = [("worker", "llm", 8080), ("worker", "api", 8080), ("api", "db", 8080),
           ("db", "registry", 5000), ("worker", "registry", 5000)]
 
 
-IT_POLICIES = ("default-deny", "reporting-egress")
+IT_POLICIES = ("default-deny", "reporting-egress", "fde-test-control-egress")
 REPORTING_EGRESS = {
     "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
     "metadata": {"name": "reporting-egress"},
@@ -34,12 +33,21 @@ REPORTING_EGRESS = {
              "egress": [{"to": [{"podSelector": {}}]}]},
 }
 
+CONTROL_EGRESS = {
+    "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+    "metadata": {"name": "fde-test-control-egress"},
+    "spec": {"podSelector": {"matchLabels": {"app.kubernetes.io/name": "fde-test-control"}}, "policyTypes": ["Egress"],
+             "egress": [{"to": [{"ipBlock": {"cidr": f"{REGISTRY[0]}/32"}}], "ports": [{"port": REGISTRY[1]}]}]},
+}
+CONTROL_WAIT = 30
+
 
 def labels(role: str) -> dict:
     if role in QUILLO:
         return {"app.kubernetes.io/name": "quillo", "app.kubernetes.io/instance": "quillo",
                 "app.kubernetes.io/component": role}
-    return {"app.kubernetes.io/name": {"gateway": "lawfirm-gateway", "other": "reporting"}[role]}
+    names = {"gateway": "lawfirm-gateway", "other": "reporting", "control": "fde-test-control"}
+    return {"app.kubernetes.io/name": names[role]}
 
 
 def probe_pod(role: str) -> dict:
@@ -68,15 +76,6 @@ def sh(m, cmd: str, timeout: float = 60) -> subprocess.CompletedProcess:
         pytest.fail(f"Lệnh trong VM chạy quá {timeout:.0f} s: {cmd[:150]}")
 
 
-def wait_api(m) -> None:
-    deadline = time.monotonic() + K8S_WAIT
-    while time.monotonic() < deadline:
-        if sh(m, "kubectl --request-timeout=5s get --raw=/readyz", timeout=30).stdout.strip() == "ok":
-            return
-        time.sleep(2)
-    pytest.fail(f"API server k3s chưa sẵn sàng sau {K8S_WAIT} s")
-
-
 def check_file(path: Path) -> None:
     try:
         docs = [d for d in yaml.safe_load_all(path.read_text()) if d]
@@ -98,19 +97,40 @@ def addresses(m) -> dict:
     return found
 
 
-def matrix(m, ips: dict) -> dict:
-    results = {}
-    sources = sorted({src for src, _, _ in ALLOWED + DENIED})
-    for src in sources:
-        flows = [(dst, port) for s, dst, port in ALLOWED + DENIED if s == src]
-        script = " ".join(f"(nc -z -w 2 {ips[dst]} {port} && echo {dst}:{port}=ok || echo {dst}:{port}=no) &"
-                          for dst, port in flows) + " wait"
-        out = sh(m, f"kubectl exec np-{src} -- sh -c {shlex.quote(script)}", timeout=120).stdout
-        for line in out.split():
+def probe(m, src: str, flows: list[tuple[str, int]], ips: dict) -> dict:
+    script = " ".join(f"(nc -z -w 2 {ips[dst]} {port} && echo {dst}:{port}=ok || echo {dst}:{port}=no) &"
+                      for dst, port in flows) + " wait"
+    run = None
+    for _ in range(3):
+        run = sh(m, f"kubectl exec np-{src} -- sh -c {shlex.quote(script)}", timeout=120)
+        results = {}
+        for line in run.stdout.split():
             key, _, value = line.partition("=")
             dst, _, port = key.partition(":")
-            results[(src, dst, int(port))] = value == "ok"
+            if value in ("ok", "no") and port.isdigit():
+                results[(src, dst, int(port))] = value == "ok"
+        if run.returncode == 0 and len(results) == len(flows):
+            return results
+        time.sleep(2)
+    pytest.fail(f"Test không chạy được nc trong pod np-{src} (kubectl exec mã {run.returncode}): {run.stderr[-500:]}")
+
+
+def matrix(m, ips: dict) -> dict:
+    results = {}
+    for src in sorted({src for src, _, _ in ALLOWED + DENIED}):
+        results.update(probe(m, src, [(dst, port) for s, dst, port in ALLOWED + DENIED if s == src], ips))
     return results
+
+
+def check_control(m, ips: dict) -> None:
+    deadline = time.monotonic() + CONTROL_WAIT
+    while True:
+        if probe(m, "control", [("registry", REGISTRY[1])], ips)[("control", "registry", REGISTRY[1])]:
+            return
+        if time.monotonic() > deadline:
+            pytest.fail("Lỗi môi trường test: pod đối chứng có egress tường minh vẫn không tới được "
+                        f"{REGISTRY[0]}:{REGISTRY[1]}, nên không kiểm được các luồng ra ngoài namespace")
+        time.sleep(3)
 
 
 def name(flow: tuple) -> str:
@@ -120,13 +140,13 @@ def name(flow: tuple) -> str:
 def test_network_policy_matches_flow_table(tmp_path):
     policy = ex.path("networkpolicy.yaml")
     check_file(policy)
-    with fdekit.vm("lawfirm-prod") as m:
-        wait_api(m)
+    with fdekit.customer_site("lawfirm-prod") as site:
+        m = site.vm
         before = sh(m, "kubectl get networkpolicy default-deny -o jsonpath='{.spec}'").stdout
         assert before, "Không đọc được NetworkPolicy default-deny của khách"
         assert sh(m, f"mkdir -p {WORK}").returncode == 0
-        (tmp_path / "probes.yaml").write_text(yaml.safe_dump_all([REPORTING_EGRESS, *(probe_pod(r) for r in
-                                                                  (*QUILLO, "gateway", "other"))]))
+        (tmp_path / "probes.yaml").write_text(yaml.safe_dump_all([REPORTING_EGRESS, CONTROL_EGRESS, *(
+            probe_pod(r) for r in (*QUILLO, "gateway", "other", "control"))]))
         m.put(tmp_path / "probes.yaml", f"{WORK}/probes.yaml")
         m.put(policy, f"{WORK}/networkpolicy.yaml")
         done = sh(m, f"kubectl apply -f {WORK}/probes.yaml")
@@ -134,9 +154,10 @@ def test_network_policy_matches_flow_table(tmp_path):
         ready = sh(m, f"kubectl wait --for=condition=Ready pod -l 'app.kubernetes.io/name' --timeout={READY_WAIT}s",
                    timeout=READY_WAIT + 30)
         assert ready.returncode == 0, f"Pod thử chưa Ready: {ready.stderr}"
+        ips = addresses(m)
+        check_control(m, ips)
         done = sh(m, f"kubectl apply -n quillo -f {WORK}/networkpolicy.yaml")
         assert done.returncode == 0, f"kubectl apply networkpolicy.yaml bị từ chối:\n{done.stderr[-2000:]}"
-        ips = addresses(m)
         assert all(ips.get(r) for r in (*QUILLO, "gateway", "other")), f"Thiếu IP pod thử: {ips}"
 
         opened: set = set()
@@ -144,7 +165,7 @@ def test_network_policy_matches_flow_table(tmp_path):
         for attempt in range(ROUNDS):
             results = matrix(m, ips)
             opened |= {f for f in ALLOWED if results.get(f)}
-            leaked |= {f for f in DENIED if results.get(f) is not False}
+            leaked |= {f for f in DENIED if results[f]}
             if attempt >= 1 and opened == set(ALLOWED):
                 break
             time.sleep(3)

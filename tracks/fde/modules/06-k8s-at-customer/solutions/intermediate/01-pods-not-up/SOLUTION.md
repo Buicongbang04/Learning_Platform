@@ -57,5 +57,7 @@ ngay; với `lawfirm-staging` thì đó lại là chỗ hỏng (bài intermediat
 
 - Tự viết NetworkPolicy (như bài basic 03) thay vì bật của chart: đạt nếu đủ luồng; `networkPolicy.apiFrom` có thể giới
   hạn nguồn gọi api. Allow-all trong namespace thì trượt tiêu chí "pod khác không nói chuyện với db/llm".
+- `requests.cpu` của lời giải: 600m cho 5 pod (llm 250m, embed 100m) cộng 100m cho pod api lúc rolling update, cùng mức
+  với bài basic 02; `limits.cpu` giữ cao (llm 2) để model dùng hết CPU khi rảnh.
 - Resources khác bảng trong `values.yaml` miễn vừa quota, LimitRange và node 2 vCPU: tổng `requests.cpu` của cả namespace
   vượt phần CPU còn lại của node thì pod `Pending` với `Insufficient cpu` dù quota còn chỗ.

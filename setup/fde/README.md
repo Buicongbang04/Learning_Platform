@@ -135,8 +135,7 @@ Ba hồ sơ Phase 2, đo ngày 2026-11-10 (cùng laptop; `factory` và `lawfirm-
 k3s trên `lawfirm-prod` (VM 5120 MB, đã tắt traefik và servicelb, còn CoreDNS, local-path-provisioner,
 metrics-server): API server trả `/readyz` khoảng 10–35 s sau khi SSH lên; lúc nghỉ dùng ~670 MB RAM trong VM (`free`;
 `kubectl top node` 759 Mi; RSS `k3s-server` ~580 MiB, `containerd` ~160 MiB), còn ~4 GB cho ứng dụng.
-k3s cần route mặc định kể cả khi air-gapped, mà mạng `restrict=on` của QEMU không phát gateway qua DHCP, nên golden
-có `/etc/netplan/60-fde-default-route.yaml` (default via `10.0.2.2`, metric 1024); egress vẫn bị QEMU chặn.
+Mạng của golden `lawfirm-prod` đã được IT cấu hình cho k3s; egress vẫn bị QEMU chặn.
 
 Kernel/glibc của golden: Ubuntu 22.04 `5.15.0-198-generic`/2.35, Ubuntu 20.04 `5.4.0-216-generic`/2.31,
 Rocky 8.10 `4.18.0-553.el8_10`/2.28, Debian 12 `6.1.0-54-cloud-amd64`/2.36. Gói cài theo trạng thái kho lúc dựng, nên dựng lại về sau có thể ra bản vá mới
@@ -223,17 +222,14 @@ không bật thêm được). Hồ sơ cũng có thể khai báo chúng trong `s
   `https://127.0.0.1:6443`, API server chỉ với tới từ trong VM). Quyền: Role `fde-deployer` (pods, services, configmaps,
   secrets, PVC, serviceaccounts, deployments, statefulsets, jobs, networkpolicies, ingresses, PDB, HPA trong `quillo`)
   và RoleBinding tới ClusterRole `view` trong `quillo`; không có quyền cluster nào (`auth can-i get nodes` = no).
-  ResourceQuota, LimitRange, nhãn namespace chỉ đọc. Route mặc định qua `10.0.2.2` chỉ để k3s chạy: VM vẫn không tới
+  ResourceQuota, LimitRange, nhãn namespace chỉ đọc. VM không tới
   được internet hay dịch vụ `127.0.0.1` của host (`test_lawfirm_prod_rbac` kiểm cả hai).
-  Namespace `quillo` gắn nhãn PSA `enforce=restricted` (cả `warn`, `audit`), `ResourceQuota` (`requests.cpu: 3`,
-  `requests.memory: 4Gi`, `limits.memory: 5Gi`, `pods: 12`, nên pod thiếu requests/limits bị từ chối), `LimitRange`
-  chỉ đặt `max` cho Pod (cpu 2, memory 3Gi) và PVC (10Gi) — kiểu `Pod` không sinh default nên container vẫn phải tự
-  khai báo resources; NetworkPolicy `default-deny` chặn mọi ingress/egress trừ DNS tới CoreDNS. `fde` được tạo, sửa,
-  xoá NetworkPolicy **của mình** (tên bất kỳ khác `default-deny`) để mở đúng luồng cần; riêng `default-deny` do IT
-  giữ: ValidatingAdmissionPolicy `quillo-protect-default-deny` từ chối UPDATE/DELETE policy tên `default-deny` khi
-  người gọi là ServiceAccount `quillo/fde` (RBAC không chặn theo tên được, nên `kubectl auth can-i delete
-  networkpolicy` vẫn trả `yes`, nhưng lệnh thật bị admission từ chối; không có `deletecollection`). `registries.yaml`
-  mirror `docker.io` và `10.0.2.101:5000` về registry nội bộ HTTP. `helm`, `kubectl` có trong `PATH`.
+  Namespace `quillo` gắn nhãn PSA `enforce=restricted` (cả `warn`, `audit`), có `ResourceQuota` `quillo-quota`,
+  `LimitRange` `quillo-limits` và NetworkPolicy `default-deny` của IT (đọc chi tiết bằng `kubectl describe`). `fde`
+  được tạo, sửa, xoá NetworkPolicy **của mình** (tên bất kỳ khác `default-deny`); `default-deny` do IT giữ bằng
+  ValidatingAdmissionPolicy `quillo-protect-default-deny` (từ chối UPDATE/DELETE policy tên đó khi người gọi là
+  `quillo/fde`; không có `deletecollection`). `registries.yaml` mirror `docker.io` và `10.0.2.101:5000` về registry
+  nội bộ HTTP. `helm`, `kubectl` có trong `PATH`.
 
 ## Một VM của bài tập trông thế nào
 
