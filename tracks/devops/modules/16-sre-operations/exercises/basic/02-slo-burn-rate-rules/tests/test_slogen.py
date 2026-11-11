@@ -102,8 +102,8 @@ def test_recording_rules_cover_every_window(slogen):
         assert rule["expr"].count(f"[{window}]") >= 2, "Cả tử số và mẫu số phải dùng cùng cửa sổ"
 
 
-def test_alert_rules_long_and_short_window(slogen):
-    for slo in spec_of(slogen)["slos"]:
+def check_alerts(slogen, slos) -> None:
+    for slo in slos:
         rules = slogen.alert_rules(slo)
         assert len(rules) == 4 and {r["alert"] for r in rules} == {"ErrorBudgetBurn"}
         seen = set()
@@ -125,6 +125,25 @@ def test_alert_rules_long_and_short_window(slogen):
             assert rule["annotations"].get("summary")
             assert "for" not in rule, "Cửa sổ ngắn đã làm nhiệm vụ chờ; không cần for"
         assert seen == set(ALERTS)
+
+
+def test_alert_rules_long_and_short_window(slogen):
+    check_alerts(slogen, spec_of(slogen)["slos"])
+
+
+def test_generator_follows_any_spec(slogen, tmp_path):
+    path = tmp_path / "checkout.yaml"
+    path.write_text(SPEC, encoding="utf-8")
+    slo = slogen.load_spec(path)["slos"][0]
+    assert slogen.budget(slo) == pytest.approx(0.001)
+    rules = slogen.recording_rules(slo)
+    assert [r["record"] for r in rules] == [f"slo:sli_error:ratio_rate{w}" for w in WINDOWS]
+    for rule, window in zip(rules, WINDOWS):
+        assert rule["labels"] == {"slo": "checkout"}
+        assert f'x_total{{code="5xx"}}[{window}]' in rule["expr"] and f"x_total[{window}]" in rule["expr"]
+    check_alerts(slogen, [slo])
+    groups = slogen.generate({"service": "olist-api", "slos": [slo]})["groups"]
+    assert [g["name"] for g in groups] == ["slo-checkout"]
 
 
 def test_generate_groups(slogen):

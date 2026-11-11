@@ -46,6 +46,11 @@ def test_release_2_4_1_is_rejected():
     assert result.returncode == 99, "Bản 2.4.1 vi phạm SLO ở traffic dự báo mà kịch bản vẫn cho qua"
 
 
+def test_original_script_still_rejects_2_4_1():
+    result, _ = run(FIXTURES / "incident" / "load.js", "2.4.1")
+    assert result.returncode == 99, "Câu chuyện của đề: cổng gốc đã chặn bản 2.4.1"
+
+
 def test_original_script_reproduces_launch_day():
     result, summary = run(FIXTURES / "incident" / "load.js", "2.4.0")
     assert result.returncode == 0 and requests(summary) > 0, "Kịch bản gốc phải tái hiện được tình huống ngày ra mắt"

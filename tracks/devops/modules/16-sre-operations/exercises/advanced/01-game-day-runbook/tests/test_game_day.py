@@ -298,6 +298,8 @@ def test_game_day(seed, tmp_path):
                     hit = next((e for e in entries if matched(stack, e, time.monotonic() - injected)), None)
                 assert hit is not None, f"Seed {seed}: không entry nào trong runbook.yaml phát hiện sự cố sau {DETECT_TIMEOUT} giây"
                 detected = time.monotonic()
+                assert any(not ok for at, _, ok in list(traffic.samples) if at >= injected), \
+                    f"Seed {seed}: chưa thấy request nào hỏng sau khi bơm lỗi (lỗi môi trường, không phải runbook)"
                 act(stack.project, hit["action"])
                 acted = time.monotonic()
                 recovered = traffic.wait_healthy(acted, RECOVER_TIMEOUT)

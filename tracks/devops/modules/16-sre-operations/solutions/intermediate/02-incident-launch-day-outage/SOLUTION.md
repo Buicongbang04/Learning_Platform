@@ -10,8 +10,9 @@ khiến cổng không thấy:
    thấp: bản hỏng trông nhanh hơn bản tốt. Trong tóm tắt, `http_req_failed` của bản 2.4.0 khoảng 90% mà không ai nhìn.
 2. **Mô hình tải đóng.** `vus: 20` nghĩa là 20 người dùng ảo, mỗi người gửi request tiếp theo ngay khi nhận response. Server trả lỗi nhanh
    thì VU lặp nhanh hơn, "throughput" tăng vọt (hàng nghìn request/giây toàn 503), đó là con số "cao hơn mọi bản trước". Với 2.3.0, 20 VU
-   chỉ đạt khoảng 100 rps và latency tự giãn ra; kịch bản không bao giờ tạo đúng 80 rps đến đều như ngày ra mắt. Mô hình đóng tự giảm tải
-   khi server chậm, nên cũng che bản 2.4.1 (chậm, không lỗi) ở các mức VU khác.
+   chỉ đạt khoảng 100 rps và latency tự giãn ra; kịch bản không bao giờ tạo đúng 80 rps đến đều như ngày ra mắt. Bản 2.4.1 (xếp
+   hàng, không trả lỗi) vẫn bị cổng cũ chặn vì 20 VU chờ nhau làm latency lên khoảng 400 ms; cổng cũ chỉ thấy được bản chậm, không thấy
+   bản hỏng nhanh.
 
 ## Sửa
 

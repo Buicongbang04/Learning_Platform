@@ -7,8 +7,6 @@ files:
     note: Kịch bản load test đang dùng làm cổng trước release
   - path: tests/test_launch_day.py
     note: Không sửa
-  - path: tests/fixtures/orders.py
-    note: Service tra đơn hàng giả, ba bản release
 run:
   - nice -n 15 docker pull grafana/k6:1.8.1@sha256:23f2279054c3e01535455c4d92914a625df12aeb631ea0e3ea7a43f96bcbc843
   - uv run pytest tracks/devops/modules/16-sre-operations/exercises/intermediate/02-incident-launch-day-outage -q -rs
@@ -29,7 +27,8 @@ Bối cảnh, ngày 2026-11-11 (đợt khuyến mãi 11/11 của Olist):
 - Bản 2.4.0 qua cổng ngày 2026-11-09: k6 thoát mã 0, không threshold nào vỡ, p95 rất thấp, throughput cao hơn mọi bản trước.
 - 20:00 ngày 11/11 traffic lên khoảng 80 request/giây đều đặn, đúng dự báo của team marketing. Khách liên tục báo không xem được đơn
   hàng, ticket hỗ trợ tăng gấp 12 lần. 20:41 rollback về 2.3.0, mọi thứ bình thường lại.
-- Bản vá 2.4.1 cũng đã qua cổng. QA thử tay thì thấy chậm.
+- Bản vá 2.4.1 bị cổng chặn ngày 2026-11-12 (p95 vượt 300 ms), nên team vẫn chạy 2.3.0. Cổng có chặn được bản chậm, vậy vì sao
+  nó để lọt 2.4.0?
 - SLO của service (tài liệu của team): 99% request thành công, và p95 latency của request thành công dưới 300 ms, đo ở traffic dự báo.
 
 Test dựng `tests/fixtures/orders.py` với từng bản release (biến `RELEASE`) trong `DockerLab` rồi chạy kịch bản của bạn bằng

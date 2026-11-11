@@ -6,7 +6,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 WORKERS = int(os.environ.get("WORKERS", "2"))
 SERVICE_MS = float(os.environ.get("SERVICE_MS", "40"))
-MODE = os.environ.get("MODE", "queue")
 SLOTS = threading.Semaphore(WORKERS)
 
 
@@ -25,11 +24,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/healthz":
             self.reply(200, {"status": "ok"})
             return
-        if MODE == "shed" and not SLOTS.acquire(blocking=False):
-            self.reply(503, {"error": "busy"})
-            return
-        if MODE != "shed":
-            SLOTS.acquire()
+        SLOTS.acquire()
         try:
             time.sleep(SERVICE_MS / 1000)
         finally:
@@ -42,5 +37,5 @@ class Handler(BaseHTTPRequestHandler):
 
 server = ThreadingHTTPServer(("0.0.0.0", 8000), Handler)
 server.daemon_threads = True
-print(f"listening mode={MODE} workers={WORKERS} service_ms={SERVICE_MS}", flush=True)
+print(f"listening workers={WORKERS} service_ms={SERVICE_MS}", flush=True)
 server.serve_forever()

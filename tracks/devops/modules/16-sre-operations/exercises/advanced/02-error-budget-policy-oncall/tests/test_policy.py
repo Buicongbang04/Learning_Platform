@@ -164,7 +164,10 @@ def test_policy_states(remaining, state):
 
 
 def test_oncall_yaml():
-    found = oncall_problems(load("oncall.yaml"))
+    oncall = load("oncall.yaml")
+    found = oncall_problems(oncall)
+    if isinstance(oncall, dict) and (oncall.get("team"), oncall.get("timezone")) != ("checkout", "Asia/Ho_Chi_Minh"):
+        found.append("Giữ team: checkout và timezone: Asia/Ho_Chi_Minh")
     assert not found, "\n".join(found)
 
 
