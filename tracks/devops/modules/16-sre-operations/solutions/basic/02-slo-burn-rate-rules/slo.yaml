@@ -1,0 +1,17 @@
+service: olist-api
+slos:
+  - name: orders-availability
+    description: Khách tra cứu đơn hàng không gặp lỗi phía server.
+    objective: 99.5
+    window: 30d
+    errors: sum(rate(http_requests_total{job="olist-api", path="/orders/{order_id}", status=~"5.."}[{{window}}]))
+    total: sum(rate(http_requests_total{job="olist-api", path="/orders/{order_id}"}[{{window}}]))
+  - name: orders-latency
+    description: Khách tra cứu đơn hàng nhận trả lời trong 250 ms.
+    objective: 95
+    window: 30d
+    errors: >-
+      sum(rate(http_request_duration_seconds_count{job="olist-api", path="/orders/{order_id}"}[{{window}}]))
+      -
+      sum(rate(http_request_duration_seconds_bucket{job="olist-api", path="/orders/{order_id}", le="0.25"}[{{window}}]))
+    total: sum(rate(http_request_duration_seconds_count{job="olist-api", path="/orders/{order_id}"}[{{window}}]))

@@ -1,0 +1,224 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 01-namespaces.yaml
+  - 00-argocd-v3.5.6-core-install.yaml
+  - 10-sops-cmp.yaml
+  - 11-repo-tools.yaml
+  - 30-git-server.yaml
+  - 40-repo-server-egress.yaml
+transformers:
+  - namespace.yaml
+patches:
+  - target:
+      kind: ConfigMap
+      name: argocd-cmd-params-cm
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cmd-params-cm
+      data:
+        application.namespaces: devops-ex-*
+        reposerver.parallelism.limit: "4"
+        reposerver.enable.git.submodule: "false"
+        controller.status.processors: "4"
+        controller.operation.processors: "2"
+        controller.kubectl.parallelism.limit: "4"
+  - target:
+      kind: ConfigMap
+      name: argocd-cm
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+      data:
+        application.sync.impersonation.enabled: "true"
+        timeout.reconciliation: 60s
+  - target:
+      kind: Deployment
+      name: argocd-applicationset-controller
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: argocd-redis
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-redis
+      spec:
+        template:
+          spec:
+            initContainers:
+              - name: secret-init
+                imagePullPolicy: Never
+            containers:
+              - name: redis
+                imagePullPolicy: Never
+                resources:
+                  requests:
+                    cpu: 10m
+                    memory: 16Mi
+  - target:
+      kind: StatefulSet
+      name: argocd-application-controller
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: argocd-application-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-application-controller
+                imagePullPolicy: Never
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 128Mi
+  - target:
+      kind: Deployment
+      name: argocd-repo-server
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-repo-server
+      spec:
+        template:
+          spec:
+            securityContext:
+              fsGroup: 999
+            initContainers:
+              - name: copyutil
+                imagePullPolicy: Never
+              - name: sops-binary
+                image: ghcr.io/getsops/sops:v3.13.3-alpine
+                imagePullPolicy: Never
+                command: [cp, /usr/local/bin/sops, /custom-tools/sops]
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 999
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: [ALL]
+                  seccompProfile:
+                    type: RuntimeDefault
+                volumeMounts:
+                  - name: custom-tools
+                    mountPath: /custom-tools
+            containers:
+              - name: argocd-repo-server
+                imagePullPolicy: Never
+                env:
+                  - name: PATH
+                    value: /devops-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+                  - name: GIT_ALLOW_PROTOCOL
+                    value: git
+                  - name: ARGOCD_EXEC_TIMEOUT
+                    value: 30s
+                  - name: HTTP_PROXY
+                    value: http://127.0.0.1:1
+                  - name: HTTPS_PROXY
+                    value: http://127.0.0.1:1
+                  - name: http_proxy
+                    value: http://127.0.0.1:1
+                  - name: https_proxy
+                    value: http://127.0.0.1:1
+                  - name: NO_PROXY
+                    value: ""
+                resources:
+                  requests:
+                    cpu: 25m
+                    memory: 64Mi
+                volumeMounts:
+                  - name: devops-repo-tools
+                    mountPath: /devops-tools
+                    readOnly: true
+              - name: sops-kustomize
+                image: quay.io/argoproj/argocd:v3.5.6
+                imagePullPolicy: Never
+                command: [/var/run/argocd/argocd-cmp-server]
+                env:
+                  - name: SOPS_AGE_KEY_FILE
+                    value: /sops-age/keys.txt
+                  - name: GIT_CONFIG_COUNT
+                    value: "1"
+                  - name: GIT_CONFIG_KEY_0
+                    value: protocol.allow
+                  - name: GIT_CONFIG_VALUE_0
+                    value: never
+                  - name: GIT_ALLOW_PROTOCOL
+                    value: none
+                  - name: ARGOCD_EXEC_TIMEOUT
+                    value: 30s
+                  - name: HTTP_PROXY
+                    value: http://127.0.0.1:1
+                  - name: HTTPS_PROXY
+                    value: http://127.0.0.1:1
+                  - name: http_proxy
+                    value: http://127.0.0.1:1
+                  - name: https_proxy
+                    value: http://127.0.0.1:1
+                  - name: NO_PROXY
+                    value: ""
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 999
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: [ALL]
+                  seccompProfile:
+                    type: RuntimeDefault
+                resources:
+                  requests:
+                    cpu: 10m
+                    memory: 32Mi
+                    ephemeral-storage: 16Mi
+                  limits:
+                    memory: 512Mi
+                    ephemeral-storage: 1Gi
+                volumeMounts:
+                  - name: var-files
+                    mountPath: /var/run/argocd
+                  - name: plugins
+                    mountPath: /home/argocd/cmp-server/plugins
+                  - name: devops-sops-cmp
+                    mountPath: /home/argocd/cmp-server/config/plugin.yaml
+                    subPath: plugin.yaml
+                  - name: cmp-tmp
+                    mountPath: /tmp
+                  - name: custom-tools
+                    mountPath: /custom-tools
+                    readOnly: true
+                  - name: sops-age
+                    mountPath: /sops-age
+                    readOnly: true
+            volumes:
+              - name: devops-sops-cmp
+                configMap:
+                  name: devops-sops-cmp
+              - name: devops-repo-tools
+                configMap:
+                  name: devops-repo-tools
+                  defaultMode: 0555
+              - name: cmp-tmp
+                emptyDir:
+                  sizeLimit: 512Mi
+              - name: custom-tools
+                emptyDir: {}
+              - name: sops-age
+                secret:
+                  secretName: devops-sops-age
+                  defaultMode: 0440

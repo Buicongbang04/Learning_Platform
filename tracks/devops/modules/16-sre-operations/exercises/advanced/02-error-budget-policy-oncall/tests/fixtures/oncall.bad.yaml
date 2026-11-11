@@ -1,0 +1,12 @@
+team: checkout
+members: [An, Bình, Chi, Dũng, Giang, Hà]
+handoff: {weekday: monday, time: "10:00"}
+weeks:
+  - {start: 2026-11-16, primary: An, secondary: Bình}
+  - {start: 2026-11-23, primary: An, secondary: Chi}
+  - {start: 2026-11-30, primary: Giang, secondary: Dũng}
+  - {start: 2026-12-07, primary: Hà, secondary: An}
+escalation:
+  - {level: primary, after_minutes: 0}
+  - {level: manager, after_minutes: 60}
+page_budget: {per_week: 30, night_per_week: 5}

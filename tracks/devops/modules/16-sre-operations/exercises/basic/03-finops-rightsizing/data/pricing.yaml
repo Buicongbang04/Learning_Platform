@@ -1,0 +1,9 @@
+currency: USD
+month_hours: 744
+vcpu_hour: 0.034
+gib_hour: 0.0046
+shared:
+  control_plane: 73.0
+  observability: 210.0
+  nat_gateway: 96.0
+orders: 412000

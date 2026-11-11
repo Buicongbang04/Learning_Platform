@@ -11,7 +11,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, H
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from olist_shop import db, log
+from olist_shop import db, log, tracing
 from olist_shop.jobs import QUEUE, RECOMPUTE_REVENUE
 from olist_shop.settings import Settings
 
@@ -31,16 +31,20 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None,
     request_duration = Histogram("http_request_duration_seconds", "Thời gian xử lý request",
                                  ["method", "path"], registry=registry)
     jobs_enqueued = Counter("jobs_enqueued_total", "Số job đã đẩy vào hàng đợi", registry=registry)
+    tracer = tracing.setup("olist-shop-api", settings.app_version)
+    tracer.instrument_engine(engine)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         log.configure(settings.log_level)
+        tracer.attach_logs()
         try:
             db.init(engine)
         except SQLAlchemyError:
             logger.exception("không tạo được bảng, /readyz sẽ báo db lỗi")
         yield
         engine.dispose()
+        tracer.shutdown()
 
     app = FastAPI(title="Olist Shop", version=settings.app_version, lifespan=lifespan)
 
@@ -50,24 +54,34 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None,
         token = log.request_id.set(rid)
         start = time.perf_counter()
         status = 500
-        try:
+        unhandled = None
+        with tracer.span(request.method, kind="server", parent=tracer.extract(request.headers),
+                         attributes={"http.request.method": request.method, "url.path": request.url.path,
+                                     "olist.request_id": rid}) as span:
             try:
-                response = await call_next(request)
-            except Exception:
-                logger.exception("lỗi không xử lý được")
-                response = JSONResponse({"error": "internal server error"}, status_code=500)
-            status = response.status_code
-            response.headers["X-Request-ID"] = rid
-            return response
-        finally:
-            elapsed = time.perf_counter() - start
-            route = request.scope.get("route")
-            path = route.path if route is not None else "unmatched"
-            requests_total.labels(request.method, path, str(status)).inc()
-            request_duration.labels(request.method, path).observe(elapsed)
-            logger.info("request", extra={"method": request.method, "path": path, "status": status,
-                                          "duration_ms": round(elapsed * 1000, 2)})
-            log.request_id.reset(token)
+                try:
+                    response = await call_next(request)
+                except Exception as error:
+                    unhandled = error
+                    logger.exception("lỗi không xử lý được")
+                    response = JSONResponse({"error": "internal server error"}, status_code=500)
+                status = response.status_code
+                response.headers["X-Request-ID"] = rid
+                return response
+            finally:
+                elapsed = time.perf_counter() - start
+                route = request.scope.get("route")
+                path = route.path if route is not None else "unmatched"
+                span.update_name(f"{request.method} {path}")
+                span.set_attribute("http.route", path)
+                span.set_attribute("http.response.status_code", status)
+                if status >= 500:
+                    tracing.failed(span, unhandled)
+                requests_total.labels(request.method, path, str(status)).inc()
+                request_duration.labels(request.method, path).observe(elapsed)
+                logger.info("request", extra={"method": request.method, "path": path, "status": status,
+                                              "duration_ms": round(elapsed * 1000, 2)})
+                log.request_id.reset(token)
 
     @app.get("/healthz")
     def healthz():
@@ -118,11 +132,19 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None,
     @app.post("/jobs/recompute", status_code=202)
     def recompute():
         job_id = uuid.uuid4().hex
-        try:
-            redis_client.rpush(QUEUE, json.dumps({"job_id": job_id, "type": RECOMPUTE_REVENUE}))
-        except redis.RedisError:
-            logger.warning("không đẩy được job vào redis", exc_info=True)
-            return JSONResponse({"error": "redis unavailable"}, status_code=503)
+        with tracer.span(f"send {QUEUE}", kind="producer",
+                         attributes={"messaging.system": "redis", "messaging.destination.name": QUEUE,
+                                     "messaging.operation.type": "send", "messaging.message.id": job_id}) as span:
+            job = {"job_id": job_id, "type": RECOMPUTE_REVENUE}
+            carrier = tracer.inject()
+            if carrier:
+                job[tracing.CARRIER] = carrier
+            try:
+                redis_client.rpush(QUEUE, json.dumps(job))
+            except redis.RedisError as error:
+                tracing.failed(span, error)
+                logger.warning("không đẩy được job vào redis", exc_info=True)
+                return JSONResponse({"error": "redis unavailable"}, status_code=503)
         jobs_enqueued.inc()
         logger.info("job enqueued", extra={"job_id": job_id, "job_type": RECOMPUTE_REVENUE})
         return {"job_id": job_id}

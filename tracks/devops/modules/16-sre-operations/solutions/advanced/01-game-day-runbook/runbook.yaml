@@ -1,0 +1,25 @@
+entries:
+  - id: api-unreachable
+    detect:
+      promql: up{job="olist-api"} == 0
+    action:
+      do: start
+      service: api
+  - id: api-slow
+    detect:
+      promql: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="olist-api", path="/orders/{order_id}"}[1m]))) > 0.3
+    action:
+      do: restart
+      service: api
+  - id: queue-rejected
+    detect:
+      logql: '{service_name="olist-shop-api"} |= "không đẩy được job vào redis"'
+    action:
+      do: restart
+      service: redis
+  - id: queue-slow
+    detect:
+      promql: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="olist-api", path="/jobs/recompute"}[1m]))) > 0.3
+    action:
+      do: restart
+      service: redis

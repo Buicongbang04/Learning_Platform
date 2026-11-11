@@ -8,7 +8,7 @@ from prometheus_client import CollectorRegistry, Counter, start_http_server
 from sqlalchemy import Engine, delete, func, insert, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from olist_shop import db, log
+from olist_shop import db, log, tracing
 from olist_shop.jobs import QUEUE, RECOMPUTE_REVENUE
 from olist_shop.settings import Settings
 
@@ -37,21 +37,27 @@ def recompute_revenue(engine: Engine) -> None:
 HANDLERS = {RECOMPUTE_REVENUE: recompute_revenue}
 
 
-def handle(raw: bytes | str, engine: Engine) -> None:
+def handle(raw: bytes | str, engine: Engine, tracer: tracing.Tracer | None = None) -> None:
+    tracer = tracer or tracing.DISABLED
     token = None
-    try:
-        job = json.loads(raw)
-        token = log.request_id.set(str(job.get("job_id", "-")))
-        HANDLERS[job["type"]](engine)
-    except Exception:
-        JOBS_FAILED.inc()
-        logger.exception("job lỗi", extra={"raw": raw})
-    else:
-        JOBS_PROCESSED.inc()
-        logger.info("job done", extra={"job_type": job["type"]})
-    finally:
-        if token is not None:
-            log.request_id.reset(token)
+    with tracer.span(f"process {QUEUE}", kind="consumer", parent=tracer.extract_job(raw),
+                     attributes={"messaging.system": "redis", "messaging.destination.name": QUEUE,
+                                 "messaging.operation.type": "process"}) as span:
+        try:
+            job = json.loads(raw)
+            token = log.request_id.set(str(job.get("job_id", "-")))
+            span.set_attribute("messaging.message.id", str(job.get("job_id", "-")))
+            HANDLERS[job["type"]](engine)
+        except Exception as error:
+            JOBS_FAILED.inc()
+            tracing.failed(span, error)
+            logger.exception("job lỗi", extra={"raw": raw})
+        else:
+            JOBS_PROCESSED.inc()
+            logger.info("job done", extra={"job_type": job["type"]})
+        finally:
+            if token is not None:
+                log.request_id.reset(token)
 
 
 def make_redis(url: str) -> redis.Redis:
@@ -70,18 +76,21 @@ def ensure_schema(engine: Engine, attempts: int = 10, delay: float = 1.0) -> Non
             time.sleep(delay * attempt)
 
 
-def run_once(redis_client: redis.Redis, engine: Engine) -> int:
+def run_once(redis_client: redis.Redis, engine: Engine, tracer: tracing.Tracer | None = None) -> int:
     raw = redis_client.lpop(QUEUE)
     if raw is None:
         return 0
-    handle(raw, engine)
+    handle(raw, engine, tracer)
     return 1
 
 
 def main() -> None:
     settings = Settings()
     log.configure(settings.log_level)
+    tracer = tracing.setup("olist-shop-worker", settings.app_version)
+    tracer.attach_logs()
     engine = db.make_engine(settings.database_url)
+    tracer.instrument_engine(engine)
     ensure_schema(engine)
     redis_client = make_redis(settings.redis_url)
     start_http_server(settings.worker_metrics_port, registry=REGISTRY)
@@ -103,9 +112,10 @@ def main() -> None:
             time.sleep(2)
             continue
         if item is not None:
-            handle(item[1], engine)
+            handle(item[1], engine, tracer)
     engine.dispose()
     logger.info("worker stopped")
+    tracer.shutdown()
 
 
 if __name__ == "__main__":

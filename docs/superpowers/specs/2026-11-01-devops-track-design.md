@@ -176,6 +176,7 @@ Ba phase, mỗi phase một PR:
   `docker build` dùng `--cpuset-cpus 12-35`.
 - **Capstone chấm thế nào**: theo cách track DE: milestone là markdown có checklist, code ở
   `capstone/project/` kèm test pytest cho phần chấm được (m01–m08); m09 tự đánh giá theo rubric.
+  Quyết định ở Phase 3: m09 có một phần chấm bằng pytest (SLO, rule, runbook, phục hồi), game day và postmortem vẫn tự đánh giá.
 - **Sự cố ở m09 và bài sự cố cố ý**: script bơm lỗi chọn ngẫu nhiên từ một tập lỗi theo seed lúc chạy;
   người học không đọc script trước game day (tự giác, như DE m12). Bài sự cố trong module: nguyên nhân
   nằm trong `solutions/`, đề chỉ mô tả triệu chứng.

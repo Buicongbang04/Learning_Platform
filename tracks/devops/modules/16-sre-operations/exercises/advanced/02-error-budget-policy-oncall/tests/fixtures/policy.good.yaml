@@ -1,0 +1,7 @@
+slo: {name: search-availability, objective: 99.9, window_days: 28, budget_minutes: 40.32}
+thresholds:
+  - {state: normal, remaining_above: 0.6, actions: [release-as-usual], allowed: [feature, bugfix, security-fix, rollback]}
+  - {state: caution, remaining_above: 0.3, actions: [extra-review], allowed: [feature, bugfix, security-fix, rollback]}
+  - {state: freeze-features, remaining_above: 0, actions: [freeze-features], allowed: [bugfix, security-fix, rollback]}
+  - {state: freeze-all, remaining_above: null, actions: [freeze-all], allowed: [security-fix, rollback]}
+exceptions: {approver: CTO, max_per_window: 2}

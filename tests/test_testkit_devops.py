@@ -1,10 +1,12 @@
 """Test cho helper DevOps của testkit: phiên bản công cụ, docker, cpuset, cluster kind."""
 
+import base64
 import json
 import os
 import pwd
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -361,10 +363,10 @@ def test_docker_lab_cleans_up_even_when_run_fails(monkeypatch):
     with pytest.raises(pytest.fail.Exception):
         with lab:
             lab.start("api", "python:3.12.16-alpine3.24", ports=[8000])
-    removed = [c for c in fake.calls if c[1:3] == ["rm", "-f"]]
-    assert [f"devops-ex-{lab.id}-api"] in [c[3:] for c in removed]
+    removed = [c for c in fake.calls if c[1:4] == ["rm", "-f", "-v"]]
+    assert [f"devops-ex-{lab.id}-api"] in [c[4:] for c in removed]
     assert fake.calls[-1] == ["docker", "network", "rm", lab.network]
-    assert all(c[1] != "rm" or c[3].startswith(f"devops-ex-{lab.id}") for c in fake.calls if c[1] == "rm")
+    assert all(c[-1].startswith(f"devops-ex-{lab.id}") for c in fake.calls if c[1] == "rm")
 
 
 def test_docker_lab_publishes_on_loopback_free_port(monkeypatch):
@@ -518,8 +520,9 @@ def test_sandbox_ready_retries_after_transient_failure(monkeypatch):
     assert len(calls) == 3, "Chỉ cache lần thử thành công"
 
 
-CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".terraform.d")
-CREDENTIAL_FILES = (".git-credentials", ".netrc")
+CREDENTIAL_DIRS = (".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".terraform.d", ".config/sops",
+                   ".gnupg")
+CREDENTIAL_FILES = (".git-credentials", ".netrc", ".vault-token")
 
 
 @pytest.fixture
@@ -645,7 +648,7 @@ def test_docker_lab_close_removes_every_container(monkeypatch):
             lab.start("a", "x:1")
             lab.start("b", "x:1")
             raise KeyboardInterrupt
-    removed = [c[3] for c in fake.calls if c[1:3] == ["rm", "-f"]]
+    removed = [c[4] for c in fake.calls if c[1:4] == ["rm", "-f", "-v"]]
     assert removed == [lab.name("a"), lab.name("b")]
 
 
@@ -2554,6 +2557,9 @@ def test_localstack_sweep_targets_devops_endpoint_only(monkeypatch):
         def paginate(self, **kwargs):
             return []
 
+        def list_event_buses(self, **kwargs):
+            return {"EventBuses": []}
+
         def list_buckets(self, **kwargs):
             return {"Buckets": [{"Name": "devops-ex-other999-b"}, {"Name": "de-data"}]}
 
@@ -2962,6 +2968,9 @@ def test_localstack_sweep_never_matches_longer_prefix(monkeypatch):
         def paginate(self, **kwargs):
             return []
 
+        def list_event_buses(self, **kwargs):
+            return {"EventBuses": []}
+
         def list_buckets(self, **kwargs):
             return {"Buckets": [{"Name": n} for n in ("devops-ex-abc123456-x", "devops-ex-abc12345x", "devops-ex-abc12345-data",
                                                       "devops-ex-abc12345")]}
@@ -3102,6 +3111,9 @@ def test_localstack_sweep_schedules_key_only_after_alias_removed(monkeypatch, al
             if self.service == "kms":
                 return [{"Aliases": [{"AliasName": "alias/devops-ex-abc12345-state", "TargetKeyId": "k1"}]}]
             return []
+
+        def list_event_buses(self, **kwargs):
+            return {"EventBuses": []}
 
         def list_buckets(self, **kwargs):
             return {"Buckets": []}
@@ -3597,6 +3609,7 @@ def test_ansible_bypass_legacy_ssh_aliases(ansible_lab):
 
 CONTROL_ATTACK = """#!/usr/bin/env python3
 import errno
+import base64
 import json
 import os
 import sys
@@ -3673,6 +3686,7 @@ class Connection(Local):
 """
 
 SHADOW_ATTACK = """#!/usr/bin/env python3
+import base64
 import json
 import os
 
@@ -3721,6 +3735,7 @@ def test_ansible_plugin_shadowing_does_not_change_connection(ansible_lab):
 
 
 HOME_ROLE_PLANT = """#!/usr/bin/env python3
+import base64
 import json
 import os
 
@@ -3785,6 +3800,7 @@ def test_ansible_role_in_home_is_refused_and_never_loaded(ansible_lab, tmp_path)
 
 
 USER_SITE_PLANT = """#!/usr/bin/env python3
+import base64
 import json
 import os
 
@@ -3941,7 +3957,7 @@ class KubeFake:
             return done(out=API_RESOURCES)
         if "--dry-run=server" in cmd:
             name = json.loads(input)["metadata"]["name"]
-            suffix = next((s for s in ("-pv", "-rbac", "-routes") if name.endswith(f"-probe{s}")), "")
+            suffix = next((s for s in ("-pv", "-rbac", "-routes", "-argocd", "-mesh") if name.endswith(f"-probe{s}")), "")
             probe = name.removesuffix(f"-probe{suffix}") + suffix
             return done(1, "", f"ValidatingAdmissionPolicy '{probe}' with binding '{probe}' denied request")
         if cmd[1:3] == ["auth", "can-i"]:
@@ -4114,7 +4130,8 @@ def test_kube_lab_namespace_and_label(monkeypatch):
     resources = {r for rule in role["rules"] for r in rule["resources"]}
     assert not verbs & {"impersonate", "escalate", "bind", "*"} and "serviceaccounts/token" not in resources and "*" not in resources
     policies = {i["metadata"]["name"]: i for i in items if i["kind"] == "ValidatingAdmissionPolicy"}
-    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac", f"{lab.namespace}-routes"}
+    assert set(policies) == {lab.namespace, f"{lab.namespace}-pv", f"{lab.namespace}-rbac", f"{lab.namespace}-routes",
+                             f"{lab.namespace}-argocd", f"{lab.namespace}-mesh"}
     rbac = policies[f"{lab.namespace}-rbac"]["spec"]
     assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in rbac["matchConditions"][0]["expression"]
     assert {r["scope"] for r in rbac["matchConstraints"]["resourceRules"]} == {"*"}
@@ -5309,6 +5326,24 @@ def test_gateway_setup_pinned_and_documented():
     assert testkit.KUBE_GATEWAY_IMAGE_DIGEST in doc and "setup/kind/gateway/10-traefik.yaml" in doc
 
 
+
+def test_kube_lab_routes_policy_refuses_service_external_ips(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicy"
+                  and i["metadata"]["name"] == f"{lab.namespace}-routes")
+    spec = policy["spec"]
+    assert {"apiGroups": [""], "apiVersions": ["*"], "resources": ["services"], "operations": ["CREATE", "UPDATE"]} \
+        in spec["matchConstraints"]["resourceRules"]
+    condition = spec["matchConditions"][0]["expression"]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in condition
+    [rule] = [v for v in spec["validations"] if "externalIPs" in v["expression"]]
+    assert rule["expression"] == ("request.resource.resource != 'services' || !has(object.spec.externalIPs) || "
+                                  "size(object.spec.externalIPs) == 0")
+    others = [v["expression"] for v in spec["validations"] if v is not rule]
+    assert all(e.startswith("request.resource.resource != '") for e in others)
+
 @KUBE_REQUIRED
 def test_kube_lab_routes_policy_real():
     testkit.Exercise.require_cluster()
@@ -5332,6 +5367,24 @@ def test_kube_lab_routes_policy_real():
         result = lab.kubectl("apply", "-f", "-", input=json.dumps(gateway), check=False)
         assert result.returncode != 0 and "forbidden" in result.stderr
         assert lab.kubectl("auth", "can-i", "create", "referencegrants.gateway.networking.k8s.io", check=False).stdout.strip() == "no"
+
+
+@KUBE_REQUIRED
+def test_kube_lab_service_external_ips_denied_by_admission_real():
+    testkit.Exercise.require_cluster()
+    with testkit.KubeLab() as lab:
+        service = {"apiVersion": "v1", "kind": "Service", "metadata": {"name": "web"},
+                   "spec": {"selector": {"app": "web"}, "ports": [{"port": 80}]}}
+        assert lab.kubectl("create", "-f", "-", input=json.dumps(service), check=False).returncode == 0
+        hijack = {**service, "metadata": {"name": "hijack"}, "spec": {**service["spec"], "externalIPs": ["10.96.0.1"]}}
+        result = lab.kubectl("create", "-f", "-", input=json.dumps(hijack), check=False)
+        assert result.returncode != 0 and f"{lab.namespace}-routes" in result.stderr and "denied" in result.stderr, result.stderr
+        patch = json.dumps({"spec": {"externalIPs": ["10.96.0.1"]}})
+        result = lab.kubectl("patch", "service", "web", "--type=merge", "-p", patch, check=False)
+        assert result.returncode != 0 and f"{lab.namespace}-routes" in result.stderr, result.stderr
+        sneaky = {**hijack, "metadata": {"name": "sneaky"}}
+        result = lab.run(["sh", "-c", "kubectl create -f -"], input=json.dumps(sneaky))
+        assert result.returncode != 0 and f"{lab.namespace}-routes" in result.stderr, result.stderr
 
 
 @pytest.mark.parametrize("args", [
@@ -5842,3 +5895,3225 @@ def test_kube_lab_crd_conversion_webhook_denied_real():
             result = lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
             assert result.returncode != 0 and "denied" in result.stderr, result.stderr
     assert testkit.kube_leftovers(lab.id) == []
+
+
+ANON_A = "a" * 64
+ANON_B = "0123456789abcdef" * 4
+
+
+class VolumeDocker(FakeDocker):
+    def __init__(self, mounts: str, anonymous: str = ""):
+        super().__init__()
+        self.mounts = mounts
+        self.anonymous = anonymous
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(list(cmd))
+        stdout = ""
+        if cmd[1] == "inspect":
+            stdout = self.mounts
+        elif cmd[1:3] == ["volume", "ls"]:
+            stdout = self.anonymous
+        return subprocess.CompletedProcess(cmd, 0, stdout, "")
+
+
+def test_docker_lab_close_removes_anonymous_volumes_unit(monkeypatch):
+    named_hex = "f" * 64
+    fake = VolumeDocker(f"{ANON_A} \n{ANON_B} {named_hex} devops-track-localstack-data act-toolcache\n",
+                        anonymous=f"{ANON_A}\n{ANON_B}\n{'e' * 64}\n")
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    with testkit.DockerLab() as lab:
+        lab.start("db", "postgres:16.15-alpine")
+    removed = [c for c in fake.calls if c[1] == "rm"]
+    assert removed == [["docker", "rm", "-f", "-v", lab.name("db")]]
+    volumes = [c for c in fake.calls if c[1:3] == ["volume", "rm"]]
+    assert volumes == [["docker", "volume", "rm", ANON_A, ANON_B]], (
+        "Chỉ xoá volume ẩn danh (64 ký tự hex, có nhãn com.docker.volume.anonymous) của container lab")
+    listed = ["docker", "volume", "ls", "-q", "-f", "label=com.docker.volume.anonymous"]
+    assert listed in fake.calls and fake.calls.index(listed) < fake.calls.index(volumes[0])
+    inspect = next(c for c in fake.calls if c[1] == "inspect")
+    assert inspect[-1] == lab.name("db") and fake.calls.index(inspect) < fake.calls.index(removed[0])
+
+
+def test_docker_lab_close_without_volumes_skips_volume_rm(monkeypatch):
+    fake = VolumeDocker("")
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    with testkit.DockerLab() as lab:
+        lab.start("web", "nginx:1.30.6-alpine")
+    assert not [c for c in fake.calls if c[1:3] == ["volume", "rm"]]
+    before = len(fake.calls)
+    with testkit.DockerLab():
+        pass
+    assert not [c for c in fake.calls[before:] if c[1] in ("inspect", "rm")]
+
+
+def test_docker_lab_close_removes_anonymous_volumes():
+    image = require_real_docker("redis:7.4.12-alpine")
+    lab = testkit.DockerLab()
+    with lab:
+        lab.start("cache", image, "300", entrypoint="sleep")
+        mounts = testkit._docker("inspect", "--format", "{{json .Mounts}}", lab.name("cache")).stdout
+        anonymous = [m["Name"] for m in json.loads(mounts) if m["Type"] == "volume"]
+        assert anonymous, "Image redis có VOLUME /data nên container phải có volume ẩn danh"
+    dangling = testkit._docker("volume", "ls", "-q", "-f", "dangling=true").stdout.split()
+    existing = testkit._docker("volume", "ls", "-q").stdout.split()
+    assert not set(anonymous) & (set(dangling) | set(existing))
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_sops_env_isolated_and_key_outside_repo(monkeypatch, tmp_path):
+    host = {"SOPS_AGE_KEY": "AGE-SECRET-KEY-MAY-THAT", "SOPS_AGE_KEY_FILE": "/home/x/.config/sops/age/keys.txt",
+            "SOPS_AGE_KEY_CMD": "cat /home/x/key", "SOPS_KMS_ARN": "arn:aws:kms:x", "AGE_PLUGIN": "x",
+            "GNUPGHOME": "/home/x/.gnupg", "XDG_CONFIG_HOME": "/home/x/.config", "VAULT_TOKEN": "s.that"}
+    for key, value in host.items():
+        monkeypatch.setenv(key, value)
+    home = tmp_path / "home"
+    key = tmp_path / "keys" / "age.txt"
+    env = testkit.sops_env(home, key)
+    assert env["SOPS_AGE_KEY_FILE"] == str(key.resolve())
+    assert env["HOME"] == str(home.resolve()) and env["XDG_CONFIG_HOME"] == f"{home.resolve()}/.config"
+    assert not set(host.values()) & set(env.values())
+    assert {k for k in env if k.startswith(("SOPS_", "AGE_"))} == {"SOPS_AGE_KEY_FILE"}
+    assert not any(k.startswith("VAULT_") for k in env)
+    assert env.get("GNUPGHOME", str(home.resolve())).startswith(str(home.resolve()))
+    for inside in (testkit.ROOT / "tracks" / "devops" / "age.txt", testkit.ROOT / "age.txt"):
+        with pytest.raises(ValueError, match="ngoài"):
+            testkit.sops_env(home, inside)
+    project = tmp_path / "repo"
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.sops_env(home, project / "keys" / "age.txt", outside=[project])
+    assert testkit.sops_env(home, key, outside=[project])["SOPS_AGE_KEY_FILE"] == str(key.resolve())
+    assert (home / ".gnupg").is_dir() and ((home / ".gnupg").stat().st_mode & 0o777) == 0o700
+    assert env["GNUPGHOME"] == str((home / ".gnupg").resolve())
+
+
+def _escape_into_root(tmp_path):
+    up = "../" * len(tmp_path.resolve().parts)
+    return Path(f"{tmp_path}/{up}{str(testkit.ROOT).lstrip('/')}/tracks/devops/keys")
+
+
+def test_key_placement_rejects_symlink_and_dotdot_into_repo(tmp_path):
+    link = tmp_path / "link"
+    link.symlink_to(testkit.ROOT / "tracks")
+    project = tmp_path / "repo"
+    project.mkdir()
+    project_link = tmp_path / "keys-link"
+    project_link.symlink_to(project)
+    dotdot = _escape_into_root(tmp_path)
+    assert ".." in dotdot.parts and dotdot.resolve().is_relative_to(testkit.ROOT)
+    home = tmp_path / "home"
+    for key_dir in (link / "devops", dotdot):
+        with pytest.raises(ValueError, match="ngoài"):
+            testkit.sops_env(home, key_dir / "age.txt")
+        with pytest.raises(ValueError, match="ngoài"):
+            testkit.age_keypair(key_dir)
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.sops_env(home, project_link / "age.txt", outside=[project])
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.age_keypair(project_link / "keys", outside=[project])
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.sops_env(home, tmp_path / "x" / ".." / "repo" / "age.txt", outside=[project_link])
+    assert not (testkit.ROOT / "tracks" / "devops" / "keys").exists()
+
+
+def test_sandbox_hides_sops_vault_and_gpg_credentials():
+    for rel in (".config/sops", ".gnupg", ".vault-token"):
+        assert rel in testkit.CREDENTIAL_PATHS
+
+
+def test_sops_and_age_versions():
+    assert testkit.parse_version(testkit.SOPS_VERSION) >= testkit.parse_version(testkit.SOPS_MIN_VERSION)
+    assert testkit.parse_version(testkit.AGE_VERSION) >= testkit.parse_version(testkit.AGE_MIN_VERSION)
+    assert testkit.TOOL_VERSION_ARGS["sops"] == ["--version", "--disable-version-check"]
+
+
+@SANDBOX_REQUIRED
+def test_age_keypair_in_sandbox(monkeypatch, tmp_path):
+    testkit.Exercise.require_tool("age-keygen", testkit.AGE_MIN_VERSION)
+    calls = []
+    real = testkit.run_sandboxed
+
+    def spy(cmd, **kwargs):
+        calls.append((list(map(str, cmd)), kwargs))
+        return real(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", spy)
+    keys = tmp_path / "keys"
+    key, public = testkit.age_keypair(keys)
+    assert key.parent == keys.resolve() and key.is_file()
+    assert (key.stat().st_mode & 0o777) == 0o600, "Khoá riêng chỉ chủ sở hữu đọc, ghi được"
+    assert re.fullmatch(r"age1[0-9a-z]{58}", public)
+    assert f"# public key: {public}" in key.read_text(encoding="utf-8")
+    assert calls and Path(calls[0][0][0]).name == "age-keygen" and calls[0][1]["writable"] == [keys.resolve()]
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.age_keypair(testkit.ROOT / "tracks" / "devops" / "keys")
+    with pytest.raises(ValueError, match="ngoài"):
+        testkit.age_keypair(tmp_path / "repo" / "keys", outside=[tmp_path / "repo"])
+
+
+@SANDBOX_REQUIRED
+def test_sops_roundtrip_with_lab_key_in_sandbox(monkeypatch, tmp_path):
+    testkit.Exercise.require_tool("sops", testkit.SOPS_MIN_VERSION)
+    testkit.Exercise.require_tool("age-keygen", testkit.AGE_MIN_VERSION)
+    other, _ = testkit.age_keypair(tmp_path / "other")
+    monkeypatch.setenv("SOPS_AGE_KEY_FILE", str(other))
+    key, public = testkit.age_keypair(tmp_path / "keys")
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "secret.yaml").write_text("password: khong-duoc-lo-ra\n", encoding="utf-8")
+    env = testkit.sops_env(tmp_path / "home", key)
+    encrypt = testkit.run_sandboxed(["sops", "encrypt", "--age", public, "--output", "enc.yaml", "secret.yaml"],
+                                    writable=[work, tmp_path / "home"], cwd=work, env=env)
+    assert encrypt.returncode == 0, encrypt.stderr
+    assert "khong-duoc-lo-ra" not in (work / "enc.yaml").read_text(encoding="utf-8")
+    hidden = testkit.run_sandboxed(["sops", "decrypt", "enc.yaml"], writable=[work, tmp_path / "home"], cwd=work, env=env)
+    assert hidden.returncode != 0, "Thư mục khoá dưới /tmp không mount thì sandbox không thấy khoá"
+    decrypt = testkit.run_sandboxed(["sops", "decrypt", "enc.yaml"], writable=[work, tmp_path / "home"], cwd=work, env=env,
+                                    readonly=[key.parent])
+    assert decrypt.returncode == 0, decrypt.stderr
+    assert "khong-duoc-lo-ra" in decrypt.stdout
+    wrong = testkit.run_sandboxed(["sops", "decrypt", "enc.yaml"], writable=[work, tmp_path / "home"], cwd=work,
+                                  env=testkit.sops_env(tmp_path / "home", other), readonly=[other.parent])
+    assert wrong.returncode != 0 and "khong-duoc-lo-ra" not in wrong.stdout + wrong.stderr
+
+
+def test_vault_service_loopback_profile_devops(monkeypatch):
+    import yaml
+
+    data = yaml.safe_load((testkit.ROOT / "setup" / "docker-compose.yml").read_text(encoding="utf-8"))
+    vault = data["services"]["vault-devops"]
+    assert vault["profiles"] == ["devops"]
+    assert vault["image"] == testkit.VAULT_IMAGE
+    assert re.fullmatch(r"hashicorp/vault:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}", vault["image"])
+    assert vault["image"].split(":")[1].split("@")[0] == testkit.VAULT_VERSION
+    assert vault["ports"] == ["127.0.0.1:${DEVOPS_VAULT_PORT:-18200}:8200"]
+    assert vault["cpuset"] == "${DEVOPS_CPUSET:-}"
+    assert vault["environment"]["VAULT_DEV_ROOT_TOKEN_ID"] == "${DEVOPS_VAULT_TOKEN:-devops-lab-root}"
+    assert vault["environment"]["VAULT_DEV_LISTEN_ADDRESS"] == "0.0.0.0:8200"
+    assert "healthcheck" in vault and "volumes" not in vault
+    assert testkit.SERVICES["vault-devops"] == ("DEVOPS_VAULT_HOST", "localhost", "DEVOPS_VAULT_PORT", 18200)
+    lines = (testkit.ROOT / "setup" / ".env.example").read_text(encoding="utf-8").splitlines()
+    assert "# DEVOPS_VAULT_PORT=18200" in lines and "# DEVOPS_VAULT_TOKEN=devops-lab-root" in lines
+    monkeypatch.delenv("DEVOPS_VAULT_PORT", raising=False)
+    monkeypatch.delenv("DEVOPS_VAULT_HOST", raising=False)
+    assert testkit.vault_devops_address() == "http://127.0.0.1:18200"
+
+
+def test_vault_env_drops_host_vars(monkeypatch, tmp_path):
+    for key, value in {"VAULT_ADDR": "https://vault.that.example:8200", "VAULT_TOKEN": "hvs.that",
+                       "VAULT_NAMESPACE": "admin", "VAULT_CACERT": "/etc/that.pem"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("DEVOPS_VAULT_PORT", "28200")
+    home = tmp_path / "vault-home"
+    env = testkit.vault_env("lab-token", home)
+    assert env == {"VAULT_ADDR": "http://127.0.0.1:28200", "VAULT_TOKEN": "lab-token", "HOME": str(home.resolve())}
+    assert home.is_dir()
+    with pytest.raises(ValueError):
+        testkit.vault_env("", home)
+    with pytest.raises(ValueError, match="ngoài repo"):
+        testkit.vault_env("lab-token", testkit.ROOT / "tracks" / "devops")
+    with pytest.raises(TypeError):
+        testkit.vault_env("lab-token")
+
+
+@SANDBOX_REQUIRED
+def test_vault_env_home_keeps_token_file_out_of_project(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    env = testkit.vault_env("lab-token", tmp_path / "vault-home")
+    result = testkit.run_sandboxed(["sh", "-c", 'printf x > "$HOME/.vault-token"'], writable=[project, tmp_path / "vault-home"],
+                                   cwd=project, env=env)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "vault-home" / ".vault-token").is_file() and not (project / ".vault-token").exists()
+
+
+def test_require_vault_devops_skips_when_down(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: False)
+    with pytest.raises(pytest.skip.Exception, match="--profile devops up -d --wait vault-devops"):
+        testkit.Exercise.require_vault_devops()
+
+
+def test_require_vault_devops_rejects_other_server(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: True)
+    monkeypatch.setattr(testkit, "_vault_health", lambda address: None)
+    with pytest.raises(pytest.skip.Exception, match="không phải vault-devops"):
+        testkit.Exercise.require_vault_devops()
+    monkeypatch.setattr(testkit, "_vault_health", lambda address: {"initialized": True, "sealed": False})
+    assert testkit.Exercise.require_vault_devops() == testkit.vault_devops_address()
+
+
+RECIPIENT = "age1" + "q" * 58
+ARGO_RESOURCES = "applications.argoproj.io\napplicationsets.argoproj.io\nappprojects.argoproj.io\n"
+
+
+class ArgoFake(KubeFake):
+    """KubeFake cộng ArgoCD: CRD argoproj.io, ConfigMap public key, pod git server, Application đọc bằng token của lab. Lệnh
+    `git` trên máy (repo của lab trong thư mục tạm) chạy thật."""
+
+    def __init__(self, monkeypatch, *, recipient=RECIPIENT, git_pods="git-5d46cfbbc8-58gjz", apps="", app_status=()):
+        self.real_run = subprocess.run
+        self.recipient = recipient
+        self.git_pods = git_pods
+        self.apps = apps
+        self.app_status = list(app_status)
+        super().__init__(monkeypatch)
+
+    def run(self, cmd, **kwargs):
+        if str(cmd[0]) == "git":
+            return self.real_run(cmd, **kwargs)
+        return super().run(cmd, **kwargs)
+
+    def run_sandboxed(self, cmd, *, writable, cwd, env, timeout=30, input=None, readonly=()):
+        joined = " ".join(map(str, cmd))
+        answer = None
+        if "api-resources --api-group=argoproj.io" in joined:
+            answer = ARGO_RESOURCES
+        elif f"configmap {testkit.KUBE_ARGOCD_AGE_PUBLIC}" in joined:
+            answer = self.recipient
+        elif "app.kubernetes.io/name=git" in joined:
+            answer = self.git_pods
+        elif "get applications.argoproj.io -o name" in joined:
+            answer = self.apps
+        elif "get applications.argoproj.io" in joined and "-o json" in joined:
+            status = self.app_status.pop(0) if len(self.app_status) > 1 else (self.app_status or [{}])[0]
+            answer = json.dumps({"metadata": {"name": "web"}, "status": status})
+        if answer is None:
+            return super().run_sandboxed(cmd, writable=writable, cwd=cwd, env=env, timeout=timeout, input=input, readonly=readonly)
+        cmd = [str(part) for part in cmd]
+        self.sandbox_calls.append({"cmd": cmd, "env": dict(env), "writable": list(writable), "readonly": list(readonly),
+                                   "cwd": cwd, "input": input})
+        return subprocess.CompletedProcess(cmd, 0, answer, "")
+
+
+def bootstrap_items(fake) -> list:
+    [apply] = [c for c in fake.calls_with("apply") if c["input"] and '"Namespace"' in c["input"]]
+    return json.loads(apply["input"])["items"]
+
+
+def test_argocd_project_restricts_destination_and_source(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        assert lab.argocd_project() == lab.namespace
+        [call] = [c for c in fake.calls_with("apply") if c["input"] and '"AppProject"' in c["input"]]
+        assert call["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig)
+        project = json.loads(call["input"])
+        assert project["metadata"] == {"name": lab.namespace, "namespace": "argocd", "labels": {"devops-ex": lab.id}}
+        spec = project["spec"]
+        assert lab.repo_url == f"git://git.devops-git.svc.cluster.local/{lab.namespace}.git"
+        assert spec["sourceRepos"] == [lab.repo_url]
+        assert spec["destinations"] == [{"server": "https://kubernetes.default.svc", "namespace": lab.namespace}]
+        assert spec["sourceNamespaces"] == [lab.namespace]
+        assert spec["clusterResourceWhitelist"] == []
+        assert spec["destinationServiceAccounts"] == [{"server": "https://kubernetes.default.svc", "namespace": lab.namespace,
+                                                       "defaultServiceAccount": "devops-ex-learner"}]
+        assert "*" not in json.dumps(spec)
+        assert not {"namespaceResourceWhitelist", "clusterResourceBlacklist", "permitOnlyProjectScopedClusters"} & set(spec)
+    role = next(i for i in bootstrap_items(fake) if i["kind"] == "Role")
+    argo = [r for r in role["rules"] if "argoproj.io" in r["apiGroups"]]
+    assert argo == [{"apiGroups": ["argoproj.io"], "resources": ["applications"], "verbs": testkit._KUBE_RW}]
+    deletes = [c["cmd"] for c in fake.calls_with("delete") if "appprojects.argoproj.io" in c["cmd"]]
+    assert deletes and all(["-n", "argocd"] == c[1:3] and "-l" in c and f"devops-ex={lab.id}" in c for c in deletes)
+    assert not any("appprojects.argoproj.io" in c["cmd"] and "--all" in c["cmd"] for c in fake.sandbox_calls)
+
+
+def test_argocd_project_skips_without_argocd(monkeypatch):
+    KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        with pytest.raises(pytest.skip.Exception) as info:
+            lab.argocd_project()
+    assert_skip(info, "chưa có ArgoCD", "setup/kind/argocd", "devops-sops-age")
+
+
+def gitops_tree(root: Path, value: str) -> Path:
+    (root / "app").mkdir(parents=True, exist_ok=True)
+    (root / "app" / "kustomization.yaml").write_text("resources: [cm.yaml]\n", encoding="utf-8")
+    (root / "app" / "cm.yaml").write_text(f"apiVersion: v1\nkind: ConfigMap\nmetadata: {{name: web}}\ndata: {{v: '{value}'}}\n",
+                                          encoding="utf-8")
+    (root / ".git").mkdir(exist_ok=True)
+    (root / ".git" / "config").write_text("[core]\n\thooksPath = /tmp/khong-duoc-dung\n", encoding="utf-8")
+    return root
+
+
+def lab_git(lab, *args) -> str:
+    return lab._git_repo.out(*args)
+
+
+def test_gitops_repo_isolated_per_lab(monkeypatch, tmp_path):
+    fake = ArgoFake(monkeypatch)
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as a, testkit.KubeLab() as b:
+        url_a, url_b = a.gitops_repo(source), b.gitops_repo(source)
+        assert url_a == a.repo_url and url_b == b.repo_url and url_a != url_b
+        for lab, other in ((a, b), (b, a)):
+            writes = [c for c in fake.sandbox_calls if c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig)
+                      and ("cp" in c["cmd"] or "exec" in c["cmd"])]
+            text = "\n".join(" ".join(c["cmd"]) for c in writes)
+            assert f"/srv/git/{lab.namespace}.git" in text and other.namespace not in text
+            for call in writes:
+                assert not {"sh", "bash", "dash"} & set(call["cmd"]), call["cmd"]
+                assert lab.kubeconfig.parent not in map(Path, call["readonly"] + call["writable"])
+            assert lab_git(lab, "ls-files").split() == ["app/cm.yaml", "app/kustomization.yaml"]
+            assert re.fullmatch(r"[0-9a-f]{40}", lab.gitops_revision)
+            assert not list(lab._admin.home.glob("*.bundle"))
+        first = a.gitops_revision
+        gitops_tree(source, "2")
+        a.gitops_repo(source)
+        assert a.gitops_revision != first and len(lab_git(a, "log", "--format=%H").split()) == 2
+        assert "v: '2'" in (a.root / "gitops" / "repo" / "app" / "cm.yaml").read_text(encoding="utf-8")
+        assert len(lab_git(b, "log", "--format=%H").split()) == 1
+    removed = [" ".join(c["cmd"]) for c in fake.sandbox_calls if "rm" in c["cmd"] and "-rf" in c["cmd"]]
+    assert any(f"/srv/git/{a.namespace}.git" in r for r in removed) and any(f"/srv/git/{b.namespace}.git" in r for r in removed)
+    assert all(r.count("/srv/git/") == 1 for r in removed)
+
+
+def test_gitops_repo_never_runs_learner_git_config(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as lab:
+        lab.gitops_repo(source)
+        config = (lab.root / "gitops" / "repo" / ".git" / "config").read_text(encoding="utf-8")
+        assert "khong-duoc-dung" not in config
+
+
+def test_gitops_repo_refuses_symlink_and_private_key(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as lab:
+        (source / "app" / "link.yaml").symlink_to(source / "app" / "cm.yaml")
+        with pytest.raises(pytest.fail.Exception, match="symlink"):
+            lab.gitops_repo(source)
+        (source / "app" / "link.yaml").unlink()
+        secret_key = "AGE-SECRET-KEY-1" + "Q" * 58
+        (source / "app" / "keys.txt").write_text(f"# public key: {RECIPIENT}\n{secret_key}\n", encoding="utf-8")
+        with pytest.raises(pytest.fail.Exception) as info:
+            lab.gitops_repo(source)
+        assert "keys.txt" in str(info.value) and secret_key not in str(info.value)
+        assert lab._git_repo is None
+
+
+def argo_app(namespace: str, **change) -> dict:
+    app = {"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": {"name": "web"},
+           "spec": {"project": namespace,
+                    "source": {"repoURL": testkit.kube_git_url(namespace), "path": "app", "targetRevision": "main"},
+                    "destination": {"server": "https://kubernetes.default.svc", "namespace": namespace},
+                    "syncPolicy": {"automated": {"prune": True, "selfHeal": True}}}}
+    for key, value in change.items():
+        if value is None:
+            app["spec"].pop(key)
+        else:
+            app["spec"][key] = value
+    return app
+
+
+FOREIGN_APPS = {
+    "project-default": ({"project": "default"}, "spec.project"),
+    "project-other-lab": ({"project": "devops-ex-0000beef"}, "spec.project"),
+    "dest-namespace": ({"destination": {"server": "https://kubernetes.default.svc", "namespace": "kube-system"}}, "destination"),
+    "dest-cluster": ({"destination": {"server": "https://10.0.0.1:6443", "namespace": "NS"}}, "destination"),
+    "dest-name": ({"destination": {"name": "prod", "namespace": "NS"}}, "destination"),
+    "dest-missing-ns": ({"destination": {"server": "https://kubernetes.default.svc"}}, "destination"),
+    "repo-other-lab": ({"source": {"repoURL": "git://git.devops-git.svc.cluster.local/devops-ex-0000beef.git", "path": "."}},
+                       "repoURL"),
+    "repo-github": ({"source": {"repoURL": "https://github.com/argoproj/argocd-example-apps.git", "path": "guestbook"}},
+                    "repoURL"),
+    "sources-one-bad": ({"source": None, "sources": [{"repoURL": "REPO", "path": "."},
+                                                     {"repoURL": "https://github.com/x/y.git", "path": "."}]}, "repoURL"),
+    "hydrator": ({"sourceHydrator": {"drySource": {"repoURL": "REPO"}}}, "sourceHydrator"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(FOREIGN_APPS))
+def test_application_with_foreign_project_refused(case):
+    namespace = "devops-ex-abc12345"
+    change, needle = FOREIGN_APPS[case]
+    text = json.dumps(change).replace('"NS"', json.dumps(namespace)).replace('"REPO"', json.dumps(testkit.kube_git_url(namespace)))
+    app = argo_app(namespace, **json.loads(text))
+    assert testkit.kube_manifest_problems([argo_app(namespace)], lab_id="abc12345", namespace=namespace) == []
+    problems = testkit.kube_manifest_problems([app], lab_id="abc12345", namespace=namespace)
+    assert any(needle in p for p in problems), problems
+
+
+@pytest.mark.parametrize("kind", ["AppProject", "ApplicationSet"])
+def test_argocd_admin_kinds_refused_statically(kind):
+    doc = {"apiVersion": "argoproj.io/v1alpha1", "kind": kind, "metadata": {"name": "x"}, "spec": {}}
+    problems = testkit.kube_manifest_problems([doc], lab_id="abc12345", namespace="devops-ex-abc12345")
+    assert problems and "bị từ chối" in problems[0]
+
+
+def test_application_policy_in_cluster(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicy"
+                  and i["metadata"]["name"] == f"{lab.namespace}-argocd")
+    spec = policy["spec"]
+    assert spec["failurePolicy"] == "Fail"
+    assert spec["matchConstraints"]["resourceRules"] == [{"apiGroups": ["argoproj.io"], "apiVersions": ["*"],
+                                                          "resources": ["applications"], "operations": ["CREATE", "UPDATE"]}]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in spec["matchConditions"][0]["expression"]
+    text = json.dumps(spec["validations"])
+    for needle in (f"object.spec.project == '{lab.namespace}'", f"object.spec.destination.namespace == '{lab.namespace}'",
+                   "https://kubernetes.default.svc", lab.repo_url, "sourceHydrator", "object.spec.sources.all"):
+        assert needle in text, needle
+    probes = [json.loads(c["input"]) for c in fake.calls_with("--dry-run=server")]
+    [probe] = [p for p in probes if p["kind"] == "Application"]
+    assert probe["metadata"]["name"] == f"{lab.namespace}-probe-argocd" and probe["spec"]["project"] == "default"
+
+
+def test_application_policy_probe_only_with_argocd(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    assert any(i["metadata"]["name"] == f"{lab.namespace}-argocd" for i in bootstrap_items(fake))
+    assert not any(json.loads(c["input"])["kind"] == "Application" for c in fake.calls_with("--dry-run=server"))
+    assert not [c for c in fake.sandbox_calls if "applications.argoproj.io" in c["cmd"] and "delete" in c["cmd"]]
+
+
+ARGOCD_OK = {
+    "crd applications.argoproj.io": (0, "customresourcedefinition.apiextensions.k8s.io/applications.argoproj.io\n"),
+    "argocd-cmd-params-cm": (0, "devops-ex-*"),
+    "configmap argocd-cm -o": (0, "true"),
+    "appprojects.argoproj.io default": (0, "[][]"),
+    "statefulset argocd-application-controller": (0, "1"),
+    "deployment argocd-repo-server": (0, "1"),
+    "configmap devops-sops-age-public": (0, RECIPIENT),
+    "deployment git": (0, "1"),
+}
+
+
+def argocd_fake(monkeypatch, answers):
+    fake = KubeFake(monkeypatch)
+    calls = []
+
+    def run(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        calls.append(joined)
+        for key, (code, out) in answers.items():
+            if key in joined:
+                return subprocess.CompletedProcess(cmd, code, out, "" if code == 0 else "NotFound")
+        return fake.run_sandboxed(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return calls
+
+
+def test_require_argocd_ok_never_reads_private_key(monkeypatch):
+    calls = argocd_fake(monkeypatch, ARGOCD_OK)
+    testkit.Exercise.require_argocd()
+    assert len([c for c in calls if c.startswith("kubectl")]) == len(ARGOCD_OK)
+    assert not any(" secret" in c or "secrets" in c for c in calls), calls
+
+
+@pytest.mark.parametrize("broken,answer,needle", [
+    ("crd applications.argoproj.io", (1, ""), "CRD applications.argoproj.io"),
+    ("argocd-cmd-params-cm", (0, ""), "application.namespaces"),
+    ("argocd-cmd-params-cm", (0, "devops-ex-abc"), "application.namespaces"),
+    ("configmap argocd-cm -o", (0, "false"), "impersonation"),
+    ("appprojects.argoproj.io default", (0, "[\"*\"][{\"namespace\":\"*\",\"server\":\"*\"}]"), "AppProject default"),
+    ("statefulset argocd-application-controller", (0, "0"), "application-controller"),
+    ("deployment argocd-repo-server", (0, ""), "Secret argocd/devops-sops-age"),
+    ("configmap devops-sops-age-public", (1, ""), "devops-sops-age-public"),
+    ("configmap devops-sops-age-public", (0, "AGE-SECRET-KEY-1XYZ"), "devops-sops-age-public"),
+    ("deployment git", (0, "0"), "git server"),
+])
+def test_require_argocd_messages(monkeypatch, broken, answer, needle):
+    answers = dict(ARGOCD_OK)
+    answers[broken] = answer
+    argocd_fake(monkeypatch, answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_argocd()
+    assert_skip(info, needle, "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/argocd",
+                "20-default-project.yaml", "create secret generic devops-sops-age", "age-keygen -y", "image-archive")
+
+
+def test_require_argocd_needs_cluster_first(monkeypatch):
+    KubeFake(monkeypatch, clusters="\n")
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_argocd()
+    assert_skip(info, "Chưa có cluster kind devops-lab")
+
+
+def test_age_private_key_never_in_sandbox(monkeypatch, tmp_path):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        assert lab.sops_age_recipient == lab.age_public_key == RECIPIENT
+        lab.kubectl("get", "pods")
+        lab.run(["kubectl", "get", "applications"])
+        learner = [c for c in fake.sandbox_calls if c["env"]["KUBECONFIG"] == str(lab.kubeconfig)]
+    reads = [c["cmd"] for c in fake.sandbox_calls if "devops-sops-age-public" in c["cmd"]]
+    assert reads == [[*reads[0][:1], "-n", "argocd", "get", "configmap", "devops-sops-age-public", "-o", "jsonpath={.data.recipient}"]]
+    for call in fake.sandbox_calls:
+        assert not {"secret", "secrets", "devops-sops-age"} & set(call["cmd"]), call["cmd"]
+    assert learner
+    for call in learner:
+        assert all(Path(p).is_relative_to(lab.root) for p in call["readonly"] + call["writable"])
+        assert not any("SOPS" in key or "AGE" in key for key in call["env"])
+
+
+def test_age_private_key_only_in_cmp_sidecar():
+    import yaml
+
+    folder = testkit.KUBE_ARGOCD_DIR
+    texts = {p.name: p.read_text(encoding="utf-8") for p in folder.iterdir() if p.is_file()}
+    assert not any("AGE-SECRET-KEY" in text for text in texts.values())
+    kustomization = yaml.safe_load(texts["kustomization.yaml"])
+    [patch] = [p for p in kustomization["patches"] if p["target"]["name"] == "argocd-repo-server"]
+    spec = yaml.safe_load(patch["patch"])["spec"]["template"]["spec"]
+    [volume] = [v for v in spec["volumes"] if "secret" in v]
+    assert volume["secret"]["secretName"] == testkit.KUBE_ARGOCD_AGE_SECRET
+    mounting = [c["name"] for c in spec["containers"] + spec["initContainers"]
+                if any(m["name"] == volume["name"] for m in c.get("volumeMounts", []))]
+    assert mounting == [testkit.KUBE_ARGOCD_CMP]
+    sidecar = next(c for c in spec["containers"] if c["name"] == testkit.KUBE_ARGOCD_CMP)
+    assert all(m.get("readOnly") for m in sidecar["volumeMounts"] if m["name"] in (volume["name"], "custom-tools"))
+    for name, text in texts.items():
+        if name.endswith(".yaml"):
+            for doc in yaml.safe_load_all(text):
+                assert not (isinstance(doc, dict) and doc.get("kind") == "Secret"
+                            and doc["metadata"]["name"] == testkit.KUBE_ARGOCD_AGE_SECRET), name
+
+
+def test_argocd_wait_waits_for_latest_revision(monkeypatch, tmp_path):
+    synced = {"health": {"status": "Healthy"}, "sync": {"status": "Synced", "revision": "a" * 40},
+              "operationState": {"phase": "Succeeded"}}
+    fake = ArgoFake(monkeypatch, app_status=[synced, synced])
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    with testkit.KubeLab() as lab:
+        assert lab.argocd_wait("web") == synced
+        lab.gitops_revision = "b" * 40
+        later = {**synced, "sync": {"status": "Synced", "revision": "b" * 40}}
+        running = {**later, "operationState": {"phase": "Running"}}
+        fake.app_status = [synced, running, later]
+        assert lab.argocd_wait("web")["sync"]["revision"] == "b" * 40
+        reads = [c for c in fake.sandbox_calls if "applications.argoproj.io" in c["cmd"] and "json" in c["cmd"]]
+        assert reads and all(c["env"]["KUBECONFIG"] == str(lab.kubeconfig) for c in reads)
+        with pytest.raises(ValueError):
+            lab.argocd_wait("Web; rm")
+
+
+def test_argocd_wait_failure_message(monkeypatch):
+    stuck = {"health": {"status": "Degraded"}, "sync": {"status": "OutOfSync", "revision": "c" * 40},
+             "operationState": {"phase": "Failed", "message": "one or more objects failed to apply"},
+             "conditions": [{"type": "SyncError", "message": "namespace default is not permitted"}],
+             "resources": [{"kind": "Secret", "name": "db"}]}
+    ArgoFake(monkeypatch, app_status=[stuck])
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    with testkit.KubeLab() as lab:
+        clock = iter(range(0, 10_000, 100))
+        monkeypatch.setattr(testkit.time, "monotonic", lambda: next(clock))
+        with pytest.raises(pytest.fail.Exception) as info:
+            lab.argocd_wait("web", timeout=5)
+    text = str(info.value)
+    for needle in ("health=Degraded", "sync=OutOfSync", "Failed", "namespace default is not permitted"):
+        assert needle in text, text
+    assert '"Secret"' not in text
+
+
+def test_argocd_setup_pinned_and_documented():
+    import hashlib
+
+    folder = testkit.KUBE_ARGOCD_DIR
+    sums = dict(reversed(line.split()) for line in (folder / "SHA256SUMS").read_text(encoding="utf-8").splitlines())
+    assert set(sums) == {p.name for p in folder.iterdir() if p.is_file() and p.name != "SHA256SUMS"}
+    for name, digest in sums.items():
+        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest, name
+    assert sums["00-argocd-v3.5.6-core-install.yaml"] == "d3d9d3555ad77eb4b6d27b1ec0d2af7978a91537e84d54631f983c227f0a3d31"
+    text = "\n".join((folder / name).read_text(encoding="utf-8") for name in sums)
+    images = set(re.findall(r"image: (\S+)", text))
+    assert images == {testkit.KUBE_ARGOCD_IMAGE, testkit.KUBE_ARGOCD_REDIS_IMAGE, testkit.KUBE_ARGOCD_SOPS_IMAGE}
+    kustomization = (folder / "kustomization.yaml").read_text(encoding="utf-8")
+    for needle in ("application.namespaces: devops-ex-*", 'application.sync.impersonation.enabled: "true"', "unsetOnly"):
+        assert needle in kustomization + (folder / "namespace.yaml").read_text(encoding="utf-8"), needle
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    for needle in (testkit.KUBE_ARGOCD_IMAGE_DIGEST, testkit.KUBE_ARGOCD_REDIS_IMAGE_DIGEST, testkit.KUBE_ARGOCD_SOPS_IMAGE_DIGEST,
+                   "setup/kind/argocd", "devops-sops-age-public", sums["00-argocd-v3.5.6-core-install.yaml"][:16]):
+        assert needle in doc, needle
+
+
+@pytest.mark.skipif(not shutil.which("kubectl"), reason="Cần kubectl để render kustomization")
+def test_argocd_rendered_manifests_fail_closed(tmp_path):
+    import yaml
+
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "KUBECONFIG": str(tmp_path / "none"), "KUBERC": "off"}
+    result = subprocess.run(["kubectl", "kustomize", str(testkit.KUBE_ARGOCD_DIR)], capture_output=True, text=True, env=env,
+                            timeout=120)
+    assert result.returncode == 0, result.stderr
+    docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+    namespaces = {d["metadata"].get("namespace") for d in docs} - {None}
+    assert namespaces == {"argocd", "devops-git"}
+    for doc in docs:
+        if doc["kind"] in ("Deployment", "StatefulSet"):
+            spec = doc["spec"]["template"]["spec"]
+            for container in spec.get("initContainers", []) + spec["containers"]:
+                assert container.get("imagePullPolicy") == "Never", (doc["metadata"]["name"], container["name"])
+    git = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "git")
+    command = git["spec"]["template"]["spec"]["containers"][0]["command"]
+    assert command[:2] == ["git", "daemon"] and not any("receive-pack" in part for part in command)
+    policy = next(d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["namespace"] == "devops-git")
+    assert policy["spec"]["ingress"][0]["from"] == [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "argocd"}},
+                                                     "podSelector": {"matchLabels": {"app.kubernetes.io/name": "argocd-repo-server"}}}]
+    labelled = [d["metadata"]["name"] for d in docs if "devops-ex" in (d["metadata"].get("labels") or {})]
+    assert labelled == []
+    appset = next(d for d in docs if d["metadata"]["name"] == "argocd-applicationset-controller" and d["kind"] == "Deployment")
+    assert appset["spec"]["replicas"] == 0
+
+
+def apply_as_learner(lab, doc: dict) -> subprocess.CompletedProcess:
+    return lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
+
+
+@KUBE_REQUIRED
+def test_argocd_application_syncs_only_into_lab_namespace_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    source = gitops_tree(tmp_path / "gitops", "1")
+    with testkit.KubeLab() as a, testkit.KubeLab() as b:
+        a.argocd_project()
+        b.argocd_project()
+        a.gitops_repo(source)
+        b.gitops_repo(source)
+        assert apply_as_learner(a, argo_app(a.namespace)).returncode == 0
+        started = time.monotonic()
+        status = a.argocd_wait("web", timeout=120)
+        first_sync = time.monotonic() - started
+        assert status["sync"]["revision"] == a.gitops_revision
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "1"
+        gitops_tree(source, "2")
+        a.gitops_repo(source)
+        started = time.monotonic()
+        a.argocd_wait("web", timeout=120)
+        resync = time.monotonic() - started
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "2"
+        print(f"ArgoCD: sync đầu {first_sync:.1f}s, sync lại sau commit mới {resync:.1f}s")
+        foreign = [
+            argo_app(a.namespace, project="default"),
+            argo_app(a.namespace, project=b.namespace),
+            argo_app(a.namespace, destination={"server": "https://kubernetes.default.svc", "namespace": "default"}),
+            argo_app(a.namespace, destination={"server": "https://kubernetes.default.svc", "namespace": b.namespace}),
+            argo_app(a.namespace, destination={"server": "https://10.0.0.1:6443", "namespace": a.namespace}),
+            argo_app(a.namespace, source={"repoURL": b.repo_url, "path": "app", "targetRevision": "main"}),
+        ]
+        for index, doc in enumerate(foreign):
+            doc["metadata"]["name"] = f"foreign-{index}"
+            result = apply_as_learner(a, doc)
+            assert result.returncode != 0 and f"{a.namespace}-argocd" in result.stderr, (doc["spec"], result.stderr)
+        assert not a.can_i("create", "appprojects.argoproj.io", serviceaccount="devops-ex-learner")
+        assert not a.can_i("create", "applications.argoproj.io", serviceaccount="devops-ex-learner", all_namespaces=True)
+        bypass = {
+            "admin-default-project": argo_app(a.namespace, project="default"),
+            "admin-foreign-namespace": argo_app(a.namespace, destination={"server": "https://kubernetes.default.svc",
+                                                                         "namespace": b.namespace}),
+            "admin-foreign-repo": argo_app(a.namespace, source={"repoURL": b.repo_url, "path": "app", "targetRevision": "main"}),
+        }
+        for name, doc in bypass.items():
+            doc["metadata"].update(name=name, namespace=a.namespace)
+            assert admin_kubectl("apply", "-f", "-", input=json.dumps(doc)).returncode == 0
+        deadline = time.monotonic() + 60
+        refused = {}
+        while time.monotonic() < deadline and len(refused) < len(bypass):
+            for name in bypass:
+                got = json.loads(admin_kubectl("-n", a.namespace, "get", "applications.argoproj.io", name, "-o", "json").stdout)
+                messages = " ".join(c.get("message", "") for c in (got.get("status") or {}).get("conditions") or [])
+                if "not permitted" in messages or "do not match any of the allowed destinations" in messages:
+                    refused[name] = messages
+            time.sleep(2)
+        assert set(refused) == set(bypass), refused
+        assert b.kubectl("get", "configmap", "web", "--ignore-not-found", "-o", "name").stdout.strip() == ""
+        escape = tmp_path / "escape"
+        (escape / "app").mkdir(parents=True)
+        (escape / "app" / "kustomization.yaml").write_text("resources: [objects.yaml]\n", encoding="utf-8")
+        (escape / "app" / "objects.yaml").write_text(
+            f"apiVersion: v1\nkind: ConfigMap\nmetadata: {{name: escaped, namespace: {b.namespace}}}\ndata: {{x: '1'}}\n---\n"
+            f"apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata: {{name: {a.namespace}-escape, labels: "
+            f"{{devops-ex: {a.id}}}}}\nrules: []\n---\n"
+            "apiVersion: v1\nkind: ServiceAccount\nmetadata: {name: impersonated}\n", encoding="utf-8")
+        a.gitops_repo(escape)
+        with pytest.raises(pytest.fail.Exception) as info:
+            a.argocd_wait("web", timeout=60)
+        assert "not permitted in project" in str(info.value) or "is forbidden" in str(info.value), str(info.value)
+        assert admin_kubectl("-n", b.namespace, "get", "configmap", "escaped").returncode != 0
+        assert admin_kubectl("get", "clusterrole", f"{a.namespace}-escape").returncode != 0
+    for lab in (a, b):
+        assert testkit.kube_leftovers(lab.id) == []
+
+
+@KUBE_REQUIRED
+@SANDBOX_REQUIRED
+def test_argocd_sops_secret_decrypted_on_sync_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    testkit.Exercise.require_tool("sops", testkit.SOPS_MIN_VERSION)
+    value = "mat-khau-" + os.urandom(6).hex()
+    with testkit.KubeLab() as lab:
+        lab.argocd_project()
+        recipient = lab.sops_age_recipient
+        assert re.fullmatch(r"age1[0-9a-z]{58}", recipient)
+        repo = tmp_path / "repo"
+        (repo / "app").mkdir(parents=True)
+        (repo / ".sops.yaml").write_text(f"creation_rules:\n  - path_regex: .*\\.enc\\.yaml$\n    encrypted_regex: ^(data|stringData)$\n"
+                                         f"    age: {recipient}\n", encoding="utf-8")
+        (repo / "app" / "kustomization.yaml").write_text("resources: [secret.enc.yaml]\n", encoding="utf-8")
+        (repo / "app" / "secret.enc.yaml").write_text(
+            f"apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\nstringData:\n  password: {value}\n", encoding="utf-8")
+        home = tmp_path / "home"
+        home.mkdir()
+        encrypt = testkit.run_sandboxed(["sops", "encrypt", "--in-place", "app/secret.enc.yaml"], writable=[repo, home], cwd=repo,
+                                        env={"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config")})
+        assert encrypt.returncode == 0, encrypt.stderr
+        assert not any(value in p.read_text(encoding="utf-8") for p in repo.rglob("*") if p.is_file())
+        lab.gitops_repo(repo)
+        app = argo_app(lab.namespace)
+        app["spec"]["source"].update(plugin={"name": testkit.KUBE_ARGOCD_CMP})
+        assert apply_as_learner(lab, app).returncode == 0
+        status = lab.argocd_wait("web", timeout=120)
+        assert value not in json.dumps(status)
+        got = lab.kubectl("get", "secret", "db", "-o", "jsonpath={.data.password}").stdout
+        assert base64.b64decode(got).decode() == value, "Secret sau khi sync không có đúng giá trị đã mã hoá"
+        described = lab.kubectl("describe", "application.argoproj.io", "web").stdout
+        assert value not in described
+    assert testkit.kube_leftovers(lab.id) == []
+
+
+@pytest.mark.parametrize("change,needle", [
+    ({"operation": {"sync": {"source": {"repoURL": "git://git.devops-git.svc.cluster.local/devops-ex-0000beef.git"}}}},
+     "operation.sync.source"),
+    ({"operation": {"sync": {"sources": [{"repoURL": "https://github.com/x/y.git"}]}}}, "operation.sync.sources"),
+    ({"operation": {"sync": {"manifests": ["apiVersion: v1\nkind: ConfigMap\n"]}}}, "operation.sync.manifests"),
+    ({"status": {"health": {"status": "Healthy"}, "sync": {"status": "Synced"}}}, "status"),
+])
+def test_application_operation_source_and_status_refused(change, needle):
+    namespace = "devops-ex-abc12345"
+    ok = {**argo_app(namespace), "operation": {"sync": {"revision": "main", "prune": True}}}
+    assert testkit.kube_manifest_problems([ok], lab_id="abc12345", namespace=namespace) == []
+    problems = testkit.kube_manifest_problems([{**argo_app(namespace), **change}], lab_id="abc12345", namespace=namespace)
+    assert any(needle in p for p in problems), problems
+
+
+def test_application_policy_refuses_operation_source_and_status(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["metadata"]["name"] == f"{lab.namespace}-argocd"
+                  and i["kind"] == "ValidatingAdmissionPolicy")
+    expressions = [v["expression"] for v in policy["spec"]["validations"]]
+    [operation] = [e for e in expressions if "object.operation" in e]
+    for key in ("source", "sources", "manifests"):
+        assert f"!has(object.operation.sync.{key})" in operation
+    assert "object.operation == oldObject.operation" in operation
+    [status] = [e for e in expressions if "object.status" in e]
+    assert "request.operation == 'CREATE' ? !has(object.status)" in status and "object.status == oldObject.status" in status
+
+
+def test_gitops_repo_size_cap(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_BYTES", 1000)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_FILES", 5)
+    big = tmp_path / "big"
+    big.mkdir()
+    (big / "blob.yaml").write_bytes(b"x" * 1001)
+    many = tmp_path / "many"
+    many.mkdir()
+    for index in range(6):
+        (many / f"f{index}.yaml").write_text("a: 1\n", encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        for source in (big, many):
+            with pytest.raises(pytest.fail.Exception, match="tối đa"):
+                lab.gitops_repo(source)
+        assert lab._git_repo is None
+    assert testkit.KUBE_GITOPS_MAX_BYTES == 1000 and testkit.KUBE_GITOPS_MAX_FILES == 5
+
+
+def test_close_releases_argocd_hook_finalizer(monkeypatch):
+    fake = ArgoFake(monkeypatch, apps="application.argoproj.io/web\n")
+    hooked = {"items": [
+        {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "migrate", "finalizers": [
+            testkit.KUBE_ARGOCD_HOOK_FINALIZER, "example.com/keep"]}},
+        {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "hook-pod", "finalizers": [testkit.KUBE_ARGOCD_HOOK_FINALIZER]}},
+        {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "plain", "finalizers": ["example.com/keep"]}},
+    ]}
+    original = fake.run_sandboxed
+    hook_lists = []
+
+    def run_sandboxed(cmd, **kwargs):
+        if "jobs.batch" in " ".join(map(str, cmd)) and "json" in cmd:
+            hook_lists.append({"cmd": list(map(str, cmd)), "env": dict(kwargs["env"])})
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(hooked), "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab() as lab:
+        pass
+    [listed] = [c for c in hook_lists if "get" in c["cmd"]] or [None]
+    assert listed is not None, "close() phải liệt kê hook trong namespace của lab"
+    assert listed["cmd"][listed["cmd"].index("-n") + 1] == lab.namespace
+    assert listed["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig)
+    kinds = [c for c in fake.calls_with("patch") if "--type=merge" in c["cmd"]]
+    patches = {c["cmd"][c["cmd"].index("patch") + 1]: json.loads(c["cmd"][-1]) for c in kinds if "finalizers" in c["cmd"][-1]
+               and "application.argoproj.io" not in c["cmd"][c["cmd"].index("patch") + 1]}
+    assert patches == {"job.batch/migrate": {"metadata": {"finalizers": ["example.com/keep"]}},
+                       "pod/hook-pod": {"metadata": {"finalizers": None}}}
+    assert all(c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig) for c in kinds)
+    order = [" ".join(c["cmd"]) for c in fake.sandbox_calls]
+    first_patch = next(i for i, c in enumerate(order) if "job.batch/migrate" in c)
+    namespace_delete = next(i for i, c in enumerate(order) if f"delete namespace {lab.namespace}" in c)
+    assert first_patch < namespace_delete
+    assert "argoproj.io" not in testkit._KUBE_HOOK_KINDS and "jobs.batch" in testkit._KUBE_HOOK_KINDS
+    assert "gateway.networking.k8s.io" not in testkit._KUBE_HOOK_KINDS
+
+
+@KUBE_REQUIRED
+def test_kube_lab_close_releases_stuck_argocd_hook_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    source = tmp_path / "gitops"
+    (source / "app").mkdir(parents=True)
+    (source / "app" / "kustomization.yaml").write_text("resources: [hook.yaml, web.yaml]\n", encoding="utf-8")
+    (source / "app" / "web.yaml").write_text("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web\ndata:\n  v: '1'\n",
+                                            encoding="utf-8")
+    (source / "app" / "hook.yaml").write_text(
+        "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: stuck\n  annotations:\n    argocd.argoproj.io/hook: PreSync\n"
+        "spec:\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: c\n"
+        f"          image: {testkit.KUBE_IMAGES['redis']}\n          envFrom: [{{configMapRef: {{name: missing}}}}]\n",
+        encoding="utf-8")
+    with testkit.KubeLab() as lab:
+        lab.argocd_project()
+        lab.gitops_repo(source)
+        assert apply_as_learner(lab, argo_app(lab.namespace)).returncode == 0
+        deadline = time.monotonic() + 90
+        finalizers = []
+        while time.monotonic() < deadline and testkit.KUBE_ARGOCD_HOOK_FINALIZER not in finalizers:
+            got = lab.kubectl("get", "job", "stuck", "-o", "jsonpath={.metadata.finalizers}", check=False).stdout
+            finalizers = json.loads(got) if got.strip() else []
+            time.sleep(2)
+        assert testkit.KUBE_ARGOCD_HOOK_FINALIZER in finalizers, "ArgoCD phải gắn hook-finalizer cho Job hook đang chạy"
+    assert lab.cleanup_error is None, lab.cleanup_error
+    assert admin_kubectl("get", "namespace", lab.namespace).returncode != 0
+    assert testkit.kube_leftovers(lab.id) == []
+
+
+def test_lab_entry_sweeps_gitops_of_killed_labs(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    alive, dead = "devops-ex-1111aaaa", "devops-ex-2222bbbb"
+
+    def run(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        answer = None
+        if joined.endswith("get namespaces -o name"):
+            answer = f"namespace/default\nnamespace/{alive}\nnamespace/argocd\n"
+        elif "get appprojects.argoproj.io -l devops-ex -o name" in joined:
+            answer = f"appproject.argoproj.io/{alive}\nappproject.argoproj.io/{dead}\n"
+        elif "ls -1A /srv/git /tmp" in joined:
+            answer = f"/srv/git:\n{alive}.git\n{dead}.git\nnot-a-lab.git\n\n/tmp:\n{dead}.bundle\n"
+        if answer is None:
+            return original(cmd, **kwargs)
+        fake.sandbox_calls.append({"cmd": list(map(str, cmd)), "env": dict(kwargs["env"]), "writable": [], "readonly": [],
+                                   "cwd": None, "input": None})
+        return subprocess.CompletedProcess(cmd, 0, answer, "")
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    with testkit.KubeLab():
+        pass
+    deleted = [c["cmd"] for c in fake.sandbox_calls if "delete" in c["cmd"] and "appprojects.argoproj.io" in c["cmd"]
+               and "-l" not in c["cmd"]]
+    assert deleted == [[deleted[0][0], "-n", "argocd", "delete", "appprojects.argoproj.io", dead, "--ignore-not-found"]]
+    removed = [c["cmd"] for c in fake.sandbox_calls if "rm" in c["cmd"] and "-rf" in c["cmd"]]
+    assert len(removed) == 1
+    assert removed[0][-2:] == [f"/srv/git/{dead}.git", f"/tmp/{dead}.bundle"]
+    assert not any(alive in part or "not-a-lab" in part for part in removed[0])
+
+
+def cmp_script() -> str:
+    import yaml
+
+    config = yaml.safe_load((testkit.KUBE_ARGOCD_DIR / "10-sops-cmp.yaml").read_text(encoding="utf-8"))
+    plugin = yaml.safe_load(config["data"]["plugin.yaml"])
+    command = plugin["spec"]["generate"]["command"]
+    assert command == ["sh", "-c"]
+    return plugin["spec"]["generate"]["args"][0]
+
+
+@pytest.mark.parametrize("metadata,refused", [
+    ("sops:\n    kms:\n        - arn: arn:aws:kms:us-east-1:1:key/x\n    age: []\n", True),
+    ("sops:\n    hc_vault:\n        - vault_address: http://vault.example:8200\n", True),
+    ("sops:\n    gcp_kms:\n        - resource_id: projects/x\n", True),
+    ("sops:\n    azure_kv:\n        - vault_url: https://x.vault.azure.net\n", True),
+    ("sops:\n    pgp:\n        - fp: ABCD\n", True),
+    ('{"sops": {"key_groups": [{"kms": [{"arn": "x"}]}]}}\n', True),
+    ("sops:\n    age:\n        - recipient: " + RECIPIENT + "\n          enc: x\n", False),
+    ("sops:\n    'hc_vault':\n        - vault_address: http://vault.example:8200\n", False),
+    ("sops:\n    ? hc_vault\n    : - vault_address: http://vault.example:8200\n", False),
+    ('{"sops": {"hc_\\x76ault": [{"vault_address": "http://vault.example:8200"}]}}\n', False),
+])
+def test_cmp_accepts_only_age_recipients(tmp_path, metadata, refused):
+    """Kiểm tên khoá trong script CMP chỉ là lớp từ chối sớm, kiểu denylist: ba cách viết cuối (khoá trong nháy đơn, khoá tường
+    minh `? hc_vault`, escape trong chuỗi JSON) lọt qua grep. Ranh giới thật để sops không gọi ra ngoài là NetworkPolicy egress
+    của repo-server cộng proxy chết (`test_argocd_repo_server_egress_and_git_locked_down`)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "secret.enc.yaml").write_text("data:\n    password: ENC[AES256_GCM,data:x]\n" + metadata, encoding="utf-8")
+    result = subprocess.run(["sh", "-c", cmp_script()], cwd=repo, capture_output=True, text=True, timeout=30,
+                            env={"PATH": "/usr/bin:/bin"})
+    assert result.returncode != 0
+    assert ("Chỉ nhận tệp SOPS mã hoá bằng recipient age" in result.stderr) == refused, result.stderr
+
+
+def test_argocd_repo_server_egress_and_git_locked_down():
+    import yaml
+
+    folder = testkit.KUBE_ARGOCD_DIR
+    policy = yaml.safe_load((folder / "40-repo-server-egress.yaml").read_text(encoding="utf-8"))
+    spec = policy["spec"]
+    assert policy["metadata"]["namespace"] == "argocd" and spec["policyTypes"] == ["Egress"]
+    assert spec["podSelector"] == {"matchLabels": {"app.kubernetes.io/name": "argocd-repo-server"}}
+    allowed = {(rule["to"][0].get("podSelector", {}).get("matchLabels", {}).popitem()[1],
+                tuple(sorted((p["port"], p["protocol"]) for p in rule["ports"]))) for rule in spec["egress"]}
+    assert allowed == {("kube-dns", ((53, "TCP"), (53, "UDP"))), ("git", ((9418, "TCP"),)), ("argocd-redis", ((6379, "TCP"),))}
+    kustomization = yaml.safe_load((folder / "kustomization.yaml").read_text(encoding="utf-8"))
+    params = next(yaml.safe_load(p["patch"]) for p in kustomization["patches"] if p["target"]["name"] == "argocd-cmd-params-cm")
+    assert params["data"]["reposerver.enable.git.submodule"] == "false"
+    repo = next(yaml.safe_load(p["patch"]) for p in kustomization["patches"] if p["target"]["name"] == "argocd-repo-server")
+    pod = repo["spec"]["template"]["spec"]
+    containers = {c["name"]: c for c in pod["containers"]}
+    sidecar_env = {e["name"]: e["value"] for e in containers["sops-kustomize"]["env"]}
+    assert sidecar_env["GIT_CONFIG_KEY_0"] == "protocol.allow" and sidecar_env["GIT_CONFIG_VALUE_0"] == "never"
+    assert sidecar_env["GIT_ALLOW_PROTOCOL"] == "none"
+    main_env = {e["name"]: e["value"] for e in containers["argocd-repo-server"]["env"]}
+    assert main_env["GIT_ALLOW_PROTOCOL"] == "git" and main_env["PATH"].startswith("/devops-tools:")
+    assert {"name": "devops-repo-tools", "mountPath": "/devops-tools", "readOnly": True} in containers["argocd-repo-server"]["volumeMounts"]
+    tools = yaml.safe_load((folder / "11-repo-tools.yaml").read_text(encoding="utf-8"))["data"]["kustomize"]
+    assert "GIT_ALLOW_PROTOCOL=none" in tools and "GIT_CONFIG_VALUE_0=never" in tools and 'exec /usr/local/bin/kustomize "$@"' in tools
+    for env in (main_env, sidecar_env):
+        assert {env[k] for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")} == {"http://127.0.0.1:1"}
+        assert env["NO_PROXY"] == ""
+    assert containers["sops-kustomize"]["resources"]["limits"]["ephemeral-storage"] == "1Gi"
+    tmp = next(v for v in pod["volumes"] if v["name"] == "cmp-tmp")
+    assert tmp["emptyDir"]["sizeLimit"] == "512Mi"
+
+
+def first_condition(lab, app: str, needles, timeout: float = 90) -> tuple[str, float]:
+    started = time.monotonic()
+    text = ""
+    while time.monotonic() - started < timeout:
+        got = json.loads(admin_kubectl("-n", lab.namespace, "get", "applications.argoproj.io", app, "-o", "json").stdout)
+        status = got.get("status") or {}
+        text = " ".join([c.get("message", "") for c in status.get("conditions") or []]
+                        + [(status.get("operationState") or {}).get("message") or ""])
+        if any(n in text for n in needles):
+            return text, time.monotonic() - started
+        time.sleep(1)
+    return text, time.monotonic() - started
+
+
+@KUBE_REQUIRED
+def test_argocd_operation_status_and_remote_bases_refused_real(tmp_path):
+    testkit.Exercise.require_argocd()
+    with testkit.KubeLab() as a, testkit.KubeLab() as b:
+        a.argocd_project()
+        b.argocd_project()
+        b.gitops_repo(gitops_tree(tmp_path / "b", "cua-lab-b"))
+        a.gitops_repo(gitops_tree(tmp_path / "a", "1"))
+        attack = argo_app(a.namespace)
+        attack["metadata"]["name"] = "steal"
+        attack["operation"] = {"sync": {"source": {"repoURL": b.repo_url, "path": "app", "targetRevision": "main"}}}
+        result = apply_as_learner(a, attack)
+        assert result.returncode != 0 and f"{a.namespace}-argocd" in result.stderr, result.stderr
+        app = argo_app(a.namespace)
+        app["spec"].pop("syncPolicy")
+        assert apply_as_learner(a, app).returncode == 0
+        a.argocd_wait("web", sync="OutOfSync", health=None, timeout=60)
+        for patch in ({"operation": {"sync": {"sources": [{"repoURL": b.repo_url, "path": "app"}]}}},
+                      {"operation": {"sync": {"manifests": ["apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\n"]}}},
+                      {"status": {"health": {"status": "Healthy"}, "sync": {"status": "Synced", "revision": a.gitops_revision}}}):
+            result = a.kubectl("patch", "applications.argoproj.io", "web", "--type=merge", "-p", json.dumps(patch), check=False)
+            assert result.returncode != 0 and f"{a.namespace}-argocd" in result.stderr, (patch, result.stderr)
+        result = a.kubectl("patch", "applications.argoproj.io", "web", "--type=merge", "-p",
+                           json.dumps({"operation": {"sync": {"revision": "main"}}}), check=False)
+        assert result.returncode == 0, result.stderr
+        a.argocd_wait("web", timeout=60)
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "1"
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout != "cua-lab-b"
+        remote = tmp_path / "remote"
+        (remote / "app").mkdir(parents=True)
+        (remote / "app" / "kustomization.yaml").write_text(f"resources:\n  - git::{b.repo_url}//app?ref=main\n", encoding="utf-8")
+        a.gitops_repo(remote)
+        text, seconds = first_condition(a, "web", ("kustomize build",))
+        assert seconds < 25 and "kustomize build" in text and "timeout after" not in text, text
+        assert a.kubectl("get", "configmap", "web", "-o", "jsonpath={.data.v}").stdout == "1"
+        print(f"Remote base trỏ repo của lab khác (git://) bị từ chối sau {seconds:.1f}s")
+        (remote / "app" / "kustomization.yaml").write_text(
+            "resources:\n  - https://github.com/kubernetes-sigs/kustomize//examples/helloWorld?ref=v5.0.0\n", encoding="utf-8")
+        a.gitops_repo(remote)
+        text, seconds = first_condition(a, "web", ("helloWorld",))
+        assert seconds < 25 and "timeout after" not in text, text
+        print(f"Remote base (built-in kustomize) bị từ chối sau {seconds:.1f}s: {text[:200]}")
+        a.kubectl("patch", "applications.argoproj.io", "web", "--type=merge", "-p",
+                  json.dumps({"spec": {"source": {"plugin": {"name": testkit.KUBE_ARGOCD_CMP}}}}))
+        (remote / "app" / "kustomization.yaml").write_text(
+            "resources:\n  - https://raw.githubusercontent.com/kubernetes-sigs/kustomize/v5.0.0/examples/helloWorld/deployment.yaml\n",
+            encoding="utf-8")
+        a.gitops_repo(remote)
+        text, seconds = first_condition(a, "web", ("CMP processing failed",))
+        assert seconds < 25 and "CMP processing failed" in text and "timeout after" not in text, text
+        print(f"Remote URL (CMP) bị từ chối sau {seconds:.1f}s: {text[:200]}")
+        assert a.kubectl("get", "deployment", "--ignore-not-found", "-o", "name").stdout.strip() == ""
+    for lab in (a, b):
+        assert testkit.kube_leftovers(lab.id) == []
+
+
+def test_gitops_repo_caps_total_history(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_REPO_BYTES", 150_000)
+    source = tmp_path / "gitops"
+    source.mkdir()
+    with testkit.KubeLab() as lab:
+        (source / "blob.bin").write_bytes(os.urandom(100_000))
+        lab.gitops_repo(source)
+        first = lab.gitops_revision
+        (source / "blob.bin").write_bytes(os.urandom(100_000))
+        with pytest.raises(pytest.fail.Exception, match="cho cả lab"):
+            lab.gitops_repo(source)
+        assert lab.gitops_revision == first
+        assert lab._git_repo.out("rev-parse", "HEAD") == first
+        assert not list(lab._admin.home.glob("*.bundle"))
+
+
+def test_gitops_repo_counts_bytes_read_not_reported_size(monkeypatch, tmp_path):
+    ArgoFake(monkeypatch)
+    monkeypatch.setattr(testkit, "KUBE_GITOPS_MAX_BYTES", 1000)
+    source = tmp_path / "gitops"
+    source.mkdir()
+    grown = source / "grown.yaml"
+    grown.write_bytes(b"x" * 5000)
+    real_stat = Path.stat
+
+    def small_stat(self, *args, **kwargs):
+        result = real_stat(self, *args, **kwargs)
+        if self == grown:
+            return os.stat_result((result.st_mode, *tuple(result)[1:6], 10, *tuple(result)[7:]))
+        return result
+
+    monkeypatch.setattr(Path, "stat", small_stat)
+    assert grown.stat().st_size == 10
+    with testkit.KubeLab() as lab:
+        with pytest.raises(pytest.fail.Exception, match="vượt 1000 byte"):
+            lab.gitops_repo(source)
+        assert lab._git_repo is None
+
+
+OBS_SERVICES = {"otel-collector", "jaeger", "loki", "prometheus", "alertmanager", "grafana"}
+OBS_DATA_DIRS = {"prometheus": "/prometheus", "alertmanager": "/alertmanager", "loki": "/loki", "jaeger": "/tmp"}
+
+
+def obs_compose() -> dict:
+    import yaml
+
+    return yaml.safe_load((testkit.OBS_DIR / "compose.yaml").read_text(encoding="utf-8"))
+
+
+def test_obs_images_pinned_by_digest_and_match_compose():
+    assert set(testkit.OBS_IMAGES) == OBS_SERVICES == set(testkit.OBS_READY)
+    for image in testkit.OBS_IMAGES.values():
+        assert re.fullmatch(r"[a-z0-9./-]+:v?\d+\.\d+\.\d+@sha256:[0-9a-f]{64}", image), image
+    services = obs_compose()["services"]
+    assert {name: svc["image"] for name, svc in services.items()} == testkit.OBS_IMAGES
+    for name, svc in services.items():
+        assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", [])), name
+        assert all(volume.startswith("./") and volume.endswith(":ro") for volume in svc.get("volumes", [])), name
+        assert svc["cpuset"] == "${DEVOPS_CPUSET:-}"
+    for name, path in OBS_DATA_DIRS.items():
+        assert any(t.split(":")[0] == path for t in services[name]["tmpfs"]), (
+            f"{name}: image có VOLUME {path}, phải phủ tmpfs để không sinh volume ẩn danh")
+    assert testkit.OBS_PULL.count("docker pull ") == len(testkit.OBS_IMAGES)
+
+
+def test_obs_defaults_point_at_stack_services():
+    import yaml
+
+    prom = yaml.safe_load((testkit.OBS_DIR / "prometheus" / "prometheus.yml").read_text(encoding="utf-8"))
+    targets = {c["job_name"]: c["static_configs"][0]["targets"] for c in prom["scrape_configs"]}
+    assert targets["olist-api"] == ["api:8000"] and targets["olist-worker"] == ["worker:9101"]
+    assert prom["alerting"]["alertmanagers"][0]["static_configs"][0]["targets"] == ["alertmanager:9093"]
+    collector = yaml.safe_load((testkit.OBS_DIR / "otel-collector" / "config.yaml").read_text(encoding="utf-8"))
+    pipelines = collector["service"]["pipelines"]
+    assert "otlp/jaeger" in pipelines["traces"]["exporters"] and pipelines["logs"]["exporters"] == ["otlphttp/loki"]
+    sources = yaml.safe_load((testkit.OBS_DIR / "grafana" / "provisioning" / "datasources" / "datasources.yaml").read_text(encoding="utf-8"))
+    assert {d["uid"] for d in sources["datasources"]} == {"prometheus", "loki", "jaeger"}
+
+
+OBS_PROJECT_COMPOSE = """
+name: olist-cua-nguoi-hoc
+services:
+  api:
+    build: .
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    networks: [backend]
+networks:
+  backend: {}
+"""
+
+
+def test_obs_stage_merges_project_and_overlays_config(tmp_path):
+    import yaml
+
+    project = tmp_path / "project"
+    write_compose(project, OBS_PROJECT_COMPOSE)
+    rules = project / "observability" / "prometheus" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "olist.yml").write_text("groups: []\n", encoding="utf-8")
+    (project / "observability" / "otel-collector").mkdir()
+    (project / "observability" / "otel-collector" / "config.yaml").write_text("receivers: {}\n", encoding="utf-8")
+    (project / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    (project / "entrypoint.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (project / "entrypoint.sh").chmod(0o700)
+    project.chmod(0o700)
+    stage = tmp_path / "stage"
+    stage.mkdir(mode=0o700)
+    file = testkit._obs_stage(stage, project)
+    merged = yaml.safe_load(file.read_text(encoding="utf-8"))
+    assert "name" not in merged, "Tên project do DockerLab đặt (devops-ex-<id>), không lấy name: của người học"
+    assert set(merged["services"]) == OBS_SERVICES | {"api"}
+    assert merged["services"]["api"]["build"] == "."
+    assert merged["services"]["prometheus"]["volumes"] == ["./observability/prometheus:/etc/prometheus:ro"]
+    for name in OBS_SERVICES:
+        assert merged["services"][name]["networks"] == ["default", "backend"]
+    config = stage / "observability"
+    assert (config / "prometheus" / "rules" / "watchdog.yml").is_file(), "Tệp mặc định vẫn còn khi người học thêm rule"
+    assert (config / "prometheus" / "rules" / "olist.yml").read_text(encoding="utf-8") == "groups: []\n"
+    assert (config / "otel-collector" / "config.yaml").read_text(encoding="utf-8") == "receivers: {}\n"
+    assert not (config / "compose.yaml").exists()
+    for path in [stage, *stage.rglob("*")]:
+        wanted = 0o755 if path.is_dir() else 0o644
+        assert path.stat().st_mode & wanted == wanted, f"{path}: container (uid khác) phải đọc được"
+    assert (stage / "entrypoint.sh").stat().st_mode & 0o777 == 0o744, "Giữ bit thực thi của tệp người học"
+    assert (project / "observability" / "otel-collector" / "config.yaml").read_text(encoding="utf-8") == "receivers: {}\n"
+
+
+def test_obs_stage_without_project_has_only_stack(tmp_path):
+    import yaml
+
+    merged = yaml.safe_load(testkit._obs_stage(tmp_path, None).read_text(encoding="utf-8"))
+    assert set(merged["services"]) == OBS_SERVICES
+    assert all("networks" not in svc for svc in merged["services"].values())
+
+
+@pytest.mark.parametrize("name", ["prometheus", "otel-collector"])
+def test_obs_stage_refuses_service_clash(tmp_path, name):
+    project = tmp_path / "project"
+    write_compose(project, f"services:\n  {name}:\n    image: {BASE}\n")
+    with pytest.raises(pytest.fail.Exception, match=f"service {name} trùng tên"):
+        testkit._obs_stage(tmp_path / "stage", project)
+
+
+def test_obs_stack_skips_without_images(monkeypatch):
+    missing = testkit.OBS_IMAGES["grafana"]
+
+    def fake(*args, **kwargs):
+        return subprocess.CompletedProcess(args, 1 if missing in args else 0, "", "")
+
+    monkeypatch.setattr(testkit, "_docker", fake)
+    monkeypatch.setattr(testkit.Exercise, "require_tool", staticmethod(lambda *a, **k: None))
+    with pytest.raises(pytest.skip.Exception) as info:
+        with testkit.DockerLab() as lab:
+            testkit.ObsStack(lab)
+    assert f"Chưa có image {missing}" in str(info.value) and testkit.OBS_PULL in str(info.value)
+
+
+@pytest.mark.parametrize("message,skipped", [
+    (f"docker build api lỗi (mã 1). 40 dòng cuối:\n{(BUILD_LOGS / 'pip-offline.log').read_text(encoding='utf-8')}", True),
+    (f"docker build api lỗi (mã 1). 40 dòng cuối:\n{(BUILD_LOGS / 'pip-retry-then-missing-package.log').read_text(encoding='utf-8')}", False),
+    ("docker compose up lỗi: api unhealthy\napi-1 | psycopg.OperationalError: Could not resolve host postgres", False),
+])
+def test_obs_stack_skips_only_on_build_network_failure(monkeypatch, message, skipped):
+    monkeypatch.setattr(testkit, "_docker", lambda *a, **k: subprocess.CompletedProcess(a, 0, "", ""))
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+
+    def compose(self, file, **kwargs):
+        pytest.fail(message)
+
+    monkeypatch.setattr(testkit.DockerLab, "compose", compose)
+    expected = pytest.skip.Exception if skipped else pytest.fail.Exception
+    with pytest.raises(expected) as info:
+        with testkit.DockerLab() as lab:
+            testkit.ObsStack(lab)
+    assert ("cần mạng" in str(info.value)) is skipped
+
+
+@pytest.mark.parametrize("where", ["observability/prometheus", "observability/prometheus/prometheus.yml"])
+def test_obs_stage_symlink_over_default_fails_clearly(tmp_path, where):
+    project = tmp_path / "project"
+    target = project / where
+    target.parent.mkdir(parents=True)
+    (tmp_path / "elsewhere").mkdir()
+    target.symlink_to(tmp_path / "elsewhere")
+    with pytest.raises(pytest.fail.Exception, match="không chép được project"):
+        testkit._obs_stage(tmp_path / "stage", project)
+
+
+def require_obs_images():
+    for image in testkit.OBS_IMAGES.values():
+        require_real_docker(image)
+
+
+def test_obs_stack_loopback_and_cleanup(monkeypatch):
+    require_obs_images()
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    defaults = {int(port) for svc in obs_compose()["services"].values() for spec in svc.get("ports", [])
+                for port in re.findall(r":-(\d+)\}", spec)}
+    assert len(defaults) == 8
+    lab = testkit.DockerLab()
+    with lab:
+        stack = testkit.ObsStack(lab)
+        rows = stack.project.ps()
+        assert {row["Service"] for row in rows} == OBS_SERVICES
+        for row in rows:
+            info = inspect_container(row["Name"])
+            assert info["Config"]["Labels"]["devops-ex"] == "1"
+            assert "no-new-privileges:true" in info["HostConfig"]["SecurityOpt"]
+            assert info["HostConfig"]["CpusetCpus"] == build_cpuset()
+            for bindings in (info["HostConfig"]["PortBindings"] or {}).values():
+                assert all(b["HostIp"] == "127.0.0.1" for b in bindings), row["Name"]
+                assert not {int(b["HostPort"]) for b in bindings} & defaults, f"{row['Name']} giữ cổng cố định"
+            mounts = info["Mounts"]
+            assert not [m for m in mounts if m["Type"] == "volume"], f"{row['Service']} tạo volume: {mounts}"
+            assert all(not m["RW"] for m in mounts if m["Type"] == "bind"), row["Name"]
+        assert "devops-obs-stack" in {d["uid"] for d in stack.grafana_dashboards()}
+        assert "Watchdog" in {a["labels"]["alertname"] for a in stack.alerts(timeout=60)}
+        up = {r["metric"]["job"]: r["value"][1] for r in stack.prom_query('up{job=~"prometheus|otel-collector"}', timeout=30)}
+        assert up == {"prometheus": "1", "otel-collector": "1"}
+        with pytest.raises(pytest.fail.Exception, match="prometheus /api/v1/query trả 400"):
+            stack.prom_query("rate(")
+        assert stack.jaeger_traces("khong-co-service") == []
+    assert testkit.docker_leftovers(lab.id) == []
+    project = testkit._docker("volume", "ls", "-q", "--filter", f"label=com.docker.compose.project=devops-ex-{lab.id}")
+    assert project.stdout.split() == []
+
+
+OBS_OLIST_COMPOSE = f"""
+x-app: &app
+  build: .
+  environment:
+    DATABASE_URL: postgresql+psycopg://olist:olist@postgres:5432/olist
+    REDIS_URL: redis://redis:6379/0
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  depends_on:
+    postgres: {{condition: service_healthy}}
+    redis: {{condition: service_started}}
+services:
+  postgres:
+    image: {testkit.KUBE_IMAGES["postgres"]}
+    environment: {{POSTGRES_USER: olist, POSTGRES_PASSWORD: olist, POSTGRES_DB: olist}}
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck: {{test: ["CMD-SHELL", "pg_isready -U olist -d olist"], interval: 2s, retries: 30}}
+  redis:
+    image: {testkit.KUBE_IMAGES["redis"]}
+    tmpfs: ["/data"]
+  api:
+    <<: *app
+    ports: ["8000"]
+  worker:
+    <<: *app
+    command: ["python", "-m", "olist_shop.worker"]
+"""
+
+
+def test_obs_stack_olist_trace_log_metric(monkeypatch, tmp_path):
+    import httpx
+
+    require_obs_images()
+    for image in (testkit.KUBE_IMAGES["postgres"], testkit.KUBE_IMAGES["redis"], "python:3.12.16-slim-trixie"):
+        require_real_docker(image)
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    app = testkit.ROOT / "tracks" / "devops" / "sample-app"
+    project = tmp_path / "project"
+    shutil.copytree(app / "olist_shop", project / "olist_shop", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(app / "requirements.txt", project)
+    shutil.copy(testkit.KUBE_OLIST_DOCKERFILE, project / "Dockerfile")
+    write_compose(project, OBS_OLIST_COMPOSE)
+    lab = testkit.DockerLab()
+    with lab:
+        stack = testkit.ObsStack(lab, project=project)
+        api = f"http://127.0.0.1:{stack.project.port('api', 8000)}"
+        with httpx.Client(trust_env=False, timeout=10) as client:
+            assert client.get(f"{api}/orders/khong-co", headers={"X-Request-ID": "obs-order"}).status_code == 404
+            assert client.post(f"{api}/jobs/recompute", headers={"X-Request-ID": "obs-job"}).status_code == 202
+
+        def order_traces():
+            return [t for t in stack.jaeger_traces("olist-shop-api") if any(s["name"] == "GET /orders/{order_id}" for s in t["spans"])]
+
+        trace = stack.eventually(order_traces, 60)
+        assert trace, "Không thấy trace của GET /orders/{order_id} trong Jaeger"
+        spans = trace[0]["spans"]
+        server = next(s for s in spans if s["name"] == "GET /orders/{order_id}")
+        db = [s for s in spans if s["attributes"].get("db.system.name") == "postgresql"]
+        assert db and all(s["parentSpanID"] == server["spanID"] for s in db), "Trace phải có span DB là con của span HTTP"
+
+        def job_traces():
+            return [t for t in stack.jaeger_traces("olist-shop-worker") if any(s["name"] == "process olist:jobs" for s in t["spans"])]
+
+        job = stack.eventually(job_traces, 60)
+        assert job and {s["service"] for s in job[0]["spans"]} == {"olist-shop-api", "olist-shop-worker"}, \
+            "Trace của job phải đi từ API qua Redis tới worker"
+        trace_id = trace[0]["traceID"]
+        logs = stack.loki_query(f'{{service_name="olist-shop-api"}} |= "{trace_id}"', timeout=60)
+        lines = [json.loads(value) for stream in logs for _, value in stream["values"]]
+        assert any(line["request_id"] == "obs-order" and line["trace_id"] == trace_id for line in lines), lines
+        metric = stack.prom_query('http_requests_total{job="olist-api", path="/orders/{order_id}", status="404"}', timeout=30)
+        assert metric and metric[0]["value"][1] == "1"
+        spans = stack.prom_query('traces_span_metrics_calls_total{service_name="olist-shop-api", span_name="GET /orders/{order_id}"}',
+                                 timeout=60)
+        assert spans, "spanmetrics của Collector phải tới Prometheus"
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_promtool_amtool_argv(monkeypatch, tmp_path):
+    fake = FakeDocker()
+    monkeypatch.setattr(testkit.subprocess, "run", fake)
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+    monkeypatch.setenv("DEVOPS_CPUSET", "2-3")
+    testkit.promtool("check", "rules", "rules.yml", cwd=tmp_path)
+    testkit.amtool("check-config", "alertmanager.yml", cwd=tmp_path)
+    runs = [c for c in fake.calls if c[:2] == ["docker", "run"]]
+    assert len(runs) == 2
+    for argv, image, entrypoint, args in ((runs[0], testkit.OBS_IMAGES["prometheus"], "/bin/promtool", ["check", "rules", "rules.yml"]),
+                                          (runs[1], testkit.OBS_IMAGES["alertmanager"], "/bin/amtool", ["check-config", "alertmanager.yml"])):
+        assert "--rm" in argv and argv[argv.index("-v") + 1] == f"{tmp_path.resolve()}:/work:ro"
+        assert argv.count("-v") == 1 and "-p" not in argv
+        assert argv[argv.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+        assert argv[argv.index("--workdir") + 1] == "/work" and argv[argv.index("--entrypoint") + 1] == entrypoint
+        assert argv[argv.index("--cpuset-cpus") + 1] == "2-3" and "no-new-privileges" in argv
+        assert argv[argv.index("--network") + 1].startswith("devops-ex-")
+        assert argv[-len(args) - 1:] == [image, *args]
+    assert [c for c in fake.calls if c[1:3] == ["network", "rm"]], "Network của lab chạy promtool được dọn"
+
+
+PROM_RULES = """groups:
+  - name: olist
+    rules:
+      - alert: ApiDown
+        expr: up{job="olist-api"} == 0
+        for: 1m
+"""
+PROM_RULES_TEST = """rule_files: [rules.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="olist-api", instance="api:8000"}'
+        values: '0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ApiDown
+        exp_alerts:
+          - exp_labels: {job: olist-api, instance: "api:8000"}
+"""
+
+
+def test_promtool_readonly_mount(tmp_path):
+    require_real_docker(testkit.OBS_IMAGES["prometheus"])
+    require_real_docker(testkit.OBS_IMAGES["alertmanager"])
+    work = tmp_path / "work"
+    work.mkdir(mode=0o700)
+    (work / "rules.yml").write_text(PROM_RULES, encoding="utf-8")
+    (work / "tests.yml").write_text(PROM_RULES_TEST, encoding="utf-8")
+    (work / "data.om").write_text("# TYPE x counter\nx_total 1 1700000000\n# EOF\n", encoding="utf-8")
+    (work / "alertmanager.yml").write_text("route: {receiver: default}\nreceivers: [{name: default}]\n", encoding="utf-8")
+    checked = testkit.promtool("check", "rules", "rules.yml", cwd=work)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    tested = testkit.promtool("test", "rules", "tests.yml", cwd=work)
+    assert tested.returncode == 0 and "SUCCESS" in tested.stdout + tested.stderr, tested.stdout + tested.stderr
+    (work / "tests.yml").write_text(PROM_RULES_TEST.replace("eval_time: 3m", "eval_time: 30s"), encoding="utf-8")
+    assert testkit.promtool("test", "rules", "tests.yml", cwd=work).returncode != 0
+    written = testkit.promtool("tsdb", "create-blocks-from", "openmetrics", "data.om", "blocks", cwd=work)
+    assert written.returncode != 0 and "read-only file system" in (written.stdout + written.stderr).lower()
+    assert sorted(p.name for p in work.iterdir()) == ["alertmanager.yml", "data.om", "rules.yml", "tests.yml"]
+    config = testkit.amtool("check-config", "alertmanager.yml", cwd=work)
+    assert config.returncode == 0, config.stdout + config.stderr
+    (work / "alertmanager.yml").write_text("route: {receiver: missing}\nreceivers: [{name: default}]\n", encoding="utf-8")
+    assert testkit.amtool("check-config", "alertmanager.yml", cwd=work).returncode != 0
+    names = testkit._docker("ps", "-a", "--filter", "name=devops-ex-", "--format", "{{.Names}}").stdout.split()
+    assert not [n for n in names if n.endswith(("-promtool", "-amtool"))]
+
+
+LAMBDA_PROBE_HANDLER = '''import json
+import os
+import urllib.request
+
+import boto3
+from botocore.config import Config
+
+
+def handler(event, context):
+    sqs = boto3.client("sqs")
+    real = boto3.client("sqs", endpoint_url="https://sqs.us-east-1.amazonaws.com", config=Config(retries={"max_attempts": 1}))
+    try:
+        real.list_queues()
+        real_aws = "reachable"
+    except Exception as error:
+        real_aws = type(error).__name__
+    try:
+        urllib.request.urlopen("http://169.254.169.254/latest/meta-data/", timeout=2)
+        metadata = "reachable"
+    except Exception as error:
+        metadata = type(error).__name__
+    session = boto3.session.Session()
+    credentials = session.get_credentials()
+    return {
+        "env": {k: v for k, v in os.environ.items() if k.startswith(("AWS_", "HTTP", "http", "NO_", "no_", "APP_", "DOCKER"))},
+        "endpoint": sqs.meta.endpoint_url,
+        "credentials": [credentials.access_key, credentials.secret_key, credentials.method],
+        "region": session.region_name,
+        "sockets": [p for p in ("/var/run/docker.sock", "/run/docker.sock") if os.path.exists(p)],
+        "uid": os.getuid(),
+        "real_aws": real_aws,
+        "metadata": metadata,
+        "writable_task": os.access("/var/task", os.W_OK),
+    }
+'''
+
+LAMBDA_SQS_HANDLER = '''import json
+import os
+
+import boto3
+
+
+def handler(event, context):
+    if event.get("Records"):
+        return {"orders": [json.loads(r["body"])["order_id"] for r in event["Records"]]}
+    sqs = boto3.client("sqs")
+    url = sqs.get_queue_url(QueueName=os.environ["QUEUE_NAME"])["QueueUrl"]
+    seen = []
+    for message in sqs.receive_message(QueueUrl=url, MaxNumberOfMessages=10, WaitTimeSeconds=2).get("Messages", []):
+        seen.append(json.loads(message["Body"])["order_id"])
+        sqs.delete_message(QueueUrl=url, ReceiptHandle=message["ReceiptHandle"])
+    if event.get("boom"):
+        raise ValueError("hỏng")
+    if event.get("sleep"):
+        import time
+        time.sleep(event["sleep"])
+    return {"orders": seen, "remaining_ms": context.get_remaining_time_in_millis()}
+'''
+
+
+def write_handler(directory: Path, text: str, requirements: str | None = None) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "app.py").write_text(text, encoding="utf-8")
+    if requirements is not None:
+        (directory / "requirements.txt").write_text(requirements, encoding="utf-8")
+    return directory
+
+
+def require_lambda_image():
+    return require_real_docker(testkit.LAMBDA_IMAGE)
+
+
+def test_lambda_image_pinned_by_digest():
+    assert re.fullmatch(r"public\.ecr\.aws/lambda/python:3\.12\.\d{4}\.\d{2}\.\d{2}\.\d{2}@sha256:[0-9a-f]{64}", testkit.LAMBDA_IMAGE)
+    assert testkit.LAMBDA_PULL == f"docker pull {testkit.LAMBDA_IMAGE}"
+    assert "boto3" in testkit.LAMBDA_BUNDLED and "requests" not in testkit.LAMBDA_BUNDLED
+
+
+@pytest.mark.parametrize("key", ["AWS_ENDPOINT_URL", "aws_access_key_id", "AWS_PROFILE", "AWS_LAMBDA_FUNCTION_TIMEOUT", "_HANDLER",
+                                 "LAMBDA_TASK_ROOT", "HTTPS_PROXY", "no_proxy", "PYTHONPATH", "LD_PRELOAD", "PATH", "BAD-KEY",
+                                 "X=Y"])
+def test_lambda_lab_refuses_reserved_env(tmp_path, key):
+    with pytest.raises(pytest.fail.Exception, match="không cho đặt biến"):
+        testkit.LambdaLab(testkit.DockerLab(), tmp_path, "app.handler", env={key: "x"})
+
+
+@pytest.mark.parametrize("handler", ["app", "app.", "../app.handler", "app.handler; rm", "-app.handler"])
+def test_lambda_lab_refuses_bad_handler(tmp_path, handler):
+    with pytest.raises(ValueError):
+        testkit.LambdaLab(testkit.DockerLab(), tmp_path, handler)
+
+
+@pytest.mark.parametrize("text,problems", [
+    ("boto3==1.42.97\nbotocore>=1.40  # có sẵn\n\n# chú thích\nPython-Dateutil\n", 0),
+    ("requests==2.32.0\nboto3\n", 1),
+    ("-r other.txt\n--index-url https://x\n", 2),
+    ("git+https://example.com/x.git\n./local\n", 2),
+])
+def test_lambda_requirements_only_bundled(tmp_path, text, problems):
+    write_handler(tmp_path, "def handler(e, c):\n    return {}\n", text)
+    assert len(testkit._lambda_requirement_problems(tmp_path)) == problems
+
+
+def test_lambda_lab_run_args_hardened(monkeypatch, tmp_path):
+    monkeypatch.setenv("DEVOPS_CPUSET", "12-35")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "host-secret")
+    lab = testkit.DockerLab()
+    fn = testkit.LambdaLab(lab, write_handler(tmp_path / "h", "def handler(e, c):\n    return {}\n"), "app.handler",
+                           env={"APP_TABLE": "orders"}, memory="512m", timeout=7)
+    fn.endpoint = "http://172.30.0.1:40000"
+    assert fn.network == f"{lab.network}-lambda-net"
+    isolated = " ".join(fn.run_args(41000))
+    assert f"--network {lab.network}-lambda-net " in isolated and "-p " not in isolated
+    shared = testkit.LambdaLab(lab, tmp_path / "h", "app.handler", isolated=False)
+    assert f"--network {lab.network} " in " ".join(shared.run_args(41000)) and "-p 127.0.0.1:41000:8080" in " ".join(shared.run_args(41000))
+    argv = fn.run_args(41000)
+    joined = " ".join(argv)
+    assert argv[:3] == ["docker", "run", "-d"] and argv[-2:] == [testkit.LAMBDA_IMAGE, "app.handler"]
+    for flag in ("--read-only", "--cap-drop ALL", "--security-opt no-new-privileges", "--memory 512m", "--cpuset-cpus 12-35",
+                 f"-v {tmp_path / 'h'}:/var/task:ro"):
+        assert flag in joined
+    assert "docker.sock" not in joined and "host-secret" not in joined and "--privileged" not in joined
+    assert [a for a in argv if a.startswith("-v")] == ["-v"] and argv.count("-v") == 1
+    env = dict(argv[i + 1].split("=", 1) for i, a in enumerate(argv) if a == "-e")
+    assert env["AWS_ENDPOINT_URL"] == "http://172.30.0.1:40000"
+    assert (env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"]) == ("test", "test")
+    assert env["AWS_CONFIG_FILE"] == env["AWS_SHARED_CREDENTIALS_FILE"] == "/dev/null"
+    assert env["AWS_EC2_METADATA_DISABLED"] == "true" and env["AWS_REGION"] == "us-east-1"
+    assert env["AWS_LAMBDA_FUNCTION_TIMEOUT"] == "7" and env["AWS_LAMBDA_FUNCTION_MEMORY_SIZE"] == "512"
+    assert env["HTTPS_PROXY"] == testkit.LAMBDA_DEAD_PROXY and env["NO_PROXY"] == "127.0.0.1,localhost,172.30.0.1"
+    assert env["APP_TABLE"] == "orders"
+    assert not {k for k in env if k.startswith("AWS_")} - {
+        "AWS_ENDPOINT_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_DEFAULT_REGION", "AWS_CONFIG_FILE",
+        "AWS_SHARED_CREDENTIALS_FILE", "AWS_EC2_METADATA_DISABLED", "AWS_LAMBDA_FUNCTION_NAME", "AWS_LAMBDA_FUNCTION_MEMORY_SIZE",
+        "AWS_LAMBDA_FUNCTION_TIMEOUT"}
+
+
+def test_lambda_lab_refuses_outside_docker_lab_with(tmp_path):
+    fn = testkit.LambdaLab(testkit.DockerLab(), write_handler(tmp_path, "def handler(e, c):\n    return {}\n"), "app.handler")
+    with pytest.raises(RuntimeError):
+        fn.invoke({})
+    with pytest.raises(RuntimeError):
+        with fn:
+            pass
+
+
+def test_lambda_lab_refuses_extra_requirements(tmp_path):
+    require_lambda_image()
+    write_handler(tmp_path / "h", "def handler(e, c):\n    return {}\n", "requests==2.32.0\n")
+    with testkit.DockerLab() as lab:
+        with pytest.raises(pytest.fail.Exception, match="requests"):
+            with testkit.LambdaLab(lab, tmp_path / "h", "app.handler"):
+                pass
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_lambda_lab_no_socket_and_dummy_credentials(monkeypatch, tmp_path):
+    require_lambda_image()
+    for key, value in (("AWS_ACCESS_KEY_ID", "AKIAHOSTLEAK"), ("AWS_SECRET_ACCESS_KEY", "host-secret"), ("AWS_PROFILE", "prod"),
+                       ("AWS_SESSION_TOKEN", "host-token"), ("DOCKER_HOST", "unix:///var/run/docker.sock")):
+        monkeypatch.setenv(key, value)
+    handler = write_handler(tmp_path / "h", LAMBDA_PROBE_HANDLER)
+    with testkit.DockerLab() as lab:
+        with testkit.LambdaLab(lab, handler, "app.handler", env={"APP_MODE": "test"}) as fn:
+            inspect = json.loads(testkit._docker("inspect", lab.name("lambda")).stdout)[0]
+            result = fn.invoke({})
+        name = lab.name("lambda")
+        assert testkit._docker("inspect", name).returncode != 0
+    assert testkit.docker_leftovers(lab.id) == []
+    mounts = inspect["Mounts"]
+    assert [(m["Type"], m["Destination"], m["RW"]) for m in mounts] == [("bind", "/var/task", False)]
+    assert not any("docker.sock" in (m.get("Source") or "") for m in mounts)
+    host = inspect["HostConfig"]
+    assert host["ReadonlyRootfs"] is True and host["CapDrop"] == ["ALL"] and host["Privileged"] is False
+    assert "no-new-privileges" in host["SecurityOpt"]
+    assert all(binding["HostIp"] == "127.0.0.1" for bindings in host["PortBindings"].values() for binding in bindings)
+    config_env = "\n".join(inspect["Config"]["Env"])
+    assert "AKIAHOSTLEAK" not in config_env and "host-secret" not in config_env and "host-token" not in config_env
+    assert result["sockets"] == [] and result["writable_task"] is False and result["uid"] != 0
+    assert result["credentials"][:2] == ["test", "test"] and result["region"] == "us-east-1"
+    env = result["env"]
+    assert "AWS_PROFILE" not in env and "DOCKER_HOST" not in env and env.get("AWS_SESSION_TOKEN", "") == ""
+    assert env["AWS_CONFIG_FILE"] == env["AWS_SHARED_CREDENTIALS_FILE"] == "/dev/null"
+    assert env["AWS_EC2_METADATA_DISABLED"] == "true" and env["APP_MODE"] == "test"
+    assert result["metadata"] != "reachable"
+
+
+def test_lambda_lab_endpoint_forced_to_localstack(monkeypatch, tmp_path):
+    require_lambda_image()
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "https://sqs.us-east-1.amazonaws.com")
+    handler = write_handler(tmp_path / "h", LAMBDA_PROBE_HANDLER)
+    with pytest.raises(pytest.fail.Exception, match="AWS_ENDPOINT_URL"):
+        testkit.LambdaLab(testkit.DockerLab(), handler, "app.handler", env={"AWS_ENDPOINT_URL": "https://example.com"})
+    with testkit.DockerLab() as lab:
+        with testkit.LambdaLab(lab, handler, "app.handler") as fn:
+            gateway = testkit._docker("network", "inspect", "-f", "{{range .IPAM.Config}}{{.Gateway}}{{end}}",
+                                      fn.network).stdout.strip()
+            result = fn.invoke({})
+            endpoint = fn.endpoint
+    assert testkit.docker_leftovers(lab.id) == []
+    assert int(endpoint.rsplit(":", 1)[1]) in testkit.lambda_forward_ports()
+    assert endpoint.startswith(f"http://{gateway}:") and result["endpoint"] == endpoint
+    assert result["env"]["AWS_ENDPOINT_URL"] == endpoint
+    assert result["env"]["NO_PROXY"] == f"127.0.0.1,localhost,{gateway}"
+    assert result["real_aws"] in {"ProxyConnectionError", "EndpointConnectionError", "ConnectionClosedError"}
+
+
+def socket_server() -> socket.socket:
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(4)
+    return server
+
+
+def test_lambda_forward_only_accepts_lab_subnet():
+    target = socket_server()
+    forward = testkit._Forward("127.0.0.1", "10.99.0.0/16", ("127.0.0.1", target.getsockname()[1]))
+    try:
+        with socket.create_connection(("127.0.0.1", forward.port), timeout=2) as client:
+            client.settimeout(2)
+            try:
+                assert client.recv(10) == b""
+            except ConnectionResetError:
+                pass
+        target.settimeout(0.5)
+        with pytest.raises(TimeoutError):
+            target.accept()
+    finally:
+        forward.close()
+        target.close()
+    with pytest.raises(OSError):
+        socket.create_connection(("127.0.0.1", forward.port), timeout=2)
+
+
+def test_lambda_forward_relays_both_ways():
+    import threading
+
+    server = socket_server()
+
+    def echo():
+        conn, _ = server.accept()
+        with conn:
+            while data := conn.recv(1024):
+                conn.sendall(data.upper())
+
+    threading.Thread(target=echo, daemon=True).start()
+    forward = testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", server.getsockname()[1]))
+    try:
+        with socket.create_connection(("127.0.0.1", forward.port), timeout=2) as client:
+            client.sendall(b"xin chao")
+            client.shutdown(socket.SHUT_WR)
+            received = b""
+            while chunk := client.recv(1024):
+                received += chunk
+        assert received == b"XIN CHAO"
+    finally:
+        forward.close()
+        server.close()
+    assert forward.sockets == set()
+
+
+def test_lambda_lab_invoke_roundtrip(tmp_path):
+    require_lambda_image()
+    testkit.Exercise.require_localstack_devops("sqs")
+    handler = write_handler(tmp_path / "h", LAMBDA_SQS_HANDLER, "boto3\n")
+    with testkit.DockerLab() as lab:
+        queue = f"{lab.network}-orders"
+        sqs = testkit.localstack_client("sqs")
+        try:
+            url = sqs.create_queue(QueueName=queue)["QueueUrl"]
+            for order in ("o-1", "o-2"):
+                sqs.send_message(QueueUrl=url, MessageBody=json.dumps({"order_id": order}))
+            with testkit.LambdaLab(lab, handler, "app.handler", env={"QUEUE_NAME": queue}, timeout=3) as fn:
+                first = fn.invoke({})
+                event = {"Records": [{"messageId": "m1", "body": json.dumps({"order_id": "o-3"}), "eventSource": "aws:sqs"}]}
+                from_event = fn.invoke(event)
+                failed = fn.invoke({"boom": True})
+                timed_out = fn.invoke({"sleep": 10})
+                after_timeout = fn.invoke({})
+                logs = fn.logs()
+            attributes = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["ApproximateNumberOfMessages"])["Attributes"]
+        finally:
+            swept = testkit.localstack_sweep(lab.network)
+    assert testkit.docker_leftovers(lab.id) == []
+    assert sorted(first["orders"]) == ["o-1", "o-2"] and 0 < first["remaining_ms"] <= 3000
+    assert from_event == {"orders": ["o-3"]}
+    assert failed["errorType"] == "ValueError" and failed["errorMessage"] == "hỏng"
+    assert "Task timed out after 3" in timed_out["errorMessage"]
+    assert after_timeout["orders"] == []
+    assert attributes["ApproximateNumberOfMessages"] == "0"
+    assert "START RequestId" in logs and "REPORT RequestId" in logs
+    assert swept == [f"sqs:{queue}"]
+
+
+def test_localstack_devops_no_docker_socket():
+    import yaml
+
+    data = yaml.safe_load((testkit.ROOT / "setup" / "docker-compose.yml").read_text(encoding="utf-8"))
+    devops = data["services"]["localstack-devops"]
+    services = devops["environment"]["SERVICES"].split(",")
+    assert {"sqs", "dynamodb", "events", "apigateway", "secretsmanager"} <= set(services)
+    assert "lambda" not in services and "ecs" not in services
+    assert not [v for v in devops.get("volumes", []) if "docker.sock" in str(v) or "/var/run" in str(v)]
+    assert not [k for k in devops["environment"] if k.startswith(("LAMBDA_", "DOCKER_"))]
+    assert "privileged" not in devops and "network_mode" not in devops
+    for name, service in data["services"].items():
+        assert not [v for v in service.get("volumes", []) if "docker.sock" in str(v)], name
+
+
+def test_require_localstack_devops_skips_when_service_missing(monkeypatch):
+    monkeypatch.setattr(testkit, "service_up", lambda name, timeout=0.5: True)
+    health = {"services": {s: "available" for s in ("s3", "iam", "sts", "dynamodb")} | {"sqs": "disabled"}}
+    monkeypatch.setattr(testkit, "_localstack_health", lambda endpoint: health)
+    monkeypatch.delenv("LOCALSTACK_DEVOPS_PORT", raising=False)
+    monkeypatch.delenv("LOCALSTACK_PORT", raising=False)
+    assert testkit.Exercise.require_localstack_devops() == "http://127.0.0.1:14566"
+    with pytest.raises(pytest.skip.Exception, match="chưa bật sqs, events") as info:
+        testkit.Exercise.require_localstack_devops("sqs", "events")
+    assert testkit.LOCALSTACK_DEVOPS_RECREATE in str(info.value) and "rm -s -f localstack-devops" in str(info.value)
+
+
+def test_localstack_sweep_serverless_resources():
+    if not testkit.service_up("localstack-devops"):
+        pytest.skip(f"Cần localstack-devops: {testkit.LOCALSTACK_DEVOPS_START}")
+    testkit.Exercise.require_localstack_devops("sqs", "events", "apigateway")
+    prefix = f"devops-ex-{os.urandom(4).hex()}"
+    keep = f"devops-ex-{os.urandom(4).hex()}"
+    sqs, events = testkit.localstack_client("sqs"), testkit.localstack_client("events")
+    apigateway = testkit.localstack_client("apigateway")
+    keep_url = sqs.create_queue(QueueName=f"{keep}-q")["QueueUrl"]
+    try:
+        url = sqs.create_queue(QueueName=f"{prefix}-orders")["QueueUrl"]
+        sqs.create_queue(QueueName=f"{prefix}-orders.fifo", Attributes={"FifoQueue": "true"})
+        arn = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
+        events.create_event_bus(Name=f"{prefix}-bus")
+        events.put_rule(Name="placed", EventBusName=f"{prefix}-bus", EventPattern='{"source": ["olist.shop"]}')
+        events.put_targets(Rule="placed", EventBusName=f"{prefix}-bus", Targets=[{"Id": "q", "Arn": arn}])
+        events.put_rule(Name=f"{prefix}-nightly", ScheduleExpression="rate(1 day)")
+        events.put_targets(Rule=f"{prefix}-nightly", Targets=[{"Id": "q", "Arn": arn}])
+        apigateway.create_rest_api(name=f"{prefix}-api")
+        removed = testkit.localstack_sweep(prefix)
+        assert sorted(removed) == sorted([
+            f"sqs:{prefix}-orders", f"sqs:{prefix}-orders.fifo", f"events-rule:{prefix}-bus/placed", f"events-bus:{prefix}-bus",
+            f"events-rule:default/{prefix}-nightly", f"apigateway:{prefix}-api"])
+        assert not [u for u in sqs.list_queues().get("QueueUrls", []) if prefix in u]
+        assert not [b for b in events.list_event_buses()["EventBuses"] if b["Name"].startswith(prefix)]
+        assert not [r for r in events.list_rules()["Rules"] if r["Name"].startswith(prefix)]
+        assert not [a for a in apigateway.get_rest_apis()["items"] if a["name"].startswith(prefix)]
+        assert keep_url in sqs.list_queues(QueueNamePrefix=keep).get("QueueUrls", [])
+    finally:
+        sqs.delete_queue(QueueUrl=keep_url)
+        testkit.localstack_sweep(prefix)
+
+
+def test_lambda_lab_enter_twice_refused(monkeypatch, tmp_path):
+    fn = testkit.LambdaLab(testkit.DockerLab(), write_handler(tmp_path, "def handler(e, c):\n    return {}\n"), "app.handler")
+    monkeypatch.setattr(fn, "_start", lambda: None)
+    monkeypatch.setattr(testkit, "_docker", lambda *a, **k: subprocess.CompletedProcess(a, 0, "", ""))
+    with fn:
+        with pytest.raises(RuntimeError, match="một lần"):
+            fn.__enter__()
+    with pytest.raises(RuntimeError, match="một lần"):
+        with fn:
+            pass
+
+
+@pytest.mark.parametrize("config,expected", [
+    ([{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}, {"Subnet": "172.30.0.0/16", "Gateway": "172.30.0.1"}],
+     ("172.30.0.1", "172.30.0.0/16")),
+    ([{"Subnet": "172.31.0.0/16", "Gateway": ""}, {"Subnet": "172.30.0.0/16", "Gateway": "172.30.0.1"}],
+     ("172.30.0.1", "172.30.0.0/16")),
+    ([{"Subnet": "172.31.0.0/16"}], None),
+    ([{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}], None),
+    ([{"Subnet": "bad", "Gateway": "x"}, None], None),
+    (None, None),
+])
+def test_lambda_ipv4_gateway(config, expected):
+    assert testkit._ipv4_gateway(config) == expected
+
+
+def test_lambda_lab_gateway_parses_ipam_json(monkeypatch, tmp_path):
+    config = [{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}, {"Subnet": "172.30.0.0/16", "Gateway": "172.30.0.1"}]
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, json.dumps(config), "")
+
+    monkeypatch.setattr(testkit, "_docker", fake)
+    fn = testkit.LambdaLab(testkit.DockerLab(), tmp_path, "app.handler")
+    assert fn._gateway() == ("172.30.0.1", "172.30.0.0/16")
+    assert calls[0][-1] == fn.network and "{{json .IPAM.Config}}" in calls[0]
+    config = [{"Subnet": "fd00:1::/64", "Gateway": "fd00:1::1"}]
+    with pytest.raises(pytest.fail.Exception, match="IPv4"):
+        fn._gateway()
+
+
+@pytest.mark.parametrize("value,expected", [(None, range(47100, 47200)), ("50000-50009", range(50000, 50010)), ("6000-6000", range(6000, 6001))])
+def test_lambda_forward_ports(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("DEVOPS_LAMBDA_FORWARD_PORTS", raising=False)
+    else:
+        monkeypatch.setenv("DEVOPS_LAMBDA_FORWARD_PORTS", value)
+    assert testkit.lambda_forward_ports() == expected
+
+
+@pytest.mark.parametrize("value", ["80-90", "50010-50000", "abc", "50000", "60000-70000"])
+def test_lambda_forward_ports_invalid(monkeypatch, value):
+    monkeypatch.setenv("DEVOPS_LAMBDA_FORWARD_PORTS", value)
+    with pytest.raises(ValueError):
+        testkit.lambda_forward_ports()
+
+
+def test_lambda_forward_binds_inside_range():
+    taken = socket.socket()
+    taken.bind(("127.0.0.1", 0))
+    taken.listen(1)
+    port = taken.getsockname()[1]
+    with pytest.raises(OSError, match="DEVOPS_LAMBDA_FORWARD_PORTS"):
+        testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", 9), ports=range(port, port + 1))
+    taken.close()
+    forward = testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", 9), ports=range(port, port + 1))
+    try:
+        assert forward.port == port
+    finally:
+        forward.close()
+
+
+def test_lambda_forward_caps_connections():
+    import threading
+
+    server = socket_server()
+    accepted = []
+
+    def hold():
+        while True:
+            try:
+                accepted.append(server.accept()[0])
+            except OSError:
+                return
+
+    threading.Thread(target=hold, daemon=True).start()
+    forward = testkit._Forward("127.0.0.1", "127.0.0.0/8", ("127.0.0.1", server.getsockname()[1]), ports=range(0, 1), limit=2)
+    clients = []
+    try:
+        for _ in range(3):
+            clients.append(socket.create_connection(("127.0.0.1", forward.port), timeout=2))
+        clients[2].settimeout(2)
+        try:
+            assert clients[2].recv(10) == b""
+        except ConnectionResetError:
+            pass
+        deadline = time.monotonic() + 5
+        while len(forward.sockets) < 4 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert len(forward.sockets) == 4 and len(accepted) == 2
+        clients[0].close()
+        accepted[0].close()
+        deadline = time.monotonic() + 5
+        while len(forward.sockets) > 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        clients.append(socket.create_connection(("127.0.0.1", forward.port), timeout=2))
+        deadline = time.monotonic() + 5
+        while len(accepted) < 3 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert len(accepted) == 3
+    finally:
+        for sock in clients + accepted:
+            sock.close()
+        forward.close()
+        server.close()
+
+
+LAMBDA_NET_HANDLER = '''import socket
+
+
+def handler(event, context):
+    result = {}
+    for name, host, port in event["targets"]:
+        try:
+            socket.create_connection((host, port), timeout=3).close()
+            result[name] = "ok"
+        except OSError as error:
+            result[name] = type(error).__name__
+    return result
+'''
+
+
+def test_lambda_lab_isolated_network(tmp_path):
+    require_lambda_image()
+    peer_image = require_real_docker()
+    handler = write_handler(tmp_path / "h", LAMBDA_NET_HANDLER)
+    with testkit.DockerLab() as lab:
+        lab.start("peer", peer_image, "python", "-u", "-m", "http.server", "8000")
+        targets = {"targets": [["peer", "peer", 8000], ["internet", "1.1.1.1", 443]]}
+        with testkit.LambdaLab(lab, handler, "app.handler") as fn:
+            network = fn.network
+            internal = testkit._docker("network", "inspect", "-f", "{{.Internal}}", network).stdout.strip()
+            isolated = fn.invoke(targets)
+        assert testkit._docker("network", "inspect", network).returncode != 0
+        lab.wait_log("peer", "Serving HTTP", timeout=30)
+        with testkit.LambdaLab(lab, handler, "app.handler", alias="shared", isolated=False) as shared:
+            assert shared.network == lab.network
+            reached = shared.invoke({"targets": [["peer", "peer", 8000]]})
+    assert testkit.docker_leftovers(lab.id) == []
+    assert internal == "true" and network == f"{lab.network}-lambda-net"
+    assert isolated["peer"] != "ok" and isolated["internet"] != "ok"
+    assert reached == {"peer": "ok"}
+
+
+def test_lambda_firewall_docs_are_port_scoped():
+    text = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    section = text[text.index("## Lambda local: LambdaLab"):text.index("## Dịch vụ phụ trợ: Vault dev")]
+    first, last = testkit.LAMBDA_FORWARD_PORTS.split("-")
+    rules = [line for line in section.splitlines() if line.startswith("sudo ")]
+    assert f"sudo ufw allow proto tcp from 172.16.0.0/12 to any port {first}:{last}" in rules
+    assert f"sudo ufw delete allow proto tcp from 172.16.0.0/12 to any port {first}:{last}" in rules
+    assert all(f"{first}" in rule and "tcp" in rule for rule in rules)
+    assert "DEVOPS_LAMBDA_FORWARD_PORTS" in section and "Xoá luật" in section and "bỏ qua các bài này" in section
+    assert "SSRF" in text and "SSRF" in (testkit.ROOT / "CONTENT_SPEC.md").read_text(encoding="utf-8")
+
+
+def test_localstack_sweep_paginates_event_buses(monkeypatch):
+    import boto3
+
+    deleted = []
+    pages = {None: {"EventBuses": [{"Name": "default"}], "NextToken": "t1"},
+             "t1": {"EventBuses": [{"Name": "devops-ex-abc12345-bus"}, {"Name": "other-bus"}]}}
+
+    class Fake:
+        def __init__(self, service):
+            self.service = service
+
+        def get_paginator(self, name):
+            return self
+
+        def paginate(self, **kwargs):
+            return []
+
+        def list_buckets(self, **kwargs):
+            return {"Buckets": []}
+
+        def list_event_buses(self, **kwargs):
+            return pages[kwargs.get("NextToken")]
+
+        def delete_event_bus(self, Name):
+            deleted.append(Name)
+
+    monkeypatch.setattr(boto3, "client", lambda service, **kwargs: Fake(service))
+    assert testkit.localstack_sweep("devops-ex-abc12345") == ["events-bus:devops-ex-abc12345-bus"]
+    assert deleted == ["devops-ex-abc12345-bus"]
+
+
+LINKERD_RESOURCES = "".join(f"{r}.policy.linkerd.io\n" for r in (
+    "authorizationpolicies", "egressnetworks", "httplocalratelimitpolicies", "httproutes", "meshtlsauthentications",
+    "networkauthentications", "serverauthorizations", "servers"))
+def pem_cert(days: float, name: str = "root.linkerd.cluster.local") -> str:
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(days=400))
+            .not_valid_after(now + datetime.timedelta(days=days)).sign(key, hashes.SHA256()))
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
+LINKERD_TRUST_ROOT = pem_cert(3650)
+LINKERD_OK = {
+    "crd servers.policy.linkerd.io": (0, "customresourcedefinition.apiextensions.k8s.io/servers.policy.linkerd.io\n"),
+    "configmap linkerd-config": (0, "clusterDomain: cluster.local\ncniEnabled: true\ndisableHeartBeat: true\n"),
+    "daemonset linkerd-cni": (0, "3 3"),
+    "configmap linkerd-identity-trust-roots": (0, LINKERD_TRUST_ROOT),
+    "mutatingwebhookconfiguration linkerd-proxy-injector-webhook-config": (0, "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"),
+    "deployment linkerd-identity": (0, "1"),
+    "deployment linkerd-destination": (0, "1"),
+    "deployment linkerd-proxy-injector": (0, "1"),
+    "configmap devops-linkerd-issuer-public": (0, pem_cert(3650, "identity.linkerd.cluster.local")),
+}
+
+
+class LinkerdFake(KubeFake):
+    """KubeFake cộng Linkerd: CRD policy.linkerd.io, các kiểm của `linkerd_problem`, và endpoint admin của proxy qua
+    `get --raw` (trả `raw[đường dẫn]`)."""
+
+    def __init__(self, monkeypatch, *, answers=None, objects=None, raw=None):
+        self.answers = dict(LINKERD_OK if answers is None else answers)
+        self.objects = objects or {}
+        self.raw = raw or {}
+        super().__init__(monkeypatch)
+
+    def run_sandboxed(self, cmd, *, writable, cwd, env, timeout=30, input=None, readonly=()):
+        joined = " ".join(map(str, cmd))
+        answer = None
+        if "api-resources --api-group=policy.linkerd.io" in joined:
+            answer = (0, LINKERD_RESOURCES)
+        elif "get --raw /api/" in joined:
+            path = cmd[cmd.index("--raw") + 1]
+            answer = (0, self.raw[path]) if path in self.raw else (1, "")
+        else:
+            answer = next((v for k, v in {**self.answers, **self.objects}.items() if k in joined), None)
+        if answer is None:
+            return super().run_sandboxed(cmd, writable=writable, cwd=cwd, env=env, timeout=timeout, input=input, readonly=readonly)
+        cmd = [str(part) for part in cmd]
+        self.sandbox_calls.append({"cmd": cmd, "env": dict(env), "writable": list(writable), "readonly": list(readonly),
+                                   "cwd": cwd, "input": input})
+        return subprocess.CompletedProcess(cmd, answer[0], answer[1], "" if answer[0] == 0 else "NotFound")
+
+
+def namespace_item(fake) -> dict:
+    return next(i for i in bootstrap_items(fake) if i["kind"] == "Namespace")
+
+
+def test_kube_lab_mesh_annotation(monkeypatch):
+    fake = LinkerdFake(monkeypatch)
+    with testkit.KubeLab(mesh=True) as lab:
+        assert lab.mesh is True
+    assert namespace_item(fake)["metadata"]["annotations"] == {"linkerd.io/inject": "enabled"}
+    probes = [json.loads(c["input"]) for c in fake.calls_with("--dry-run=server")]
+    [probe] = [p for p in probes if p["kind"] == "MeshTLSAuthentication"]
+    assert probe["metadata"]["name"] == f"{lab.namespace}-probe-mesh" and probe["spec"] == {"identities": ["*"]}
+    plain = LinkerdFake(monkeypatch)
+    with testkit.KubeLab():
+        pass
+    assert "annotations" not in namespace_item(plain)["metadata"]
+
+
+def test_kube_lab_mesh_skips_without_linkerd(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with pytest.raises(pytest.skip.Exception) as info:
+        with testkit.KubeLab(mesh=True):
+            pass
+    assert_skip(info, "chưa có Linkerd", "apply --server-side -k setup/kind/linkerd", "certs.sh")
+    assert not fake.calls_with("apply", "-f", "-")
+    with testkit.KubeLab() as lab:
+        pass
+    assert not any(json.loads(c["input"])["kind"] == "MeshTLSAuthentication" for c in fake.calls_with("--dry-run=server"))
+    assert any(i["metadata"]["name"] == f"{lab.namespace}-mesh" for i in bootstrap_items(fake))
+
+
+def test_kube_lab_role_writes_linkerd_policy_in_lab_only(monkeypatch):
+    fake = LinkerdFake(monkeypatch)
+    with testkit.KubeLab():
+        pass
+    role = next(i for i in bootstrap_items(fake) if i["kind"] == "Role")
+    linkerd = [r for r in role["rules"] if any("linkerd" in g for g in r["apiGroups"])]
+    assert linkerd == [{"apiGroups": ["policy.linkerd.io"],
+                        "resources": ["servers", "authorizationpolicies", "httproutes", "meshtlsauthentications"],
+                        "verbs": testkit._KUBE_RW}]
+    cluster_roles = [i for i in bootstrap_items(fake) if i["kind"] == "ClusterRole"]
+    assert not any("linkerd" in json.dumps(c["rules"]) for c in cluster_roles)
+    assert "policy.linkerd.io" not in testkit._KUBE_HOOK_KINDS
+    assert "linkerd" in testkit.KUBE_SHARED_NAMESPACES
+
+
+MESH_NS = "devops-ex-abc12345"
+
+
+def mesh_identity(sa: str, ns: str = MESH_NS) -> str:
+    return f"{sa}.{ns}.serviceaccount.identity.linkerd.cluster.local"
+
+
+def mesh_doc(kind: str, spec: dict, version: str = "v1alpha1") -> dict:
+    return {"apiVersion": f"policy.linkerd.io/{version}", "kind": kind, "metadata": {"name": "x"}, "spec": spec}
+
+
+FOREIGN_MESH = {
+    "authz-target-namespace-other": mesh_doc("AuthorizationPolicy", {
+        "targetRef": {"kind": "Namespace", "name": "devops-ex-other"},
+        "requiredAuthenticationRefs": [{"kind": "ServiceAccount", "name": "api"}]}),
+    "authz-target-ns-field": mesh_doc("AuthorizationPolicy", {"targetRef": {"group": "policy.linkerd.io", "kind": "Server",
+                                                                            "name": "web", "namespace": "linkerd"}}),
+    "authz-auth-ref-other": mesh_doc("AuthorizationPolicy", {
+        "targetRef": {"group": "policy.linkerd.io", "kind": "Server", "name": "web"},
+        "requiredAuthenticationRefs": [{"group": "policy.linkerd.io", "kind": "MeshTLSAuthentication", "name": "a",
+                                        "namespace": "devops-ex-other"}]}),
+    "authz-sa-ref-other": mesh_doc("AuthorizationPolicy", {
+        "targetRef": {"group": "policy.linkerd.io", "kind": "Server", "name": "web"},
+        "requiredAuthenticationRefs": [{"kind": "ServiceAccount", "name": "api", "namespace": "kube-system"}]}),
+    "mtls-star": mesh_doc("MeshTLSAuthentication", {"identities": ["*"]}),
+    "mtls-other-ns": mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("api", "devops-ex-other")]}),
+    "mtls-control-plane": mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("linkerd-destination", "linkerd")]}),
+    "mtls-suffix-trick": mesh_doc("MeshTLSAuthentication", {"identities": [f"a.b.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local"]}),
+    "mtls-star-suffix": mesh_doc("MeshTLSAuthentication", {"identities": ["*.cluster.local"]}),
+    "mtls-ref-other-sa": mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "api",
+                                                                             "namespace": "devops-ex-other"}]}),
+    "mtls-ref-other-namespace": mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "Namespace", "name": "linkerd"}]}),
+    "mtls-ref-star": mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "*"}]}),
+    "route-parent-other": mesh_doc("HTTPRoute", {"parentRefs": [{"group": "policy.linkerd.io", "kind": "Server", "name": "web",
+                                                                 "namespace": "devops-ex-other"}]}, "v1beta3"),
+    "route-backend-other": mesh_doc("HTTPRoute", {"parentRefs": [{"group": "core", "kind": "Service", "name": "web", "port": 80}],
+                                                  "rules": [{"backendRefs": [{"name": "web", "port": 80,
+                                                                              "namespace": "devops-ex-other"}]}]}, "v1beta3"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(FOREIGN_MESH))
+def test_linkerd_policy_foreign_namespace_refused(case):
+    problems = testkit.kube_manifest_problems([FOREIGN_MESH[case]], lab_id="abc12345", namespace=MESH_NS)
+    assert problems and all(p.startswith(f"{FOREIGN_MESH[case]['kind']} x:") for p in problems), problems
+
+
+def test_linkerd_policy_inside_lab_allowed():
+    docs = [
+        mesh_doc("Server", {"podSelector": {"matchLabels": {"app": "web"}}, "port": "http", "proxyProtocol": "HTTP/1"}, "v1beta3"),
+        mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("api"), f"*.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local"]}),
+        mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "api"},
+                                                            {"kind": "ServiceAccount", "name": "worker", "namespace": MESH_NS},
+                                                            {"kind": "Namespace", "name": MESH_NS}]}),
+        mesh_doc("AuthorizationPolicy", {"targetRef": {"group": "policy.linkerd.io", "kind": "Server", "name": "web"},
+                                         "requiredAuthenticationRefs": [{"group": "policy.linkerd.io", "kind": "MeshTLSAuthentication",
+                                                                         "name": "api-only"}]}),
+        mesh_doc("AuthorizationPolicy", {"targetRef": {"kind": "Namespace", "name": MESH_NS},
+                                         "requiredAuthenticationRefs": [{"kind": "ServiceAccount", "name": "api",
+                                                                         "namespace": MESH_NS}]}),
+        {**mesh_doc("HTTPRoute", {"parentRefs": [{"group": "core", "kind": "Service", "name": "web", "port": 80}],
+                                  "rules": [{"timeouts": {"request": "2s"}, "backendRefs": [{"name": "web", "port": 80}]}]}, "v1beta3"),
+         "metadata": {"name": "web", "annotations": {"retry.linkerd.io/http": "5xx"}}},
+    ]
+    assert testkit.kube_manifest_problems(docs, lab_id="abc12345", namespace=MESH_NS) == []
+
+
+def test_linkerd_policy_vap_in_bootstrap(monkeypatch):
+    fake = LinkerdFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicy"
+                  and i["metadata"]["name"] == f"{lab.namespace}-mesh")
+    spec = policy["spec"]
+    assert spec["failurePolicy"] == "Fail"
+    assert spec["matchConstraints"]["resourceRules"] == [{
+        "apiGroups": ["policy.linkerd.io"], "apiVersions": ["*"],
+        "resources": ["authorizationpolicies", "meshtlsauthentications", "httproutes"], "operations": ["CREATE", "UPDATE"]}]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in spec["matchConditions"][0]["expression"]
+    text = json.dumps(spec["validations"])
+    for needle in ("object.spec.targetRef", "requiredAuthenticationRefs.all", "identityRefs.all", "parentRefs.all",
+                   "backendRefs.all", f"{lab.namespace}\\\\\\\\.serviceaccount\\\\\\\\.identity\\\\\\\\.linkerd\\\\\\\\.cluster\\\\\\\\.local$",
+                   "lowerAscii() != 'namespace'", "r.name != '*'"):
+        assert needle in text, needle
+    binding = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicyBinding"
+                   and i["metadata"]["name"] == f"{lab.namespace}-mesh")
+    assert binding["spec"]["validationActions"] == ["Deny"]
+
+
+@pytest.mark.parametrize("identity,ok", [
+    (mesh_identity("api"), True), (f"*.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local", True),
+    ("*", False), (mesh_identity("api", "devops-ex-other"), False), (f"a.b.{MESH_NS}.serviceaccount.identity.linkerd.cluster.local", False),
+    (f"api.{MESH_NS}.serviceaccount.identity.linkerd.example.org", False), (None, False), ("", False),
+])
+def test_kube_mesh_identity_ok(identity, ok):
+    assert testkit.kube_mesh_identity_ok(identity, MESH_NS) is ok
+
+
+def linkerd_fake(monkeypatch, answers):
+    fake = KubeFake(monkeypatch)
+    calls = []
+
+    def run(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        calls.append(joined)
+        for key, (code, out) in answers.items():
+            if key in joined:
+                return subprocess.CompletedProcess(cmd, code, out, "" if code == 0 else "NotFound")
+        return fake.run_sandboxed(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return calls
+
+
+def test_require_linkerd_ok_never_reads_secrets(monkeypatch):
+    calls = linkerd_fake(monkeypatch, LINKERD_OK)
+    testkit.Exercise.require_linkerd()
+    assert len([c for c in calls if c.startswith("kubectl")]) == len(LINKERD_OK) + 1
+    assert not any(" secret" in c or "secrets" in c for c in calls), calls
+
+
+@pytest.mark.parametrize("broken,answer,needle", [
+    ("configmap linkerd-identity-trust-roots", (0, pem_cert(-1)), "trust anchor"),
+    ("configmap linkerd-identity-trust-roots", (0, pem_cert(3)), "sắp hết hạn"),
+    ("configmap devops-linkerd-issuer-public", (0, pem_cert(-2, "identity.linkerd.cluster.local")), "issuer"),
+    ("configmap devops-linkerd-issuer-public", (0, "-----BEGIN CERTIFICATE-----\nrác\n-----END CERTIFICATE-----\n"),
+     "không đọc được"),
+])
+def test_require_linkerd_checks_certificate_expiry(monkeypatch, broken, answer, needle):
+    answers = dict(LINKERD_OK)
+    answers[broken] = answer
+    linkerd_fake(monkeypatch, answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_linkerd()
+    assert_skip(info, needle, "certs.sh")
+
+
+def test_require_linkerd_without_issuer_public_configmap_still_ok(monkeypatch):
+    answers = dict(LINKERD_OK)
+    answers["configmap devops-linkerd-issuer-public"] = (0, "")
+    linkerd_fake(monkeypatch, answers)
+    testkit.Exercise.require_linkerd()
+
+
+@pytest.mark.parametrize("broken,answer,needle", [
+    ("crd servers.policy.linkerd.io", (1, ""), "CRD servers.policy.linkerd.io"),
+    ("configmap linkerd-config", (0, "cniEnabled: false\n"), "cniEnabled"),
+    ("configmap linkerd-config", (1, ""), "cniEnabled"),
+    ("daemonset linkerd-cni", (0, "2 3"), "linkerd-cni"),
+    ("daemonset linkerd-cni", (0, "0 0"), "linkerd-cni"),
+    ("configmap linkerd-identity-trust-roots", (1, ""), "linkerd-identity-trust-roots"),
+    ("mutatingwebhookconfiguration linkerd-proxy-injector-webhook-config",
+     (0, base64.b64encode(b"devops-linkerd-certs-sh").decode()), "caBundle"),
+    ("mutatingwebhookconfiguration linkerd-proxy-injector-webhook-config", (0, ""), "caBundle"),
+    ("deployment linkerd-identity", (0, "0"), "linkerd/linkerd-identity"),
+    ("deployment linkerd-destination", (0, ""), "linkerd/linkerd-destination"),
+    ("deployment linkerd-proxy-injector", (1, ""), "linkerd/linkerd-proxy-injector"),
+])
+def test_require_linkerd_messages(monkeypatch, broken, answer, needle):
+    answers = dict(LINKERD_OK)
+    answers[broken] = answer
+    linkerd_fake(monkeypatch, answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_linkerd()
+    assert_skip(info, needle, "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/linkerd",
+                "bash setup/kind/linkerd/certs.sh", "image-archive", "SHA256SUMS", "Gateway API CRD")
+
+
+def test_require_linkerd_needs_cluster_first(monkeypatch):
+    KubeFake(monkeypatch, clusters="\n")
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_linkerd()
+    assert_skip(info, "Chưa có cluster kind devops-lab")
+
+
+WEB_METRICS = """# HELP response_total Total count of HTTP responses.
+# TYPE response_total counter
+control_identity_cert_expiration_timestamp_seconds 1794439715.0
+response_total{direction="inbound",target_addr="10.244.2.6:80",target_ip="10.244.2.6",target_port="80",tls="true",client_id="api.NS.serviceaccount.identity.linkerd.cluster.local",srv_kind="server",srv_name="web-http",status_code="200",classification="success",grpc_status="",error=""} 5
+response_total{direction="inbound",target_addr="10.244.2.6:80",target_ip="10.244.2.6",target_port="80",tls="true",client_id="api.NS.serviceaccount.identity.linkerd.cluster.local",srv_kind="server",srv_name="web-http",status_code="503",classification="failure",grpc_status="",error=""} 2
+response_total{direction="inbound",target_addr="0.0.0.0:4191",target_ip="0.0.0.0",target_port="4191",tls="no_identity",no_tls_reason="no_tls_from_remote",status_code="200",classification="success",grpc_status="",error=""} 40
+request_total{direction="inbound",target_addr="10.244.2.6:80",target_ip="10.244.2.6",target_port="80",tls="no_identity",no_tls_reason="no_tls_from_remote",srv_kind="default"} 1
+request_total{direction="inbound",target_addr="0.0.0.0:4191",target_ip="0.0.0.0",target_port="4191",tls="no_identity",no_tls_reason="no_tls_from_remote"} 40
+inbound_http_authz_deny_total{target_port="80",srv_group="policy.linkerd.io",srv_kind="server",srv_name="web-http",srv_port="80",tls="true",client_id="intruder.NS.serviceaccount.identity.linkerd.cluster.local"} 3
+"""
+API_METRICS = """control_identity_cert_expiration_timestamp_seconds 1794439715.0
+response_total{direction="outbound",authority="web.NS.svc.cluster.local",target_port="80",tls="true",server_id="web.NS.serviceaccount.identity.linkerd.cluster.local",status_code="200",classification="success",grpc_status="",error=""} 5
+outbound_http_route_request_statuses_total{parent_kind="Service",parent_name="web",route_name="web-retry",hostname="",http_status="200",error=""} 6
+outbound_http_route_request_statuses_total{parent_kind="Service",parent_name="web",route_name="web-retry",hostname="",http_status="503",error=""} 1
+outbound_http_route_request_statuses_total{parent_kind="Service",parent_name="web",route_name="web-retry",hostname="",http_status="",error="TIMEOUT"} 2
+outbound_http_route_retry_requests_total{parent_kind="Service",route_name="web-retry",hostname=""} 4
+"""
+
+
+def mesh_pod(name: str, sa: str, *, proxy=True, phase="Running", image=testkit.KUBE_LINKERD_PROXY_IMAGE,
+             version=testkit.KUBE_LINKERD_VERSION) -> dict:
+    sidecars = [{"name": "linkerd-network-validator", "image": testkit.KUBE_LINKERD_PROXY_IMAGE}] + (
+        [{"name": "linkerd-proxy", "image": image, "restartPolicy": "Always"}] if proxy else [])
+    annotations = {"linkerd.io/proxy-version": version} if version else {}
+    return {"metadata": {"name": name, "annotations": annotations},
+            "spec": {"serviceAccountName": sa, "initContainers": sidecars, "containers": [{"name": "app", "image": "nginx"}]},
+            "status": {"phase": phase}}
+
+
+def mesh_lab_fake(monkeypatch, pods, metrics, ns_holder, identities=None):
+    fake = LinkerdFake(monkeypatch)
+    original = fake.run_sandboxed
+
+    def run(cmd, **kwargs):
+        cmd = [str(c) for c in cmd]
+        ns = ns_holder.get("ns", "")
+        joined = " ".join(cmd)
+        if "/pods/" in joined:
+            fake.sandbox_calls.append({"cmd": cmd, "env": dict(kwargs["env"]), "input": None})
+        if "get deployment web -o json" in joined:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"spec": {"selector": {"matchLabels": {"app": "web"}}}}), "")
+        if "get pods -l app=web -o json" in joined or "get pods web-0 -o json" in joined:
+            body = {"kind": "List", "items": pods} if "-l" in cmd else pods[0]
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(body), "")
+        if "--raw" in cmd and "/pods/" in cmd[cmd.index("--raw") + 1]:
+            path = cmd[cmd.index("--raw") + 1]
+            pod = path.split("/pods/")[1].split(":")[0]
+            if path.endswith("/env.json"):
+                sa = next(p["spec"].get("serviceAccountName") for p in pods if p["metadata"]["name"] == pod)
+                local = (identities or {}).get(pod, mesh_identity(sa, ns)).replace("NS", ns)
+                return subprocess.CompletedProcess(cmd, 0, json.dumps({"LINKERD2_PROXY_IDENTITY_LOCAL_NAME": local}), "")
+            return subprocess.CompletedProcess(cmd, 0, metrics.get(pod, "").replace("NS", ns), "")
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run)
+    return fake
+
+
+def test_mesh_status_reads_identity_and_counts(monkeypatch):
+    holder = {}
+    pods = [mesh_pod("web-1", "web"), mesh_pod("web-2", "web"), mesh_pod("web-3", "web", phase="Pending")]
+    fake = mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS, "web-2": WEB_METRICS + API_METRICS}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("web")
+        assert status["workload"] == "deployment/web" and status["pods"] == ["web-1", "web-2"]
+        assert status["injected"] and status["mtls"]
+        assert status["identity"] == mesh_identity("web", lab.namespace)
+        assert (status["success"], status["failure"], status["denied"], status["plaintext"]) == (10, 4, 6, 2)
+        assert status["clients"] == [mesh_identity("api", lab.namespace)]
+        assert (status["outbound_success"], status["outbound_failure"], status["retries"]) == (6, 3, 4)
+        assert status["servers"] == [mesh_identity("web", lab.namespace)]
+        raws = [c for c in fake.sandbox_calls if "--raw" in c["cmd"] and "/readyz" not in c["cmd"]]
+        assert raws and all(c["env"]["KUBECONFIG"] == str(lab.admin_kubeconfig) for c in raws)
+        assert {c["cmd"][c["cmd"].index("--raw") + 1] for c in raws} == {
+            f"/api/v1/namespaces/{lab.namespace}/pods/{p}:4191/proxy/{e}" for p in ("web-1", "web-2") for e in ("metrics", "env.json")}
+
+
+def test_mesh_status_unmeshed_pod_reports_not_injected(monkeypatch):
+    holder = {}
+    pods = [mesh_pod("web-0", "web", proxy=False)]
+    mesh_lab_fake(monkeypatch, pods, {}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("pod/web-0")
+        assert status["pods"] == ["web-0"] and not status["injected"] and not status["mtls"] and status["identity"] is None
+
+
+def test_mesh_status_without_certificate_has_no_identity(monkeypatch):
+    holder = {}
+    pods = [mesh_pod("web-1", "web")]
+    mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS.replace("1794439715.0", "0")}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("deployment/web")
+        assert status["injected"] and not status["mtls"] and status["identity"] is None
+
+
+@pytest.mark.parametrize("change", [
+    {"image": "evil/fake-proxy:1"}, {"image": "cr.l5d.io/linkerd/proxy:edge-26.11.1"}, {"version": None},
+    {"version": "edge-26.11.1"},
+])
+def test_mesh_status_refuses_spoofed_proxy_container(monkeypatch, change):
+    holder = {}
+    pods = [mesh_pod("web-1", "web", **change)]
+    fake = mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("deployment/web")
+        assert not status["injected"] and not status["mtls"] and status["identity"] is None
+        assert status["success"] == 0 and status["clients"] == []
+        assert not [c for c in fake.sandbox_calls if "--raw" in c["cmd"] and "/readyz" not in c["cmd"]]
+
+
+@pytest.mark.parametrize("local", ["api.NS.serviceaccount.identity.linkerd.cluster.local",
+                                   "web.devops-ex-other.serviceaccount.identity.linkerd.cluster.local", "", "web"])
+def test_mesh_status_identity_must_match_pod_service_account(monkeypatch, local):
+    holder = {}
+    pods = [mesh_pod("web-1", "web")]
+    mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS}, holder, identities={"web-1": local})
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("deployment/web")
+        assert status["injected"] and not status["mtls"] and status["identity"] is None
+
+
+def test_mesh_status_default_service_account_identity(monkeypatch):
+    holder = {}
+    pod = mesh_pod("web-1", "")
+    mesh_lab_fake(monkeypatch, [pod], {"web-1": WEB_METRICS}, holder,
+                  identities={"web-1": "default.NS.serviceaccount.identity.linkerd.cluster.local"})
+    del pod["spec"]["serviceAccountName"]
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        assert lab.mesh_status("deployment/web")["identity"] == mesh_identity("default", lab.namespace)
+
+
+def test_linkerd_metrics_ignore_non_finite_values():
+    text = ('response_total{direction="inbound",target_port="80",tls="true",client_id="a",classification="success"} NaN\n'
+            'response_total{direction="inbound",target_port="80",tls="true",client_id="b",classification="failure"} +Inf\n'
+            'inbound_http_authz_deny_total{target_port="80"} -Inf\n'
+            'control_identity_cert_expiration_timestamp_seconds NaN\n'
+            'response_total{direction="inbound",target_port="80",tls="true",client_id="c",classification="success"} 2\n')
+    counts = testkit._linkerd_metrics(text)
+    assert (counts["success"], counts["failure"], counts["denied"], counts["cert"]) == (2, 0, 0, False)
+    assert counts["clients"] == {"c"}
+
+
+def test_close_releases_hook_finalizer_on_linkerd_kinds(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        if "api-resources --api-group=policy.linkerd.io" in joined:
+            return subprocess.CompletedProcess(cmd, 0, LINKERD_RESOURCES, "")
+        if "jobs.batch" in joined and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    kinds = cmd[cmd.index("get") + 1].split(",")
+    assert {f"{r}.policy.linkerd.io" for r in testkit.KUBE_LINKERD_RESOURCES} <= set(kinds)
+    assert "jobs.batch" in kinds
+
+
+def test_close_hook_kinds_without_linkerd_have_no_linkerd_group(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        if "jobs.batch" in " ".join(map(str, cmd)) and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    assert "linkerd" not in cmd[cmd.index("get") + 1]
+
+
+
+def test_close_releases_hook_finalizer_on_gateway_httproutes_when_crd_present(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        if "api-resources --api-group=gateway.networking.k8s.io" in joined:
+            return subprocess.CompletedProcess(cmd, 0, "gateways.gateway.networking.k8s.io\nhttproutes.gateway.networking.k8s.io\n", "")
+        if "jobs.batch" in joined and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    kinds = cmd[cmd.index("get") + 1].split(",")
+    assert "httproutes.gateway.networking.k8s.io" in kinds and "jobs.batch" in kinds
+    assert not any(k.endswith(".gateway.networking.k8s.io") and k != "httproutes.gateway.networking.k8s.io" for k in kinds)
+
+
+def test_close_hook_kinds_without_gateway_api_have_no_gateway_group(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        if "jobs.batch" in " ".join(map(str, cmd)) and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    assert "gateway.networking.k8s.io" not in cmd[cmd.index("get") + 1]
+
+@pytest.mark.parametrize("workload", ["", "Web", "service/web", "deployment/", "web; rm -rf /", "../web", "-n", None,
+                                      "deployment/web/x"])
+def test_mesh_status_validates_workload(monkeypatch, workload):
+    LinkerdFake(monkeypatch)
+    with testkit.KubeLab(mesh=True) as lab:
+        with pytest.raises(ValueError):
+            lab.mesh_status(workload)
+
+
+def test_linkerd_setup_pinned_and_documented():
+    import hashlib
+
+    folder = testkit.KUBE_LINKERD_DIR
+    sums = dict(reversed(line.split()) for line in (folder / "SHA256SUMS").read_text(encoding="utf-8").splitlines())
+    assert set(sums) == {p.name for p in folder.iterdir() if p.is_file() and p.name != "SHA256SUMS"}
+    for name, digest in sums.items():
+        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest, name
+    text = "\n".join((folder / name).read_text(encoding="utf-8") for name in sums)
+    for name in sums:
+        if name.endswith(".yaml"):
+            body = (folder / name).read_text(encoding="utf-8")
+            assert "-----BEGIN" not in body and not re.search(r"^\s*tls\.key:", body, re.M), name
+    images = set(re.findall(r"image: (\S+)", text))
+    assert images == set(testkit.KUBE_LINKERD_IMAGES)
+    pulls = re.findall(r"imagePullPolicy: (\S+)", text)
+    assert pulls and set(pulls) == {"Never"}
+    rendered = (folder / "20-linkerd-control-plane-edge-26.10.1.yaml").read_text(encoding="utf-8")
+    for needle in ("cniEnabled: true", "disableHeartBeat: true", "externalCA: true", "scheme: kubernetes.io/tls",
+                   "linkerdVersion: edge-26.10.1", "enableShutdownEndpoint: false"):
+        assert needle in rendered, needle
+    assert "kind: Secret" not in rendered and "kind: CronJob" not in rendered
+    assert rendered.count(f"caBundle: {base64.b64encode(testkit.KUBE_LINKERD_CA_PLACEHOLDER.encode()).decode()}") == 3
+    script = (folder / "certs.sh").read_text(encoding="utf-8")
+    for needle in ("mktemp -d", "trap 'rm -rf", "umask 077", "rm -f root.key", "openssl genpkey -algorithm EC",
+                   "linkerd-identity-trust-roots", "linkerd-identity-issuer", "--server-side", "caBundle"):
+        assert needle in script, needle
+    assert script.index("rm -f root.key") < script.index("create configmap linkerd-identity-trust-roots")
+    doc = (testkit.ROOT / "setup" / "DEVOPS-TOOLS.md").read_text(encoding="utf-8")
+    for needle in (*testkit.KUBE_LINKERD_IMAGES.values(), "setup/kind/linkerd", "bash setup/kind/linkerd/certs.sh",
+                   "edge-26.10.1", "66d634f5318c8016f0b5face246a688964b6e2c86d6c3be34be68ab9fcd2a8cc"):
+        assert needle in doc, needle
+
+
+@pytest.mark.skipif(not shutil.which("kubectl"), reason="Cần kubectl để render kustomization")
+def test_linkerd_rendered_manifests_fail_closed(tmp_path):
+    import yaml
+
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "KUBECONFIG": str(tmp_path / "none"), "KUBERC": "off"}
+    result = subprocess.run(["kubectl", "kustomize", str(testkit.KUBE_LINKERD_DIR)], capture_output=True, text=True, env=env,
+                            timeout=120)
+    assert result.returncode == 0, result.stderr
+    docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+    namespaces = {d["metadata"].get("namespace") for d in docs} - {None}
+    assert namespaces == {"linkerd", "linkerd-cni"}
+    for doc in docs:
+        if doc["kind"] in ("Deployment", "DaemonSet"):
+            spec = doc["spec"]["template"]["spec"]
+            for container in spec.get("initContainers", []) + spec["containers"]:
+                assert container.get("imagePullPolicy") == "Never", (doc["metadata"]["name"], container["name"])
+                assert "NET_ADMIN" not in json.dumps(container), container["name"]
+    assert not [d for d in docs if d["kind"] in ("Secret", "CronJob")]
+    labelled = [d["metadata"]["name"] for d in docs if "devops-ex" in (d["metadata"].get("labels") or {})]
+    assert labelled == []
+    ns = {d["metadata"]["name"]: d["metadata"]["labels"] for d in docs if d["kind"] == "Namespace"}
+    assert ns["linkerd"]["pod-security.kubernetes.io/enforce"] == "restricted"
+    assert ns["linkerd"]["config.linkerd.io/admission-webhooks"] == "disabled"
+    injector = next(d for d in docs if d["kind"] == "MutatingWebhookConfiguration")
+    exprs = injector["webhooks"][0]["namespaceSelector"]["matchExpressions"]
+    assert {"key": "config.linkerd.io/admission-webhooks", "operator": "NotIn", "values": ["disabled"]} in exprs
+
+
+MESH_APP = """apiVersion: v1
+kind: ServiceAccount
+metadata: {name: SA}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: SA}
+spec:
+  selector: {matchLabels: {app: SA}}
+  template:
+    metadata: {labels: {app: SA}}
+    spec:
+      serviceAccountName: SA
+      containers:
+      - name: SA
+        image: nginx:1.30.6-alpine
+        imagePullPolicy: Never
+        ports: [{containerPort: 80, name: http}]
+"""
+MESH_POLICY = """apiVersion: v1
+kind: Service
+metadata: {name: web}
+spec:
+  selector: {app: web}
+  ports: [{port: 80, targetPort: 80, name: http}]
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata: {name: web-http}
+spec:
+  podSelector: {matchLabels: {app: web}}
+  port: http
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata: {name: api-only}
+spec:
+  identityRefs:
+  - {kind: ServiceAccount, name: api}
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata: {name: web-from-api}
+spec:
+  targetRef: {group: policy.linkerd.io, kind: Server, name: web-http}
+  requiredAuthenticationRefs:
+  - {group: policy.linkerd.io, kind: MeshTLSAuthentication, name: api-only}
+"""
+
+
+def curl_code(lab, deployment: str, url: str) -> str:
+    result = lab.kubectl("exec", f"deploy/{deployment}", "-c", deployment, "--", "curl", "-s", "-m", "5", "-o", "/dev/null",
+                         "-w", "%{http_code}", url, check=False)
+    return result.stdout.strip()
+
+
+@KUBE_REQUIRED
+def test_kube_lab_mesh_mtls_and_authorization_policy_real(tmp_path):
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_linkerd()
+    testkit.Exercise.require_kind_images(testkit.KUBE_IMAGES["nginx"])
+    (tmp_path / "app.yaml").write_text("---\n".join(MESH_APP.replace("SA", sa) for sa in ("web", "api", "intruder")), encoding="utf-8")
+    (tmp_path / "policy.yaml").write_text(MESH_POLICY, encoding="utf-8")
+    with testkit.KubeLab(mesh=True) as lab:
+        lab.apply_learner(tmp_path / "app.yaml")
+        lab.kubectl("rollout", "status", "deployment/web", "deployment/api", "deployment/intruder", "--timeout=120s", timeout=150)
+        lab.apply_learner(tmp_path / "policy.yaml")
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and curl_code(lab, "intruder", "http://web/") != "403":
+            time.sleep(1)
+        assert [curl_code(lab, "api", "http://web/") for _ in range(3)] == ["200"] * 3
+        assert curl_code(lab, "intruder", "http://web/") == "403"
+        web = lab.mesh_status("deployment/web")
+        assert web["injected"] and web["mtls"], web
+        assert web["identity"] == f"web.{lab.namespace}.serviceaccount.identity.linkerd.cluster.local"
+        assert f"api.{lab.namespace}.serviceaccount.identity.linkerd.cluster.local" in web["clients"]
+        assert web["success"] >= 3 and web["denied"] >= 1 and web["failure"] == 0, web
+        api = lab.mesh_status("api")
+        assert api["identity"] == f"api.{lab.namespace}.serviceaccount.identity.linkerd.cluster.local"
+        assert web["identity"] in api["servers"] and api["outbound_success"] >= 3, api
+    assert testkit.kube_leftovers(lab.id) == []
+
+
+@KUBE_REQUIRED
+def test_linkerd_policy_vap_refuses_foreign_namespace_real():
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_linkerd()
+    with testkit.KubeLab() as lab:
+        def named(doc, name):
+            return {**doc, "metadata": {"name": name}}
+
+        good = [named(mesh_doc("MeshTLSAuthentication", {"identities": [mesh_identity("api", lab.namespace)]}), "by-name"),
+                named(mesh_doc("MeshTLSAuthentication", {"identityRefs": [{"kind": "ServiceAccount", "name": "api"}]}), "good"),
+                named(mesh_doc("AuthorizationPolicy", {"targetRef": {"kind": "Namespace", "name": lab.namespace},
+                                                       "requiredAuthenticationRefs": [{"group": "policy.linkerd.io",
+                                                                                       "kind": "MeshTLSAuthentication",
+                                                                                       "name": "good"}]}), "good"),
+                named(mesh_doc("HTTPRoute", {"parentRefs": [{"group": "core", "kind": "Service", "name": "web", "port": 80}],
+                                             "rules": [{"backendRefs": [{"name": "web", "port": 80}]}]}, "v1beta3"), "good")]
+        for doc in good:
+            result = lab.kubectl("apply", "-f", "-", input=json.dumps(doc), check=False)
+            assert result.returncode == 0, (doc["kind"], result.stderr)
+        for case, doc in sorted(FOREIGN_MESH.items()):
+            if case == "authz-target-ns-field":
+                continue
+            text = json.dumps(doc).replace(MESH_NS, lab.namespace)
+            result = lab.kubectl("apply", "-f", "-", input=text.replace('"name": "x"', f'"name": "{case}"', 1), check=False)
+            assert result.returncode != 0 and f"{lab.namespace}-mesh" in result.stderr, (case, result.stderr)
+        for resource in ("networkauthentications", "httplocalratelimitpolicies", "serverauthorizations", "egressnetworks"):
+            assert lab.kubectl("auth", "can-i", "create", f"{resource}.policy.linkerd.io", check=False).stdout.strip() == "no"
+        assert lab.kubectl("auth", "can-i", "create", "serviceprofiles.linkerd.io", check=False).stdout.strip() == "no"
+        assert lab.kubectl("auth", "can-i", "create", "servers.policy.linkerd.io", "-n", "linkerd",
+                           check=False).stdout.strip() == "no"
+
+
+def fault_info(name: str, *, labels=None, running=True, tmpfs=None, cid=None) -> dict:
+    return {"Name": f"/{name}", "Id": cid or f"id-{name}", "State": {"Running": running},
+            "Config": {"Labels": {"devops-ex": "1", **(labels or {})}}, "HostConfig": {"Tmpfs": tmpfs or {}}}
+
+
+class FakeFaultDocker:
+    """`_docker` giả cho FaultInjector: `ps` trả mọi tên (kể cả container lạ), `inspect` đọc từ `infos`, lệnh khác được ghi."""
+
+    def __init__(self, infos: list[dict]):
+        self.infos = {i["Name"].lstrip("/"): i for i in infos}
+        self.calls: list[tuple[str, ...]] = []
+
+    def __call__(self, *args, timeout=60):
+        self.calls.append(args)
+        if args[0] == "ps":
+            return subprocess.CompletedProcess(args, 0, "\n".join(self.infos), "")
+        if args[0] == "inspect":
+            found = [self.by_ref(n) for n in args[1:] if n in self.infos or any(i["Id"] == n for i in self.infos.values())]
+            return subprocess.CompletedProcess(args, 0 if found else 1, json.dumps(found), "" if found else "No such object")
+        if args[0] in ("kill", "stop", "start"):
+            info = self.by_ref(args[-1])
+            info["State"]["Running"] = args[0] == "start"
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    def by_ref(self, ref: str) -> dict:
+        return self.infos.get(ref) or next(i for i in self.infos.values() if i["Id"] == ref)
+
+    def mutations(self) -> list[tuple[str, ...]]:
+        return [c for c in self.calls if c[0] not in ("ps", "inspect")]
+
+
+def fault_lab(monkeypatch, *, foreign=True):
+    lab = testkit.DockerLab()
+    lab._entered = True
+    prefix = lab.network
+    compose = {"devops-ex.lab": lab.id, "com.docker.compose.project": prefix}
+    infos = [
+        fault_info(f"{prefix}-api-1", labels={**compose, "com.docker.compose.service": "api"}),
+        fault_info(f"{prefix}-worker-1", labels={**compose, "com.docker.compose.service": "worker"}),
+        fault_info(f"{prefix}-redis-1", labels={**compose, "com.docker.compose.service": "redis"}, tmpfs={"/data": "size=16m"}),
+        fault_info(f"{prefix}-postgres-1", labels={**compose, "com.docker.compose.service": "postgres"},
+                   tmpfs={"/var/lib/postgresql/data": ""}),
+        fault_info(f"{prefix}-prometheus-1", labels={**compose, "com.docker.compose.service": "prometheus"}, tmpfs={"/prometheus": "size=8m"}),
+    ]
+    if foreign:
+        infos += [
+            fault_info(f"{prefix}-decoy", tmpfs={"/data": "size=1m"}),
+            fault_info(f"{prefix}-other-lab", labels={"devops-ex.lab": "ffffffff"}),
+            fault_info(f"devops-ex-ffffffff-redis-1", labels={"devops-ex.lab": "ffffffff", "com.docker.compose.service": "redis"}),
+            {**fault_info(f"{prefix}-unlabelled"), "Config": {"Labels": {"devops-ex.lab": lab.id}}},
+            fault_info("de-learning-redis", labels={"com.docker.compose.service": "redis"}),
+        ]
+    fake = FakeFaultDocker(infos)
+    monkeypatch.setattr(testkit, "_docker", fake)
+    return lab, fake
+
+
+def test_fault_injector_rejects_bad_arguments(monkeypatch):
+    lab, _ = fault_lab(monkeypatch)
+    with pytest.raises(TypeError):
+        testkit.FaultInjector(object(), seed=1)
+    for seed in ("1", True, 1.5):
+        with pytest.raises(TypeError):
+            testkit.FaultInjector(lab, seed=seed)
+    with pytest.raises(ValueError, match="không nhận"):
+        testkit.FaultInjector(lab, seed=1, faults=["rm-rf"])
+    with pytest.raises(ValueError, match="không hỗ trợ bad-config"):
+        testkit.FaultInjector(lab, seed=1, faults=["bad-config"])
+    with pytest.raises(ValueError, match="không hỗ trợ net-delay"):
+        testkit.FaultInjector(testkit.KubeLab(), seed=1, faults=["net-delay"])
+    for delay in (0, 6000, True):
+        with pytest.raises(ValueError):
+            testkit.FaultInjector(lab, seed=1, delay_ms=delay)
+    with pytest.raises(RuntimeError, match="with DockerLab"):
+        testkit.FaultInjector(testkit.DockerLab(), seed=1).plan()
+
+
+def test_fault_injector_seed_deterministic(monkeypatch):
+    lab, fake = fault_lab(monkeypatch)
+    plans = {seed: testkit.FaultInjector(lab, seed=seed).plan() for seed in range(200)}
+    assert all(testkit.FaultInjector(lab, seed=seed).plan() == plan for seed, plan in plans.items())
+    assert {code for code, _ in plans.values()} == set(testkit.FAULT_DOCKER_CODES)
+    assert {service for _, service in plans.values()} == {"api", "worker", "redis", "postgres"}
+    assert {s for c, s in plans.values() if c == "disk-full"} == {"redis"}
+    assert {s for c, s in plans.values() if c == "redis-stop"} == {"redis"}
+    assert fake.mutations() == [], "plan() không được thay đổi gì"
+    only = {testkit.FaultInjector(lab, seed=seed, faults=["kill"], services=["api", "worker"]).plan() for seed in range(50)}
+    assert only == {("kill", "api"), ("kill", "worker")}
+    shuffled, _ = fault_lab(monkeypatch)
+    fake_infos = list(testkit._docker.infos.items())
+    testkit._docker.infos = dict(reversed(fake_infos))
+    assert {seed: testkit.FaultInjector(shuffled, seed=seed).plan() for seed in range(200)} == plans, \
+        "Thứ tự docker ps trả về không được đổi lựa chọn"
+
+
+def test_fault_injector_only_touches_lab_resources(monkeypatch):
+    lab, fake = fault_lab(monkeypatch)
+    found = testkit.FaultInjector(lab, seed=1).candidates()
+    assert {service for _, service in found} == {"api", "worker", "redis", "postgres"}
+    with pytest.raises(pytest.fail.Exception, match="không có tài nguyên"):
+        testkit.FaultInjector(lab, seed=1, services=["decoy", "other-lab", "unlabelled", "prometheus"]).plan()
+    for name in (f"{lab.network}-decoy", f"{lab.network}-other-lab", "de-learning-redis", f"{lab.network}-unlabelled"):
+        with pytest.raises(RuntimeError, match="từ chối"):
+            testkit.FaultInjector(lab, seed=1)._inspect(name)
+    start = len(fake.calls)
+    for code in ("kill", "redis-stop", "disk-full"):
+        injector = testkit.FaultInjector(lab, seed=3, faults=[code])
+        assert injector.inject() == code
+        assert injector.revert() == []
+    own = {f"{lab.network}-api-1", f"{lab.network}-worker-1", f"{lab.network}-redis-1", f"{lab.network}-postgres-1"}
+    own |= {f"id-{name}" for name in own}
+    touched = [c for c in fake.mutations()]
+    assert touched and all(any(arg in own for arg in call) for call in touched), touched
+    listed = [c for c in fake.calls[start:] if c[0] == "inspect"]
+    assert listed and all(n in own or n.startswith(f"{lab.network}-") for c in listed for n in c[1:]), \
+        "Chỉ inspect container mang tiền tố của lab"
+    assert not [c for c in touched if f"{lab.network}-prometheus-1" in c]
+
+
+class FakeKube:
+    def __init__(self, lab, objects):
+        self.lab = lab
+        self.objects = objects
+        self.calls: list[tuple[str, ...]] = []
+
+    def __call__(self, *args, check=True, input=None, timeout=None):
+        self.calls.append(args)
+        if args[0] == "get" and "-o" in args and args[args.index("-o") + 1] == "json":
+            return subprocess.CompletedProcess(args, 0, json.dumps({"items": self.objects}), "")
+        if args[0] == "get" and "jsonpath={.spec.replicas}" in args:
+            workload = next(o for o in self.objects if f"{o['kind'].lower()}/{o['metadata']['name']}" == args[1])
+            return subprocess.CompletedProcess(args, 0, str(workload["spec"]["replicas"]), "")
+        if args[0] == "scale":
+            workload = next(o for o in self.objects if f"{o['kind'].lower()}/{o['metadata']['name']}" == args[1])
+            workload["spec"]["replicas"] = int(args[2].split("=")[1])
+        if args[:2] == ("patch", "configmap"):
+            config = next(o for o in self.objects if o["kind"] == "ConfigMap" and o["metadata"]["name"] == args[2])
+            config["data"].update(json.loads(args[-1])["data"])
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+
+def kube_objects() -> list[dict]:
+    def workload(kind, name, replicas=1, *, env_from=None, volumes=(), mounts=()):
+        container = {"name": "main", "image": "x", "volumeMounts": list(mounts)}
+        if env_from:
+            container["envFrom"] = [{"configMapRef": {"name": env_from}}]
+        return {"kind": kind, "metadata": {"name": name}, "spec": {"replicas": replicas, "selector": {"matchLabels": {"app": name}},
+                "template": {"metadata": {"labels": {"app": name}}, "spec": {"containers": [container], "volumes": list(volumes)}}}}
+
+    def pod(name, app, phase="Running"):
+        return {"kind": "Pod", "metadata": {"name": name, "labels": {"app": app}}, "status": {"phase": phase}}
+
+    return [
+        workload("Deployment", "api", 2, env_from="api-config",
+                 volumes=[{"name": "scratch", "emptyDir": {"sizeLimit": "16Mi"}}], mounts=[{"name": "scratch", "mountPath": "/scratch"}]),
+        workload("Deployment", "redis"),
+        workload("StatefulSet", "postgres", volumes=[{"name": "big", "emptyDir": {"sizeLimit": "4Gi"}}],
+                 mounts=[{"name": "big", "mountPath": "/big"}]),
+        {"kind": "ConfigMap", "metadata": {"name": "api-config"}, "data": {"DATABASE_URL": "postgresql://postgres/olist"}},
+        {"kind": "ConfigMap", "metadata": {"name": "unused"}, "data": {"A": "b"}},
+        pod("api-7d9-b", "api"), pod("api-7d9-a", "api"), pod("redis-55-x", "redis"), pod("postgres-0", "postgres", "Pending"),
+    ]
+
+
+def test_fault_injector_kube_stays_in_lab_namespace(monkeypatch):
+    lab = testkit.KubeLab()
+    fake = FakeKube(lab, kube_objects())
+    monkeypatch.setattr(lab, "kubectl", fake)
+    lab._admin = None
+    plans = {testkit.FaultInjector(lab, seed=s).plan() for s in range(200)}
+    assert plans == {("kill", "deployment/api"), ("kill", "deployment/redis"), ("disk-full", "deployment/api"),
+                     ("redis-stop", "deployment/redis"), ("bad-config", "configmap/api-config")}
+    for code in testkit.FAULT_KUBE_CODES:
+        with testkit.FaultInjector(lab, seed=7, faults=[code]) as injector:
+            assert injector.inject() == code
+    config = next(o for o in fake.objects if o["metadata"]["name"] == "api-config")
+    assert config["data"] == {"DATABASE_URL": "postgresql://postgres/olist"}
+    assert next(o for o in fake.objects if o["metadata"]["name"] == "redis")["spec"]["replicas"] == 1
+    calls = [" ".join(c) for c in fake.calls]
+    assert "delete pod api-7d9-a --grace-period=0 --force --wait=false" in calls
+    assert "scale deployment/redis --replicas=0" in calls and "scale deployment/redis --replicas=1" in calls
+    assert any(c.startswith("exec api-7d9-a -c main -- dd if=/dev/zero of=/scratch/") and c.endswith("count=17") for c in calls), \
+        "Ghi theo sizeLimit 16Mi cộng 1 MiB"
+    assert any(c.startswith("exec api-7d9-a -c main -- rm -f /scratch/") for c in calls)
+    assert sum(c.startswith("patch deployment/api --type merge") for c in calls) == 2
+    patched = [json.loads(c[-1]) for c in fake.calls if c[:2] == ("patch", "configmap")]
+    assert patched[0]["data"]["DATABASE_URL"].endswith(testkit.FAULT_CONFIG_SUFFIX)
+    for call in fake.calls:
+        flat = " ".join(call)
+        assert not re.search(r"\bnodes?\b|--namespace|\s-n\s|--all-namespaces|\s-A\b|--kubeconfig|--as", f" {flat} "), flat
+
+
+def docker_ps(*filters: str) -> list[str]:
+    args = ["ps", "-a", "--format", "{{.Names}}"]
+    for f in filters:
+        args += ["--filter", f]
+    return testkit._docker(*args).stdout.split()
+
+
+FAULT_COMPOSE = f"""
+services:
+  api:
+    image: {BASE}
+    command: ["python", "-m", "http.server", "8000"]
+  redis:
+    image: {testkit.KUBE_IMAGES["redis"]}
+    tmpfs: ["/data:size=8m"]
+"""
+
+
+def qdiscs(name: str) -> str:
+    result = subprocess.run(["docker", "run", "--rm", "--network", f"container:{name}", "--cap-drop", "ALL", "--cap-add", "NET_ADMIN",
+                             "--security-opt", "no-new-privileges", *testkit.docker_cpu_args(), "--entrypoint", "tc",
+                             testkit.FAULT_NETEM_IMAGE, "qdisc", "show"], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+def started_at(name: str) -> tuple[bool, str]:
+    info = inspect_container(name)
+    return info["State"]["Running"], info["State"]["StartedAt"]
+
+
+def fill_exists(name: str) -> bool:
+    return testkit._docker("exec", name, "test", "-e", f"/data/{testkit.FAULT_FILL_FILE}").returncode == 0
+
+
+def fault_real_images():
+    require_real_docker(BASE)
+    require_real_docker(testkit.KUBE_IMAGES["redis"])
+    require_real_docker(testkit.FAULT_NETEM_IMAGE)
+
+
+def test_fault_injector_real_only_touches_lab_resources(monkeypatch, tmp_path):
+    fault_real_images()
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    recorded: list[list[str]] = []
+    active: list[bool] = []
+    real_run = subprocess.run
+
+    def recording(cmd, *args, **kwargs):
+        if active and isinstance(cmd, list) and cmd[:1] == ["docker"]:
+            recorded.append(list(cmd))
+        return real_run(cmd, *args, **kwargs)
+
+    lab, other = testkit.DockerLab(), testkit.DockerLab()
+    decoy = None
+    with lab, other:
+        lab.compose(write_compose(tmp_path / "a", FAULT_COMPOSE))
+        other.compose(write_compose(tmp_path / "b", FAULT_COMPOSE))
+        decoy = f"{lab.network}-decoy"
+        made = testkit._docker("run", "-d", "--name", decoy, "--label", "devops-ex=1", "--security-opt", "no-new-privileges",
+                               *testkit.docker_cpu_args(), "--tmpfs", "/data:size=4m", testkit.KUBE_IMAGES["redis"])
+        assert made.returncode == 0, made.stderr
+        try:
+            bystanders = [decoy] + [other.project.container(s) for s in ("api", "redis")]
+            before = {name: started_at(name) for name in bystanders}
+            own = {lab.project.container(s): inspect_container(lab.project.container(s))["Id"] for s in ("api", "redis")}
+            monkeypatch.setattr(testkit.subprocess, "run", recording)
+            for code in testkit.FAULT_DOCKER_CODES:
+                injector = testkit.FaultInjector(lab, seed=11, faults=[code])
+                active.append(True)
+                try:
+                    assert injector.inject() == code
+                finally:
+                    active.clear()
+                assert injector.resource in ("api", "redis")
+                for name in bystanders:
+                    assert started_at(name) == before[name], f"{code} chạm {name}"
+                    assert "netem" not in qdiscs(name), f"{code} thêm netem vào {name}"
+                assert not fill_exists(decoy) and not fill_exists(other.project.container("redis"))
+                active.append(True)
+                try:
+                    assert injector.revert() == []
+                finally:
+                    active.clear()
+            monkeypatch.setattr(testkit.subprocess, "run", real_run)
+            names = set(own) | set(own.values())
+            for argv in recorded:
+                verb = argv[1]
+                if verb in ("kill", "stop", "start", "exec"):
+                    target = next(a for a in argv[2:] if not a.startswith("-") and a not in ("0", "5"))
+                    assert target in names, argv
+                if verb == "run":
+                    assert argv[argv.index("--network") + 1].removeprefix("container:") in names, argv
+                    assert argv[argv.index("--cap-add") + 1] == "NET_ADMIN" and argv[argv.index("--cap-drop") + 1] == "ALL"
+                    assert "no-new-privileges" in argv and "--read-only" in argv and "--rm" in argv
+                    assert argv[argv.index("--name") + 1].startswith(f"{lab.network}-fault-netem-")
+            assert {argv[1] for argv in recorded} >= {"kill", "stop", "start", "exec", "run"}
+            for name in own:
+                assert not inspect_container(name)["HostConfig"].get("CapAdd"), "Container của bài không được thêm capability"
+        finally:
+            monkeypatch.setattr(testkit.subprocess, "run", real_run)
+            testkit._docker("rm", "-f", "-v", decoy)
+    assert testkit.docker_leftovers(lab.id) == [] and testkit.docker_leftovers(other.id) == []
+
+
+def test_fault_injector_reverts_on_close(monkeypatch, tmp_path):
+    import warnings
+
+    fault_real_images()
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    lab = testkit.DockerLab()
+    with lab:
+        project = lab.compose(write_compose(tmp_path, FAULT_COMPOSE))
+        api, redis = project.container("api"), project.container("redis")
+        for code, service in (("kill", "api"), ("redis-stop", "redis"), ("net-delay", "api"), ("disk-full", "redis")):
+            injector = testkit.FaultInjector(lab, seed=5, faults=[code], services=[service])
+            name = api if service == "api" else redis
+            assert injector.inject() == code and injector.resource == service
+            if code in ("kill", "redis-stop"):
+                assert not started_at(name)[0]
+            elif code == "net-delay":
+                assert f"delay {testkit.FAULT_DELAY_MS}ms" in qdiscs(name)
+            else:
+                assert fill_exists(name)
+                full = testkit._docker("exec", name, "sh", "-c", "echo x > /data/probe")
+                assert full.returncode != 0 and "space" in full.stderr.lower()
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                injector.close()
+            assert started_at(name)[0], f"{code}: container chưa chạy lại"
+            assert "netem" not in qdiscs(name) and not fill_exists(name)
+            with pytest.raises(RuntimeError, match="một lỗi"):
+                injector.inject()
+        recovered = testkit.FaultInjector(lab, seed=5, faults=["kill"], services=["api"])
+        recovered.inject()
+        assert project.run("up", "-d", "--force-recreate", "--no-deps", "api").returncode == 0
+        delayed = testkit.FaultInjector(lab, seed=5, faults=["net-delay"], services=["redis"])
+        delayed.inject()
+        assert project.run("restart", "redis").returncode == 0
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert recovered.revert() == [] and delayed.revert() == []
+        assert started_at(project.container("api"))[0]
+    assert testkit.docker_leftovers(lab.id) == []
+    project_volumes = testkit._docker("volume", "ls", "-q", "--filter", f"label=com.docker.compose.project=devops-ex-{lab.id}")
+    assert project_volumes.stdout.split() == []
+
+
+@KUBE_REQUIRED
+def test_fault_injector_kube_real():
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_kind_images(testkit.KUBE_IMAGES["redis"])
+    image = testkit.KUBE_IMAGES["redis"]
+
+    def deployment(name, command, **extra):
+        container = {"name": "main", "image": image, "imagePullPolicy": "Never", "command": command, **extra.pop("container", {})}
+        return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name},
+                "spec": {"replicas": 1, "selector": {"matchLabels": {"app": name}},
+                         "template": {"metadata": {"labels": {"app": name}},
+                                      "spec": {"terminationGracePeriodSeconds": 0, "containers": [container], **extra}}}}
+
+    docs = [
+        {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "web-config"}, "data": {"MODE": "ok"}},
+        deployment("web", ["sh", "-c", "sleep 3600"], container={"envFrom": [{"configMapRef": {"name": "web-config"}}],
+                                                                 "volumeMounts": [{"name": "scratch", "mountPath": "/scratch"}]},
+                   volumes=[{"name": "scratch", "emptyDir": {"medium": "Memory", "sizeLimit": "8Mi"}}]),
+        deployment("redis", ["redis-server"]),
+    ]
+    with testkit.KubeLab() as lab:
+        lab.kubectl("apply", "-f", "-", input=json.dumps({"apiVersion": "v1", "kind": "List", "items": docs}))
+        lab.kubectl("rollout", "status", "deployment/web", "deployment/redis", "--timeout=120s", timeout=150)
+
+        def pods(app):
+            out = lab.kubectl("get", "pods", "-l", f"app={app}", "-o", "json").stdout
+            return [p["metadata"]["name"] for p in json.loads(out)["items"] if not p["metadata"].get("deletionTimestamp")]
+
+        before = pods("web")
+        with testkit.FaultInjector(lab, seed=2, faults=["kill"], services=["web"]) as injector:
+            assert injector.inject() == "kill"
+        lab.kubectl("rollout", "status", "deployment/web", "--timeout=120s", timeout=150)
+        deadline = time.monotonic() + 60
+        while set(pods("web")) & set(before) and time.monotonic() < deadline:
+            time.sleep(1)
+        assert not set(pods("web")) & set(before), "Pod bị kill phải được thay"
+        with testkit.FaultInjector(lab, seed=2, faults=["redis-stop"]) as injector:
+            injector.inject()
+            assert lab.kubectl("get", "deployment/redis", "-o", "jsonpath={.spec.replicas}").stdout == "0"
+        assert lab.kubectl("get", "deployment/redis", "-o", "jsonpath={.spec.replicas}").stdout == "1"
+        lab.kubectl("rollout", "status", "deployment/web", "--timeout=120s", timeout=150)
+        pod = pods("web")[0]
+        with testkit.FaultInjector(lab, seed=2, faults=["disk-full"]) as injector:
+            injector.inject()
+            assert lab.kubectl("exec", pod, "--", "test", "-e", f"/scratch/{testkit.FAULT_FILL_FILE}", check=False).returncode == 0
+        assert lab.kubectl("exec", pod, "--", "test", "-e", f"/scratch/{testkit.FAULT_FILL_FILE}", check=False).returncode != 0
+        with testkit.FaultInjector(lab, seed=2, faults=["bad-config"]) as injector:
+            assert injector.inject() == "bad-config" and injector.resource == "configmap/web-config"
+            data = json.loads(lab.kubectl("get", "configmap", "web-config", "-o", "json").stdout)["data"]
+            assert data == {"MODE": f"ok{testkit.FAULT_CONFIG_SUFFIX}"}
+            lab.kubectl("rollout", "status", "deployment/web", "--timeout=120s", timeout=150)
+            new = pods("web")[0]
+            assert lab.kubectl("exec", new, "--", "printenv", "MODE").stdout.strip() == f"ok{testkit.FAULT_CONFIG_SUFFIX}"
+        assert json.loads(lab.kubectl("get", "configmap", "web-config", "-o", "json").stdout)["data"] == {"MODE": "ok"}
+        nodes_before = admin_kubectl("get", "nodes", "-o", "json")
+        assert all(not n["spec"].get("unschedulable") and not n["spec"].get("taints", [])
+                   or n["metadata"]["name"].endswith("control-plane") for n in json.loads(nodes_before.stdout)["items"])
+
+
+def test_k6_run_argv_and_summary(monkeypatch, tmp_path):
+    fake = FakeDocker()
+    marker = testkit.K6_SUMMARY_MARKER
+
+    def run(cmd, **kwargs):
+        fake(cmd, **kwargs)
+        if cmd[:2] == ["docker", "run"]:
+            harness = next(a.split(":")[0] for a in cmd if a.endswith(":/harness:ro"))
+            text = Path(harness, "run.js").read_text(encoding="utf-8")
+            assert 'export * from "/scripts/load.js";' in text and "handleSummary" in text
+            return subprocess.CompletedProcess(cmd, 99, f"log\n{marker}" + json.dumps({"metrics": {"x": {"values": {"rate": 1}}}}) + "\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(testkit.subprocess, "run", run)
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+    monkeypatch.setenv("DEVOPS_CPUSET", "2-3")
+    script = tmp_path / "load.js"
+    script.write_text("export default function () {}\n", encoding="utf-8")
+    with testkit.DockerLab() as lab:
+        result, summary = testkit.k6_run(lab, script, env={"TARGET": "http://api:8000", "STEPS": "10,20"})
+        assert result.returncode == 99 and summary == {"metrics": {"x": {"values": {"rate": 1}}}}
+        with pytest.raises(ValueError):
+            testkit.k6_run(lab, script, env={"BAD KEY": "x"})
+        (tmp_path / "evil.js").symlink_to(script)
+        with pytest.raises(pytest.fail.Exception, match="tệp .js thường"):
+            testkit.k6_run(lab, tmp_path / "evil.js")
+    argv = next(c for c in fake.calls if c[:2] == ["docker", "run"])
+    assert "--rm" in argv and argv[argv.index("--network") + 1] == lab.network
+    assert f"{tmp_path.resolve()}:/scripts:ro" in argv and argv[argv.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+    assert argv[argv.index("--memory") + 1] == testkit.K6_MEMORY and argv[argv.index("--cpuset-cpus") + 1] == "2-3"
+    tail = argv[argv.index(testkit.K6_IMAGE):]
+    assert tail == [testkit.K6_IMAGE, "run", "--quiet", "--no-color", "-e", "TARGET=http://api:8000", "-e", "STEPS=10,20",
+                    "/harness/run.js"]
+    import tempfile
+
+    assert not list(Path(tempfile.gettempdir()).glob(f"{lab.network}-k6-*")), "Thư mục harness phải được xoá"
+
+
+def test_k6_image_matches_mlops_pin():
+    mlops = (testkit.ROOT / "mlopskit.py").read_text(encoding="utf-8")
+    tag = re.search(r'K6_IMAGE = "([^"]+)"', mlops).group(1)
+    assert testkit.K6_IMAGE.startswith(f"{tag}@sha256:") and re.fullmatch(r".+@sha256:[0-9a-f]{64}", testkit.K6_IMAGE)
+
+
+def test_k6_run_real(monkeypatch, tmp_path):
+    require_real_docker(BASE)
+    require_real_docker(testkit.K6_IMAGE)
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    work = tmp_path / "k6"
+    work.mkdir(mode=0o700)
+    (work / "load.js").write_text(
+        'import http from "k6/http";\nimport { check } from "k6";\n'
+        'export const options = { scenarios: { probe: { executor: "constant-arrival-rate", rate: 10, timeUnit: "1s", '
+        'duration: "2s", preAllocatedVUs: 5 } }, thresholds: { "http_req_failed{scenario:probe}": ["rate<0.01"] } };\n'
+        'export default function () { check(http.get(`${__ENV.TARGET}/`), { ok: (r) => r.status === 200 }); }\n',
+        encoding="utf-8")
+    lab = testkit.DockerLab()
+    with lab:
+        lab.start("api", BASE, "python", "-u", "-m", "http.server", "8000")
+        lab.wait_log("api", "Serving HTTP")
+        result, summary = testkit.k6_run(lab, work / "load.js", env={"TARGET": "http://api:8000"}, timeout=120)
+        assert result.returncode == 0, result.stderr[-2000:]
+        assert summary["metrics"]["http_reqs"]["values"]["count"] >= 15
+        assert summary["metrics"]["http_req_failed{scenario:probe}"]["values"]["rate"] == 0
+        failed, summary = testkit.k6_run(lab, work / "load.js", env={"TARGET": "http://api:8000/khong-co"}, timeout=120)
+        assert failed.returncode == 99, failed.stderr[-2000:]
+        assert summary["metrics"]["http_req_failed{scenario:probe}"]["thresholds"]["rate<0.01"]["ok"] is False
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_fault_injector_fails_loudly_when_docker_ps_fails(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    calls = []
+
+    def broken(*args, timeout=60):
+        calls.append(args)
+        if args[0] == "ps" and len(calls) <= 2:
+            return subprocess.CompletedProcess(args, 1, "", "Error response from daemon: busy")
+        return fake(*args, timeout=timeout)
+
+    monkeypatch.setattr(testkit, "_docker", broken)
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    assert testkit.FaultInjector(lab, seed=1).plan()[1] in {"api", "worker", "redis", "postgres"}, "Lỗi tạm thời của docker ps được thử lại"
+    calls.clear()
+
+    def dead(*args, timeout=60):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 1, "", "Cannot connect to the Docker daemon")
+
+    monkeypatch.setattr(testkit, "_docker", dead)
+    with pytest.raises(pytest.fail.Exception, match="không đọc được container của lab: Cannot connect"):
+        testkit.FaultInjector(lab, seed=1).plan()
+    assert len(calls) == 3
+
+
+def test_fault_injector_refuses_shared_network_namespace(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    for name, mode in ((f"{lab.network}-api-1", "host"), (f"{lab.network}-worker-1", "container:abc")):
+        fake.infos[name]["HostConfig"]["NetworkMode"] = mode
+    plans = {testkit.FaultInjector(lab, seed=s, faults=["net-delay"]).plan() for s in range(50)}
+    assert {service for _, service in plans} == {"redis", "postgres"}, "Không trễ mạng vào container dùng chung namespace"
+    injector = testkit.FaultInjector(lab, seed=1, faults=["kill"], services=["api"])
+    with pytest.raises(pytest.fail.Exception, match="từ chối .*network mode host"):
+        injector.inject()
+    assert fake.mutations() == []
+
+
+def test_fault_injector_skips_vanished_containers_and_repolls(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    gone = f"{lab.network}-promtool"
+    polls = []
+
+    def flaky(*args, timeout=60):
+        if args[0] == "ps":
+            polls.append(1)
+            if len(polls) <= 2:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            return subprocess.CompletedProcess(args, 0, "\n".join([gone, *fake.infos]), "")
+        if args[:2] == ("inspect", gone):
+            return subprocess.CompletedProcess(args, 1, "[]", f"Error: No such object: {gone}")
+        return fake(*args, timeout=timeout)
+
+    monkeypatch.setattr(testkit, "_docker", flaky)
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    assert testkit.FaultInjector(lab, seed=1).plan()[1] in {"api", "worker", "redis", "postgres"}
+    assert len(polls) >= 3, "Danh sách rỗng tạm thời phải được hỏi lại trước khi fail"
+
+
+
+def test_fault_injector_netem_image_must_come_from_setup(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+    injector = testkit.FaultInjector(lab, seed=1, faults=["net-delay"])
+    with pytest.raises(pytest.fail.Exception, match="không phải bản build từ setup/netem"):
+        injector.inject()
+    assert not [c for c in fake.mutations() if c[0] != "image"]

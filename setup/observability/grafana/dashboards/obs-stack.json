@@ -1,0 +1,18 @@
+{
+  "uid": "devops-obs-stack",
+  "title": "ObsStack: trạng thái target",
+  "tags": ["devops", "obs-stack"],
+  "schemaVersion": 41,
+  "time": {"from": "now-15m", "to": "now"},
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Target đang up theo job",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0},
+      "targets": [{"refId": "A", "expr": "up", "legendFormat": "{{job}}"}]
+    }
+  ]
+}

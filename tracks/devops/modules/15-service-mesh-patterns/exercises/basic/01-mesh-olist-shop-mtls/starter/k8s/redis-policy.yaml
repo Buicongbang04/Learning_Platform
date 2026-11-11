@@ -1,0 +1,3 @@
+# TODO: Server cho cổng redis của pod Redis
+# TODO: MeshTLSAuthentication nêu danh tính của api và worker
+# TODO: AuthorizationPolicy nối hai object trên

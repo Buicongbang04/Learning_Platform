@@ -1,0 +1,11 @@
+workload,team,env,replicas,hours,cpu_request_m,mem_request_mi,cpu_p95_m,mem_max_mi
+olist-api,checkout,prod,6,744,1000,2048,310,780
+olist-worker,checkout,prod,3,744,500,1024,420,950
+search-api,search,prod,4,744,2000,4096,350,1500
+search-indexer,search,prod,2,744,1000,8192,800,7900
+recs-model,data,prod,2,744,4000,16384,600,3000
+etl-nightly,data,prod,1,124,2000,8192,1500,6000
+grafana,platform,prod,1,744,500,1024,40,300
+olist-api,checkout,staging,2,744,1000,2048,30,400
+loadtest-rig,,staging,8,744,1000,2048,20,150
+feature-preview-142,,staging,3,744,500,1024,5,120

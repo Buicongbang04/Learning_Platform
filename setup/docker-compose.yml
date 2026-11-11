@@ -5,7 +5,7 @@
 # Bật theo nhóm:
 #   docker compose -f setup/docker-compose.yml --profile nosql up -d
 # Nhóm: sql (postgres), nosql (mongo, redis, cassandra, neo4j), lake (minio),
-#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), devops (mailpit, registry, localstack-devops), all (các nhóm trên, không gồm devops)
+#       stream (kafka), bi (metabase + superset + postgres), cloud (localstack), devops (mailpit, registry, localstack-devops, vault-devops), all (các nhóm trên, không gồm devops)
 # Tắt (giữ dữ liệu):     docker compose -f setup/docker-compose.yml --profile all down
 # Tắt và xoá dữ liệu:    docker compose -f setup/docker-compose.yml --profile all down -v
 #
@@ -255,13 +255,14 @@ services:
       retries: 10
 
   localstack-devops:
-    # LocalStack riêng của track DevOps (module 08, capstone m05), tách hẳn service `localstack` của track DE:
+    # LocalStack riêng của track DevOps (module 08, 14, capstone m05), tách hẳn service `localstack` của track DE:
     # cổng khác, volume khác, profile devops. Cùng image ghim với DE nên không cần LOCALSTACK_AUTH_TOKEN.
+    # Không bật Lambda, không mount socket Docker: code Lambda chạy trong LambdaLab của testkit.
     image: localstack/localstack:4.4.0
     profiles: [devops]
     cpuset: "${DEVOPS_CPUSET:-}"
     environment:
-      SERVICES: s3,iam,sts,dynamodb,kms,ssm,secretsmanager
+      SERVICES: s3,iam,sts,dynamodb,kms,ssm,secretsmanager,sqs,events,apigateway
       AWS_DEFAULT_REGION: us-east-1
     ports:
       - "127.0.0.1:${LOCALSTACK_DEVOPS_PORT:-14566}:4566"
@@ -273,6 +274,25 @@ services:
       timeout: 5s
       retries: 20
       start_period: 20s
+
+  vault-devops:
+    # Vault dev mode cho module 12 và capstone: dữ liệu chỉ trong RAM, đã unseal sẵn, mất hết khi container dừng.
+    # Token root là chuỗi cố định cho lab (không bí mật), đổi bằng DEVOPS_VAULT_TOKEN trong setup/.env.
+    # Image có VOLUME /vault/file và /vault/logs: tắt bằng `rm -s -f -v vault-devops` để xoá luôn volume ẩn danh.
+    image: hashicorp/vault:2.2.1@sha256:962a92876e168d68eaaa24b0b8b49bbce1cb63024060a67bba95cd158a366fc2
+    profiles: [devops]
+    cpuset: "${DEVOPS_CPUSET:-}"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "${DEVOPS_VAULT_TOKEN:-devops-lab-root}"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      SKIP_SETCAP: "true"
+    ports:
+      - "127.0.0.1:${DEVOPS_VAULT_PORT:-18200}:8200"
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 # Mọi service chung network `de-net`: từ Metabase kết nối Postgres bằng host `postgres`,
 # từ container khác kết nối Kafka bằng `kafka:9092`.

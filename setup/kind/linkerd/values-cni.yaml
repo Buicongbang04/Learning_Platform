@@ -1,0 +1,8 @@
+image:
+  pullPolicy: Never
+resources:
+  cpu:
+    request: 5m
+  memory:
+    request: 16Mi
+    limit: 64Mi

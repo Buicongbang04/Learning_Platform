@@ -1,0 +1,26 @@
+storefront:
+  calls: api POST /api/checkout
+  timeout: 3s
+  retries: 3
+  retry_on: [5xx, timeout, connect-failure]
+  backoff: none
+api:
+  calls: payments POST /payments
+  timeout: 1s
+  retries: 3
+  retry_on: [5xx, timeout]
+  backoff: none
+  idempotency_key: true
+payments:
+  replicas: 4
+  calls:
+    - fraud-score POST /score (từ 2.14.0)
+    - postgres ledger
+  fraud_score_timeout: none
+  db_pool_per_pod: 25
+  server_timeout: 5s
+fraud-score:
+  replicas: 2
+  p99_normal_ms: 120
+postgres:
+  max_connections: 200

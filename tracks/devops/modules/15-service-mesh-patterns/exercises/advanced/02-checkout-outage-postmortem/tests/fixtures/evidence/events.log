@@ -1,0 +1,16 @@
+2026-11-27 13:40 [deploy] storefront 5.8.0 lên production (giao diện Black Friday), không đổi cấu hình client
+2026-11-27 14:05 [deploy] payments 2.14.0 lên production: thêm bước gọi fraud-score đồng bộ trước khi ghi ledger
+2026-11-27 14:09 [log] storefront: số dòng "upstream timeout POST /api/checkout" tăng từ 0 lên 37 mỗi phút
+2026-11-27 14:11 [alert] CheckoutErrorRate firing (tỉ lệ lỗi checkout > 5% trong 2 phút) -> on-call Minh
+2026-11-27 14:13 [chat] Minh: ack, đang xem dashboard checkout
+2026-11-27 14:15 [alert] PaymentsErrorRate firing; payments 4/4 pod CPU 100%, p99 5000 ms (chạm timeout của server)
+2026-11-27 14:16 [chat] Minh: mở incident SEV-1, gọi Lan (team payments)
+2026-11-27 14:18 [action] Lan scale payments 4 -> 8 pod
+2026-11-27 14:21 [chat] Lan: payments vẫn lỗi gần 90%; pool kết nối Postgres 200/200, fraud-score p99 900 ms
+2026-11-27 14:24 [action] Lan rollback payments về 2.13.2
+2026-11-27 14:27 [chat] Lan: rollback xong, lỗi payments chỉ giảm nhẹ, CPU vẫn 100%
+2026-11-27 14:29 [chat] Minh: đặt cạnh nhau hai biểu đồ request vào storefront và request vào payments
+2026-11-27 14:31 [action] Minh tắt retry của storefront qua feature flag storefront.checkout.retries=0, đổi api.payments.retries 3 -> 1
+2026-11-27 14:35 [chat] Lan: lỗi payments dưới 5%, pool Postgres 60/200
+2026-11-27 14:38 [chat] Minh: các chỉ số về như 14:00, theo dõi thêm 30 phút
+2026-11-27 15:10 [chat] Minh: đóng incident, hẹn postmortem 2026-11-30

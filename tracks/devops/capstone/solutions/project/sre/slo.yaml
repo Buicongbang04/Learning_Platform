@@ -1,0 +1,14 @@
+service: olist-shop-api
+slos:
+  - name: api-availability
+    objective: 99.5
+    window: 30d
+    error_budget_minutes: 216
+    sli: >
+      Tỉ lệ request của khách (tra đơn, doanh thu theo bang, đẩy job tính lại) mà API trả lời không phải 5xx, đếm bằng
+      http_requests_total của job olist-api; request của Prometheus (/metrics) và của health check (/healthz, /readyz) không tính.
+    rationale: >
+      Olist Shop là công cụ nội bộ cho nhóm vận hành đơn hàng, một instance, Postgres và Redis không có bản sao. 99,5% cho 216 phút
+      hỏng mỗi 30 ngày: đủ cho một lần restart Postgres có kế hoạch mỗi tuần và một sự cố cỡ game day mỗi tháng mà không phải đóng
+      băng deploy. 99,9% (43 phút) đòi failover tự động cho Postgres, thứ stack này chưa có; hứa con số đó là hứa suông. SLI đo ở
+      server nên không thấy lúc API chết hẳn; khoảng mù đó do alert up == 0 và runbook api-unreachable che.

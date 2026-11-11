@@ -1,0 +1,9 @@
+groups:
+  - name: devops-obs
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: Luôn bắn để chứng minh đường Prometheus → Alertmanager còn sống

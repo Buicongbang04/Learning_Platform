@@ -1,0 +1,11 @@
+team: checkout
+members: [An, Bình, Chi, Dũng, Giang, Hà]
+timezone: Asia/Ho_Chi_Minh
+handoff:
+  weekday: TODO
+  time: TODO
+weeks: []
+escalation: []
+page_budget:
+  per_week: TODO
+  night_per_week: TODO

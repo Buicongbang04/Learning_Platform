@@ -1,0 +1,8 @@
+route:
+  receiver: default
+  # TODO: group_by, route con theo severity, route riêng cho Watchdog
+
+# TODO: inhibit_rules
+
+receivers:
+  - name: default

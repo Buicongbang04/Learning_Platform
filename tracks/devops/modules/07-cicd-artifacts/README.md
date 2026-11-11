@@ -89,7 +89,7 @@ wheel từ Internet: chậm, và mất mạng là không chấm được. Track 
 
 Tag của image là `1.0-<hash8>`: 8 ký tự đầu SHA-256 của `Dockerfile` nối `requirements-ci.txt`. Đổi phiên bản uv, Python, ARG
 hay một wheel là đổi tag, nên testkit (tính tag y hệt từ hai tệp) không bao giờ dùng nhầm image cũ mà skip kèm lệnh build image
-mới. Build từ gốc repo (cần mạng một lần, khoảng 1 phút, image khoảng 810 MB):
+mới. Build từ gốc repo (cần mạng một lần, khoảng 1 phút, image khoảng 850 MB):
 
 ```bash
 ACT_RUNNER="devops-track/act-runner:1.0-$(cat setup/act-runner/Dockerfile setup/act-runner/requirements-ci.txt | sha256sum | cut -c1-8)" &&
@@ -105,7 +105,7 @@ echo "$ACT_RUNNER"
 ```text
 uv 0.10.8
 /opt/uv/python/cpython-3.12.13-linux-x86_64-gnu/bin/python3.12
-devops-track/act-runner:1.0-9d5fff50
+devops-track/act-runner:1.0-a5037b3b
 ```
 
 Image này **không** mang nhãn `devops-ex=1` và không thuộc lab nào, nên không lệnh dọn nào của test xoá nó; nó ở lại cho các lần
@@ -115,7 +115,7 @@ bạn build image mới, xoá image cũ bằng tag cũ của nó (`docker image 
 
 | | Runner `ubuntu-latest` của GitHub | `devops-track/act-runner:1.0-<hash8>` dưới act |
 | --- | --- | --- |
-| Kích thước | Máy ảo đầy đủ | Khoảng 810 MB |
+| Kích thước | Máy ảo đầy đủ | Khoảng 850 MB |
 | Có sẵn | Python, Docker, git, curl, jq, hàng trăm công cụ | Node.js 24, bash, git, chứng chỉ CA, uv, CPython 3.12.13, wheel của Olist Shop; **không** curl, Docker |
 | Docker | Có daemon riêng của máy ảo | Không có socket (testkit tắt), không Docker-in-Docker |
 | User | `runner` có sudo | `root` trong container, bị giới hạn bởi cgroup và `no-new-privileges` |
@@ -131,7 +131,7 @@ container, volume, network của lần chạy khi xong. Muốn tự chạy act b
 dòng cuối lệnh build ở trên in ra):
 
 ```text
--P ubuntu-latest=devops-track/act-runner:1.0-9d5fff50
+-P ubuntu-latest=devops-track/act-runner:1.0-a5037b3b
 --pull=false
 --container-daemon-socket -
 ```

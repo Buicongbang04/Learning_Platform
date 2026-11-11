@@ -1,0 +1,4 @@
+request_logs: "TODO: mọi dòng log của API thuộc request có request_id đúng bằng $request_id"
+trace_id_of_request: "TODO: chỉ in trace_id của request $request_id, mỗi dòng một trace_id"
+worker_logs_of_trace: "TODO: log của worker thuộc trace $trace_id"
+errors_by_path: "TODO: số dòng log request trả 5xx theo path trong 5 phút"

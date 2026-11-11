@@ -1,0 +1,11 @@
+groups:
+  - name: olist-api-recording
+    rules:
+      # TODO: ba recording rule job:http_requests:rate5m, job:http_requests_errors:ratio_rate5m,
+      # job_path:http_request_duration_seconds:p95_5m
+      []
+
+  - name: olist-api-alerts
+    rules:
+      # TODO: hai alert OlistApiHighErrorRate (severity page) và OlistApiSlowOrders (severity ticket)
+      []

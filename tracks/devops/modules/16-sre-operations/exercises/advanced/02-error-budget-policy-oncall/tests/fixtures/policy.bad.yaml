@@ -1,0 +1,7 @@
+slo: {name: x, objective: 99.9, window_days: 28, budget_minutes: 43.2}
+thresholds:
+  - {state: normal, remaining_above: 0.25, actions: [ship], allowed: [feature, security-fix, rollback]}
+  - {state: caution, remaining_above: 0.5, actions: [review], allowed: [feature, security-fix, rollback]}
+  - {state: freeze-features, remaining_above: 0, actions: [freeze], allowed: [feature, security-fix, rollback]}
+  - {state: freeze-all, remaining_above: null, actions: [freeze], allowed: [rollback]}
+exceptions: {}

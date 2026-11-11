@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: olist-staging
+  namespace: argocd
+spec:
+  project: olist-staging
+  source:
+    repoURL: https://git.example.com/olist/gitops.git
+    targetRevision: main
+    path: envs/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: olist-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

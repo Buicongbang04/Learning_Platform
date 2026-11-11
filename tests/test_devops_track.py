@@ -42,8 +42,7 @@ MILESTONE_AFTER = {
     "m08": "13-observability",
     "m09": "16-sre-operations",
 }
-PHASE1_MODULES = MODULE_IDS[:6]
-PHASE1_MILESTONES = ["m01", "m02"]
+SPEC_EXERCISE_TARGET = 120
 
 LEVELS = ("basic", "intermediate", "advanced")
 EXERCISE_HEADINGS = ["Mục tiêu", "Đề bài", "Tiêu chí đạt", "Gợi ý"]
@@ -194,7 +193,8 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
     return errors
 
 
-TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu")
+TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault", "argocd", "linkerd", "promtool",
+         "amtool", "aws", "awslocal", "tc", "k6")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
 NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
 TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
@@ -389,8 +389,13 @@ def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
 
 
 def check_tool_calls(path: Path) -> list[str]:
-    """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu trực tiếp; đi qua helper của testkit
-    (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp).
+    """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu, sops, age, age-keygen, vault, argocd,
+    linkerd, promtool, amtool, aws, awslocal, tc, k6 trực tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command,
+    act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với
+    sops_env/vault_env; ArgoCD qua KubeLab.argocd_project, gitops_repo, argocd_wait; Linkerd qua KubeLab(mesh=True) và
+    KubeLab.mesh_status; promtool, amtool qua
+    testkit.promtool/amtool; stack observability qua ObsStack; AWS qua localstack_client, handler Lambda qua LambdaLab; bơm lỗi
+    (kill, stop container, `tc` netem) qua FaultInjector; k6 qua k6_run).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
     `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
@@ -427,7 +432,7 @@ def check_tool_calls(path: Path) -> list[str]:
         elif isinstance(node, ast.alias) and node.name == "_docker":
             found.add((node.lineno, "_docker"))
     return [
-        f"{path}:{line}: gọi {tool} trực tiếp; dùng helper của testkit (DockerLab, run_sandboxed, ...)"
+        f"{path}:{line}: gọi {tool} trực tiếp; dùng helper của testkit (DockerLab, run_sandboxed, promtool, ...)"
         for line, tool in sorted(found)
     ] + [
         f"{path}:{line}: {problem} (lệnh chạy bằng root trong node privileged chỉ được là argv cố định của testkit)"
@@ -577,11 +582,27 @@ def test_milestone_docs_on_disk():
     assert_clean([e for p in docs if p.is_file() for e in check_milestone_doc(p)])
 
 
-def test_phase1_modules_present():
-    missing = [m for m in PHASE1_MODULES if not (MODULES_DIR / m).is_dir()]
+def test_all_modules_and_milestones_present():
+    missing = [m for m in MODULE_IDS if not (MODULES_DIR / m).is_dir()]
     docs = {m["id"]: TRACK / m["doc"] for m in load_track()["capstone"]["milestones"]}
-    missing += [docs[m].relative_to(ROOT).as_posix() for m in PHASE1_MILESTONES if not docs[m].is_file()]
-    assert not missing, f"Phase 1 còn thiếu: {missing}"
+    missing += [m for m in MILESTONE_AFTER if m not in docs or not docs[m].is_file()]
+    tests = TRACK / "capstone" / "project" / "tests"
+    missing += [f"capstone/project/tests/test_{m}.py" for m in MILESTONE_AFTER if not (tests / f"test_{m}.py").is_file()]
+    assert not missing, f"Track DevOps còn thiếu: {missing}"
+    assert len(MODULE_IDS) == 17 and len(MILESTONE_AFTER) == 9
+
+
+def exercise_total() -> int:
+    return sum(len(exercise_dirs(MODULES_DIR / m)) for m in MODULE_IDS)
+
+
+def test_exercise_total_matches_readmes():
+    total = exercise_total()
+    assert 17 * 5 <= total <= 17 * 9
+    assert abs(total - SPEC_EXERCISE_TARGET) <= 0.15 * SPEC_EXERCISE_TARGET, f"{total} bài, spec nhắm khoảng {SPEC_EXERCISE_TARGET}"
+    row = next(line for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines() if line.startswith("| [DevOps]"))
+    assert f"{total} bài" in row and "Đầy đủ" in row and "9 milestone" in row, f"README gốc phải ghi {total} bài: {row}"
+    assert f"{total} bài tập" in (TRACK / "README.md").read_text(encoding="utf-8"), f"README track phải ghi {total} bài tập"
 
 
 README_OK = (
@@ -768,6 +789,24 @@ def test_exercise_layout_basic_minimum_and_bad_level(tmp_path):
 
 TOOL_DENYLIST_BAD = {
     "list-docker": 'subprocess.run(["docker", "run", "--rm", "nginx"])\n',
+    "list-sops": 'subprocess.run(["sops", "decrypt", "secret.enc.yaml"])\n',
+    "list-age-keygen": 'subprocess.run(["age-keygen", "-o", "key.txt"])\n',
+    "string-age": 'subprocess.run("age -d -i key.txt secret.age", shell=True)\n',
+    "list-vault": 'subprocess.run(["vault", "kv", "get", "secret/app"])\n',
+    "list-argocd": 'subprocess.run(["argocd", "app", "sync", "web", "--core"])\n',
+    "string-argocd": 'subprocess.run("argocd app wait web --health", shell=True)\n',
+    "list-linkerd": 'subprocess.run(["linkerd", "viz", "stat", "deploy", "-n", lab.namespace])\n',
+    "string-linkerd": 'subprocess.run("linkerd check --proxy", shell=True)\n',
+    "shell-c-linkerd": 'subprocess.run(["bash", "-c", "linkerd identity -n x"])\n',
+    "list-promtool": 'subprocess.run(["promtool", "test", "rules", "tests.yml"])\n',
+    "list-tc": 'subprocess.run(["tc", "qdisc", "add", "dev", "eth0", "root", "netem", "delay", "400ms"])\n',
+    "shell-c-tc": 'subprocess.run(["sh", "-c", "tc qdisc del dev eth0 root"])\n',
+    "list-k6": 'subprocess.run(["k6", "run", "load.js"])\n',
+    "list-docker-kill": 'subprocess.run(["docker", "kill", name])\n',
+    "string-docker-stop": 'subprocess.run(f"docker stop {name}", shell=True)\n',
+    "string-amtool": 'subprocess.run("amtool check-config alertmanager.yml", shell=True)\n',
+    "shell-c-promtool": 'subprocess.run(["bash", "-c", "cd rules && promtool check rules *.yml"])\n',
+    "shell-c-vault": 'subprocess.run(["bash", "-c", "vault login root && vault kv put secret/x a=b"])\n',
     "tuple-docker": "subprocess.run(('docker', 'ps', '-a'))\n",
     "list-kind": 'subprocess.run(["kind", "get", "clusters"], check=True)\n',
     "list-act-via-variable": 'cmd = ["act", "-j", "test"]\nsubprocess.run(cmd)\n',
@@ -785,6 +824,8 @@ TOOL_DENYLIST_BAD = {
     "local-run-wrapper": 'def run_cmd(c):\n    return subprocess.run(c)\nrun_cmd(["kind", "get", "clusters"])\n',
     "local-exec-wrapper": 'exec_tool(("tofu", "plan"))\n',
     "string-subprocess": 'subprocess.check_output("docker run --rm nginx", shell=True)\n',
+    "list-aws": 'subprocess.run(["aws", "sqs", "list-queues"])\n',
+    "string-awslocal": 'subprocess.run("awslocal s3 ls", shell=True)\n',
     "string-os-system": "os.system('docker rm -f x')\n",
     "string-os-popen": "os.popen('kubectl get ns').read()\n",
     "string-popen": 'Popen("helm list", shell=True)\n',
@@ -854,12 +895,25 @@ TOOL_DENYLIST_GOOD = {
     "act-run-helper": 'result = act_run(tmp_path / "project", job="build")\nassert act_job_results(result) == {"build": True}\n',
     "testkit-act-run": 'testkit.act_run(project, event="push", secrets={"DEPLOY_TOKEN": "x"}, timeout=300)\n',
     "run-sandboxed-shell-c": 'run_sandboxed(["bash", "-c", "tofu init && tofu plan"], writable=[t], cwd=t, env={})\n',
+    "run-sandboxed-sops": 'run_sandboxed(["sops", "decrypt", "s.yaml"], writable=[t], cwd=t, env=sops_env(t / "h", key))\n',
+    "run-sandboxed-vault": 'run_sandboxed(["vault", "kv", "get", "secret/app"], writable=[t], cwd=t, env=vault_env(token, t / "h"))\n',
+    "age-keypair": 'key, public = age_keypair(tmp_path / "keys")\n',
+    "promtool-helper": 'result = promtool("test", "rules", "tests.yml", cwd=ex.target)\nassert result.returncode == 0\n',
+    "amtool-helper": 'testkit.amtool("check-config", "alertmanager.yml", cwd=ex.target)\n',
+    "lambda-lab": ('with DockerLab() as lab:\n    with LambdaLab(lab, ex.path("handler"), "app.handler", env={"QUEUE_NAME": q}) as fn:\n'
+                   '        assert fn.invoke({"Records": []}) == {"orders": []}\n'),
+    "localstack-client": 'sqs = localstack_client("sqs")\nsqs.create_queue(QueueName=f"{lab.prefix}-orders")\n',
+    "run-sandboxed-aws": 'run_sandboxed(["aws", "sqs", "list-queues"], writable=[t], cwd=t, env=tofu_env(t / "h", prefix=p))\n',
+    "obs-stack": ('with DockerLab() as lab:\n    stack = ObsStack(lab, project=ex.target)\n    stack.prom_query("up")\n'
+                  '    stack.loki_query(\'{service_name="olist-shop-api"}\')\n    stack.jaeger_traces("olist-shop-api")\n'),
     "other-argv": 'subprocess.run(["git", "status"])\nsubprocess.run(["bash", "-c", "echo docker"])\n',
     "nice-python": 'subprocess.run(["nice", "-n", "15", "python3", "x.py"])\n',
     "wrapper-learner-script": 'subprocess.run(["timeout", "30", "bash", "deploy.sh", "docker"])\n',
     "learner-script-string": 'subprocess.run("./deploy.sh docker", shell=True)\n',
     "echo-mentions-tool": 'subprocess.run("echo use kubectl here", shell=True)\n',
     "kube-lab": 'with KubeLab() as lab:\n    lab.apply_learner(ex.path("k8s"))\n    lab.kubectl("get", "deploy", "api")\n    lab.helm("list")\n',
+    "kube-lab-gitops": ('ex.require_argocd()\nwith KubeLab() as lab:\n    lab.argocd_project()\n    lab.gitops_repo(ex.path("gitops"))\n'
+                        '    lab.apply_learner(ex.path("app.yaml"))\n    lab.argocd_wait("web")\n    r = lab.sops_age_recipient\n'),
     "kube-lab-run-script": 'with KubeLab() as lab:\n    lab.run(["bash", "deploy.sh"], readonly=[ex.target])\n',
     "kind-node-exec": 'kind_node_exec("devops-lab-control-plane", "etcdctl", "version")\n',
     "kind-node-exec-kubectl-argv": 'kind_node_exec("devops-lab-control-plane", "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "get", "nodes")\n',
@@ -874,6 +928,12 @@ TOOL_DENYLIST_GOOD = {
                       '"snapshot", "save", "/var/lib/etcd/devops-ex-snapshot.db", timeout=120)\n'),
     "require-kind-images": 'ex.require_kind_images("devops-track/olist-shop:1.0", "postgres:16.15-alpine")\n',
     "require-gateway": 'ex.require_gateway()\nwith KubeLab() as lab:\n    host = lab.hostname\n',
+    "kube-lab-mesh": ('ex.require_linkerd()\nwith KubeLab(mesh=True) as lab:\n    lab.apply_learner(ex.path("k8s"))\n'
+                      '    status = lab.mesh_status("deployment/api")\n    assert status["mtls"]\n'),
+    "fault-injector": ('with DockerLab() as lab:\n    stack = ObsStack(lab, project=project)\n'
+                       '    with FaultInjector(lab, seed=seed, services=["api", "redis"]) as injector:\n        code = injector.inject()\n'),
+    "k6-run-helper": 'result, summary = k6_run(lab, ex.path("load.js"), env={"TARGET": "http://api:8000"})\n',
+    "fault-injector-kube": 'with KubeLab() as lab:\n    testkit.FaultInjector(lab, seed=7, faults=["kill", "bad-config"]).inject()\n',
     "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
 }
 

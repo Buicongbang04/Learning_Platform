@@ -1,0 +1,6 @@
+rule_files: [rules.yml]
+evaluation_interval: 1m
+
+tests:
+  # TODO: promql_expr_test cho cả ba recording rule; với mỗi alert một ca bắn và một ca không bắn (có traffic)
+  []

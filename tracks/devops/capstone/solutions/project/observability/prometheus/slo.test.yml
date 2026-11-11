@@ -1,0 +1,79 @@
+rule_files:
+  - rules/slo.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+875x70'
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0+125x70'
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/metrics", status="200"}'
+        values: '0+12x70'
+    promql_expr_test:
+      - expr: olist:slo_api_errors:ratio_rate5m
+        eval_time: 30m
+        exp_samples:
+          - labels: 'olist:slo_api_errors:ratio_rate5m'
+            value: 0.125
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: OlistApiErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {severity: page, long_window: 1h, service: api}
+            exp_annotations:
+              summary: "SLO api-availability đốt error budget nhanh gấp 14,4 lần (2% budget 30 ngày trong 1 giờ)"
+              runbook_url: https://github.com/OWNER/olist-shop-platform/blob/main/sre/RUNBOOK.md#slo-burn
+          - exp_labels: {severity: page, long_window: 6h, service: api}
+            exp_annotations:
+              summary: "SLO api-availability đốt error budget nhanh gấp 6 lần (5% budget 30 ngày trong 6 giờ)"
+              runbook_url: https://github.com/OWNER/olist-shop-platform/blob/main/sre/RUNBOOK.md#slo-burn
+          - exp_labels: {severity: ticket, long_window: 1d, service: api}
+            exp_annotations:
+              summary: "SLO api-availability đốt error budget gấp 3 lần mức cho phép trong 1 ngày (10% budget)"
+              runbook_url: https://github.com/OWNER/olist-shop-platform/blob/main/sre/RUNBOOK.md#slo-burn
+
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+1000x399 399000+900x10'
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0x399 0+100x10'
+    alert_rule_test:
+      - eval_time: 405m
+        alertname: OlistApiErrorBudgetBurn
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+980x1500'
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0+20x1500'
+    alert_rule_test:
+      - eval_time: 1500m
+        alertname: OlistApiErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {severity: ticket, long_window: 1d, service: api}
+            exp_annotations:
+              summary: "SLO api-availability đốt error budget gấp 3 lần mức cho phép trong 1 ngày (10% budget)"
+              runbook_url: https://github.com/OWNER/olist-shop-platform/blob/main/sre/RUNBOOK.md#slo-burn
+
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+1000x70'
+      - series: 'http_requests_total{job="olist-api", method="GET", path="/readyz", status="503"}'
+        values: '0+1000x70'
+    promql_expr_test:
+      - expr: olist:slo_api_errors:ratio_rate1h
+        eval_time: 65m
+        exp_samples:
+          - labels: 'olist:slo_api_errors:ratio_rate1h'
+            value: 0
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: OlistApiErrorBudgetBurn
+        exp_alerts: []

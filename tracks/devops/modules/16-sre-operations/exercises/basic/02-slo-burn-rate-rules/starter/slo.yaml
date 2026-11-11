@@ -1,0 +1,14 @@
+service: olist-api
+slos:
+  - name: orders-availability
+    description: Khách tra cứu đơn hàng không gặp lỗi phía server.
+    objective: TODO
+    window: 30d
+    errors: TODO
+    total: sum(rate(http_requests_total{job="olist-api", path="/orders/{order_id}"}[{{window}}]))
+  - name: orders-latency
+    description: Khách tra cứu đơn hàng nhận trả lời trong 250 ms.
+    objective: TODO
+    window: 30d
+    errors: TODO
+    total: TODO

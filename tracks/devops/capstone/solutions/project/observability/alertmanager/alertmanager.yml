@@ -1,0 +1,24 @@
+route:
+  receiver: olist-default
+  group_by: [alertname, service]
+  group_wait: 5s
+  group_interval: 30s
+  repeat_interval: 4h
+  routes:
+    - matchers: ['severity="page"']
+      receiver: olist-page
+      repeat_interval: 1h
+    - matchers: ['severity="ticket"']
+      receiver: olist-ticket
+      group_wait: 1m
+      repeat_interval: 24h
+
+inhibit_rules:
+  - source_matchers: ['alertname="OlistWorkerDown"']
+    target_matchers: ['service="worker"', 'severity="ticket"']
+    equal: [service]
+
+receivers:
+  - name: olist-default
+  - name: olist-page
+  - name: olist-ticket

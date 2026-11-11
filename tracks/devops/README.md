@@ -5,9 +5,9 @@ engineer senior**: không dừng ở "biết công cụ", mà tự vận hành �
 xử lý sự cố và trả lời được câu hỏi phỏng vấn thiết kế. Phần roadmap.sh còn thiếu (giới thiệu DevOps & SRE,
 vận hành SRE) được bổ sung ở module 00 và 16.
 
-Lộ trình gồm 17 module (00–16). Mỗi module có lý thuyết (`README.md`), câu hỏi phỏng vấn (`interview.md`),
-khoảng 7 bài tập 3 mức Basic → Intermediate → Advanced chấm bằng `pytest`, cùng một milestone của dự án
-capstone [Olist Shop lên production local](capstone/README.md).
+Lộ trình gồm 17 module (00–16), tổng cộng 134 bài tập. Mỗi module có lý thuyết (`README.md`), câu hỏi phỏng vấn
+(`interview.md`, ít nhất 12 câu), 7–9 bài tập 3 mức Basic → Intermediate → Advanced chấm bằng `pytest`; dự án capstone
+[Olist Shop lên production local](capstone/README.md) có 9 milestone, mỗi milestone mở ra sau một module.
 
 ## Dành cho ai, nối với track Data Engineer thế nào
 
@@ -41,9 +41,6 @@ lại bài của track DE.
 | 14 | [`14-cloud-serverless`](modules/14-cloud-serverless/README.md) Cloud & serverless | AWS core qua LocalStack, lab free tier, Lambda |
 | 15 | [`15-service-mesh-patterns`](modules/15-service-mesh-patterns/README.md) Service mesh & patterns | Linkerd, cloud design patterns |
 | 16 | [`16-sre-operations`](modules/16-sre-operations/README.md) SRE & vận hành | SLO, error budget, incident, postmortem, chaos, FinOps |
-
-Module được phát hành theo ba đợt: 00–05 trước, 06–11 sau đó, 12–16 cuối cùng. Link tới module chưa có sẽ
-hoạt động khi module đó được thêm.
 
 ```mermaid
 flowchart LR
@@ -122,12 +119,15 @@ Track này **không có script cài tự động**. Mỗi công cụ được d�
 cần sudo nếu được), lệnh xác nhận và cách gỡ. Mục lục ở [`setup/DEVOPS-TOOLS.md`](../../setup/DEVOPS-TOOLS.md).
 Không bao giờ chạy script tải từ mạng thẳng vào shell với quyền root, và không bỏ qua bước kiểm checksum.
 
-Dịch vụ phụ trợ của track nằm dưới profile `devops` của `setup/docker-compose.yml` (ví dụ Mailpit cho module
-04), không đụng các service của track Data Engineer. Ứng dụng mẫu có compose riêng trong
+Dịch vụ phụ trợ của track nằm dưới profile `devops` của `setup/docker-compose.yml`: Mailpit (module 04), registry
+local (module 07, capstone m04), `localstack-devops` (module 08, 14, capstone m05) và `vault-devops` (module 12),
+không đụng các service của track Data Engineer. Stack observability (module 13, capstone m08, m09) do test dựng riêng
+mỗi lần chạy. Ứng dụng mẫu có compose riêng trong
 [`sample-app/`](sample-app/README.md), cổng host mặc định `25432`, `26379`, `28000` để không trùng project khác, chỉ mở trên `127.0.0.1`.
 
-Từ module 10, bài cần Kubernetes dùng chung một cluster kind tên `devops-lab`. Module 10 hướng dẫn tạo đầy đủ;
-khung lệnh như sau:
+Từ module 10, bài cần Kubernetes dùng chung một cluster kind tên `devops-lab`. Module 10 hướng dẫn tạo đầy đủ; các
+thành phần admin cài một lần (Gateway API và Traefik, metrics-server, ArgoCD, Linkerd) và image cần nạp vào node có ở
+[Cluster kind devops-lab](../../setup/DEVOPS-TOOLS.md#cluster-kind-devops-lab). Khung lệnh như sau:
 
 ```bash
 nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --config setup/kind/devops-lab.yaml --kubeconfig ~/.kube/devops-lab.yaml

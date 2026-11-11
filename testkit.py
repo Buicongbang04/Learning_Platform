@@ -28,13 +28,17 @@ Trong test:
     with AnsibleLab(["worker-1"]) as lab: run = lab.playbook("site.yml", cwd=lab.stage(ex.target)); run.changed  # bài Ansible: target SSH trong container
     with KubeLab() as lab: lab.apply_learner(ex.path("k8s")); lab.kubectl("get", "deploy", "api", "-o", "json")  # bài Kubernetes: namespace riêng trên devops-lab
     kind_node_exec("devops-lab-control-plane", "etcdctl", "version")  # lệnh cố định của testkit trong node kind, argv không qua shell
+    key, public = age_keypair(tmp_path / "keys"); env = sops_env(tmp_path / "home", key)  # bài SOPS: sops chạy trong run_sandboxed
+    ex.require_vault_devops(); env = vault_env(VAULT_DEV_TOKEN, tmp_path / "vault-home")  # bài Vault: vault CLI chạy trong run_sandboxed, Vault dev của lab
 """
 
 from __future__ import annotations
 
 import atexit
+import base64
 import importlib.util
 import json
+import math
 import linecache
 import os
 import re
@@ -87,6 +91,7 @@ SERVICES = {
     "mailpit": ("MAILPIT_HOST", "localhost", "MAILPIT_SMTP_PORT", 11025),
     "registry": ("REGISTRY_HOST", "localhost", "DEVOPS_REGISTRY_PORT", 15000),
     "localstack-devops": ("LOCALSTACK_DEVOPS_HOST", "localhost", "LOCALSTACK_DEVOPS_PORT", 14566),
+    "vault-devops": ("DEVOPS_VAULT_HOST", "localhost", "DEVOPS_VAULT_PORT", 18200),
 }
 
 def _port(name: str) -> int:
@@ -130,6 +135,7 @@ TOOL_VERSION_ARGS = {
     "openssl": ["version"],
     "dig": ["-v"],
     "ssh": ["-V"],
+    "sops": ["--version", "--disable-version-check"],
 }
 
 _VERSION = re.compile(r"\d+(?:\.\d+)+")
@@ -300,6 +306,19 @@ def free_port() -> int:
 
 def _docker(*args: str, timeout: float = 60) -> subprocess.CompletedProcess:
     return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+
+
+_ANONYMOUS_VOLUME = re.compile(r"[0-9a-f]{64}")
+_ANONYMOUS_LABEL = "com.docker.volume.anonymous"
+_VOLUME_MOUNTS = '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}} {{end}}{{end}}'
+
+
+def _anonymous_volumes(names: list[str]) -> list[str]:
+    """Volume ẩn danh (tên 64 ký tự hex, sinh từ `VOLUME` của image) đang gắn vào các container `names`."""
+    if not names:
+        return []
+    found = _docker("inspect", "--format", _VOLUME_MOUNTS, *names).stdout.split()
+    return list(dict.fromkeys(v for v in found if _ANONYMOUS_VOLUME.fullmatch(v)))
 
 
 def docker_leftovers(lab_id: str) -> list[str]:
@@ -636,7 +655,7 @@ class DockerLab:
 
     def run_args(self, alias: str, image: str, *command: str, detach: bool = True, mounts=(), publish=(),
                  env: dict[str, str] | None = None, entrypoint: str | None = None, memory: str = DOCKER_MEMORY,
-                 pids_limit: int = DOCKER_PIDS_LIMIT) -> list[str]:
+                 pids_limit: int = DOCKER_PIDS_LIMIT, user: str | None = None, workdir: str | None = None) -> list[str]:
         args = ["docker", "run", "-d" if detach else "--rm"]
         args += ["--name", self.name(alias), "--label", DOCKER_LABEL, "--network", self.network, "--network-alias", alias]
         args += ["--security-opt", "no-new-privileges", "--memory", memory, "--pids-limit", str(pids_limit), *docker_cpu_args()]
@@ -648,6 +667,10 @@ class DockerLab:
             args += ["-e", f"{key}={value}"]
         if entrypoint:
             args += ["--entrypoint", entrypoint]
+        if user:
+            args += ["--user", user]
+        if workdir:
+            args += ["--workdir", workdir]
         return [*args, image, *command]
 
     def _track(self, alias: str) -> str:
@@ -670,18 +693,19 @@ class DockerLab:
             if result.returncode == 0:
                 self.ports[alias] = dict(publish)
                 return name
-            _docker("rm", "-f", name)
+            _docker("rm", "-f", "-v", name)
             if not any(text in result.stderr for text in _PORT_TAKEN):
                 break
         pytest.fail(f"docker run {alias} ({image}) lỗi: {result.stderr.strip()}")
 
     def run_once(self, alias: str, image: str, *command: str, mounts=(), entrypoint=None, timeout: float = 60,
-                 memory: str = DOCKER_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT) -> subprocess.CompletedProcess:
+                 memory: str = DOCKER_MEMORY, pids_limit: int = DOCKER_PIDS_LIMIT, user: str | None = None,
+                 workdir: str | None = None) -> subprocess.CompletedProcess:
         """Chạy container tới khi xong (vd. `nginx -t`) và trả kết quả; container vẫn được dọn nếu quá giờ."""
         self._require_entered()
         self._track(alias)
         args = self.run_args(alias, image, *command, detach=False, mounts=mounts, entrypoint=entrypoint, memory=memory,
-                             pids_limit=pids_limit)
+                             pids_limit=pids_limit, user=user, workdir=workdir)
         try:
             return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -961,9 +985,21 @@ class DockerLab:
                 self.project.down()
             except (OSError, subprocess.TimeoutExpired):
                 pass
+        try:
+            volumes = _anonymous_volumes(self.names)
+        except (OSError, subprocess.TimeoutExpired):
+            volumes = []
         for name in self.names:
             try:
-                _docker("rm", "-f", name)
+                _docker("rm", "-f", "-v", name)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if volumes:
+            try:
+                anonymous = set(_docker("volume", "ls", "-q", "-f", f"label={_ANONYMOUS_LABEL}").stdout.split())
+                volumes = [v for v in volumes if v in anonymous]
+                if volumes:
+                    _docker("volume", "rm", *volumes)
             except (OSError, subprocess.TimeoutExpired):
                 pass
         self._delete_pushed()
@@ -999,7 +1035,7 @@ SANDBOX_SKIP = (
 
 CREDENTIAL_PATHS = (
     ".docker", ".kube", ".aws", ".ssh", ".config/gcloud", ".azure", ".config/gh", ".git-credentials", ".netrc", ".terraform.d",
-    ".cache/devops-track/kube",
+    ".cache/devops-track/kube", ".config/sops", ".gnupg", ".vault-token",
 )
 
 
@@ -1661,6 +1697,8 @@ TOFU_AWS_PROVIDER = "6.12.0"
 TOFU_TIMEOUT = 300
 TOFU_REGION = "us-east-1"
 LOCALSTACK_DEVOPS_START = "docker compose -f setup/docker-compose.yml --profile devops up -d --wait localstack-devops"
+LOCALSTACK_DEVOPS_RECREATE = ("docker compose -f setup/docker-compose.yml --profile devops rm -s -f localstack-devops && "
+                              f"{LOCALSTACK_DEVOPS_START}")
 _TOFU_PREFIX = re.compile(rf"{DOCKER_PREFIX}[0-9a-f]{{8}}")
 TOFU_PROVIDERS = {"hashicorp/aws": TOFU_AWS_PROVIDER}
 TOFU_REGISTRY = "registry.opentofu.org"
@@ -1932,7 +1970,9 @@ def localstack_sweep(prefix: str) -> list[str]:
     """Xoá trên `localstack-devops` (không bao giờ trên `localstack` của DE) mọi tài nguyên mang đúng tiền tố của một lab
     (`devops-ex-<8 hex>`): tên bằng tiền tố hoặc bắt đầu bằng `<tiền tố>-`/`<tiền tố>/` (bỏ `/` đầu và `alias/`). Gồm bucket
     S3 (mọi version), bảng DynamoDB, IAM role và policy, tham số SSM, secret của Secrets Manager (xoá ngay), alias KMS (kèm
-    lên lịch xoá khoá khi không còn alias nào khác trỏ tới). Trả danh sách `loại:tên` đã xoá."""
+    lên lịch xoá khoá khi không còn alias nào khác trỏ tới), hàng đợi SQS, rule EventBridge (gỡ target trước; rule mang
+    tiền tố hoặc nằm trên bus mang tiền tố) và event bus, REST API của API Gateway, function Lambda (kèm event source
+    mapping). Trả danh sách `loại:tên` đã xoá."""
     if not _TOFU_PREFIX.fullmatch(prefix):
         raise ValueError(f"Tiền tố {prefix!r} không phải devops-ex-<8 hex> của một lab")
     endpoint = _localstack_devops_checked()
@@ -2030,6 +2070,63 @@ def localstack_sweep(prefix: str) -> list[str]:
                 kms.schedule_key_deletion(KeyId=key, PendingWindowInDays=7)
             except errors:
                 pass
+
+    sqs = boto3.client("sqs", **options)
+    try:
+        queues = [url for page in sqs.get_paginator("list_queues").paginate() for url in page.get("QueueUrls", [])]
+    except errors:
+        queues = []
+    for url in queues:
+        name = url.rstrip("/").rsplit("/", 1)[-1]
+        if _owned_by(name.removesuffix(".fifo"), prefix):
+            attempt(f"sqs:{name}", lambda url=url: sqs.delete_queue(QueueUrl=url))
+
+    events = boto3.client("events", **options)
+    buses: list[str] = []
+    try:
+        token = None
+        while True:
+            page = events.list_event_buses(**({"NextToken": token} if token else {}))
+            buses += [bus["Name"] for bus in page.get("EventBuses", [])]
+            token = page.get("NextToken")
+            if not token:
+                break
+    except errors:
+        pass
+    for bus in buses:
+        try:
+            rules = [rule["Name"] for page in events.get_paginator("list_rules").paginate(EventBusName=bus)
+                     for rule in page.get("Rules", [])]
+        except errors:
+            rules = []
+        for rule in rules:
+            if not _owned_by(rule, prefix) and not _owned_by(bus, prefix):
+                continue
+
+            def unhook(rule=rule, bus=bus) -> None:
+                ids = [t["Id"] for t in events.list_targets_by_rule(Rule=rule, EventBusName=bus).get("Targets", [])]
+                if ids:
+                    events.remove_targets(Rule=rule, EventBusName=bus, Ids=ids, Force=True)
+
+            attempt(f"events-rule:{bus}/{rule}", unhook,
+                    lambda rule=rule, bus=bus: events.delete_rule(Name=rule, EventBusName=bus, Force=True))
+        if bus != "default" and _owned_by(bus, prefix):
+            attempt(f"events-bus:{bus}", lambda bus=bus: events.delete_event_bus(Name=bus))
+
+    apigateway = boto3.client("apigateway", **options)
+    for api in listed(apigateway, "get_rest_apis", "items", "name"):
+        attempt(f"apigateway:{api['name']}", lambda api=api: apigateway.delete_rest_api(restApiId=api["id"]))
+
+    lambdas = boto3.client("lambda", **options)
+    for function in listed(lambdas, "list_functions", "Functions", "FunctionName"):
+        name = function["FunctionName"]
+        try:
+            mappings = lambdas.list_event_source_mappings(FunctionName=name).get("EventSourceMappings", [])
+        except errors:
+            mappings = []
+        for mapping in mappings:
+            attempt(f"lambda-esm:{mapping['UUID']}", lambda uuid=mapping["UUID"]: lambdas.delete_event_source_mapping(UUID=uuid))
+        attempt(f"lambda:{name}", lambda name=name: lambdas.delete_function(FunctionName=name))
     return removed
 
 
@@ -2234,8 +2331,782 @@ class TofuLab:
                     shutil.rmtree(self.root, ignore_errors=True)
 
 
+LAMBDA_IMAGE = ("public.ecr.aws/lambda/python:3.12.2026.10.22.03"
+                "@sha256:25aee9bac65f131c5d090d3e3a36ccf232d65cf3e6c1dbd0bffd43ca7ce34406")
+LAMBDA_PULL = f"docker pull {LAMBDA_IMAGE}"
+LAMBDA_RIE_PORT = 8080
+LAMBDA_TASK_ROOT = "/var/task"
+LAMBDA_TMP_SIZE = "64m"
+LAMBDA_TIMEOUT = 30
+LAMBDA_DEAD_PROXY = "http://127.0.0.1:9"
+LAMBDA_BUNDLED = frozenset({"boto3", "botocore", "jmespath", "python_dateutil", "s3transfer", "six", "urllib3", "simplejson"})
+_LAMBDA_INVOKE_PATH = "/2015-03-31/functions/function/invocations"
+_LAMBDA_HANDLER = re.compile(r"^[A-Za-z_]\w*(?:[./][A-Za-z_]\w*)*\.[A-Za-z_]\w*$")
+_LAMBDA_ENV_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_LAMBDA_RESERVED = re.compile(r"^(?:AWS_.*|_.*|LAMBDA_.*|(?:HTTPS?|NO|ALL)_PROXY|PYTHON.*|LD_.*|PATH|HOME|TZ|LANG)$")
+_LAMBDA_REQUIREMENT = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
+_LAMBDA_PROBE = ("import socket, sys\ntry:\n    socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=5).close()\n"
+                 "except OSError as error:\n    sys.exit(str(error))\n")
+
+
+def _lambda_requirement_problems(handler_dir: Path) -> list[str]:
+    path = handler_dir / "requirements.txt"
+    if not path.is_file():
+        return []
+    problems = []
+    for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        text = line.split("#", 1)[0].strip()
+        if not text:
+            continue
+        match = _LAMBDA_REQUIREMENT.match(text)
+        name = re.sub(r"[-.]+", "_", match.group(1)).lower() if match else None
+        if name not in LAMBDA_BUNDLED:
+            problems.append(f"requirements.txt:{number}: {text!r}")
+    return problems
+
+
+def _memory_mb(memory: str) -> int:
+    match = re.fullmatch(r"(\d+)([kmg]?)b?", memory.strip().lower())
+    if not match:
+        raise ValueError(f"memory {memory!r} phải dạng 256m hay 1g")
+    value, unit = int(match.group(1)), match.group(2)
+    return {"k": value // 1024, "m": value, "g": value * 1024, "": value // (1024 * 1024)}[unit]
+
+
+LAMBDA_FORWARD_PORTS = "47100-47199"
+LAMBDA_FORWARD_LIMIT = 64
+
+
+def lambda_forward_ports() -> range:
+    """Dải cổng (trên IP gateway của network Lambda) mà bộ chuyển tiếp tới localstack-devops được nghe: biến
+    `DEVOPS_LAMBDA_FORWARD_PORTS` dạng `đầu-cuối`, mặc định `LAMBDA_FORWARD_PORTS`. Cố định để luật tường lửa mở đúng dải này."""
+    text = os.environ.get("DEVOPS_LAMBDA_FORWARD_PORTS", LAMBDA_FORWARD_PORTS).strip()
+    match = re.fullmatch(r"(\d+)-(\d+)", text)
+    first, last = (int(match.group(1)), int(match.group(2))) if match else (0, 0)
+    if not match or not 1024 <= first <= last <= 65535:
+        raise ValueError(f"DEVOPS_LAMBDA_FORWARD_PORTS={text!r} phải dạng đầu-cuối trong 1024..65535, vd. {LAMBDA_FORWARD_PORTS}")
+    return range(first, last + 1)
+
+
+class _Forward:
+    """Chuyển tiếp TCP từ `bind` (IP gateway của network Lambda trên máy), ở cổng trống đầu tiên của `ports`, tới `target`
+    (localstack-devops trên loopback). Chỉ nhận kết nối từ `subnet`, tối đa `limit` kết nối cùng lúc (quá thì đóng ngay).
+    `close()` đóng socket nghe và mọi kết nối đang mở."""
+
+    def __init__(self, bind: str, subnet: str, target: tuple[str, int], *, ports: range | None = None,
+                 limit: int = LAMBDA_FORWARD_LIMIT) -> None:
+        import errno
+        import ipaddress
+        import threading
+
+        self._thread = threading.Thread
+        self.subnet = ipaddress.ip_network(subnet, strict=False)
+        self.target = target
+        self.lock = threading.Lock()
+        self.slots = threading.BoundedSemaphore(limit)
+        self.sockets: set[socket.socket] = set()
+        self.closed = False
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        for port in ports if ports is not None else lambda_forward_ports():
+            try:
+                self.server.bind((bind, port))
+                break
+            except OSError as error:
+                if error.errno != errno.EADDRINUSE:
+                    self.server.close()
+                    raise
+        else:
+            self.server.close()
+            raise OSError(errno.EADDRINUSE, f"Hết cổng trống trong DEVOPS_LAMBDA_FORWARD_PORTS trên {bind}")
+        self.server.listen(32)
+        self.port = self.server.getsockname()[1]
+        self._thread(target=self._accept, daemon=True).start()
+
+    def _accept(self) -> None:
+        import ipaddress
+
+        while True:
+            try:
+                client, peer = self.server.accept()
+            except OSError:
+                return
+            if ipaddress.ip_address(peer[0]) not in self.subnet or not self.slots.acquire(blocking=False):
+                client.close()
+                continue
+            try:
+                upstream = socket.create_connection(self.target, timeout=5)
+                upstream.settimeout(None)
+            except OSError:
+                client.close()
+                self.slots.release()
+                continue
+            with self.lock:
+                if self.closed:
+                    client.close()
+                    upstream.close()
+                    self.slots.release()
+                    return
+                self.sockets.update((client, upstream))
+            pair = [client, upstream, 2]
+            self._thread(target=self._pump, args=(client, upstream, pair), daemon=True).start()
+            self._thread(target=self._pump, args=(upstream, client, pair), daemon=True).start()
+
+    def _pump(self, source: socket.socket, sink: socket.socket, pair: list) -> None:
+        try:
+            while data := source.recv(65536):
+                sink.sendall(data)
+        except OSError:
+            pass
+        try:
+            sink.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+        with self.lock:
+            pair[2] -= 1
+            if pair[2]:
+                return
+            for sock in pair[:2]:
+                self.sockets.discard(sock)
+                sock.close()
+        self.slots.release()
+
+    def close(self) -> None:
+        with self.lock:
+            self.closed = True
+            sockets, self.sockets = [self.server, *self.sockets], set()
+        for sock in sockets:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            sock.close()
+
+
+def _ipv4_gateway(config) -> tuple[str, str] | None:
+    """Cặp (gateway, subnet) IPv4 đầu tiên có gateway trong mục `IPAM.Config` của `docker network inspect`."""
+    import ipaddress
+
+    for entry in config or []:
+        subnet, gateway = (entry or {}).get("Subnet"), (entry or {}).get("Gateway")
+        if not subnet or not gateway:
+            continue
+        try:
+            if ipaddress.ip_network(subnet, strict=False).version == 4 and ipaddress.ip_address(gateway).version == 4:
+                return gateway, subnet
+        except ValueError:
+            continue
+    return None
+
+
+class LambdaLab:
+    """Chạy handler Python của người học như một Lambda trên máy: image `LAMBDA_IMAGE` (Lambda Python 3.12 của AWS, ghim
+    digest, có sẵn Runtime Interface Emulator). Dùng
+    `with LambdaLab(lab, ex.path("handler"), "app.handler") as fn: fn.invoke({...})` bên trong `with DockerLab() as lab:`.
+
+    Container chạy bằng `docker run` dựng từ `lab.run_args` (tên `devops-ex-<id>-<alias>`, `lab.close()` cũng dọn): code
+    mount chỉ đọc ở `/var/task`, root filesystem chỉ đọc cộng tmpfs `/tmp`, uid/gid của người chạy test (65534 khi là root),
+    `--cap-drop ALL`, no-new-privileges, cpuset, RAM `memory` (cũng là `AWS_LAMBDA_FUNCTION_MEMORY_SIZE`), timeout `timeout`
+    giây (`AWS_LAMBDA_FUNCTION_TIMEOUT`; quá giờ thì `invoke` trả `{"errorMessage": "Task timed out ..."}`). Không mount socket
+    Docker hay thư mục nào khác, không mang biến môi trường nào của máy.
+
+    Network: mặc định (`isolated=True`) container nằm một mình trên network `--internal` riêng `devops-ex-<id>-<alias>-net`:
+    không ra Internet, không thấy container khác của lab; test gọi RIE thẳng qua IP container. `isolated=False` thì container
+    nằm trên network của lab (thấy container khác, ra được Internet như mọi container của `DockerLab`), RIE mở trên
+    `127.0.0.1` ở cổng trống. Cả hai trường hợp container vẫn tới được các cổng mà máy mở trên `0.0.0.0` qua IP gateway.
+
+    Env bị ép, người học không ghi đè được (`env` có `AWS_*`, `LAMBDA_*`, `_*`, biến proxy, `PYTHON*`, `LD_*`, `PATH`, `HOME`,
+    `TZ`, `LANG` thì fail, giống biến dành riêng của Lambda thật): `AWS_ENDPOINT_URL` trỏ `localstack-devops`, credential
+    giả `test`/`test`, `AWS_REGION=us-east-1`, `AWS_CONFIG_FILE`/`AWS_SHARED_CREDENTIALS_FILE=/dev/null`,
+    `AWS_EC2_METADATA_DISABLED=true`, `HTTPS_PROXY`/`HTTP_PROXY` là cổng chết trong container, `NO_PROXY` chỉ có loopback và
+    endpoint. Bảo đảm là: không có credential thật, và client AWS mặc định chỉ gọi LocalStack; đó không phải rào mạng, code
+    tự mở socket vẫn đi được tới đâu network cho phép.
+
+    `localstack-devops` chỉ mở trên `127.0.0.1` của máy, container không tới được. LambdaLab không nối network nào vào
+    service dùng chung: nó mở một bộ chuyển tiếp TCP trong tiến trình pytest, nghe trên IP gateway của network container ở
+    cổng đầu tiên còn trống trong `lambda_forward_ports()` (`DEVOPS_LAMBDA_FORWARD_PORTS`, mặc định 47100-47199), chỉ nhận
+    kết nối từ subnet đó, tối đa `LAMBDA_FORWARD_LIMIT` kết nối cùng lúc, chuyển tới `localstack_devops_endpoint()`. Tường lửa
+    chặn container nói chuyện với máy thì skip kèm lý do.
+
+    Thư viện: chỉ thư viện chuẩn và gói có sẵn trong image (`LAMBDA_BUNDLED`: boto3, botocore...), không cài gì thêm;
+    `requirements.txt` trong `handler_dir` chỉ được liệt kê các gói đó.
+    """
+
+    def __init__(self, lab: DockerLab, handler_dir: Path, handler: str, *, env: dict[str, str] | None = None,
+                 memory: str = "256m", timeout: int = LAMBDA_TIMEOUT, alias: str = "lambda", isolated: bool = True) -> None:
+        if not _LAMBDA_HANDLER.match(handler):
+            raise ValueError(f"handler {handler!r} phải dạng module.hàm (vd. app.handler)")
+        if not _IMAGE_ALIAS.match(alias):
+            raise ValueError(f"alias {alias!r} phải là chữ thường, số, '.', '_', '-'")
+        if not 1 <= int(timeout) <= 900:
+            raise ValueError("timeout của Lambda nằm trong 1..900 giây")
+        bad = [str(key) for key in (env or {}) if not _LAMBDA_ENV_KEY.match(str(key)) or _LAMBDA_RESERVED.match(str(key).upper())]
+        if bad:
+            pytest.fail(f"LambdaLab không cho đặt biến {', '.join(sorted(bad))}: AWS_*, LAMBDA_*, proxy... là biến dành riêng, "
+                        "testkit ép để handler chỉ tới được localstack-devops với credential giả")
+        self.lab = lab
+        self.handler_dir = Path(handler_dir).resolve()
+        self.handler = handler
+        self.user_env = {str(key): str(value) for key, value in (env or {}).items()}
+        self.memory = memory
+        self.memory_mb = _memory_mb(memory)
+        self.timeout = int(timeout)
+        self.alias = alias
+        self.isolated = bool(isolated)
+        self.network = f"{lab.network}-{alias}-net" if self.isolated else lab.network
+        self.endpoint: str | None = None
+        self.url: str | None = None
+        self._forward: _Forward | None = None
+        self._network_created = False
+        self._entered = False
+
+    def __enter__(self) -> "LambdaLab":
+        if self._entered:
+            raise RuntimeError("Mỗi LambdaLab chỉ vào `with` một lần; tạo LambdaLab mới cho lần chạy khác")
+        self._entered = True
+        try:
+            self._start()
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def env(self) -> dict[str, str]:
+        endpoint = self.endpoint or "http://127.0.0.1:1"
+        no_proxy = f"127.0.0.1,localhost,{urlsplit(endpoint).hostname}"
+        return {
+            **self.user_env,
+            "AWS_ENDPOINT_URL": endpoint,
+            "AWS_ACCESS_KEY_ID": "test",
+            "AWS_SECRET_ACCESS_KEY": "test",
+            "AWS_REGION": TOFU_REGION,
+            "AWS_DEFAULT_REGION": TOFU_REGION,
+            "AWS_CONFIG_FILE": "/dev/null",
+            "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+            "AWS_EC2_METADATA_DISABLED": "true",
+            "AWS_LAMBDA_FUNCTION_NAME": self.alias,
+            "AWS_LAMBDA_FUNCTION_MEMORY_SIZE": str(self.memory_mb),
+            "AWS_LAMBDA_FUNCTION_TIMEOUT": str(self.timeout),
+            "HTTPS_PROXY": LAMBDA_DEAD_PROXY,
+            "HTTP_PROXY": LAMBDA_DEAD_PROXY,
+            "https_proxy": LAMBDA_DEAD_PROXY,
+            "http_proxy": LAMBDA_DEAD_PROXY,
+            "NO_PROXY": no_proxy,
+            "no_proxy": no_proxy,
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+
+    def run_args(self, host_port: int | None = None) -> list[str]:
+        user = f"{os.getuid()}:{os.getgid()}" if os.getuid() else "65534:65534"
+        publish = [] if self.isolated or host_port is None else [(LAMBDA_RIE_PORT, host_port)]
+        args = self.lab.run_args(self.alias, LAMBDA_IMAGE, self.handler, mounts=[(self.handler_dir, LAMBDA_TASK_ROOT)],
+                                 publish=publish, env=self.env(), memory=self.memory, user=user)
+        args[args.index("--network") + 1] = self.network
+        hardening = ["--read-only", "--tmpfs", f"/tmp:rw,nosuid,nodev,size={LAMBDA_TMP_SIZE}", "--cap-drop", "ALL"]
+        return [*args[:3], *hardening, *args[3:]]
+
+    def _gateway(self) -> tuple[str, str]:
+        result = _docker("network", "inspect", "-f", "{{json .IPAM.Config}}", self.network)
+        try:
+            found = _ipv4_gateway(json.loads(result.stdout or "null")) if result.returncode == 0 else None
+        except ValueError:
+            found = None
+        if found is None:
+            pytest.fail(f"Network {self.network} không có subnet IPv4 kèm gateway: {(result.stderr or result.stdout).strip()}")
+        return found
+
+    def _create_network(self) -> None:
+        self._network_created = True
+        result = _docker("network", "create", "--internal", "--label", DOCKER_LABEL, "--label", f"{DOCKER_LAB_LABEL}={self.lab.id}",
+                         self.network)
+        if result.returncode != 0:
+            pytest.fail(f"Không tạo được network {self.network}: {result.stderr.strip()}")
+
+    def _run(self) -> str:
+        name = self.lab._track(self.alias)
+        result = None
+        for _ in range(1 if self.isolated else 3):
+            port = None if self.isolated else free_port()
+            result = subprocess.run(self.run_args(port), capture_output=True, text=True, timeout=120)
+            if result.returncode == 0:
+                if port is not None:
+                    self.lab.ports[self.alias] = {LAMBDA_RIE_PORT: port}
+                    return f"http://127.0.0.1:{port}"
+                return f"http://{self.lab.ip(self.alias)}:{LAMBDA_RIE_PORT}"
+            _docker("rm", "-f", "-v", name)
+            if not any(text in result.stderr for text in _PORT_TAKEN):
+                break
+        pytest.fail(f"docker run Lambda {self.alias} lỗi: {result.stderr.strip() if result else ''}")
+
+    def _start(self) -> None:
+        self.lab._require_entered()
+        if not self.handler_dir.is_dir():
+            pytest.fail(f"Không có thư mục handler {self.handler_dir}")
+        problems = _lambda_requirement_problems(self.handler_dir)
+        if problems:
+            pytest.fail("LambdaLab không cài thư viện; chỉ có thư viện chuẩn và gói có sẵn trong image Lambda "
+                        f"({', '.join(sorted(LAMBDA_BUNDLED))}). Bỏ khỏi requirements.txt:\n- " + "\n- ".join(problems))
+        Exercise.require_image(LAMBDA_IMAGE, hint=f"Tải bằng: {LAMBDA_PULL}")
+        target = urlsplit(_localstack_devops_checked())
+        ports = lambda_forward_ports()
+        if self.isolated:
+            self._create_network()
+        gateway, subnet = self._gateway()
+        try:
+            self._forward = _Forward(gateway, subnet, (target.hostname or "127.0.0.1", target.port or 80), ports=ports)
+        except OSError as error:
+            pytest.fail(f"Không mở được bộ chuyển tiếp trên {gateway} trong dải {ports.start}-{ports.stop - 1}: {error}")
+        self.endpoint = f"http://{gateway}:{self._forward.port}"
+        base = self._run()
+        self.lab.wait_http(self.alias, f"{base}/", timeout=60)
+        reach = self.lab.exec(self.alias, "python", "-c", _LAMBDA_PROBE, gateway, str(self._forward.port), timeout=30)
+        if reach.returncode != 0:
+            pytest.skip(f"Container không tới được {self.endpoint} (IP gateway của network Lambda trên máy): "
+                        f"{(reach.stderr or reach.stdout).strip()[-300:]}. Tường lửa (ufw, firewalld) có thể đang chặn "
+                        "container nói chuyện với máy; xem setup/DEVOPS-TOOLS.md mục LambdaLab")
+        self.url = f"{base}{_LAMBDA_INVOKE_PATH}"
+
+    def invoke(self, event: Any = None, *, timeout: float | None = None) -> Any:
+        """Gọi handler một lần qua HTTP của RIE, trả kết quả đã parse JSON (thường là dict). Handler ném lỗi thì trả
+        `{"errorMessage", "errorType", "stackTrace"}`; quá timeout của Lambda thì `{"errorMessage": "Task timed out ..."}`."""
+        import httpx
+
+        if self.url is None:
+            raise RuntimeError("Dùng LambdaLab bằng `with LambdaLab(lab, ...) as fn:` rồi mới invoke")
+        wait = timeout if timeout is not None else self.timeout + 30
+        try:
+            response = httpx.post(self.url, content=json.dumps({} if event is None else event), timeout=wait, trust_env=False)
+        except httpx.HTTPError as error:
+            pytest.fail(f"Không gọi được Lambda {self.alias}: {error}. {self.lab._log_tail(self.alias)}")
+        try:
+            return response.json()
+        except ValueError:
+            return {"errorMessage": response.text}
+
+    def logs(self) -> str:
+        return self.lab.logs(self.alias)
+
+    def close(self) -> None:
+        self.url = None
+        if self._forward is not None:
+            self._forward.close()
+            self._forward = None
+        if self._entered:
+            try:
+                _docker("rm", "-f", "-v", self.lab.name(self.alias))
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if self._network_created:
+            self._network_created = False
+            try:
+                _docker("network", "rm", self.network)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+
 # Dòng magic `%...`, shell `!...` hoặc gán từ shell `x = !ls`; nhóm 1 giữ thụt lề.
 _MAGIC = re.compile(r"^(\s*)(?:[%!]|[\w, ]+=\s*[%!]).*$")
+
+
+SOPS_VERSION = "3.13.3"
+SOPS_MIN_VERSION = "3.9"
+AGE_VERSION = "1.3.2"
+AGE_MIN_VERSION = "1.2"
+VAULT_VERSION = "2.2.1"
+VAULT_IMAGE = f"hashicorp/vault:{VAULT_VERSION}@sha256:962a92876e168d68eaaa24b0b8b49bbce1cb63024060a67bba95cd158a366fc2"
+VAULT_DEVOPS_START = "docker compose -f setup/docker-compose.yml --profile devops up -d --wait vault-devops"
+VAULT_DEV_TOKEN = os.environ.get("DEVOPS_VAULT_TOKEN", "devops-lab-root")
+_AGE_PUBLIC = re.compile(r"^# public key: (age1[0-9a-z]+)$", re.M)
+
+
+def _key_outside(path: Path, outside) -> Path:
+    real = Path(path).resolve()
+    for root in (ROOT, *outside):
+        if real.is_relative_to(Path(root).resolve()):
+            raise ValueError(f"Khoá age phải nằm ngoài {root} (repo hay project của người học): {real}")
+    return real
+
+
+def sops_env(home: Path, key_file: Path, *, outside=()) -> dict[str, str]:
+    """Env cho `sops` trong `run_sandboxed`: `HOME` và `XDG_CONFIG_HOME` tạm (không đọc `~/.config/sops`), `GNUPGHOME` là
+    `home/.gnupg`, `SOPS_AGE_KEY_FILE` là khoá của lab; tạo `home`, `home/.config` và `home/.gnupg` (quyền 0700). Không mang
+    `SOPS_*`, `AGE_*`, `GNUPGHOME` của máy. `key_file` nằm trong repo hay trong một thư mục của `outside` (project của người
+    học), kể cả qua symlink hay `..`, thì ValueError. Khoá dưới /tmp (như `tmp_path`) bị tmpfs của sandbox che: truyền
+    `readonly=[key_file.parent]` cho `run_sandboxed`."""
+    home = Path(home).resolve()
+    key = _key_outside(key_file, outside)
+    (home / ".config").mkdir(parents=True, exist_ok=True)
+    (home / ".gnupg").mkdir(mode=0o700, exist_ok=True)
+    (home / ".gnupg").chmod(0o700)
+    return {"HOME": str(home), "XDG_CONFIG_HOME": f"{home}/.config", "GNUPGHOME": f"{home}/.gnupg", "SOPS_AGE_KEY_FILE": str(key)}
+
+
+def age_keypair(directory: Path, *, outside=()) -> tuple[Path, str]:
+    """Sinh khoá age bằng `age-keygen -o` trong sandbox (chỉ `directory` ghi được); trả (đường dẫn khoá riêng, public key).
+    `directory` nằm trong repo hay trong `outside` thì ValueError. Không bao giờ in khoá riêng."""
+    directory = _key_outside(directory, outside)
+    Exercise.require_tool("age-keygen", AGE_MIN_VERSION)
+    directory.mkdir(parents=True, exist_ok=True)
+    key = directory / "age-key.txt"
+    if key.exists():
+        raise ValueError(f"Đã có khoá {key}; dùng thư mục mới cho mỗi khoá")
+    result = run_sandboxed(["age-keygen", "-o", str(key)], writable=[directory], cwd=directory, env={})
+    found = _AGE_PUBLIC.search(key.read_text(encoding="utf-8")) if key.is_file() else None
+    if result.returncode != 0 or found is None:
+        pytest.fail(f"age-keygen lỗi (mã {result.returncode}): {result.stderr.strip()[-DOCKER_LOG_CHARS:]}")
+    return key, found.group(1)
+
+
+def vault_devops_address() -> str:
+    host = os.environ.get(SERVICES["vault-devops"][0], SERVICES["vault-devops"][1])
+    return f"http://{'127.0.0.1' if host == 'localhost' else host}:{_port('vault-devops')}"
+
+
+def vault_env(token: str, home: Path) -> dict[str, str]:
+    """Env cho `vault` CLI: `VAULT_ADDR` của `vault-devops`, `token` truyền vào, `HOME` là thư mục tạm `home` (tạo nếu chưa
+    có) để `vault login` ghi `.vault-token` ở đó, không vào project của người học; không mang `VAULT_*` của máy. `home` nằm
+    trong repo thì ValueError."""
+    if not token:
+        raise ValueError("vault_env cần token của lab")
+    home = Path(home).resolve()
+    if home.is_relative_to(ROOT):
+        raise ValueError(f"HOME của vault phải nằm ngoài repo: {home}")
+    home.mkdir(parents=True, exist_ok=True)
+    return {"VAULT_ADDR": vault_devops_address(), "VAULT_TOKEN": token, "HOME": str(home)}
+
+
+def _vault_health(address: str) -> dict | None:
+    import urllib.error
+    import urllib.request
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f"{address}/v1/sys/health", timeout=3) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        try:
+            return json.loads(error.read().decode("utf-8"))
+        except ValueError:
+            return None
+    except (OSError, ValueError):
+        return None
+
+
+OBS_DIR = ROOT / "setup" / "observability"
+OBS_IMAGES = {
+    "prometheus": "prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996",
+    "alertmanager": "prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a",
+    "grafana": "grafana/grafana:13.2.5@sha256:9f7aa1e1e3246aade5792d35a738049f7f32f89cd51d1956cf426a4e86268a84",
+    "loki": "grafana/loki:3.7.9@sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28",
+    "otel-collector": "otel/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849",
+    "jaeger": "jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17",
+}
+OBS_READY = {
+    "otel-collector": (13133, "/"),
+    "jaeger": (16686, "/"),
+    "loki": (3100, "/ready"),
+    "prometheus": (9090, "/-/ready"),
+    "alertmanager": (9093, "/-/ready"),
+    "grafana": (3000, "/api/health"),
+}
+OBS_CONFIG_DIR = "observability"
+OBS_COMPOSE = "devops-ex-obs.compose.yaml"
+OBS_PROJECT_FILES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
+OBS_MEMORY = "512m"
+OBS_TIMEOUT = 180
+OBS_PULL = " && ".join(f"docker pull {image}" for image in OBS_IMAGES.values())
+
+
+def _obs_stage(stage: Path, project: Path | None) -> Path:
+    """Dựng thư mục project cho `ObsStack` trong `stage`: cấu hình mặc định của `setup/observability/` chép vào
+    `observability/`, rồi chép đè thư mục `project` của người học (tệp cùng đường dẫn trong `observability/` thay tệp
+    mặc định), rồi gộp service của stack vào tệp compose của người học (nếu có) thành một tệp `OBS_COMPOSE`."""
+    import yaml
+
+    shutil.copytree(OBS_DIR, stage / OBS_CONFIG_DIR, ignore=shutil.ignore_patterns("compose.yaml", *_COPY_IGNORE))
+    merged: dict[str, Any] = {}
+    if project is not None:
+        project = Path(project).resolve()
+        if not project.is_dir():
+            pytest.fail(f"ObsStack: không có thư mục project {project}")
+        try:
+            shutil.copytree(project, stage, symlinks=True, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+        except (shutil.Error, OSError) as error:
+            pytest.fail(f"ObsStack: không chép được project {project} đè lên cấu hình mặc định ({error}). Tệp hay thư mục "
+                        f"trong {OBS_CONFIG_DIR}/ phải là tệp thật cùng kiểu với mặc định, không phải symlink")
+        found = next((stage / name for name in OBS_PROJECT_FILES if (stage / name).is_file()), None)
+        if found is not None:
+            try:
+                merged = yaml.safe_load(found.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError as error:
+                pytest.fail(f"ObsStack: không đọc được {found.name} của project: {error}")
+            if not isinstance(merged, dict):
+                pytest.fail(f"ObsStack: {found.name} của project phải là một mapping")
+    obs = yaml.safe_load((OBS_DIR / "compose.yaml").read_text(encoding="utf-8"))["services"]
+    own = dict(merged.get("services") or {})
+    clash = sorted(set(own) & set(obs))
+    if clash:
+        pytest.fail(f"ObsStack: service {', '.join(clash)} trùng tên service của stack observability. Đổi tên service "
+                    f"của bạn; muốn đổi cấu hình của stack thì đặt tệp vào {OBS_CONFIG_DIR}/<service>/ trong project")
+    networks = list(merged.get("networks") or {})
+    for name, svc in obs.items():
+        svc["volumes"] = [f"./{OBS_CONFIG_DIR}/{volume[2:]}" if volume.startswith("./") else volume
+                          for volume in svc.get("volumes") or []]
+        if networks:
+            svc["networks"] = list(dict.fromkeys(["default", *networks]))
+        own[name] = svc
+    merged.pop("name", None)
+    merged["services"] = own
+    file = stage / OBS_COMPOSE
+    file.write_text(yaml.safe_dump(merged, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    for path in [stage, *stage.rglob("*")]:
+        if not path.is_symlink():
+            path.chmod(path.stat().st_mode | (0o755 if path.is_dir() else 0o644))
+    return file
+
+
+def _otlp_value(value: dict):
+    for key in ("stringValue", "boolValue", "doubleValue"):
+        if key in value:
+            return value[key]
+    if "intValue" in value:
+        return int(value["intValue"])
+    if "arrayValue" in value:
+        return [_otlp_value(item) for item in value["arrayValue"].get("values", [])]
+    return None
+
+
+def _otlp_traces(result: dict) -> list:
+    """OTLP JSON (`resourceSpans`) thành danh sách trace, mỗi trace một mục, span kèm `service` và `attributes` dạng dict."""
+    traces: dict[str, list] = {}
+    for resource in result.get("resourceSpans") or []:
+        attributes = {a["key"]: _otlp_value(a.get("value") or {}) for a in (resource.get("resource") or {}).get("attributes", [])}
+        for scope in resource.get("scopeSpans") or []:
+            for span in scope.get("spans") or []:
+                traces.setdefault(span["traceId"], []).append({
+                    "spanID": span.get("spanId"), "parentSpanID": span.get("parentSpanId") or None,
+                    "name": span.get("name"), "kind": span.get("kind"), "service": attributes.get("service.name"),
+                    "attributes": {a["key"]: _otlp_value(a.get("value") or {}) for a in span.get("attributes") or []},
+                })
+    return [{"traceID": trace_id, "spans": spans} for trace_id, spans in traces.items()]
+
+
+class ObsStack:
+    """Stack observability (OTel Collector, Jaeger, Loki, Prometheus, Alertmanager, Grafana; image `OBS_IMAGES` ghim
+    digest) của một `DockerLab`, dựng bằng `lab.compose` nên có mọi bảo đảm của nó: cổng trống trên 127.0.0.1, nhãn
+    `devops-ex=1`, cpuset, giới hạn RAM, bind mount chỉ đọc, `close()` của lab chạy `down -v`.
+
+    Không service nào của stack tạo volume: dữ liệu của Prometheus, Loki, Alertmanager, Jaeger nằm trong tmpfs, Grafana
+    ghi vào lớp ghi của container. Cấu hình mặc định ở `setup/observability/`.
+
+    `project` (tuỳ chọn) là thư mục của người học. Tệp `compose.yaml` trong đó (nếu có, ví dụ api, worker, postgres,
+    redis của Olist Shop) được gộp với stack thành một project compose: app gửi OTLP gRPC tới `otel-collector:4317`,
+    Prometheus scrape `api:8000` và `worker:9101`. Tệp trong `project/observability/` thay tệp mặc định cùng đường dẫn,
+    ví dụ `observability/prometheus/rules/olist.yml`, `observability/grafana/dashboards/olist.json`,
+    `observability/otel-collector/config.yaml`. Service của người học trùng tên service của stack thì fail.
+
+    Mỗi lab một project compose, nên một lab chỉ dựng một `ObsStack` và không gọi `lab.compose` riêng. Các hàm truy vấn
+    nhận `timeout` (giây): lớn hơn 0 thì hỏi lại tới khi có kết quả khác rỗng hoặc hết giờ.
+
+    `memory` là giới hạn RAM của **mỗi** container trong project, gồm cả service của người học (api, worker, postgres...),
+    vì compose của testkit chỉ có một giá trị cho mọi service. Service có `build:` lỗi vì mất mạng ở lần build đầu (pip,
+    apt; xét bằng `build_failed_on_network`) thì skip kèm lời nhắc chạy lại khi có mạng; lỗi build khác vẫn fail.
+    """
+
+    def __init__(self, lab: DockerLab, *, project: Path | None = None, env: dict | None = None,
+                 memory: str = OBS_MEMORY, timeout: float = OBS_TIMEOUT) -> None:
+        lab._require_entered()
+        for image in OBS_IMAGES.values():
+            Exercise.require_image(image, f"Tải các image của stack bằng: {OBS_PULL}")
+        stage = Path(tempfile.mkdtemp(prefix=f"{lab.network}-obs-"))
+        try:
+            file = _obs_stage(stage, project)
+            start = time.monotonic()
+            try:
+                self.project = lab.compose(file, env=env, memory=memory, timeout=timeout)
+            except pytest.fail.Exception as error:
+                if str(error).startswith("docker build ") and build_failed_on_network(str(error)):
+                    pytest.skip("ObsStack: build image của project cần mạng ở lần đầu để tải gói (BuildKit giữ cache cho "
+                                "lần sau). Kiểm kết nối mạng rồi chạy lại.")
+                raise
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+        self.urls = {name: f"http://127.0.0.1:{self.project.port(name, port)}" for name, (port, _) in OBS_READY.items()}
+        self._wait_ready(max(timeout - (time.monotonic() - start), 30))
+        self.startup_seconds = time.monotonic() - start
+
+    @staticmethod
+    def _client():
+        import httpx
+
+        return httpx.Client(trust_env=False, timeout=10)
+
+    def _wait_ready(self, timeout: float) -> None:
+        import httpx
+
+        pending = dict(OBS_READY)
+        deadline = time.monotonic() + timeout
+        with self._client() as client:
+            while pending:
+                for name, (_, path) in list(pending.items()):
+                    try:
+                        if client.get(self.urls[name] + path).status_code == 200:
+                            del pending[name]
+                    except httpx.HTTPError:
+                        pass
+                if not pending:
+                    return
+                if time.monotonic() > deadline:
+                    logs = "\n".join(f"--- {name}\n{self.project.logs(name, tail=DOCKER_LOG_LINES)[-DOCKER_LOG_CHARS:]}"
+                                     for name in pending)
+                    pytest.fail(f"ObsStack: {', '.join(pending)} chưa sẵn sàng sau {int(timeout)} giây.\n{logs}")
+                time.sleep(0.5)
+
+    def url(self, service: str) -> str:
+        return self.urls[service]
+
+    def _get(self, service: str, path: str, params: dict | None = None):
+        with self._client() as client:
+            response = client.get(self.urls[service] + path, params=params)
+        if response.status_code >= 400:
+            pytest.fail(f"{service} {path} trả {response.status_code}: {response.text[:DOCKER_LOG_CHARS]}")
+        return response.json()
+
+    @staticmethod
+    def eventually(fetch, timeout: float = 60, interval: float = 1):
+        """Gọi `fetch()` tới khi kết quả khác rỗng hoặc hết `timeout` giây, trả kết quả cuối. Dùng khi cần điều kiện
+        riêng, ví dụ `stack.eventually(lambda: [t for t in stack.jaeger_traces("api") if ...])`."""
+        deadline = time.monotonic() + timeout
+        result = fetch()
+        while not result and time.monotonic() < deadline:
+            time.sleep(interval)
+            result = fetch()
+        return result
+
+    def _poll(self, fetch, timeout: float):
+        return self.eventually(fetch, timeout) if timeout > 0 else fetch()
+
+    def prom_query(self, expr: str, *, timeout: float = 0) -> list:
+        """`data.result` của `/api/v1/query` (instant query); query sai cú pháp thì fail kèm lỗi của Prometheus."""
+        return self._poll(lambda: self._get("prometheus", "/api/v1/query", {"query": expr})["data"]["result"], timeout)
+
+    def loki_query(self, logql: str, *, since: float = 3600, limit: int = 100, timeout: float = 0) -> list:
+        """`data.result` của `/loki/api/v1/query_range` trong `since` giây gần nhất (stream, mỗi stream có `values`)."""
+        def fetch():
+            end = time.time_ns()
+            params = {"query": logql, "start": str(end - int(since * 1e9)), "end": str(end), "limit": str(limit),
+                      "direction": "backward"}
+            return self._get("loki", "/loki/api/v1/query_range", params)["data"]["result"]
+        return self._poll(fetch, timeout)
+
+    def jaeger_traces(self, service: str, *, limit: int = 20, lookback: float = 3600, timeout: float = 0) -> list:
+        """Trace của `service` (`service.name` của OTel) qua API v3 của Jaeger, gom theo trace: mỗi mục là
+        `{"traceID", "spans": [{"spanID", "parentSpanID", "name", "kind", "service", "attributes"}]}`."""
+        def fetch():
+            from datetime import datetime, timedelta, timezone
+
+            now = datetime.now(timezone.utc)
+            params = {"query.service_name": service, "query.search_depth": str(limit),
+                      "query.start_time_min": (now - timedelta(seconds=lookback)).isoformat().replace("+00:00", "Z"),
+                      "query.start_time_max": (now + timedelta(seconds=60)).isoformat().replace("+00:00", "Z")}
+            with self._client() as client:
+                response = client.get(self.urls["jaeger"] + "/api/v3/traces", params=params)
+            if response.status_code == 404:
+                return []
+            if response.status_code >= 400:
+                pytest.fail(f"jaeger /api/v3/traces trả {response.status_code}: {response.text[:DOCKER_LOG_CHARS]}")
+            return _otlp_traces(response.json().get("result") or {})
+        return self._poll(fetch, timeout)
+
+    def grafana_dashboards(self) -> list:
+        """Dashboard đã provision (`/api/search?type=dash-db`): mỗi mục có `uid`, `title`, `tags`, `folderTitle`."""
+        return self._get("grafana", "/api/search", {"type": "dash-db"})
+
+    def grafana_dashboard(self, uid: str) -> dict:
+        return self._get("grafana", f"/api/dashboards/uid/{uid}")["dashboard"]
+
+    def alerts(self, *, timeout: float = 0) -> list:
+        """Alert đang active trong Alertmanager (`/api/v2/alerts`): mỗi mục có `labels`, `annotations`, `status`."""
+        return self._poll(lambda: self._get("alertmanager", "/api/v2/alerts"), timeout)
+
+
+def _obs_tool(alias: str, image: str, entrypoint: str, args: tuple[str, ...], cwd: Path,
+              timeout: float) -> subprocess.CompletedProcess:
+    Exercise.require_image(image)
+    cwd = Path(cwd).resolve()
+    if not cwd.is_dir():
+        pytest.fail(f"{alias}: cwd {cwd} không phải thư mục")
+    with DockerLab() as lab:
+        return lab.run_once(alias, image, *args, mounts=[(cwd, "/work")], entrypoint=entrypoint, timeout=timeout,
+                            user=f"{os.getuid()}:{os.getgid()}", workdir="/work")
+
+
+def promtool(*args: str, cwd: Path, timeout: float = 120) -> subprocess.CompletedProcess:
+    """`promtool <args>` trong image Prometheus ghim (`OBS_IMAGES`), qua `DockerLab.run_once`: `cwd` mount chỉ đọc ở
+    `/work` (thư mục làm việc), chạy bằng uid/gid của người chạy test, network riêng của lab. Ví dụ
+    `promtool("test", "rules", "tests.yml", cwd=project)`."""
+    return _obs_tool("promtool", OBS_IMAGES["prometheus"], "/bin/promtool", args, cwd, timeout)
+
+
+def amtool(*args: str, cwd: Path, timeout: float = 120) -> subprocess.CompletedProcess:
+    """`amtool <args>` trong image Alertmanager ghim, cùng cách cách ly như `promtool`. Ví dụ
+    `amtool("check-config", "alertmanager.yml", cwd=project)`."""
+    return _obs_tool("amtool", OBS_IMAGES["alertmanager"], "/bin/amtool", args, cwd, timeout)
+
+
+K6_IMAGE = "grafana/k6:1.8.1@sha256:23f2279054c3e01535455c4d92914a625df12aeb631ea0e3ea7a43f96bcbc843"
+K6_PULL = f"docker pull {K6_IMAGE}"
+K6_MEMORY = "512m"
+K6_TIMEOUT = 300
+K6_SUMMARY_MARKER = "@@devops-ex-k6-summary@@"
+_K6_SCRIPT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\.js")
+_K6_ENV = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_K6_HARNESS = """export * from "/scripts/{name}";
+export {{ default }} from "/scripts/{name}";
+export function handleSummary(data) {{
+  return {{ stdout: "\\n{marker}" + JSON.stringify(data) + "\\n" }};
+}}
+"""
+
+
+def k6_run(lab: DockerLab, script: Path, *, env: dict | None = None, timeout: float = K6_TIMEOUT,
+           memory: str = K6_MEMORY) -> tuple[subprocess.CompletedProcess, dict | None]:
+    """Chạy kịch bản k6 `script` của người học trong image `K6_IMAGE` (ghim digest, cùng bản track MLOps) bằng
+    `lab.run_once`: network của lab (gọi service khác của lab bằng tên, ví dụ `http://api:8000`), thư mục chứa `script` mount
+    chỉ đọc ở `/scripts`, uid/gid của người chạy test, cpuset, RAM `memory`, `--rm`. `env` thành `-e KEY=VALUE` của k6
+    (`__ENV` trong kịch bản). testkit chạy một tệp bọc chỉ đọc ở `/harness` (`export *` và `default` từ kịch bản, cộng
+    `handleSummary` in tóm tắt JSON), nên kịch bản phải có `export default function`. Trả `(kết quả, tóm tắt)`: tóm tắt là
+    dict `handleSummary` của k6 (`metrics.<tên>.values`, `thresholds`, `root_group`), `None` khi k6 không chạy tới cuối.
+    k6 thoát mã 99 khi có threshold không đạt. Thiếu image thì skip kèm `K6_PULL`."""
+    Exercise.require_image(K6_IMAGE, f"Tải image k6 bằng: {K6_PULL}")
+    script = Path(script)
+    if script.is_symlink() or not script.is_file() or not _K6_SCRIPT.fullmatch(script.name):
+        pytest.fail(f"Kịch bản k6 {script.name} phải là tệp .js thường, tên chỉ gồm chữ, số, '.', '_', '-'")
+    args = ["run", "--quiet", "--no-color"]
+    for key, value in (env or {}).items():
+        if not _K6_ENV.fullmatch(str(key)) or "\n" in str(value):
+            raise ValueError(f"Biến k6 {key!r} không hợp lệ")
+        args += ["-e", f"{key}={value}"]
+    harness = Path(tempfile.mkdtemp(prefix=f"{lab.network}-k6-"))
+    try:
+        (harness / "run.js").write_text(_K6_HARNESS.format(name=script.name, marker=K6_SUMMARY_MARKER), encoding="utf-8")
+        harness.chmod(0o755)
+        (harness / "run.js").chmod(0o644)
+        result = lab.run_once("k6", K6_IMAGE, *args, "/harness/run.js", mounts=[(script.resolve().parent, "/scripts"),
+                              (harness, "/harness")], timeout=timeout, memory=memory, user=f"{os.getuid()}:{os.getgid()}",
+                              workdir="/scripts")
+    finally:
+        shutil.rmtree(harness, ignore_errors=True)
+    summary = None
+    index = result.stdout.rfind(K6_SUMMARY_MARKER)
+    if index >= 0:
+        try:
+            summary = json.loads(result.stdout[index + len(K6_SUMMARY_MARKER):].strip().splitlines()[0])
+        except (ValueError, IndexError):
+            summary = None
+    return result, summary
 
 
 ANSIBLE_VERSION = "2.21.5"
@@ -3055,8 +3926,75 @@ KUBE_SKIP_METRICS = (
     "kind load image-archive, kiểm SHA256SUMS, xem module 11 mục 0 và setup/DEVOPS-TOOLS.md): {setup}; vừa cài thì chờ khoảng "
     "30 giây cho lần lấy số liệu đầu tiên"
 )
+KUBE_ARGOCD_DIR = ROOT / "setup" / "kind" / "argocd"
+KUBE_ARGOCD_VERSION = "3.5.6"
+KUBE_ARGOCD_NAMESPACE = "argocd"
+KUBE_ARGOCD_IMAGE = "quay.io/argoproj/argocd:v3.5.6"
+KUBE_ARGOCD_IMAGE_DIGEST = "sha256:8e5cc5bb008df8a09dba439462e58c94c55b7735888d3ebde0c25fc05e4e5335"
+KUBE_ARGOCD_REDIS_IMAGE = "public.ecr.aws/docker/library/redis:8.2.3-alpine"
+KUBE_ARGOCD_REDIS_IMAGE_DIGEST = "sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba"
+KUBE_ARGOCD_SOPS_IMAGE = "ghcr.io/getsops/sops:v3.13.3-alpine"
+KUBE_ARGOCD_SOPS_IMAGE_DIGEST = "sha256:ae501277bf742f1662e0f881f43dd8fd6798b489a8058e921dbf6cda597140ea"
+KUBE_ARGOCD_CMP = "sops-kustomize"
+KUBE_ARGOCD_AGE_SECRET = "devops-sops-age"
+KUBE_ARGOCD_AGE_PUBLIC = "devops-sops-age-public"
+KUBE_IN_CLUSTER = "https://kubernetes.default.svc"
+KUBE_GIT_NAMESPACE = "devops-git"
+KUBE_GIT_SERVICE = "git.devops-git.svc.cluster.local"
+KUBE_GIT_ROOT = "/srv/git"
+KUBE_ARGOCD_SETUP = (
+    "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/argocd "
+    "&& sleep 3 && kubectl --kubeconfig ~/.kube/devops-lab.yaml wait --for condition=Established crd/appprojects.argoproj.io --timeout=60s "
+    "&& kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side --force-conflicts -f setup/kind/argocd/20-default-project.yaml"
+)
+KUBE_ARGOCD_KEY_SETUP = (
+    'keydir=$(mktemp -d) && age-keygen -o "$keydir/keys.txt" && kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd create secret '
+    'generic devops-sops-age --from-file=keys.txt="$keydir/keys.txt" && kubectl --kubeconfig ~/.kube/devops-lab.yaml -n argocd '
+    'create configmap devops-sops-age-public --from-literal=recipient="$(age-keygen -y "$keydir/keys.txt")" && rm -rf "$keydir"'
+)
+KUBE_SKIP_ARGOCD = (
+    "Cluster kind {name} chưa có ArgoCD dùng chung ({detail}). Admin cài một lần (kéo ba image theo digest rồi nạp bằng docker save "
+    "và kind load image-archive, kiểm SHA256SUMS, xem module 12 mục 0 và setup/DEVOPS-TOOLS.md): {setup}; rồi tạo khoá age dùng "
+    "chung (khoá riêng chỉ vào Secret argocd/devops-sops-age, không để lại trên máy): {key}"
+)
+KUBE_LINKERD_DIR = ROOT / "setup" / "kind" / "linkerd"
+KUBE_LINKERD_VERSION = "edge-26.10.1"
+KUBE_LINKERD_NAMESPACE = "linkerd"
+KUBE_LINKERD_CNI_NAMESPACE = "linkerd-cni"
+KUBE_LINKERD_IMAGES = {
+    "cr.l5d.io/linkerd/controller:edge-26.10.1": "sha256:880437e01bbd4bf3d8fa7b56996c4ed5dd6551843363dc851ddd0b298b923e8a",
+    "cr.l5d.io/linkerd/proxy:edge-26.10.1": "sha256:f2add36071cfca33754d2930800860785aaed672590bc0207be2f4da9889eb11",
+    "cr.l5d.io/linkerd/cni-plugin:v1.7.0": "sha256:f710874e5d70edfcf6e9e2a8ad18175b928a3f572eae322d7123b96f9b40c5a4",
+}
+KUBE_LINKERD_GROUP = "policy.linkerd.io"
+KUBE_LINKERD_RESOURCES = ("servers", "authorizationpolicies", "httproutes", "meshtlsauthentications")
+KUBE_LINKERD_TRUST_DOMAIN = "cluster.local"
+KUBE_LINKERD_IDENTITY_SUFFIX = f"serviceaccount.identity.linkerd.{KUBE_LINKERD_TRUST_DOMAIN}"
+KUBE_LINKERD_ADMIN_PORT = 4191
+KUBE_LINKERD_CA_PLACEHOLDER = "devops-linkerd-certs-sh"
+KUBE_LINKERD_PROXY_IMAGE = "cr.l5d.io/linkerd/proxy:edge-26.10.1"
+KUBE_LINKERD_ISSUER_PUBLIC = "devops-linkerd-issuer-public"
+KUBE_LINKERD_CERT_MARGIN = 7 * 24 * 3600
+KUBE_LINKERD_DEPLOYMENTS = ("linkerd-identity", "linkerd-destination", "linkerd-proxy-injector")
+KUBE_LINKERD_SETUP = (
+    "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/linkerd && bash setup/kind/linkerd/certs.sh"
+)
+KUBE_SKIP_LINKERD = (
+    "Cluster kind {name} chưa có Linkerd dùng chung ({detail}). Admin cài một lần sau Gateway API CRD (kéo ba image "
+    "cr.l5d.io/linkerd theo digest rồi nạp bằng docker save và kind load image-archive, cni-plugin nạp cả control plane; kiểm "
+    "SHA256SUMS; xem module 15 mục 0 và setup/DEVOPS-TOOLS.md): {setup}. certs.sh sinh trust anchor, issuer và chứng chỉ webhook "
+    "bằng openssl trong thư mục tạm, khoá trust anchor bị xoá ngay sau khi ký"
+)
+_KUBE_MESH_IDENTITY = re.compile(r"(?:\*|[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)")
+_KUBE_WORKLOAD = re.compile(r"(?:(deployment|statefulset|daemonset|pod)/)?([a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)")
+_KUBE_AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{58}")
+KUBE_GITOPS_MAX_BYTES = 20 * 1024 * 1024
+KUBE_GITOPS_MAX_FILES = 2000
+KUBE_GITOPS_MAX_REPO_BYTES = 40 * 1024 * 1024
+_KUBE_OPERATION_SOURCES = ("source", "sources", "manifests")
+_KUBE_ARGO_APP = re.compile(r"[a-z0-9]([-a-z0-9]{0,51}[a-z0-9])?")
 KUBE_NODE_LOCK_TIMEOUT = 900
-KUBE_SHARED_NAMESPACES = ("kube-system", "local-path-storage", "devops-gateway")
+KUBE_SHARED_NAMESPACES = ("kube-system", "local-path-storage", "devops-gateway", "argocd", "devops-git", "linkerd")
 KUBE_SHARED_READY_TIMEOUT = 180
 KUBE_LOAD = "kind load docker-image {images} --name {name} --nodes " + KUBE_WORKERS
 KUBE_SKIP_IMAGES = (
@@ -3105,6 +4043,10 @@ _KUBE_REFUSED = {
     "PersistentVolume": "PV do bài tạo trỏ được ra ngoài cluster (nfs tới máy host) hay giữ sẵn PVC của lab khác; PV tĩnh dùng "
                         "KubeLab.admin_local_pv, PV động dùng StorageClass standard",
     "Gateway": "bài gắn route vào Gateway dùng chung devops-gateway/public; Gateway chiếm listener của controller dùng chung",
+    "AppProject": "AppProject quyết định repo và namespace mà ArgoCD được sync tới; testkit tạo sẵn project riêng của lab "
+                  "(KubeLab.argocd_project)",
+    "ApplicationSet": "ApplicationSet sinh Application hàng loạt và không chạy trong namespace của lab; viết từng Application "
+                      "trong project của lab",
     "GatewayClass": "GatewayClass chọn controller cho cả cluster; dùng GatewayClass devops-traefik có sẵn",
     "ReferenceGrant": "ReferenceGrant mở quyền tham chiếu chéo namespace; route của bài chỉ trỏ Service trong namespace của lab",
     "StorageClass": "provisioner chạy bằng quyền của node; tham số như pathPattern của local-path tạo được volume trỏ ra ngoài thư "
@@ -3139,7 +4081,15 @@ _KUBE_LEARNER_RULES = [
     {"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": _KUBE_RW},
     {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"], "verbs": _KUBE_RW},
     {"apiGroups": ["metrics.k8s.io"], "resources": ["pods"], "verbs": ["get", "list"]},
+    {"apiGroups": ["argoproj.io"], "resources": ["applications"], "verbs": _KUBE_RW},
+    {"apiGroups": [KUBE_LINKERD_GROUP], "resources": list(KUBE_LINKERD_RESOURCES), "verbs": _KUBE_RW},
 ]
+KUBE_ARGOCD_HOOK_FINALIZER = "argocd.argoproj.io/hook-finalizer"
+_KUBE_HOOK_KINDS = ",".join(
+    f"{resource}.{group}" if group else resource
+    for rule in _KUBE_LEARNER_RULES if "create" in rule["verbs"]
+    for group in rule["apiGroups"] for resource in rule["resources"]
+    if "/" not in resource and group not in ("argoproj.io", "gateway.networking.k8s.io", KUBE_LINKERD_GROUP))
 _KUBE_SYSTEM_USER = (
     "((request.userInfo.username.startsWith('system:') && !request.userInfo.username.startsWith('system:serviceaccount:')) || "
     "request.userInfo.username.startsWith('system:serviceaccount:kube-system:') || "
@@ -3239,6 +4189,64 @@ class _KubeAdmin:
         names = [line.split()[0] for line in result.stdout.splitlines() if line.strip()]
         return [n for n in names if n.split(".")[0] != "nodes"]
 
+    def has_argocd(self) -> bool:
+        """Cluster có CRD Application của ArgoCD (nhóm `argoproj.io`)."""
+        result = self.run("api-resources", "--api-group=argoproj.io", "-o", "name")
+        return result.returncode == 0 and "applications.argoproj.io" in result.stdout.split()
+
+    def has_linkerd(self) -> bool:
+        """Cluster có CRD policy của Linkerd (nhóm `policy.linkerd.io`)."""
+        result = self.run("api-resources", f"--api-group={KUBE_LINKERD_GROUP}", "-o", "name")
+        return result.returncode == 0 and f"servers.{KUBE_LINKERD_GROUP}" in result.stdout.split()
+
+    def has_gateway_api(self) -> bool:
+        """Cluster có CRD HTTPRoute của Gateway API (nhóm `gateway.networking.k8s.io`)."""
+        result = self.run("api-resources", "--api-group=gateway.networking.k8s.io", "-o", "name")
+        return result.returncode == 0 and "httproutes.gateway.networking.k8s.io" in result.stdout.split()
+
+    def linkerd_problem(self) -> str | None:
+        """Lý do Linkerd dùng chung chưa dùng được, hay None. Chỉ đọc ConfigMap, Deployment, DaemonSet và webhook; không đọc
+        Secret nào (issuer, chứng chỉ webhook)."""
+        ns = ("-n", KUBE_LINKERD_NAMESPACE)
+        placeholder = base64.b64encode(KUBE_LINKERD_CA_PLACEHOLDER.encode()).decode()
+
+        def ready(out: str) -> bool:
+            numbers = out.split()
+            return len(numbers) == 2 and numbers[0] == numbers[1] and numbers[0] not in ("", "0")
+
+        checks = [
+            (f"CRD servers.{KUBE_LINKERD_GROUP}", ("get", "crd", f"servers.{KUBE_LINKERD_GROUP}", "-o", "name"),
+             lambda out: f"servers.{KUBE_LINKERD_GROUP}" in out),
+            ("linkerd-config chưa bật cniEnabled (pod trong namespace baseline cần CNI thay cho proxy-init có NET_ADMIN)",
+             (*ns, "get", "configmap", "linkerd-config", "-o", "jsonpath={.data.values}"),
+             lambda out: "\ncniEnabled: true\n" in f"\n{out}\n"),
+            (f"DaemonSet {KUBE_LINKERD_CNI_NAMESPACE}/linkerd-cni chưa sẵn sàng trên mọi node",
+             ("-n", KUBE_LINKERD_CNI_NAMESPACE, "get", "daemonset", "linkerd-cni", "-o",
+              "jsonpath={.status.numberReady} {.status.desiredNumberScheduled}"), ready),
+            ("thiếu ConfigMap linkerd/linkerd-identity-trust-roots (chưa chạy certs.sh)",
+             (*ns, "get", "configmap", "linkerd-identity-trust-roots", "-o", r"jsonpath={.data.ca-bundle\.crt}"),
+             lambda out: out.strip().startswith("-----BEGIN CERTIFICATE-----")),
+            ("webhook linkerd-proxy-injector chưa có caBundle thật (chưa chạy certs.sh sau khi apply)",
+             ("get", "mutatingwebhookconfiguration", "linkerd-proxy-injector-webhook-config", "-o",
+              "jsonpath={.webhooks[0].clientConfig.caBundle}"), lambda out: out.strip() not in ("", placeholder)),
+            *[(f"Deployment linkerd/{name} chưa có pod available (thiếu Secret do certs.sh tạo thì pod kẹt ContainerCreating)",
+               (*ns, "get", "deployment", name, "-o", "jsonpath={.status.availableReplicas}"),
+               lambda out: out.strip() not in ("", "0")) for name in KUBE_LINKERD_DEPLOYMENTS],
+        ]
+        for what, args, ok in checks:
+            result = self.run(*args)
+            if result.returncode != 0 or not ok(result.stdout):
+                return what
+        roots = self.run(*ns, "get", "configmap", "linkerd-identity-trust-roots", "-o", r"jsonpath={.data.ca-bundle\.crt}")
+        problem = _linkerd_cert_problem("trust anchor (linkerd-identity-trust-roots)", roots.stdout)
+        if problem:
+            return problem
+        issuer = self.run(*ns, "get", "configmap", KUBE_LINKERD_ISSUER_PUBLIC, "-o", r"jsonpath={.data.tls\.crt}",
+                          "--ignore-not-found")
+        if issuer.returncode == 0 and issuer.stdout.strip():
+            return _linkerd_cert_problem(f"issuer ({KUBE_LINKERD_ISSUER_PUBLIC})", issuer.stdout)
+        return None
+
     def cluster_kinds(self) -> set[str]:
         result = self.run("api-resources", "--namespaced=false", "--no-headers")
         kinds = set()
@@ -3247,6 +4255,20 @@ class _KubeAdmin:
             if "false" in words[:-1]:
                 kinds.add(words[words.index("false") + 1])
         return kinds
+
+
+def _linkerd_cert_problem(what: str, pem: str) -> str | None:
+    """Lý do chứng chỉ công khai `pem` của Linkerd không dùng được: không đọc được, hay hết hạn trong `KUBE_LINKERD_CERT_MARGIN`."""
+    from cryptography import x509
+
+    try:
+        certs = x509.load_pem_x509_certificates(pem.encode())
+    except ValueError:
+        return f"chứng chỉ {what} không đọc được"
+    soonest = min(cert.not_valid_after_utc.timestamp() for cert in certs)
+    if soonest - time.time() < KUBE_LINKERD_CERT_MARGIN:
+        return f"chứng chỉ {what} hết hạn hay sắp hết hạn (dưới 7 ngày); chạy lại certs.sh rồi restart pod trong mesh"
+    return None
 
 
 def _kube_ready(admin: _KubeAdmin, name: str) -> None:
@@ -3563,6 +4585,146 @@ def _kube_route_problems(where: str, kind: str, doc: dict, namespace: str) -> li
     return found
 
 
+def kube_git_url(namespace: str) -> str:
+    """URL nội bộ của repo git riêng của lab trên git server dùng chung (`git daemon` chỉ đọc trong namespace `devops-git`)."""
+    return f"git://{KUBE_GIT_SERVICE}/{namespace}.git"
+
+
+def _kube_argocd_problems(where: str, kind: str, doc: dict, namespace: str) -> list[str]:
+    if kind != "Application" or not str(doc.get("apiVersion", "")).startswith("argoproj.io/"):
+        return []
+    spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+    url = kube_git_url(namespace)
+    found = []
+    if spec.get("project") != namespace:
+        found.append(f"{where}: spec.project phải là project riêng của lab ({namespace}), không phải {spec.get('project')!r}")
+    destination = spec.get("destination") if isinstance(spec.get("destination"), dict) else {}
+    server, name = destination.get("server"), destination.get("name")
+    if (destination.get("namespace") != namespace or server not in (None, KUBE_IN_CLUSTER) or name not in (None, "in-cluster")
+            or (server is None and name is None)):
+        found.append(f"{where}: destination chỉ được là namespace {namespace} trên cluster hiện tại ({KUBE_IN_CLUSTER})")
+    sources = ([spec["source"]] if isinstance(spec.get("source"), dict) else []) + [
+        s for s in spec.get("sources") or [] if isinstance(s, dict)]
+    if not sources or any(s.get("repoURL") != url for s in sources):
+        found.append(f"{where}: repoURL chỉ được là repo git của lab ({url})")
+    if "sourceHydrator" in spec:
+        found.append(f"{where}: sourceHydrator ghi ngược vào git, lab không dùng")
+    operation = doc.get("operation") if isinstance(doc.get("operation"), dict) else {}
+    sync = operation.get("sync") if isinstance(operation.get("sync"), dict) else {}
+    for key in _KUBE_OPERATION_SOURCES:
+        if key in sync:
+            found.append(f"{where}: operation.sync.{key} cho ArgoCD render nguồn khác spec (repo của lab khác); chỉ sync theo spec")
+    if "status" in doc:
+        found.append(f"{where}: status của Application do ArgoCD ghi, bài không được tự đặt")
+    return found
+
+
+_PROM_SAMPLE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(.*)\})?\s+(\S+)(?:\s+\S+)?$")
+_PROM_LABEL = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"')
+
+
+def _linkerd_metrics(text: str) -> dict:
+    """Gộp số đếm từ `/metrics` của proxy Linkerd: inbound trên cổng ứng dụng (bỏ cổng admin 4191), outbound theo route,
+    và proxy đã có chứng chỉ mTLS chưa (`control_identity_cert_expiration_timestamp_seconds` > 0)."""
+    counts = {"success": 0, "failure": 0, "denied": 0, "plaintext": 0, "outbound_success": 0, "outbound_failure": 0,
+              "retries": 0, "cert": False, "clients": set(), "servers": set()}
+    for line in text.splitlines():
+        match = _PROM_SAMPLE.match(line.strip())
+        if not match or line.startswith("#"):
+            continue
+        name, raw, value = match.groups()
+        try:
+            number = float(value)
+        except ValueError:
+            continue
+        if not math.isfinite(number):
+            continue
+        labels = dict(_PROM_LABEL.findall(raw or ""))
+        admin = labels.get("target_port") == str(KUBE_LINKERD_ADMIN_PORT)
+        inbound = labels.get("direction") == "inbound" and not admin
+        if name == "control_identity_cert_expiration_timestamp_seconds" and number > 0:
+            counts["cert"] = True
+        elif name == "response_total" and inbound:
+            key = "failure" if labels.get("classification") == "failure" else "success"
+            counts[key] += int(number)
+            if labels.get("tls") == "true" and labels.get("client_id"):
+                counts["clients"].add(labels["client_id"])
+        elif name == "request_total" and inbound and labels.get("tls") != "true":
+            counts["plaintext"] += int(number)
+        elif name in ("inbound_http_authz_deny_total", "inbound_tcp_authz_deny_total") and not admin:
+            counts["denied"] += int(number)
+        elif name == "outbound_http_route_request_statuses_total":
+            status = labels.get("http_status", "")
+            key = "outbound_failure" if labels.get("error") or status.startswith("5") or not status else "outbound_success"
+            counts[key] += int(number)
+        elif name == "outbound_http_route_retry_requests_total":
+            counts["retries"] += int(number)
+        elif name == "response_total" and labels.get("direction") == "outbound" and labels.get("tls") == "true" \
+                and labels.get("server_id"):
+            counts["servers"].add(labels["server_id"])
+    return counts
+
+
+def _linkerd_injected(pod: dict) -> bool:
+    """Pod do proxy-injector của Linkerd dùng chung tiêm: annotation `linkerd.io/proxy-version` đúng bản đã ghim và container
+    `linkerd-proxy` (native sidecar hay container thường) chạy đúng image proxy đã ghim. Container tự đặt tên `linkerd-proxy` với
+    image khác (server giả trên cổng 4191) không tính."""
+    annotations = (pod.get("metadata") or {}).get("annotations") or {}
+    if annotations.get("linkerd.io/proxy-version") != KUBE_LINKERD_VERSION:
+        return False
+    spec = pod.get("spec") or {}
+    proxies = [c for c in (spec.get("initContainers") or []) + (spec.get("containers") or []) if c.get("name") == "linkerd-proxy"]
+    digest = KUBE_LINKERD_IMAGES[KUBE_LINKERD_PROXY_IMAGE]
+    allowed = {KUBE_LINKERD_PROXY_IMAGE, f"{KUBE_LINKERD_PROXY_IMAGE}@{digest}", f"{KUBE_LINKERD_PROXY_IMAGE.rsplit(':', 1)[0]}@{digest}"}
+    return len(proxies) == 1 and proxies[0].get("image") in allowed
+
+
+def kube_mesh_identity_ok(identity, namespace: str) -> bool:
+    """Danh tính mTLS mà MeshTLSAuthentication của lab được nêu: ServiceAccount (hay `*`) trong đúng namespace của lab,
+    `<sa>.<namespace>.serviceaccount.identity.linkerd.cluster.local`. Không nhận `*` trần hay danh tính của namespace khác."""
+    suffix = f".{namespace}.{KUBE_LINKERD_IDENTITY_SUFFIX}"
+    return (isinstance(identity, str) and identity.endswith(suffix)
+            and bool(_KUBE_MESH_IDENTITY.fullmatch(identity.removesuffix(suffix))))
+
+
+def _kube_mesh_problems(where: str, kind: str, doc: dict, namespace: str) -> list[str]:
+    if not str(doc.get("apiVersion", "")).startswith(f"{KUBE_LINKERD_GROUP}/"):
+        return []
+    spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+    found = []
+
+    def refs(value) -> list[dict]:
+        return [r for r in value if isinstance(r, dict)] if isinstance(value, list) else []
+
+    def foreign(ref: dict) -> bool:
+        kind_of = str(ref.get("kind", "")).lower()
+        return ref.get("namespace") not in (None, "", namespace) or (kind_of == "namespace" and ref.get("name") != namespace)
+
+    if kind == "AuthorizationPolicy":
+        target = spec.get("targetRef") if isinstance(spec.get("targetRef"), dict) else {}
+        if foreign(target):
+            found.append(f"{where}: targetRef chỉ được trỏ Server, HTTPRoute hay Namespace của lab ({namespace})")
+        if any(foreign(r) for r in refs(spec.get("requiredAuthenticationRefs"))):
+            found.append(f"{where}: requiredAuthenticationRefs chỉ được trỏ object, ServiceAccount trong namespace {namespace}")
+    if kind == "MeshTLSAuthentication":
+        identities = spec.get("identities") if isinstance(spec.get("identities"), list) else []
+        bad = [i for i in identities if not kube_mesh_identity_ok(i, namespace)]
+        if bad:
+            found.append(f"{where}: identities chỉ gồm <serviceaccount hay *>.{namespace}.{KUBE_LINKERD_IDENTITY_SUFFIX}, "
+                         f"không nhận {', '.join(map(str, bad))}")
+        identity_refs = refs(spec.get("identityRefs"))
+        if any(foreign(r) or str(r.get("kind", "")).lower() not in ("serviceaccount", "namespace") or r.get("name") == "*"
+               for r in identity_refs):
+            found.append(f"{where}: identityRefs chỉ gồm ServiceAccount hay Namespace của lab ({namespace})")
+    if kind == "HTTPRoute":
+        rules = spec.get("rules") if isinstance(spec.get("rules"), list) else []
+        backends = [b for rule in rules if isinstance(rule, dict) for b in refs(rule.get("backendRefs"))]
+        if any(foreign(r) for r in refs(spec.get("parentRefs")) + backends):
+            found.append(f"{where}: parentRefs và backendRefs chỉ được trỏ Service, Server trong namespace {namespace}; route "
+                         "gắn vào Server của lab khác đổi luật inbound của lab đó")
+    return found
+
+
 def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), cluster_kinds=(), api_group: str | None = None) -> list[str]:
     """Kiểm tĩnh object Kubernetes của bài trước khi apply (tín hiệu sớm, ranh giới thật là quyền RBAC, policy và Pod Security
     trong cluster, xem `KubeLab`). Object namespaced chỉ ở namespace của lab (không ghi namespace thì lab đặt). Object
@@ -3572,7 +4734,11 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
     escalate/bind/impersonate, `*` trên `*` hay aggregationRule; pod (ở bất kỳ độ sâu nào: Deployment, CronJob...) privileged,
     hostPath, hostNetwork/hostPID/hostIPC, hostPort, capability ngoài baseline, procMount, seccomp/AppArmor Unconfined;
     PersistentVolume hostPath hay local; StorageClass; PriorityClass globalDefault; Service có externalIPs; CustomResourceDefinition
-    ngoài nhóm API `api_group` của lab."""
+    ngoài nhóm API `api_group` của lab; AppProject, ApplicationSet; Application của ArgoCD có project khác project của lab,
+    destination ngoài namespace của lab hay ngoài cluster hiện tại, repoURL khác repo git của lab (`kube_git_url`); object
+    `policy.linkerd.io` tham chiếu namespace khác: AuthorizationPolicy có targetRef hay requiredAuthenticationRefs ngoài lab,
+    MeshTLSAuthentication có danh tính ngoài namespace của lab (kể cả `*` trần) hay identityRefs ngoài lab, HTTPRoute có
+    parentRefs, backendRefs ngoài lab."""
     found = []
     cluster = _KUBE_CLUSTER_KINDS | set(cluster_kinds)
     for index, doc in enumerate(_kube_flatten(documents), 1):
@@ -3597,6 +4763,8 @@ def kube_manifest_problems(documents, *, lab_id: str, namespace: str, allow=(), 
             found.append(f"{where}: namespace {meta.get('namespace')} nằm ngoài namespace của lab ({namespace})")
         found += _kube_rbac_problems(where, kind, doc, namespace)
         found += _kube_route_problems(where, kind, doc, namespace)
+        found += _kube_argocd_problems(where, kind, doc, namespace)
+        found += _kube_mesh_problems(where, kind, doc, namespace)
         for spec in _kube_pod_specs(doc):
             found += _kube_pod_problems(where, spec)
         if kind == "PriorityClass" and doc.get("globalDefault") is True:
@@ -3658,12 +4826,20 @@ def _kube_hostpath_pv(name: str, path: str) -> str:
 
 
 def kube_leftovers(lab_id: str, name: str = KIND_CLUSTER) -> list[str]:
-    """Namespace `devops-ex-<id>` và object cluster-scoped có nhãn `devops-ex=<id>` còn trên cluster; rỗng là đã dọn sạch."""
+    """Namespace `devops-ex-<id>`, object cluster-scoped có nhãn `devops-ex=<id>`, AppProject của lab trong `argocd` và repo git
+    của lab trên git server còn trên cluster; rỗng là đã dọn sạch."""
     with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}{lab_id}-check-") as tmp:
         admin = _KubeAdmin(Path(tmp), name)
-        found = admin.run("get", "namespace", f"{DOCKER_PREFIX}{lab_id}", "--ignore-not-found", "-o", "name").stdout.split()
+        namespace = f"{DOCKER_PREFIX}{lab_id}"
+        found = admin.run("get", "namespace", namespace, "--ignore-not-found", "-o", "name").stdout.split()
         kinds = ",".join(admin.cluster_resources())
         found += admin.run("get", kinds, "-l", f"{_KUBE_LABEL_KEY}={lab_id}", "-o", "name").stdout.split()
+        if admin.has_argocd():
+            projects = admin.run("-n", KUBE_ARGOCD_NAMESPACE, "get", "appprojects.argoproj.io", "-l", f"{_KUBE_LABEL_KEY}={lab_id}",
+                                 "-o", "name")
+            found += projects.stdout.split() if projects.returncode == 0 else []
+            listed = admin.run("-n", KUBE_GIT_NAMESPACE, "exec", "deploy/git", "-c", "git", "--", "ls", "-1A", KUBE_GIT_ROOT)
+            found += [f"git:{KUBE_GIT_ROOT}/{line}" for line in listed.stdout.split() if line == f"{namespace}.git"]
         return found
 
 
@@ -3677,7 +4853,9 @@ class KubeLab:
     `serviceaccounts/token`, không escalate/bind; ghi được ResourceQuota, LimitRange của chính namespace đó), ClusterRoleBinding
     vào `view` (đọc mọi namespace, không có Secret) và quyền đọc object cluster-scoped, quyền ghi đúng các kind trong `allow`
     (`KUBE_ALLOWABLE`, không có StorageClass; có CustomResourceDefinition thì Role thêm quyền ghi mọi resource của nhóm API riêng
-    `api_group` trong namespace của lab, và CRD phải thuộc nhóm đó), và bốn
+    `api_group` trong namespace của lab, và CRD phải thuộc nhóm đó; ghi `applications.argoproj.io` trong namespace của lab,
+    không ghi `appprojects`; ghi `servers`, `authorizationpolicies`, `httproutes`, `meshtlsauthentications` của
+    `policy.linkerd.io` trong namespace của lab), và sáu
     ValidatingAdmissionPolicy: policy `devops-ex-<id>` áp cho mọi ServiceAccount của namespace (nhóm
     `system:serviceaccounts:<ns>`, kể cả ServiceAccount bài tự tạo rồi lấy token trong pod): object cluster-scoped tạo, sửa,
     xoá phải mang nhãn `devops-ex=<id>`, PV không hostPath hay local, PriorityClass không globalDefault, CRD chỉ thuộc `api_group`,
@@ -3687,8 +4865,18 @@ class KubeLab:
     không cấp cho `system:*` hay ServiceAccount của namespace khác (RoleBinding bỏ trống namespace của subject ServiceAccount là
     namespace của chính nó); policy `devops-ex-<id>-routes` (cũng cho mọi ServiceAccount
     của namespace): Ingress phải `ingressClassName: devops-traefik`, không `defaultBackend`, HTTPRoute chỉ gắn Gateway
-    `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con. Lab chỉ trao kubeconfig khi cả
-    bốn policy đã chặn được lần tạo thử.
+    `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con, Service không có
+    `externalIPs` (CVE-2020-8554); policy `devops-ex-<id>-argocd`
+    (cũng cho mọi ServiceAccount của namespace): Application phải có `spec.project` là project của lab (`devops-ex-<id>`),
+    destination là namespace của lab trên `https://kubernetes.default.svc`, repoURL là `repo_url` của lab, không
+    `sourceHydrator`; policy `devops-ex-<id>-mesh` (cũng cho mọi ServiceAccount của namespace): AuthorizationPolicy,
+    MeshTLSAuthentication, HTTPRoute của Linkerd chỉ tham chiếu namespace của lab (targetRef, requiredAuthenticationRefs,
+    identityRefs, parentRefs, backendRefs), danh tính trong `identities` là `<sa hay *>.<namespace>.serviceaccount.identity.
+    linkerd.cluster.local`, không `*` trần. Lab chỉ trao kubeconfig khi cả sáu policy đã chặn được lần tạo thử (policy ArgoCD chỉ thử
+    khi cluster có CRD của ArgoCD, policy mesh khi có CRD `policy.linkerd.io`). GitOps: `argocd_project`, `gitops_repo`,
+    `argocd_wait`, `age_public_key`/`sops_age_recipient`. Service mesh: `mesh=True` kiểm Linkerd dùng chung như
+    `Exercise.require_linkerd` (thiếu thì skip) rồi gắn annotation `linkerd.io/inject: enabled` vào namespace, nên mọi pod của
+    bài có proxy; `mesh_status(workload)` đọc trạng thái proxy, danh tính mTLS và số request.
 
     `kubectl`, `helm`, `run` (script của bài), `apply_learner`, `helm_install` chạy qua `run_sandboxed` với `KUBECONFIG` là
     kubeconfig của lab (một cluster, một context có namespace của lab, token của `devops-ex-learner`) trong thư mục `control`
@@ -3700,7 +4888,7 @@ class KubeLab:
     `kubectl` nhận `--user`, `--group`, `--serviceaccount` duy nhất khi argv bắt đầu bằng `create rolebinding` hay `create
     clusterrolebinding` (subject của binding); đặt trước lệnh con hay ở lệnh khác là cờ danh tính, bị từ chối.
 
-    Ranh giới: quyền RBAC của token, bốn policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
+    Ranh giới: quyền RBAC của token, sáu policy ở trên, và Pod Security của namespace (baseline chặn privileged, hostPath,
     hostNetwork, hostPID, hostIPC, hostPort, capability lạ). Node kind là container privileged: pod privileged thấy ổ đĩa của máy
     host, hostPath vào node chạm `/var` và `/run/containerd` của node. Vì thế chặn các trường đó là yêu cầu an toàn cho máy host
     chứ không chỉ cho cluster. `kube_manifest_problems` trong `apply_learner` và `helm_install` (sau `helm template`) là tín hiệu
@@ -3708,10 +4896,12 @@ class KubeLab:
 
     `close()` gỡ cordon và taint lab đã đặt, xoá namespace (chờ tối đa `KUBE_CLEANUP_TIMEOUT`), xoá PV có `claimRef` trỏ namespace
     của lab, object cluster-scoped có nhãn `devops-ex=<id>` (không bao giờ đụng object khác, không xoá node), thư mục PV local
-    trong worker, rồi thư mục tạm. Dọn lỗi thì có `UserWarning`, và test đang đạt sẽ fail.
+    trong worker, rồi thư mục tạm. Object `policy.linkerd.io` của bài là namespaced nên đi theo namespace; Linkerd không giữ gì
+    của lab ngoài namespace (chứng chỉ của proxy chỉ nằm trong bộ nhớ của pod). Dọn lỗi thì có `UserWarning`, và test đang đạt sẽ fail.
     """
 
-    def __init__(self, name: str = KIND_CLUSTER, *, allow=(), pod_security: str = "baseline", timeout: float = KUBE_TIMEOUT) -> None:
+    def __init__(self, name: str = KIND_CLUSTER, *, allow=(), pod_security: str = "baseline", timeout: float = KUBE_TIMEOUT,
+                 mesh: bool = False) -> None:
         if pod_security not in ("baseline", "restricted"):
             raise ValueError(f"pod_security chỉ nhận baseline hoặc restricted, không nhận {pod_security!r}")
         for kind in allow:
@@ -3721,6 +4911,7 @@ class KubeLab:
         self.allow = tuple(allow)
         self.pod_security = pod_security
         self.timeout = timeout
+        self.mesh = bool(mesh)
         self.id = uuid.uuid4().hex[:8]
         self.namespace = f"{DOCKER_PREFIX}{self.id}"
         self.label = f"{_KUBE_LABEL_KEY}={self.id}"
@@ -3735,6 +4926,14 @@ class KubeLab:
         self._taints: set[tuple[str, str, str]] = set()
         self._local_nodes: set[str] = set()
         self._node_lock = None
+        self._argocd = False
+        self._linkerd = False
+        self._gateway_api = False
+        self._project = False
+        self._git_pushed = False
+        self._git_repo: GitRepo | None = None
+        self._age_public: str | None = None
+        self.gitops_revision = ""
 
     @property
     def control(self) -> Path:
@@ -3784,6 +4983,15 @@ class KubeLab:
         self._admin = _KubeAdmin(self.root, self.name)
         _kube_ready(self._admin, self.name)
         self._cluster_kinds = self._admin.cluster_kinds()
+        self._argocd = self._admin.has_argocd()
+        self._linkerd = self._admin.has_linkerd()
+        self._gateway_api = self._admin.has_gateway_api()
+        if self.mesh:
+            problem = self._admin.linkerd_problem()
+            if problem:
+                pytest.skip(KUBE_SKIP_LINKERD.format(name=self.name, detail=problem, setup=KUBE_LINKERD_SETUP))
+        if self._argocd:
+            self._sweep_gitops()
         self._created = True
         result = self._admin.run("apply", "-f", "-", input=json.dumps({"apiVersion": "v1", "kind": "List",
                                                                        "items": self._bootstrap()}))
@@ -3883,7 +5091,8 @@ class KubeLab:
         host_ok = f"(h == '{domain}' || h.endsWith('.{domain}'))"
         routes = [{"apiGroups": ["networking.k8s.io"], "apiVersions": ["*"], "resources": ["ingresses"], "operations": ["CREATE", "UPDATE"]},
                   {"apiGroups": ["gateway.networking.k8s.io"], "apiVersions": ["*"], "resources": ["httproutes"],
-                   "operations": ["CREATE", "UPDATE"]}]
+                   "operations": ["CREATE", "UPDATE"]},
+                  {"apiGroups": [""], "apiVersions": ["*"], "resources": ["services"], "operations": ["CREATE", "UPDATE"]}]
         route_rules = [
             {"expression": "request.resource.resource != 'ingresses' || (has(object.spec.ingressClassName) && "
                            f"object.spec.ingressClassName == '{KUBE_INGRESS_CLASS}' && !has(object.spec.defaultBackend) && "
@@ -3897,6 +5106,60 @@ class KubeLab:
                            "(!has(p.group) || p.group == 'gateway.networking.k8s.io')) && has(object.spec.hostnames) && "
                            f"size(object.spec.hostnames) > 0 && object.spec.hostnames.all(h, {host_ok}))",
              "message": f"HTTPRoute của bài chỉ gắn vào {KUBE_GATEWAY_NAMESPACE}/{KUBE_GATEWAY_NAME}, hostnames là {domain} hay tên con"},
+            {"expression": "request.resource.resource != 'services' || !has(object.spec.externalIPs) || "
+                           "size(object.spec.externalIPs) == 0",
+             "message": "Service của bài không được có externalIPs (chặn được traffic tới địa chỉ đó của mọi pod, CVE-2020-8554)"},
+        ]
+        url = kube_git_url(self.namespace)
+        applications = [{"apiGroups": ["argoproj.io"], "apiVersions": ["*"], "resources": ["applications"],
+                         "operations": ["CREATE", "UPDATE"]}]
+        argocd_rules = [
+            {"expression": f"has(object.spec.project) && object.spec.project == '{self.namespace}'",
+             "message": f"Application của bài phải dùng project riêng của lab: spec.project {self.namespace}"},
+            {"expression": f"has(object.spec.destination) && has(object.spec.destination.namespace) && "
+                           f"object.spec.destination.namespace == '{self.namespace}' && "
+                           f"(has(object.spec.destination.server) || has(object.spec.destination.name)) && "
+                           f"(!has(object.spec.destination.server) || object.spec.destination.server == '{KUBE_IN_CLUSTER}') && "
+                           "(!has(object.spec.destination.name) || object.spec.destination.name == 'in-cluster')",
+             "message": f"Application của bài chỉ sync vào namespace {self.namespace} trên cluster hiện tại ({KUBE_IN_CLUSTER})"},
+            {"expression": f"(has(object.spec.source) || has(object.spec.sources)) && "
+                           f"(!has(object.spec.source) || object.spec.source.repoURL == '{url}') && "
+                           f"(!has(object.spec.sources) || object.spec.sources.all(s, s.repoURL == '{url}')) && "
+                           "!has(object.spec.sourceHydrator)",
+             "message": f"Application của bài chỉ lấy nguồn từ repo git của lab: {url}"},
+            {"expression": "!has(object.operation) || !has(object.operation.sync) || "
+                           "(request.operation == 'UPDATE' && has(oldObject.operation) && object.operation == oldObject.operation) || "
+                           + " && ".join(f"!has(object.operation.sync.{key})" for key in _KUBE_OPERATION_SOURCES),
+             "message": "Application của bài không được đặt operation.sync.source, sources hay manifests (nguồn ngoài spec)"},
+            {"expression": "request.operation == 'CREATE' ? !has(object.status) : ((!has(object.status) && !has(oldObject.status)) || "
+                           "(has(object.status) && has(oldObject.status) && object.status == oldObject.status))",
+             "message": "status của Application do ArgoCD ghi; bài không được tạo hay sửa status"},
+        ]
+        ns = self.namespace
+
+        def local(ref: str) -> str:
+            return (f"((!has({ref}.namespace) || {ref}.namespace == '' || {ref}.namespace == '{ns}') && "
+                    f"(!has({ref}.kind) || {ref}.kind.lowerAscii() != 'namespace' || {ref}.name == '{ns}'))")
+
+        identity = (r"^(\*|[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)\." + ns + r"\." + KUBE_LINKERD_IDENTITY_SUFFIX.replace(".", r"\.")
+                    + "$").replace("\\", "\\\\")
+        mesh = [{"apiGroups": [KUBE_LINKERD_GROUP], "apiVersions": ["*"],
+                 "resources": ["authorizationpolicies", "meshtlsauthentications", "httproutes"], "operations": ["CREATE", "UPDATE"]}]
+        mesh_rules = [
+            {"expression": "request.resource.resource != 'authorizationpolicies' || (has(object.spec.targetRef) && "
+                           f"{local('object.spec.targetRef')} && (!has(object.spec.requiredAuthenticationRefs) || "
+                           f"object.spec.requiredAuthenticationRefs.all(r, {local('r')})))",
+             "message": f"AuthorizationPolicy của bài chỉ trỏ targetRef, requiredAuthenticationRefs trong namespace {ns}"},
+            {"expression": "request.resource.resource != 'meshtlsauthentications' || ((!has(object.spec.identities) || "
+                           f"object.spec.identities.all(i, i.matches('{identity}'))) && (!has(object.spec.identityRefs) || "
+                           f"object.spec.identityRefs.all(r, {local('r')} && has(r.kind) && "
+                           "r.kind.lowerAscii() in ['serviceaccount', 'namespace'] && r.name != '*')))",
+             "message": f"MeshTLSAuthentication của bài chỉ nêu danh tính <serviceaccount hay *>.{ns}.{KUBE_LINKERD_IDENTITY_SUFFIX} "
+                        "và identityRefs ServiceAccount, Namespace của lab"},
+            {"expression": "request.resource.resource != 'httproutes' || ((!has(object.spec.parentRefs) || "
+                           f"object.spec.parentRefs.all(r, {local('r')})) && (!has(object.spec.rules) || object.spec.rules.all(x, "
+                           f"!has(x.backendRefs) || x.backendRefs.all(r, {local('r')}))))",
+             "message": f"HTTPRoute (policy.linkerd.io) của bài chỉ trỏ parentRefs, backendRefs trong namespace {ns}"},
         ]
         items = [
             *policy(self.namespace, everything,
@@ -3907,10 +5170,15 @@ class KubeLab:
                     f"object.metadata.name == '{self._probe}-rbac')", rbac_rules),
             *policy(f"{self.namespace}-routes", routes,
                     f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-routes')", route_rules),
+            *policy(f"{self.namespace}-argocd", applications,
+                    f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-argocd')", argocd_rules),
+            *policy(f"{self.namespace}-mesh", mesh,
+                    f"{lab_identity} || (request.dryRun == true && object.metadata.name == '{self._probe}-mesh')", mesh_rules),
             *policy(f"{self.namespace}-pv", volumes,
                     f"!{_KUBE_SYSTEM_USER} && !(request.dryRun == true && object.metadata.name.endsWith('-probe-pv') && "
                     f"object.metadata.name != '{self._probe}-pv')", no_host_pv),
-            {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": self.namespace, "labels": ns_labels}},
+            {"apiVersion": "v1", "kind": "Namespace", "metadata": {
+                "name": self.namespace, "labels": ns_labels, **({"annotations": {"linkerd.io/inject": "enabled"}} if self.mesh else {})}},
             {"apiVersion": "v1", "kind": "ServiceAccount", "metadata": meta(_KUBE_SA, True), "automountServiceAccountToken": False},
             {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role", "metadata": meta(_KUBE_SA, True),
              "rules": _KUBE_LEARNER_RULES},
@@ -3951,7 +5219,7 @@ class KubeLab:
     def _wait_ready(self) -> None:
         """Policy và RBAC mới tạo chỉ có hiệu lực sau khi API server đồng bộ (vài giây). Chờ tới khi mỗi lần tạo thử bằng admin
         (dry-run, tên probe riêng của lab) bị đúng policy tương ứng của lab chặn: ClusterRole không nhãn, ClusterRole nhãn
-        aggregate-to, PV hostPath, Ingress không class. Rồi chờ token
+        aggregate-to, PV hostPath, Ingress không class, và (cluster có ArgoCD) Application dùng project `default`. Rồi chờ token
         của lab được tạo pod, mới trao kubeconfig."""
         probes = {
             self.namespace: {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "ClusterRole",
@@ -3966,6 +5234,16 @@ class KubeLab:
                                        "metadata": {"name": f"{self._probe}-rbac", "labels": {f"{_KUBE_AGGREGATE}view": "true"}},
                                        "rules": []},
         }
+        if self._argocd:
+            probes[f"{self.namespace}-argocd"] = {
+                "apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+                "metadata": {"name": f"{self._probe}-argocd", "namespace": self.namespace},
+                "spec": {"project": "default", "destination": {"server": KUBE_IN_CLUSTER, "namespace": self.namespace},
+                         "source": {"repoURL": kube_git_url(self.namespace), "path": ".", "targetRevision": "main"}}}
+        if self._linkerd:
+            probes[f"{self.namespace}-mesh"] = {
+                "apiVersion": f"{KUBE_LINKERD_GROUP}/v1alpha1", "kind": "MeshTLSAuthentication",
+                "metadata": {"name": f"{self._probe}-mesh", "namespace": self.namespace}, "spec": {"identities": ["*"]}}
         deadline = time.monotonic() + 30
         for name, probe in probes.items():
             while True:
@@ -4106,6 +5384,356 @@ class KubeLab:
             pytest.fail(f"Chart {chart.name} bị từ chối trước khi cài:\n- " + "\n- ".join(problems))
         return self.helm("upgrade", "--install", release, str(chart), "--namespace", self.namespace, *args, readonly=[chart],
                          check=check)
+
+    def _require_argocd(self, detail: str) -> None:
+        if not self._argocd:
+            pytest.skip(KUBE_SKIP_ARGOCD.format(name=self.name, detail=detail, setup=KUBE_ARGOCD_SETUP, key=KUBE_ARGOCD_KEY_SETUP))
+
+    @property
+    def repo_url(self) -> str:
+        """URL nội bộ của repo git riêng của lab (`git://git.devops-git.svc.cluster.local/<namespace>.git`), dùng trong
+        `spec.source.repoURL` của Application. Chỉ repo-server của ArgoCD đọc được (NetworkPolicy của `devops-git`)."""
+        return kube_git_url(self.namespace)
+
+    def argocd_project(self) -> str:
+        """Bằng quyền admin tạo AppProject `devops-ex-<id>` trong namespace `argocd` (nhãn của lab, xoá trong `close()`):
+        `sourceRepos` chỉ `repo_url`, `destinations` chỉ namespace của lab trên `https://kubernetes.default.svc`,
+        `sourceNamespaces` chỉ namespace của lab, không có `clusterResourceWhitelist` (không object cluster-scoped nào), và
+        `destinationServiceAccounts` buộc ArgoCD sync bằng chính ServiceAccount `devops-ex-learner` của lab (impersonation):
+        object trong repo chỉ được tạo khi token của lab tạo được, qua đúng RBAC, policy và Pod Security của lab. Trả tên
+        project để ghi vào `spec.project`."""
+        self._require_entered()
+        self._require_argocd("chưa có CRD applications.argoproj.io")
+        project = {
+            "apiVersion": "argoproj.io/v1alpha1", "kind": "AppProject",
+            "metadata": {"name": self.namespace, "namespace": KUBE_ARGOCD_NAMESPACE, "labels": {_KUBE_LABEL_KEY: self.id}},
+            "spec": {
+                "description": f"Project riêng của lab {self.namespace}",
+                "sourceRepos": [self.repo_url],
+                "sourceNamespaces": [self.namespace],
+                "destinations": [{"server": KUBE_IN_CLUSTER, "namespace": self.namespace}],
+                "clusterResourceWhitelist": [],
+                "destinationServiceAccounts": [{"server": KUBE_IN_CLUSTER, "namespace": self.namespace,
+                                                "defaultServiceAccount": _KUBE_SA}],
+            },
+        }
+        self._project = True
+        result = self._admin.run("apply", "-f", "-", input=json.dumps(project))
+        if result.returncode != 0:
+            pytest.fail(f"Không tạo được AppProject {self.namespace}: {_output_tail(result)}")
+        return self.namespace
+
+    def _git_pods(self, running: bool = False) -> list[str]:
+        argv = ["-n", KUBE_GIT_NAMESPACE, "get", "pods", "-l", "app.kubernetes.io/name=git", "-o", "jsonpath={.items[*].metadata.name}"]
+        result = self._admin.run(*argv, *(["--field-selector=status.phase=Running"] if running else []))
+        return [p for p in result.stdout.split() if re.fullmatch(r"[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?", p)] if result.returncode == 0 else []
+
+    def _git_exec(self, pod: str, *argv: str) -> subprocess.CompletedProcess:
+        return self._admin.run("-n", KUBE_GIT_NAMESPACE, "exec", pod, "-c", "git", "--", *argv, timeout=120)
+
+    def gitops_repo(self, path: Path) -> str:
+        """Chép tệp thường trong thư mục `path` (bỏ `.git`, không nhận symlink, không nhận tệp có khoá riêng age) vào một repo git
+        mới của lab (`GitRepo`, `SAFE_GIT_CONFIG`, tác giả và ngày cố định), commit, rồi bằng quyền admin đẩy lên repo riêng
+        `<namespace>.git` của git server (mỗi lần tối đa `KUBE_GITOPS_MAX_FILES` tệp và `KUBE_GITOPS_MAX_BYTES` byte, đếm theo byte
+        thật đọc được lúc chép chứ không theo kích thước khai báo; bundle của cả lịch sử tối đa `KUBE_GITOPS_MAX_REPO_BYTES`;
+        `kubectl cp` bundle vào pod rồi `git fetch` vào repo bare; git server chỉ cho đọc, không
+        ai push được qua mạng). Gọi lại với nội dung mới là thêm một commit lên `main` (lịch sử giữ nguyên) và yêu cầu mọi
+        Application của lab refresh ngay. `gitops_revision` là SHA của commit vừa đẩy. Trả `repo_url`; `close()` xoá repo."""
+        self._require_entered()
+        self._require_argocd("chưa có CRD applications.argoproj.io")
+        source = Path(path).resolve()
+        if not source.is_dir():
+            raise ValueError(f"gitops_repo cần thư mục, không thấy {source}")
+        files = []
+        for item in sorted(source.rglob("*")):
+            rel = item.relative_to(source)
+            if ".git" in rel.parts:
+                continue
+            if item.is_symlink():
+                pytest.fail(f"gitops_repo: {rel} là symlink; repo GitOps của bài chỉ nhận tệp thường")
+            if item.is_file():
+                files.append(rel)
+        limit = (f"repo GitOps của bài tối đa {KUBE_GITOPS_MAX_FILES} tệp và {KUBE_GITOPS_MAX_BYTES // (1024 * 1024)} MiB mỗi lần "
+                 "(git server dùng chung, lưu trong emptyDir)")
+        if len(files) > KUBE_GITOPS_MAX_FILES:
+            pytest.fail(f"gitops_repo: {len(files)} tệp; {limit}")
+        contents: dict[Path, bytes] = {}
+        remaining = KUBE_GITOPS_MAX_BYTES
+        for rel in files:
+            try:
+                fd = os.open(source / rel, os.O_RDONLY | os.O_NOFOLLOW)
+            except OSError as error:
+                pytest.fail(f"gitops_repo: không đọc được {rel} như tệp thường ({error.strerror})")
+            with os.fdopen(fd, "rb") as handle:
+                data = handle.read(remaining + 1)
+            if len(data) > remaining:
+                pytest.fail(f"gitops_repo: vượt {KUBE_GITOPS_MAX_BYTES} byte khi chép tới {rel}; {limit}")
+            remaining -= len(data)
+            contents[rel] = data
+        leaked = [str(rel) for rel, data in contents.items() if b"AGE-SECRET-KEY-" in data]
+        if leaked:
+            pytest.fail(f"gitops_repo: {', '.join(leaked)} chứa khoá riêng age (AGE-SECRET-KEY-...); khoá riêng không bao giờ được "
+                        "commit vào repo, chỉ public key (age1...) nằm trong .sops.yaml")
+        pods = self._git_pods(running=True)
+        if not pods:
+            pytest.skip(KUBE_SKIP_ARGOCD.format(name=self.name, detail=f"git server trong {KUBE_GIT_NAMESPACE} chưa chạy",
+                                                setup=KUBE_ARGOCD_SETUP, key=KUBE_ARGOCD_KEY_SETUP))
+        work, home = self.root / "gitops" / "repo", self.root / "gitops" / "home"
+        if self._git_repo is None:
+            work.mkdir(parents=True)
+            home.mkdir(parents=True)
+            self._git_repo = GitRepo(work, home)
+            self._git_repo.out("init", "--quiet")
+        else:
+            for child in work.iterdir():
+                if child.name != ".git":
+                    shutil.rmtree(child) if child.is_dir() and not child.is_symlink() else child.unlink()
+        for rel, data in contents.items():
+            (work / rel).parent.mkdir(parents=True, exist_ok=True)
+            (work / rel).write_bytes(data)
+        repo = self._git_repo
+        repo.out("add", "--all")
+        repo.out("commit", "--quiet", "--allow-empty", "-m", f"{self.namespace}: {source.name}")
+        bundle = self._admin.home / f"{self.namespace}.bundle"
+        repo.out("bundle", "create", str(bundle), "main")
+        if bundle.stat().st_size > KUBE_GITOPS_MAX_REPO_BYTES:
+            size = bundle.stat().st_size
+            bundle.unlink()
+            if self.gitops_revision:
+                repo.out("reset", "--quiet", "--soft", self.gitops_revision)
+            pytest.fail(f"gitops_repo: lịch sử repo của lab đã {size} byte, vượt {KUBE_GITOPS_MAX_REPO_BYTES // (1024 * 1024)} MiB "
+                        "cho cả lab (mỗi lần gọi là thêm một commit); gom thay đổi lại hay dùng lab mới")
+        pod, remote, incoming = pods[0], f"{KUBE_GIT_ROOT}/{self.namespace}.git", f"/tmp/{self.namespace}.bundle"
+        self._git_pushed = True
+        try:
+            result = self._admin.run("cp", str(bundle), f"{KUBE_GIT_NAMESPACE}/{pod}:{incoming}", "-c", "git", timeout=120)
+            for argv in (("git", *SAFE_GIT_CONFIG, "init", "--quiet", "--bare", remote),
+                         ("git", *SAFE_GIT_CONFIG, "-C", remote, "fetch", "--quiet", "--force", incoming, "+main:main")):
+                if result.returncode == 0:
+                    result = self._git_exec(pod, *argv)
+            if result.returncode != 0:
+                pytest.fail(f"Không đẩy được repo {self.namespace}.git lên git server: {_output_tail(result)}")
+        finally:
+            bundle.unlink(missing_ok=True)
+            self._git_exec(pod, "rm", "-f", incoming)
+        self.gitops_revision = repo.out("rev-parse", "HEAD")
+        apps = [a for a in self.kubectl("get", "applications.argoproj.io", "-o", "name", check=False).stdout.split()
+                if a.startswith("application.argoproj.io/")]
+        if apps:
+            self.kubectl("annotate", *apps, "argocd.argoproj.io/refresh=hard", "--overwrite", check=False)
+        return self.repo_url
+
+    def argocd_wait(self, app: str, *, health: str | None = "Healthy", sync: str | None = "Synced", timeout: float = 180,
+                    latest: bool = True) -> dict:
+        """Chờ Application `app` trong namespace của lab có `status.health.status == health` và `status.sync.status == sync`
+        (`None` là bỏ qua điều kiện đó), không còn thao tác sync đang chạy, và (`latest`, sau `gitops_repo`) trạng thái tính trên
+        đúng commit cuối cùng đã đẩy. Đọc bằng token của lab. Trả `status` của Application; quá `timeout` giây thì fail kèm
+        health, sync, revision, thông điệp của thao tác sync và condition (không bao giờ in object hay giá trị Secret)."""
+        self._require_entered()
+        if not isinstance(app, str) or not _KUBE_ARGO_APP.fullmatch(app):
+            raise ValueError(f"Tên Application {app!r} không hợp lệ")
+        if not 1 <= timeout <= 900:
+            raise ValueError(f"timeout {timeout!r} phải từ 1 tới 900 giây")
+        deadline = time.monotonic() + timeout
+        status: dict = {}
+        while True:
+            result = self.kubectl("get", "applications.argoproj.io", app, "-o", "json", check=False)
+            try:
+                status = (json.loads(result.stdout).get("status") or {}) if result.returncode == 0 else {}
+            except ValueError:
+                status = {}
+            got_sync = status.get("sync") or {}
+            revisions = [got_sync.get("revision"), *(got_sync.get("revisions") or [])]
+            running = (status.get("operationState") or {}).get("phase") in ("Running", "Terminating")
+            if (status and (health is None or (status.get("health") or {}).get("status") == health)
+                    and (sync is None or got_sync.get("status") == sync) and not running
+                    and (not latest or not self.gitops_revision or self.gitops_revision in revisions)):
+                return status
+            if time.monotonic() > deadline:
+                break
+            time.sleep(2)
+        operation = status.get("operationState") or {}
+        conditions = "; ".join(f"{c.get('type')}: {c.get('message')}" for c in status.get("conditions") or [] if isinstance(c, dict))
+        detail = (f"health={(status.get('health') or {}).get('status')}, sync={(status.get('sync') or {}).get('status')}, "
+                  f"revision={(status.get('sync') or {}).get('revision')}, commit cuối của gitops_repo={self.gitops_revision or '-'}, "
+                  f"thao tác sync={operation.get('phase')}: {operation.get('message')}; condition: {conditions or '-'}")
+        pytest.fail(f"Application {app} chưa đạt health={health}, sync={sync} sau {timeout:.0f}s ({detail[:DOCKER_LOG_CHARS]})")
+
+    @property
+    def age_public_key(self) -> str:
+        """Public key (`age1...`) của khoá age dùng chung mà admin tạo cho ArgoCD, đọc từ ConfigMap
+        `argocd/devops-sops-age-public`. Khoá riêng chỉ nằm trong Secret `argocd/devops-sops-age`, chỉ mount vào sidecar CMP
+        `sops-kustomize` của repo-server; testkit không bao giờ đọc Secret đó, và không có gì của nó vào sandbox của người học."""
+        self._require_entered()
+        if self._age_public is None:
+            result = self._admin.run("-n", KUBE_ARGOCD_NAMESPACE, "get", "configmap", KUBE_ARGOCD_AGE_PUBLIC, "-o",
+                                     "jsonpath={.data.recipient}")
+            value = result.stdout.strip()
+            if result.returncode != 0 or not _KUBE_AGE_RECIPIENT.fullmatch(value):
+                pytest.skip(KUBE_SKIP_ARGOCD.format(name=self.name, detail=f"thiếu ConfigMap {KUBE_ARGOCD_NAMESPACE}/"
+                                                    f"{KUBE_ARGOCD_AGE_PUBLIC} có recipient age1...", setup=KUBE_ARGOCD_SETUP,
+                                                    key=KUBE_ARGOCD_KEY_SETUP))
+            self._age_public = value
+        return self._age_public
+
+    @property
+    def sops_age_recipient(self) -> str:
+        """Recipient cho `sops encrypt --age <recipient>` và `creation_rules[].age` của `.sops.yaml`: chính `age_public_key`."""
+        return self.age_public_key
+
+    def mesh_status(self, workload: str) -> dict:
+        """Trạng thái mesh của một workload trong namespace của lab, đọc bằng kubeconfig admin qua lệnh cố định của testkit:
+        `get` object và pod, rồi `get --raw` endpoint admin `/metrics`, `/env.json` của proxy Linkerd (cổng 4191) qua API server.
+        `workload` là `deployment/<tên>` (mặc định khi chỉ ghi tên), `statefulset/<tên>`, `daemonset/<tên>` hay `pod/<tên>`.
+
+        Trả dict: `pods` (pod đang Running), `injected` (mọi pod có container `linkerd-proxy`), `identity` (danh tính mTLS của
+        workload, `<sa>.<namespace>.serviceaccount.identity.linkerd.cluster.local`, None khi chưa có), `mtls` (mọi pod đã nhận chứng chỉ
+        từ linkerd-identity), phía inbound trên cổng của ứng dụng (không tính cổng admin): `success`, `failure` (response 5xx),
+        `denied` (request bị AuthorizationPolicy chặn), `plaintext` (request không qua mTLS), `clients` (danh tính client đã
+        gọi qua mTLS); phía outbound: `outbound_success`, `outbound_failure` (kết quả cuối mà ứng dụng nhận, sau retry),
+        `retries` (lần thử lại do HTTPRoute), `servers` (danh tính server đã gọi qua mTLS). Số đếm cộng dồn từ lúc proxy khởi
+        động (pod khởi động lại là về 0): bài chấm nên gọi trước và sau khi tạo tải rồi so hiệu số, không so số tuyệt đối.
+
+        Pod chỉ tính là `injected` khi có annotation `linkerd.io/proxy-version` đúng bản đã ghim và container `linkerd-proxy`
+        chạy đúng image proxy đã ghim (`_linkerd_injected`); `identity`/`mtls` chỉ đúng khi `LINKERD2_PROXY_IDENTITY_LOCAL_NAME`
+        của proxy bằng `<serviceAccountName hay default>.<namespace>.serviceaccount.identity.linkerd.cluster.local` và proxy đã có
+        chứng chỉ. Container tự đặt tên `linkerd-proxy` để giả số liệu trên cổng 4191 vì thế không qua được."""
+        self._require_entered()
+        match = _KUBE_WORKLOAD.fullmatch(workload) if isinstance(workload, str) else None
+        if not match:
+            raise ValueError(f"workload {workload!r} phải là <tên>, deployment/<tên>, statefulset/<tên>, daemonset/<tên> hay "
+                             "pod/<tên> trong namespace của lab")
+        kind, name = match.group(1) or "deployment", match.group(2)
+        ns = ("-n", self.namespace)
+        if kind == "pod":
+            selector = None
+        else:
+            found = self._admin.run(*ns, "get", kind, name, "-o", "json")
+            if found.returncode != 0:
+                pytest.fail(f"Không đọc được {kind}/{name} trong {self.namespace}: {_output_tail(found)}")
+            labels = ((json.loads(found.stdout).get("spec") or {}).get("selector") or {}).get("matchLabels") or {}
+            if not labels:
+                pytest.fail(f"{kind}/{name} không có spec.selector.matchLabels để tìm pod")
+            selector = ",".join(f"{key}={value}" for key, value in sorted(labels.items()))
+        listed = self._admin.run(*ns, "get", "pods", *(("-l", selector) if selector else (name,)), "-o", "json")
+        if listed.returncode != 0:
+            pytest.fail(f"Không liệt kê được pod của {kind}/{name}: {_output_tail(listed)}")
+        data = json.loads(listed.stdout or "{}")
+        items = data.get("items", [data]) if data.get("kind") == "List" or "items" in data else [data]
+        pods = [item for item in items if (item.get("status") or {}).get("phase") == "Running"
+                and not (item.get("metadata") or {}).get("deletionTimestamp")]
+        status = {"workload": f"{kind}/{name}", "pods": sorted(p["metadata"]["name"] for p in pods), "injected": bool(pods),
+                  "identity": None, "mtls": bool(pods), "success": 0, "failure": 0, "denied": 0, "plaintext": 0, "clients": [],
+                  "outbound_success": 0, "outbound_failure": 0, "retries": 0, "servers": []}
+        identities, clients, servers = set(), set(), set()
+        for pod in pods:
+            if not _linkerd_injected(pod):
+                status["injected"] = status["mtls"] = False
+                continue
+            spec = pod.get("spec") or {}
+            expected = f"{spec.get('serviceAccountName') or 'default'}.{self.namespace}.{KUBE_LINKERD_IDENTITY_SUFFIX}"
+            base = f"/api/v1/namespaces/{self.namespace}/pods/{pod['metadata']['name']}:{KUBE_LINKERD_ADMIN_PORT}/proxy"
+            env = self._admin.run("get", "--raw", f"{base}/env.json")
+            metrics = self._admin.run("get", "--raw", f"{base}/metrics")
+            if env.returncode != 0 or metrics.returncode != 0:
+                status["mtls"] = False
+                continue
+            try:
+                local = json.loads(env.stdout).get("LINKERD2_PROXY_IDENTITY_LOCAL_NAME")
+            except ValueError:
+                local = None
+            counts = _linkerd_metrics(metrics.stdout)
+            if local == expected and counts["cert"]:
+                identities.add(local)
+            else:
+                status["mtls"] = False
+            for key in ("success", "failure", "denied", "plaintext", "outbound_success", "outbound_failure", "retries"):
+                status[key] += counts[key]
+            clients |= counts["clients"]
+            servers |= counts["servers"]
+        status["identity"] = next(iter(identities)) if len(identities) == 1 and status["mtls"] else None
+        status["clients"], status["servers"] = sorted(clients), sorted(servers)
+        return status
+
+    def _sweep_gitops(self) -> None:
+        """Dọn phần GitOps của lab bị giết trước khi kịp `close()` (SIGKILL): repo `devops-ex-<id>.git`, bundle trong pod git và
+        AppProject `devops-ex-<id>` mà namespace `devops-ex-<id>` không còn. Lab đang chạy luôn có namespace nên không bị đụng."""
+        listed = self._admin.run("get", "namespaces", "-o", "name")
+        if listed.returncode != 0:
+            return
+        alive = {n.removeprefix("namespace/") for n in listed.stdout.split()}
+        stale = lambda name: re.fullmatch(rf"{DOCKER_PREFIX}[0-9a-f]{{8}}", name) and name not in alive
+        projects = self._admin.run("-n", KUBE_ARGOCD_NAMESPACE, "get", "appprojects.argoproj.io", "-l", _KUBE_LABEL_KEY, "-o", "name")
+        for name in projects.stdout.split() if projects.returncode == 0 else []:
+            project = name.split("/", 1)[-1]
+            if stale(project):
+                self._admin.run("-n", KUBE_ARGOCD_NAMESPACE, "delete", "appprojects.argoproj.io", project, "--ignore-not-found")
+        for pod in self._git_pods(running=True):
+            entries = self._git_exec(pod, "ls", "-1A", KUBE_GIT_ROOT, "/tmp")
+            names = {line.removesuffix(".git").removesuffix(".bundle").rstrip(":").rsplit("/", 1)[-1]
+                     for line in entries.stdout.split()}
+            old = sorted(n for n in names if stale(n))
+            if old:
+                self._git_exec(pod, "rm", "-rf", *(f"{KUBE_GIT_ROOT}/{n}.git" for n in old), *(f"/tmp/{n}.bundle" for n in old))
+
+    def _delete_applications(self, errors: list[str]) -> None:
+        listed = self._admin.run("-n", self.namespace, "get", "applications.argoproj.io", "-o", "name", "--ignore-not-found")
+        names = [n for n in listed.stdout.split() if n.startswith("application.argoproj.io/")]
+        if not names:
+            return
+        result = self._admin.run("-n", self.namespace, "delete", *names, "--ignore-not-found", "--wait=true", "--timeout=60s",
+                                 timeout=90)
+        if result.returncode == 0:
+            return
+        for name in names:
+            self._admin.run("-n", self.namespace, "patch", name, "--type=merge", "-p", '{"metadata":{"finalizers":null}}')
+        result = self._admin.run("-n", self.namespace, "delete", *names, "--ignore-not-found", "--wait=true", "--timeout=30s",
+                                 timeout=60)
+        if result.returncode != 0:
+            errors.append(f"xoá Application trong {self.namespace}: {_output_tail(result)}")
+
+    def _release_argocd_hooks(self, errors: list[str]) -> None:
+        """ArgoCD gắn finalizer `hook-finalizer` cho object hook (Job PreSync...) và chỉ gỡ khi hook kết thúc. Application bị xoá
+        lúc hook còn chạy thì finalizer ở lại, namespace kẹt Terminating. Gỡ đúng finalizer đó trên object trong namespace của lab
+        (hook được apply bằng token của lab nên chỉ thuộc các kind trong Role của lab). Chỉ xét các kind trong
+        `_KUBE_HOOK_KINDS`, cộng bốn kind `policy.linkerd.io` trong Role của lab khi cluster có Linkerd và
+        `httproutes.gateway.networking.k8s.io` khi cluster có CRD của Gateway API: hook là custom resource
+        thuộc CRD trong nhóm `api_group` của lab **không** được gỡ finalizer ở đây; bài dùng hook kiểu đó phải tự dọn trước khi
+        đóng lab."""
+        kinds = (_KUBE_HOOK_KINDS + "".join(f",{r}.{KUBE_LINKERD_GROUP}" for r in KUBE_LINKERD_RESOURCES if self._linkerd)
+                 + (",httproutes.gateway.networking.k8s.io" if self._gateway_api else ""))
+        listed = self._admin.run("-n", self.namespace, "get", kinds, "-o", "json", "--ignore-not-found")
+        if listed.returncode != 0:
+            errors.append(f"liệt kê hook ArgoCD trong {self.namespace}: {_output_tail(listed)}")
+            return
+        try:
+            items = json.loads(listed.stdout or "{}").get("items") or []
+        except ValueError:
+            items = []
+        for item in items:
+            metadata = item.get("metadata") or {}
+            finalizers = metadata.get("finalizers") or []
+            if KUBE_ARGOCD_HOOK_FINALIZER not in finalizers:
+                continue
+            group = item.get("apiVersion", "").rpartition("/")[0]
+            ref = f"{item.get('kind', '').lower()}{'.' + group if group else ''}/{metadata.get('name')}"
+            rest = [f for f in finalizers if f != KUBE_ARGOCD_HOOK_FINALIZER]
+            result = self._admin.run("-n", self.namespace, "patch", ref, "--type=merge", "-p",
+                                     json.dumps({"metadata": {"finalizers": rest or None}}))
+            if result.returncode != 0:
+                errors.append(f"gỡ {KUBE_ARGOCD_HOOK_FINALIZER} khỏi {ref}: {_output_tail(result)}")
+
+    def _remove_gitops(self, errors: list[str]) -> None:
+        if self._project:
+            result = self._admin.run("-n", KUBE_ARGOCD_NAMESPACE, "delete", "appprojects.argoproj.io", "-l", self.label,
+                                     "--ignore-not-found", "--wait=true", "--timeout=60s", timeout=90)
+            if result.returncode != 0:
+                errors.append(f"xoá AppProject {self.namespace}: {_output_tail(result)}")
+        if self._git_pushed:
+            for pod in self._git_pods():
+                result = self._git_exec(pod, "rm", "-rf", f"{KUBE_GIT_ROOT}/{self.namespace}.git", f"/tmp/{self.namespace}.bundle")
+                if result.returncode != 0:
+                    errors.append(f"xoá repo {self.namespace}.git trong {KUBE_GIT_NAMESPACE}/{pod}: {_output_tail(result)}")
 
     def _worker(self, node) -> str:
         if not isinstance(node, str) or not _KUBE_WORKER.fullmatch(node) or node not in kind_nodes(self.name):
@@ -4258,7 +5886,7 @@ class KubeLab:
         `~/.cache/devops-track/kube-nodes.lock` (flock, chờ tối đa `KUBE_NODE_LOCK_TIMEOUT`) tới khi `close()` hoàn tác xong: hai
         lab dùng `node_action` không bao giờ chạy chồng nhau, kể cả ở hai tiến trình pytest. Test dùng `node_action` mang marker
         `kube_nodes`. Sau khi hoàn tác, `close()` chờ Deployment trong `KUBE_SHARED_NAMESPACES` (CoreDNS, local-path, Gateway,
-        metrics-server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node. `timeout` là
+        metrics-server, ArgoCD, git server) available lại, để bài chạy sau không skip vì thành phần dùng chung đang dời node. `timeout` là
         `--timeout` của drain (10 tới 120 giây).
 
         Mỗi thao tác được ghi vào `kube-nodes.state.json` cạnh khoá (chỉ đọc, ghi, xoá khi đang giữ khoá) trước khi chạy và xoá khi
@@ -4337,14 +5965,20 @@ class KubeLab:
             self._wait_shared_ready(errors)
 
     def close(self) -> None:
-        """Gỡ thao tác node của lab, xoá namespace, chờ rồi xoá PV có `claimRef` trỏ namespace của lab (PV do local-path tạo
-        cho PVC của bài không mang nhãn), xoá object cluster-scoped có nhãn của lab, xoá thư mục PV local trong worker."""
+        """Gỡ thao tác node của lab, xoá Application của ArgoCD trong namespace của lab (gỡ finalizer nếu ArgoCD không xử lý kịp)
+        và gỡ `hook-finalizer` khỏi hook còn dở,
+        xoá namespace, chờ rồi xoá PV có `claimRef` trỏ namespace của lab (PV do local-path tạo cho PVC của bài không mang nhãn),
+        xoá object cluster-scoped có nhãn của lab, AppProject của lab và repo git của lab trên git server, xoá thư mục PV local
+        trong worker."""
         import warnings
 
         errors = []
         try:
             if self._admin is not None and self._created:
                 self._restore_nodes(errors)
+                if self._argocd:
+                    self._delete_applications(errors)
+                    self._release_argocd_hooks(errors)
                 result = self._admin.run("delete", "namespace", self.namespace, "--ignore-not-found", "--wait=true",
                                          f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
                 if result.returncode != 0:
@@ -4363,6 +5997,7 @@ class KubeLab:
                                          f"--timeout={KUBE_CLEANUP_TIMEOUT}s", timeout=KUBE_CLEANUP_TIMEOUT + 30)
                 if result.returncode != 0:
                     errors.append(f"xoá object cluster-scoped nhãn {self.label}: {_output_tail(result)}")
+                self._remove_gitops(errors)
                 for node in sorted(self._local_nodes):
                     removed = kind_node_exec(node, "rm", "-rf", f"{KUBE_LOCAL_PV_ROOT}/{self.id}")
                     if removed.returncode != 0:
@@ -4381,6 +6016,435 @@ class KubeLab:
                                   f"và kubectl delete <loại> -l {self.label}:\n" + "\n".join(errors))
             warnings.warn(self.cleanup_error, UserWarning)
 
+
+
+FAULT_CODES = ("kill", "net-delay", "disk-full", "redis-stop", "bad-config")
+FAULT_DOCKER_CODES = ("kill", "net-delay", "disk-full", "redis-stop")
+FAULT_KUBE_CODES = ("kill", "disk-full", "redis-stop", "bad-config")
+FAULT_NETEM_BASE = "alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a"
+FAULT_NETEM_IMAGE = "devops-track/netem:1.0"
+FAULT_NETEM_DIR = ROOT / "setup" / "netem"
+FAULT_NETEM_BUILD = f"docker pull {FAULT_NETEM_BASE} && docker build --pull=false -t {FAULT_NETEM_IMAGE} setup/netem"
+FAULT_DELAY_MS = 400
+FAULT_FILL_LIMIT = 256 * 1024 * 1024
+FAULT_FILL_FILE = ".devops-ex-fault-fill"
+FAULT_CONFIG_SUFFIX = ".devops-ex-invalid"
+FAULT_RESTART_ANNOTATION = "devops-ex/fault-restart"
+FAULT_REDIS = "redis"
+FAULT_PLAN_WAIT = 5
+_FAULT_PATH = re.compile(r"/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
+_FAULT_SIZE = re.compile(r"^(\d+)([kKmMgG]?)$")
+_FAULT_KUBE_SIZE = re.compile(r"^(\d+)(Ki|Mi|Gi|k|M|G)?$")
+_FAULT_UNITS = {"": 1, "k": 1024, "m": 1024 ** 2, "g": 1024 ** 3, "Ki": 1024, "Mi": 1024 ** 2, "Gi": 1024 ** 3,
+                "K": 1000, "M": 1000 ** 2, "G": 1000 ** 3}
+_FAULT_NETEM_ADD = 'for d in $(ls /sys/class/net); do [ "$d" = lo ] || tc qdisc replace dev "$d" root netem delay {ms}ms || exit 1; done'
+_FAULT_NETEM_DEL = 'for d in $(ls /sys/class/net); do [ "$d" = lo ] || tc qdisc del dev "$d" root 2>/dev/null; done; exit 0'
+
+
+def _fault_size(text: str, pattern: re.Pattern) -> int | None:
+    match = pattern.fullmatch(str(text).strip())
+    if not match:
+        return None
+    unit = match.group(2) or ""
+    return int(match.group(1)) * _FAULT_UNITS[unit if pattern is _FAULT_KUBE_SIZE else unit.lower()]
+
+
+def _fault_shared_network(info: dict) -> bool:
+    mode = str((info.get("HostConfig") or {}).get("NetworkMode") or "")
+    return mode == "host" or mode.startswith("container:")
+
+
+def _fault_docker_tmpfs(info: dict) -> list[tuple[str, int]]:
+    """tmpfs có giới hạn kích thước của một container (đường dẫn, byte), từ `HostConfig.Tmpfs` và `Mounts` kiểu tmpfs."""
+    found: dict[str, int] = {}
+    for path, options in ((info.get("HostConfig") or {}).get("Tmpfs") or {}).items():
+        for option in str(options).split(","):
+            key, _, value = option.partition("=")
+            size = _fault_size(value, _FAULT_SIZE) if key.strip() == "size" else None
+            if size:
+                found[path] = size
+    for mount in (info.get("HostConfig") or {}).get("Mounts") or []:
+        size = ((mount.get("TmpfsOptions") or {}).get("SizeBytes") or 0) if mount.get("Type") == "tmpfs" else 0
+        if size:
+            found[mount.get("Target", "")] = int(size)
+    return sorted((p, s) for p, s in found.items() if _FAULT_PATH.fullmatch(p) and ".." not in p.split("/") and 0 < s <= FAULT_FILL_LIMIT)
+
+
+class FaultInjector:
+    """Bơm đúng một lỗi, chọn theo `seed`, vào tài nguyên của một lab (game day, chaos), rồi hoàn tác khi `close()`.
+
+    `FaultInjector(target, *, seed, faults=None, services=None, redis="redis", delay_ms=400)`: `target` là `DockerLab` (đã
+    vào `with`, thường có `ObsStack` hay `lab.compose`) hoặc `KubeLab`. `plan()` trả `(mã lỗi, tài nguyên)` mà không làm gì;
+    `inject()` bơm lỗi và trả **mã lỗi** (một trong `FAULT_CODES`), không trả mô tả; `revert()` hoàn tác và trả danh sách lỗi
+    khi hoàn tác (rỗng là sạch); `close()` (và `__exit__`) gọi `revert()`, có lỗi thì `UserWarning`.
+
+    Chọn lỗi: liệt kê mọi cặp (mã, tài nguyên) hợp lệ của lab theo thứ tự cố định, `random.Random(seed)` chọn mã trong các mã có
+    tài nguyên rồi chọn tài nguyên, nên cùng seed trên cùng một topology luôn ra cùng một lỗi. `faults` giới hạn tập mã, `services`
+    giới hạn tên service (compose), alias (`lab.start`) hay tên workload (Kubernetes).
+
+    DockerLab (`FAULT_DOCKER_CODES`): `kill` (`docker kill`, hoàn tác `docker start`), `redis-stop` (`docker stop` service tên
+    `redis`), `disk-full` (ghi đầy tmpfs **có `size=`** không quá `FAULT_FILL_LIMIT` bằng `dd` trong container, tệp
+    `FAULT_FILL_FILE`; hoàn tác xoá tệp), `net-delay` (thêm `delay_ms` mili giây bằng `tc qdisc ... netem` trên mọi interface
+    trừ `lo`, hoàn tác `tc qdisc del`; không bao giờ với container có network mode `host` hay `container:*`). Lệnh `kill`,
+    `stop`, `start`, `exec` đi theo ID container đã inspect, không theo tên. Image `FAULT_NETEM_IMAGE` được nhận khi có tag và nhãn
+    `org.opencontainers.image.title` của `setup/netem/Dockerfile` (không kiểm digest: image build tại máy). `net-delay` chạy `tc` trong container phụ `devops-ex-<id>-fault-netem-<n>` (image
+    `FAULT_NETEM_IMAGE`, build bằng `FAULT_NETEM_BUILD`, thiếu thì skip) dùng chung network namespace của **đúng** container
+    đích (`--network container:<id>`), `--cap-drop ALL --cap-add NET_ADMIN`, no-new-privileges, `--read-only`, cpuset, RAM 32m,
+    `--rm`: chỉ container phụ có NET_ADMIN, chỉ trong namespace mạng của container đích, chạy xong là thoát; container của bài
+    không bao giờ được thêm capability. Kernel cần module `sch_netem` (tự nạp lần đầu).
+
+    KubeLab (`FAULT_KUBE_CODES`): mọi lệnh đi qua `lab.kubectl` (token `devops-ex-learner`, chỉ namespace của lab), không bao giờ
+    dùng kubeconfig admin hay `node_action`, không chạm node. `kill` xoá một pod đang chạy của Deployment/StatefulSet (controller
+    tạo lại); `redis-stop` scale workload `redis` về 0 (hoàn tác scale lại); `disk-full` ghi `sizeLimit` cộng 1 MiB vào `emptyDir` có `sizeLimit`
+    không quá `FAULT_FILL_LIMIT` (`medium: Memory` thì đầy tmpfs; emptyDir trên đĩa nằm trên đĩa của node và kubelet evict pod khi
+    vượt `sizeLimit`; hoàn tác xoá tệp nếu pod còn); `bad-config` thêm `FAULT_CONFIG_SUFFIX` vào mọi giá trị của một
+    ConfigMap mà workload dùng (env, envFrom, volume) rồi rollout lại workload đó bằng annotation `FAULT_RESTART_ANNOTATION`
+    (hoàn tác ghi lại giá trị cũ và rollout lần nữa). `net-delay` không có trên KubeLab: pod dưới Pod Security baseline không
+    được NET_ADMIN.
+
+    Chỉ chạm tài nguyên của lab: container phải có tên `devops-ex-<id>-...`, nhãn `devops-ex=1` và (tên trong `lab.names` hoặc nhãn
+    `devops-ex.lab=<id>`), kiểm lại bằng `docker inspect` ngay trước mỗi lệnh; service của stack observability (`OBS_IMAGES`)
+    và container phụ của chính injector không bao giờ là đích. Hoàn tác bỏ qua tài nguyên đã được người học khôi phục (container
+    chạy lại, container tạo mới có ID khác, pod đã thay).
+    """
+
+    def __init__(self, target, *, seed: int, faults=None, services=None, redis: str = FAULT_REDIS,
+                 delay_ms: int = FAULT_DELAY_MS) -> None:
+        if not isinstance(target, (DockerLab, KubeLab)):
+            raise TypeError("FaultInjector chỉ nhận DockerLab hoặc KubeLab")
+        if isinstance(seed, bool) or not isinstance(seed, int):
+            raise TypeError("seed phải là số nguyên")
+        if isinstance(delay_ms, bool) or not isinstance(delay_ms, int) or not 1 <= delay_ms <= 5000:
+            raise ValueError("delay_ms phải là số nguyên từ 1 tới 5000")
+        self.kube = isinstance(target, KubeLab)
+        supported = FAULT_KUBE_CODES if self.kube else FAULT_DOCKER_CODES
+        faults = tuple(supported if faults is None else faults)
+        unknown = [f for f in faults if f not in FAULT_CODES]
+        if unknown or not faults:
+            raise ValueError(f"faults chỉ nhận {', '.join(FAULT_CODES)}, không nhận {unknown or 'tập rỗng'}")
+        unsupported = [f for f in faults if f not in supported]
+        if unsupported:
+            raise ValueError(f"{type(target).__name__} không hỗ trợ {', '.join(unsupported)}")
+        self.target = target
+        self.seed = seed
+        self.faults = faults
+        self.services = None if services is None else tuple(services)
+        self.redis = redis
+        self.delay_ms = delay_ms
+        self.code: str | None = None
+        self.resource: str | None = None
+        self._undo: list[tuple] = []
+        self._sidecars = 0
+
+    def __enter__(self) -> "FaultInjector":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def _wanted(self, name: str) -> bool:
+        return self.services is None or name in self.services
+
+    def _containers(self) -> dict[str, dict]:
+        lab = self.target
+        lab._require_entered()
+        for attempt in range(3):
+            listed = _docker("ps", "-a", "--filter", f"label={DOCKER_LABEL}", "--filter", f"name={lab.network}-", "--format",
+                             "{{.Names}}")
+            if listed.returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            pytest.fail(f"FaultInjector: không đọc được container của lab: {listed.stderr.strip()}")
+        infos = []
+        for name in sorted(n for n in listed.stdout.split() if n.startswith(f"{lab.network}-")):
+            result = _docker("inspect", name)
+            if result.returncode != 0:
+                if "no such" in result.stderr.lower():
+                    continue
+                pytest.fail(f"FaultInjector: không đọc được container {name}: {result.stderr.strip()}")
+            infos += json.loads(result.stdout)
+        services: dict[str, dict] = {}
+        for info in infos:
+            name = info["Name"].lstrip("/")
+            if not self._owned(info):
+                continue
+            labels = (info.get("Config") or {}).get("Labels") or {}
+            if labels.get("com.docker.compose.project") == lab.network:
+                service = labels.get("com.docker.compose.service", "")
+                if service in OBS_IMAGES:
+                    continue
+            else:
+                service = name[len(lab.network) + 1:]
+            if service.startswith("fault-") or not service or not self._wanted(service) or service in services:
+                continue
+            services[service] = info
+        return services
+
+    def _owned(self, info: dict) -> bool:
+        lab = self.target
+        name = info.get("Name", "").lstrip("/")
+        labels = (info.get("Config") or {}).get("Labels") or {}
+        return (name.startswith(f"{lab.network}-") and labels.get("devops-ex") == "1"
+                and (name in lab.names or labels.get(DOCKER_LAB_LABEL) == lab.id))
+
+    def _inspect(self, name: str) -> dict | None:
+        result = _docker("inspect", name)
+        if result.returncode != 0:
+            return None
+        info = json.loads(result.stdout)[0]
+        if not self._owned(info):
+            raise RuntimeError(f"FaultInjector từ chối chạm {name}: không phải container của lab {self.target.id}")
+        return info
+
+    def _docker_candidates(self) -> list[tuple[str, str]]:
+        found = []
+        for service, info in sorted(self._containers().items()):
+            if not (info.get("State") or {}).get("Running"):
+                continue
+            found.append(("kill", service))
+            if not _fault_shared_network(info):
+                found.append(("net-delay", service))
+            if _fault_docker_tmpfs(info):
+                found.append(("disk-full", service))
+            if service == self.redis:
+                found.append(("redis-stop", service))
+        return found
+
+    def _kube_objects(self) -> list[dict]:
+        result = self.target.kubectl("get", "deployments,statefulsets,configmaps,pods", "-o", "json")
+        return json.loads(result.stdout).get("items", [])
+
+    @staticmethod
+    def _selects(workload: dict, pod: dict) -> bool:
+        selector = ((workload.get("spec") or {}).get("selector") or {}).get("matchLabels") or {}
+        labels = (pod.get("metadata") or {}).get("labels") or {}
+        return bool(selector) and all(labels.get(k) == v for k, v in selector.items())
+
+    @staticmethod
+    def _running(pod: dict) -> bool:
+        return ((pod.get("status") or {}).get("phase") == "Running"
+                and not (pod.get("metadata") or {}).get("deletionTimestamp"))
+
+    @staticmethod
+    def _config_refs(workload: dict) -> set[str]:
+        spec = ((workload.get("spec") or {}).get("template") or {}).get("spec") or {}
+        refs = {((v.get("configMap") or {}).get("name")) for v in spec.get("volumes") or []}
+        for container in (spec.get("containers") or []) + (spec.get("initContainers") or []):
+            refs |= {((e.get("configMapRef") or {}).get("name")) for e in container.get("envFrom") or []}
+            refs |= {(((e.get("valueFrom") or {}).get("configMapKeyRef") or {}).get("name")) for e in container.get("env") or []}
+        return {r for r in refs if r}
+
+    @staticmethod
+    def _empty_dirs(workload: dict) -> list[tuple[str, str, int]]:
+        spec = ((workload.get("spec") or {}).get("template") or {}).get("spec") or {}
+        sized = {}
+        for volume in spec.get("volumes") or []:
+            limit = (volume.get("emptyDir") or {}).get("sizeLimit") if "emptyDir" in volume else None
+            size = _fault_size(limit, _FAULT_KUBE_SIZE) if limit is not None else None
+            if size and size <= FAULT_FILL_LIMIT:
+                sized[volume.get("name")] = size
+        found = []
+        for container in spec.get("containers") or []:
+            for mount in container.get("volumeMounts") or []:
+                path = mount.get("mountPath", "")
+                if mount.get("name") in sized and not mount.get("readOnly") and _FAULT_PATH.fullmatch(path) and ".." not in path.split("/"):
+                    found.append((container.get("name"), path, sized[mount["name"]]))
+        return sorted(found)
+
+    def _kube_workloads(self, objects: list[dict]) -> list[tuple[str, dict]]:
+        kinds = {"Deployment": "deployment", "StatefulSet": "statefulset"}
+        return sorted((f"{kinds[o['kind']]}/{o['metadata']['name']}", o) for o in objects
+                      if o.get("kind") in kinds and self._wanted(o["metadata"]["name"]))
+
+    def _kube_candidates(self) -> list[tuple[str, str]]:
+        objects = self._kube_objects()
+        pods = [o for o in objects if o.get("kind") == "Pod"]
+        configs = {o["metadata"]["name"]: o for o in objects if o.get("kind") == "ConfigMap"}
+        found = []
+        for ref, workload in self._kube_workloads(objects):
+            running = [p for p in pods if self._running(p) and self._selects(workload, p)]
+            if running:
+                found.append(("kill", ref))
+                if self._empty_dirs(workload):
+                    found.append(("disk-full", ref))
+            if workload["metadata"]["name"] == self.redis and (workload.get("spec") or {}).get("replicas", 1) > 0:
+                found.append(("redis-stop", ref))
+            for name in sorted(self._config_refs(workload)):
+                config = configs.get(name)
+                if config and config.get("data") and not config.get("immutable"):
+                    found.append(("bad-config", f"configmap/{name}"))
+        return sorted(set(found))
+
+    def candidates(self) -> list[tuple[str, str]]:
+        """Mọi cặp (mã lỗi, tài nguyên) bơm được vào lab lúc này, theo thứ tự cố định."""
+        found = self._kube_candidates() if self.kube else self._docker_candidates()
+        return sorted((c, r) for c, r in found if c in self.faults)
+
+    def plan(self) -> tuple[str, str]:
+        """(mã lỗi, tài nguyên) mà `inject()` sẽ bơm, chọn bằng `random.Random(seed)`; không thay đổi gì."""
+        import random
+
+        found = self.candidates()
+        deadline = time.monotonic() + FAULT_PLAN_WAIT
+        while not found and time.monotonic() < deadline:
+            time.sleep(1)
+            found = self.candidates()
+        if not found:
+            seen = "" if self.kube else "; container của lab đang thấy: " + (", ".join(
+                f"{name} ({'chạy' if (info.get('State') or {}).get('Running') else 'dừng'})"
+                for name, info in sorted(self._containers().items())) or "không có")
+            pytest.fail(f"FaultInjector: lab không có tài nguyên nào bơm được lỗi {', '.join(self.faults)}"
+                        + (f" trong {', '.join(self.services)}" if self.services else "") + seen)
+        rng = random.Random(self.seed)
+        codes = sorted({c for c, _ in found}, key=FAULT_CODES.index)
+        code = rng.choice(codes)
+        return code, rng.choice(sorted(r for c, r in found if c == code))
+
+    def inject(self) -> str:
+        """Bơm lỗi đã chọn theo seed và trả mã lỗi. Mỗi injector chỉ bơm một lần."""
+        if self.code is not None:
+            raise RuntimeError("FaultInjector chỉ bơm một lỗi; tạo injector mới cho lỗi tiếp theo")
+        code, resource = self.plan()
+        self.code, self.resource = code, resource
+        (self._inject_kube if self.kube else self._inject_docker)(code, resource)
+        return code
+
+    def _netem(self, container_id: str, script: str) -> subprocess.CompletedProcess:
+        lab = self.target
+        self._sidecars += 1
+        name = lab._track(f"fault-netem-{self._sidecars}")
+        args = ["docker", "run", "--rm", "--name", name, "--label", DOCKER_LABEL, "--label", f"{DOCKER_LAB_LABEL}={lab.id}",
+                "--network", f"container:{container_id}", "--cap-drop", "ALL", "--cap-add", "NET_ADMIN",
+                "--security-opt", "no-new-privileges", "--read-only", "--memory", "32m", "--pids-limit", "32",
+                *docker_cpu_args(), "--entrypoint", "sh", FAULT_NETEM_IMAGE, "-c", script]
+        return subprocess.run(args, capture_output=True, text=True, timeout=60)
+
+    def _inject_docker(self, code: str, service: str) -> None:
+        if code == "net-delay":
+            Exercise.require_image(FAULT_NETEM_IMAGE, f"Build image tc của FaultInjector bằng: {FAULT_NETEM_BUILD}")
+            title = _docker("image", "inspect", "--format", '{{index .Config.Labels "org.opencontainers.image.title"}}',
+                            FAULT_NETEM_IMAGE).stdout.strip()
+            if title != FAULT_NETEM_IMAGE.split(":")[0]:
+                pytest.fail(f"Image {FAULT_NETEM_IMAGE} không phải bản build từ setup/netem (nhãn title {title!r}). "
+                            f"Build lại bằng: {FAULT_NETEM_BUILD}")
+        info = self._containers()[service]
+        name, cid = info["Name"].lstrip("/"), info["Id"]
+        current = self._inspect(name)
+        if current is None or current["Id"] != cid:
+            pytest.fail(f"FaultInjector: container {name} vừa đổi")
+        if _fault_shared_network(current):
+            pytest.fail(f"FaultInjector từ chối {name}: network mode {current['HostConfig'].get('NetworkMode')} dùng chung "
+                        "network namespace với máy host hay container khác")
+        if code in ("kill", "redis-stop"):
+            self._undo.append(("start", name, cid))
+            result = _docker("kill", cid) if code == "kill" else _docker("stop", "-t", "5", cid)
+        elif code == "net-delay":
+            self._undo.append(("netem", name, cid))
+            result = self._netem(cid, _FAULT_NETEM_ADD.format(ms=self.delay_ms))
+        else:
+            path, size = _fault_docker_tmpfs(info)[0]
+            target = f"{path}/{FAULT_FILL_FILE}"
+            self._undo.append(("unfill", name, cid, target))
+            result = _docker("exec", "-u", "0", cid, "dd", "if=/dev/zero", f"of={target}", "bs=1048576",
+                             f"count={size // 1048576 + 1}", timeout=120)
+            if result.returncode != 0 and "space" in (result.stderr or "").lower():
+                result = subprocess.CompletedProcess(result.args, 0, result.stdout, result.stderr)
+        if result.returncode != 0:
+            pytest.fail(f"FaultInjector: bơm lỗi {code} vào {service} không được: {(result.stderr or '').strip()[-DOCKER_LOG_CHARS:]}")
+
+    def _inject_kube(self, code: str, resource: str) -> None:
+        lab = self.target
+        objects = self._kube_objects()
+        kind, _, name = resource.partition("/")
+        if code == "bad-config":
+            config = next(o for o in objects if o.get("kind") == "ConfigMap" and o["metadata"]["name"] == name)
+            original = dict(config.get("data") or {})
+            users = [ref for ref, w in self._kube_workloads(objects) if name in self._config_refs(w)]
+            self._undo.append(("config", name, original, users))
+            lab.kubectl("patch", "configmap", name, "--type", "merge", "-p",
+                        json.dumps({"data": {k: f"{v}{FAULT_CONFIG_SUFFIX}" for k, v in original.items()}}))
+            self._rollout(users, "inject")
+            return
+        workload = next(w for ref, w in self._kube_workloads(objects) if ref == resource)
+        running = sorted((p for p in objects if p.get("kind") == "Pod" and self._running(p) and self._selects(workload, p)),
+                         key=lambda p: p["metadata"]["name"])
+        if code == "kill":
+            lab.kubectl("delete", "pod", running[0]["metadata"]["name"], "--grace-period=0", "--force", "--wait=false")
+        elif code == "redis-stop":
+            replicas = (workload.get("spec") or {}).get("replicas", 1)
+            self._undo.append(("scale", resource, replicas))
+            lab.kubectl("scale", resource, "--replicas=0")
+        else:
+            container, path, size = self._empty_dirs(workload)[0]
+            pod = running[0]["metadata"]["name"]
+            target = f"{path}/{FAULT_FILL_FILE}"
+            self._undo.append(("unfill-pod", pod, container, target))
+            lab.kubectl("exec", pod, "-c", container, "--", "dd", "if=/dev/zero", f"of={target}", "bs=1048576",
+                        f"count={size // 1048576 + 1}", check=False, timeout=120)
+
+    def _rollout(self, workloads: list[str], stage: str) -> None:
+        patch = json.dumps({"spec": {"template": {"metadata": {"annotations": {FAULT_RESTART_ANNOTATION: f"{self.seed}-{stage}"}}}}})
+        for ref in workloads:
+            self.target.kubectl("patch", ref, "--type", "merge", "-p", patch)
+
+    def _revert_step(self, step: tuple) -> str | None:
+        action = step[0]
+        if self.kube:
+            lab = self.target
+            if action == "config":
+                _, name, original, users = step
+                result = lab.kubectl("patch", "configmap", name, "--type", "merge", "-p", json.dumps({"data": original}), check=False)
+                if result.returncode != 0:
+                    return f"ghi lại ConfigMap {name}: {_output_tail(result)}"
+                self._rollout(users, "revert")
+            elif action == "scale":
+                _, resource, replicas = step
+                current = lab.kubectl("get", resource, "-o", "jsonpath={.spec.replicas}", check=False)
+                if current.returncode == 0 and current.stdout.strip() == "0":
+                    result = lab.kubectl("scale", resource, f"--replicas={replicas}", check=False)
+                    if result.returncode != 0:
+                        return f"scale lại {resource}: {_output_tail(result)}"
+            elif action == "unfill-pod":
+                _, pod, container, target = step
+                if lab.kubectl("get", "pod", pod, check=False).returncode == 0:
+                    lab.kubectl("exec", pod, "-c", container, "--", "rm", "-f", target, check=False)
+            return None
+        _, name, cid = step[:3]
+        info = self._inspect(name)
+        if info is None or info["Id"] != cid:
+            return None
+        running = (info.get("State") or {}).get("Running")
+        if action == "start" and not running:
+            result = _docker("start", cid)
+            return None if result.returncode == 0 else f"docker start {name}: {result.stderr.strip()}"
+        if action == "netem" and running:
+            result = self._netem(cid, _FAULT_NETEM_DEL)
+            return None if result.returncode == 0 else f"gỡ netem khỏi {name}: {result.stderr.strip()}"
+        if action == "unfill" and running:
+            result = _docker("exec", "-u", "0", cid, "rm", "-f", step[3])
+            return None if result.returncode == 0 else f"xoá {step[3]} trong {name}: {result.stderr.strip()}"
+        return None
+
+    def revert(self) -> list[str]:
+        """Hoàn tác lỗi đã bơm (bỏ qua phần người học đã tự khôi phục); trả danh sách lỗi khi hoàn tác, rỗng là sạch."""
+        errors = []
+        while self._undo:
+            step = self._undo.pop()
+            try:
+                problem = self._revert_step(step)
+            except (OSError, subprocess.TimeoutExpired, RuntimeError, pytest.fail.Exception) as error:
+                problem = str(error)
+            if problem:
+                errors.append(problem)
+        return errors
+
+    def close(self) -> None:
+        import warnings
+
+        errors = self.revert()
+        if errors:
+            warnings.warn("FaultInjector hoàn tác chưa hết:\n" + "\n".join(errors), UserWarning)
 
 
 def _unique_name(path: Path) -> str:
@@ -4593,9 +6657,11 @@ class Exercise:
         return registry_address()
 
     @staticmethod
-    def require_localstack_devops() -> str:
+    def require_localstack_devops(*services: str) -> str:
         """Skip khi `localstack-devops` (profile `devops`) chưa chạy, cổng của nó trùng `localstack` của DE, hoặc cổng đó là
-        server khác (LocalStack của DE bật S3/IAM/STS nhưng tắt DynamoDB); trả endpoint. Test IaC dùng qua `TofuLab`."""
+        server khác (LocalStack của DE bật S3/IAM/STS nhưng tắt DynamoDB); trả endpoint. Test IaC dùng qua `TofuLab`.
+        `services` (vd. `"sqs", "events"`) là service bài cần thêm: container tạo từ cấu hình cũ chưa bật thì skip kèm lệnh
+        tạo lại."""
         if _port("localstack-devops") == _port("localstack"):
             pytest.skip(
                 f"LOCALSTACK_DEVOPS_PORT ({_port('localstack-devops')}) trùng LOCALSTACK_PORT của track DE; bài DevOps không "
@@ -4603,12 +6669,30 @@ class Exercise:
         endpoint = localstack_devops_endpoint()
         if not service_up("localstack-devops"):
             pytest.skip(f"LocalStack của track DevOps chưa chạy. Bật bằng: {LOCALSTACK_DEVOPS_START}")
-        services = (_localstack_health(endpoint) or {}).get("services", {})
-        if any(services.get(name) in (None, "disabled") for name in ("s3", "iam", "sts", "dynamodb")):
+        services_up = (_localstack_health(endpoint) or {}).get("services", {})
+        if any(services_up.get(name) in (None, "disabled") for name in ("s3", "iam", "sts", "dynamodb")):
             pytest.skip(
                 f"Cổng {_port('localstack-devops')} đang mở nhưng không phải localstack-devops (thiếu S3, IAM, STS hay "
                 f"DynamoDB). Đổi LOCALSTACK_DEVOPS_PORT trong setup/.env rồi chạy: {LOCALSTACK_DEVOPS_START}")
+        missing = [name for name in services if services_up.get(name) in (None, "disabled")]
+        if missing:
+            pytest.skip(
+                f"localstack-devops đang chạy chưa bật {', '.join(missing)} (container tạo từ setup/docker-compose.yml cũ). "
+                f"Tạo lại: {LOCALSTACK_DEVOPS_RECREATE}")
         return endpoint
+
+    @staticmethod
+    def require_vault_devops() -> str:
+        """Skip khi `vault-devops` (profile `devops`) chưa chạy hoặc cổng của nó là server khác; trả địa chỉ. Test dùng qua
+        `vault_env`."""
+        if not service_up("vault-devops"):
+            pytest.skip(f"Vault dev của track DevOps chưa chạy. Bật bằng: {VAULT_DEVOPS_START}")
+        health = _vault_health(vault_devops_address())
+        if not isinstance(health, dict) or health.get("initialized") is not True or health.get("sealed") is not False:
+            pytest.skip(
+                f"Cổng {_port('vault-devops')} đang mở nhưng không phải vault-devops (GET /v1/sys/health không trả Vault đã "
+                f"unseal). Đổi DEVOPS_VAULT_PORT trong setup/.env rồi chạy: {VAULT_DEVOPS_START}")
+        return vault_devops_address()
 
     @staticmethod
     def require_tool(name: str, min_version: str | None = None) -> None:
@@ -4700,6 +6784,61 @@ class Exercise:
                 result = admin.run(*args)
                 if result.returncode != 0 or not ok(result.stdout):
                     pytest.skip(KUBE_SKIP_METRICS.format(name=name, detail=what, setup=KUBE_METRICS_SETUP))
+
+    @staticmethod
+    def require_argocd(name: str = KIND_CLUSTER) -> None:
+        """Skip kèm lệnh cài khi cluster chưa có ArgoCD dùng chung đúng cấu hình của track: CRD `applications.argoproj.io`,
+        `application.namespaces: devops-ex-*` (Application trong namespace của lab), sync bằng impersonation, AppProject
+        `default` đã khoá, application-controller sẵn sàng, repo-server (kèm sidecar CMP `sops-kustomize`, cần Secret
+        `argocd/devops-sops-age`) available, ConfigMap `argocd/devops-sops-age-public` có recipient `age1...`, git server
+        `devops-git/git` available. Không đọc Secret chứa khoá riêng. Admin cài một lần từ `setup/kind/argocd/`; test không bao
+        giờ cài."""
+        _require_cluster_up(name)
+        with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}argocd-") as tmp:
+            admin = _KubeAdmin(Path(tmp), name)
+            ns = ("-n", KUBE_ARGOCD_NAMESPACE)
+            checks = (
+                ("CRD applications.argoproj.io", ("get", "crd", "applications.argoproj.io", "-o", "name"),
+                 lambda out: "applications.argoproj.io" in out),
+                ("argocd-cmd-params-cm chưa có application.namespaces: devops-ex-*",
+                 (*ns, "get", "configmap", "argocd-cmd-params-cm", "-o", r"jsonpath={.data.application\.namespaces}"),
+                 lambda out: "devops-ex-*" in [part.strip() for part in out.split(",")]),
+                ("argocd-cm chưa bật application.sync.impersonation.enabled",
+                 (*ns, "get", "configmap", "argocd-cm", "-o", r"jsonpath={.data.application\.sync\.impersonation\.enabled}"),
+                 lambda out: out.strip() == "true"),
+                ("AppProject default chưa khoá (20-default-project.yaml)",
+                 (*ns, "get", "appprojects.argoproj.io", "default", "-o", "jsonpath={.spec.sourceRepos}{.spec.destinations}"),
+                 lambda out: out.strip() in ("", "[]", "[][]")),
+                ("application-controller chưa sẵn sàng", (*ns, "get", "statefulset", "argocd-application-controller", "-o",
+                                                          "jsonpath={.status.readyReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+                (f"repo-server chưa có pod available (thiếu Secret {KUBE_ARGOCD_NAMESPACE}/{KUBE_ARGOCD_AGE_SECRET} thì pod kẹt ở "
+                 "ContainerCreating)", (*ns, "get", "deployment", "argocd-repo-server", "-o", "jsonpath={.status.availableReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+                (f"thiếu ConfigMap {KUBE_ARGOCD_NAMESPACE}/{KUBE_ARGOCD_AGE_PUBLIC} có recipient age1...",
+                 (*ns, "get", "configmap", KUBE_ARGOCD_AGE_PUBLIC, "-o", "jsonpath={.data.recipient}"),
+                 lambda out: bool(_KUBE_AGE_RECIPIENT.fullmatch(out.strip()))),
+                (f"git server {KUBE_GIT_NAMESPACE}/git chưa có pod available",
+                 ("-n", KUBE_GIT_NAMESPACE, "get", "deployment", "git", "-o", "jsonpath={.status.availableReplicas}"),
+                 lambda out: out.strip() not in ("", "0")),
+            )
+            for what, args, ok in checks:
+                result = admin.run(*args)
+                if result.returncode != 0 or not ok(result.stdout):
+                    pytest.skip(KUBE_SKIP_ARGOCD.format(name=name, detail=what, setup=KUBE_ARGOCD_SETUP, key=KUBE_ARGOCD_KEY_SETUP))
+
+    @staticmethod
+    def require_linkerd(name: str = KIND_CLUSTER) -> None:
+        """Skip kèm lệnh cài khi cluster chưa có Linkerd dùng chung đúng cấu hình của track: CRD `servers.policy.linkerd.io`,
+        `linkerd-config` bật `cniEnabled` (pod trong namespace baseline không cần NET_ADMIN), DaemonSet `linkerd-cni` sẵn sàng
+        trên mọi node, ConfigMap `linkerd-identity-trust-roots` có chứng chỉ, webhook proxy-injector có caBundle thật (đã chạy
+        `certs.sh`), và linkerd-identity, linkerd-destination, linkerd-proxy-injector available. Không đọc Secret nào. Admin cài
+        một lần từ `setup/kind/linkerd/`; test không bao giờ cài. `KubeLab(mesh=True)` tự kiểm như vậy khi mở lab."""
+        _require_cluster_up(name)
+        with tempfile.TemporaryDirectory(prefix=f"{DOCKER_PREFIX}linkerd-") as tmp:
+            problem = _KubeAdmin(Path(tmp), name).linkerd_problem()
+            if problem:
+                pytest.skip(KUBE_SKIP_LINKERD.format(name=name, detail=problem, setup=KUBE_LINKERD_SETUP))
 
     @staticmethod
     def require_kind_images(*images: str, name: str = KIND_CLUSTER) -> None:

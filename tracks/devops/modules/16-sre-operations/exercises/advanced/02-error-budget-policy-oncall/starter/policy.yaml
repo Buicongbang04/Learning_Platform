@@ -1,0 +1,13 @@
+slo:
+  name: checkout-availability
+  objective: 99.9
+  window_days: 28
+  budget_minutes: TODO
+thresholds:
+  - state: TODO
+    remaining_above: TODO
+    actions: []
+    allowed: []
+exceptions:
+  approver: TODO
+  max_per_window: TODO

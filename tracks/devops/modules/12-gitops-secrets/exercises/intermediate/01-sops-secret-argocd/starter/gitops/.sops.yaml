@@ -1,0 +1,4 @@
+creation_rules:
+  - path_regex: shop/.*\.enc\.yaml$
+    age: TEAM_AGE_RECIPIENT
+# TODO: ArgoCD cũng phải giải mã được; chỉ mã hoá trường dữ liệu của Secret (xem README)

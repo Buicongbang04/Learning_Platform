@@ -1,0 +1,32 @@
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: redis
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: redis}
+  port: redis
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: olist-shop-redis-clients
+spec:
+  identityRefs:
+    - {kind: ServiceAccount, name: api}
+    - {kind: ServiceAccount, name: worker}
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: redis-only-olist-shop
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: redis
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: olist-shop-redis-clients
