@@ -1,0 +1,13 @@
+team: search
+members: [An, Bình, Chi, Dũng, Giang, Hà]
+handoff: {weekday: monday, time: "09:30"}
+weeks:
+  - {start: 2026-11-16, primary: Bình, secondary: Hà}
+  - {start: 2026-11-23, primary: Chi, secondary: Giang}
+  - {start: 2026-11-30, primary: An, secondary: Hà}
+  - {start: 2026-12-07, primary: Dũng, secondary: Bình}
+escalation:
+  - {level: primary, after_minutes: 0}
+  - {level: secondary, after_minutes: 15}
+  - {level: manager, after_minutes: 30}
+page_budget: {per_week: 12, night_per_week: 1}

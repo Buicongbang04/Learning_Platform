@@ -1,0 +1,98 @@
+rule_files: [rules.yml]
+evaluation_interval: 1m
+
+tests:
+  - name: lỗi 10% ngay từ đầu, mọi mức bắn
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+90x30'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0+10x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-availability, severity: page, long_window: 1h}
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-availability, severity: page, long_window: 6h}
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-availability, severity: ticket, long_window: 1d}
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-availability, severity: ticket, long_window: 3d}
+
+  - name: một phút lỗi 100% sau một ngày khoẻ không bắn gì
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+100x1440 144000 144000+100x10'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0x1440 100x11'
+    alert_rule_test:
+      - eval_time: 1443m
+        alertname: ErrorBudgetBurn
+        exp_alerts: []
+
+  - name: lỗi 2% cả ngày chỉ ra ticket
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+98x1440'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="503"}'
+        values: '0+2x1440'
+    alert_rule_test:
+      - eval_time: 1440m
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-availability, severity: ticket, long_window: 1d}
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-availability, severity: ticket, long_window: 3d}
+
+  - name: lỗi 0,3% không bắn, lỗi ở path khác không tính
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+997x1440'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0+3x1440'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/stats/revenue-by-state", status="500"}'
+        values: '0+50x1440'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="POST", path="/orders/{order_id}", status="404"}'
+        values: '0+50x1440'
+    alert_rule_test:
+      - eval_time: 1440m
+        alertname: ErrorBudgetBurn
+        exp_alerts: []
+
+  - name: 40% request chậm hơn 250 ms trong 7 giờ
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_count{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}"}'
+        values: '0+100x420'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="0.25"}'
+        values: '0+60x420'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="0.1"}'
+        values: '0+10x420'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0+100x420'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0x420'
+    alert_rule_test:
+      - eval_time: 420m
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-latency, severity: page, long_window: 6h}
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-latency, severity: ticket, long_window: 1d}
+          - exp_labels: {alertname: ErrorBudgetBurn, slo: orders-latency, severity: ticket, long_window: 3d}
+
+  - name: không có traffic thì không bắn
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="200"}'
+        values: '0x120'
+      - series: 'http_requests_total{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", status="500"}'
+        values: '0x120'
+      - series: 'http_request_duration_seconds_count{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}"}'
+        values: '0x120'
+      - series: 'http_request_duration_seconds_bucket{job="olist-api", instance="api:8000", method="GET", path="/orders/{order_id}", le="0.25"}'
+        values: '0x120'
+    alert_rule_test:
+      - eval_time: 120m
+        alertname: ErrorBudgetBurn
+        exp_alerts: []

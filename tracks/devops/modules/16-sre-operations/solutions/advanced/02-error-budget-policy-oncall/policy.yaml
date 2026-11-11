@@ -1,0 +1,25 @@
+slo:
+  name: checkout-availability
+  objective: 99.9
+  window_days: 28
+  budget_minutes: 40.32
+thresholds:
+  - state: normal
+    remaining_above: 0.5
+    actions: [release-as-usual]
+    allowed: [feature, bugfix, security-fix, rollback]
+  - state: caution
+    remaining_above: 0.25
+    actions: [reliability-review, canary-required]
+    allowed: [feature, bugfix, security-fix, rollback]
+  - state: freeze-features
+    remaining_above: 0
+    actions: [freeze-features, reliability-sprint]
+    allowed: [bugfix, security-fix, rollback]
+  - state: freeze-all
+    remaining_above: null
+    actions: [freeze-all, postmortem-required, exec-review]
+    allowed: [security-fix, rollback]
+exceptions:
+  approver: VP Engineering
+  max_per_window: 1

@@ -1,0 +1,23 @@
+entries:
+  - id: API Down
+    detect:
+      promql: up{job="olist-api"} == 0
+    action: {do: start, service: api}
+  - id: two-queries
+    detect:
+      promql: up == 0
+      logql: '{service_name="x"}'
+    action: {do: start, service: api}
+  - id: reboot
+    detect:
+      promql: up == 0
+    action: {do: reboot, service: api}
+  - id: logs
+    detect:
+      logql: 'rate({service_name="x"}[1m])'
+    action: {do: restart, service: redis}
+  - id: extra
+    detect:
+      promql: up == 0
+    action: {do: start, service: api}
+    owner: platform

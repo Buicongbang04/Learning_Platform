@@ -1,0 +1,9 @@
+entries:
+  - id: db-down
+    detect:
+      promql: pg_up == 0
+    action: {do: start, service: postgres}
+  - id: api-slow
+    detect:
+      promql: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[1m]))) > 0.3
+    action: {do: restart, service: api}

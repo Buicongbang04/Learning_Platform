@@ -1,0 +1,29 @@
+team: checkout
+members: [An, Bình, Chi, Dũng, Giang, Hà]
+timezone: Asia/Ho_Chi_Minh
+handoff:
+  weekday: monday
+  time: "10:00"
+weeks:
+  - start: 2026-11-16
+    primary: An
+    secondary: Hà
+  - start: 2026-11-23
+    primary: Bình
+    secondary: Chi
+  - start: 2026-11-30
+    primary: Dũng
+    secondary: Hà
+  - start: 2026-12-07
+    primary: Giang
+    secondary: An
+escalation:
+  - level: primary
+    after_minutes: 0
+  - level: secondary
+    after_minutes: 10
+  - level: engineering-manager
+    after_minutes: 25
+page_budget:
+  per_week: 10
+  night_per_week: 2

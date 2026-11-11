@@ -1,0 +1,111 @@
+questions:
+  - id: sli-choice
+    kind: knowledge
+    type: single
+    prompt: "Phỏng vấn: \"Chọn SLI cho trang đặt hàng của Olist.\" Câu trả lời nào tốt nhất?"
+    options:
+      - { id: a, text: "CPU trung bình của các pod API dưới 70%, vì CPU cao là dấu hiệu sớm nhất của sự cố" }
+      - { id: b, text: "Tỉ lệ request đặt hàng thành công và trả lời dưới 300 ms, đo ở load balancer" }
+      - { id: c, text: "Số pod đang Running chia số replica mong muốn, lấy từ Kubernetes mỗi phút" }
+      - { id: d, text: "Uptime của database theo ping mỗi 30 giây, vì checkout phụ thuộc database" }
+  - id: burn-rate-math
+    kind: knowledge
+    type: single
+    prompt: "SLO 99,9% trong 30 ngày. Một giờ vừa qua tỉ lệ lỗi là 1,44%. Burn rate và phần budget đã tiêu trong giờ đó là bao nhiêu?"
+    options:
+      - { id: a, text: "Burn rate 1,44; tiêu khoảng 0,2% budget" }
+      - { id: b, text: "Burn rate 14,4; tiêu khoảng 2% budget" }
+      - { id: c, text: "Burn rate 144; tiêu khoảng 20% budget" }
+      - { id: d, text: "Burn rate 14,4; tiêu khoảng 14,4% budget" }
+  - id: budget-exhausted
+    kind: knowledge
+    type: single
+    prompt: "Giữa tháng, error budget của checkout đã cạn. Chính sách đã ký nói gì là hợp lý nhất?"
+    options:
+      - { id: a, text: "Dừng release tính năng, vẫn cho rollback và vá bảo mật, ưu tiên việc độ tin cậy cho tới khi budget hồi" }
+      - { id: b, text: "Dừng mọi thay đổi kể cả rollback và vá bảo mật, để hệ thống tự ổn định cho tới hết cửa sổ 30 ngày của SLO" }
+      - { id: c, text: "Tăng SLO lên 99,99% cho tháng sau để team chú ý hơn tới độ tin cậy" }
+      - { id: d, text: "Không làm gì: budget chỉ là con số tham khảo, quyết định release vẫn do product" }
+  - id: incident-commander
+    kind: knowledge
+    type: single
+    prompt: "Trong sự cố SEV1, vai trò incident commander nên làm gì?"
+    options:
+      - { id: a, text: "Tự tay sửa lỗi vì thường là người giỏi nhất, các vai trò khác đứng chờ kết quả và không ai liên lạc với khách" }
+      - { id: b, text: "Tìm ra ai gây lỗi để báo cáo cấp trên trong lúc sự cố còn đang diễn ra" }
+      - { id: c, text: "Điều phối: giao việc, quyết định giảm thiểu, đảm bảo có người cập nhật cho khách và nội bộ" }
+      - { id: d, text: "Viết postmortem ngay trong lúc sự cố để không quên chi tiết quan trọng nào" }
+  - id: blameless
+    kind: knowledge
+    type: single
+    prompt: "Một kỹ sư chạy nhầm lệnh xoá bảng trên production. Câu nào hợp với postmortem không đổ lỗi?"
+    options:
+      - { id: a, text: "Kỹ sư bất cẩn; action item là nhắc kỹ sư cẩn thận hơn lần sau" }
+      - { id: b, text: "Hệ thống cho phép một lệnh tay xoá bảng production không cần duyệt; action item là chặn điều đó" }
+      - { id: c, text: "Không ghi tên ai và không ghi lệnh đã chạy, để không ai cảm thấy bị nhắm tới" }
+      - { id: d, text: "Đình chỉ quyền production của kỹ sư đó một tháng để làm gương, rồi ghi tên người đó vào phần nguyên nhân gốc" }
+  - id: chaos-first-step
+    kind: knowledge
+    type: single
+    prompt: "Team muốn bắt đầu chaos engineering trên Olist. Bước đầu tiên đúng nhất là gì?"
+    options:
+      - { id: a, text: "Tắt ngẫu nhiên một node production vào giờ cao điểm, không báo trước cho ai, để xem hệ thống thật chịu được tới đâu" }
+      - { id: b, text: "Mua công cụ chaos thương mại rồi bật mọi kịch bản có sẵn trên mọi môi trường" }
+      - { id: c, text: "Nêu giả thuyết trạng thái ổn định đo bằng SLI, giới hạn blast radius, có cách dừng ngay" }
+      - { id: d, text: "Chờ hệ thống có đủ test đơn vị và integration rồi mới nghĩ tới chaos" }
+  - id: littles-law
+    kind: knowledge
+    type: single
+    prompt: "API nhận 400 request/giây, latency trung bình 50 ms. Theo định luật Little, cần khoảng bao nhiêu kết nối database nếu mỗi request giữ một kết nối suốt thời gian xử lý?"
+    options:
+      - { id: a, text: "8" }
+      - { id: b, text: "20" }
+      - { id: c, text: "50" }
+      - { id: d, text: "400" }
+  - id: rightsizing-memory
+    kind: knowledge
+    type: single
+    prompt: "Khi rightsizing một workload Kubernetes, vì sao request RAM nên dựa trên mức cao nhất còn CPU dựa trên p95?"
+    options:
+      - { id: a, text: "Vì giá RAM trên cloud luôn đắt hơn giá CPU tính theo giờ" }
+      - { id: b, text: "Vì thiếu CPU chỉ bị throttle và chậm đi, còn thiếu RAM thì container bị OOMKilled" }
+      - { id: c, text: "Vì Kubernetes và metrics-server không đo được p95 của RAM theo thời gian, chỉ đo được mức cao nhất từng thấy" }
+      - { id: d, text: "Vì scheduler chỉ xếp pod dựa trên request RAM, bỏ qua request CPU" }
+  - id: ci-least-privilege
+    kind: knowledge
+    type: single
+    prompt: "Pipeline CI cần deploy lên AWS. Cách nào theo least privilege?"
+    options:
+      - { id: a, text: "Lưu access key của tài khoản admin vào secret của repo để mọi job dùng chung" }
+      - { id: b, text: "OIDC: job xin role tạm thời giới hạn theo repo và nhánh, chỉ quyền deploy cần thiết" }
+      - { id: c, text: "Tạo một IAM user riêng cho CI có quyền admin nhưng xoay vòng key mỗi 90 ngày" }
+      - { id: d, text: "Cho runner tự host chạy với instance profile admin, vì runner nằm trong VPC riêng" }
+  - id: behavioural
+    kind: knowledge
+    type: single
+    prompt: "Phỏng vấn hành vi: \"Kể về lần bạn gây ra sự cố.\" Cách trả lời nào tốt nhất?"
+    options:
+      - { id: a, text: "Nói chưa bao giờ gây sự cố, để thể hiện mình cẩn thận và đáng tin" }
+      - { id: b, text: "Kể sự cố của đồng nghiệp và cách mình phát hiện ra lỗi của người đó" }
+      - { id: c, text: "Theo STAR: bối cảnh, việc của mình, hành động cụ thể, kết quả có số và điều đã thay đổi sau đó" }
+      - { id: d, text: "Kể ngắn gọn rằng sự cố nhỏ và đã được sửa nhanh, rồi chuyển sang thành tích khác" }
+  - id: pipeline-security
+    kind: knowledge
+    type: multi
+    prompt: "Những biện pháp nào thuộc bảo mật pipeline cơ bản đáng làm ngay cho repo Olist Shop?"
+    options:
+      - { id: a, text: "Quét secret trong mọi commit và chặn push khi phát hiện" }
+      - { id: b, text: "Sinh SBOM cho mỗi image build ra và lưu cùng artifact" }
+      - { id: c, text: "Ký image và kiểm chữ ký trước khi deploy" }
+      - { id: d, text: "Cho mọi job quyền ghi vào repo để tiện tự động sửa lỗi" }
+      - { id: e, text: "Ghim action bên thứ ba theo commit SHA thay vì tag" }
+  - id: toil
+    kind: knowledge
+    type: multi
+    prompt: "Việc nào là toil theo định nghĩa của Google SRE?"
+    options:
+      - { id: a, text: "Mỗi sáng tay xoá log cũ trên ba máy chủ để không đầy đĩa" }
+      - { id: b, text: "Thiết kế lại kiến trúc để bỏ một phụ thuộc hay lỗi" }
+      - { id: c, text: "Restart tay worker mỗi khi alert hàng đợi đầy, tuần vài lần" }
+      - { id: d, text: "Tạo tài khoản cho nhân viên mới bằng cách bấm tay qua năm giao diện" }
+      - { id: e, text: "Viết postmortem cho một sự cố SEV1" }

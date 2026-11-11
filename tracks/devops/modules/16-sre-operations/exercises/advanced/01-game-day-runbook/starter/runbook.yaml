@@ -1,0 +1,7 @@
+entries:
+  - id: TODO
+    detect:
+      promql: TODO
+    action:
+      do: TODO
+      service: TODO
