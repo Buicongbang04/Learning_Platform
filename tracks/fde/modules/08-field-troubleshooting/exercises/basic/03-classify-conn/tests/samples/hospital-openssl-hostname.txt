@@ -1,0 +1,13 @@
+$ openssl s_client -connect 127.0.0.1:8443 -CAfile ~/tlslab/ca.pem -verify_hostname 127.0.0.1 -brief </dev/null
+Can't use SSL_get_servername
+depth=0 CN = quillo.benhvien.local
+verify error:num=62:Hostname mismatch
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.3
+Ciphersuite: TLS_AES_256_GCM_SHA384
+Peer certificate: CN = quillo.benhvien.local
+Hash used: SHA256
+Signature type: RSA-PSS
+Verification error: Hostname mismatch
+Server Temp Key: X25519, 253 bits
+DONE

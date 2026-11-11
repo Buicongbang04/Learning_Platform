@@ -1,0 +1,23 @@
+embed-1  | 0.00.003.419 I srv  llama_server: initializing ...
+embed-1  | 0.00.013.542 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+embed-1  | 0.00.014.073 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+embed-1  | 0.00.015.608 I srv    load_model: loading model '/models/nomic-embed-text-v1.5.Q8_0.gguf'
+embed-1  | 0.00.083.318 W load: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect
+embed-1  | 0.00.094.128 I cmn          init: llama threadpool init, n_threads = 2
+embed-1  | 0.00.094.205 W init: embeddings required but some input tokens were not marked as outputs -> overriding
+embed-1  | 0.00.121.412 W srv    load_model: speculative decoding not supported by this context
+embed-1  | 0.00.121.421 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+embed-1  | 0.00.123.299 I srv  llama_server: model loaded
+embed-1  | 0.00.123.303 I srv  llama_server: listening on http://0.0.0.0:8080
+embed-1  | 0.17.297.184 I srv    operator(): operator(): cleaning up before exit...
+embed-1  | 0.00.019.334 I srv  llama_server: initializing ...
+embed-1  | 0.00.096.386 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+embed-1  | 0.00.102.373 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+embed-1  | 0.00.104.386 I srv    load_model: loading model '/models/nomic-embed-text-v1.5.Q8_0.gguf'
+embed-1  | 0.00.471.258 W load: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect
+embed-1  | 0.01.001.020 I cmn          init: llama threadpool init, n_threads = 2
+embed-1  | 0.01.001.558 W init: embeddings required but some input tokens were not marked as outputs -> overriding
+embed-1  | 0.02.425.940 W srv    load_model: speculative decoding not supported by this context
+embed-1  | 0.02.436.440 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+embed-1  | 0.02.492.640 I srv  llama_server: model loaded
+embed-1  | 0.02.493.014 I srv  llama_server: listening on http://0.0.0.0:8080

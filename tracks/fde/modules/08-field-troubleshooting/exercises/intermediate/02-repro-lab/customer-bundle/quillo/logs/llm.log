@@ -1,0 +1,19 @@
+llm-1  | 0.00.001.205 I srv  llama_server: initializing ...
+llm-1  | 0.00.009.817 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+llm-1  | 0.00.010.187 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+llm-1  | 0.00.011.742 I srv    load_model: loading model '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'
+llm-1  | 0.00.506.467 W load: control-looking token: *** '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+llm-1  | 0.00.635.164 I cmn          init: llama threadpool init, n_threads = 2
+llm-1  | 0.00.696.143 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 4096, kv_unified = 'true'
+llm-1  | 0.00.700.751 I srv  llama_server: model loaded
+llm-1  | 0.00.700.932 I srv  llama_server: listening on http://0.0.0.0:8080
+llm-1  | 0.16.839.368 I srv    operator(): operator(): cleaning up before exit...
+llm-1  | 0.00.008.759 I srv  llama_server: initializing ...
+llm-1  | 0.00.080.651 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+llm-1  | 0.00.088.801 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+llm-1  | 0.00.091.803 I srv    load_model: loading model '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'
+llm-1  | 0.02.128.223 W load: control-looking token: *** '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+llm-1  | 0.04.514.626 I cmn          init: llama threadpool init, n_threads = 2
+llm-1  | 0.04.647.659 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 4096, kv_unified = 'true'
+llm-1  | 0.04.657.431 I srv  llama_server: model loaded
+llm-1  | 0.04.657.517 I srv  llama_server: listening on http://0.0.0.0:8080

@@ -1,0 +1,2 @@
+$ getent hosts localhost
+::1             localhost localhost.localdomain localhost6 localhost6.localdomain6

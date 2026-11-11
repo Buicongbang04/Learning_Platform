@@ -1,0 +1,19 @@
+cause: proxy-misrouting
+summary: >-
+  Các container quillo tạo lại trong đợt bảo trì mang biến HTTP_PROXY/HTTPS_PROXY của proxy bệnh viện, với no_proxy chỉ
+  có localhost,127.0.0.1. Thư viện HTTP của api tôn trọng biến này, nên lời gọi nội bộ tới http://llm:8080 và
+  http://embed:8080 đi vòng qua proxy, proxy không biết tên llm/embed và trả 502. Hai container model vẫn healthy vì
+  healthcheck của chúng gọi 127.0.0.1 ngay trong container.
+evidence:
+  - source: bundle:quillo/logs/api.log
+    text: "502 Bad Gateway' for url 'http://embed:8080"
+  - source: bundle:quillo/healthz.txt
+    text: "\"llm\":false"
+  - source: customer:1
+    text: "HTTP_PROXY=http://10.0.2.100:3128"
+customer_commands:
+  - docker inspect --format '{{json .Config.Env}}' quillo-api-1
+next_steps:
+  - "Hỏi IT vì sao khai proxy trong ~/.docker/config.json; nếu chỉ để docker pull thì cấu hình proxy cho dockerd (systemd drop-in), không cho container."
+  - "Nếu cần giữ proxy cho container: thêm llm, embed, db, api và mạng nội bộ của compose vào noProxy/NO_PROXY, rồi docker compose up -d --force-recreate."
+  - "Kiểm lại: /healthz trả 200 với llm, embed true và /api/ask trả lời có trích dẫn; ghi tình huống vào runbook triển khai cho bệnh viện."

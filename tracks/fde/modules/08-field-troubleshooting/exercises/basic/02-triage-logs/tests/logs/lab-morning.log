@@ -1,0 +1,261 @@
+embed-1  | 0.00.005.302 I srv  llama_server: initializing ...
+embed-1  | 0.00.024.331 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+embed-1  | 0.00.024.980 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+embed-1  | 0.00.027.628 I srv    load_model: loading model '/models/nomic-embed-text-v1.5.Q8_0.gguf'
+embed-1  | 0.00.116.867 W load: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect
+embed-1  | 0.00.217.856 I cmn          init: llama threadpool init, n_threads = 2
+embed-1  | 0.00.218.092 W init: embeddings required but some input tokens were not marked as outputs -> overriding
+embed-1  | 0.00.314.183 W srv    load_model: speculative decoding not supported by this context
+embed-1  | 0.00.317.633 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+embed-1  | 0.00.319.455 I srv  llama_server: model loaded
+embed-1  | 0.00.321.596 I srv  llama_server: listening on http://0.0.0.0:8080
+embed-1  | 0.11.780.902 I srv    operator(): operator(): cleaning up before exit...
+embed-1  | 0.00.005.222 I srv  llama_server: initializing ...
+embed-1  | 0.00.041.933 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+embed-1  | 0.00.044.321 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+embed-1  | 0.00.045.832 I srv    load_model: loading model '/models/nomic-embed-text-v1.5.Q8_0.gguf'
+embed-1  | 0.00.221.818 W load: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect
+embed-1  | 0.00.407.571 I cmn          init: llama threadpool init, n_threads = 2
+embed-1  | 0.00.407.835 W init: embeddings required but some input tokens were not marked as outputs -> overriding
+embed-1  | 0.00.865.667 W srv    load_model: speculative decoding not supported by this context
+embed-1  | 0.00.865.681 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+embed-1  | 0.00.915.208 I srv  llama_server: model loaded
+embed-1  | 0.00.915.222 I srv  llama_server: listening on http://0.0.0.0:8080
+embed-1  | 0.06.541.832 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.06.541.841 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+embed-1  | 0.06.541.847 I slot get_availabl: id  1 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.06.541.849 I slot launch_slot_: id  1 | task 1 | processing task, is_child = 0
+embed-1  | 0.07.484.375 I slot      release: id  0 | task 0 | stop processing: n_tokens = 409, truncated = 0
+embed-1  | 0.07.484.398 I slot      release: id  1 | task 1 | stop processing: n_tokens = 203, truncated = 0
+embed-1  | 0.07.510.786 I slot get_availabl: id  2 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.07.510.795 I slot launch_slot_: id  2 | task 3 | processing task, is_child = 0
+embed-1  | 0.07.510.797 I slot get_availabl: id  3 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.07.510.797 I slot launch_slot_: id  3 | task 4 | processing task, is_child = 0
+embed-1  | 0.08.453.381 I slot      release: id  2 | task 3 | stop processing: n_tokens = 404, truncated = 0
+embed-1  | 0.08.453.394 I slot      release: id  3 | task 4 | stop processing: n_tokens = 195, truncated = 0
+embed-1  | 0.08.470.719 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = 15194351
+embed-1  | 0.08.470.730 I slot launch_slot_: id  0 | task 6 | processing task, is_child = 0
+embed-1  | 0.08.470.735 I slot get_availabl: id  1 | task -1 | selected slot by LRU, n_tokens = 0, t_last = 15194371
+embed-1  | 0.08.470.737 I slot launch_slot_: id  1 | task 7 | processing task, is_child = 0
+embed-1  | 0.09.394.371 I slot      release: id  0 | task 6 | stop processing: n_tokens = 406, truncated = 0
+embed-1  | 0.09.394.384 I slot      release: id  1 | task 7 | stop processing: n_tokens = 193, truncated = 0
+embed-1  | 0.39.730.870 I slot get_availabl: id  2 | task -1 | selected slot by LRU, n_tokens = 0, t_last = 16163357
+embed-1  | 0.39.730.891 I slot launch_slot_: id  2 | task 9 | processing task, is_child = 0
+embed-1  | 0.39.800.763 I slot      release: id  2 | task 9 | stop processing: n_tokens = 18, truncated = 0
+embed-1  | 0.47.854.213 I slot get_availabl: id  3 | task -1 | selected slot by LRU, n_tokens = 0, t_last = 16163367
+embed-1  | 0.47.854.221 I slot launch_slot_: id  3 | task 11 | processing task, is_child = 0
+embed-1  | 0.47.898.390 I slot      release: id  3 | task 11 | stop processing: n_tokens = 18, truncated = 0
+embed-1  | 0.48.883.577 I srv    operator(): operator(): cleaning up before exit...
+embed-1  | 0.00.000.617 I srv  llama_server: initializing ...
+embed-1  | 0.00.009.545 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+embed-1  | 0.00.009.918 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+embed-1  | 0.00.011.319 I srv    load_model: loading model '/models/nomic-embed-text-v1.5.Q8_0.gguf'
+embed-1  | 0.00.060.123 W load: special_eos_id is not in special_eog_ids - the tokenizer config may be incorrect
+embed-1  | 0.00.070.377 I cmn          init: llama threadpool init, n_threads = 2
+embed-1  | 0.00.070.658 W init: embeddings required but some input tokens were not marked as outputs -> overriding
+embed-1  | 0.00.080.815 W srv    load_model: speculative decoding not supported by this context
+embed-1  | 0.00.080.947 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+embed-1  | 0.00.082.718 I srv  llama_server: model loaded
+embed-1  | 0.00.082.815 I srv  llama_server: listening on http://0.0.0.0:8080
+embed-1  | 0.29.920.734 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.29.920.745 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+embed-1  | 0.29.920.750 I slot get_availabl: id  1 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.29.920.751 I slot launch_slot_: id  1 | task 1 | processing task, is_child = 0
+embed-1  | 0.30.863.277 I slot      release: id  0 | task 0 | stop processing: n_tokens = 407, truncated = 0
+embed-1  | 0.30.863.290 I slot      release: id  1 | task 1 | stop processing: n_tokens = 194, truncated = 0
+embed-1  | 0.30.878.164 I slot get_availabl: id  2 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.30.878.171 I slot launch_slot_: id  2 | task 3 | processing task, is_child = 0
+embed-1  | 0.30.878.173 I slot get_availabl: id  3 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+embed-1  | 0.30.878.174 I slot launch_slot_: id  3 | task 4 | processing task, is_child = 0
+embed-1  | 0.31.772.038 I slot      release: id  2 | task 3 | stop processing: n_tokens = 409, truncated = 0
+embed-1  | 0.31.777.596 I slot      release: id  3 | task 4 | stop processing: n_tokens = 199, truncated = 0
+embed-1  | 1.15.342.999 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = 133092653
+embed-1  | 1.15.343.006 I slot launch_slot_: id  0 | task 6 | processing task, is_child = 0
+embed-1  | 1.15.368.252 I slot      release: id  0 | task 6 | stop processing: n_tokens = 16, truncated = 0
+embed-1  | 1.21.137.333 I slot get_availabl: id  1 | task -1 | selected slot by LRU, n_tokens = 0, t_last = 133092663
+embed-1  | 1.21.137.338 I slot launch_slot_: id  1 | task 8 | processing task, is_child = 0
+embed-1  | 1.21.178.972 I slot      release: id  1 | task 8 | stop processing: n_tokens = 18, truncated = 0
+llm-1    | 0.00.006.114 I srv  llama_server: initializing ...
+llm-1    | 0.00.020.144 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+llm-1    | 0.00.020.566 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+llm-1    | 0.00.022.162 I srv    load_model: loading model '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'
+llm-1    | 0.00.497.352 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+llm-1    | 0.00.622.660 I cmn          init: llama threadpool init, n_threads = 2
+llm-1    | 0.00.699.133 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 4096, kv_unified = 'true'
+llm-1    | 0.00.702.997 I srv  llama_server: model loaded
+llm-1    | 0.00.703.086 I srv  llama_server: listening on http://0.0.0.0:8080
+llm-1    | 0.11.813.353 I srv    operator(): operator(): cleaning up before exit...
+llm-1    | 0.00.000.935 I srv  llama_server: initializing ...
+llm-1    | 0.00.017.871 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+llm-1    | 0.00.018.235 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+llm-1    | 0.00.022.831 I srv    load_model: loading model '/models/qwen2.5-0.5b-instruct-q4_k_m.gguf'
+llm-1    | 0.01.090.074 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+llm-1    | 0.01.621.858 I cmn          init: llama threadpool init, n_threads = 2
+llm-1    | 0.01.750.202 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 4096, kv_unified = 'true'
+llm-1    | 0.01.760.801 I srv  llama_server: model loaded
+llm-1    | 0.01.760.862 I srv  llama_server: listening on http://0.0.0.0:8080
+llm-1    | 0.39.757.579 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+llm-1    | 0.39.757.629 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+llm-1    | 0.47.785.169 I slot print_timing: id  0 | task 0 | prompt eval time =    7584.82 ms /  1084 tokens (    7.00 ms per token,   142.92 tokens per second)
+llm-1    | 0.47.785.207 I slot print_timing: id  0 | task 0 |        eval time =     442.67 ms /    15 tokens (   31.62 ms per token,    31.63 tokens per second)
+llm-1    | 0.47.785.216 I slot print_timing: id  0 | task 0 |       total time =    8027.50 ms /  1099 tokens
+llm-1    | 0.47.785.227 I slot print_timing: id  0 | task 0 |    graphs reused =         14
+llm-1    | 0.47.785.344 I slot print_timing: id  0 | task 0 |   graph reallocs =          0    /     0        (same size) / (changed size)
+llm-1    | 0.47.785.645 I slot      release: id  0 | task 0 | stop processing: n_tokens = 1098, truncated = 0
+llm-1    | 0.47.842.430 I slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 1.000 (> 0.100 thold), f_keep = 0.987
+llm-1    | 0.47.842.466 I slot launch_slot_: id  0 | task 16 | processing task, is_child = 0
+llm-1    | 0.47.842.483 W slot   operator(): id  0 | task 16 | need to evaluate at least 1 token for each active slot (n_past = 1084, task.n_tokens() = 1084)
+llm-1    | 0.47.842.483 W slot   operator(): id  0 | task 16 | n_past was set to 1083
+llm-1    | 0.48.310.382 I slot print_timing: id  0 | task 16 | prompt eval time =      36.05 ms /     1 tokens (   36.05 ms per token,    27.74 tokens per second)
+llm-1    | 0.48.310.580 I slot print_timing: id  0 | task 16 |        eval time =     431.83 ms /    15 tokens (   30.85 ms per token,    32.42 tokens per second)
+llm-1    | 0.48.310.635 I slot print_timing: id  0 | task 16 |       total time =     467.88 ms /    16 tokens
+llm-1    | 0.48.310.677 I slot print_timing: id  0 | task 16 |    graphs reused =         29
+llm-1    | 0.48.310.724 I slot print_timing: id  0 | task 16 |   graph reallocs =          0    /     0        (same size) / (changed size)
+llm-1    | 0.48.310.964 I slot      release: id  0 | task 16 | stop processing: n_tokens = 1098, truncated = 0
+llm-1    | 2.50.422.390 I slot get_availabl: id  1 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+llm-1    | 2.50.422.429 I slot launch_slot_: id  1 | task 32 | processing task, is_child = 0
+llm-1    | 2.56.177.543 I slot print_timing: id  1 | task 32 | prompt eval time =    5667.76 ms /  1087 tokens (    5.21 ms per token,   191.79 tokens per second)
+llm-1    | 2.56.177.550 I slot print_timing: id  1 | task 32 |        eval time =      73.40 ms /     4 tokens (   24.47 ms per token,    40.87 tokens per second)
+llm-1    | 2.56.177.551 I slot print_timing: id  1 | task 32 |       total time =    5741.16 ms /  1091 tokens
+llm-1    | 2.56.177.552 I slot print_timing: id  1 | task 32 |    graphs reused =         31
+llm-1    | 2.56.177.554 I slot print_timing: id  1 | task 32 |   graph reallocs =          0    /     0        (same size) / (changed size)
+llm-1    | 2.56.177.636 I slot      release: id  1 | task 32 | stop processing: n_tokens = 1090, truncated = 0
+llm-1    | 2.56.234.014 I slot get_availabl: id  2 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+llm-1    | 2.56.234.060 I slot launch_slot_: id  2 | task 37 | processing task, is_child = 0
+llm-1    | 3.02.655.629 I slot print_timing: id  2 | task 37 | prompt eval time =    5958.74 ms /  1092 tokens (    5.46 ms per token,   183.26 tokens per second)
+llm-1    | 3.02.655.710 I slot print_timing: id  2 | task 37 |        eval time =     458.15 ms /    15 tokens (   32.72 ms per token,    30.56 tokens per second)
+llm-1    | 3.02.655.736 I slot print_timing: id  2 | task 37 |       total time =    6416.89 ms /  1107 tokens
+llm-1    | 3.02.655.768 I slot print_timing: id  2 | task 37 |    graphs reused =         44
+llm-1    | 3.02.655.801 I slot print_timing: id  2 | task 37 |   graph reallocs =          0    /     0        (same size) / (changed size)
+llm-1    | 3.02.656.056 I slot      release: id  2 | task 37 | stop processing: n_tokens = 1106, truncated = 0
+worker-1  | {"ts": "2026-11-11T03:13:54+0000", "level": "INFO", "logger": "quillo.ingest", "msg": "worker bắt đầu theo dõi", "inbox": "/data/inbox", "version": "1.0.0"}
+worker-1  | {"ts": "2026-11-11T05:46:05+0000", "level": "INFO", "logger": "quillo.ingest", "msg": "worker bắt đầu theo dõi", "inbox": "/data/inbox", "version": "1.0.0"}
+worker-1  | {"ts": "2026-11-11T05:46:11+0000", "level": "INFO", "logger": "quillo.ingest", "msg": "đã nạp tài liệu", "doc_id": "7c2f366ad43ac38b", "filename": "hop-dong-001.txt", "chunks": 2}
+worker-1  | {"ts": "2026-11-11T05:46:12+0000", "level": "INFO", "logger": "quillo.ingest", "msg": "đã nạp tài liệu", "doc_id": "8b6b45023c4a4eb2", "filename": "hop-dong-002.txt", "chunks": 2}
+db-1      | The files belonging to this database system will be owned by user "postgres".
+db-1      | This user must also own the server process.
+db-1      | 
+db-1      | The database cluster will be initialized with locale "en_US.utf8".
+db-1      | The default database encoding has accordingly been set to "UTF8".
+db-1      | The default text search configuration will be set to "english".
+db-1      | 
+db-1      | Data page checksums are disabled.
+db-1      | 
+db-1      | fixing permissions on existing directory /var/lib/postgresql/data ... ok
+db-1      | creating subdirectories ... ok
+db-1      | selecting dynamic shared memory implementation ... posix
+db-1      | selecting default max_connections ... 100
+db-1      | selecting default shared_buffers ... 128MB
+worker-1  | {"ts": "2026-11-11T05:46:13+0000", "level": "INFO", "logger": "quillo.ingest", "msg": "đã nạp tài liệu", "doc_id": "dc6e6717786af73e", "filename": "hop-dong-003.txt", "chunks": 2}
+worker-1  | {"ts": "2026-11-11T05:46:53+0000", "level": "WARNING", "logger": "quillo.ingest", "msg": "dịch vụ không với tới, để nguyên tệp và thử lại sau", "file": "hop-dong-004.txt", "error": "ConnectError('[Errno -3] Temporary failure in name resolution')", "retry_s": 5.0}
+worker-1  | {"ts": "2026-11-11T05:46:58+0000", "level": "WARNING", "logger": "quillo.ingest", "msg": "dịch vụ không với tới, để nguyên tệp và thử lại sau", "file": "hop-dong-004.txt", "error": "ConnectError('[Errno -3] Temporary failure in name resolution')", "retry_s": 10.0}
+worker-1  | {"ts": "2026-11-11T05:47:08+0000", "level": "WARNING", "logger": "quillo.ingest", "msg": "dịch vụ không với tới, để nguyên tệp và thử lại sau", "file": "hop-dong-004.txt", "error": "ConnectError('[Errno -3] Temporary failure in name resolution')", "retry_s": 20.0}
+worker-1  | {"ts": "2026-11-11T05:47:28+0000", "level": "WARNING", "logger": "quillo.ingest", "msg": "dịch vụ không với tới, để nguyên tệp và thử lại sau", "file": "hop-dong-004.txt", "error": "ConnectError('[Errno -3] Temporary failure in name resolution')", "retry_s": 40.0}
+worker-1  | {"ts": "2026-11-11T05:48:09+0000", "level": "INFO", "logger": "quillo.ingest", "msg": "đã nạp tài liệu", "doc_id": "6426f1b66eac051a", "filename": "hop-dong-004.txt", "chunks": 2}
+worker-1  | {"ts": "2026-11-11T05:48:10+0000", "level": "INFO", "logger": "quillo.ingest", "msg": "đã nạp tài liệu", "doc_id": "6add179a4975d0cd", "filename": "hop-dong-005.txt", "chunks": 2}
+worker-1  | {"ts": "2026-11-11T05:48:30+0000", "level": "WARNING", "logger": "pypdf._reader", "msg": "EOF marker not found"}
+worker-1  | {"ts": "2026-11-11T05:48:30+0000", "level": "ERROR", "logger": "quillo.ingest", "msg": "nạp tài liệu lỗi", "file": "scan-006.pdf", "error": "PdfStreamError('Stream has ended unexpectedly')", "attempts": 1}
+db-1      | selecting default time zone ... Etc/UTC
+db-1      | creating configuration files ... ok
+db-1      | running bootstrap script ... ok
+db-1      | performing post-bootstrap initialization ... ok
+db-1      | syncing data to disk ... ok
+db-1      | 
+db-1      | initdb: warning: enabling "trust" authentication for local connections
+db-1      | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+db-1      | 
+db-1      | Success. You can now start the database server using:
+db-1      | 
+db-1      |     pg_ctl -D /var/lib/postgresql/data -l logfile start
+db-1      | 
+db-1      | waiting for server to start....2026-11-11 03:13:43.202 UTC [47] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+db-1      | 2026-11-11 03:13:43.205 UTC [47] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+db-1      | 2026-11-11 03:13:43.215 UTC [50] LOG:  database system was shut down at 2026-11-11 03:13:43 UTC
+db-1      | 2026-11-11 03:13:43.220 UTC [47] LOG:  database system is ready to accept connections
+db-1      |  done
+db-1      | server started
+db-1      | CREATE DATABASE
+db-1      | 
+db-1      | 
+db-1      | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+db-1      | 
+db-1      | waiting for server to shut down....2026-11-11 03:13:43.382 UTC [47] LOG:  received fast shutdown request
+db-1      | 2026-11-11 03:13:43.386 UTC [47] LOG:  aborting any active transactions
+db-1      | 2026-11-11 03:13:43.388 UTC [47] LOG:  background worker "logical replication launcher" (PID 53) exited with exit code 1
+db-1      | 2026-11-11 03:13:43.388 UTC [48] LOG:  shutting down
+db-1      | 2026-11-11 03:13:43.393 UTC [48] LOG:  checkpoint starting: shutdown immediate
+db-1      | 2026-11-11 03:13:43.435 UTC [48] LOG:  checkpoint complete: wrote 922 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.019 s, sync=0.015 s, total=0.047 s; sync files=301, longest=0.006 s, average=0.001 s; distance=4255 kB, estimate=4255 kB; lsn=0/1912108, redo lsn=0/1912108
+db-1      | 2026-11-11 03:13:43.439 UTC [47] LOG:  database system is shut down
+db-1      |  done
+db-1      | server stopped
+db-1      | 
+db-1      | PostgreSQL init process complete; ready for start up.
+db-1      | 
+db-1      | 2026-11-11 03:13:43.499 UTC [1] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+db-1      | 2026-11-11 03:13:43.500 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+db-1      | 2026-11-11 03:13:43.500 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+api-1     | INFO:     Started server process [1]
+api-1     | INFO:     Waiting for application startup.
+api-1     | {"ts": "2026-11-11T03:13:49+0000", "level": "INFO", "logger": "quillo.db", "msg": "áp migration", "migration": "0001_init.sql"}
+api-1     | {"ts": "2026-11-11T03:13:49+0000", "level": "INFO", "logger": "quillo.api", "msg": "quillo sẵn sàng", "version": "1.0.0", "schema": 1}
+api-1     | INFO:     Application startup complete.
+api-1     | INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+api-1     | {"ts": "2026-11-11T03:13:53+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T03:13:54+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 7}
+api-1     | INFO:     Shutting down
+api-1     | INFO:     Waiting for application shutdown.
+api-1     | INFO:     Application shutdown complete.
+api-1     | INFO:     Finished server process [1]
+api-1     | INFO:     Started server process [1]
+api-1     | INFO:     Waiting for application startup.
+api-1     | INFO:     Application startup complete.
+api-1     | INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+api-1     | {"ts": "2026-11-11T05:46:05+0000", "level": "INFO", "logger": "quillo.api", "msg": "quillo sẵn sàng", "version": "1.0.0", "schema": 1}
+api-1     | {"ts": "2026-11-11T05:46:07+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 9}
+api-1     | {"ts": "2026-11-11T05:46:09+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 7}
+api-1     | {"ts": "2026-11-11T05:46:19+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:46:29+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 7}
+api-1     | {"ts": "2026-11-11T05:46:40+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:46:50+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 15}
+api-1     | {"ts": "2026-11-11T05:46:51+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "POST", "path": "/api/ask", "status": 200, "ms": 8127}
+api-1     | {"ts": "2026-11-11T05:46:52+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "POST", "path": "/api/ask", "status": 200, "ms": 524}
+api-1     | {"ts": "2026-11-11T05:46:53+0000", "level": "ERROR", "logger": "quillo.api", "msg": "model server lỗi", "path": "/api/ask", "error": "ConnectError('[Errno -3] Temporary failure in name resolution')"}
+api-1     | {"ts": "2026-11-11T05:46:53+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "POST", "path": "/api/ask", "status": 503, "ms": 11}
+api-1     | {"ts": "2026-11-11T05:46:53+0000", "level": "ERROR", "logger": "quillo.api", "msg": "model server lỗi", "path": "/api/ask", "error": "ConnectError('[Errno -3] Temporary failure in name resolution')"}
+api-1     | {"ts": "2026-11-11T05:46:53+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "POST", "path": "/api/ask", "status": 503, "ms": 10}
+api-1     | {"ts": "2026-11-11T05:47:01+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 503, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:47:11+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 503, "ms": 11}
+api-1     | {"ts": "2026-11-11T05:47:21+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 503, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:47:31+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 503, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:47:38+0000", "level": "ERROR", "logger": "quillo.api", "msg": "model server lỗi", "path": "/api/ask", "error": "ConnectError('[Errno -3] Temporary failure in name resolution')"}
+api-1     | {"ts": "2026-11-11T05:47:38+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "POST", "path": "/api/ask", "status": 503, "ms": 7}
+api-1     | {"ts": "2026-11-11T05:47:42+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:47:52+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:48:02+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:48:12+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 7}
+api-1     | {"ts": "2026-11-11T05:48:22+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:48:33+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 8}
+api-1     | {"ts": "2026-11-11T05:48:43+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 7}
+api-1     | {"ts": "2026-11-11T05:48:53+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 7}
+api-1     | {"ts": "2026-11-11T05:49:00+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "POST", "path": "/api/ask", "status": 200, "ms": 5792}
+api-1     | {"ts": "2026-11-11T05:49:03+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "GET", "path": "/healthz", "status": 200, "ms": 21}
+api-1     | {"ts": "2026-11-11T05:49:06+0000", "level": "INFO", "logger": "quillo.api", "msg": "request", "method": "POST", "path": "/api/ask", "status": 200, "ms": 6477}
+db-1      | 2026-11-11 03:13:43.505 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+db-1      | 2026-11-11 03:13:43.512 UTC [63] LOG:  database system was shut down at 2026-11-11 03:13:43 UTC
+db-1      | 2026-11-11 03:13:43.517 UTC [1] LOG:  database system is ready to accept connections
+db-1      | 2026-11-11 03:13:54.555 UTC [1] LOG:  received fast shutdown request
+db-1      | 2026-11-11 03:13:54.562 UTC [1] LOG:  aborting any active transactions
+db-1      | 2026-11-11 03:13:54.563 UTC [1] LOG:  background worker "logical replication launcher" (PID 66) exited with exit code 1
+db-1      | 2026-11-11 03:13:54.564 UTC [61] LOG:  shutting down
+db-1      | 2026-11-11 03:13:54.568 UTC [61] LOG:  checkpoint starting: shutdown immediate
+db-1      | 2026-11-11 03:13:54.592 UTC [61] LOG:  checkpoint complete: wrote 217 buffers (1.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.007 s, sync=0.008 s, total=0.028 s; sync files=103, longest=0.004 s, average=0.001 s; distance=1112 kB, estimate=1112 kB; lsn=0/1A284E0, redo lsn=0/1A284E0
+db-1      | 2026-11-11 03:13:54.594 UTC [1] LOG:  database system is shut down
+db-1      | 
+db-1      | PostgreSQL Database directory appears to contain a database; Skipping initialization
+db-1      | 
+db-1      | 2026-11-11 05:46:04.196 UTC [1] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+db-1      | 2026-11-11 05:46:04.196 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+db-1      | 2026-11-11 05:46:04.196 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+db-1      | 2026-11-11 05:46:04.206 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+db-1      | 2026-11-11 05:46:04.217 UTC [29] LOG:  database system was shut down at 2026-11-11 03:13:54 UTC
+db-1      | 2026-11-11 05:46:04.233 UTC [1] LOG:  database system is ready to accept connections

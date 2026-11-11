@@ -1,0 +1,6 @@
+CONTAINER           REPOSITORY                   TAG                 PLATFORM            IMAGE ID            SIZE                CREATED
+quillo-api-1        quillo-api                   1.0.0               linux/amd64         fdf4b1d40dbb        187MB               11 hours ago
+quillo-db-1         pgvector/pgvector            0.8.6-pg16          linux/amd64         9b05db12a354        438MB               2 months ago
+quillo-embed-1      ghcr.io/ggml-org/llama.cpp   server-b11718       linux/amd64         ee21862106e6        844MB               3 weeks ago
+quillo-llm-1        ghcr.io/ggml-org/llama.cpp   server-b11718       linux/amd64         ee21862106e6        844MB               3 weeks ago
+quillo-worker-1     quillo-api                   1.0.0               linux/amd64         fdf4b1d40dbb        187MB               11 hours ago

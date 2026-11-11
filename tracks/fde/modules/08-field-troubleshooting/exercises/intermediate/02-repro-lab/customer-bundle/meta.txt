@@ -1,0 +1,5 @@
+quillo-support 1.0
+collected_utc=2026-11-11T06:00:48Z
+host=fde-ex-660aa175
+cwd=/home/fde/quillo-1.0.0
+user=fde

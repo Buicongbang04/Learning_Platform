@@ -704,6 +704,12 @@ Thêm hồ sơ mới: thêm YAML + `setup/fde/cloud-init/<hồ sơ>.sh`, đo `fa
 - Test kiểm **kết quả cuối trên VM** bằng công cụ thật (dịch vụ trả lời qua cổng forward, installer chạy lại idempotent,
   báo cáo survey khớp `Profile.facts`), không mô phỏng bằng Python và không chỉ grep chuỗi. Mọi quy tắc test chấm phải
   được nói trong README bài hoặc milestone.
+- Bài **sự cố nhiều kịch bản** (chẩn đoán, không phải cài đặt): định nghĩa kịch bản (cách test dựng sự cố, ticket, tập
+  nguyên nhân chấp nhận, mẫu bằng chứng trực tiếp) nằm trong `solutions/…/scenarios.py`, test nạp từ đó để mọi tệp trong
+  `exercises/` không lộ nguyên nhân. Người học đi hai bước: chạy thẳng tệp test để dựng cảnh theo seed (in seed, ticket,
+  bundle, kênh hỏi khách), rồi chấm bằng `pytest` với biến seed của bài (vd. `FDE_08_INCIDENT_SEED`), test dựng lại đúng
+  kịch bản của seed; chưa đặt biến thì skip. `SOLUTION=1` chạy **mọi** kịch bản, mỗi kịch bản với báo cáo tham chiếu
+  riêng (`solutions/…/incidents/<kịch bản>.yaml`), không cần bước tương tác.
 
 ### Module và trường `section`
 

@@ -275,6 +275,11 @@ trong ngân sách 300 s: nó boot từ một **snapshot dẫn xuất** dựng m�
 - `07-customer-integration-quillo` (module 07): `lab-open` (3072 MB) đang chạy quillo 1.0.0 bằng compose
   (`~/quillo-1.0.0`, `QUILLO_BIND=0.0.0.0` để cổng forward của QEMU tới được api), chưa bật SSO, inbox rỗng. Dựng từ
   bundle bằng `setup/fde/derived/07-customer-integration-quillo.sh` (đầu vào của khoá: bundle, script).
+- `08-field-troubleshooting-hospital` (module 08): `hospital` (3072 MB) đang chạy quillo 1.0.0 bằng compose
+  (`~/quillo-1.0.0`, `QUILLO_BIND=0.0.0.0`), inbox rỗng; binary compose v5.6.1 đã ghim nằm ở
+  `~/.docker/cli-plugins/docker-compose` của `fde` (máy không có plugin compose). Dựng từ bundle bằng
+  `setup/fde/derived/08-field-troubleshooting-hospital.sh` (đầu vào của khoá: bundle, script, sha256 của binary compose
+  trong `data/raw/fde-tools/docker-compose-v5.6.1/`); ~85 s, đĩa còn trống ~3,8 GB.
 
 ## PC GPU
 

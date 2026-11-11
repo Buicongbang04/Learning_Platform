@@ -1,0 +1,24 @@
+$ curl -v http://archive.ubuntu.com/ubuntu/ -o /dev/null
+* Uses proxy env variable no_proxy == 'localhost,127.0.0.1'
+* Uses proxy env variable http_proxy == 'http://10.0.2.100:3128'
+*   Trying 10.0.2.100:3128...
+* TCP_NODELAY set
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0* Connected to 10.0.2.100 (10.0.2.100) port 3128 (#0)
+> GET http://archive.ubuntu.com/ubuntu/ HTTP/1.1
+> Host: archive.ubuntu.com
+> User-Agent: curl/7.68.0
+> Accept: */*
+> Proxy-Connection: Keep-Alive
+> 
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 407 Proxy Authentication Required
+< Proxy-Authenticate: Basic realm="mitmproxy"
+< content-length: 129
+< 
+{ [129 bytes data]
+
+100   129  100   129    0     0   3146      0 --:--:-- --:--:-- --:--:--  3225
+* Connection #0 to host 10.0.2.100 left intact

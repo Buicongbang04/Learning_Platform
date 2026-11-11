@@ -1,0 +1,11 @@
+$ openssl s_client -connect pypi.org:443 -proxy 10.0.2.100:3128 -servername pypi.org -CAfile ~/proxy-ca.pem -verify_return_error -brief </dev/null
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.3
+Ciphersuite: TLS_AES_256_GCM_SHA384
+Peer certificate: CN = pypi.org
+Hash used: SHA256
+Signature type: RSA-PSS
+Verification: OK
+Server Temp Key: X25519, 253 bits
+
+DONE

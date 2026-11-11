@@ -1,0 +1,100 @@
+$ curl -v --cacert ~/proxy-ca.pem https://pypi.org/robots.txt -o /dev/null
+* Uses proxy env variable no_proxy == 'localhost,127.0.0.1'
+* Uses proxy env variable https_proxy == 'http://10.0.2.100:3128'
+*   Trying 10.0.2.100:3128...
+* TCP_NODELAY set
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0* Connected to 10.0.2.100 (10.0.2.100) port 3128 (#0)
+* allocate connect buffer!
+* Establish HTTP proxy tunnel to pypi.org:443
+> CONNECT pypi.org:443 HTTP/1.1
+> Host: pypi.org:443
+> User-Agent: curl/7.68.0
+> Proxy-Connection: Keep-Alive
+> 
+< HTTP/1.1 200 Connection established
+< 
+* Proxy replied 200 to CONNECT request
+* CONNECT phase completed!
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: /home/fde/proxy-ca.pem
+  CApath: /etc/ssl/certs
+} [5 bytes data]
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+} [512 bytes data]
+* CONNECT phase completed!
+* CONNECT phase completed!
+{ [5 bytes data]
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+{ [122 bytes data]
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+{ [43 bytes data]
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+{ [959 bytes data]
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+{ [264 bytes data]
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+{ [52 bytes data]
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+} [1 bytes data]
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+} [52 bytes data]
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+* ALPN, server accepted to use h2
+* Server certificate:
+*  subject: CN=pypi.org
+*  start date: Nov  9 05:41:47 2026 GMT
+*  expire date: May 27 05:41:47 2027 GMT
+*  subjectAltName: host "pypi.org" matched cert's "pypi.org"
+*  issuer: CN=mitmproxy; O=mitmproxy
+*  SSL certificate verify ok.
+* Using HTTP2, server supports multi-use
+* Connection state changed (HTTP/2 confirmed)
+* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len=0
+} [5 bytes data]
+* Using Stream ID: 1 (easy handle 0x55e901d44b60)
+} [5 bytes data]
+> GET /robots.txt HTTP/2
+> Host: pypi.org
+> user-agent: curl/7.68.0
+> accept: */*
+> 
+{ [5 bytes data]
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+{ [233 bytes data]
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+{ [233 bytes data]
+* old SSL session ID is stale, removing
+{ [5 bytes data]
+* Connection state changed (MAX_CONCURRENT_STREAMS == 100)!
+} [5 bytes data]
+< HTTP/2 200 
+< cache-control: max-age=86400, public
+< etag: "ESq3TQq/jha3JHY8E7YTqw"
+< referrer-policy: origin-when-cross-origin
+< content-security-policy: base-uri 'self'; connect-src 'self' https://api.github.com/repos/ https://api.github.com/search/issues https://gitlab.com/api/ https://analytics.python.org *.ethicalads.io https://api.pwnedpasswords.com https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/sre/mathmaps/ https://2p66nmmycsj3.statuspage.io; default-src 'none'; font-src 'self'; form-action 'self' https://checkout.stripe.com https://billing.stripe.com; frame-ancestors 'none'; frame-src 'none'; img-src 'self' https://pypi-camo.freetls.fastly.net/ *.ethicalads.io ethicalads.blob.core.windows.net; script-src 'self' https://analytics.python.org *.ethicalads.io 'sha256-U3hKDidudIaxBDEzwGJApJgPEf2mWk6cfMWghrAa6i0=' https://cdn.jsdelivr.net/npm/mathjax@3.2.2/ 'sha256-1CldwzdEg2k1wTmf7s5RWVd7NMXI/7nxxjJM2C4DqII=' 'sha256-0POaN8stWYQxhzjKS+/eOfbbJ/u4YHO5ZagJvLpMypo='; style-src 'self' *.ethicalads.io 'sha256-2YHqZokjiizkHi1Zt+6ar0XJ0OeEy/egBnlm+MDMtrM=' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-JLEjeN9e5dGsz5475WyRaoA4eQOdNPxDIeUhclnJDCE=' 'sha256-mQyxHEuwZJqpxCw3SLmc4YOySNKXunyu2Oiz1r3/wAE=' 'sha256-OCf+kv5Asiwp++8PIevKBYSgnNLNUZvxAp4a7wMLuKA=' 'sha256-h5LOiLhk6wiJrGsG5ItM0KimwzWQH/yAcmoJDJL//bY='
+< server: gunicorn
+< content-type: text/plain; charset=UTF-8
+< accept-ranges: bytes
+< date: Wed, 11 Nov 2026 05:41:47 GMT
+< x-served-by: cache-iad-kiad7000020-IAD, cache-iad-kiad7000144-IAD, cache-sin-wsat1880084-SIN
+< x-cache: MISS, HIT, HIT
+< x-cache-hits: 0, 1113, 2435
+< x-timer: S1794375708.796541,VS0,VE0
+< vary: Accept-Encoding
+< strict-transport-security: max-age=31536000; includeSubDomains; preload
+< x-frame-options: deny
+< x-xss-protection: 1; mode=block
+< x-content-type-options: nosniff
+< x-permitted-cross-domain-policies: none
+< permissions-policy: publickey-credentials-create=(self),publickey-credentials-get=(self),accelerometer=(),ambient-light-sensor=(),autoplay=(),battery=(),camera=(),display-capture=(),document-domain=(),encrypted-media=(),execution-while-not-rendered=(),execution-while-out-of-viewport=(),fullscreen=(),gamepad=(),geolocation=(),gyroscope=(),hid=(),identity-credentials-get=(),idle-detection=(),local-fonts=(),magnetometer=(),microphone=(),midi=(),otp-credentials=(),payment=(),picture-in-picture=(),screen-wake-lock=(),serial=(),speaker-selection=(),storage-access=(),usb=(),web-share=(),xr-spatial-tracking=()
+< content-length: 325
+< 
+{ [5 bytes data]
+
+100   325  100   325    0     0   1294      0 --:--:-- --:--:-- --:--:--  1300
+* Connection #0 to host 10.0.2.100 left intact

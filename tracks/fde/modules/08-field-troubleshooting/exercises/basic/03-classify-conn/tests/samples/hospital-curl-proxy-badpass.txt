@@ -1,0 +1,27 @@
+$ curl -v --proxy-user svc-proxy:wrong-e066ce https://pypi.org/robots.txt -o /dev/null
+* Uses proxy env variable no_proxy == 'localhost,127.0.0.1'
+* Uses proxy env variable https_proxy == 'http://10.0.2.100:3128'
+*   Trying 10.0.2.100:3128...
+* TCP_NODELAY set
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0* Connected to 10.0.2.100 (10.0.2.100) port 3128 (#0)
+* allocate connect buffer!
+* Establish HTTP proxy tunnel to pypi.org:443
+* Proxy auth using Basic with user 'svc-proxy'
+> CONNECT pypi.org:443 HTTP/1.1
+> Host: pypi.org:443
+> Proxy-Authorization: Basic c3ZjLXByb3h5Ondyb25nLWUwNjZjZQ==
+> User-Agent: curl/7.68.0
+> Proxy-Connection: Keep-Alive
+> 
+< HTTP/1.1 407 Proxy Authentication Required
+< Proxy-Authenticate: Basic realm="mitmproxy"
+* Authentication problem. Ignoring this.
+< content-length: 129
+< 
+* Received HTTP code 407 from proxy after CONNECT
+* CONNECT phase completed!
+* Closing connection 0
+curl: (56) Received HTTP code 407 from proxy after CONNECT

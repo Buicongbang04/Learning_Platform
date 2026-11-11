@@ -1,0 +1,9 @@
+Filesystem      Inodes  IUsed  IFree IUse% Mounted on
+udev            368374    402 367972    1% /dev
+tmpfs           372719    740 371979    1% /run
+/dev/vda1      1032192 120821 911371   12% /
+tmpfs           372719     14 372705    1% /dev/shm
+tmpfs           372719      3 372716    1% /run/lock
+tmpfs           372719     18 372701    1% /sys/fs/cgroup
+/dev/vda15           0      0      0     - /boot/efi
+tmpfs           372719     21 372698    1% /run/user/1000

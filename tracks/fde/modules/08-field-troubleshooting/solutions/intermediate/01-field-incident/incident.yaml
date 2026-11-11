@@ -1,0 +1,21 @@
+cause: disk-full
+summary: >-
+  Ổ / (8 GB, chung cho hệ điều hành, Docker và dữ liệu Postgres) đã đầy 100%. Postgres không mở rộng được tệp dữ liệu
+  khi worker ghi chunk của tài liệu mới (could not extend file: No space left on device), nên worker để nguyên tài liệu
+  trong inbox và thử lại mãi. Đọc không cần ghi nên hỏi tài liệu cũ vẫn được và /healthz vẫn 200. Chỗ bị chiếm là bản
+  export của HIS trong /var/backups/his, không phải dữ liệu của quillo.
+evidence:
+  - source: bundle:system/df.txt
+    text: "100% /"
+  - source: bundle:quillo/logs/db.log
+    text: "No space left on device"
+  - source: bundle:quillo/logs/worker.log
+    text: "để nguyên tệp và thử lại sau"
+  - source: customer:1
+    text: "/var/backups/his"
+customer_commands:
+  - sudo du -xh -d 2 /var
+next_steps:
+  - "IT bệnh viện chuyển bản export HIS khỏi ổ / (hoặc xoá bản cũ theo chính sách lưu trữ của họ); không xoá gì trong /var/lib/docker."
+  - "Sau khi có chỗ, kiểm worker tự nạp lại tài liệu đang chờ (inbox trống dần, log 'đã nạp tài liệu') mà không cần khởi động lại."
+  - "Đề xuất lâu dài: job export ghi sang ổ/NAS khác, cảnh báo khi ổ / còn dưới 15%, và đưa ngưỡng đĩa vào preflight của quillo."
