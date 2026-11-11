@@ -6,9 +6,11 @@ import os
 import re
 import secrets
 import shutil
+import subprocess
 import threading
 import time
 import uuid
+import warnings
 from pathlib import Path
 
 import httpx
@@ -50,7 +52,7 @@ COLLECTOR = "http://otel-collector:4317"
 LATENCY = 0.5
 HEALTHY_WINDOW = 10
 STEADY_WAIT = 120
-QUIET_AFTER = 20
+QUIET_AFTER = 60
 DEADLINE = 240
 COOLDOWN = 20
 POLL = 2
@@ -149,13 +151,28 @@ def tier_of(rule: dict) -> tuple[str, str]:
     return str(labels.get("severity")), str(labels.get("long_window"))
 
 
+def unfenced(doc: str) -> str:
+    """Dòng bắt đầu bằng '#' trong khối code (```, ~~~) được lùi một khoảng trắng để không thành tiêu đề."""
+    out, fence = [], None
+    for line in doc.splitlines():
+        mark = re.match(r"\s*(```|~~~)", line)
+        if mark and fence is None:
+            fence = mark.group(1)
+        elif mark and line.strip().startswith(fence):
+            fence = None
+        elif fence is not None and line.startswith("#"):
+            line = " " + line
+        out.append(line)
+    return "\n".join(out)
+
+
 def runbook_sections(doc: str) -> dict[str, str]:
-    parts = re.split(r"^## +(.+?)\s*$", doc, flags=re.M)
+    parts = re.split(r"^## +(.+?)\s*$", unfenced(doc), flags=re.M)
     return {parts[i].strip(): parts[i + 1] for i in range(1, len(parts) - 1, 2)}
 
 
 def subsection(body: str, name: str) -> str:
-    match = re.search(rf"^### +{re.escape(name)}\s*$(.*?)(?=^#{{1,3}} |\Z)", body, re.M | re.S)
+    match = re.search(rf"^### +{re.escape(name)}\s*$(.*?)(?=^#{{1,3}} |\Z)", unfenced(body), re.M | re.S)
     return match.group(1) if match else ""
 
 
@@ -263,6 +280,8 @@ def scenarios(budget: float) -> dict[str, dict]:
             scenario([(1500, slow), (150, 0.0)], [(1500, (("ticket", "1d"),)), (1640, ())]),
         "6 giờ khoẻ, 60 phút lỗi 20 lần budget, rồi hết lỗi: chưa bắn ở phút 10, page 1h ở phút 55, tắt 12 phút sau khi hết lỗi":
             scenario([(400, 0.0), (60, fast), (15, 0.0)], [(410, ()), (455, (("page", "1h"),)), (472, ())]),
+        "7 giờ lỗi 10 lần budget: chỉ page 6h và ticket 1d":
+            scenario([(430, 10 * budget)], [(420, (("page", "6h"), ("ticket", "1d")))]),
         "25 giờ lỗi nửa budget: không bắn":
             scenario([(1500, low)], [(1500, ())]),
         "lỗi chỉ ở /readyz, ở job olist-api-canary và 4xx: không bắn, mọi recording rule bằng 0":
@@ -566,8 +585,14 @@ def processed(stack: ObsStack) -> float | None:
 
 
 def game_day(stack: ObsStack, lab: DockerLab, probes: Probes, entries: list[dict], seed: int) -> dict:
-    with FaultInjector(lab, seed=seed, faults=list(FAULTS), services=list(FAULT_SERVICES), delay_ms=DELAY_MS) as injector:
-        code = injector.inject()
+    with warnings.catch_warnings(record=True) as caught, \
+            FaultInjector(lab, seed=seed, faults=list(FAULTS), services=list(FAULT_SERVICES), delay_ms=DELAY_MS) as injector:
+        warnings.simplefilter("always")
+        try:
+            code = injector.inject()
+        except (pytest.fail.Exception, RuntimeError, OSError, subprocess.TimeoutExpired, KeyError, ValueError):
+            raise AssertionError(f"Seed {seed}: không bơm được lỗi (lỗi môi trường, không phải runbook; chi tiết ẩn để không lộ "
+                                 f"lỗi). {rerun(seed)}") from None
         injected = mark = time.monotonic()
         actions: list[dict] = []
         recovered = None
@@ -591,6 +616,7 @@ def game_day(stack: ObsStack, lab: DockerLab, probes: Probes, entries: list[dict
         result = {"code": code, "resource": injector.resource, "actions": actions,
                   "recovered": None if recovered is None else recovered - injected,
                   "failed": sum(1 for _, _, ok in samples if not ok), "total": len(samples)}
+    result["warnings"] = [str(w.message) for w in caught]
     if recovered is not None:
         start = processed(stack)
         deadline = time.monotonic() + JOBS_WAIT
@@ -646,7 +672,8 @@ def observed(project_root, tmp_path_factory):
             if noisy:
                 raise AssertionError("bỏ qua game day vì runbook báo động giả khi hệ thống đang khoẻ")
             state.steps["game"] = game_day(stack, lab, probes, entries, state.seed)
-        except (pytest.fail.Exception, AssertionError, httpx.HTTPError, KeyError, ValueError) as error:
+        except (pytest.fail.Exception, AssertionError, httpx.HTTPError, KeyError, ValueError, subprocess.TimeoutExpired,
+                RuntimeError, OSError) as error:
             state.failure = f"{type(error).__name__}: {error}"
         finally:
             if probes is not None:
@@ -690,6 +717,8 @@ def test_m09_live_game_day_recovers(observed):
     print(f"\nGame day M09, seed {seed}: lỗi {step['code']} vào {step['resource']}. Entry đã chạy: {done}. Khoẻ lại "
           f"{HEALTHY_WINDOW} giây liền ở giây {step['recovered']:.0f} sau khi bơm. Request của khách giả hỏng: "
           f"{step['failed']}/{step['total']}.\n{rerun(seed)}")
+    for message in step.get("warnings") or []:
+        print(f"Cảnh báo khi hoàn tác lỗi: {message}")
 
 
 def test_m09_checks_catch_bad_files():
@@ -736,5 +765,7 @@ def test_m09_checks_catch_bad_files():
     assert "long_window=6h" in found and "long_window=1d" in found and "không bắn" in found and "long_window=1h" not in found
     assert len(coverage_problems({"tests": "x"})) == len(TIERS) + 1
     hidden = scenarios(0.005)
-    assert len(hidden) == 7 and all(t["alert_rule_test"] for t in hidden.values())
+    assert len(hidden) == 8 and all(t["alert_rule_test"] for t in hidden.values())
     assert cumulative([1.5, 2.5]) == "0 1.5 4"
+    fenced = f"# R\n\n## db-down\n\n```bash\n## khong-phai-muc\n### Leo thang\nkhong-phai-muc\n```\n\n{full}"
+    assert set(runbook_sections(fenced)) == {"db-down"} and "khong-phai-muc" not in subsection(fenced, "Leo thang")

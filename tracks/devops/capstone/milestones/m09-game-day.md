@@ -42,8 +42,8 @@ flowchart LR
 - **Không đọc trước** `capstone/project/tests/test_m09.py`, lớp `FaultInjector` trong `testkit.py` hay lời giải trước game day. Test
   không giấu được gì với người đọc code; đây là bài tự giác, như M12 của track Data Engineer. Đọc trước thì game day chỉ còn là bài tra
   cứu và postmortem của bạn không còn giá trị.
-- Bạn biết **blast radius**: lỗi chỉ chạm một trong ba service `api`, `postgres`, `redis` trong stack của test, là loại lỗi hạ tầng
-  thường gặp (tiến trình chết, dịch vụ bị dừng, mạng chậm), và được hoàn tác khi test kết thúc. Bạn không biết lỗi nào, vào đâu.
+- Bạn biết **blast radius**: lỗi chỉ chạm một trong ba service `api`, `postgres`, `redis` trong stack của test, là một lỗi hạ tầng
+  thường gặp (ví dụ tiến trình chết hay mạng chậm; danh sách này không đầy đủ), và được hoàn tác khi test kết thúc. Bạn không biết lỗi nào, vào đâu.
 - Seed lấy từ đồng hồ lúc chạy. Test chỉ in lỗi đã bơm **sau khi** hệ thống đã khôi phục; nếu không khôi phục được, test chỉ in seed.
   Chạy lại đúng sự cố đó bằng biến `M09_SEED=<seed>` (để kiểm runbook đã sửa), nhưng mỗi game day mới thì để seed ngẫu nhiên.
 
@@ -115,7 +115,7 @@ dùng `keep_firing_for`; `annotations.summary`; `annotations.runbook_url` kết 
 | Hạng mục | Quy tắc được chấm |
 | --- | --- |
 | Hợp lệ | `promtool check rules prometheus/rules/slo.yml` sạch; đủ sáu recording rule, ba alert như trên. |
-| Đúng objective | Test sinh 7 kịch bản `promtool test rules` **theo budget của bạn** và chạy trên bản chép `slo.yml` đã bỏ annotation và mọi nhãn alert ngoài `severity`, `long_window`. Mẫu mỗi phút, route tra đơn 1000 request/phút: (1) 70 phút lỗi 20 lần budget từ đầu, có thêm traffic `/metrics`, `/healthz`, `/readyz`: cả ba mức bắn ở phút 65, phút 110 (40 phút sau khi hết lỗi) chỉ còn `ticket`/`1d`; (2) 6 giờ khoẻ rồi 5 phút lỗi 20 lần budget: không bắn; (3) 25 giờ lỗi 4 lần budget: chỉ `ticket`/`1d`, 140 phút sau khi hết lỗi không còn gì; (4) 6 giờ khoẻ, 60 phút lỗi 20 lần budget rồi hết lỗi: phút thứ 10 chưa bắn, phút 55 chỉ `page`/`1h`, 12 phút sau khi hết lỗi không còn gì; (5) 25 giờ lỗi nửa budget: không bắn; (6) 5xx chỉ ở `/readyz` và ở job `olist-api-canary`, route tra đơn chỉ có 200 và 404 (chưa từng có series 5xx): không bắn, sáu recording rule đều bằng 0; (7) không có traffic: không bắn. |
+| Đúng objective | Test sinh 8 kịch bản `promtool test rules` **theo budget của bạn** và chạy trên bản chép `slo.yml` đã bỏ annotation và mọi nhãn alert ngoài `severity`, `long_window`. Mẫu mỗi phút, route tra đơn 1000 request/phút: (1) 70 phút lỗi 20 lần budget từ đầu, có thêm traffic `/metrics`, `/healthz`, `/readyz`: cả ba mức bắn ở phút 65, phút 110 (40 phút sau khi hết lỗi) chỉ còn `ticket`/`1d`; (2) 6 giờ khoẻ rồi 5 phút lỗi 20 lần budget: không bắn; (3) 25 giờ lỗi 4 lần budget: chỉ `ticket`/`1d`, 140 phút sau khi hết lỗi không còn gì; (4) 6 giờ khoẻ, 60 phút lỗi 20 lần budget rồi hết lỗi: phút thứ 10 chưa bắn, phút 55 chỉ `page`/`1h`, 12 phút sau khi hết lỗi không còn gì; (5) 7 giờ lỗi 10 lần budget: ở phút 420 chỉ `page`/`6h` và `ticket`/`1d` (mức 1h cần trên 14,4 lần); (6) 25 giờ lỗi nửa budget: không bắn; (7) 5xx chỉ ở `/readyz` và ở job `olist-api-canary`, route tra đơn chỉ có 200 và 404 (chưa từng có series 5xx): không bắn, sáu recording rule đều bằng 0; (8) không có traffic: không bắn. |
 | Test của bạn | `promtool test rules slo.test.yml` (thư mục làm việc `prometheus/`, nên `rule_files: [rules/slo.yml]`) pass; có ca `OlistApiErrorBudgetBurn` bắn cho từng mức (`exp_labels` có `severity`, `long_window` của mức đó) và ít nhất một ca không bắn (`exp_alerts: []`). |
 | Route | Theo `amtool config routes test` trên `alertmanager.yml` của M08, với đúng nhãn của từng rule: hai mức `page` tới `olist-page`, mức `ticket` tới `olist-ticket`. |
 
@@ -125,7 +125,7 @@ dùng `keep_firing_for`; `annotations.summary`; `annotations.runbook_url` kết 
 
 ```yaml
 entries:
-  - id: ten-entry                  # chữ thường, số, '-', không trùng
+  - id: ten-entry                  # chữ thường, số, '-', tối đa 42 ký tự, không bắt đầu hay kết thúc bằng '-', không trùng
     detect:
       promql: <instant query, khớp khi kết quả khác rỗng>   # hoặc logql: '{service_name="olist-shop-api"} |= "..."'
     action:
@@ -133,6 +133,7 @@ entries:
       service: postgres            # api, worker, postgres hoặc redis
 ```
 
+- `detect` không được trống hay còn chữ `TODO`.
 - `promql`: instant query trên Prometheus của stack (scrape mỗi 5 giây: job `olist-api`, `olist-worker`, `otel-spanmetrics`, cùng
   recording rule của bạn); viết điều kiện bằng `> ngưỡng`, `== 0`. Test kiểm cú pháp bằng `promtool check rules`.
 - `logql`: log query bắt đầu bằng `{` trên Loki (nhãn `service_name` là `olist-shop-api`, `olist-shop-worker`); khớp khi có ít nhất
@@ -154,7 +155,7 @@ Grafana, Prometheus, Alertmanager của stack (xem được trong lúc chạy v�
 1. Chạy khách giả liên tục: tra đơn (`GET /orders/<id>`, 200 hoặc 404), `GET /readyz` (200), cứ bốn lượt một `POST /jobs/recompute`
    (202). Một request **đạt** khi đúng mã và trả lời dưới 0,5 giây (timeout 3 giây). **Khoẻ** nghĩa là mọi request trong 10 giây gần
    nhất đều đạt (ít nhất 8 tra đơn, 5 `/readyz`, 1 job).
-2. Chờ khoẻ (tối đa 120 giây), thêm 20 giây, rồi kiểm **trạng thái ổn định**: Prometheus đã nạp sáu recording rule và
+2. Chờ khoẻ (tối đa 120 giây), thêm 60 giây (để lỗi lúc khởi động, nếu có, ra khỏi cửa sổ `[30s]`, `[1m]` của detect), rồi kiểm **trạng thái ổn định**: Prometheus đã nạp sáu recording rule và
    `OlistApiErrorBudgetBurn`, mọi rule `health: ok`; `olist:slo_api_errors:ratio_rate5m` ra đúng một series không nhãn;
    `OlistApiErrorBudgetBurn` không pending hay firing; **không entry nào** của `runbook.yaml` khớp (khớp lúc này là báo động giả, game
    day không chạy).
@@ -190,8 +191,8 @@ trước `uv run`.
 Cần mọi thứ của M08 (Docker, compose ≥ 2.24.4, image nền của Dockerfile M03, `postgres` và `redis` bạn chọn, sáu image của stack
 observability) cộng image `devops-track/netem:1.0` của `FaultInjector`, build theo mục "k6 và FaultInjector" của
 [setup/DEVOPS-TOOLS.md](../../../../setup/DEVOPS-TOOLS.md#k6-và-faultinjector).
-Thiếu thứ nào thì test cần nó skip kèm lệnh cần chạy. Một lần chạy đủ mất khoảng 2 phút khi image đã build (phần tệp khoảng 40 giây,
-game day khoảng 80 giây), tới 5 phút khi runbook không khôi phục được, và khoảng 700 MB RAM.
+Thiếu thứ nào thì test cần nó skip kèm lệnh cần chạy. Một lần chạy đủ mất khoảng 3 phút khi image đã build (phần tệp khoảng 45 giây,
+game day khoảng 2 phút), tới 6 phút khi runbook không khôi phục được, và khoảng 700 MB RAM.
 
 ### 6. Game day thật và postmortem (tự đánh giá)
 

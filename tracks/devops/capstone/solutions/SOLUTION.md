@@ -270,8 +270,9 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 - **Hai recipient trong `.sops.yaml`.** Khoá team để người sửa Secret giải mã được ở máy mình; khoá ArgoCD để cluster giải mã lúc
   sync. Thêm người là `sops updatekeys`, không phải chia sẻ khoá riêng. `encrypted_regex: ^(data|stringData)$` giữ `kind`, `metadata`
   đọc được khi review PR.
-- **`retry` có giới hạn.** Sync lỗi được thử lại tối đa 3 lần với backoff; không có `retry` thì một lần sync lỗi (vd. Secret sai) giữ
-  Application ở commit cũ cho tới khi hết lượt thử, commit sửa phải chờ.
+- **`retry` có giới hạn.** Sync lỗi được thử lại tối đa 3 lần, backoff từ 5 giây tới 1 phút: đủ cho lỗi tạm thời (repo-server bận,
+  API server chậm). Lỗi do cấu hình (vd. Secret giải mã hỏng) không tự hết dù thử bao nhiêu lần; giới hạn 3 lần để Application dừng ở
+  trạng thái sync lỗi rõ ràng thay vì thử mãi, và commit sửa kích một lần sync mới.
 
 ## M08: `project/observability/`, `project/container/compose.yaml`
 
@@ -291,7 +292,8 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
   series `up`) thì alert này im; ở Kubernetes cần thêm `absent(up{job=...})`.
 - **Page cho triệu chứng người dùng thấy, ticket cho thứ chờ được.** Tỉ lệ lỗi 5xx và worker chết là page; p95 chậm 10 phút là ticket.
   Alertmanager route theo `severity`, mức độ lạ (thiếu nhãn, viết hoa) về `olist-default`, không bao giờ đánh thức người trực. Inhibit
-  rule chặn ticket của worker khi `OlistWorkerDown` đang bắn (`equal: [service]`), để một sự cố chỉ ra một thông báo.
+  rule (`OlistWorkerDown` chặn alert `severity=ticket` của `service=worker`) là khung mẫu: bài chưa có alert ticket nào của worker,
+  nên hiện nó không chặn gì; khi thêm alert worker chậm hay hàng đợi dài thì một sự cố chỉ ra một thông báo. Không được chấm.
 - **Test rule dùng series 20 giây.** `rate` trên cửa sổ `[1m]` với mẫu 15 giây ngoại suy theo hệ số 4/3 và cho
   `4.999999999999999` thay vì `5`; promtool so chính xác. Mẫu 20 giây cho hệ số 3/2, ra số đúng.
 - **Dashboard chỉ dùng uid datasource đã provision.** `${DS_PROMETHEUS}` là thứ của dashboard export để import tay; provision từ tệp
@@ -308,7 +310,7 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
   traffic thật để bắt chỗ này. `path!~` thay vì liệt kê path của khách: thêm route mới thì SLI tự có, không âm thầm bỏ sót.
 - **Sáu recording rule, mỗi cửa sổ một rule, mỗi rule tự tính tử số và mẫu số.** Không lấy trung bình của tỉ lệ 1 phút (`avg_over_time`
   trên `olist:api_errors:ratio_rate1m`): trung bình của tỉ lệ khác tỉ lệ của tổng khi traffic không đều. `or on() vector(0)` như M08,
-  để alert có số 0 mà so khi chưa có 5xx; kịch bản 6 không có series 5xx nào nên bắt được rule thiếu nó.
+  để alert có số 0 mà so khi chưa có 5xx; kịch bản 7 không có series 5xx nào nên bắt được rule thiếu nó.
 - **Ngưỡng viết `(14.4 * 0.005)` thay vì `0.072`.** Đọc là thấy hệ số và budget; đổi objective thì sửa một số ở ba chỗ (hay sinh tệp
   bằng script như Basic 02 của module 16). Test sinh kịch bản theo objective trong `slo.yaml`, nên tệp rule lệch objective thì fail.
 - **Ba mức, không có mức 3d/6h.** Mức 1 lần budget trong 3 ngày là ticket chậm nhất; với một service nội bộ, review budget hằng tuần
@@ -353,7 +355,9 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 | README "GitOps" | Lý do Application nhiều nguồn và cái giá, quy trình lên version và rollback có số đo, ai giữ khoá nào, runbook xoay mật khẩu Postgres không gián đoạn, so với Sealed Secrets/ESO/Vault | Chép application.yaml |
 | Vòng thật M08 | Dựng stack bằng tay, lần từ log lỗi sang trace có span DB, dừng worker và đo thời gian tới khi alert tới Alertmanager, chạy lại và thấy alert hết | Chỉ chạy test |
 | README "Observability" | Bảng alert có ngưỡng và lý do, việc đầu tiên khi bị page, cái giá của duration từ spanmetrics, alert còn thiếu cho độ dài hàng đợi, ảnh dashboard lúc sự cố | Liệt kê tệp cấu hình |
-| SLO M09 | Objective có lý do theo người dùng và hạ tầng thật, SLI loại traffic của Prometheus và health check, nêu khoảng mù khi API chết và thứ che nó, có error budget policy | Chọn 99,99% "cho đẹp", SLI đếm cả `/metrics` |
-| Alert và runbook M09 | Giải thích được hai cửa sổ và ngưỡng 14,4/6/3; entry nhắm một thành phần, thứ tự theo phụ thuộc; Leo thang có điều kiện dừng và người cần gọi | Một entry "có 5xx thì restart mọi thứ" |
-| Game day M09 | Giả thuyết trạng thái ổn định, blast radius, điều kiện dừng viết trước; entry đúng thành phần chạy đầu tiên; khoẻ lại trong 3 phút; ít nhất ba seed mới | Đọc test hay `FaultInjector` trước, chạy lại một seed quen cho tới khi pass |
-| Postmortem M09 | Timeline khớp output của test, tác động có phút budget đã tiêu, nguyên nhân theo hệ thống, ba action item có người, hạn và loại, bảng các game day | Chỉ có "đã restart, hết lỗi"; câu đổ lỗi cho người |
+| M09: SLO và error budget | Objective có lý do theo người dùng và hạ tầng thật, SLI loại traffic của Prometheus và health check, nêu khoảng mù khi API chết và thứ che nó, có error budget policy | Chọn 99,99% "cho đẹp", SLI đếm cả `/metrics` |
+| M09: Alert và runbook | Giải thích được hai cửa sổ và ngưỡng 14,4/6/3; entry nhắm một thành phần, thứ tự theo phụ thuộc; Leo thang có điều kiện dừng và người cần gọi | Một entry "có 5xx thì restart mọi thứ" |
+| M09: Chuẩn bị game day | Giả thuyết trạng thái ổn định bằng số, blast radius, điều kiện dừng, vai trò, viết trước khi chạy | Viết sau khi đã biết lỗi |
+| M09: Phát hiện và khôi phục | Entry đúng thành phần chạy đầu tiên; khoẻ lại trong 3 phút; job kẹt trong sự cố được xử lý sau đó | Pass nhờ chạy qua nhiều entry đoán mò |
+| M09: Postmortem | Timeline khớp output của test, tác động có phút budget đã tiêu, nguyên nhân theo hệ thống, ba action item có người, hạn và loại | Chỉ có "đã restart, hết lỗi"; câu đổ lỗi cho người |
+| M09: Vòng cải tiến | Ít nhất ba game day với seed mới, thay đổi sau mỗi lần, lần fail được sửa và kiểm lại bằng `M09_SEED` | Đọc test hay `FaultInjector` trước, chạy lại một seed quen cho tới khi pass |
