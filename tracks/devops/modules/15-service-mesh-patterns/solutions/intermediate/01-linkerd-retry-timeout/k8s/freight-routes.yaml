@@ -1,0 +1,42 @@
+apiVersion: policy.linkerd.io/v1beta3
+kind: HTTPRoute
+metadata:
+  name: freight-quote
+  annotations:
+    retry.linkerd.io/http: 5xx
+    retry.linkerd.io/limit: "3"
+    retry.linkerd.io/timeout: 300ms
+    timeout.linkerd.io/request: 2s
+spec:
+  parentRefs:
+    - group: core
+      kind: Service
+      name: freight
+      port: 8080
+  rules:
+    - matches:
+        - path: {type: Exact, value: /quote}
+          method: GET
+      backendRefs:
+        - name: freight
+          port: 8080
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: HTTPRoute
+metadata:
+  name: freight-reserve
+  annotations:
+    timeout.linkerd.io/request: 3s
+spec:
+  parentRefs:
+    - group: core
+      kind: Service
+      name: freight
+      port: 8080
+  rules:
+    - matches:
+        - path: {type: Exact, value: /reserve}
+          method: POST
+      backendRefs:
+        - name: freight
+          port: 8080

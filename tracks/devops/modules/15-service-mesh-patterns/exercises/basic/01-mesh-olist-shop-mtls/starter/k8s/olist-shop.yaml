@@ -1,0 +1,59 @@
+# TODO: ServiceAccount riêng cho api và cho worker (tên api, worker), không tự mount token
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: {app.kubernetes.io/name: api}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: api}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: api, app.kubernetes.io/part-of: olist-shop}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: api
+          image: devops-track/olist-shop:1.0
+          env:
+            - name: DATABASE_URL
+              valueFrom: {secretKeyRef: {name: olist-db, key: DATABASE_URL}}
+            - {name: REDIS_URL, value: "redis://redis:6379/0"}
+          ports: [{name: http, containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 256Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: api}
+spec:
+  selector: {app.kubernetes.io/name: api}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels: {app.kubernetes.io/name: worker}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: worker}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: worker, app.kubernetes.io/part-of: olist-shop}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: worker
+          image: devops-track/olist-shop:1.0
+          command: ["python", "-m", "olist_shop.worker"]
+          env:
+            - name: DATABASE_URL
+              valueFrom: {secretKeyRef: {name: olist-db, key: DATABASE_URL}}
+            - {name: REDIS_URL, value: "redis://redis:6379/0"}
+          ports: [{name: metrics, containerPort: 9101}]
+          resources: {requests: {cpu: 20m, memory: 96Mi}, limits: {memory: 192Mi}}
+# TODO: đưa api và worker vào mesh, mỗi Deployment chạy bằng ServiceAccount của nó

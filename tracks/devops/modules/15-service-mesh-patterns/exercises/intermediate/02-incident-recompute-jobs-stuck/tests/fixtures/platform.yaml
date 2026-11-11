@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: Secret
+metadata: {name: olist-db}
+type: Opaque
+stringData:
+  POSTGRES_USER: olist
+  POSTGRES_PASSWORD: olist-incident-lab
+  POSTGRES_DB: olist
+  DATABASE_URL: postgresql+psycopg://olist:olist-incident-lab@postgres:5432/olist
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: postgres}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: redis}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: postgres, labels: {app.kubernetes.io/name: postgres}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/name: postgres}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: postgres}
+    spec:
+      serviceAccountName: postgres
+      securityContext: {runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, fsGroup: 70, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: postgres
+          image: postgres:16.15-alpine
+          envFrom: [{secretRef: {name: olist-db}}]
+          env: [{name: PGDATA, value: /var/lib/postgresql/data/pgdata}]
+          ports: [{name: postgres, containerPort: 5432}]
+          readinessProbe: {exec: {command: ["pg_isready", "-U", "olist", "-d", "olist"]}, periodSeconds: 3}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 256Mi}}
+          volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}, {name: run, mountPath: /var/run/postgresql}]
+      volumes: [{name: data, emptyDir: {}}, {name: run, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres}
+spec:
+  selector: {app.kubernetes.io/name: postgres}
+  ports: [{name: postgres, port: 5432, targetPort: postgres}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis, labels: {app.kubernetes.io/name: redis}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/name: redis}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: redis}
+    spec:
+      serviceAccountName: redis
+      securityContext: {runAsNonRoot: true, runAsUser: 999, runAsGroup: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: redis
+          image: redis:7.4.12-alpine
+          ports: [{name: redis, containerPort: 6379}]
+          readinessProbe: {exec: {command: ["redis-cli", "ping"]}, periodSeconds: 3}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 128Mi}}
+          volumeMounts: [{name: data, mountPath: /data}]
+      volumes: [{name: data, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis}
+spec:
+  selector: {app.kubernetes.io/name: redis}
+  ports: [{name: redis, port: 6379, targetPort: redis}]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: api}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: {app.kubernetes.io/name: api}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: api}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: api, app.kubernetes.io/part-of: olist-shop}
+    spec:
+      serviceAccountName: api
+      automountServiceAccountToken: false
+      containers:
+        - name: api
+          image: devops-track/olist-shop:1.0
+          env:
+            - name: DATABASE_URL
+              valueFrom: {secretKeyRef: {name: olist-db, key: DATABASE_URL}}
+            - {name: REDIS_URL, value: "redis://redis:6379/0"}
+          ports: [{name: http, containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 256Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: api}
+spec:
+  selector: {app.kubernetes.io/name: api}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata: {name: redis}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: redis}
+  port: redis
+  proxyProtocol: opaque
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata: {name: olist-shop-redis-clients}
+spec:
+  identityRefs:
+    - {kind: ServiceAccount, name: api}
+    - {kind: ServiceAccount, name: worker}
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata: {name: redis-only-olist-shop}
+spec:
+  targetRef: {group: policy.linkerd.io, kind: Server, name: redis}
+  requiredAuthenticationRefs:
+    - {group: policy.linkerd.io, kind: MeshTLSAuthentication, name: olist-shop-redis-clients}
