@@ -25,6 +25,13 @@ Hai route trên cùng Service `freight`:
 - **404 khi chỉ có route cho GET.** Theo Gateway API, khi Service đã có HTTPRoute, request không khớp rule nào bị từ chối với 404. Bản nháp
   bắt mọi path nên không bị 404, nhưng lại retry cả POST. Phải có route riêng cho mỗi nhóm hành vi.
 
+## Vì sao test cấu hình là cần thiết
+
+Tỉ lệ thành công đo trên 200 request với seed 15 cố định. Bản nháp trong `starter/` (route bắt mọi path, chỉ `retry.linkerd.io/http: 5xx`,
+limit mặc định 1) đạt mốc 97% ở seed này (khoảng 98%) dù về kỳ vọng nó chỉ khoảng 96% và với seed khác có thể dưới 97%. Thứ bắt cấu
+hình thiếu `limit`, thiếu timeout mỗi lần thử là test độ trễ (request treo 2,5 giây) và test đọc annotation (`limit` phải là 3,
+`retry.linkerd.io/timeout` không quá 500 ms), không phải test tỉ lệ thành công.
+
 ## Đọc số liệu
 
 - `outbound_http_route_retry_requests_total` trên proxy của checkout đếm số lần thử lại; `outbound_http_route_request_statuses_total`

@@ -34,11 +34,11 @@ trong giới hạn.
 
 | Luồng | Yêu cầu |
 | --- | --- |
-| `GET /quote` | Retry khi `5xx`, tối đa 3 lần thử lại (`retry.linkerd.io/limit` từ 1 tới 3); timeout mỗi lần thử (`retry.linkerd.io/timeout`) không quá 1 s; timeout cả request (`timeout.linkerd.io/request`) không quá 2 s |
+| `GET /quote` | Retry khi `5xx`, đúng 3 lần thử lại (`retry.linkerd.io/limit: "3"`); timeout mỗi lần thử (`retry.linkerd.io/timeout`) không quá 500 ms; timeout cả request (`timeout.linkerd.io/request`) không quá 2 s. Với backend này, cấu hình phải đạt ít nhất 97% thành công (bảng dưới): mỗi lần thử hỏng khoảng 30%, nên 2 lần thử lại (khoảng 2,7% lỗi) là quá sát ngưỡng |
 | `POST /reserve` | Vẫn tới được `freight`; không có annotation `retry.linkerd.io/*` nào trên route khớp nó |
 
-Retry và timeout của Linkerd đặt bằng annotation trên HTTPRoute (ví dụ `retry.linkerd.io/http: 5xx`, `retry.linkerd.io/limit: "2"`,
-`retry.linkerd.io/timeout: 500ms`, `timeout.linkerd.io/request: 3s`), áp cho mọi rule của route đó. Bản nháp trong `starter/` dùng
+Retry và timeout của Linkerd đặt bằng annotation trên HTTPRoute (ví dụ `retry.linkerd.io/http: 5xx`, `retry.linkerd.io/limit: "1"`,
+`retry.linkerd.io/timeout: 800ms`, `timeout.linkerd.io/request: 3s`), áp cho mọi rule của route đó. Bản nháp trong `starter/` dùng
 một route bắt mọi path: đọc kỹ xem nó làm gì với `POST /reserve`.
 
 **Cách test chấm.** Cài `freight` và `checkout`, rồi:

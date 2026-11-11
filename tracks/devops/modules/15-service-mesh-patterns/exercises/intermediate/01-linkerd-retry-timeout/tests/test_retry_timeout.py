@@ -165,9 +165,9 @@ def test_route_settings(traffic):
         name = route["metadata"]["name"]
         assert "5xx" in notes.get("retry.linkerd.io/http", ""), f"{name}: retry.linkerd.io/http cần có 5xx"
         limit = notes.get("retry.linkerd.io/limit", "")
-        assert limit.isdigit() and 1 <= int(limit) <= 3, f"{name}: retry.linkerd.io/limit phải là số từ 1 tới 3, đang là {limit!r}"
+        assert limit == "3", f"{name}: retry.linkerd.io/limit phải là 3, đang là {limit!r}"
         per_try = seconds(notes.get("retry.linkerd.io/timeout"))
-        assert per_try is not None and per_try <= 1, f"{name}: retry.linkerd.io/timeout phải có và không quá 1 s"
+        assert per_try is not None and per_try <= 0.5, f"{name}: retry.linkerd.io/timeout phải có và không quá 500 ms"
         whole = seconds(notes.get("timeout.linkerd.io/request"))
         assert whole is not None and whole <= 2, f"{name}: timeout.linkerd.io/request phải có và không quá 2 s"
     for route in reserve:

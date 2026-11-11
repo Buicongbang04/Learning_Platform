@@ -60,7 +60,7 @@ timeout) và các lớp lỗi đã có sẵn.
 Ngủ bằng `self.sleep`, đo thời gian bằng `self.clock`; test truyền đồng hồ giả (ngủ là cộng giờ, không ngủ thật).
 
 `create_payment` sinh **một** Idempotency-Key (ví dụ `uuid.uuid4().hex`) cho mỗi lần gọi và gửi đúng key đó ở header `Idempotency-Key`
-cho mọi lần thử của lần gọi ấy; payment khác có key khác.
+cho mọi lần thử của lần gọi ấy; payment khác có key khác. `get_order` không gửi header này.
 
 **Cách test chấm.** Mỗi test chạy `tests/fixtures/driver.py` trong sandbox bubblewrap (như module 02): driver nạp `resilient.py` của bạn,
 dựng `FakeOlist` trên `127.0.0.1` cổng ngẫu nhiên với kịch bản cho từng path (mã HTTP, `Retry-After`, `"slow"` ngủ 0,6 giây,
@@ -68,7 +68,7 @@ dựng `FakeOlist` trên `127.0.0.1` cổng ngẫu nhiên với kịch bản cho
 server nhận, các lần chờ, lỗi ném ra, trạng thái breaker, Idempotency-Key. Kịch bản gồm: lỗi tạm thời rồi thành công, hết lượt, 404,
 500, 429 kèm `Retry-After`, `Retry-After` vượt deadline, timeout và mất kết nối, deadline cắt chuỗi chờ, jitter (cận trên, seed khác
 nhau, cùng seed), breaker mở và hồi phục, request thử ở nửa mở thất bại, nửa mở chỉ cho một request, breaker mở giữa vòng retry,
-payment giữ key qua các lần thử, 409 của payment. Chạy dưới 5 giây.
+payment giữ key qua các lần thử, GET không có key, timeout mỗi lần thử co lại theo deadline, 409 của payment. Chạy dưới 5 giây.
 
 ## Tiêu chí đạt
 

@@ -99,6 +99,27 @@ def scenario_deadline(m):
     return {**result, "requests": server.count("/orders/o1"), "sleeps": clock.sleeps}
 
 
+def scenario_get_headers(m):
+    server, clock = FakeOlist({"/orders/o1": [503, 200]}), FakeClock()
+    result = call(client(m, server, clock).get_order, "o1")
+    return {**result, "methods": [r["method"] for r in server.requests], "keys": [r["idempotency_key"] for r in server.requests]}
+
+
+def scenario_attempt_timeouts(m):
+    server, clock = FakeOlist({"/orders/o1": [503]}), FakeClock()
+    options = {"max_attempts": 5, "base_delay": 1.0, "max_delay": 8.0, "timeout": 2.0, "deadline": 2.5, "rng": TopRandom()}
+    api = client(m, server, clock, **options)
+    original, seen = api._send, []
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["timeout"] if "timeout" in kwargs else args[4] if len(args) > 4 else None)
+        return original(*args, **kwargs)
+
+    api._send = spy
+    result = call(api.get_order, "o1")
+    return {**result, "timeouts": seen, "sleeps": clock.sleeps, "requests": server.count("/orders/o1")}
+
+
 def scenario_jitter(m):
     def series(seed):
         rng = random.Random(seed)

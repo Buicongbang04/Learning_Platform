@@ -30,6 +30,9 @@ Namespace của lab **không** bật inject cho cả namespace; pod nào muốn 
 - `storefront` và `intruder`: pod shell trong mesh, ServiceAccount cùng tên;
 - `legacy-report`: pod shell ngoài mesh (không proxy, không mTLS).
 
+Cả hai workload của Olist Shop đều cần Redis: api đẩy job vào list `olist:jobs` (`RPUSH`), worker lấy job ra bằng `BLPOP olist:jobs`;
+vì vậy "chỉ Olist Shop được dùng Redis" nghĩa là đúng hai danh tính api và worker.
+
 Sửa hai tệp trong `starter/k8s/`:
 
 1. `olist-shop.yaml`

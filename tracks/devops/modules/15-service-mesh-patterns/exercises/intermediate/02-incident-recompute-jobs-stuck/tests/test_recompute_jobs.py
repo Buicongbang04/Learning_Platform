@@ -3,6 +3,7 @@ import subprocess
 import time
 
 import pytest
+import yaml
 
 from testkit import KUBE_IMAGES, Exercise, KubeLab
 
@@ -12,6 +13,9 @@ CLIENTS = ex.fixtures / "clients.yaml"
 INCIDENT = ex.fixtures / "incident" / "worker.yaml"
 PLATFORM_KINDS = {"Server", "AuthorizationPolicy", "MeshTLSAuthentication", "HTTPRoute"}
 PLATFORM_NAMES = {"api", "redis", "postgres", "olist-db", "intruder", "legacy-report"}
+FOREIGN_ACCOUNTS = {"api", "redis", "postgres", "intruder"}
+WORKLOADS = {"Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job", "CronJob", "Pod"}
+IDENTITY_MESSAGE = "worker không được chạy bằng ServiceAccount/danh tính của team platform"
 PROBE = """
 import json, socket, sys, urllib.request
 out = {}
@@ -38,6 +42,27 @@ for target in sys.argv[1:]:
         out[target] = "chan " + type(error).__name__ + " " + str(error)[:60]
 print(json.dumps(out))
 """
+
+
+def pod_spec(document: dict) -> dict:
+    spec = document.get("spec") or {}
+    if document.get("kind") == "Pod":
+        return spec
+    if document.get("kind") == "CronJob":
+        spec = ((spec.get("jobTemplate") or {}).get("spec")) or {}
+    return ((spec.get("template") or {}).get("spec")) or {}
+
+
+def borrowed_accounts(documents) -> list[str]:
+    found = []
+    for document in documents:
+        if not isinstance(document, dict) or document.get("kind") not in WORKLOADS:
+            continue
+        spec = pod_spec(document)
+        account = spec.get("serviceAccountName") or spec.get("serviceAccount") or "default"
+        if account in FOREIGN_ACCOUNTS:
+            found.append(f"{document['kind']}/{(document.get('metadata') or {}).get('name')}")
+    return found
 
 
 def probe(lab, deployment: str, container: str, target: str) -> str:
@@ -136,6 +161,26 @@ def test_worker_stays_in_mesh(shop):
     lab, _, _ = shop
     status = lab.mesh_status("deployment/worker")
     assert status["pods"] and status["injected"] and status["mtls"], f"worker phải chạy trong mesh như các service khác: {status}"
+
+
+def test_worker_uses_its_own_identity(shop):
+    lab, _, _ = shop
+    assert not borrowed_accounts(lab.manifests(ex.path("k8s"))), IDENTITY_MESSAGE
+    identity = lab.mesh_status("deployment/worker")["identity"] or ""
+    assert identity, "worker chưa có danh tính mTLS"
+    assert identity.split(".", 1)[0] not in FOREIGN_ACCOUNTS, IDENTITY_MESSAGE
+
+
+def test_identity_check_catches_borrowed_account():
+    solution = ex.dir.parents[2] / "solutions" / ex.dir.parent.name / ex.dir.name / "k8s" / "worker.yaml"
+    starter = ex.dir / "starter" / "k8s" / "worker.yaml"
+    documents = list(yaml.safe_load_all(solution.read_text(encoding="utf-8")))
+    assert not borrowed_accounts(documents)
+    assert not borrowed_accounts(list(yaml.safe_load_all(starter.read_text(encoding="utf-8"))))
+    for document in documents:
+        if document.get("kind") == "Deployment":
+            document["spec"]["template"]["spec"]["serviceAccountName"] = "api"
+    assert borrowed_accounts(documents) == ["Deployment/worker"]
 
 
 def test_redis_still_refuses_strangers(shop):

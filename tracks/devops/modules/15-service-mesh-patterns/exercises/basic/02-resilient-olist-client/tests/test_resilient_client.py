@@ -76,6 +76,19 @@ def test_deadline_caps_total_wait(tmp_path):
         f"Deadline 3,5 giây: chờ 1, 2 rồi dừng vì lần chờ 4 giây sẽ vượt deadline: {data}"
 
 
+def test_get_has_no_idempotency_key(tmp_path):
+    data = scenario(tmp_path, "get_headers")
+    assert data.get("ok") == ORDER and data["methods"] == ["GET", "GET"], data
+    assert data["keys"] == [None, None], f"GET không gửi Idempotency-Key: {data['keys']}"
+
+
+def test_attempt_timeout_follows_deadline(tmp_path):
+    data = scenario(tmp_path, "attempt_timeouts")
+    assert failed(data, "UpstreamError", 503) and data["requests"] == 2 and data["sleeps"] == [1.0], data
+    assert data["timeouts"] == [2.0, 1.5], \
+        f"Timeout mỗi lần thử là min(timeout, phần deadline còn lại): cần [2.0, 1.5], được {data['timeouts']}"
+
+
 def test_full_jitter(tmp_path):
     data = scenario(tmp_path, "jitter")
     caps = data["caps"]
