@@ -1,0 +1,49 @@
+# quillo 1.0.0 trên namespace quillo của lawfirm-prod: PSA restricted, ResourceQuota + LimitRange, default-deny,
+# image từ registry nội bộ.
+
+image:
+  registry: 10.0.2.101:5000
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+api:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+worker:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+db:
+  podSecurityContext: {runAsUser: 999, runAsGroup: 999, fsGroup: 999}
+llm:
+  podSecurityContext: {runAsUser: 65534, runAsGroup: 65534}
+embed:
+  podSecurityContext: {runAsUser: 65534, runAsGroup: 65534}
+
+resources:
+  api:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  worker:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+  db:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  llm:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {cpu: "2", memory: 1536Mi}
+  embed:
+    requests: {cpu: 250m, memory: 384Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  models:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 128Mi}
+
+networkPolicy:
+  enabled: true

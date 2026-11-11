@@ -1,0 +1,25 @@
+# Quyền cần để cài quillo bằng Helm vào namespace (need) và quyền chỉ cần biết để lập kế hoạch (info).
+# Mỗi dòng: need|info rồi đúng các đối số của `kubectl auth can-i`.
+need create deployments.apps
+need create statefulsets.apps
+need create services
+need create configmaps
+need create secrets
+need list secrets
+need create persistentvolumeclaims
+need create networkpolicies.networking.k8s.io
+need list pods
+need get pods --subresource=log
+need create pods --subresource=portforward
+need create pods --subresource=exec
+info delete networkpolicies.networking.k8s.io/default-deny
+info update resourcequotas
+info get nodes
+info list namespaces
+info create namespaces
+info list customresourcedefinitions.apiextensions.k8s.io
+info create roles.rbac.authorization.k8s.io
+info create rolebindings.rbac.authorization.k8s.io
+info create clusterroles.rbac.authorization.k8s.io
+info list persistentvolumes
+info list storageclasses.storage.k8s.io

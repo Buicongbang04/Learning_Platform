@@ -1,0 +1,146 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quillo-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: quillo
+      app.kubernetes.io/instance: quillo
+      app.kubernetes.io/component: api
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: lawfirm-gateway
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: quillo
+              app.kubernetes.io/instance: quillo
+              app.kubernetes.io/component: db
+      ports:
+        - port: 5432
+    - to:
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [quillo]}
+              - {key: app.kubernetes.io/instance, operator: In, values: [quillo]}
+              - {key: app.kubernetes.io/component, operator: In, values: [llm, embed]}
+      ports:
+        - port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quillo-worker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: quillo
+      app.kubernetes.io/instance: quillo
+      app.kubernetes.io/component: worker
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: quillo
+              app.kubernetes.io/instance: quillo
+              app.kubernetes.io/component: db
+      ports:
+        - port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: quillo
+              app.kubernetes.io/instance: quillo
+              app.kubernetes.io/component: embed
+      ports:
+        - port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quillo-db
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: quillo
+      app.kubernetes.io/instance: quillo
+      app.kubernetes.io/component: db
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [quillo]}
+              - {key: app.kubernetes.io/instance, operator: In, values: [quillo]}
+              - {key: app.kubernetes.io/component, operator: In, values: [api, worker]}
+      ports:
+        - port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quillo-llm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: quillo
+      app.kubernetes.io/instance: quillo
+      app.kubernetes.io/component: llm
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: quillo
+              app.kubernetes.io/instance: quillo
+              app.kubernetes.io/component: api
+      ports:
+        - port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quillo-embed
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: quillo
+      app.kubernetes.io/instance: quillo
+      app.kubernetes.io/component: embed
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [quillo]}
+              - {key: app.kubernetes.io/instance, operator: In, values: [quillo]}
+              - {key: app.kubernetes.io/component, operator: In, values: [api, worker]}
+      ports:
+        - port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lawfirm-gateway-to-quillo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lawfirm-gateway
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: quillo
+              app.kubernetes.io/instance: quillo
+              app.kubernetes.io/component: api
+      ports:
+        - port: 8080

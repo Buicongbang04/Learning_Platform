@@ -1,0 +1,48 @@
+# Values của quillo cho cluster production của công ty luật (namespace quillo).
+# Ngân sách còn lại sau it-backup-agent: requests.cpu 800m (quy định 1 CPU của IT), requests.memory 3Gi,
+# limits.memory 4Gi; tính cả một pod api thêm lúc rolling update.
+# Tổng: requests.cpu 600m + 100m, requests.memory 2Gi + 256Mi, limits.memory 3456Mi + 512Mi.
+
+image:
+  registry: 10.0.2.101:5000/vendors/quillo
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+api:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+worker:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+db:
+  podSecurityContext: {runAsUser: 999, runAsGroup: 999, fsGroup: 999}
+llm:
+  podSecurityContext: {runAsUser: 65534, runAsGroup: 65534}
+embed:
+  podSecurityContext: {runAsUser: 65534, runAsGroup: 65534}
+
+resources:
+  api:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  worker:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+  db:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  llm:
+    requests: {cpu: 250m, memory: 1Gi}
+    limits: {cpu: "2", memory: 1536Mi}
+  embed:
+    requests: {cpu: 100m, memory: 384Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  models:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 128Mi}
