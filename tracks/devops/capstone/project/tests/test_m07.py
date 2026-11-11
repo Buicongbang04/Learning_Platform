@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from kube_stack import DEPS, call, chart_path, get_json, helm_offline, restricted_gaps
 from olist_stack import missing
-from test_m06 import DEPS, call, chart_path, get_json, helm_offline, restricted_gaps
 from testkit import (AGE_MIN_VERSION, HELM_MIN_VERSION, KUBE_ARGOCD_CMP, KUBE_GATEWAY_SERVICE, KUBE_IMAGES, KUBE_IN_CLUSTER,
                      SOPS_MIN_VERSION, Exercise, KubeLab, age_keypair, run_sandboxed, sops_env)
 
@@ -65,6 +65,10 @@ def leaked_files(root: Path, password: str) -> list[str]:
     return found
 
 
+def mapping(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
 def gitops_dir(project_root: Path) -> Path:
     return project_root / GITOPS
 
@@ -99,11 +103,12 @@ def application_problems(project_root: Path) -> list[str]:
     if len(docs) != 1 or not isinstance(docs[0], dict) or docs[0].get("kind") != "Application":
         return ["application.yaml chứa đúng một object kind Application"]
     app = docs[0]
-    spec = app.get("spec") or {}
+    spec = mapping(app.get("spec"))
+    metadata = mapping(app.get("metadata"))
     found = []
-    if app.get("apiVersion") != "argoproj.io/v1alpha1" or (app.get("metadata") or {}).get("name") != APP:
+    if app.get("apiVersion") != "argoproj.io/v1alpha1" or metadata.get("name") != APP:
         found.append(f"Application apiVersion argoproj.io/v1alpha1, tên {APP}")
-    if "namespace" in (app.get("metadata") or {}):
+    if "namespace" in metadata:
         found.append("Không ghi metadata.namespace: test tạo Application trong namespace của lab")
     if spec.get("project") != "LAB_PROJECT":
         found.append("spec.project là placeholder LAB_PROJECT (project riêng của lab)")
@@ -129,23 +134,29 @@ def application_problems(project_root: Path) -> list[str]:
         found.append(f"Cần đúng một nguồn path {CHART_PATH} (chart M06, ArgoCD render bằng Helm)")
     else:
         chart = helm[0]
-        options = chart.get("helm") or {}
+        options = mapping(chart.get("helm"))
         if "plugin" in chart or "kustomize" in chart or "directory" in chart:
             found.append(f"Nguồn {CHART_PATH} render bằng Helm có sẵn của ArgoCD (khoá helm), không plugin, kustomize, directory")
         if options.get("releaseName") != RELEASE:
             found.append(f"helm.releaseName là {RELEASE} (tên object shop-api, shop-worker như M06)")
-        files = [str(f) for f in options.get("valueFiles") or []]
-        if not any(f == VALUES_PATH or f.endswith("/" + VALUES_PATH) for f in files):
-            found.append(f"helm.valueFiles phải đọc {VALUES_PATH} trong repo (version nằm trong git): {files}")
-        if any(p.get("name") in ("image.tag", "image") for p in options.get("parameters") or [] if isinstance(p, dict)):
+        refs = {str(s["ref"]) for s in sources if s.get("ref") and "path" not in s}
+        raw = options.get("valueFiles")
+        files = [str(f) for f in raw] if isinstance(raw, list) else []
+        if any("://" in f for f in files):
+            found.append(f"helm.valueFiles chỉ đọc tệp trong repo của lab, không URL: {files}")
+        if not any(f == f"${ref}/{VALUES_PATH}" for f in files for ref in refs):
+            found.append(f"helm.valueFiles phải có $<ref>/{VALUES_PATH}, với <ref> là ref của một nguồn chỉ có ref (version nằm "
+                         f"trong git): valueFiles {files}, ref {sorted(refs)}")
+        parameters = options.get("parameters") if isinstance(options.get("parameters"), list) else []
+        if any(p.get("name") in ("image.tag", "image") for p in parameters if isinstance(p, dict)):
             found.append("Không đặt image.tag trong Application: version chỉ nằm trong gitops/values-lab.yaml")
-        if "image" in (options.get("valuesObject") or {}) or "image" in str(options.get("values") or ""):
+        if "image" in mapping(options.get("valuesObject")) or "image" in str(options.get("values") or ""):
             found.append("Không đặt image trong valuesObject/values của Application: version chỉ nằm trong gitops/values-lab.yaml")
     if len(sealed) != 1:
         found.append(f"Cần đúng một nguồn path {SECRETS_PATH} cho Secret mã hoá")
     elif (sealed[0].get("plugin") or {}).get("name") != KUBE_ARGOCD_CMP:
         found.append(f"Nguồn {SECRETS_PATH} dùng plugin {KUBE_ARGOCD_CMP} (chỉ plugin này có khoá age để giải mã)")
-    automated = (spec.get("syncPolicy") or {}).get("automated")
+    automated = mapping(spec.get("syncPolicy")).get("automated")
     if not isinstance(automated, dict) or automated.get("prune") is not True or automated.get("selfHeal") is not True:
         found.append("syncPolicy.automated bật prune: true và selfHeal: true")
     for key in ("operation", "status"):
@@ -161,7 +172,7 @@ def values_of(gitops: Path) -> dict:
 
 def bumped(text: str, tag: str) -> str:
     data = yaml.safe_load(text) or {}
-    data.setdefault("image", {})["tag"] = tag
+    data["image"] = {**mapping(data.get("image")), "tag": tag}
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
@@ -180,10 +191,22 @@ def deployment_images(docs: list[dict]) -> dict:
             for d in docs if d.get("kind") == "Deployment" and (d.get("metadata") or {}).get("name") in (API, WORKER)}
 
 
+def searches(pattern, text: str) -> bool | None:
+    """`re.search` không vỡ với regex hỏng: None khi `pattern` không biên dịch được."""
+    try:
+        return re.search(str(pattern), text) is not None
+    except re.error:
+        return None
+
+
 def sops_rule_problems(gitops: Path) -> list[str]:
     config = load_yaml(gitops / ".sops.yaml") or {}
     rules = config.get("creation_rules") if isinstance(config, dict) else None
-    matching = [r for r in rules or [] if isinstance(r, dict) and re.search(str(r.get("path_regex", "$^")), TARGET)]
+    rules = [r for r in rules if isinstance(r, dict)] if isinstance(rules, list) else []
+    broken = [str(r.get("path_regex")) for r in rules if searches(r.get("path_regex", "$^"), TARGET) is None]
+    if broken:
+        return [f".sops.yaml: path_regex không phải regex hợp lệ: {broken}"]
+    matching = [r for r in rules if searches(r.get("path_regex", "$^"), TARGET)]
     if not matching:
         return [f".sops.yaml cần creation_rule có path_regex khớp {TARGET} (đường dẫn tính từ thư mục gitops/)"]
     rule, found = matching[0], []
@@ -195,10 +218,12 @@ def sops_rule_problems(gitops: Path) -> list[str]:
     pattern = rule.get("encrypted_regex")
     if not pattern:
         found.append("Chỉ mã hoá trường dữ liệu (encrypted_regex), metadata còn đọc được khi review")
+    elif searches(pattern, "data") is None:
+        found.append(f"encrypted_regex không phải regex hợp lệ: {pattern}")
     else:
-        found += [f"encrypted_regex phải khớp {k}" for k in ("data", "stringData") if not re.search(pattern, k)]
+        found += [f"encrypted_regex phải khớp {k}" for k in ("data", "stringData") if not searches(pattern, k)]
         found += [f"encrypted_regex không được khớp {k}" for k in ("apiVersion", "kind", "metadata", "name", "type")
-                  if re.search(pattern, k)]
+                  if searches(pattern, k)]
     if any(k in rule for k in FORBIDDEN_SOPS):
         found.append("Chỉ dùng age (sidecar của ArgoCD từ chối tệp có khoá KMS, Vault, PGP)")
     return found
@@ -207,10 +232,12 @@ def sops_rule_problems(gitops: Path) -> list[str]:
 def secret_dir_problems(gitops: Path) -> list[str]:
     found = []
     kustomization = load_yaml(gitops / "secrets" / "kustomization.yaml") or {}
-    if not isinstance(kustomization, dict) or "olist-db.enc.yaml" not in (kustomization.get("resources") or []):
-        found.append("secrets/kustomization.yaml liệt kê olist-db.enc.yaml trong resources")
+    if not isinstance(kustomization, dict) or kustomization.get("resources") != ["olist-db.enc.yaml"]:
+        resources = kustomization.get("resources") if isinstance(kustomization, dict) else None
+        found.append(f"secrets/kustomization.yaml có resources đúng [olist-db.enc.yaml] (không thêm tệp hay base khác), đang là "
+                     f"{resources!r}")
     elif any(kustomization.get(k) for k in ("secretGenerator", "configMapGenerator", "helmCharts", "components", "generators")):
-        found.append("secrets/kustomization.yaml chỉ liệt kê olist-db.enc.yaml, không generator, helmCharts hay components")
+        found.append("secrets/kustomization.yaml không dùng secretGenerator, configMapGenerator, helmCharts, components, generators")
     extra = sorted(p.name for p in (gitops / "secrets").iterdir() if p.name not in SECRET_FILES)
     if extra:
         found.append(f"secrets/ chỉ có kustomization.yaml và olist-db.enc.yaml (do seal-db.sh ghi), đang có thêm {extra}")
@@ -220,7 +247,13 @@ def secret_dir_problems(gitops: Path) -> list[str]:
         except yaml.YAMLError:
             continue
         for doc in docs:
-            values = {**(doc.get("data") or {}), **(doc.get("stringData") or {})} if doc.get("kind") == "Secret" else {}
+            if doc.get("kind") != "Secret":
+                continue
+            fields = [doc.get(k) for k in ("data", "stringData") if doc.get(k) is not None]
+            if any(not isinstance(f, dict) for f in fields):
+                found.append(f"{path.relative_to(gitops)}: data/stringData của Secret phải là mapping")
+                continue
+            values = {k: v for f in fields for k, v in f.items()}
             if any(not ENCRYPTED.match(str(v)) for v in values.values()):
                 found.append(f"{path.relative_to(gitops)}: Secret có giá trị chưa mã hoá (không in giá trị)")
     return found
@@ -267,24 +300,37 @@ def sealed_problems(state: dict) -> list[str]:
     leaked = leaked_files(state["repo"], password)
     if leaked:
         return [f"Giá trị rõ (hay base64 của nó) nằm trong repo: {leaked} (không in giá trị)"]
-    doc = yaml.safe_load((gitops / TARGET).read_text(encoding="utf-8")) or {}
+    try:
+        doc = yaml.safe_load((gitops / TARGET).read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        doc = None
+    if not isinstance(doc, dict):
+        return [f"gitops/{TARGET} phải là một Secret YAML (mapping)"]
     found = []
-    if doc.get("kind") != "Secret" or (doc.get("metadata") or {}).get("name") != "olist-db":
+    if doc.get("kind") != "Secret" or mapping(doc.get("metadata")).get("name") != "olist-db":
         found.append("kind Secret và metadata.name olist-db còn đọc được (chỉ mã hoá trường dữ liệu)")
-    values = {**(doc.get("data") or {}), **(doc.get("stringData") or {})}
+    values = mapping_fields(doc)
     if set(values) != SECRET_KEYS:
         found.append(f"Secret olist-db có đúng các khoá {sorted(SECRET_KEYS)}, đang có {sorted(values)}")
     if not values or not all(ENCRYPTED.match(str(v)) for v in values.values()):
         found.append("Mọi giá trị trong stringData/data phải là ENC[...]")
-    recipients = sorted(e.get("recipient") for e in (doc.get("sops") or {}).get("age") or [])
+    age = (doc.get("sops") if isinstance(doc.get("sops"), dict) else {}).get("age")
+    recipients = sorted(str(e.get("recipient")) for e in (age if isinstance(age, list) else []) if isinstance(e, dict))
     if recipients != sorted(state["recipients"]):
         found.append("Tệp phải mã hoá cho đúng hai recipient của .sops.yaml (team và ArgoCD)")
     return found
 
 
+def mapping_fields(doc: dict) -> dict:
+    """Gộp `data` và `stringData` của một Secret; trường không phải mapping bị bỏ qua (phép kiểm khác báo)."""
+    return {k: v for key in ("data", "stringData") if isinstance(doc.get(key), dict) for k, v in doc[key].items()}
+
+
 def decoded(doc: dict) -> dict:
-    out = {k: str(v) for k, v in (doc.get("stringData") or {}).items()}
-    for key, value in (doc.get("data") or {}).items():
+    string = doc.get("stringData") if isinstance(doc.get("stringData"), dict) else {}
+    data = doc.get("data") if isinstance(doc.get("data"), dict) else {}
+    out = {k: str(v) for k, v in string.items()}
+    for key, value in data.items():
         try:
             out[key] = base64.b64decode(str(value)).decode()
         except ValueError:
@@ -316,7 +362,7 @@ def test_m07_application_manifest(project_root):
 
 def test_m07_values_drive_version(project_root, tmp_path):
     gitops = require_files(project_root)
-    tag = (values_of(gitops).get("image") or {}).get("tag")
+    tag = mapping(values_of(gitops).get("image")).get("tag")
     assert tag == CURRENT, f"{VALUES_PATH}: image.tag là chuỗi \"{CURRENT}\" (version đang chạy nằm trong git), đang là {tag!r}"
     text = (gitops / VALUES).read_text(encoding="utf-8")
     chart = chart_path(project_root)
@@ -428,7 +474,7 @@ def deploy_problems(project_root: Path, tmp: Path) -> list[str]:
         return found
     found = application_problems(project_root)
     try:
-        tag = (values_of(gitops_dir(project_root)).get("image") or {}).get("tag")
+        tag = mapping(values_of(gitops_dir(project_root)).get("image")).get("tag")
     except pytest.fail.Exception as error:
         return found + [str(error)]
     if tag != CURRENT:
@@ -441,11 +487,13 @@ def deploy_problems(project_root: Path, tmp: Path) -> list[str]:
     return [f"helm template lỗi: {error}"] if code else restricted_gaps(docs)
 
 
-def require_next_image() -> None:
+def require_images() -> None:
+    """Một lần kiểm cho cả bốn image; thiếu tag `1.1` thì thông báo skip có thêm lệnh `docker tag` trước lệnh nạp."""
     try:
-        Exercise.require_kind_images(NEXT_IMAGE)
+        Exercise.require_kind_images(KUBE_IMAGES["olist"], NEXT_IMAGE, KUBE_IMAGES["postgres"], KUBE_IMAGES["redis"])
     except pytest.skip.Exception as error:
-        pytest.skip(f"{error} Tag {NEXT} là bản giả lập của 'bản mới' trong lab, tạo trước khi nạp: {NEXT_TAG}")
+        hint = f" Tag {NEXT} là bản giả lập của 'bản mới' trong lab, tạo trước khi nạp: {NEXT_TAG}" if NEXT_IMAGE in str(error) else ""
+        pytest.skip(f"{error}{hint}")
 
 
 @pytest.fixture(scope="module")
@@ -463,8 +511,7 @@ def deployed(project_root, tmp_path_factory):
     Exercise.require_argocd()
     Exercise.require_gateway()
     Exercise.require_metrics()
-    Exercise.require_kind_images(KUBE_IMAGES["olist"], KUBE_IMAGES["postgres"], KUBE_IMAGES["redis"])
-    require_next_image()
+    require_images()
     with KubeLab(pod_security="restricted") as lab:
         state.lab = lab
         try:
@@ -576,3 +623,28 @@ def test_m07_helpers_tolerate_bad_input(tmp_path):
     (project / GITOPS / "application.yaml").write_text("kind: Application\nspec:\n  source: {}\n", encoding="utf-8")
     found = application_problems(project)
     assert any("spec.sources" in f for f in found) and any("LAB_PROJECT" in f for f in found), found
+    (project / GITOPS / "application.yaml").write_text(
+        "kind: Application\nmetadata: x\nspec:\n  syncPolicy: []\n  sources:\n    - {repoURL: LAB_REPO_URL, targetRevision: main, "
+        "path: chart/olist-shop, helm: {valueFiles: ['https://evil/gitops/values-lab.yaml', '$nope/gitops/values-lab.yaml'], "
+        "parameters: x, valuesObject: []}}\n", encoding="utf-8")
+    found = application_problems(project)
+    assert any("không URL" in f for f in found) and any("$<ref>" in f for f in found), found
+
+
+def test_m07_static_checks_survive_malformed_files(tmp_path):
+    """Tệp hỏng hình dạng (regex sai, data là list, resources thừa) cho thông báo, không làm test lỗi."""
+    gitops = tmp_path / GITOPS
+    (gitops / "secrets").mkdir(parents=True)
+    (gitops / ".sops.yaml").write_text("creation_rules:\n  - path_regex: '(['\n  - x\n", encoding="utf-8")
+    assert any("regex hợp lệ" in f for f in sops_rule_problems(gitops))
+    (gitops / ".sops.yaml").write_text("creation_rules:\n  - path_regex: secrets/.*\n    encrypted_regex: '(['\n",
+                                       encoding="utf-8")
+    assert any("encrypted_regex không phải regex" in f for f in sops_rule_problems(gitops))
+    (gitops / "secrets" / "kustomization.yaml").write_text(
+        "resources: [olist-db.enc.yaml, https://example.invalid/base]\n", encoding="utf-8")
+    (gitops / "secrets" / "bad.yaml").write_text("kind: Secret\ndata: [1, 2]\n", encoding="utf-8")
+    found = secret_dir_problems(gitops)
+    assert any("đúng [olist-db.enc.yaml]" in f for f in found) and any("phải là mapping" in f for f in found), found
+    assert any("bad.yaml" in f for f in found)
+    assert mapping_fields({"data": [1], "stringData": {"a": "b"}}) == {"a": "b"} and decoded({"data": "x"}) == {}
+    assert yaml.safe_load(bumped("image: plain\n", NEXT)) == {"image": {"tag": NEXT}}

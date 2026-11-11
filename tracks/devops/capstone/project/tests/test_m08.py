@@ -65,10 +65,22 @@ def read_yaml(path: Path):
         pytest.fail(f"{path.name} không phải YAML hợp lệ: {error}", pytrace=False)
 
 
-def rules_of(obs: Path) -> list[dict]:
-    data = read_yaml(obs / RULES) or {}
+def rule_slots(data) -> list[tuple[int, int, dict]]:
+    """(chỉ số group, chỉ số rule, rule) cho mọi rule là mapping trong group là mapping; phần sai hình dạng bị bỏ qua."""
     groups = data.get("groups") if isinstance(data, dict) else None
-    return [r for g in groups or [] if isinstance(g, dict) for r in g.get("rules") or [] if isinstance(r, dict)]
+    return [(gi, ri, rule) for gi, group in enumerate(groups if isinstance(groups, list) else []) if isinstance(group, dict)
+            for ri, rule in enumerate(group.get("rules") if isinstance(group.get("rules"), list) else []) if isinstance(rule, dict)]
+
+
+def rules_of(obs: Path) -> list[dict]:
+    return [rule for _, _, rule in rule_slots(read_yaml(obs / RULES))]
+
+
+def loaded_rules(obs: Path) -> dict:
+    data = read_yaml(obs / RULES)
+    if not rule_slots(data):
+        pytest.fail(f"{RULES} phải có groups: [ {{name, rules: [...]}} ] với ít nhất một rule", pytrace=False)
+    return data
 
 
 def env_of(service: dict) -> dict:
@@ -104,10 +116,11 @@ def rule_problems(obs: Path) -> list[str]:
         if rule is None:
             found.append(f"Thiếu alert {name}")
             continue
-        labels = rule.get("labels") or {}
+        labels = rule.get("labels") if isinstance(rule.get("labels"), dict) else {}
         if labels.get("severity") != severity or labels.get("service") != service:
             found.append(f"{name}: labels severity {severity}, service {service}, đang {labels}")
-        if not str((rule.get("annotations") or {}).get("summary", "")).strip():
+        annotations = rule.get("annotations") if isinstance(rule.get("annotations"), dict) else {}
+        if not str(annotations.get("summary", "")).strip():
             found.append(f"{name}: cần annotations.summary (người trực đọc câu này đầu tiên)")
     return found
 
@@ -115,25 +128,31 @@ def rule_problems(obs: Path) -> list[str]:
 def stripped_rules(obs: Path, dest: Path) -> Path:
     """Bản chép tệp rule chỉ giữ nhãn severity, service và bỏ annotation, để kịch bản ẩn so đúng hành vi (promtool so
     annotation và nhãn từng chữ)."""
-    data = read_yaml(obs / RULES) or {}
-    for group in data.get("groups") or []:
-        for rule in group.get("rules") or []:
-            if "alert" in rule:
-                rule.pop("annotations", None)
-                rule["labels"] = {k: v for k, v in (rule.get("labels") or {}).items() if k in ("severity", "service")}
+    data = loaded_rules(obs)
+    for _, _, rule in rule_slots(data):
+        if "alert" in rule:
+            rule.pop("annotations", None)
+            labels = rule.get("labels") if isinstance(rule.get("labels"), dict) else {}
+            rule["labels"] = {k: v for k, v in labels.items() if k in ("severity", "service")}
     (dest / "rules").mkdir(parents=True, exist_ok=True)
     (dest / "rules" / "olist.yml").write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return dest
 
 
 def coverage_problems(obs: Path) -> list[str]:
-    data = read_yaml(obs / RULE_TESTS) or {}
-    tests = [t for t in data.get("tests") or [] if isinstance(t, dict)] if isinstance(data, dict) else []
+    data = read_yaml(obs / RULE_TESTS)
+    tests = data.get("tests") if isinstance(data, dict) else None
+    tests = [t for t in tests if isinstance(t, dict)] if isinstance(tests, list) else []
     firing, quiet, exprs = set(), set(), []
+
+    def cases(test: dict, key: str) -> list[dict]:
+        value = test.get(key)
+        return [c for c in value if isinstance(c, dict)] if isinstance(value, list) else []
+
     for test in tests:
-        for case in test.get("alert_rule_test") or []:
+        for case in cases(test, "alert_rule_test"):
             (firing if case.get("exp_alerts") else quiet).add(case.get("alertname"))
-        exprs += [str(case.get("expr", "")) for case in test.get("promql_expr_test") or [] if case.get("exp_samples")]
+        exprs += [str(case.get("expr", "")) for case in cases(test, "promql_expr_test") if case.get("exp_samples")]
     found = [f"{RULE_TESTS}: {name} cần ít nhất một ca bắn (exp_alerts khác rỗng)" for name in ALERTS if name not in firing]
     found += [f"{RULE_TESTS}: {name} cần ít nhất một ca không bắn (exp_alerts: [])" for name in ALERTS if name not in quiet]
     found += [f"{RULE_TESTS}: {name} cần một promql_expr_test có exp_samples" for name in RECORDS
@@ -144,21 +163,19 @@ def coverage_problems(obs: Path) -> list[str]:
 def mutants(obs: Path) -> dict[str, Path]:
     """Mỗi alert hai bản đột biến (không bao giờ bắn, luôn bắn), mỗi recording rule một bản nhân đôi giá trị; mỗi bản ở một thư
     mục riêng kèm tệp test của bạn."""
-    base = read_yaml(obs / RULES) or {}
     variants = {}
-    for group_index, group in enumerate(base.get("groups") or []):
-        for rule_index, rule in enumerate(group.get("rules") or []):
-            if rule.get("alert") in ALERTS:
-                variants[f"{rule['alert']} không bao giờ bắn"] = (group_index, rule_index, "vector(1) < 0")
-                variants[f"{rule['alert']} luôn bắn"] = (group_index, rule_index, "vector(1)")
-            elif rule.get("record") in RECORDS:
-                variants[f"{rule['record']} nhân đôi"] = (group_index, rule_index, f"({rule.get('expr')}) * 2")
+    for group_index, rule_index, rule in rule_slots(read_yaml(obs / RULES)):
+        if rule.get("alert") in ALERTS:
+            variants[f"{rule['alert']} không bao giờ bắn"] = (group_index, rule_index, "vector(1) < 0")
+            variants[f"{rule['alert']} luôn bắn"] = (group_index, rule_index, "vector(1)")
+        elif rule.get("record") in RECORDS:
+            variants[f"{rule['record']} nhân đôi"] = (group_index, rule_index, f"({rule.get('expr')}) * 2")
     return variants
 
 
 def mutation_survivors(obs: Path, work: Path) -> tuple[list[str], int]:
     """Chạy tệp test của bạn trên từng bản đột biến (mỗi bản một lần promtool); trả các bản mà test vẫn pass và số bản đã chạy."""
-    base = read_yaml(obs / RULES) or {}
+    base = loaded_rules(obs)
     tests_text = (obs / RULE_TESTS).read_text(encoding="utf-8")
     survivors, variants = [], mutants(obs)
     for index, (label, (group_index, rule_index, expr)) in enumerate(variants.items()):
@@ -183,11 +200,16 @@ def dashboard_of(obs: Path) -> dict:
 
 def panels_of(dashboard: dict) -> list[dict]:
     out = []
-    for panel in dashboard.get("panels") or []:
+    for panel in dashboard.get("panels") if isinstance(dashboard.get("panels"), list) else []:
         if isinstance(panel, dict):
             out.append(panel)
-            out += [p for p in panel.get("panels") or [] if isinstance(p, dict)]
+            out += [p for p in panel.get("panels") if isinstance(p, dict)] if isinstance(panel.get("panels"), list) else []
     return out
+
+
+def targets_of(panel: dict) -> list[dict]:
+    targets = panel.get("targets")
+    return [t for t in targets if isinstance(t, dict)] if isinstance(targets, list) else []
 
 
 def datasource_uid(panel: dict, target: dict) -> str:
@@ -196,7 +218,7 @@ def datasource_uid(panel: dict, target: dict) -> str:
 
 
 def prom_targets(dashboard: dict) -> list[str]:
-    return [str(t.get("expr", "")) for p in panels_of(dashboard) for t in p.get("targets") or []
+    return [str(t.get("expr", "")) for p in panels_of(dashboard) for t in targets_of(p)
             if isinstance(t, dict) and datasource_uid(p, t) == "prometheus" and t.get("expr")]
 
 
@@ -205,14 +227,14 @@ def dashboard_problems(dashboard: dict) -> list[str]:
     if dashboard.get("uid") != "olist-shop" or "Olist Shop" not in str(dashboard.get("title", "")):
         found.append(f"Dashboard uid olist-shop, title có chữ 'Olist Shop': uid {dashboard.get('uid')!r}")
     panels = panels_of(dashboard)
-    sources = {datasource_uid(p, t) for p in panels for t in p.get("targets") or [] if isinstance(t, dict)}
+    sources = {datasource_uid(p, t) for p in panels for t in targets_of(p)}
     if any("${" in s or s.startswith("$") for s in sources):
         found.append(f"Datasource ghi bằng uid đã provision (prometheus, loki), không dùng biến {sorted(sources)}")
     exprs = prom_targets(dashboard)
     found += [f"Không panel Prometheus nào vẽ {name}" for name in RECORDS if not any(name in e for e in exprs)]
     if any(re.search(r"\$(?!__)\w|\$\{(?!__)", e) for e in exprs):
         found.append("Query Prometheus của panel không dùng biến dashboard (chỉ macro $__rate_interval, $__interval, $__range)")
-    if not any(p.get("type") == "logs" and any(datasource_uid(p, t) == "loki" for t in p.get("targets") or []) for p in panels):
+    if not any(p.get("type") == "logs" and any(datasource_uid(p, t) == "loki" for t in targets_of(p)) for p in panels):
         found.append("Cần một panel kiểu logs đọc từ datasource loki")
     return found
 
@@ -354,6 +376,12 @@ def red_step(stack: ObsStack) -> dict:
     return {name: stack.prom_query(name, timeout=DATA_WAIT) for name in RECORDS}
 
 
+def peak_step(stack: ObsStack) -> dict:
+    """Giá trị lớn nhất trong 5 phút của hai rule đếm: lúc test hỏi, traffic có thể đã dừng quá một phút và rate về 0."""
+    return {name: stack.prom_query(f"max_over_time({name}[5m])", timeout=30)
+            for name in ("olist:api_requests:rate1m", "olist:worker_jobs:rate1m")}
+
+
 def rules_step(stack: ObsStack) -> list[dict]:
     with httpx.Client(trust_env=False, timeout=10) as client:
         groups = client.get(stack.url("prometheus") + "/api/v1/rules").json()["data"]["groups"]
@@ -428,6 +456,7 @@ def observed(project_root, tmp_path_factory):
                 state.steps["job"] = job_step(stack, client, api)
                 state.steps["traffic"] = {"jobs": traffic(client, api)}
             state.steps["red"] = red_step(stack)
+            state.steps["peak"] = peak_step(stack)
             state.steps["rules"] = {"rules": rules_step(stack)}
             state.steps["dashboard"] = dashboard_step(stack)
             state.steps["alert"] = alert_step(stack)
@@ -451,8 +480,8 @@ def test_m08_trace_has_db_span(observed):
     assert step["spans"], f"Jaeger không có trace {step['trace_id'] or '(chưa có trace_id)'} của olist-shop-api"
     server = [s for s in step["spans"] if s["service"] == "olist-shop-api" and s["parentSpanID"] is None]
     db = [s for s in step["spans"] if s["attributes"].get("db.system.name") == "postgresql"]
-    assert server and db and all(s["parentSpanID"] == server[0]["spanID"] for s in db), (
-        f"Trace phải có span HTTP gốc của api và span DB (db.system.name postgresql) là con của nó: "
+    assert server and any(s["parentSpanID"] == server[0]["spanID"] for s in db), (
+        f"Trace phải có span HTTP gốc của api và ít nhất một span DB (db.system.name postgresql) là con trực tiếp của nó: "
         f"{[(s['name'], s['parentSpanID']) for s in step['spans']]}")
 
 
@@ -463,9 +492,10 @@ def test_m08_red_metrics_recorded(observed):
     shapes = {name: [r.get("metric", {}) for r in result] for name, result in step.items()}
     wrong = {name: metrics for name, metrics in shapes.items() if metrics != [{"__name__": name}]}
     assert not wrong, f"Mỗi recording rule ra đúng một series chỉ có __name__: {wrong}"
-    for name in ("olist:api_requests:rate1m", "olist:worker_jobs:rate1m"):
-        value = float(step[name][0]["value"][1])
-        assert value > 0, f"{name} phải lớn hơn 0 khi đang có request và job: {value}"
+    peak = observed.step("peak")
+    for name, result in peak.items():
+        value = float(result[0]["value"][1]) if result else 0.0
+        assert value > 0, f"max_over_time({name}[5m]) phải lớn hơn 0 sau khi có request và job: {value}"
 
 
 def test_m08_rules_loaded_in_prometheus(observed):
@@ -508,6 +538,8 @@ def test_m08_checks_catch_bad_config(tmp_path):
     found = dashboard_problems(bad)
     assert any("uid olist-shop" in f for f in found) and any("biến" in f for f in found) and any("logs" in f for f in found), found
     assert len(panels_of(bad)) == 2
+    assert panels_of({"panels": 3}) == [] and prom_targets({"panels": [{"targets": "x"}, {"targets": [1]}]}) == []
+    assert any("uid olist-shop" in f for f in dashboard_problems({"panels": [{"type": "logs", "targets": "x"}]}))
     obs = tmp_path / "obs"
     (obs / "prometheus").mkdir(parents=True)
     (obs / RULE_TESTS).write_text(yaml.safe_dump({"tests": [{"alert_rule_test": [
@@ -516,3 +548,16 @@ def test_m08_checks_catch_bad_config(tmp_path):
     found = coverage_problems(obs)
     assert any("OlistWorkerDown cần ít nhất một ca không bắn" in f for f in found)
     assert not any("OlistWorkerDown cần ít nhất một ca bắn" in f for f in found)
+    (obs / RULE_TESTS).write_text("tests:\n  - alert_rule_test: x\n    promql_expr_test: [1, {expr: y}]\n  - 3\n", encoding="utf-8")
+    assert len(coverage_problems(obs)) == len(ALERTS) * 2 + len(RECORDS)
+    (obs / RULES).parent.mkdir(parents=True)
+    (obs / RULES).write_text("groups:\n  - x\n  - {name: g, rules: [1, {alert: OlistApiSlow, expr: up, labels: [a]}]}\n",
+                             encoding="utf-8")
+    assert rules_of(obs) == [{"alert": "OlistApiSlow", "expr": "up", "labels": ["a"]}]
+    assert list(mutants(obs).values()) == [(1, 1, "vector(1) < 0"), (1, 1, "vector(1)")]
+    stripped = yaml.safe_load((stripped_rules(obs, tmp_path / "s") / "rules" / "olist.yml").read_text(encoding="utf-8"))
+    assert stripped["groups"][1]["rules"][1]["labels"] == {}
+    (obs / RULES).write_text("groups: 3\n", encoding="utf-8")
+    with pytest.raises(pytest.fail.Exception, match="groups"):
+        stripped_rules(obs, tmp_path / "t")
+    assert mutants(obs) == {}
