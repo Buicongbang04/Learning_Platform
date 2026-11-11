@@ -37,6 +37,8 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | promtool, amtool | 13 Observability (chạy trong image Prometheus, Alertmanager ghim qua `testkit.promtool`/`amtool`, không cần cài; muốn gõ tay thì dùng `docker run` ở [Stack observability](#stack-observability)) | Đúng bản trong image | [Stack observability](#stack-observability) |
 | logcli (tuỳ chọn) | 13 Observability (bản đã kiểm 3.7.9, cùng bản Loki của stack, kiểm SHA-256 theo `SHA256SUMS` của release; không bài nào cần, chỉ để chạy LogQL từ terminal) | 3.0 | [Cài đặt](../tracks/devops/modules/13-observability/README.md#0-cài-đặt) |
 | Image Lambda `public.ecr.aws/lambda/python:3.12.2026.10.22.03` ghim digest (có Runtime Interface Emulator, chạy handler qua `LambdaLab`, xem [Lambda local: LambdaLab](#lambda-local-lambdalab)) | 14 Cloud & serverless | Đúng tag đã ghim | [Cài đặt](../tracks/devops/modules/14-cloud-serverless/README.md#0-cài-đặt) |
+| k6 (image `grafana/k6:1.8.1` ghim digest, chạy qua `testkit.k6_run`; xem [k6 và FaultInjector](#k6-và-faultinjector)) | 16 SRE & vận hành (load test, capacity) | Đúng tag và digest đã ghim | [k6 và FaultInjector](#k6-và-faultinjector) |
+| Image `devops-track/netem:1.0` (`tc` của iproute2 trên alpine 3.24.3, build một lần từ `setup/netem/`; xem [k6 và FaultInjector](#k6-và-faultinjector)) | 16 SRE & vận hành (game day: `FaultInjector` thêm độ trễ mạng) | Đúng tag đã ghim | [k6 và FaultInjector](#k6-và-faultinjector) |
 | AWS CLI v2 (`aws`, tuỳ chọn) | 14 Cloud & serverless (bản đã kiểm 2.38.6, cài vào `~/.local/aws-cli` từ zip chính thức, kiểm chữ ký PGP của AWS CLI Team và SHA-256; test không cần, chỉ để chạy tay trên LocalStack hay làm lab AWS thật) | 2.x | [Cài đặt](../tracks/devops/modules/14-cloud-serverless/README.md#0-cài-đặt) |
 
 Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
@@ -67,6 +69,8 @@ Hệ quả:
 - Prometheus và Alertmanager không phải binary trên máy mà là image Docker: track DevOps dùng đúng `prom/prometheus:v3.5.0` và
   `prom/alertmanager:v0.34.1` như track MLOps (cùng digest), nên không tải thêm và không hạ bản nào. `promtool`, `amtool` của
   hai track đều chạy trong hai image này. Đừng `docker image rm` hai image khi còn học track kia.
+- k6 cũng là image: track DevOps dùng `grafana/k6:1.8.1` đúng tag track MLOps ghim, thêm digest
+  `sha256:23f2279054c3e01535455c4d92914a625df12aeb631ea0e3ea7a43f96bcbc843`. Đã kéo cho track MLOps thì không phải tải lại.
 
 ## Dịch vụ phụ trợ: Mailpit
 
@@ -206,6 +210,28 @@ docker run --rm --network none -u "$(id -u):$(id -g)" -v "$PWD:/work:ro" -w /wor
 docker run --rm --network none -u "$(id -u):$(id -g)" -v "$PWD:/work:ro" -w /work --entrypoint /bin/amtool \
   prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a check-config alertmanager.yml
 ```
+
+## k6 và FaultInjector
+
+Module 16 và capstone m09 cần hai image. Test không tự kéo hay build: thiếu thì skip kèm đúng lệnh dưới đây.
+
+```bash
+nice -n 15 docker pull grafana/k6:1.8.1@sha256:23f2279054c3e01535455c4d92914a625df12aeb631ea0e3ea7a43f96bcbc843 &&
+nice -n 15 docker pull alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a &&
+nice -n 15 docker build --pull=false -t devops-track/netem:1.0 setup/netem
+```
+
+| Image | Bản | Dùng cho |
+|---|---|---|
+| `grafana/k6:1.8.1` | 1.8.1 (2026-08-12), cùng tag track MLOps | `testkit.k6_run`: kịch bản k6 của bài chạy trong network của lab, thư mục kịch bản chỉ đọc |
+| `alpine:3.24.3` | 3.24.3 (2026-10-21) | Base của image netem |
+| `devops-track/netem:1.0` | `iproute2-tc` 7.0.0-r0, khoảng 15 MB | `testkit.FaultInjector` lỗi `net-delay`: container phụ chạy `tc qdisc ... netem` |
+
+`FaultInjector` bơm một lỗi theo seed vào container của chính lab (`kill`, `redis-stop`, đầy tmpfs có giới hạn, trễ mạng). Lỗi trễ
+mạng cần quyền `NET_ADMIN`; quyền này chỉ cấp cho container phụ `devops-ex-<id>-fault-netem-<n>`, chạy vài giây với
+`--network container:<container đích>`, `--cap-drop ALL --cap-add NET_ADMIN`, no-new-privileges, chỉ đọc, rồi tự xoá. Container
+của bài không bao giờ có thêm capability. Lần đầu dùng, kernel tự nạp module `sch_netem` (xem bằng `lsmod | grep netem`, gỡ bằng
+`sudo modprobe -r sch_netem` khi không còn qdisc nào dùng nó). Gỡ image: `docker image rm devops-track/netem:1.0`.
 
 ## Cluster kind devops-lab
 

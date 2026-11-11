@@ -8505,3 +8505,491 @@ def test_linkerd_policy_vap_refuses_foreign_namespace_real():
         assert lab.kubectl("auth", "can-i", "create", "serviceprofiles.linkerd.io", check=False).stdout.strip() == "no"
         assert lab.kubectl("auth", "can-i", "create", "servers.policy.linkerd.io", "-n", "linkerd",
                            check=False).stdout.strip() == "no"
+
+
+def fault_info(name: str, *, labels=None, running=True, tmpfs=None, cid=None) -> dict:
+    return {"Name": f"/{name}", "Id": cid or f"id-{name}", "State": {"Running": running},
+            "Config": {"Labels": {"devops-ex": "1", **(labels or {})}}, "HostConfig": {"Tmpfs": tmpfs or {}}}
+
+
+class FakeFaultDocker:
+    """`_docker` giả cho FaultInjector: `ps` trả mọi tên (kể cả container lạ), `inspect` đọc từ `infos`, lệnh khác được ghi."""
+
+    def __init__(self, infos: list[dict]):
+        self.infos = {i["Name"].lstrip("/"): i for i in infos}
+        self.calls: list[tuple[str, ...]] = []
+
+    def __call__(self, *args, timeout=60):
+        self.calls.append(args)
+        if args[0] == "ps":
+            return subprocess.CompletedProcess(args, 0, "\n".join(self.infos), "")
+        if args[0] == "inspect":
+            found = [self.infos[n] for n in args[1:] if n in self.infos]
+            return subprocess.CompletedProcess(args, 0 if found else 1, json.dumps(found), "" if found else "No such object")
+        if args[0] in ("kill", "stop"):
+            self.infos[args[-1]]["State"]["Running"] = False
+        if args[0] == "start":
+            self.infos[args[-1]]["State"]["Running"] = True
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    def mutations(self) -> list[tuple[str, ...]]:
+        return [c for c in self.calls if c[0] not in ("ps", "inspect")]
+
+
+def fault_lab(monkeypatch, *, foreign=True):
+    lab = testkit.DockerLab()
+    lab._entered = True
+    prefix = lab.network
+    compose = {"devops-ex.lab": lab.id, "com.docker.compose.project": prefix}
+    infos = [
+        fault_info(f"{prefix}-api-1", labels={**compose, "com.docker.compose.service": "api"}),
+        fault_info(f"{prefix}-worker-1", labels={**compose, "com.docker.compose.service": "worker"}),
+        fault_info(f"{prefix}-redis-1", labels={**compose, "com.docker.compose.service": "redis"}, tmpfs={"/data": "size=16m"}),
+        fault_info(f"{prefix}-postgres-1", labels={**compose, "com.docker.compose.service": "postgres"},
+                   tmpfs={"/var/lib/postgresql/data": ""}),
+        fault_info(f"{prefix}-prometheus-1", labels={**compose, "com.docker.compose.service": "prometheus"}, tmpfs={"/prometheus": "size=8m"}),
+    ]
+    if foreign:
+        infos += [
+            fault_info(f"{prefix}-decoy", tmpfs={"/data": "size=1m"}),
+            fault_info(f"{prefix}-other-lab", labels={"devops-ex.lab": "ffffffff"}),
+            fault_info(f"devops-ex-ffffffff-redis-1", labels={"devops-ex.lab": "ffffffff", "com.docker.compose.service": "redis"}),
+            {**fault_info(f"{prefix}-unlabelled"), "Config": {"Labels": {"devops-ex.lab": lab.id}}},
+            fault_info("de-learning-redis", labels={"com.docker.compose.service": "redis"}),
+        ]
+    fake = FakeFaultDocker(infos)
+    monkeypatch.setattr(testkit, "_docker", fake)
+    return lab, fake
+
+
+def test_fault_injector_rejects_bad_arguments(monkeypatch):
+    lab, _ = fault_lab(monkeypatch)
+    with pytest.raises(TypeError):
+        testkit.FaultInjector(object(), seed=1)
+    for seed in ("1", True, 1.5):
+        with pytest.raises(TypeError):
+            testkit.FaultInjector(lab, seed=seed)
+    with pytest.raises(ValueError, match="không nhận"):
+        testkit.FaultInjector(lab, seed=1, faults=["rm-rf"])
+    with pytest.raises(ValueError, match="không hỗ trợ bad-config"):
+        testkit.FaultInjector(lab, seed=1, faults=["bad-config"])
+    with pytest.raises(ValueError, match="không hỗ trợ net-delay"):
+        testkit.FaultInjector(testkit.KubeLab(), seed=1, faults=["net-delay"])
+    for delay in (0, 6000, True):
+        with pytest.raises(ValueError):
+            testkit.FaultInjector(lab, seed=1, delay_ms=delay)
+    with pytest.raises(RuntimeError, match="with DockerLab"):
+        testkit.FaultInjector(testkit.DockerLab(), seed=1).plan()
+
+
+def test_fault_injector_seed_deterministic(monkeypatch):
+    lab, fake = fault_lab(monkeypatch)
+    plans = {seed: testkit.FaultInjector(lab, seed=seed).plan() for seed in range(200)}
+    assert all(testkit.FaultInjector(lab, seed=seed).plan() == plan for seed, plan in plans.items())
+    assert {code for code, _ in plans.values()} == set(testkit.FAULT_DOCKER_CODES)
+    assert {service for _, service in plans.values()} == {"api", "worker", "redis", "postgres"}
+    assert {s for c, s in plans.values() if c == "disk-full"} == {"redis"}
+    assert {s for c, s in plans.values() if c == "redis-stop"} == {"redis"}
+    assert fake.mutations() == [], "plan() không được thay đổi gì"
+    only = {testkit.FaultInjector(lab, seed=seed, faults=["kill"], services=["api", "worker"]).plan() for seed in range(50)}
+    assert only == {("kill", "api"), ("kill", "worker")}
+    shuffled, _ = fault_lab(monkeypatch)
+    fake_infos = list(testkit._docker.infos.items())
+    testkit._docker.infos = dict(reversed(fake_infos))
+    assert {seed: testkit.FaultInjector(shuffled, seed=seed).plan() for seed in range(200)} == plans, \
+        "Thứ tự docker ps trả về không được đổi lựa chọn"
+
+
+def test_fault_injector_only_touches_lab_resources(monkeypatch):
+    lab, fake = fault_lab(monkeypatch)
+    found = testkit.FaultInjector(lab, seed=1).candidates()
+    assert {service for _, service in found} == {"api", "worker", "redis", "postgres"}
+    with pytest.raises(pytest.fail.Exception, match="không có tài nguyên"):
+        testkit.FaultInjector(lab, seed=1, services=["decoy", "other-lab", "unlabelled", "prometheus"]).plan()
+    for name in (f"{lab.network}-decoy", f"{lab.network}-other-lab", "de-learning-redis", f"{lab.network}-unlabelled"):
+        with pytest.raises(RuntimeError, match="từ chối"):
+            testkit.FaultInjector(lab, seed=1)._inspect(name)
+    for code in ("kill", "redis-stop", "disk-full"):
+        injector = testkit.FaultInjector(lab, seed=3, faults=[code])
+        assert injector.inject() == code
+        assert injector.revert() == []
+    own = {f"{lab.network}-api-1", f"{lab.network}-worker-1", f"{lab.network}-redis-1", f"{lab.network}-postgres-1"}
+    touched = [c for c in fake.mutations()]
+    assert touched and all(any(arg in own for arg in call) for call in touched), touched
+    listed = [c for c in fake.calls if c[0] == "inspect" and len(c) > 2]
+    assert listed and all(n.startswith(f"{lab.network}-") for c in listed for n in c[1:]), listed
+    assert not [c for c in touched if f"{lab.network}-prometheus-1" in c]
+
+
+class FakeKube:
+    def __init__(self, lab, objects):
+        self.lab = lab
+        self.objects = objects
+        self.calls: list[tuple[str, ...]] = []
+
+    def __call__(self, *args, check=True, input=None, timeout=None):
+        self.calls.append(args)
+        if args[0] == "get" and "-o" in args and args[args.index("-o") + 1] == "json":
+            return subprocess.CompletedProcess(args, 0, json.dumps({"items": self.objects}), "")
+        if args[0] == "get" and "jsonpath={.spec.replicas}" in args:
+            workload = next(o for o in self.objects if f"{o['kind'].lower()}/{o['metadata']['name']}" == args[1])
+            return subprocess.CompletedProcess(args, 0, str(workload["spec"]["replicas"]), "")
+        if args[0] == "scale":
+            workload = next(o for o in self.objects if f"{o['kind'].lower()}/{o['metadata']['name']}" == args[1])
+            workload["spec"]["replicas"] = int(args[2].split("=")[1])
+        if args[:2] == ("patch", "configmap"):
+            config = next(o for o in self.objects if o["kind"] == "ConfigMap" and o["metadata"]["name"] == args[2])
+            config["data"].update(json.loads(args[-1])["data"])
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+
+def kube_objects() -> list[dict]:
+    def workload(kind, name, replicas=1, *, env_from=None, volumes=(), mounts=()):
+        container = {"name": "main", "image": "x", "volumeMounts": list(mounts)}
+        if env_from:
+            container["envFrom"] = [{"configMapRef": {"name": env_from}}]
+        return {"kind": kind, "metadata": {"name": name}, "spec": {"replicas": replicas, "selector": {"matchLabels": {"app": name}},
+                "template": {"metadata": {"labels": {"app": name}}, "spec": {"containers": [container], "volumes": list(volumes)}}}}
+
+    def pod(name, app, phase="Running"):
+        return {"kind": "Pod", "metadata": {"name": name, "labels": {"app": app}}, "status": {"phase": phase}}
+
+    return [
+        workload("Deployment", "api", 2, env_from="api-config",
+                 volumes=[{"name": "scratch", "emptyDir": {"sizeLimit": "16Mi"}}], mounts=[{"name": "scratch", "mountPath": "/scratch"}]),
+        workload("Deployment", "redis"),
+        workload("StatefulSet", "postgres", volumes=[{"name": "big", "emptyDir": {"sizeLimit": "4Gi"}}],
+                 mounts=[{"name": "big", "mountPath": "/big"}]),
+        {"kind": "ConfigMap", "metadata": {"name": "api-config"}, "data": {"DATABASE_URL": "postgresql://postgres/olist"}},
+        {"kind": "ConfigMap", "metadata": {"name": "unused"}, "data": {"A": "b"}},
+        pod("api-7d9-b", "api"), pod("api-7d9-a", "api"), pod("redis-55-x", "redis"), pod("postgres-0", "postgres", "Pending"),
+    ]
+
+
+def test_fault_injector_kube_stays_in_lab_namespace(monkeypatch):
+    lab = testkit.KubeLab()
+    fake = FakeKube(lab, kube_objects())
+    monkeypatch.setattr(lab, "kubectl", fake)
+    lab._admin = None
+    plans = {testkit.FaultInjector(lab, seed=s).plan() for s in range(200)}
+    assert plans == {("kill", "deployment/api"), ("kill", "deployment/redis"), ("disk-full", "deployment/api"),
+                     ("redis-stop", "deployment/redis"), ("bad-config", "configmap/api-config")}
+    for code in testkit.FAULT_KUBE_CODES:
+        with testkit.FaultInjector(lab, seed=7, faults=[code]) as injector:
+            assert injector.inject() == code
+    config = next(o for o in fake.objects if o["metadata"]["name"] == "api-config")
+    assert config["data"] == {"DATABASE_URL": "postgresql://postgres/olist"}
+    assert next(o for o in fake.objects if o["metadata"]["name"] == "redis")["spec"]["replicas"] == 1
+    calls = [" ".join(c) for c in fake.calls]
+    assert "delete pod api-7d9-a --grace-period=0 --force --wait=false" in calls
+    assert "scale deployment/redis --replicas=0" in calls and "scale deployment/redis --replicas=1" in calls
+    assert any(c.startswith("exec api-7d9-a -c main -- dd if=/dev/zero of=/scratch/") for c in calls)
+    assert any(c.startswith("exec api-7d9-a -c main -- rm -f /scratch/") for c in calls)
+    assert sum(c.startswith("patch deployment/api --type merge") for c in calls) == 2
+    patched = [json.loads(c[-1]) for c in fake.calls if c[:2] == ("patch", "configmap")]
+    assert patched[0]["data"]["DATABASE_URL"].endswith(testkit.FAULT_CONFIG_SUFFIX)
+    for call in fake.calls:
+        flat = " ".join(call)
+        assert not re.search(r"\bnodes?\b|--namespace|\s-n\s|--all-namespaces|\s-A\b|--kubeconfig|--as", f" {flat} "), flat
+
+
+def docker_ps(*filters: str) -> list[str]:
+    args = ["ps", "-a", "--format", "{{.Names}}"]
+    for f in filters:
+        args += ["--filter", f]
+    return testkit._docker(*args).stdout.split()
+
+
+FAULT_COMPOSE = f"""
+services:
+  api:
+    image: {BASE}
+    command: ["python", "-m", "http.server", "8000"]
+  redis:
+    image: {testkit.KUBE_IMAGES["redis"]}
+    tmpfs: ["/data:size=8m"]
+"""
+
+
+def qdiscs(name: str) -> str:
+    result = subprocess.run(["docker", "run", "--rm", "--network", f"container:{name}", "--cap-drop", "ALL", "--cap-add", "NET_ADMIN",
+                             "--security-opt", "no-new-privileges", *testkit.docker_cpu_args(), "--entrypoint", "tc",
+                             testkit.FAULT_NETEM_IMAGE, "qdisc", "show"], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+def started_at(name: str) -> tuple[bool, str]:
+    info = inspect_container(name)
+    return info["State"]["Running"], info["State"]["StartedAt"]
+
+
+def fill_exists(name: str) -> bool:
+    return testkit._docker("exec", name, "test", "-e", f"/data/{testkit.FAULT_FILL_FILE}").returncode == 0
+
+
+def fault_real_images():
+    require_real_docker(BASE)
+    require_real_docker(testkit.KUBE_IMAGES["redis"])
+    require_real_docker(testkit.FAULT_NETEM_IMAGE)
+
+
+def test_fault_injector_real_only_touches_lab_resources(monkeypatch, tmp_path):
+    fault_real_images()
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    recorded: list[list[str]] = []
+    active: list[bool] = []
+    real_run = subprocess.run
+
+    def recording(cmd, *args, **kwargs):
+        if active and isinstance(cmd, list) and cmd[:1] == ["docker"]:
+            recorded.append(list(cmd))
+        return real_run(cmd, *args, **kwargs)
+
+    lab, other = testkit.DockerLab(), testkit.DockerLab()
+    decoy = None
+    with lab, other:
+        lab.compose(write_compose(tmp_path / "a", FAULT_COMPOSE))
+        other.compose(write_compose(tmp_path / "b", FAULT_COMPOSE))
+        decoy = f"{lab.network}-decoy"
+        made = testkit._docker("run", "-d", "--name", decoy, "--label", "devops-ex=1", "--security-opt", "no-new-privileges",
+                               *testkit.docker_cpu_args(), "--tmpfs", "/data:size=4m", testkit.KUBE_IMAGES["redis"])
+        assert made.returncode == 0, made.stderr
+        try:
+            bystanders = [decoy] + [other.project.container(s) for s in ("api", "redis")]
+            before = {name: started_at(name) for name in bystanders}
+            own = {lab.project.container(s): inspect_container(lab.project.container(s))["Id"] for s in ("api", "redis")}
+            monkeypatch.setattr(testkit.subprocess, "run", recording)
+            for code in testkit.FAULT_DOCKER_CODES:
+                injector = testkit.FaultInjector(lab, seed=11, faults=[code])
+                active.append(True)
+                try:
+                    assert injector.inject() == code
+                finally:
+                    active.clear()
+                assert injector.resource in ("api", "redis")
+                for name in bystanders:
+                    assert started_at(name) == before[name], f"{code} chạm {name}"
+                    assert "netem" not in qdiscs(name), f"{code} thêm netem vào {name}"
+                assert not fill_exists(decoy) and not fill_exists(other.project.container("redis"))
+                active.append(True)
+                try:
+                    assert injector.revert() == []
+                finally:
+                    active.clear()
+            monkeypatch.setattr(testkit.subprocess, "run", real_run)
+            names = set(own) | set(own.values())
+            for argv in recorded:
+                verb = argv[1]
+                if verb in ("kill", "stop", "start", "exec"):
+                    target = next(a for a in argv[2:] if not a.startswith("-") and a not in ("0", "5"))
+                    assert target in names, argv
+                if verb == "run":
+                    assert argv[argv.index("--network") + 1].removeprefix("container:") in names, argv
+                    assert argv[argv.index("--cap-add") + 1] == "NET_ADMIN" and argv[argv.index("--cap-drop") + 1] == "ALL"
+                    assert "no-new-privileges" in argv and "--read-only" in argv and "--rm" in argv
+                    assert argv[argv.index("--name") + 1].startswith(f"{lab.network}-fault-netem-")
+            assert {argv[1] for argv in recorded} >= {"kill", "stop", "start", "exec", "run"}
+            for name in own:
+                assert not inspect_container(name)["HostConfig"].get("CapAdd"), "Container của bài không được thêm capability"
+        finally:
+            monkeypatch.setattr(testkit.subprocess, "run", real_run)
+            testkit._docker("rm", "-f", "-v", decoy)
+    assert testkit.docker_leftovers(lab.id) == [] and testkit.docker_leftovers(other.id) == []
+
+
+def test_fault_injector_reverts_on_close(monkeypatch, tmp_path):
+    import warnings
+
+    fault_real_images()
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    lab = testkit.DockerLab()
+    with lab:
+        project = lab.compose(write_compose(tmp_path, FAULT_COMPOSE))
+        api, redis = project.container("api"), project.container("redis")
+        for code, service in (("kill", "api"), ("redis-stop", "redis"), ("net-delay", "api"), ("disk-full", "redis")):
+            injector = testkit.FaultInjector(lab, seed=5, faults=[code], services=[service])
+            name = api if service == "api" else redis
+            assert injector.inject() == code and injector.resource == service
+            if code in ("kill", "redis-stop"):
+                assert not started_at(name)[0]
+            elif code == "net-delay":
+                assert f"delay {testkit.FAULT_DELAY_MS}ms" in qdiscs(name)
+            else:
+                assert fill_exists(name)
+                full = testkit._docker("exec", name, "sh", "-c", "echo x > /data/probe")
+                assert full.returncode != 0 and "space" in full.stderr.lower()
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                injector.close()
+            assert started_at(name)[0], f"{code}: container chưa chạy lại"
+            assert "netem" not in qdiscs(name) and not fill_exists(name)
+            with pytest.raises(RuntimeError, match="một lỗi"):
+                injector.inject()
+        recovered = testkit.FaultInjector(lab, seed=5, faults=["kill"], services=["api"])
+        recovered.inject()
+        assert project.run("up", "-d", "--force-recreate", "--no-deps", "api").returncode == 0
+        delayed = testkit.FaultInjector(lab, seed=5, faults=["net-delay"], services=["redis"])
+        delayed.inject()
+        assert project.run("restart", "redis").returncode == 0
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert recovered.revert() == [] and delayed.revert() == []
+        assert started_at(project.container("api"))[0]
+    assert testkit.docker_leftovers(lab.id) == []
+    project_volumes = testkit._docker("volume", "ls", "-q", "--filter", f"label=com.docker.compose.project=devops-ex-{lab.id}")
+    assert project_volumes.stdout.split() == []
+
+
+@KUBE_REQUIRED
+def test_fault_injector_kube_real():
+    testkit.Exercise.require_cluster()
+    testkit.Exercise.require_kind_images(testkit.KUBE_IMAGES["redis"])
+    image = testkit.KUBE_IMAGES["redis"]
+
+    def deployment(name, command, **extra):
+        container = {"name": "main", "image": image, "imagePullPolicy": "Never", "command": command, **extra.pop("container", {})}
+        return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name},
+                "spec": {"replicas": 1, "selector": {"matchLabels": {"app": name}},
+                         "template": {"metadata": {"labels": {"app": name}},
+                                      "spec": {"terminationGracePeriodSeconds": 0, "containers": [container], **extra}}}}
+
+    docs = [
+        {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "web-config"}, "data": {"MODE": "ok"}},
+        deployment("web", ["sh", "-c", "sleep 3600"], container={"envFrom": [{"configMapRef": {"name": "web-config"}}],
+                                                                 "volumeMounts": [{"name": "scratch", "mountPath": "/scratch"}]},
+                   volumes=[{"name": "scratch", "emptyDir": {"medium": "Memory", "sizeLimit": "8Mi"}}]),
+        deployment("redis", ["redis-server"]),
+    ]
+    with testkit.KubeLab() as lab:
+        lab.kubectl("apply", "-f", "-", input=json.dumps({"apiVersion": "v1", "kind": "List", "items": docs}))
+        lab.kubectl("rollout", "status", "deployment/web", "deployment/redis", "--timeout=120s", timeout=150)
+
+        def pods(app):
+            out = lab.kubectl("get", "pods", "-l", f"app={app}", "-o", "json").stdout
+            return [p["metadata"]["name"] for p in json.loads(out)["items"] if not p["metadata"].get("deletionTimestamp")]
+
+        before = pods("web")
+        with testkit.FaultInjector(lab, seed=2, faults=["kill"], services=["web"]) as injector:
+            assert injector.inject() == "kill"
+        lab.kubectl("rollout", "status", "deployment/web", "--timeout=120s", timeout=150)
+        deadline = time.monotonic() + 60
+        while set(pods("web")) & set(before) and time.monotonic() < deadline:
+            time.sleep(1)
+        assert not set(pods("web")) & set(before), "Pod bị kill phải được thay"
+        with testkit.FaultInjector(lab, seed=2, faults=["redis-stop"]) as injector:
+            injector.inject()
+            assert lab.kubectl("get", "deployment/redis", "-o", "jsonpath={.spec.replicas}").stdout == "0"
+        assert lab.kubectl("get", "deployment/redis", "-o", "jsonpath={.spec.replicas}").stdout == "1"
+        lab.kubectl("rollout", "status", "deployment/web", "--timeout=120s", timeout=150)
+        pod = pods("web")[0]
+        with testkit.FaultInjector(lab, seed=2, faults=["disk-full"]) as injector:
+            injector.inject()
+            assert lab.kubectl("exec", pod, "--", "test", "-e", f"/scratch/{testkit.FAULT_FILL_FILE}", check=False).returncode == 0
+        assert lab.kubectl("exec", pod, "--", "test", "-e", f"/scratch/{testkit.FAULT_FILL_FILE}", check=False).returncode != 0
+        with testkit.FaultInjector(lab, seed=2, faults=["bad-config"]) as injector:
+            assert injector.inject() == "bad-config" and injector.resource == "configmap/web-config"
+            data = json.loads(lab.kubectl("get", "configmap", "web-config", "-o", "json").stdout)["data"]
+            assert data == {"MODE": f"ok{testkit.FAULT_CONFIG_SUFFIX}"}
+            lab.kubectl("rollout", "status", "deployment/web", "--timeout=120s", timeout=150)
+            new = pods("web")[0]
+            assert lab.kubectl("exec", new, "--", "printenv", "MODE").stdout.strip() == f"ok{testkit.FAULT_CONFIG_SUFFIX}"
+        assert json.loads(lab.kubectl("get", "configmap", "web-config", "-o", "json").stdout)["data"] == {"MODE": "ok"}
+        nodes_before = admin_kubectl("get", "nodes", "-o", "json")
+        assert all(not n["spec"].get("unschedulable") and not n["spec"].get("taints", [])
+                   or n["metadata"]["name"].endswith("control-plane") for n in json.loads(nodes_before.stdout)["items"])
+
+
+def test_k6_run_argv_and_summary(monkeypatch, tmp_path):
+    fake = FakeDocker()
+    marker = testkit.K6_SUMMARY_MARKER
+
+    def run(cmd, **kwargs):
+        fake(cmd, **kwargs)
+        if cmd[:2] == ["docker", "run"]:
+            harness = next(a.split(":")[0] for a in cmd if a.endswith(":/harness:ro"))
+            text = Path(harness, "run.js").read_text(encoding="utf-8")
+            assert 'export * from "/scripts/load.js";' in text and "handleSummary" in text
+            return subprocess.CompletedProcess(cmd, 99, f"log\n{marker}" + json.dumps({"metrics": {"x": {"values": {"rate": 1}}}}) + "\n", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(testkit.subprocess, "run", run)
+    monkeypatch.setattr(testkit.Exercise, "require_image", staticmethod(lambda *a, **k: None))
+    monkeypatch.setenv("DEVOPS_CPUSET", "2-3")
+    script = tmp_path / "load.js"
+    script.write_text("export default function () {}\n", encoding="utf-8")
+    with testkit.DockerLab() as lab:
+        result, summary = testkit.k6_run(lab, script, env={"TARGET": "http://api:8000", "STEPS": "10,20"})
+        assert result.returncode == 99 and summary == {"metrics": {"x": {"values": {"rate": 1}}}}
+        with pytest.raises(ValueError):
+            testkit.k6_run(lab, script, env={"BAD KEY": "x"})
+        (tmp_path / "evil.js").symlink_to(script)
+        with pytest.raises(pytest.fail.Exception, match="tệp .js thường"):
+            testkit.k6_run(lab, tmp_path / "evil.js")
+    argv = next(c for c in fake.calls if c[:2] == ["docker", "run"])
+    assert "--rm" in argv and argv[argv.index("--network") + 1] == lab.network
+    assert f"{tmp_path.resolve()}:/scripts:ro" in argv and argv[argv.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+    assert argv[argv.index("--memory") + 1] == testkit.K6_MEMORY and argv[argv.index("--cpuset-cpus") + 1] == "2-3"
+    tail = argv[argv.index(testkit.K6_IMAGE):]
+    assert tail == [testkit.K6_IMAGE, "run", "--quiet", "--no-color", "-e", "TARGET=http://api:8000", "-e", "STEPS=10,20",
+                    "/harness/run.js"]
+    import tempfile
+
+    assert not list(Path(tempfile.gettempdir()).glob(f"{lab.network}-k6-*")), "Thư mục harness phải được xoá"
+
+
+def test_k6_image_matches_mlops_pin():
+    mlops = (testkit.ROOT / "mlopskit.py").read_text(encoding="utf-8")
+    tag = re.search(r'K6_IMAGE = "([^"]+)"', mlops).group(1)
+    assert testkit.K6_IMAGE.startswith(f"{tag}@sha256:") and re.fullmatch(r".+@sha256:[0-9a-f]{64}", testkit.K6_IMAGE)
+
+
+def test_k6_run_real(monkeypatch, tmp_path):
+    require_real_docker(BASE)
+    require_real_docker(testkit.K6_IMAGE)
+    monkeypatch.setenv("DEVOPS_CPUSET", build_cpuset())
+    work = tmp_path / "k6"
+    work.mkdir(mode=0o700)
+    (work / "load.js").write_text(
+        'import http from "k6/http";\nimport { check } from "k6";\n'
+        'export const options = { scenarios: { probe: { executor: "constant-arrival-rate", rate: 10, timeUnit: "1s", '
+        'duration: "2s", preAllocatedVUs: 5 } }, thresholds: { "http_req_failed{scenario:probe}": ["rate<0.01"] } };\n'
+        'export default function () { check(http.get(`${__ENV.TARGET}/`), { ok: (r) => r.status === 200 }); }\n',
+        encoding="utf-8")
+    lab = testkit.DockerLab()
+    with lab:
+        lab.start("api", BASE, "python", "-u", "-m", "http.server", "8000")
+        lab.wait_log("api", "Serving HTTP")
+        result, summary = testkit.k6_run(lab, work / "load.js", env={"TARGET": "http://api:8000"}, timeout=120)
+        assert result.returncode == 0, result.stderr[-2000:]
+        assert summary["metrics"]["http_reqs"]["values"]["count"] >= 15
+        assert summary["metrics"]["http_req_failed{scenario:probe}"]["values"]["rate"] == 0
+        failed, summary = testkit.k6_run(lab, work / "load.js", env={"TARGET": "http://api:8000/khong-co"}, timeout=120)
+        assert failed.returncode == 99, failed.stderr[-2000:]
+        assert summary["metrics"]["http_req_failed{scenario:probe}"]["thresholds"]["rate<0.01"]["ok"] is False
+    assert testkit.docker_leftovers(lab.id) == []
+
+
+def test_fault_injector_fails_loudly_when_docker_ps_fails(monkeypatch):
+    lab, fake = fault_lab(monkeypatch, foreign=False)
+    calls = []
+
+    def broken(*args, timeout=60):
+        calls.append(args)
+        if args[0] == "ps" and len(calls) <= 2:
+            return subprocess.CompletedProcess(args, 1, "", "Error response from daemon: busy")
+        return fake(*args, timeout=timeout)
+
+    monkeypatch.setattr(testkit, "_docker", broken)
+    monkeypatch.setattr(testkit.time, "sleep", lambda s: None)
+    assert testkit.FaultInjector(lab, seed=1).plan()[1] in {"api", "worker", "redis", "postgres"}, "Lỗi tạm thời của docker ps được thử lại"
+    calls.clear()
+
+    def dead(*args, timeout=60):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 1, "", "Cannot connect to the Docker daemon")
+
+    monkeypatch.setattr(testkit, "_docker", dead)
+    with pytest.raises(pytest.fail.Exception, match="không đọc được container của lab: Cannot connect"):
+        testkit.FaultInjector(lab, seed=1).plan()
+    assert len(calls) == 3

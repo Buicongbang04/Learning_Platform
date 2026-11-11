@@ -357,5 +357,18 @@ def test_devops_tools_documents_lambda_lab():
     assert "## Lambda local: LambdaLab" in text and testkit.LAMBDA_PULL in text
     assert testkit.LOCALSTACK_DEVOPS_RECREATE in text and "SQS" in text and "không mount socket Docker" in text
     spec = (ROOT / "CONTENT_SPEC.md").read_text(encoding="utf-8")
-    assert "testkit.LambdaLab(lab, " in spec and "`aws`, `awslocal` thẳng" in spec
+    assert "testkit.LambdaLab(lab, " in spec and "`aws`, `awslocal`, `tc`, `k6` thẳng" in spec
     assert testkit.LAMBDA_IMAGE.split("@")[0] in spec
+
+
+def test_devops_tools_documents_k6_and_netem():
+    text = TOOLS_DOC.read_text(encoding="utf-8")
+    assert "## k6 và FaultInjector" in text and testkit.K6_IMAGE in text
+    assert testkit.FAULT_NETEM_BASE in text and f"-t {testkit.FAULT_NETEM_IMAGE} setup/netem" in text
+    dockerfile = (testkit.FAULT_NETEM_DIR / "Dockerfile").read_text(encoding="utf-8").splitlines()
+    assert dockerfile[0] == f"FROM {testkit.FAULT_NETEM_BASE}"
+    assert re.search(r"apk add --no-cache iproute2-tc=\d[\w.-]+$", dockerfile[1])
+    assert testkit.FAULT_NETEM_BUILD == (f"docker pull {testkit.FAULT_NETEM_BASE} && docker build --pull=false -t "
+                                         f"{testkit.FAULT_NETEM_IMAGE} setup/netem")
+    spec = (ROOT / "CONTENT_SPEC.md").read_text(encoding="utf-8")
+    assert "testkit.FaultInjector(lab, seed=seed" in spec and "testkit.k6_run(lab, " in spec

@@ -3056,6 +3056,59 @@ def amtool(*args: str, cwd: Path, timeout: float = 120) -> subprocess.CompletedP
     return _obs_tool("amtool", OBS_IMAGES["alertmanager"], "/bin/amtool", args, cwd, timeout)
 
 
+K6_IMAGE = "grafana/k6:1.8.1@sha256:23f2279054c3e01535455c4d92914a625df12aeb631ea0e3ea7a43f96bcbc843"
+K6_PULL = f"docker pull {K6_IMAGE}"
+K6_MEMORY = "512m"
+K6_TIMEOUT = 300
+K6_SUMMARY_MARKER = "@@devops-ex-k6-summary@@"
+_K6_SCRIPT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\.js")
+_K6_ENV = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_K6_HARNESS = """export * from "/scripts/{name}";
+export {{ default }} from "/scripts/{name}";
+export function handleSummary(data) {{
+  return {{ stdout: "\\n{marker}" + JSON.stringify(data) + "\\n" }};
+}}
+"""
+
+
+def k6_run(lab: DockerLab, script: Path, *, env: dict | None = None, timeout: float = K6_TIMEOUT,
+           memory: str = K6_MEMORY) -> tuple[subprocess.CompletedProcess, dict | None]:
+    """Chạy kịch bản k6 `script` của người học trong image `K6_IMAGE` (ghim digest, cùng bản track MLOps) bằng
+    `lab.run_once`: network của lab (gọi service khác của lab bằng tên, ví dụ `http://api:8000`), thư mục chứa `script` mount
+    chỉ đọc ở `/scripts`, uid/gid của người chạy test, cpuset, RAM `memory`, `--rm`. `env` thành `-e KEY=VALUE` của k6
+    (`__ENV` trong kịch bản). testkit chạy một tệp bọc chỉ đọc ở `/harness` (`export *` và `default` từ kịch bản, cộng
+    `handleSummary` in tóm tắt JSON), nên kịch bản phải có `export default function`. Trả `(kết quả, tóm tắt)`: tóm tắt là
+    dict `handleSummary` của k6 (`metrics.<tên>.values`, `thresholds`, `root_group`), `None` khi k6 không chạy tới cuối.
+    k6 thoát mã 99 khi có threshold không đạt. Thiếu image thì skip kèm `K6_PULL`."""
+    Exercise.require_image(K6_IMAGE, f"Tải image k6 bằng: {K6_PULL}")
+    script = Path(script)
+    if script.is_symlink() or not script.is_file() or not _K6_SCRIPT.fullmatch(script.name):
+        pytest.fail(f"Kịch bản k6 {script.name} phải là tệp .js thường, tên chỉ gồm chữ, số, '.', '_', '-'")
+    args = ["run", "--quiet", "--no-color"]
+    for key, value in (env or {}).items():
+        if not _K6_ENV.fullmatch(str(key)) or "\n" in str(value):
+            raise ValueError(f"Biến k6 {key!r} không hợp lệ")
+        args += ["-e", f"{key}={value}"]
+    harness = Path(tempfile.mkdtemp(prefix=f"{lab.network}-k6-"))
+    try:
+        (harness / "run.js").write_text(_K6_HARNESS.format(name=script.name, marker=K6_SUMMARY_MARKER), encoding="utf-8")
+        harness.chmod(0o755)
+        (harness / "run.js").chmod(0o644)
+        result = lab.run_once("k6", K6_IMAGE, *args, "/harness/run.js", mounts=[(script.resolve().parent, "/scripts"),
+                              (harness, "/harness")], timeout=timeout, memory=memory, user=f"{os.getuid()}:{os.getgid()}",
+                              workdir="/scripts")
+    finally:
+        shutil.rmtree(harness, ignore_errors=True)
+    summary = None
+    index = result.stdout.rfind(K6_SUMMARY_MARKER)
+    if index >= 0:
+        try:
+            summary = json.loads(result.stdout[index + len(K6_SUMMARY_MARKER):].strip().splitlines()[0])
+        except (ValueError, IndexError):
+            summary = None
+    return result, summary
+
+
 ANSIBLE_VERSION = "2.21.5"
 ANSIBLE_MIN_VERSION = "2.21"
 ANSIBLE_TARGET_DIR = ROOT / "setup" / "ansible-target"
@@ -5949,6 +6002,408 @@ class KubeLab:
                                   f"và kubectl delete <loại> -l {self.label}:\n" + "\n".join(errors))
             warnings.warn(self.cleanup_error, UserWarning)
 
+
+
+FAULT_CODES = ("kill", "net-delay", "disk-full", "redis-stop", "bad-config")
+FAULT_DOCKER_CODES = ("kill", "net-delay", "disk-full", "redis-stop")
+FAULT_KUBE_CODES = ("kill", "disk-full", "redis-stop", "bad-config")
+FAULT_NETEM_BASE = "alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a"
+FAULT_NETEM_IMAGE = "devops-track/netem:1.0"
+FAULT_NETEM_DIR = ROOT / "setup" / "netem"
+FAULT_NETEM_BUILD = f"docker pull {FAULT_NETEM_BASE} && docker build --pull=false -t {FAULT_NETEM_IMAGE} setup/netem"
+FAULT_DELAY_MS = 400
+FAULT_FILL_LIMIT = 256 * 1024 * 1024
+FAULT_FILL_FILE = ".devops-ex-fault-fill"
+FAULT_CONFIG_SUFFIX = ".devops-ex-invalid"
+FAULT_RESTART_ANNOTATION = "devops-ex/fault-restart"
+FAULT_REDIS = "redis"
+_FAULT_PATH = re.compile(r"/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
+_FAULT_SIZE = re.compile(r"^(\d+)([kKmMgG]?)$")
+_FAULT_KUBE_SIZE = re.compile(r"^(\d+)(Ki|Mi|Gi|k|M|G)?$")
+_FAULT_UNITS = {"": 1, "k": 1024, "m": 1024 ** 2, "g": 1024 ** 3, "Ki": 1024, "Mi": 1024 ** 2, "Gi": 1024 ** 3,
+                "K": 1000, "M": 1000 ** 2, "G": 1000 ** 3}
+_FAULT_NETEM_ADD = 'for d in $(ls /sys/class/net); do [ "$d" = lo ] || tc qdisc replace dev "$d" root netem delay {ms}ms || exit 1; done'
+_FAULT_NETEM_DEL = 'for d in $(ls /sys/class/net); do [ "$d" = lo ] || tc qdisc del dev "$d" root 2>/dev/null; done; exit 0'
+
+
+def _fault_size(text: str, pattern: re.Pattern) -> int | None:
+    match = pattern.fullmatch(str(text).strip())
+    if not match:
+        return None
+    unit = match.group(2) or ""
+    return int(match.group(1)) * _FAULT_UNITS[unit if pattern is _FAULT_KUBE_SIZE else unit.lower()]
+
+
+def _fault_docker_tmpfs(info: dict) -> list[tuple[str, int]]:
+    """tmpfs có giới hạn kích thước của một container (đường dẫn, byte), từ `HostConfig.Tmpfs` và `Mounts` kiểu tmpfs."""
+    found: dict[str, int] = {}
+    for path, options in ((info.get("HostConfig") or {}).get("Tmpfs") or {}).items():
+        for option in str(options).split(","):
+            key, _, value = option.partition("=")
+            size = _fault_size(value, _FAULT_SIZE) if key.strip() == "size" else None
+            if size:
+                found[path] = size
+    for mount in (info.get("HostConfig") or {}).get("Mounts") or []:
+        size = ((mount.get("TmpfsOptions") or {}).get("SizeBytes") or 0) if mount.get("Type") == "tmpfs" else 0
+        if size:
+            found[mount.get("Target", "")] = int(size)
+    return sorted((p, s) for p, s in found.items() if _FAULT_PATH.fullmatch(p) and ".." not in p.split("/") and 0 < s <= FAULT_FILL_LIMIT)
+
+
+class FaultInjector:
+    """Bơm đúng một lỗi, chọn theo `seed`, vào tài nguyên của một lab (game day, chaos), rồi hoàn tác khi `close()`.
+
+    `FaultInjector(target, *, seed, faults=None, services=None, redis="redis", delay_ms=400)`: `target` là `DockerLab` (đã
+    vào `with`, thường có `ObsStack` hay `lab.compose`) hoặc `KubeLab`. `plan()` trả `(mã lỗi, tài nguyên)` mà không làm gì;
+    `inject()` bơm lỗi và trả **mã lỗi** (một trong `FAULT_CODES`), không trả mô tả; `revert()` hoàn tác và trả danh sách lỗi
+    khi hoàn tác (rỗng là sạch); `close()` (và `__exit__`) gọi `revert()`, có lỗi thì `UserWarning`.
+
+    Chọn lỗi: liệt kê mọi cặp (mã, tài nguyên) hợp lệ của lab theo thứ tự cố định, `random.Random(seed)` chọn mã trong các mã có
+    tài nguyên rồi chọn tài nguyên, nên cùng seed trên cùng một topology luôn ra cùng một lỗi. `faults` giới hạn tập mã, `services`
+    giới hạn tên service (compose), alias (`lab.start`) hay tên workload (Kubernetes).
+
+    DockerLab (`FAULT_DOCKER_CODES`): `kill` (`docker kill`, hoàn tác `docker start`), `redis-stop` (`docker stop` service tên
+    `redis`), `disk-full` (ghi đầy tmpfs **có `size=`** không quá `FAULT_FILL_LIMIT` bằng `dd` trong container, tệp
+    `FAULT_FILL_FILE`; hoàn tác xoá tệp), `net-delay` (thêm `delay_ms` mili giây bằng `tc qdisc ... netem` trên mọi interface
+    trừ `lo`, hoàn tác `tc qdisc del`). `net-delay` chạy `tc` trong container phụ `devops-ex-<id>-fault-netem-<n>` (image
+    `FAULT_NETEM_IMAGE`, build bằng `FAULT_NETEM_BUILD`, thiếu thì skip) dùng chung network namespace của **đúng** container
+    đích (`--network container:<id>`), `--cap-drop ALL --cap-add NET_ADMIN`, no-new-privileges, `--read-only`, cpuset, RAM 32m,
+    `--rm`: chỉ container phụ có NET_ADMIN, chỉ trong namespace mạng của container đích, chạy xong là thoát; container của bài
+    không bao giờ được thêm capability. Kernel cần module `sch_netem` (tự nạp lần đầu).
+
+    KubeLab (`FAULT_KUBE_CODES`): mọi lệnh đi qua `lab.kubectl` (token `devops-ex-learner`, chỉ namespace của lab), không bao giờ
+    dùng kubeconfig admin hay `node_action`, không chạm node. `kill` xoá một pod đang chạy của Deployment/StatefulSet (controller
+    tạo lại); `redis-stop` scale workload `redis` về 0 (hoàn tác scale lại); `disk-full` ghi đầy `emptyDir` có `sizeLimit` không
+    quá `FAULT_FILL_LIMIT` (hoàn tác xoá tệp nếu pod còn); `bad-config` thêm `FAULT_CONFIG_SUFFIX` vào mọi giá trị của một
+    ConfigMap mà workload dùng (env, envFrom, volume) rồi rollout lại workload đó bằng annotation `FAULT_RESTART_ANNOTATION`
+    (hoàn tác ghi lại giá trị cũ và rollout lần nữa). `net-delay` không có trên KubeLab: pod dưới Pod Security baseline không
+    được NET_ADMIN.
+
+    Chỉ chạm tài nguyên của lab: container phải có tên `devops-ex-<id>-...`, nhãn `devops-ex=1` và (tên trong `lab.names` hoặc nhãn
+    `devops-ex.lab=<id>`), kiểm lại bằng `docker inspect` ngay trước mỗi lệnh; service của stack observability (`OBS_IMAGES`)
+    và container phụ của chính injector không bao giờ là đích. Hoàn tác bỏ qua tài nguyên đã được người học khôi phục (container
+    chạy lại, container tạo mới có ID khác, pod đã thay).
+    """
+
+    def __init__(self, target, *, seed: int, faults=None, services=None, redis: str = FAULT_REDIS,
+                 delay_ms: int = FAULT_DELAY_MS) -> None:
+        if not isinstance(target, (DockerLab, KubeLab)):
+            raise TypeError("FaultInjector chỉ nhận DockerLab hoặc KubeLab")
+        if isinstance(seed, bool) or not isinstance(seed, int):
+            raise TypeError("seed phải là số nguyên")
+        if isinstance(delay_ms, bool) or not isinstance(delay_ms, int) or not 1 <= delay_ms <= 5000:
+            raise ValueError("delay_ms phải là số nguyên từ 1 tới 5000")
+        self.kube = isinstance(target, KubeLab)
+        supported = FAULT_KUBE_CODES if self.kube else FAULT_DOCKER_CODES
+        faults = tuple(supported if faults is None else faults)
+        unknown = [f for f in faults if f not in FAULT_CODES]
+        if unknown or not faults:
+            raise ValueError(f"faults chỉ nhận {', '.join(FAULT_CODES)}, không nhận {unknown or 'tập rỗng'}")
+        unsupported = [f for f in faults if f not in supported]
+        if unsupported:
+            raise ValueError(f"{type(target).__name__} không hỗ trợ {', '.join(unsupported)}")
+        self.target = target
+        self.seed = seed
+        self.faults = faults
+        self.services = None if services is None else tuple(services)
+        self.redis = redis
+        self.delay_ms = delay_ms
+        self.code: str | None = None
+        self.resource: str | None = None
+        self._undo: list[tuple] = []
+        self._sidecars = 0
+
+    def __enter__(self) -> "FaultInjector":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def _wanted(self, name: str) -> bool:
+        return self.services is None or name in self.services
+
+    def _containers(self) -> dict[str, dict]:
+        lab = self.target
+        lab._require_entered()
+        for attempt in range(3):
+            listed = _docker("ps", "-a", "--filter", f"label={DOCKER_LABEL}", "--filter", f"name={lab.network}-", "--format",
+                             "{{.Names}}")
+            names = sorted(n for n in listed.stdout.split() if n.startswith(f"{lab.network}-"))
+            result = _docker("inspect", *names) if names and listed.returncode == 0 else None
+            if listed.returncode == 0 and (result is None or result.returncode == 0):
+                break
+            time.sleep(1)
+        if listed.returncode != 0 or (result is not None and result.returncode != 0):
+            problem = (result.stderr if result is not None and result.returncode != 0 else listed.stderr).strip()
+            pytest.fail(f"FaultInjector: không đọc được container của lab: {problem}")
+        if not names:
+            return {}
+        services: dict[str, dict] = {}
+        for info in json.loads(result.stdout):
+            name = info["Name"].lstrip("/")
+            if not self._owned(info):
+                continue
+            labels = (info.get("Config") or {}).get("Labels") or {}
+            if labels.get("com.docker.compose.project") == lab.network:
+                service = labels.get("com.docker.compose.service", "")
+                if service in OBS_IMAGES:
+                    continue
+            else:
+                service = name[len(lab.network) + 1:]
+            if service.startswith("fault-") or not service or not self._wanted(service) or service in services:
+                continue
+            services[service] = info
+        return services
+
+    def _owned(self, info: dict) -> bool:
+        lab = self.target
+        name = info.get("Name", "").lstrip("/")
+        labels = (info.get("Config") or {}).get("Labels") or {}
+        return (name.startswith(f"{lab.network}-") and labels.get("devops-ex") == "1"
+                and (name in lab.names or labels.get(DOCKER_LAB_LABEL) == lab.id))
+
+    def _inspect(self, name: str) -> dict | None:
+        result = _docker("inspect", name)
+        if result.returncode != 0:
+            return None
+        info = json.loads(result.stdout)[0]
+        if not self._owned(info):
+            raise RuntimeError(f"FaultInjector từ chối chạm {name}: không phải container của lab {self.target.id}")
+        return info
+
+    def _docker_candidates(self) -> list[tuple[str, str]]:
+        found = []
+        for service, info in sorted(self._containers().items()):
+            if not (info.get("State") or {}).get("Running"):
+                continue
+            found += [("kill", service), ("net-delay", service)]
+            if _fault_docker_tmpfs(info):
+                found.append(("disk-full", service))
+            if service == self.redis:
+                found.append(("redis-stop", service))
+        return found
+
+    def _kube_objects(self) -> list[dict]:
+        result = self.target.kubectl("get", "deployments,statefulsets,configmaps,pods", "-o", "json")
+        return json.loads(result.stdout).get("items", [])
+
+    @staticmethod
+    def _selects(workload: dict, pod: dict) -> bool:
+        selector = ((workload.get("spec") or {}).get("selector") or {}).get("matchLabels") or {}
+        labels = (pod.get("metadata") or {}).get("labels") or {}
+        return bool(selector) and all(labels.get(k) == v for k, v in selector.items())
+
+    @staticmethod
+    def _running(pod: dict) -> bool:
+        return ((pod.get("status") or {}).get("phase") == "Running"
+                and not (pod.get("metadata") or {}).get("deletionTimestamp"))
+
+    @staticmethod
+    def _config_refs(workload: dict) -> set[str]:
+        spec = ((workload.get("spec") or {}).get("template") or {}).get("spec") or {}
+        refs = {((v.get("configMap") or {}).get("name")) for v in spec.get("volumes") or []}
+        for container in (spec.get("containers") or []) + (spec.get("initContainers") or []):
+            refs |= {((e.get("configMapRef") or {}).get("name")) for e in container.get("envFrom") or []}
+            refs |= {(((e.get("valueFrom") or {}).get("configMapKeyRef") or {}).get("name")) for e in container.get("env") or []}
+        return {r for r in refs if r}
+
+    @staticmethod
+    def _empty_dirs(workload: dict) -> list[tuple[str, str]]:
+        spec = ((workload.get("spec") or {}).get("template") or {}).get("spec") or {}
+        sized = {}
+        for volume in spec.get("volumes") or []:
+            limit = (volume.get("emptyDir") or {}).get("sizeLimit") if "emptyDir" in volume else None
+            size = _fault_size(limit, _FAULT_KUBE_SIZE) if limit is not None else None
+            if size and size <= FAULT_FILL_LIMIT:
+                sized[volume.get("name")] = size
+        found = []
+        for container in spec.get("containers") or []:
+            for mount in container.get("volumeMounts") or []:
+                path = mount.get("mountPath", "")
+                if mount.get("name") in sized and not mount.get("readOnly") and _FAULT_PATH.fullmatch(path) and ".." not in path.split("/"):
+                    found.append((container.get("name"), path))
+        return sorted(found)
+
+    def _kube_workloads(self, objects: list[dict]) -> list[tuple[str, dict]]:
+        kinds = {"Deployment": "deployment", "StatefulSet": "statefulset"}
+        return sorted((f"{kinds[o['kind']]}/{o['metadata']['name']}", o) for o in objects
+                      if o.get("kind") in kinds and self._wanted(o["metadata"]["name"]))
+
+    def _kube_candidates(self) -> list[tuple[str, str]]:
+        objects = self._kube_objects()
+        pods = [o for o in objects if o.get("kind") == "Pod"]
+        configs = {o["metadata"]["name"]: o for o in objects if o.get("kind") == "ConfigMap"}
+        found = []
+        for ref, workload in self._kube_workloads(objects):
+            running = [p for p in pods if self._running(p) and self._selects(workload, p)]
+            if running:
+                found.append(("kill", ref))
+                if self._empty_dirs(workload):
+                    found.append(("disk-full", ref))
+            if workload["metadata"]["name"] == self.redis and (workload.get("spec") or {}).get("replicas", 1) > 0:
+                found.append(("redis-stop", ref))
+            for name in sorted(self._config_refs(workload)):
+                config = configs.get(name)
+                if config and config.get("data") and not config.get("immutable"):
+                    found.append(("bad-config", f"configmap/{name}"))
+        return sorted(set(found))
+
+    def candidates(self) -> list[tuple[str, str]]:
+        """Mọi cặp (mã lỗi, tài nguyên) bơm được vào lab lúc này, theo thứ tự cố định."""
+        found = self._kube_candidates() if self.kube else self._docker_candidates()
+        return sorted((c, r) for c, r in found if c in self.faults)
+
+    def plan(self) -> tuple[str, str]:
+        """(mã lỗi, tài nguyên) mà `inject()` sẽ bơm, chọn bằng `random.Random(seed)`; không thay đổi gì."""
+        import random
+
+        found = self.candidates()
+        if not found:
+            seen = "" if self.kube else "; container của lab đang thấy: " + (", ".join(
+                f"{name} ({'chạy' if (info.get('State') or {}).get('Running') else 'dừng'})"
+                for name, info in sorted(self._containers().items())) or "không có")
+            pytest.fail(f"FaultInjector: lab không có tài nguyên nào bơm được lỗi {', '.join(self.faults)}"
+                        + (f" trong {', '.join(self.services)}" if self.services else "") + seen)
+        rng = random.Random(self.seed)
+        codes = sorted({c for c, _ in found}, key=FAULT_CODES.index)
+        code = rng.choice(codes)
+        return code, rng.choice(sorted(r for c, r in found if c == code))
+
+    def inject(self) -> str:
+        """Bơm lỗi đã chọn theo seed và trả mã lỗi. Mỗi injector chỉ bơm một lần."""
+        if self.code is not None:
+            raise RuntimeError("FaultInjector chỉ bơm một lỗi; tạo injector mới cho lỗi tiếp theo")
+        code, resource = self.plan()
+        self.code, self.resource = code, resource
+        (self._inject_kube if self.kube else self._inject_docker)(code, resource)
+        return code
+
+    def _netem(self, container_id: str, script: str) -> subprocess.CompletedProcess:
+        lab = self.target
+        self._sidecars += 1
+        name = lab._track(f"fault-netem-{self._sidecars}")
+        args = ["docker", "run", "--rm", "--name", name, "--label", DOCKER_LABEL, "--label", f"{DOCKER_LAB_LABEL}={lab.id}",
+                "--network", f"container:{container_id}", "--cap-drop", "ALL", "--cap-add", "NET_ADMIN",
+                "--security-opt", "no-new-privileges", "--read-only", "--memory", "32m", "--pids-limit", "32",
+                *docker_cpu_args(), "--entrypoint", "sh", FAULT_NETEM_IMAGE, "-c", script]
+        return subprocess.run(args, capture_output=True, text=True, timeout=60)
+
+    def _inject_docker(self, code: str, service: str) -> None:
+        if code == "net-delay":
+            Exercise.require_image(FAULT_NETEM_IMAGE, f"Build image tc của FaultInjector bằng: {FAULT_NETEM_BUILD}")
+        info = self._containers()[service]
+        name, cid = info["Name"].lstrip("/"), info["Id"]
+        if self._inspect(name)["Id"] != cid:
+            pytest.fail(f"FaultInjector: container {name} vừa đổi")
+        if code in ("kill", "redis-stop"):
+            self._undo.append(("start", name, cid))
+            result = _docker("kill", name) if code == "kill" else _docker("stop", "-t", "5", name)
+        elif code == "net-delay":
+            self._undo.append(("netem", name, cid))
+            result = self._netem(cid, _FAULT_NETEM_ADD.format(ms=self.delay_ms))
+        else:
+            path, size = _fault_docker_tmpfs(info)[0]
+            target = f"{path}/{FAULT_FILL_FILE}"
+            self._undo.append(("unfill", name, cid, target))
+            result = _docker("exec", "-u", "0", name, "dd", "if=/dev/zero", f"of={target}", "bs=1048576",
+                             f"count={size // 1048576 + 1}", timeout=120)
+            if result.returncode != 0 and "space" in (result.stderr or "").lower():
+                result = subprocess.CompletedProcess(result.args, 0, result.stdout, result.stderr)
+        if result.returncode != 0:
+            pytest.fail(f"FaultInjector: bơm lỗi {code} vào {service} không được: {(result.stderr or '').strip()[-DOCKER_LOG_CHARS:]}")
+
+    def _inject_kube(self, code: str, resource: str) -> None:
+        lab = self.target
+        objects = self._kube_objects()
+        kind, _, name = resource.partition("/")
+        if code == "bad-config":
+            config = next(o for o in objects if o.get("kind") == "ConfigMap" and o["metadata"]["name"] == name)
+            original = dict(config.get("data") or {})
+            users = [ref for ref, w in self._kube_workloads(objects) if name in self._config_refs(w)]
+            self._undo.append(("config", name, original, users))
+            lab.kubectl("patch", "configmap", name, "--type", "merge", "-p",
+                        json.dumps({"data": {k: f"{v}{FAULT_CONFIG_SUFFIX}" for k, v in original.items()}}))
+            self._rollout(users, "inject")
+            return
+        workload = next(w for ref, w in self._kube_workloads(objects) if ref == resource)
+        running = sorted((p for p in objects if p.get("kind") == "Pod" and self._running(p) and self._selects(workload, p)),
+                         key=lambda p: p["metadata"]["name"])
+        if code == "kill":
+            lab.kubectl("delete", "pod", running[0]["metadata"]["name"], "--grace-period=0", "--force", "--wait=false")
+        elif code == "redis-stop":
+            replicas = (workload.get("spec") or {}).get("replicas", 1)
+            self._undo.append(("scale", resource, replicas))
+            lab.kubectl("scale", resource, "--replicas=0")
+        else:
+            container, path = self._empty_dirs(workload)[0]
+            pod = running[0]["metadata"]["name"]
+            target = f"{path}/{FAULT_FILL_FILE}"
+            self._undo.append(("unfill-pod", pod, container, target))
+            lab.kubectl("exec", pod, "-c", container, "--", "dd", "if=/dev/zero", f"of={target}", "bs=1048576",
+                        f"count={FAULT_FILL_LIMIT // 1048576 + 1}", check=False, timeout=120)
+
+    def _rollout(self, workloads: list[str], stage: str) -> None:
+        patch = json.dumps({"spec": {"template": {"metadata": {"annotations": {FAULT_RESTART_ANNOTATION: f"{self.seed}-{stage}"}}}}})
+        for ref in workloads:
+            self.target.kubectl("patch", ref, "--type", "merge", "-p", patch)
+
+    def _revert_step(self, step: tuple) -> str | None:
+        action = step[0]
+        if self.kube:
+            lab = self.target
+            if action == "config":
+                _, name, original, users = step
+                result = lab.kubectl("patch", "configmap", name, "--type", "merge", "-p", json.dumps({"data": original}), check=False)
+                if result.returncode != 0:
+                    return f"ghi lại ConfigMap {name}: {_output_tail(result)}"
+                self._rollout(users, "revert")
+            elif action == "scale":
+                _, resource, replicas = step
+                current = lab.kubectl("get", resource, "-o", "jsonpath={.spec.replicas}", check=False)
+                if current.returncode == 0 and current.stdout.strip() == "0":
+                    result = lab.kubectl("scale", resource, f"--replicas={replicas}", check=False)
+                    if result.returncode != 0:
+                        return f"scale lại {resource}: {_output_tail(result)}"
+            elif action == "unfill-pod":
+                _, pod, container, target = step
+                if lab.kubectl("get", "pod", pod, check=False).returncode == 0:
+                    lab.kubectl("exec", pod, "-c", container, "--", "rm", "-f", target, check=False)
+            return None
+        _, name, cid = step[:3]
+        info = self._inspect(name)
+        if info is None or info["Id"] != cid:
+            return None
+        running = (info.get("State") or {}).get("Running")
+        if action == "start" and not running:
+            result = _docker("start", name)
+            return None if result.returncode == 0 else f"docker start {name}: {result.stderr.strip()}"
+        if action == "netem" and running:
+            result = self._netem(cid, _FAULT_NETEM_DEL)
+            return None if result.returncode == 0 else f"gỡ netem khỏi {name}: {result.stderr.strip()}"
+        if action == "unfill" and running:
+            result = _docker("exec", "-u", "0", name, "rm", "-f", step[3])
+            return None if result.returncode == 0 else f"xoá {step[3]} trong {name}: {result.stderr.strip()}"
+        return None
+
+    def revert(self) -> list[str]:
+        """Hoàn tác lỗi đã bơm (bỏ qua phần người học đã tự khôi phục); trả danh sách lỗi khi hoàn tác, rỗng là sạch."""
+        errors = []
+        while self._undo:
+            step = self._undo.pop()
+            try:
+                problem = self._revert_step(step)
+            except (OSError, subprocess.TimeoutExpired, RuntimeError, pytest.fail.Exception) as error:
+                problem = str(error)
+            if problem:
+                errors.append(problem)
+        return errors
+
+    def close(self) -> None:
+        import warnings
+
+        errors = self.revert()
+        if errors:
+            warnings.warn("FaultInjector hoàn tác chưa hết:\n" + "\n".join(errors), UserWarning)
 
 
 def _unique_name(path: Path) -> str:

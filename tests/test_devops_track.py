@@ -195,7 +195,7 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
 
 
 TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu", "sops", "age", "age-keygen", "vault", "argocd", "linkerd", "promtool",
-         "amtool", "aws", "awslocal")
+         "amtool", "aws", "awslocal", "tc", "k6")
 SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
 NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
 TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
@@ -391,11 +391,12 @@ def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
 
 def check_tool_calls(path: Path) -> list[str]:
     """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu, sops, age, age-keygen, vault, argocd,
-    linkerd, promtool, amtool, aws, awslocal trực tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command,
+    linkerd, promtool, amtool, aws, awslocal, tc, k6 trực tiếp; đi qua helper của testkit (DockerLab, run_sandboxed, sandbox_command,
     act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp, age_keypair; sops và vault chạy trong run_sandboxed với
     sops_env/vault_env; ArgoCD qua KubeLab.argocd_project, gitops_repo, argocd_wait; Linkerd qua KubeLab(mesh=True) và
     KubeLab.mesh_status; promtool, amtool qua
-    testkit.promtool/amtool; stack observability qua ObsStack; AWS qua localstack_client, handler Lambda qua LambdaLab).
+    testkit.promtool/amtool; stack observability qua ObsStack; AWS qua localstack_client, handler Lambda qua LambdaLab; bơm lỗi
+    (kill, stop container, `tc` netem) qua FaultInjector; k6 qua k6_run).
 
     Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
     `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
@@ -783,6 +784,11 @@ TOOL_DENYLIST_BAD = {
     "string-linkerd": 'subprocess.run("linkerd check --proxy", shell=True)\n',
     "shell-c-linkerd": 'subprocess.run(["bash", "-c", "linkerd identity -n x"])\n',
     "list-promtool": 'subprocess.run(["promtool", "test", "rules", "tests.yml"])\n',
+    "list-tc": 'subprocess.run(["tc", "qdisc", "add", "dev", "eth0", "root", "netem", "delay", "400ms"])\n',
+    "shell-c-tc": 'subprocess.run(["sh", "-c", "tc qdisc del dev eth0 root"])\n',
+    "list-k6": 'subprocess.run(["k6", "run", "load.js"])\n',
+    "list-docker-kill": 'subprocess.run(["docker", "kill", name])\n',
+    "string-docker-stop": 'subprocess.run(f"docker stop {name}", shell=True)\n',
     "string-amtool": 'subprocess.run("amtool check-config alertmanager.yml", shell=True)\n',
     "shell-c-promtool": 'subprocess.run(["bash", "-c", "cd rules && promtool check rules *.yml"])\n',
     "shell-c-vault": 'subprocess.run(["bash", "-c", "vault login root && vault kv put secret/x a=b"])\n',
@@ -909,6 +915,10 @@ TOOL_DENYLIST_GOOD = {
     "require-gateway": 'ex.require_gateway()\nwith KubeLab() as lab:\n    host = lab.hostname\n',
     "kube-lab-mesh": ('ex.require_linkerd()\nwith KubeLab(mesh=True) as lab:\n    lab.apply_learner(ex.path("k8s"))\n'
                       '    status = lab.mesh_status("deployment/api")\n    assert status["mtls"]\n'),
+    "fault-injector": ('with DockerLab() as lab:\n    stack = ObsStack(lab, project=project)\n'
+                       '    with FaultInjector(lab, seed=seed, services=["api", "redis"]) as injector:\n        code = injector.inject()\n'),
+    "k6-run-helper": 'result, summary = k6_run(lab, ex.path("load.js"), env={"TARGET": "http://api:8000"})\n',
+    "fault-injector-kube": 'with KubeLab() as lab:\n    testkit.FaultInjector(lab, seed=7, faults=["kill", "bad-config"]).inject()\n',
     "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
 }
 
