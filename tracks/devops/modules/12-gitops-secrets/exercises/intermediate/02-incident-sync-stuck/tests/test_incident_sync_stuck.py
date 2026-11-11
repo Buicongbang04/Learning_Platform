@@ -78,6 +78,14 @@ def hook_result(status: dict) -> list[dict]:
     return [r for r in resources if r.get("kind") == "Job" and r.get("name") == "migrate"]
 
 
+def migrate_completed(lab) -> bool:
+    """Bằng chứng hook migrate đã chạy xong khi `operationState` đã bị một lần self-heal sync sau đó (không có hook) ghi đè."""
+    result = lab.kubectl("get", "events", "--field-selector", "involvedObject.kind=Job,involvedObject.name=migrate", "-o", "json",
+                         check=False)
+    events = json.loads(result.stdout or "{}").get("items") or [] if result.returncode == 0 else []
+    return any(event.get("reason") == "Completed" for event in events)
+
+
 def migrate_broken(lab) -> str:
     job = json.loads(lab.kubectl("get", "job", "migrate", "-o", "json", check=False).stdout or "{}")
     if (job.get("status") or {}).get("failed", 0) >= 1:
@@ -114,6 +122,7 @@ def fixed(tmp_path_factory):
         try:
             state["first"] = lab.argocd_wait(APP, timeout=60 if quick else 240)
             state["seconds"] = time.monotonic() - started
+            state["migrate_completed"] = migrate_completed(lab)
             state["first_revision"] = lab.gitops_revision
             bump_version(repo)
             lab.gitops_repo(repo)
@@ -190,7 +199,10 @@ def test_fresh_namespace_syncs(fixed):
     _, state = fixed
     assert isinstance(state.get("first"), dict), f"Namespace trống chưa sync được: {state.get('error')}"
     hooks = hook_result(state["first"])
-    assert hooks and all(h.get("hookPhase") == "Succeeded" for h in hooks), f"Hook migrate phải Succeeded: {hooks}"
+    if hooks:
+        assert all(h.get("hookPhase") == "Succeeded" for h in hooks), f"Hook migrate phải Succeeded: {hooks}"
+    else:
+        assert state.get("migrate_completed"), "Hook migrate phải chạy xong (Job migrate có event Completed) trước khi app Synced"
 
 
 def test_next_commit_deploys(fixed):
