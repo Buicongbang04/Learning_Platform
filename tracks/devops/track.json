@@ -4,7 +4,7 @@
   "icon": "container",
   "status": "active",
   "order": 5,
-  "description": "17 module (từ module 00 giới thiệu DevOps & SRE) tới mức DevOps engineer senior: Linux, scripting, mạng, Nginx, container, CI/CD, IaC bằng OpenTofu, Ansible, Kubernetes gần mức CKA, GitOps, observability, cloud và SRE; bài sự cố cố ý và capstone vận hành Olist Shop như production trên máy local.",
+  "description": "17 module (từ module 00 giới thiệu DevOps & SRE) tới mức DevOps engineer senior: Linux, scripting, mạng, Nginx, container, CI/CD, IaC bằng OpenTofu, Ansible, Kubernetes gần mức CKA, GitOps, observability, cloud và SRE; bài sự cố cố ý, postmortem chấm rubric và capstone 9 milestone vận hành Olist Shop như production trên máy local.",
   "source": "https://roadmap.sh/devops",
   "modules": [
     {

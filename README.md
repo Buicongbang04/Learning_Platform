@@ -12,7 +12,7 @@ Bike Sharing, MovieLens…) và mọi bài tập đều **tự chấm bằng `py
 | [Data Engineer](tracks/data-engineer/README.md) | Đầy đủ | 12 module (00–11): nền tảng kỹ thuật, data modeling, NoSQL, warehouse & lakehouse, batch pipeline (Airflow, dbt, Prefect), Spark, Kafka, DevOps cho data, serving & BI, security & governance, cloud; lab CDC và GCP; 102 bài; capstone [Olist Data Platform](tracks/data-engineer/capstone/README.md) 12 milestone | [data-engineer](https://roadmap.sh/data-engineer) |
 | [AI & Data Scientist](tracks/data-science/README.md) | Đầy đủ | 15 module từ toán, thống kê, A/B testing, causal inference tới ML, deep learning, MLOps và ML system design; 120 bài; capstone [Olist Customer Experience](tracks/data-science/capstone/README.md) 7 milestone | [ai-data-scientist](https://roadmap.sh/ai-data-scientist) |
 | [Data Analyst](tracks/data-analyst/README.md) | Đầy đủ | 15 module từ tư duy phân tích, Excel, SQL, Python tới trực quan hoá và đọc biểu đồ, BI (Metabase, Superset, Streamlit), experimentation, product/business analytics và storytelling; 108 bài; capstone [dunnhumby Complete Journey](tracks/data-analyst/capstone/README.md) 7 milestone | [data-analyst](https://roadmap.sh/data-analyst) |
-| [DevOps](tracks/devops/README.md) | Đang viết (6/17 module) | Linux, scripting, Git, mạng, Nginx; sắp tới container, CI/CD, OpenTofu, Ansible, Kubernetes, GitOps, observability, SRE; capstone vận hành [Olist Shop](tracks/devops/sample-app/README.md) như production trên máy local | [devops](https://roadmap.sh/devops) |
+| [DevOps](tracks/devops/README.md) | Đầy đủ | 17 module (00–16): giới thiệu DevOps & SRE, Linux, scripting, Git, mạng, Nginx, container, CI/CD bằng act, IaC bằng OpenTofu trên LocalStack, Ansible, Kubernetes gần mức CKA trên kind, GitOps bằng ArgoCD và secret bằng SOPS/Vault, observability (Prometheus, Loki, OpenTelemetry, Grafana), cloud và serverless, service mesh Linkerd, SRE (SLO, error budget, chaos, postmortem); bài sự cố cố ý, runbook và postmortem chấm rubric; 134 bài; capstone vận hành [Olist Shop](tracks/devops/capstone/README.md) như production trên máy local 9 milestone | [devops](https://roadmap.sh/devops) |
 | [AI Engineer](tracks/ai-engineer/README.md) | Đầy đủ | 23 module (00–22): phần A tự xây mô hình (neural network từ numpy, PyTorch, computer vision, NLP, Transformer và GPT mini tiếng Việt, generative model, reinforcement learning, interpretability) và phần B ứng dụng LLM (model mở, quantization, API và prompting, embeddings, RAG, fine-tune, reasoning, agent, LangGraph, multimodal, safety, evaluation và serving, system design, quantum ML); 173 bài; capstone [Trợ lý pháp luật tiếng Việt](tracks/ai-engineer/capstone/README.md) 9 milestone | [ai-engineer](https://roadmap.sh/ai-engineer) |
 | [MLOps](tracks/mlops/README.md) | Đầy đủ | 19 module (00–18): lõi junior 00–13 (container, DVC, MLflow, Prefect, Feast, serving, CI/CD bằng act, Prometheus/Grafana, drift, deploy DL, Kubernetes cho ML) và tầng senior 14–18 (K8s production, distributed training, streaming, bảo mật model, system design); 155 bài; capstone [dịch vụ ETA cho taxi NYC](tracks/mlops/capstone/README.md) 18 milestone | [mlops](https://roadmap.sh/mlops) |
 
@@ -48,7 +48,7 @@ flowchart LR
 | Docker + Compose plugin | Postgres, Kafka, MongoDB… (Data Engineer), Metabase/Superset (Data Analyst), lab container (DevOps) | Khi module cần |
 | LibreOffice Calc (`soffice`) | Chấm bài Excel module 02 Data Analyst, mở tệp `.xlsx` từ app | Khi học Data Analyst |
 | Java 17/21 | PySpark (module 06 Data Engineer) | Khi module cần |
-| Công cụ DevOps (shellcheck, jq, bubblewrap, openssl…) | Track DevOps, mỗi công cụ được dạy cài ở module dùng nó lần đầu: [setup/DEVOPS-TOOLS.md](setup/DEVOPS-TOOLS.md) | Khi học DevOps |
+| Công cụ DevOps (shellcheck, bubblewrap, act, tofu, ansible, kind, kubectl, helm, sops…) | Track DevOps, mỗi công cụ được dạy cài ở module dùng nó lần đầu: [setup/DEVOPS-TOOLS.md](setup/DEVOPS-TOOLS.md) | Khi học DevOps |
 | Tài khoản Kaggle | Tải Olist, dunnhumby và một số bộ dữ liệu | Nên có |
 | VS Code + extension Jupyter | Mở notebook từ app | Tuỳ chọn |
 
@@ -146,10 +146,10 @@ docker compose -f setup/docker-compose.yml --profile all stop      # tắt hết
 | `stream` | Kafka | Data Engineer |
 | `cloud` | LocalStack | Data Engineer |
 | `bi` | Postgres, Metabase, Superset | Data Analyst (module 10, capstone) |
-| `devops` | Mailpit (SMTP giả) | DevOps (không nằm trong `all`) |
+| `devops` | Mailpit (SMTP giả), registry local, LocalStack riêng (`localstack-devops`), Vault dev (`vault-devops`) | DevOps (không nằm trong `all`) |
 
 Airflow, lab CDC và lab GCP có compose riêng trong `setup/airflow/`, `setup/cdc/`, `setup/cloud-gcp/`. Metabase,
-Superset và Mailpit chỉ mở trên `127.0.0.1`. Cổng bị dự án khác chiếm thì đổi trong `setup/.env` (mẫu ở `setup/.env.example`).
+Superset và các dịch vụ của profile `devops` chỉ mở trên `127.0.0.1`. Cổng bị dự án khác chiếm thì đổi trong `setup/.env` (mẫu ở `setup/.env.example`).
 Module nào cần dịch vụ nào: [setup/SETUP.md](setup/SETUP.md#5-module-cần-dịch-vụ-nào).
 
 Dịch vụ BI cần nạp dữ liệu sau khi bật lần đầu:

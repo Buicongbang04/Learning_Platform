@@ -41,7 +41,8 @@ Mục lục các công cụ ngoài `uv` và Docker mà track DevOps cần. Mỗi
 | Image `devops-track/netem:1.0` (`tc` của iproute2 trên alpine 3.24.3, build một lần từ `setup/netem/`; xem [k6 và FaultInjector](#k6-và-faultinjector)) | 16 SRE & vận hành (game day: `FaultInjector` thêm độ trễ mạng) | Đúng tag đã ghim | [Cài đặt](../tracks/devops/modules/16-sre-operations/README.md#0-cài-đặt) |
 | AWS CLI v2 (`aws`, tuỳ chọn) | 14 Cloud & serverless (bản đã kiểm 2.38.6, cài vào `~/.local/aws-cli` từ zip chính thức, kiểm chữ ký PGP của AWS CLI Team và SHA-256; test không cần, chỉ để chạy tay trên LocalStack hay làm lab AWS thật) | 2.x | [Cài đặt](../tracks/devops/modules/14-cloud-serverless/README.md#0-cài-đặt) |
 
-Các dòng của module chưa viết sẽ được liên kết đầy đủ khi module đó có mặt trong repo.
+Module 00 (Giới thiệu DevOps & SRE) không cần công cụ nào; mọi module 01–16 có `## 0. Cài đặt` riêng, bảng trên chỉ ghi
+module dạy cài lần đầu.
 
 ## Binary dùng chung với track MLOps
 
@@ -285,22 +286,24 @@ kind delete cluster --name devops-lab --kubeconfig ~/.kube/devops-lab.yaml
 
 Pod của bài tập không bao giờ kéo image từ Internet lúc chấm: image phải có sẵn trong containerd của hai worker (control plane có
 taint, pod của bài không chạy ở đó). `ex.require_kind_images(...)` skip kèm đúng lệnh nạp khi thiếu. Các image dùng chung của module
-10, 11 và capstone m06:
+10, 11, 12, 15 và capstone m06, m07:
 
 | Image | Nguồn | Dùng cho |
 | --- | --- | --- |
 | `devops-track/olist-shop:1.0` | Build từ `setup/kind/olist-shop.Dockerfile` trên `python:3.12.16-slim-trixie`, user `10001`, context `tracks/devops/sample-app` | API và worker Olist Shop |
+| `devops-track/olist-shop:1.1` | `docker tag devops-track/olist-shop:1.0 devops-track/olist-shop:1.1` (cùng image, chỉ thêm tag) | "Bản mới" trong lab: capstone m07 (đổi `image.tag` qua GitOps), lệnh rollout làm tay ở module 10 (`kubectl set image`) |
 | `postgres:16.15-alpine` | Docker Hub | Postgres |
 | `redis:7.4.12-alpine` | Docker Hub | Redis |
 | `nginx:1.30.6-alpine` | Docker Hub (đã có từ module 05) | Sidecar reverse proxy |
 
-Build image Olist Shop (lần đầu cần mạng cho `pip install`), kéo ba image còn lại, rồi nạp vào hai worker. Chạy từ thư mục gốc của
+Build image Olist Shop (lần đầu cần mạng cho `pip install`), gắn thêm tag `1.1`, kéo ba image còn lại, rồi nạp vào hai worker. Chạy từ thư mục gốc của
 repo; không ghim thì bỏ `${DEVOPS_CPUSET:+...}`:
 
 ```bash
 nice -n 15 docker build --pull=false -f setup/kind/olist-shop.Dockerfile -t devops-track/olist-shop:1.0 tracks/devops/sample-app ${DEVOPS_CPUSET:+--cpuset-cpus "$DEVOPS_CPUSET"} &&
+docker tag devops-track/olist-shop:1.0 devops-track/olist-shop:1.1 &&
 docker pull postgres:16.15-alpine && docker pull redis:7.4.12-alpine && docker pull nginx:1.30.6-alpine &&
-nice -n 15 kind load docker-image devops-track/olist-shop:1.0 postgres:16.15-alpine redis:7.4.12-alpine nginx:1.30.6-alpine --name devops-lab --nodes devops-lab-worker,devops-lab-worker2
+nice -n 15 kind load docker-image devops-track/olist-shop:1.0 devops-track/olist-shop:1.1 postgres:16.15-alpine redis:7.4.12-alpine nginx:1.30.6-alpine --name devops-lab --nodes devops-lab-worker,devops-lab-worker2
 ```
 
 Docker bật **containerd image store** (Docker Desktop mới, Docker Engine 29 cài mới; `docker info` có dòng
@@ -310,7 +313,7 @@ lên cho `docker save --platform`):
 
 ```bash
 mkdir -p ~/.cache/devops-track/kind-images &&
-for image in devops-track/olist-shop:1.0 postgres:16.15-alpine redis:7.4.12-alpine nginx:1.30.6-alpine; do
+for image in devops-track/olist-shop:1.0 devops-track/olist-shop:1.1 postgres:16.15-alpine redis:7.4.12-alpine nginx:1.30.6-alpine; do
   archive=~/.cache/devops-track/kind-images/"$(echo "$image" | tr '/:' '__')".tar &&
   docker save --platform linux/amd64 -o "$archive" "$image" &&
   nice -n 15 kind load image-archive "$archive" --name devops-lab --nodes devops-lab-worker,devops-lab-worker2 &&
