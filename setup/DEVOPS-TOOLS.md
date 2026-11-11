@@ -510,7 +510,7 @@ của [Gateway dùng chung](#gateway-dùng-chung-gateway-api-và-traefik)); test
 | `01-namespaces.yaml`, `kustomization.yaml`, `certs.sh`, `values-*.yaml` (track viết) | Namespace `linkerd` (Pod Security `restricted`) và `linkerd-cni` (`privileged`, CNI ghi vào `/etc/cni/net.d` của node), cả hai tắt webhook của Linkerd; script sinh chứng chỉ | `SHA256SUMS` |
 | Image `cr.l5d.io/linkerd/controller:edge-26.10.1` | destination, policy controller, identity, proxy-injector | Digest `sha256:880437e01bbd4bf3d8fa7b56996c4ed5dd6551843363dc851ddd0b298b923e8a` |
 | Image `cr.l5d.io/linkerd/proxy:edge-26.10.1` | Proxy sidecar và init container `linkerd-network-validator` của mọi pod trong mesh | Digest `sha256:f2add36071cfca33754d2930800860785aaed672590bc0207be2f4da9889eb11` |
-| Image `cr.l5d.io/linkerd/cni-plugin:v1.7.0` | DaemonSet `linkerd-cni` trên cả ba node (kể cả control plane) | Digest `sha256:f710874e5d70edfcf6e9e2a8ad18175b928a3f572eae322d7123b96f9b40c5a4` |
+| Image `cr.l5d.io/linkerd/cni-plugin:v1.7.0` | DaemonSet `linkerd-cni` trên cả ba node (kể cả control plane); bản mặc định của chart 2026.10.1, phát hành 2026-09-14 (tag `cni-plugin/v1.7.0` của `linkerd2-proxy-init`) | Digest `sha256:f710874e5d70edfcf6e9e2a8ad18175b928a3f572eae322d7123b96f9b40c5a4` |
 
 Lựa chọn và lý do:
 
@@ -529,8 +529,12 @@ Lựa chọn và lý do:
   (`kubectl get --raw /api/v1/namespaces/<ns>/pods/<pod>:4191/proxy/metrics`), nên không cần Prometheus và dashboard của viz
   (thêm vài trăm MiB). Heartbeat (CronJob gửi về linkerd.io) tắt.
 - **Chứng chỉ do admin sinh bằng openssl** (không cần thêm binary `step`): `certs.sh` tạo trust anchor (ECDSA P-256, 10 năm), ký
-  issuer (CA trung gian `identity.linkerd.cluster.local`, 1 năm), **xoá khoá trust anchor ngay sau khi ký**, rồi đưa trust anchor vào
-  ConfigMap `linkerd/linkerd-identity-trust-roots`, issuer vào Secret `linkerd/linkerd-identity-issuer`. Ba webhook dùng một CA
+  issuer (CA trung gian `identity.linkerd.cluster.local`, 10 năm: không có khoá trust anchor để ký lại issuer, nên issuer sống cùng
+  trust anchor), **xoá khoá trust anchor ngay sau khi ký**, rồi đưa trust anchor vào ConfigMap
+  `linkerd/linkerd-identity-trust-roots`, issuer vào Secret `linkerd/linkerd-identity-issuer` và chứng chỉ công khai của issuer
+  (không khoá) vào ConfigMap `linkerd/devops-linkerd-issuer-public`. `require_linkerd` skip khi trust anchor hay issuer (đọc từ hai
+  ConfigMap công khai này; cluster cài bằng `certs.sh` cũ chưa có ConfigMap issuer thì chỉ kiểm trust anchor) không đọc được hay còn
+  dưới 7 ngày. Ba webhook dùng một CA
   riêng (khoá cũng bị xoá sau khi ký) và Secret `linkerd-*-k8s-tls`; script vá `caBundle` của ba webhook rồi khởi động lại control
   plane. Mọi tệp nằm trong `mktemp -d`, `umask 077`, xoá khi thoát; Secret tạo bằng server-side apply nên khoá không bị chép vào
   annotation `last-applied-configuration`. Khoá viết dạng PKCS#8: policy controller (Rust) không đọc khoá EC dạng SEC1 (`could not
@@ -562,8 +566,11 @@ kubectl --kubeconfig ~/.kube/devops-lab.yaml -n linkerd rollout status deploymen
 
 `certs.sh` đọc kubeconfig admin ở `~/.kube/devops-lab.yaml` (đổi bằng biến `DEVOPS_LAB_KUBECONFIG`). Chạy lại `certs.sh` là xoay
 toàn bộ chứng chỉ: trust anchor mới, nên phải khởi động lại mọi pod đang trong mesh (`kubectl rollout restart`); không có khoá trust
-anchor cũ để ký issuer mới chung gốc. `apply -k` lại thư mục này đặt `caBundle` của webhook về chuỗi giữ chỗ
-`devops-linkerd-certs-sh`: chạy lại `certs.sh` sau đó (`require_linkerd` báo đúng lỗi này). CRD Gateway API cài sau Linkerd thì
+anchor cũ để ký issuer mới chung gốc. Áp lại thư mục này (**chưa kiểm lại**): `certs.sh` đã vá `caBundle` bằng `kubectl patch`
+(field manager khác), nên `apply --server-side -k` lần nữa nhiều khả năng báo conflict ở `caBundle` thay vì lặng lẽ ghi đè. Khi đó
+dùng `apply --server-side --force-conflicts -k setup/kind/linkerd` (đặt `caBundle` về chuỗi giữ chỗ `devops-linkerd-certs-sh`) rồi
+chạy lại `certs.sh`, tức là xoay trust anchor và phải `kubectl rollout restart` mọi workload đang trong mesh; `require_linkerd` báo
+đúng lỗi `caBundle` giữ chỗ nếu quên bước `certs.sh`. CRD Gateway API cài sau Linkerd thì
 policy controller không theo dõi HTTPRoute của Gateway API cho tới khi `kubectl -n linkerd rollout restart deployment/linkerd-destination`.
 
 Render lại manifest (người bảo trì track, khi nâng bản; chart lấy từ `https://helm.linkerd.io/edge`, SHA-256 là `digest` trong
@@ -618,14 +625,30 @@ Giới hạn cần biết:
   so với quyền `view` mọi namespace mà lab vốn có.
 - Lab ghi được `servers`, `authorizationpolicies`, `httproutes`, `meshtlsauthentications` trong namespace của lab; không
   `networkauthentications`, `httplocalratelimitpolicies`, `serverauthorizations`, `egressnetworks`, `serviceprofiles`. Policy
-  `devops-ex-<id>-mesh` chặn mọi tham chiếu ra ngoài namespace của lab (HTTPRoute gắn vào `Server` của lab khác làm request không khớp
-  route nào của lab đó nhận 404) và danh tính `*` trần trong `MeshTLSAuthentication`.
+  `devops-ex-<id>-mesh` chặn mọi tham chiếu ra ngoài namespace của lab và danh tính `*` trần trong `MeshTLSAuthentication`. Lý do:
+  một HTTPRoute gắn vào `Server` của lab khác, nếu được chấp nhận, sẽ thêm route vào luật inbound của lab đó (request không khớp
+  route nào có thể bị từ chối). Policy chặn ngay ở admission; không dựa vào việc Linkerd tự bỏ qua tham chiếu chéo namespace.
 - Danh tính mTLS dựa trên token ServiceAccount của pod; token của lab không xin được token cho ServiceAccount khác, nên pod của
   lab chỉ mang danh tính của namespace mình.
+- Phạm vi ảnh hưởng dùng chung: `linkerd-cni` chèn plugin của nó vào chain CNI (`/etc/cni/net.d`) của **mọi node**, nên mọi pod tạo
+  mới trên cluster, kể cả pod ngoài mesh và của lab khác, đi qua plugin này lúc dựng mạng (pod không có proxy thì plugin không đặt
+  luật nào); webhook proxy-injector nhận **mọi** lần tạo pod và Service ở mọi namespace trừ `kube-system`, `cert-manager` và namespace
+  có nhãn `config.linkerd.io/admission-webhooks: disabled` (timeout 10 giây, `failurePolicy: Ignore`). DaemonSet CNI hỏng hay plugin
+  lỗi thì pod mới trên node đó có thể kẹt `ContainerCreating`, bất kể lab có dùng mesh hay không.
+- `KubeLab.mesh_status` chỉ tin pod có annotation `linkerd.io/proxy-version: edge-26.10.1` và container `linkerd-proxy` chạy đúng
+  image proxy đã ghim, và chỉ báo danh tính khi `LINKERD2_PROXY_IDENTITY_LOCAL_NAME` khớp ServiceAccount của pod; số đếm cộng dồn
+  từ lúc proxy khởi động, bài chấm nên so hiệu số trước và sau khi tạo tải.
 
 Gỡ: `kubectl --kubeconfig ~/.kube/devops-lab.yaml delete -k setup/kind/linkerd` (xoá CRD là xoá mọi object `policy.linkerd.io`;
 ConfigMap và Secret do `certs.sh` tạo nằm trong namespace `linkerd` nên bị xoá cùng), rồi `kubectl rollout restart` các workload
-còn proxy.
+còn proxy. Sau đó kiểm (**chưa kiểm lại** trên cluster thật) rằng chain CNI của từng node không còn nhắc tới linkerd-cni, nếu còn
+thì pod mới có thể lỗi dựng mạng:
+
+```bash
+for node in $(kind get nodes --name devops-lab); do echo "== $node"; docker exec "$node" sh -c 'grep -l linkerd /etc/cni/net.d/* 2>/dev/null; ls /opt/cni/bin | grep -i linkerd'; done
+```
+
+Không in gì là sạch. Còn tệp thì xoá cluster rồi tạo lại là cách chắc chắn nhất (cluster lab không giữ gì cần giữ).
 
 ### Bài thao tác node (cordon, drain, taint)
 

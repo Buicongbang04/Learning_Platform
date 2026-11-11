@@ -7853,7 +7853,24 @@ def test_localstack_sweep_paginates_event_buses(monkeypatch):
 LINKERD_RESOURCES = "".join(f"{r}.policy.linkerd.io\n" for r in (
     "authorizationpolicies", "egressnetworks", "httplocalratelimitpolicies", "httproutes", "meshtlsauthentications",
     "networkauthentications", "serverauthorizations", "servers"))
-LINKERD_TRUST_ROOT = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"
+def pem_cert(days: float, name: str = "root.linkerd.cluster.local") -> str:
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(days=400))
+            .not_valid_after(now + datetime.timedelta(days=days)).sign(key, hashes.SHA256()))
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
+LINKERD_TRUST_ROOT = pem_cert(3650)
 LINKERD_OK = {
     "crd servers.policy.linkerd.io": (0, "customresourcedefinition.apiextensions.k8s.io/servers.policy.linkerd.io\n"),
     "configmap linkerd-config": (0, "clusterDomain: cluster.local\ncniEnabled: true\ndisableHeartBeat: true\n"),
@@ -7863,6 +7880,7 @@ LINKERD_OK = {
     "deployment linkerd-identity": (0, "1"),
     "deployment linkerd-destination": (0, "1"),
     "deployment linkerd-proxy-injector": (0, "1"),
+    "configmap devops-linkerd-issuer-public": (0, pem_cert(3650, "identity.linkerd.cluster.local")),
 }
 
 
@@ -8057,8 +8075,31 @@ def linkerd_fake(monkeypatch, answers):
 def test_require_linkerd_ok_never_reads_secrets(monkeypatch):
     calls = linkerd_fake(monkeypatch, LINKERD_OK)
     testkit.Exercise.require_linkerd()
-    assert len([c for c in calls if c.startswith("kubectl")]) == len(LINKERD_OK)
+    assert len([c for c in calls if c.startswith("kubectl")]) == len(LINKERD_OK) + 1
     assert not any(" secret" in c or "secrets" in c for c in calls), calls
+
+
+@pytest.mark.parametrize("broken,answer,needle", [
+    ("configmap linkerd-identity-trust-roots", (0, pem_cert(-1)), "trust anchor"),
+    ("configmap linkerd-identity-trust-roots", (0, pem_cert(3)), "sắp hết hạn"),
+    ("configmap devops-linkerd-issuer-public", (0, pem_cert(-2, "identity.linkerd.cluster.local")), "issuer"),
+    ("configmap devops-linkerd-issuer-public", (0, "-----BEGIN CERTIFICATE-----\nrác\n-----END CERTIFICATE-----\n"),
+     "không đọc được"),
+])
+def test_require_linkerd_checks_certificate_expiry(monkeypatch, broken, answer, needle):
+    answers = dict(LINKERD_OK)
+    answers[broken] = answer
+    linkerd_fake(monkeypatch, answers)
+    with pytest.raises(pytest.skip.Exception) as info:
+        testkit.Exercise.require_linkerd()
+    assert_skip(info, needle, "certs.sh")
+
+
+def test_require_linkerd_without_issuer_public_configmap_still_ok(monkeypatch):
+    answers = dict(LINKERD_OK)
+    answers["configmap devops-linkerd-issuer-public"] = (0, "")
+    linkerd_fake(monkeypatch, answers)
+    testkit.Exercise.require_linkerd()
 
 
 @pytest.mark.parametrize("broken,answer,needle", [
@@ -8111,13 +8152,17 @@ outbound_http_route_retry_requests_total{parent_kind="Service",route_name="web-r
 """
 
 
-def mesh_pod(name: str, sa: str, *, proxy=True, phase="Running") -> dict:
-    sidecars = [{"name": "linkerd-network-validator"}] + ([{"name": "linkerd-proxy", "restartPolicy": "Always"}] if proxy else [])
-    return {"metadata": {"name": name}, "spec": {"serviceAccountName": sa, "initContainers": sidecars,
-                                                 "containers": [{"name": "app"}]}, "status": {"phase": phase}}
+def mesh_pod(name: str, sa: str, *, proxy=True, phase="Running", image=testkit.KUBE_LINKERD_PROXY_IMAGE,
+             version=testkit.KUBE_LINKERD_VERSION) -> dict:
+    sidecars = [{"name": "linkerd-network-validator", "image": testkit.KUBE_LINKERD_PROXY_IMAGE}] + (
+        [{"name": "linkerd-proxy", "image": image, "restartPolicy": "Always"}] if proxy else [])
+    annotations = {"linkerd.io/proxy-version": version} if version else {}
+    return {"metadata": {"name": name, "annotations": annotations},
+            "spec": {"serviceAccountName": sa, "initContainers": sidecars, "containers": [{"name": "app", "image": "nginx"}]},
+            "status": {"phase": phase}}
 
 
-def mesh_lab_fake(monkeypatch, pods, metrics, ns_holder):
+def mesh_lab_fake(monkeypatch, pods, metrics, ns_holder, identities=None):
     fake = LinkerdFake(monkeypatch)
     original = fake.run_sandboxed
 
@@ -8136,8 +8181,9 @@ def mesh_lab_fake(monkeypatch, pods, metrics, ns_holder):
             path = cmd[cmd.index("--raw") + 1]
             pod = path.split("/pods/")[1].split(":")[0]
             if path.endswith("/env.json"):
-                sa = next(p["spec"]["serviceAccountName"] for p in pods if p["metadata"]["name"] == pod)
-                return subprocess.CompletedProcess(cmd, 0, json.dumps({"LINKERD2_PROXY_IDENTITY_LOCAL_NAME": mesh_identity(sa, ns)}), "")
+                sa = next(p["spec"].get("serviceAccountName") for p in pods if p["metadata"]["name"] == pod)
+                local = (identities or {}).get(pod, mesh_identity(sa, ns)).replace("NS", ns)
+                return subprocess.CompletedProcess(cmd, 0, json.dumps({"LINKERD2_PROXY_IDENTITY_LOCAL_NAME": local}), "")
             return subprocess.CompletedProcess(cmd, 0, metrics.get(pod, "").replace("NS", ns), "")
         return original(cmd, **kwargs)
 
@@ -8183,6 +8229,95 @@ def test_mesh_status_without_certificate_has_no_identity(monkeypatch):
         holder["ns"] = lab.namespace
         status = lab.mesh_status("deployment/web")
         assert status["injected"] and not status["mtls"] and status["identity"] is None
+
+
+@pytest.mark.parametrize("change", [
+    {"image": "evil/fake-proxy:1"}, {"image": "cr.l5d.io/linkerd/proxy:edge-26.11.1"}, {"version": None},
+    {"version": "edge-26.11.1"},
+])
+def test_mesh_status_refuses_spoofed_proxy_container(monkeypatch, change):
+    holder = {}
+    pods = [mesh_pod("web-1", "web", **change)]
+    fake = mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS}, holder)
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("deployment/web")
+        assert not status["injected"] and not status["mtls"] and status["identity"] is None
+        assert status["success"] == 0 and status["clients"] == []
+        assert not [c for c in fake.sandbox_calls if "--raw" in c["cmd"] and "/readyz" not in c["cmd"]]
+
+
+@pytest.mark.parametrize("local", ["api.NS.serviceaccount.identity.linkerd.cluster.local",
+                                   "web.devops-ex-other.serviceaccount.identity.linkerd.cluster.local", "", "web"])
+def test_mesh_status_identity_must_match_pod_service_account(monkeypatch, local):
+    holder = {}
+    pods = [mesh_pod("web-1", "web")]
+    mesh_lab_fake(monkeypatch, pods, {"web-1": WEB_METRICS}, holder, identities={"web-1": local})
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        status = lab.mesh_status("deployment/web")
+        assert status["injected"] and not status["mtls"] and status["identity"] is None
+
+
+def test_mesh_status_default_service_account_identity(monkeypatch):
+    holder = {}
+    pod = mesh_pod("web-1", "")
+    mesh_lab_fake(monkeypatch, [pod], {"web-1": WEB_METRICS}, holder,
+                  identities={"web-1": "default.NS.serviceaccount.identity.linkerd.cluster.local"})
+    del pod["spec"]["serviceAccountName"]
+    with testkit.KubeLab(mesh=True) as lab:
+        holder["ns"] = lab.namespace
+        assert lab.mesh_status("deployment/web")["identity"] == mesh_identity("default", lab.namespace)
+
+
+def test_linkerd_metrics_ignore_non_finite_values():
+    text = ('response_total{direction="inbound",target_port="80",tls="true",client_id="a",classification="success"} NaN\n'
+            'response_total{direction="inbound",target_port="80",tls="true",client_id="b",classification="failure"} +Inf\n'
+            'inbound_http_authz_deny_total{target_port="80"} -Inf\n'
+            'control_identity_cert_expiration_timestamp_seconds NaN\n'
+            'response_total{direction="inbound",target_port="80",tls="true",client_id="c",classification="success"} 2\n')
+    counts = testkit._linkerd_metrics(text)
+    assert (counts["success"], counts["failure"], counts["denied"], counts["cert"]) == (2, 0, 0, False)
+    assert counts["clients"] == {"c"}
+
+
+def test_close_releases_hook_finalizer_on_linkerd_kinds(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        if "api-resources --api-group=policy.linkerd.io" in joined:
+            return subprocess.CompletedProcess(cmd, 0, LINKERD_RESOURCES, "")
+        if "jobs.batch" in joined and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    kinds = cmd[cmd.index("get") + 1].split(",")
+    assert {f"{r}.policy.linkerd.io" for r in testkit.KUBE_LINKERD_RESOURCES} <= set(kinds)
+    assert "jobs.batch" in kinds
+
+
+def test_close_hook_kinds_without_linkerd_have_no_linkerd_group(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        if "jobs.batch" in " ".join(map(str, cmd)) and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    assert "linkerd" not in cmd[cmd.index("get") + 1]
 
 
 @pytest.mark.parametrize("workload", ["", "Web", "service/web", "deployment/", "web; rm -rf /", "../web", "-n", None,

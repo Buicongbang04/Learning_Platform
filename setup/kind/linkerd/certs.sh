@@ -24,9 +24,10 @@ apply() { "$@" --dry-run=client -o yaml | kubectl --kubeconfig "$kubeconfig" app
 ca root 3650 root.linkerd.cluster.local 1
 sign issuer identity.linkerd.cluster.local root \
   "basicConstraints=critical,CA:TRUE,pathlen:0
-keyUsage=critical,keyCertSign,cRLSign" 365
+keyUsage=critical,keyCertSign,cRLSign" 3650
 rm -f root.key
 apply k create configmap linkerd-identity-trust-roots --from-file=ca-bundle.crt=root.crt
+apply k create configmap devops-linkerd-issuer-public --from-file=tls.crt=issuer.crt
 apply k create secret generic linkerd-identity-issuer --type=kubernetes.io/tls \
   --from-file=tls.crt=issuer.crt --from-file=tls.key=issuer.key --from-file=ca.crt=root.crt
 rm -f issuer.key

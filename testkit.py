@@ -38,6 +38,7 @@ import atexit
 import base64
 import importlib.util
 import json
+import math
 import linecache
 import os
 import re
@@ -3918,6 +3919,9 @@ KUBE_LINKERD_TRUST_DOMAIN = "cluster.local"
 KUBE_LINKERD_IDENTITY_SUFFIX = f"serviceaccount.identity.linkerd.{KUBE_LINKERD_TRUST_DOMAIN}"
 KUBE_LINKERD_ADMIN_PORT = 4191
 KUBE_LINKERD_CA_PLACEHOLDER = "devops-linkerd-certs-sh"
+KUBE_LINKERD_PROXY_IMAGE = "cr.l5d.io/linkerd/proxy:edge-26.10.1"
+KUBE_LINKERD_ISSUER_PUBLIC = "devops-linkerd-issuer-public"
+KUBE_LINKERD_CERT_MARGIN = 7 * 24 * 3600
 KUBE_LINKERD_DEPLOYMENTS = ("linkerd-identity", "linkerd-destination", "linkerd-proxy-injector")
 KUBE_LINKERD_SETUP = (
     "kubectl --kubeconfig ~/.kube/devops-lab.yaml apply --server-side -k setup/kind/linkerd && bash setup/kind/linkerd/certs.sh"
@@ -4175,6 +4179,14 @@ class _KubeAdmin:
             result = self.run(*args)
             if result.returncode != 0 or not ok(result.stdout):
                 return what
+        roots = self.run(*ns, "get", "configmap", "linkerd-identity-trust-roots", "-o", r"jsonpath={.data.ca-bundle\.crt}")
+        problem = _linkerd_cert_problem("trust anchor (linkerd-identity-trust-roots)", roots.stdout)
+        if problem:
+            return problem
+        issuer = self.run(*ns, "get", "configmap", KUBE_LINKERD_ISSUER_PUBLIC, "-o", r"jsonpath={.data.tls\.crt}",
+                          "--ignore-not-found")
+        if issuer.returncode == 0 and issuer.stdout.strip():
+            return _linkerd_cert_problem(f"issuer ({KUBE_LINKERD_ISSUER_PUBLIC})", issuer.stdout)
         return None
 
     def cluster_kinds(self) -> set[str]:
@@ -4185,6 +4197,20 @@ class _KubeAdmin:
             if "false" in words[:-1]:
                 kinds.add(words[words.index("false") + 1])
         return kinds
+
+
+def _linkerd_cert_problem(what: str, pem: str) -> str | None:
+    """Lý do chứng chỉ công khai `pem` của Linkerd không dùng được: không đọc được, hay hết hạn trong `KUBE_LINKERD_CERT_MARGIN`."""
+    from cryptography import x509
+
+    try:
+        certs = x509.load_pem_x509_certificates(pem.encode())
+    except ValueError:
+        return f"chứng chỉ {what} không đọc được"
+    soonest = min(cert.not_valid_after_utc.timestamp() for cert in certs)
+    if soonest - time.time() < KUBE_LINKERD_CERT_MARGIN:
+        return f"chứng chỉ {what} hết hạn hay sắp hết hạn (dưới 7 ngày); chạy lại certs.sh rồi restart pod trong mesh"
+    return None
 
 
 def _kube_ready(admin: _KubeAdmin, name: str) -> None:
@@ -4553,6 +4579,8 @@ def _linkerd_metrics(text: str) -> dict:
             number = float(value)
         except ValueError:
             continue
+        if not math.isfinite(number):
+            continue
         labels = dict(_PROM_LABEL.findall(raw or ""))
         admin = labels.get("target_port") == str(KUBE_LINKERD_ADMIN_PORT)
         inbound = labels.get("direction") == "inbound" and not admin
@@ -4577,6 +4605,20 @@ def _linkerd_metrics(text: str) -> dict:
                 and labels.get("server_id"):
             counts["servers"].add(labels["server_id"])
     return counts
+
+
+def _linkerd_injected(pod: dict) -> bool:
+    """Pod do proxy-injector của Linkerd dùng chung tiêm: annotation `linkerd.io/proxy-version` đúng bản đã ghim và container
+    `linkerd-proxy` (native sidecar hay container thường) chạy đúng image proxy đã ghim. Container tự đặt tên `linkerd-proxy` với
+    image khác (server giả trên cổng 4191) không tính."""
+    annotations = (pod.get("metadata") or {}).get("annotations") or {}
+    if annotations.get("linkerd.io/proxy-version") != KUBE_LINKERD_VERSION:
+        return False
+    spec = pod.get("spec") or {}
+    proxies = [c for c in (spec.get("initContainers") or []) + (spec.get("containers") or []) if c.get("name") == "linkerd-proxy"]
+    digest = KUBE_LINKERD_IMAGES[KUBE_LINKERD_PROXY_IMAGE]
+    allowed = {KUBE_LINKERD_PROXY_IMAGE, f"{KUBE_LINKERD_PROXY_IMAGE}@{digest}", f"{KUBE_LINKERD_PROXY_IMAGE.rsplit(':', 1)[0]}@{digest}"}
+    return len(proxies) == 1 and proxies[0].get("image") in allowed
 
 
 def kube_mesh_identity_ok(identity, namespace: str) -> bool:
@@ -5485,7 +5527,12 @@ class KubeLab:
         `denied` (request bị AuthorizationPolicy chặn), `plaintext` (request không qua mTLS), `clients` (danh tính client đã
         gọi qua mTLS); phía outbound: `outbound_success`, `outbound_failure` (kết quả cuối mà ứng dụng nhận, sau retry),
         `retries` (lần thử lại do HTTPRoute), `servers` (danh tính server đã gọi qua mTLS). Số đếm cộng dồn từ lúc proxy khởi
-        động."""
+        động (pod khởi động lại là về 0): bài chấm nên gọi trước và sau khi tạo tải rồi so hiệu số, không so số tuyệt đối.
+
+        Pod chỉ tính là `injected` khi có annotation `linkerd.io/proxy-version` đúng bản đã ghim và container `linkerd-proxy`
+        chạy đúng image proxy đã ghim (`_linkerd_injected`); `identity`/`mtls` chỉ đúng khi `LINKERD2_PROXY_IDENTITY_LOCAL_NAME`
+        của proxy bằng `<serviceAccountName hay default>.<namespace>.serviceaccount.identity.linkerd.cluster.local` và proxy đã có
+        chứng chỉ. Container tự đặt tên `linkerd-proxy` để giả số liệu trên cổng 4191 vì thế không qua được."""
         self._require_entered()
         match = _KUBE_WORKLOAD.fullmatch(workload) if isinstance(workload, str) else None
         if not match:
@@ -5515,11 +5562,11 @@ class KubeLab:
                   "outbound_success": 0, "outbound_failure": 0, "retries": 0, "servers": []}
         identities, clients, servers = set(), set(), set()
         for pod in pods:
-            spec = pod.get("spec") or {}
-            containers = [c.get("name") for c in (spec.get("containers") or []) + (spec.get("initContainers") or [])]
-            if "linkerd-proxy" not in containers:
+            if not _linkerd_injected(pod):
                 status["injected"] = status["mtls"] = False
                 continue
+            spec = pod.get("spec") or {}
+            expected = f"{spec.get('serviceAccountName') or 'default'}.{self.namespace}.{KUBE_LINKERD_IDENTITY_SUFFIX}"
             base = f"/api/v1/namespaces/{self.namespace}/pods/{pod['metadata']['name']}:{KUBE_LINKERD_ADMIN_PORT}/proxy"
             env = self._admin.run("get", "--raw", f"{base}/env.json")
             metrics = self._admin.run("get", "--raw", f"{base}/metrics")
@@ -5531,7 +5578,7 @@ class KubeLab:
             except ValueError:
                 local = None
             counts = _linkerd_metrics(metrics.stdout)
-            if local and counts["cert"]:
+            if local == expected and counts["cert"]:
                 identities.add(local)
             else:
                 status["mtls"] = False
@@ -5584,9 +5631,11 @@ class KubeLab:
         """ArgoCD gắn finalizer `hook-finalizer` cho object hook (Job PreSync...) và chỉ gỡ khi hook kết thúc. Application bị xoá
         lúc hook còn chạy thì finalizer ở lại, namespace kẹt Terminating. Gỡ đúng finalizer đó trên object trong namespace của lab
         (hook được apply bằng token của lab nên chỉ thuộc các kind trong Role của lab). Chỉ xét các kind trong
-        `_KUBE_HOOK_KINDS`: hook là custom resource thuộc CRD trong nhóm `api_group` của lab **không** được gỡ finalizer ở
-        đây; bài dùng hook kiểu đó phải tự dọn trước khi đóng lab."""
-        listed = self._admin.run("-n", self.namespace, "get", _KUBE_HOOK_KINDS, "-o", "json", "--ignore-not-found")
+        `_KUBE_HOOK_KINDS`, cộng bốn kind `policy.linkerd.io` trong Role của lab khi cluster có Linkerd: hook là custom resource
+        thuộc CRD trong nhóm `api_group` của lab **không** được gỡ finalizer ở đây; bài dùng hook kiểu đó phải tự dọn trước khi
+        đóng lab."""
+        kinds = _KUBE_HOOK_KINDS + "".join(f",{r}.{KUBE_LINKERD_GROUP}" for r in KUBE_LINKERD_RESOURCES if self._linkerd)
+        listed = self._admin.run("-n", self.namespace, "get", kinds, "-o", "json", "--ignore-not-found")
         if listed.returncode != 0:
             errors.append(f"liệt kê hook ArgoCD trong {self.namespace}: {_output_tail(listed)}")
             return
