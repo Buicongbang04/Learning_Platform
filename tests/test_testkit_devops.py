@@ -5326,6 +5326,24 @@ def test_gateway_setup_pinned_and_documented():
     assert testkit.KUBE_GATEWAY_IMAGE_DIGEST in doc and "setup/kind/gateway/10-traefik.yaml" in doc
 
 
+
+def test_kube_lab_routes_policy_refuses_service_external_ips(monkeypatch):
+    fake = KubeFake(monkeypatch)
+    with testkit.KubeLab() as lab:
+        pass
+    policy = next(i for i in bootstrap_items(fake) if i["kind"] == "ValidatingAdmissionPolicy"
+                  and i["metadata"]["name"] == f"{lab.namespace}-routes")
+    spec = policy["spec"]
+    assert {"apiGroups": [""], "apiVersions": ["*"], "resources": ["services"], "operations": ["CREATE", "UPDATE"]} \
+        in spec["matchConstraints"]["resourceRules"]
+    condition = spec["matchConditions"][0]["expression"]
+    assert f"'system:serviceaccounts:{lab.namespace}' in request.userInfo.groups" in condition
+    [rule] = [v for v in spec["validations"] if "externalIPs" in v["expression"]]
+    assert rule["expression"] == ("request.resource.resource != 'services' || !has(object.spec.externalIPs) || "
+                                  "size(object.spec.externalIPs) == 0")
+    others = [v["expression"] for v in spec["validations"] if v is not rule]
+    assert all(e.startswith("request.resource.resource != '") for e in others)
+
 @KUBE_REQUIRED
 def test_kube_lab_routes_policy_real():
     testkit.Exercise.require_cluster()
@@ -5349,6 +5367,24 @@ def test_kube_lab_routes_policy_real():
         result = lab.kubectl("apply", "-f", "-", input=json.dumps(gateway), check=False)
         assert result.returncode != 0 and "forbidden" in result.stderr
         assert lab.kubectl("auth", "can-i", "create", "referencegrants.gateway.networking.k8s.io", check=False).stdout.strip() == "no"
+
+
+@KUBE_REQUIRED
+def test_kube_lab_service_external_ips_denied_by_admission_real():
+    testkit.Exercise.require_cluster()
+    with testkit.KubeLab() as lab:
+        service = {"apiVersion": "v1", "kind": "Service", "metadata": {"name": "web"},
+                   "spec": {"selector": {"app": "web"}, "ports": [{"port": 80}]}}
+        assert lab.kubectl("create", "-f", "-", input=json.dumps(service), check=False).returncode == 0
+        hijack = {**service, "metadata": {"name": "hijack"}, "spec": {**service["spec"], "externalIPs": ["10.96.0.1"]}}
+        result = lab.kubectl("create", "-f", "-", input=json.dumps(hijack), check=False)
+        assert result.returncode != 0 and f"{lab.namespace}-routes" in result.stderr and "denied" in result.stderr, result.stderr
+        patch = json.dumps({"spec": {"externalIPs": ["10.96.0.1"]}})
+        result = lab.kubectl("patch", "service", "web", "--type=merge", "-p", patch, check=False)
+        assert result.returncode != 0 and f"{lab.namespace}-routes" in result.stderr, result.stderr
+        sneaky = {**hijack, "metadata": {"name": "sneaky"}}
+        result = lab.run(["sh", "-c", "kubectl create -f -"], input=json.dumps(sneaky))
+        assert result.returncode != 0 and f"{lab.namespace}-routes" in result.stderr, result.stderr
 
 
 @pytest.mark.parametrize("args", [
@@ -8319,6 +8355,45 @@ def test_close_hook_kinds_without_linkerd_have_no_linkerd_group(monkeypatch):
     [cmd] = listed
     assert "linkerd" not in cmd[cmd.index("get") + 1]
 
+
+
+def test_close_releases_hook_finalizer_on_gateway_httproutes_when_crd_present(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        joined = " ".join(map(str, cmd))
+        if "api-resources --api-group=gateway.networking.k8s.io" in joined:
+            return subprocess.CompletedProcess(cmd, 0, "gateways.gateway.networking.k8s.io\nhttproutes.gateway.networking.k8s.io\n", "")
+        if "jobs.batch" in joined and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    kinds = cmd[cmd.index("get") + 1].split(",")
+    assert "httproutes.gateway.networking.k8s.io" in kinds and "jobs.batch" in kinds
+    assert not any(k.endswith(".gateway.networking.k8s.io") and k != "httproutes.gateway.networking.k8s.io" for k in kinds)
+
+
+def test_close_hook_kinds_without_gateway_api_have_no_gateway_group(monkeypatch):
+    fake = ArgoFake(monkeypatch)
+    original = fake.run_sandboxed
+    listed = []
+
+    def run_sandboxed(cmd, **kwargs):
+        if "jobs.batch" in " ".join(map(str, cmd)) and "json" in cmd:
+            listed.append(list(map(str, cmd)))
+        return original(cmd, **kwargs)
+
+    monkeypatch.setattr(testkit, "run_sandboxed", run_sandboxed)
+    with testkit.KubeLab():
+        pass
+    [cmd] = listed
+    assert "gateway.networking.k8s.io" not in cmd[cmd.index("get") + 1]
 
 @pytest.mark.parametrize("workload", ["", "Web", "service/web", "deployment/", "web; rm -rf /", "../web", "-n", None,
                                       "deployment/web/x"])

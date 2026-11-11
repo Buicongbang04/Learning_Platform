@@ -21,7 +21,7 @@ Ngày: 2026-11-11. Track DevOps đã đủ nội dung theo spec, không còn pha
     `k6_run`; Olist Shop xuất trace và log OTLP khi có `OTEL_EXPORTER_OTLP_ENDPOINT`.
 - **Validator** `tests/test_devops_track.py`: đủ 17 module và 9 milestone (kèm `capstone/project/tests/test_mNN.py`), quy mô từng
   module, frontmatter và heading của bài, lời giải trùng tên starter, tổng số bài khớp con số trong README gốc và README track, công
-  cụ chỉ gọi qua helper (cấm `docker`, `kind`, `act`, `kubectl`, `helm`, `tofu`, `sops`, `age`, `vault`, `argocd`, `linkerd`,
+  cụ chỉ gọi qua helper (cấm `docker`, `kind`, `act`, `kubectl`, `helm`, `tofu`, `sops`, `age`, `age-keygen`, `vault`, `argocd`, `linkerd`,
   `promtool`, `amtool`, `aws`, `awslocal`, `tc`, `k6` trần), marker `kube_nodes`, không `curl | sudo sh`.
 
 ## 2. Tài liệu gốc

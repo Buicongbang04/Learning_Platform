@@ -4199,6 +4199,11 @@ class _KubeAdmin:
         result = self.run("api-resources", f"--api-group={KUBE_LINKERD_GROUP}", "-o", "name")
         return result.returncode == 0 and f"servers.{KUBE_LINKERD_GROUP}" in result.stdout.split()
 
+    def has_gateway_api(self) -> bool:
+        """Cluster có CRD HTTPRoute của Gateway API (nhóm `gateway.networking.k8s.io`)."""
+        result = self.run("api-resources", "--api-group=gateway.networking.k8s.io", "-o", "name")
+        return result.returncode == 0 and "httproutes.gateway.networking.k8s.io" in result.stdout.split()
+
     def linkerd_problem(self) -> str | None:
         """Lý do Linkerd dùng chung chưa dùng được, hay None. Chỉ đọc ConfigMap, Deployment, DaemonSet và webhook; không đọc
         Secret nào (issuer, chứng chỉ webhook)."""
@@ -4860,7 +4865,8 @@ class KubeLab:
     không cấp cho `system:*` hay ServiceAccount của namespace khác (RoleBinding bỏ trống namespace của subject ServiceAccount là
     namespace của chính nó); policy `devops-ex-<id>-routes` (cũng cho mọi ServiceAccount
     của namespace): Ingress phải `ingressClassName: devops-traefik`, không `defaultBackend`, HTTPRoute chỉ gắn Gateway
-    `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con; policy `devops-ex-<id>-argocd`
+    `devops-gateway/public`, mọi host là `hostname` của lab (`<namespace>.olist.test`) hay tên con, Service không có
+    `externalIPs` (CVE-2020-8554); policy `devops-ex-<id>-argocd`
     (cũng cho mọi ServiceAccount của namespace): Application phải có `spec.project` là project của lab (`devops-ex-<id>`),
     destination là namespace của lab trên `https://kubernetes.default.svc`, repoURL là `repo_url` của lab, không
     `sourceHydrator`; policy `devops-ex-<id>-mesh` (cũng cho mọi ServiceAccount của namespace): AuthorizationPolicy,
@@ -4922,6 +4928,7 @@ class KubeLab:
         self._node_lock = None
         self._argocd = False
         self._linkerd = False
+        self._gateway_api = False
         self._project = False
         self._git_pushed = False
         self._git_repo: GitRepo | None = None
@@ -4978,6 +4985,7 @@ class KubeLab:
         self._cluster_kinds = self._admin.cluster_kinds()
         self._argocd = self._admin.has_argocd()
         self._linkerd = self._admin.has_linkerd()
+        self._gateway_api = self._admin.has_gateway_api()
         if self.mesh:
             problem = self._admin.linkerd_problem()
             if problem:
@@ -5083,7 +5091,8 @@ class KubeLab:
         host_ok = f"(h == '{domain}' || h.endsWith('.{domain}'))"
         routes = [{"apiGroups": ["networking.k8s.io"], "apiVersions": ["*"], "resources": ["ingresses"], "operations": ["CREATE", "UPDATE"]},
                   {"apiGroups": ["gateway.networking.k8s.io"], "apiVersions": ["*"], "resources": ["httproutes"],
-                   "operations": ["CREATE", "UPDATE"]}]
+                   "operations": ["CREATE", "UPDATE"]},
+                  {"apiGroups": [""], "apiVersions": ["*"], "resources": ["services"], "operations": ["CREATE", "UPDATE"]}]
         route_rules = [
             {"expression": "request.resource.resource != 'ingresses' || (has(object.spec.ingressClassName) && "
                            f"object.spec.ingressClassName == '{KUBE_INGRESS_CLASS}' && !has(object.spec.defaultBackend) && "
@@ -5097,6 +5106,9 @@ class KubeLab:
                            "(!has(p.group) || p.group == 'gateway.networking.k8s.io')) && has(object.spec.hostnames) && "
                            f"size(object.spec.hostnames) > 0 && object.spec.hostnames.all(h, {host_ok}))",
              "message": f"HTTPRoute của bài chỉ gắn vào {KUBE_GATEWAY_NAMESPACE}/{KUBE_GATEWAY_NAME}, hostnames là {domain} hay tên con"},
+            {"expression": "request.resource.resource != 'services' || !has(object.spec.externalIPs) || "
+                           "size(object.spec.externalIPs) == 0",
+             "message": "Service của bài không được có externalIPs (chặn được traffic tới địa chỉ đó của mọi pod, CVE-2020-8554)"},
         ]
         url = kube_git_url(self.namespace)
         applications = [{"apiGroups": ["argoproj.io"], "apiVersions": ["*"], "resources": ["applications"],
@@ -5684,10 +5696,12 @@ class KubeLab:
         """ArgoCD gắn finalizer `hook-finalizer` cho object hook (Job PreSync...) và chỉ gỡ khi hook kết thúc. Application bị xoá
         lúc hook còn chạy thì finalizer ở lại, namespace kẹt Terminating. Gỡ đúng finalizer đó trên object trong namespace của lab
         (hook được apply bằng token của lab nên chỉ thuộc các kind trong Role của lab). Chỉ xét các kind trong
-        `_KUBE_HOOK_KINDS`, cộng bốn kind `policy.linkerd.io` trong Role của lab khi cluster có Linkerd: hook là custom resource
+        `_KUBE_HOOK_KINDS`, cộng bốn kind `policy.linkerd.io` trong Role của lab khi cluster có Linkerd và
+        `httproutes.gateway.networking.k8s.io` khi cluster có CRD của Gateway API: hook là custom resource
         thuộc CRD trong nhóm `api_group` của lab **không** được gỡ finalizer ở đây; bài dùng hook kiểu đó phải tự dọn trước khi
         đóng lab."""
-        kinds = _KUBE_HOOK_KINDS + "".join(f",{r}.{KUBE_LINKERD_GROUP}" for r in KUBE_LINKERD_RESOURCES if self._linkerd)
+        kinds = (_KUBE_HOOK_KINDS + "".join(f",{r}.{KUBE_LINKERD_GROUP}" for r in KUBE_LINKERD_RESOURCES if self._linkerd)
+                 + (",httproutes.gateway.networking.k8s.io" if self._gateway_api else ""))
         listed = self._admin.run("-n", self.namespace, "get", kinds, "-o", "json", "--ignore-not-found")
         if listed.returncode != 0:
             errors.append(f"liệt kê hook ArgoCD trong {self.namespace}: {_output_tail(listed)}")

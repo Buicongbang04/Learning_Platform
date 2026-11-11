@@ -151,6 +151,7 @@ docker compose -f setup/docker-compose.yml --profile all stop      # tắt hết
 Airflow, lab CDC và lab GCP có compose riêng trong `setup/airflow/`, `setup/cdc/`, `setup/cloud-gcp/`. Metabase,
 Superset và các dịch vụ của profile `devops` chỉ mở trên `127.0.0.1`. Cổng bị dự án khác chiếm thì đổi trong `setup/.env` (mẫu ở `setup/.env.example`).
 Module nào cần dịch vụ nào: [setup/SETUP.md](setup/SETUP.md#5-module-cần-dịch-vụ-nào).
+Dịch vụ của profile `devops` (Mailpit, registry, `localstack-devops`, `vault-devops`) dùng khi nào và bật ra sao: [setup/DEVOPS-TOOLS.md](setup/DEVOPS-TOOLS.md).
 
 Dịch vụ BI cần nạp dữ liệu sau khi bật lần đầu:
 
