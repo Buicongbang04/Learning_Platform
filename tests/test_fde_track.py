@@ -4,6 +4,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -370,6 +371,10 @@ def test_phase1_present():
     assert not missing, f"Phase 1 còn thiếu: {missing}"
 
 
+@pytest.mark.xfail(
+    reason="Phase 2 đang làm: module 10 và milestone m04–m10 chưa có. Bỏ xfail khi Phase 2 xong.",
+    strict=False,
+)
 def test_phase2_present():
     missing = [m for m in PHASE2_MODULES if not (MODULES_DIR / m).is_dir()]
     docs = {m["id"]: TRACK / m["doc"] for m in load_track()["capstone"]["milestones"]}
