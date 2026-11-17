@@ -1,0 +1,1 @@
+# TODO: Ingress olist-legacy cho host legacy.lab.olist.test, mọi path tới Service api-stable, qua IngressClass dùng chung của cluster.

@@ -1,0 +1,6 @@
+- name: Restart olist-worker
+  ansible.builtin.systemd_service:
+    name: olist-worker
+    state: restarted
+    daemon_reload: true
+  when: ansible_facts.service_mgr == "systemd"

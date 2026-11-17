@@ -1,0 +1,66 @@
+image:
+  repository: devops-track/olist-shop
+  tag: ""
+  pullPolicy: IfNotPresent
+
+config:
+  logLevel: INFO
+  redisUrl: redis://redis:6379/0
+
+database:
+  existingSecret: olist-db
+  secretKey: DATABASE_URL
+
+api:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    scaleDownStabilizationSeconds: 120
+  pdb:
+    minAvailable: 1
+
+worker:
+  replicas: 1
+  terminationGracePeriodSeconds: 30
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      memory: 192Mi
+
+route:
+  enabled: true
+  host: shop.olist.test
+  gateway:
+    name: public
+    namespace: devops-gateway
+
+networkPolicy:
+  enabled: true
+  gateway:
+    namespace: devops-gateway
+    podLabels:
+      app.kubernetes.io/name: traefik
+  database:
+    podLabels:
+      app.kubernetes.io/name: postgres
+    port: 5432
+  redis:
+    podLabels:
+      app.kubernetes.io/name: redis
+    port: 6379
+
+rbac:
+  oncall:
+    enabled: true
+    group: olist:oncall

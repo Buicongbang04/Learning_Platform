@@ -1,0 +1,61 @@
+- name: Cấu hình worker bằng module
+  hosts: workers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Tạo thư mục releases
+      ansible.builtin.file:
+        path: /opt/olist-shop/releases
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Tạo thư mục bản 1.4.2
+      ansible.builtin.file:
+        path: /opt/olist-shop/releases/1.4.2
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ghi LOG_LEVEL
+      ansible.builtin.lineinfile:
+        path: /etc/olist-shop/worker.env
+        regexp: "^LOG_LEVEL="
+        line: LOG_LEVEL=INFO
+
+    - name: Đổi timezone
+      ansible.builtin.lineinfile:
+        path: /etc/olist-shop/worker.env
+        regexp: "^TZ="
+        line: TZ=Asia/Ho_Chi_Minh
+
+    - name: Trỏ current vào bản đang chạy
+      ansible.builtin.file:
+        src: /opt/olist-shop/releases/1.4.2
+        dest: /opt/olist-shop/current
+        state: link
+
+    - name: Kiểm phiên bản Python
+      ansible.builtin.command: /usr/local/bin/python3 --version
+      register: python
+      changed_when: false
+
+    - name: Python phải từ 3.12
+      ansible.builtin.assert:
+        that: python.stdout.split()[1] is version("3.12", ">=")
+        fail_msg: "Worker cần Python 3.12 trở lên, máy có {{ python.stdout }}"
+        quiet: true
+
+    - name: Đếm job lỗi trong log
+      ansible.builtin.command: grep -c ERROR /var/log/olist-shop/worker.log
+      register: errors
+      changed_when: false
+      failed_when: errors.rc > 1
+
+    - name: Dừng khi worker lỗi quá nhiều
+      ansible.builtin.assert:
+        that: errors.stdout | int < 5
+        fail_msg: "Worker có {{ errors.stdout }} dòng ERROR trong log (ngưỡng 5): kiểm tra trước khi đổi cấu hình"
+        quiet: true

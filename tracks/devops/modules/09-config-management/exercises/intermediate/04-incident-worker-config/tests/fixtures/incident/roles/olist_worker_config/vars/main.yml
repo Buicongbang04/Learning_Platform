@@ -1,0 +1,4 @@
+olist_worker_env_file: /etc/olist-shop/worker.env
+olist_worker_unit_file: /etc/systemd/system/olist-worker.service
+olist_worker_state_dir: /var/lib/olist-shop
+olist_worker_log_level: INFO

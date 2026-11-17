@@ -1,72 +1,112 @@
-# Bàn giao: track DevOps (sau Phase 1)
+# Bàn giao: track DevOps (sau Phase 2)
 
-Ngày: 2026-11-01. Dành cho phiên Claude Code làm Phase 2 (module 06–11, milestone m03–m06). Đọc hết trước khi làm.
+Ngày: 2026-11-10. Dành cho phiên Claude Code làm Phase 3 (module 12–16, milestone m07–m09, cập nhật bảng track trong README gốc).
+Đọc hết trước khi làm.
 
 ## 1. Trạng thái
 
-- Nhánh `devops-track`, worktree `Learning_Platform-devops`. Phase 1 xong: hạ tầng dùng chung, Olist Shop, module 00–05, capstone m01–m02.
-- Mỗi task có implementer và reviewer độc lập; cuối phase có review toàn nhánh và một đợt sửa. Review cuối sạch.
-- Track DA, DE, DS cho cùng kết quả trên `main` và trên nhánh (`SOLUTION=1`): DA 436 passed / 314 skipped, DE 638 / 218, DS 943 / 379. `tests/` từ 319 lên 436 passed (test DevOps mới).
-- Chạy riêng từng track. Gộp DE + DS + DA vào một tiến trình pytest đã crash (faulthandler) dù từng track riêng đều xanh.
+- Phase 1 (module 00–05, capstone m01–m02, hạ tầng nền) đã gộp vào `main` qua PR #10.
+- Phase 2 trên nhánh `devops-phase2`, worktree `Learning_Platform-devops`:
+  - module 06–11, capstone m03–m06;
+  - testkit mở rộng: `DockerLab.build/compose/push`, `act_run`, `TofuLab`, `AnsibleLab`, `KubeLab`, `GitRepo`;
+  - `setup/act-runner/`, `setup/kind/` (cluster `devops-lab`, Gateway API + Traefik, metrics-server);
+  - dịch vụ compose profile `devops` (registry, localstack-devops).
+- Mỗi task có implementer và reviewer độc lập, tối đa 5 vòng sửa. Cuối phase có review toàn nhánh và một đợt sửa (`a3bfee6e`). Review
+  cuối không còn lỗi Critical.
+- `main` (AI Engineer, MLOps, FDE) đã gộp vào nhánh. `tests/` toàn repo: 1788 passed, 63 skipped.
+- Theo yêu cầu người dùng, không chạy lại `SOLUTION=1` của track khác sau khi gộp. Thay đổi chung có thể chạm track khác:
+  - `DockerLab.run_args` thêm `--security-opt no-new-privileges` (FDE `_SiteLab` và MLOps dùng `DockerLab`);
+  - `run_sandboxed` che thêm thư mục credential và đặt `PYTHONNOUSERSITE=1` (MLOps dùng).
 
 ## 2. Tài liệu gốc
 
-- Spec: `docs/superpowers/specs/2026-11-01-devops-track-design.md`
-- Plan Phase 1: `docs/superpowers/plans/2026-11-01-devops-phase1.md` (mục Task 10/11 còn ghi `docker run --rm` trực tiếp, đã bị thay bằng `DockerLab`, xem mục 3)
+- Spec: `docs/superpowers/specs/2026-11-01-devops-track-design.md` (Phase 3: dòng 160)
+- Plan Phase 2: `docs/superpowers/plans/2026-11-01-devops-phase2.md`
 - Checklist K8s/Terraform: `docs/superpowers/research/2026-11-01-k8s-terraform-topic-checklists.md`
-- Quy ước nội dung DevOps (bắt buộc đọc): mục "Track DevOps" trong `CONTENT_SPEC.md`
+- Quy ước (bắt buộc đọc): mục "Track DevOps" trong `CONTENT_SPEC.md`, bảng helper và mục Kubernetes
+- Cài công cụ: `setup/DEVOPS-TOOLS.md`. Không có script cài: mỗi module có `## 0. Cài đặt` từng bước, theo quyết định của người
+  dùng.
 
-## 3. Quyết định đã đưa ra khi làm Phase 1
+## 3. Quyết định đã đưa ra ở Phase 2
 
-Người học xem lại được; mỗi dòng ghi giá phải trả nếu sai.
+Mỗi dòng ghi giá phải trả nếu sai.
 
-1. Kiểm link `DEVOPS-TOOLS.md` lỏng tới Task 10 rồi mới chặt (vì module chưa có). Sai thì link hỏng lọt tới Task 10; đã chặt ở `b1962f5`.
-2. Package ứng dụng mẫu là `olist_shop/`, log ở `log.py` (tránh trùng `app/` của repo và `logging` của Python). Sai thì đổi tên.
-3. Capstone theo bố cục track DE (`project/`, `milestones/`, `solutions/`). Sai thì xếp lại thư mục.
-4. Cổng mặc định Olist Shop: PG 25432, Redis 26379, API 28000 (stack DE trên máy đã dùng 15432/16379). Sai thì đổi cổng.
-5. Sửa link module 04 và bỏ `12-35` cứng trong lệnh của người học, gộp vào Task 5. Chi phí nếu sai: diff thêm nhỏ.
-6. Test graceful-stop không được gửi tín hiệu tới tiến trình lạ: nâng từ Minor lên sửa ngay.
-7. Mọi test chạy script người học có thể ghi/xoá tệp phải qua `testkit.run_sandboxed` (bubblewrap); máy không có bwrap thì skip, không bao giờ chạy trần. Sai thì máy thiếu bwrap mất phần chấm, không mất dữ liệu.
-8. Sandbox che thêm `/run` và `~/.docker`, lọc `LD_PRELOAD`/`SHELLOPTS`…, test chứng minh chỉ đọc trên đường thấy được.
-9. Module 03: lệnh git chạy ngoài sandbox phải tắt `core.hooksPath`/`core.fsmonitor`; gate git ≥ 2.30.
-10. Máy builder không có `dig` (cần `sudo apt`): bài chấm bắt buộc không dùng `dig`, DNS chấm offline.
-11. Module 04: sửa quy tắc DMARC nhiều bản ghi theo RFC 7489, câu CN, khai báo `dnspython`.
-12. Validator cấm gọi docker trực tiếp trong test module; `DockerLab` mặc định `--memory 256m --pids-limit 256`.
-13. Capstone: test ở `capstone/project/tests`, `SOLUTION=1` chấm `capstone/solutions/project/`.
-14. Capstone m02 dùng `DockerLab`, m01 dùng `run_sandboxed` (khác chữ trong plan).
-15. Đợt sửa cuối: tài liệu capstone, compose chỉ publish trên 127.0.0.1, module 01 vào sandbox (graceful-stop là ngoại lệ có lý do, chạy session riêng), mục "Track DevOps" trong `CONTENT_SPEC.md`.
-16. Hoãn sang Phase 2 các việc ở mục 4.
+1. **Validator:** cấm gọi docker/kind/act/kubectl/helm/tofu trần trong test module và capstone; chỉ đi qua helper. Sai thì phải nới
+   danh sách.
+2. **Cài công cụ trước module:** helper cần công cụ trước khi module dạy cài thì builder cài bản ghim (release chính thức + checksum)
+   vào `~/.local/bin`; `## 0. Cài đặt` của module dùng đúng bản đó.
+3. **Compose:** compose của người học kiểm theo allowlist khoá service và top-level; volume/network có `name:` phải bắt đầu bằng
+   `devops-ex-<id>`. Sai thì bài cần khoá lạ bị từ chối; khi đó nới allowlist kèm test.
+4. **`act_run`:**
+   - Đổi tên workflow thành `devops-ex-<id>-…`.
+   - Bước build/push thật có `if: ${{ !env.ACT }}` và được kiểm tĩnh; harness tự build/push/deploy bằng `DockerLab`.
+   - Luôn truyền `GITHUB_TOKEN` giả và đặt shim `gh` đầu PATH. Lý do: act 0.2.94 gọi `gh auth token` khi thiếu secret, và đã làm lộ
+     token thật một lần trước khi sửa.
+5. **Runner act:** image ghim `devops-track/act-runner:1.0-<hash>`, build một lần, giữ lại có chủ đích (khoảng 810 MB, không có
+   nhãn `devops-ex`).
+6. **OpenTofu:**
+   - OpenTofu 1.13.2, `hashicorp/aws` 6.12.0 (giới hạn của LocalStack 4.4.0); capstone m05 cần tofu ≥ 1.11.
+   - Provider chỉ lấy từ mirror `~/.cache/devops-track/tofu-plugins`; egress đi qua proxy chết.
+   - Mọi cách ghi đè proxy trong HCL/JSON (kể cả `\u` escape) bị từ chối.
+7. **Ansible:** chỉ chạy trong sandbox (`AnsibleLab`), target là container sshd của `DockerLab`; connection ghim bằng extra vars
+   FQCN. Không bao giờ chạy ansible cục bộ ngoài sandbox (nó tạo `~/.ansible`).
+8. **Kubernetes:**
+   - Cluster `devops-lab` chạy bằng kind, `kindest/node:v1.34.0` ghim digest, 1 control plane + 2 worker.
+   - Ingress ở `127.0.0.1:18180`/`18543`, đổi từ 18080/18443 để tránh trùng quillo của FDE.
+   - Kubeconfig admin chỉ ở `~/.kube/devops-lab.yaml`.
+   - Người học dùng token ServiceAccount với Role riêng; mỗi lab có bốn ValidatingAdmissionPolicy (chung, rbac, pv, routes) và Pod
+     Security baseline/restricted.
+9. **Việc admin trên đầu vào của người học:** chỉ qua `admin_local_pv` và `node_action`. PV local nằm trong container worker, vì bind
+   từ host cho phép tạo tệp setuid trên host. Restore etcd và nâng cấp kubeadm là lab tay chấm bằng rubric.
+10. **`node_action`:** giữ khoá flock và ghi tệp trạng thái. Lab bị SIGKILL thì `require_cluster` của bài sau tự hoàn tác phần còn
+    trên cluster. `require_cluster` kiểm cả bản tối thiểu của kind (0.30) và kubectl (1.33).
+11. **Thành phần admin cài một lần từ `setup/kind/`:** Gateway API v1.6.3 + Traefik v3.7.17 và metrics-server v0.9.1. Test chỉ gọi
+    `require_gateway()`/`require_metrics()`.
+12. **Image capstone m06:** dùng image chung `devops-track/olist-shop:1.0`, không dùng image m03 của người học, vì kind không kéo được
+    từ registry lúc chấm.
 
-testkit vẫn nhận `DEVOPS_CPUSET=none` để tương thích; tài liệu không bao giờ khuyên dùng giá trị này.
+## 4. Việc đầu tiên của Phase 3
 
-## 4. Việc đầu tiên của Phase 2 (hạ tầng dùng chung)
+- Đọc spec mục Phase 3 và checklist; viết plan Phase 3 (module 12–16, m07–m09) theo cùng quy trình.
+- **Module 12, GitOps (ArgoCD) và secrets (SOPS):** cài ArgoCD vào `devops-lab` cần quyền cluster-scoped. Thiết kế giống Gateway:
+  admin cài một lần từ `setup/kind/argocd/`, ghim digest; lab chỉ tạo `Application` trong project giới hạn theo namespace
+  `devops-ex-<id>`; cần thêm quyền CR vào `KubeLab`, kèm test.
+- **Module 13, Observability:** Prometheus/Grafana/Loki/Tempo hoặc OTel Collector. Ưu tiên compose qua `DockerLab.compose` hơn cài vào
+  cluster. Olist Shop đã có `X-Request-ID` và log JSON.
+- **Module 14, Cloud & serverless:** local-first trên localstack-devops (Lambda, API Gateway, SQS), kèm hướng dẫn AWS thật cho phần
+  cần.
+- **Module 15, service mesh:** cân nhắc tài nguyên trên kind (Linkerd nhẹ hơn Istio); một công cụ thực hành kèm bảng so sánh.
+- **Module 16, SRE và m09:** đánh giá độc lập, game day, postmortem chấm rubric. Cần làm rõ: spec §5 nói phần Advanced có postmortem
+  chấm rubric, còn Phase 2 chỉ có postmortem không chấm trong bài sự cố.
+- Cập nhật bảng track trong README gốc khi xong.
 
-Làm trước khi viết module 06. Đề xuất chi tiết nằm trong review toàn nhánh; tóm tắt:
+## 5. Đã xử lý ngoài track và còn treo
 
-- **Helper git dùng chung trong testkit** (`SAFE_GIT_CONFIG`, `git_env(home)`, `GitRepo` chuyển sang sandbox sau khi code người học chạy), thay 5 bản chép trong module 03. Module 07 và 12 cần dùng.
-- **`require_cluster`** kiểm cluster chạy thật (`kubectl --context kind-devops-lab get --raw /readyz`), tách thông báo "docker tắt", "chưa có cluster", "cluster đang dừng".
-- **Helper mới**, ghi vào bảng trong `CONTENT_SPEC.md` khi xong:
-  - `KubeLab`: kubeconfig tạm từ `kind get kubeconfig`, namespace `devops-ex-<id>`, không bao giờ đụng `~/.kube/config` hay current-context của người học. Ưu tiên cao nhất.
-  - `act_run`: env sạch, image `-P` ghim, giới hạn tài nguyên, không mount socket vào job container.
-  - `DockerLab.build` và `DockerLab.compose` (override cpuset, giới hạn, cổng 127.0.0.1, `down -v` khi đóng).
-  - `kind_node_exec` / `kind_node_cp` chỉ cho container `devops-lab-*`.
-  - LocalStack riêng cho DevOps dưới profile `devops`, không đụng `localstack` của DE.
-- **Validator**: thay regex `DIRECT_DOCKER` bằng danh sách cấm theo helper (docker, act, kind, kubectl/helm ngoài `KubeLab`); không bắt nhầm `require_tool("docker", "24")`.
-- **`run_sandboxed`** che thêm `~/.kube`, `~/.aws`, `~/.ssh`, `~/.config/gcloud`, `~/.azure`; `import pwd` trong hàm và bắt `KeyError`; cache bước tự kiểm.
-- **`DockerLab`**: `--security-opt no-new-privileges`, lưu `docker logs` khi lỗi, `run_once` nhận `memory`/`pids_limit`.
-- **testkit**: so phiên bản đệm số 0 (`1.27` = `1.27.0`), câu báo không đọc được phiên bản.
-- **Olist Shop** (trước module 10 và 13): response 500 có `X-Request-ID`, `/jobs/recompute` trả 503 khi Redis chết, Postgres có `connect_timeout`.
-- **Kiểm trước module 06**: BuildKit có tôn trọng `--cpuset-cpus` không; nếu không, dùng builder `docker-container` với `--driver-opt cpuset-cpus=…`.
+- **MLOps `mlopskit.act_run`:** đã sửa theo yêu cầu người dùng (HOME tạm, bỏ `GITHUB_*`/`GH_*`/`DOCKER_*`/`XDG_*` của máy,
+  `GITHUB_TOKEN` giả, `gh` giả đầu PATH), kèm test; module 08 của MLOps với `SOLUTION=1` vẫn pass.
+- **Binary dùng chung với MLOps trong `~/.local/bin`:**
 
-## 5. Chưa kiểm chứng trên máy
+  | Binary | DevOps | MLOps |
+  | --- | --- | --- |
+  | act | 0.2.94 | 0.2.94 (đã nâng) |
+  | kind | 0.30.0 | 0.33.0 |
+  | kubectl | 1.34.13 | 1.35.8 |
 
-- Khối cài `gitleaks` (tuỳ chọn, module 03): tải binary bị chặn khi làm, chưa chạy thử.
-- Cài `dig` (module 04): cần `sudo apt`, builder không chạy.
-- Tương thích OpenSSL 1.1.1 và OpenSSH 8.x (module 04): suy từ code, chỉ chạy trên OpenSSL 3.0.13 và OpenSSH 9.6.
-- Các khối lệnh "chạy thử" thủ công trong tài liệu m01/m02 (cần stack compose đã seed).
+  Đã ghi trong `setup/DEVOPS-TOOLS.md`. act của MLOps đã nâng lên 0.2.94 theo yêu cầu người dùng. kind 0.33 với `devops-lab` chưa
+  kiểm.
+- **Volume Docker ẩn danh** tạo 2026-11-01 lúc 06:52 và 14:04, không rõ nguồn, để nguyên.
 
-## 6. Công cụ đã cài trên máy người học
+## 6. Chưa kiểm chứng trên máy
 
-- `~/.local/bin/shellcheck` 0.11.0 (theo hướng dẫn module 01).
-- Image: `axllent/mailpit:v1.21.8`, `nginx:1.30.6-alpine`, `python:3.12.16-alpine3.24`.
-- Không chạy container nào lâu dài. Container của người học (`de-learning-*`, `portainer`) không bị đụng.
+- Module 11: lab kubeadm (`devops-ts`) và cài chart `podinfo` 6.7.1 (chart có trong index, chưa cài thử).
+- Action `aquasecurity/trivy-action` trong workflow tham chiếu m04 (bị bỏ qua khi chạy dưới act).
+- Phần chưa kiểm của Phase 1 vẫn như cũ: gitleaks, `dig`, OpenSSL 1.1.1, OpenSSH 8.x.
+
+## 7. Công cụ và tài nguyên để lại trên máy
+
+- **`~/.local/bin`:** shellcheck 0.11.0, act 0.2.94, actionlint, trivy 0.76.1, tofu 1.13.2, kind 0.30.0, kubectl 1.34.13, helm 3.22.1.
+- **`~/.cache/devops-track/`:** mirror provider tofu, venv ansible-core 2.21.5, khoá và tệp trạng thái node.
+- **Image và volume:** `devops-track/act-runner:1.0-9d5fff50`, `devops-track/olist-shop:1.0`, các image ghim của bài; volume
+  `devops-track-localstack-data`.
+- **Không còn chạy gì:** không có cluster kind, không có `~/.kube`, không có container `devops-ex`. Container của người dùng
+  (`de-learning-*`, `fnb-*`, `neo4j-fnb`, `portainer`) không bị đụng.

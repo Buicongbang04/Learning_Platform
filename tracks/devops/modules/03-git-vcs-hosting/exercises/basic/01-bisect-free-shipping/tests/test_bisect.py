@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from testkit import Exercise, run_sandboxed
+from testkit import Exercise, GitRepo, git_env, run_sandboxed
 
 
 def load_builder():
@@ -39,14 +39,14 @@ def build(tmp_path, home, layout):
 
 
 def sandboxed(cmd, tmp_path, repo, home, timeout=60):
-    return run_sandboxed([str(c) for c in cmd], writable=[tmp_path], cwd=repo, env=shop.git_env(home), timeout=timeout)
+    return run_sandboxed([str(c) for c in cmd], writable=[tmp_path], cwd=repo, env=git_env(home), timeout=timeout)
 
 
 def tgit(tmp_path, repo, home, *args):
     """git sau khi script của người học đã chạy trong repo: cấu hình repo có thể đã bị sửa, nên cũng chạy trong sandbox."""
-    result = sandboxed(["git", *shop.SAFE_CONFIG, *args], tmp_path, repo, home)
-    assert result.returncode == 0, f"git {' '.join(args)}: {result.stderr}"
-    return result.stdout.strip()
+    tainted = GitRepo(repo, home, writable=[tmp_path])
+    tainted.taint()
+    return tainted.out(*args, timeout=60)
 
 
 def check_at(tmp_path, repo, home, sha, script):
@@ -138,7 +138,7 @@ def test_learner_git_config_never_runs_outside_sandbox(tmp_path, tmp_path_factor
     shop.git(repo, home, "checkout", "-q", info["shas"][5])
     shop.git(repo, home, "status", "--porcelain")
     assert not marker.exists(), "Hook do người học cấu hình đã chạy ngoài sandbox"
-    subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, env=shop.git_env(home), capture_output=True)
+    subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, env=git_env(home), capture_output=True)
     assert marker.exists(), "Kiểm tra vô nghĩa: hook giả không chạy cả khi gọi git không bảo vệ"
 
 

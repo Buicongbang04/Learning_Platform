@@ -74,7 +74,7 @@ flowchart TD
 | [M08](milestones/m08-observability.md) | 13 Observability | M06, M07 | metrics, logs, traces; dashboard Grafana và alert rule | pytest |
 | [M09](milestones/m09-game-day.md) | 16 SRE & vận hành | toàn bộ | SLO, game day với sự cố bơm vào, khôi phục, postmortem; tuỳ chọn deploy AWS thật | rubric tự đánh giá |
 
-Milestone M01–M02 có ngay cùng module 00–05; M03–M06 và M07–M09 được thêm cùng các module tương ứng.
+Milestone M01–M06 đã có cùng module 00–11; M07–M09 được thêm cùng các module tương ứng.
 
 ## Cách chấm
 
@@ -98,8 +98,8 @@ SOLUTION=1 uv run pytest tracks/devops/capstone/project/tests -q -rs
 Lệnh đầu chấm code của bạn; lệnh sau chạy bản tham chiếu, phải pass khi đã cài đủ công cụ. Thêm `-k m02` để
 chỉ chạy một milestone.
 
-Test của capstone dựng container bằng `docker run --rm` với cờ ghim CPU từ `testkit.docker_cpu_args()`, đặt tên
-ngẫu nhiên có tiền tố `devops-ex-` và dọn trong `finally`, nên ngắt giữa chừng cũng không để lại container. Trên
+Test của capstone dựng container qua `testkit.DockerLab` với cờ ghim CPU từ `testkit.docker_cpu_args()`, đặt tên
+ngẫu nhiên có tiền tố `devops-ex-` và xoá khi kết thúc, nên lỗi hay ngắt giữa chừng cũng không để lại container. Trên
 máy dùng chung, đặt `DEVOPS_CPUSET` theo máy của bạn (xem [Ghim CPU](../README.md#ghim-cpu-trên-máy-dùng-chung)) và chạy lệnh nặng với `nice -n 15 taskset -c "$DEVOPS_CPUSET"`.
 
 ## Trình bày làm portfolio

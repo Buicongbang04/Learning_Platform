@@ -1,0 +1,18 @@
+docker build starter lỗi (mã 100). 40 dòng cuối:
+#5 [2/5] RUN apt-get update && apt-get install -y build-essential libpq-dev curl
+#5 0.412 Ign:1 http://deb.debian.org/debian trixie InRelease
+#5 0.413 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+#5 0.413 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+#5 10.44 Err:1 http://deb.debian.org/debian trixie InRelease
+#5 10.44   Temporary failure resolving 'deb.debian.org'
+#5 10.44 Err:3 http://deb.debian.org/debian-security trixie-security InRelease
+#5 10.44   Temporary failure resolving 'deb.debian.org'
+#5 10.45 Reading package lists...
+#5 10.46 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Temporary failure resolving 'deb.debian.org'
+#5 10.46 W: Some index files failed to download. They have been ignored, or old ones used instead.
+#5 10.47 Reading package lists...
+#5 10.48 Building dependency tree...
+#5 10.48 E: Unable to locate package build-essential
+#5 ERROR: process "/bin/sh -c apt-get update && apt-get install -y build-essential libpq-dev curl" did not complete successfully: exit code: 100
+------
+ERROR: failed to build: failed to solve: process "/bin/sh -c apt-get update && apt-get install -y build-essential libpq-dev curl" did not complete successfully: exit code: 100

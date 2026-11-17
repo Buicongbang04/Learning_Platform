@@ -1,0 +1,15 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: shop
+  annotations:
+    kubernetes.io/ingress.class: devops-traefik
+spec:
+  rules:
+    - host: shop.lab.olist.test
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: api
+              servicePort: 8000

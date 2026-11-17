@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "olist-api.fullname" . }}
+  labels:
+    {{- include "olist-api.labels" . | nindent 4 }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      {{- include "olist-api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "olist-api.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: api
+          image: "devops-track/olist-shop:1.0"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "olist-api.fullname" . }}
+          env:
+            # TODO: lấy DATABASE_URL từ Secret có sẵn (values.database), không ghi mật khẩu vào chart
+            - name: DATABASE_URL
+              value: postgresql+psycopg://olist:olist-k8s-lab@postgres:5432/olist
+          ports:
+            - name: http
+              containerPort: 8000
+          # TODO: readinessProbe /readyz, livenessProbe /healthz, resources từ values, securityContext

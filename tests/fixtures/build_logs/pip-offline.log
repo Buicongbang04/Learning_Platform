@@ -1,0 +1,40 @@
+docker build net lỗi (mã 1). 40 dòng cuối:
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 195B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12.16-slim-trixie
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/python:3.12.16-slim-trixie@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07
+#4 resolve docker.io/library/python:3.12.16-slim-trixie@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07 0.0s done
+#4 CACHED
+
+#5 [2/2] RUN pip install --no-cache-dir --retries 2 --timeout 3 --index-url https://pypi.invalid/simple python-dateutil==2.9.0.post0
+#5 3.215 Looking in indexes: https://pypi.invalid/simple
+#5 3.226 WARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7cb868c771d0>: Failed to establish a new connection: [Errno -2] Name or service not known')': /simple/python-dateutil/
+#5 3.734 WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7cb868113f80>: Failed to establish a new connection: [Errno -2] Name or service not known')': /simple/python-dateutil/
+#5 3.749 ERROR: Could not find a version that satisfies the requirement python-dateutil==2.9.0.post0 (from versions: none)
+#5 3.784 ERROR: No matching distribution found for python-dateutil==2.9.0.post0
+#5 ERROR: process "/bin/sh -c pip install --no-cache-dir --retries 2 --timeout 3 --index-url https://pypi.invalid/simple python-dateutil==2.9.0.post0" did not complete successfully: exit code: 1
+------
+ > [2/2] RUN pip install --no-cache-dir --retries 2 --timeout 3 --index-url https://pypi.invalid/simple python-dateutil==2.9.0.post0:
+3.215 Looking in indexes: https://pypi.invalid/simple
+3.226 WARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7cb868c771d0>: Failed to establish a new connection: [Errno -2] Name or service not known')': /simple/python-dateutil/
+3.734 WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7cb868113f80>: Failed to establish a new connection: [Errno -2] Name or service not known')': /simple/python-dateutil/
+3.749 ERROR: Could not find a version that satisfies the requirement python-dateutil==2.9.0.post0 (from versions: none)
+3.784 ERROR: No matching distribution found for python-dateutil==2.9.0.post0
+------
+Dockerfile:2
+--------------------
+   1 |     FROM python:3.12.16-slim-trixie
+   2 | >>> RUN pip install --no-cache-dir --retries 2 --timeout 3 --index-url https://pypi.invalid/simple python-dateutil==2.9.0.post0
+   3 |     
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c pip install --no-cache-dir --retries 2 --timeout 3 --index-url https://pypi.invalid/simple python-dateutil==2.9.0.post0" did not complete successfully: exit code: 1

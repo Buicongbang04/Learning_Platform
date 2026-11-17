@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-proxy
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      location = /proxy-healthz {
+        access_log off;
+        return 200 "ok\n";
+      }
+      location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Request-ID $request_id;
+        add_header X-Served-By olist-proxy always;
+      }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector:
+    app.kubernetes.io/name: api
+  ports:
+    - name: http
+      port: 80
+      # TODO: trỏ vào cổng của sidecar proxy, không vào api
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      # TODO: init container wait-db chờ postgres:5432 mở (image devops-track/olist-shop:1.0, python)
+      # TODO: native sidecar proxy (nginx:1.30.6-alpine, cổng 8080, cấu hình từ ConfigMap api-proxy ở trên, startupProbe)
+      containers:
+        - name: api
+          image: devops-track/olist-shop:1.0
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: olist-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: olist-db
+                  key: DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}

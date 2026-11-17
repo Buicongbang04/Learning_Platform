@@ -1,0 +1,27 @@
+- name: Đưa bí mật của worker lên máy
+  hosts: workers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Tạo group olist
+      ansible.builtin.group:
+        name: olist
+        system: true
+
+    - name: Tạo thư mục cấu hình
+      ansible.builtin.file:
+        path: /etc/olist-shop
+        state: directory
+        owner: root
+        group: olist
+        mode: "0750"
+
+    - name: Ghi secrets.env
+      ansible.builtin.template:
+        src: templates/secrets.env.j2
+        dest: /etc/olist-shop/secrets.env
+        owner: root
+        group: olist
+        mode: "0640"
+      no_log: true
+      diff: false

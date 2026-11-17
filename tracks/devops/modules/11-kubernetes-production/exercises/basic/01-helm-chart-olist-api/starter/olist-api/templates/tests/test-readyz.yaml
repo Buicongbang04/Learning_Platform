@@ -1,0 +1,1 @@
+# TODO: Pod có annotation helm.sh/hook: test gọi http://<fullname>:<cổng Service>/readyz, thoát 0 khi trả 200

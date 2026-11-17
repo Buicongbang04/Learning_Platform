@@ -1,0 +1,18 @@
+[Unit]
+Description=Olist Shop worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=olist
+Group=olist
+EnvironmentFile={{ olist_worker_env_file }}
+WorkingDirectory=/opt/olist-shop/app
+ExecStart=/opt/olist-shop/.venv/bin/python -m olist_shop.worker
+StateDirectory=olist-shop
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

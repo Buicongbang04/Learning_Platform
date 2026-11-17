@@ -130,14 +130,18 @@ Từ module 10, bài cần Kubernetes dùng chung một cluster kind tên `devop
 khung lệnh như sau:
 
 ```bash
-nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --name devops-lab
-docker update --cpuset-cpus "$DEVOPS_CPUSET" devops-lab-control-plane
-kubectl cluster-info --context kind-devops-lab
-kind delete cluster --name devops-lab
+nice -n 15 taskset -c "$DEVOPS_CPUSET" kind create cluster --config setup/kind/devops-lab.yaml --kubeconfig ~/.kube/devops-lab.yaml
+for node in $(kind get nodes --name devops-lab); do docker update --cpuset-cpus "$DEVOPS_CPUSET" "$node"; done
+kubectl --kubeconfig ~/.kube/devops-lab.yaml cluster-info
+kind delete cluster --name devops-lab --kubeconfig ~/.kube/devops-lab.yaml
 ```
 
+`--kubeconfig ~/.kube/devops-lab.yaml` ở cả lệnh tạo và xoá giữ kind tránh xa `~/.kube/config` và current-context của bạn.
+kind, kubectl (module 10) và act (module 07) cài vào `~/.local/bin`, cùng chỗ với bản mà track MLOps cài; xem
+[Binary dùng chung với track MLOps](../../setup/DEVOPS-TOOLS.md#binary-dùng-chung-với-track-mlops) trước khi cài hay gỡ.
+
 `$DEVOPS_CPUSET` là dải core bạn chọn ở mục [Ghim CPU](#ghim-cpu-trên-máy-dùng-chung) bên dưới. Nếu bạn không
-ghim (máy ít core, `DEVOPS_CPUSET` rỗng hoặc chưa đặt), bỏ `taskset -c "$DEVOPS_CPUSET"` và bỏ dòng `docker update`:
+ghim (máy ít core, `DEVOPS_CPUSET` rỗng hoặc chưa đặt), bỏ `taskset -c "$DEVOPS_CPUSET"` và bỏ dòng `for ... docker update`:
 `taskset` và `docker update` đều báo lỗi khi nhận dải rỗng hoặc dải vượt quá số core của máy.
 
 Test cần cluster tự skip khi `devops-lab` chưa chạy. Xoá cluster khi học xong để trả tài nguyên cho máy.
@@ -168,9 +172,9 @@ Quy ước của track:
 - Lệnh nặng chạy trực tiếp trên máy (build, test, `kind create`) chạy với `nice -n 15 taskset -c "$DEVOPS_CPUSET"`;
   không ghim thì chỉ `nice -n 15`.
 - Container không kế thừa `nice` và `taskset` của lệnh gõ, nên phải ghim bằng `--cpuset-cpus "$DEVOPS_CPUSET"`
-  (hoặc `cpuset` trong compose, đọc cùng biến). Test gọi `docker run` lấy cờ từ `testkit.docker_cpu_args()`:
-  có `DEVOPS_CPUSET` thì dùng giá trị đó, rỗng hoặc chưa đặt thì chỉ ghim `12-35` khi máy có từ 36
-  core trở lên. Test luôn có `--rm` và dọn container trong `finally`.
+  (hoặc `cpuset` trong compose, đọc cùng biến). Test dựng container qua `testkit.DockerLab`, lấy cờ từ
+  `testkit.docker_cpu_args()`: có `DEVOPS_CPUSET` thì dùng giá trị đó, rỗng hoặc chưa đặt thì chỉ ghim `12-35` khi
+  máy có từ 36 core trở lên. Test luôn xoá container mình tạo khi kết thúc, kể cả khi lỗi hay bị Ctrl-C.
 - Mỗi lúc chạy một việc nặng, tắt container và cluster sau mỗi đợt kiểm.
 
 Giải thích chi tiết ở mục "Ghim CPU" của [`setup/DEVOPS-TOOLS.md`](../../setup/DEVOPS-TOOLS.md).

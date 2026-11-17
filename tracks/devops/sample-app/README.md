@@ -33,8 +33,10 @@ flowchart LR
 | GET | `/readyz` | `200 {"db":"ok","redis":"ok"}`; thành phần nào lỗi thì `503` và giá trị `"error"` (readiness) |
 | GET | `/orders/{order_id}` | Đơn hàng, danh sách item, `total` = tổng `price + freight_value`; không có thì `404` |
 | GET | `/stats/revenue-by-state` | `[{"state": "SP", "revenue": 123.45}, ...]` giảm dần, đọc bảng `revenue_by_state` do worker tính |
-| POST | `/jobs/recompute` | Đẩy job `recompute_revenue` vào list Redis `olist:jobs`, trả `202 {"job_id": ...}` |
+| POST | `/jobs/recompute` | Đẩy job `recompute_revenue` vào list Redis `olist:jobs`, trả `202 {"job_id": ...}`; Redis lỗi thì `503 {"error":"redis unavailable"}` |
 | GET | `/metrics` | Prometheus: `http_requests_total{method,path,status}`, `http_request_duration_seconds`, `jobs_enqueued_total` |
+
+Lỗi không lường trước (ví dụ mất kết nối Postgres giữa request) trả `500 {"error":"internal server error"}`, vẫn kèm header `X-Request-ID` để bạn tìm đúng dòng log có traceback. Kết nối Postgres có `connect_timeout` 3 giây, nên DB không trả lời thì request lỗi nhanh thay vì treo.
 
 Nhãn `path` là route template (`/orders/{order_id}`), không phải URL thật; URL không khớp route nào gom
 thành `path="unmatched"`. Nếu dùng URL thật, mỗi order id sinh một time series và Prometheus sẽ nổ

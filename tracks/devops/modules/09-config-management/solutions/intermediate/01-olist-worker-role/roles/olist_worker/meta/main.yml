@@ -1,0 +1,11 @@
+galaxy_info:
+  role_name: olist_worker
+  author: olist-shop-platform
+  description: Cài worker Olist Shop (code, virtualenv, env file, systemd unit) trên Debian
+  license: MIT
+  min_ansible_version: "2.21"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

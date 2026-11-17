@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-reporter
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reporter
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reporter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-reporter
+subjects:
+  - kind: ServiceAccount
+    name: pod-reporter
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod-reporter
+data:
+  report.py: |
+    import json, os, ssl, time, urllib.error, urllib.request
+    root = "/var/run/secrets/kubernetes.io/serviceaccount"
+    namespace = open(f"{root}/namespace").read().strip()
+    server = "https://%s:%s" % (os.environ["KUBERNETES_SERVICE_HOST"], os.environ["KUBERNETES_SERVICE_PORT"])
+    context = ssl.create_default_context(cafile=f"{root}/ca.crt")
+    while True:
+        token = open(f"{root}/token").read().strip()
+        request = urllib.request.Request(f"{server}/api/v1/namespaces/{namespace}/pods",
+                                         headers={"Authorization": f"Bearer {token}"})
+        try:
+            with urllib.request.urlopen(request, context=context, timeout=5) as answer:
+                items = json.load(answer)["items"]
+            ready = [p["metadata"]["name"] for p in items
+                     if any(c["type"] == "Ready" and c["status"] == "True" for c in p["status"].get("conditions", []))]
+            print(json.dumps({"pods": len(items), "ready": len(ready)}), flush=True)
+        except urllib.error.HTTPError as error:
+            print(json.dumps({"error": error.code, "detail": error.read().decode()[:200]}), flush=True)
+        except Exception as error:
+            print(json.dumps({"error": type(error).__name__, "detail": str(error)[:200]}), flush=True)
+        time.sleep(10)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-reporter
+  labels:
+    app.kubernetes.io/name: pod-reporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pod-reporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pod-reporter
+    spec:
+      serviceAccountName: pod-reporter
+      terminationGracePeriodSeconds: 1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: reporter
+          image: devops-track/olist-shop:1.0
+          command: ["python", "/app/report.py"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: script
+              mountPath: /app
+      volumes:
+        - name: script
+          configMap:
+            name: pod-reporter

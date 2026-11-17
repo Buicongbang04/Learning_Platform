@@ -1,0 +1,43 @@
+docker build typo lỗi (mã 1). 40 dòng cuối:
+#1 transferring dockerfile: 141B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12.16-slim-trixie
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/python:3.12.16-slim-trixie@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07
+#4 resolve docker.io/library/python:3.12.16-slim-trixie@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07 0.0s done
+#4 CACHED
+
+#5 [2/2] RUN pip install --no-cache-dir six==1.16.0 nonexistent-olist-pkg==9.9.9
+#5 2.020 Collecting six==1.16.0
+#5 2.020 WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7f3a1c2b8d10>: Failed to establish a new connection: [Errno -3] Temporary failure in name resolution')': /simple/six/
+#5 2.147   Downloading six-1.16.0-py2.py3-none-any.whl.metadata (1.8 kB)
+#5 2.416 ERROR: Could not find a version that satisfies the requirement nonexistent-olist-pkg==9.9.9 (from versions: none)
+#5 2.682 
+#5 2.682 [notice] A new release of pip is available: 25.0.1 -> 26.2.2
+#5 2.682 [notice] To update, run: pip install --upgrade pip
+#5 2.683 ERROR: No matching distribution found for nonexistent-olist-pkg==9.9.9
+#5 ERROR: process "/bin/sh -c pip install --no-cache-dir six==1.16.0 nonexistent-olist-pkg==9.9.9" did not complete successfully: exit code: 1
+------
+ > [2/2] RUN pip install --no-cache-dir six==1.16.0 nonexistent-olist-pkg==9.9.9:
+2.020 Collecting six==1.16.0
+2.020 WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7f3a1c2b8d10>: Failed to establish a new connection: [Errno -3] Temporary failure in name resolution')': /simple/six/
+2.147   Downloading six-1.16.0-py2.py3-none-any.whl.metadata (1.8 kB)
+2.416 ERROR: Could not find a version that satisfies the requirement nonexistent-olist-pkg==9.9.9 (from versions: none)
+2.682 
+2.682 [notice] A new release of pip is available: 25.0.1 -> 26.2.2
+2.682 [notice] To update, run: pip install --upgrade pip
+2.683 ERROR: No matching distribution found for nonexistent-olist-pkg==9.9.9
+------
+Dockerfile:2
+--------------------
+   1 |     FROM python:3.12.16-slim-trixie
+   2 | >>> RUN pip install --no-cache-dir six==1.16.0 nonexistent-olist-pkg==9.9.9
+   3 |     
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c pip install --no-cache-dir six==1.16.0 nonexistent-olist-pkg==9.9.9" did not complete successfully: exit code: 1

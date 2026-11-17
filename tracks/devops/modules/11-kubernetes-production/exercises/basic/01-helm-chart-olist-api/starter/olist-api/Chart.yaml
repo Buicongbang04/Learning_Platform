@@ -1,0 +1,6 @@
+apiVersion: v2
+name: olist-api
+description: API FastAPI của Olist Shop, một thành phần; Postgres và Redis do chart khác hay team khác cung cấp
+type: application
+version: 0.1.0
+appVersion: "1.0"

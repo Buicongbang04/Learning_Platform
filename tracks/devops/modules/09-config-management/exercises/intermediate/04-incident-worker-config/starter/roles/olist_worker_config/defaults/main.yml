@@ -1,0 +1,1 @@
+olist_worker_redis_url: redis://redis.internal:6379/0

@@ -1,0 +1,5 @@
+- name: Cấu hình worker Olist Shop
+  hosts: workers:batch
+  become: true
+  roles:
+    - role: olist_worker_config

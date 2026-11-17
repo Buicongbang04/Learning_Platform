@@ -35,6 +35,8 @@ PROMETHEUS_IMAGE = "prom/prometheus:v3.5.0"
 ALERTMANAGER_IMAGE = "prom/alertmanager:v0.34.1"
 K6_IMAGE = "grafana/k6:1.8.1"
 ACT_INSTALL_HINT = "Chưa cài act. Xem module 08-cicd-for-ml, mục 0"
+ACT_MIN_VERSION = "0.2.80"
+_ACT_DROPPED_ENV = ("GITHUB_", "GH_", "ACTIONS_", "DBUS_", "XDG_", "DOCKER_")
 KIND_CLUSTER = "mlops"
 KUBE_CONTEXT = "kind-mlops"
 KIND_HINT = "Chạy: bash setup/mlops/kind/up.sh (xem module 13-kubernetes-for-ml, mục 0)"
@@ -328,6 +330,9 @@ def act_run(workdir: Path, *args: str, event: str = "push", timeout: int = 600,
     """Chạy workflow bằng `act` (runner image tự build, `--pull=false`, `--bind` thư mục làm việc).
 
     Chỉ đảm bảo không kéo image. Workflow không được dùng `uses:` action từ xa (act sẽ cần mạng và GitHub).
+    act chạy với `HOME` tạm, không mang `GITHUB_*`, `GH_*`, `ACTIONS_*`, `DOCKER_*`, `DBUS_*`, `XDG_*` của máy, luôn nhận
+    secret `GITHUB_TOKEN` giả và có `gh` giả đầu `PATH`: act 0.2.94 chạy `gh auth token` khi thiếu secret này, nên không có
+    các lớp đó thì token GitHub thật của máy lọt vào job.
     Dọn đúng các container của lần chạy này (nhãn `mlops-ex-run=<uuid8>`), không đụng container khác.
     Tuỳ chọn container thêm (vd. `--user uid:gid`) truyền qua `container_options`, không truyền `--container-options`
     trong `args` vì act chỉ giữ giá trị cuối.
@@ -337,16 +342,30 @@ def act_run(workdir: Path, *args: str, event: str = "push", timeout: int = 600,
     binary = shutil.which("act")
     if binary is None:
         pytest.skip(ACT_INSTALL_HINT)
+    testkit.Exercise.require_tool("act", ACT_MIN_VERSION)
     runner = _ensure_image(ACT_RUNNER, ROOT / "setup" / "mlops" / "act-runner")
     run_label = f"mlops-ex-run={uuid.uuid4().hex[:8]}"
     command = [binary, event, "-P", f"ubuntu-latest={runner}", "--pull=false", "--bind",
-               "--container-options", f"--label {LABEL} --label {run_label} {container_options}".strip(), *args]
+               "--container-options", f"--label {LABEL} --label {run_label} {container_options}".strip(),
+               "-s", "GITHUB_TOKEN", *args]
+    root = Path(tempfile.mkdtemp(prefix=f"{PREFIX}act-"))
     try:
-        return subprocess.run(command, cwd=workdir, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        pytest.fail(f"act quá {timeout} giây", pytrace=False)
+        home = root / "home"
+        home.mkdir()
+        env = {k: v for k, v in os.environ.items() if k.upper() != "ACT" and not k.startswith(_ACT_DROPPED_ENV)}
+        env.update(PATH=f"{testkit._act_gh_shim(root)}:{env.get('PATH', '/usr/local/bin:/usr/bin:/bin')}", HOME=str(home),
+                   DOCKER_HOST=testkit._act_docker_host(), GITHUB_TOKEN=testkit.ACT_DUMMY_GITHUB_TOKEN)
+        try:
+            result = subprocess.run(command, cwd=workdir, capture_output=True, text=True, timeout=timeout, env=env)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"act quá {timeout} giây", pytrace=False)
+        if (root / testkit.ACT_GH_SHIM_MARKER).exists():
+            pytest.fail("act đã gọi `gh` (định lấy token GitHub của máy); act_run phải luôn truyền GITHUB_TOKEN tường minh",
+                        pytrace=False)
+        return result
     finally:
         _remove_labeled_containers(run_label)
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def dvc_sh(repo: Path, cmd: str, args: tuple[str, ...] = (), *, ok: bool = True, env: dict[str, str] | None = None,

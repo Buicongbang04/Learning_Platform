@@ -1,0 +1,46 @@
+- name: Tạo group olist
+  ansible.builtin.group:
+    name: olist
+    system: true
+
+- name: Tạo user olist
+  ansible.builtin.user:
+    name: olist
+    group: olist
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Tạo thư mục cấu hình
+  ansible.builtin.file:
+    path: /etc/olist-shop
+    state: directory
+    owner: root
+    group: olist
+    mode: "0750"
+
+- name: Tạo thư mục dữ liệu thuộc olist
+  ansible.builtin.file:
+    path: "{{ olist_worker_state_dir }}"
+    state: directory
+    owner: olist
+    group: olist
+    mode: "0750"
+
+- name: Ghi env file
+  ansible.builtin.template:
+    src: worker.env.j2
+    dest: "{{ olist_worker_env_file }}"
+    owner: root
+    group: olist
+    mode: "0640"
+  notify: Restart olist-worker
+
+- name: Ghi systemd unit
+  ansible.builtin.template:
+    src: olist-worker.service.j2
+    dest: "{{ olist_worker_unit_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart olist-worker

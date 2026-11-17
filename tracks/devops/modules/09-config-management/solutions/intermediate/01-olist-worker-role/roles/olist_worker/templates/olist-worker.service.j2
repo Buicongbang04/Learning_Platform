@@ -1,0 +1,40 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Olist Shop worker
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User={{ olist_worker_user }}
+Group={{ olist_worker_user }}
+EnvironmentFile={{ olist_worker_config_dir }}/worker.env
+WorkingDirectory={{ olist_worker_home }}/app
+ExecStart={{ olist_worker_home }}/.venv/bin/python -m olist_shop.worker
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+StateDirectory=olist-shop
+UMask=0027
+MemoryMax={{ olist_worker_memory_max }}
+TasksMax=64
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

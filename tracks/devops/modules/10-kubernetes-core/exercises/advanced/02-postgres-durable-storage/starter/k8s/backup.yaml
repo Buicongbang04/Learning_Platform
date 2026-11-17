@@ -1,0 +1,1 @@
+# TODO: PVC pg-backups (StorageClass standard, 1Gi) và CronJob pg-backup chạy pg_dump -Fc mỗi đêm vào PVC đó.

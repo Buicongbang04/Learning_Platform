@@ -1,40 +1,19 @@
-import os
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from testkit import Exercise, run_sandboxed
+from testkit import Exercise, GitRepo, git_env, run_sandboxed
 
 ex = Exercise(__file__)
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="Cần git")
-SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 
 
 @pytest.fixture(autouse=True)
 def git_version():
     ex.require_tool("git", min_version="2.30")
 
-
-def git_env(home: Path) -> dict[str, str]:
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(home),
-        "GIT_CONFIG_GLOBAL": "/dev/null",
-        "GIT_CONFIG_SYSTEM": "/dev/null",
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "Olist Bot",
-        "GIT_AUTHOR_EMAIL": "bot@olist-shop.example",
-        "GIT_COMMITTER_NAME": "Olist Bot",
-        "GIT_COMMITTER_EMAIL": "bot@olist-shop.example",
-        "GIT_AUTHOR_DATE": "2026-07-01T10:00:00+00:00",
-        "GIT_COMMITTER_DATE": "2026-07-01T10:00:00+00:00",
-        "GIT_TERMINAL_PROMPT": "0",
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-    }
 
 
 class Repo:
@@ -45,18 +24,11 @@ class Repo:
         self.path = tmp_path / "olist-shop"
         self.path.mkdir()
         self.counter = 0
-        self.tainted = False
+        self.repo = GitRepo(self.path, self.home, writable=[tmp_path])
         self.git("init", "-q")
 
     def git(self, *args: str, check: bool = True) -> str:
-        cmd = ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args]
-        if self.tainted:
-            result = run_sandboxed(cmd, writable=[self.tmp], cwd=self.path, env=git_env(self.home))
-        else:
-            result = subprocess.run(cmd, cwd=self.path, env=git_env(self.home), capture_output=True, text=True)
-        if check and result.returncode != 0:
-            raise AssertionError(f"git {' '.join(args)}: {result.stderr}")
-        return result.stdout.strip()
+        return self.repo.out("-c", "tag.gpgsign=false", *args, check=check)
 
     def commit(self, message: str, name: str = "CHANGES.txt") -> str:
         self.counter += 1
@@ -69,7 +41,7 @@ class Repo:
         self.git("tag", name, ref)
 
     def release(self, cwd: Path | None = None):
-        self.tainted = True
+        self.repo.taint()
         return run_sandboxed(
             [sys.executable, ex.path("release.py")], writable=[self.tmp], cwd=cwd or self.path, env=git_env(self.home), timeout=30
         )

@@ -1,0 +1,5 @@
+- name: Chuẩn bị máy cho Olist Shop
+  hosts: olist
+  become: true
+  gather_facts: false
+  tasks: []

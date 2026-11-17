@@ -1,9 +1,11 @@
 """Validator nội dung track DevOps: track.json, README, module, bài tập, test dùng Docker."""
 
+import ast
 import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +54,6 @@ SLUG = re.compile(r"^\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$")
 FENCE = re.compile(r"^(```|~~~)")
 H2 = re.compile(r"^## (?!#)(.+)$")
 FRONTMATTER = re.compile(r"^---\n([\s\S]*?)\n---\n?")
-DOCKER_RUN = re.compile(r"""\bdocker["']?(?:\s*,\s*["']|\s+)(?:container["']?(?:\s*,\s*["']|\s+))?run\b""")
 CURL_SUDO = re.compile(r"\b(?:curl|wget)\b.*\|\s*sudo\b(?:\s+-\S+)*\s+(?:ba|z|da)?sh\b")
 IGNORED_PARTS = {"__pycache__", ".pytest_cache"}
 
@@ -193,31 +194,268 @@ def check_exercise_layout(module_dir: Path) -> list[str]:
     return errors
 
 
-def check_docker_test(path: Path) -> list[str]:
-    text = path.read_text(encoding="utf-8")
-    runs = len(DOCKER_RUN.findall(text))
-    if not runs:
-        return []
-    errors = []
-    if text.count("--rm") < runs:
-        errors.append(f"{path}: gọi docker run {runs} lần nhưng thiếu --rm")
-    if text.count("docker_cpu_args(") < 1:
-        errors.append(f"{path}: gọi docker run nhưng không dùng docker_cpu_args()")
-    return errors
+TOOLS = ("docker", "kind", "act", "kubectl", "helm", "tofu")
+SANDBOX_HELPERS = {"run_sandboxed", "sandbox_command"}
+NODE_HELPERS = {"kind_node_exec", "kind_node_cp"}
+TESTKIT_HELPERS = SANDBOX_HELPERS | NODE_HELPERS
+SHELLS = {"sh", "bash", "dash", "zsh"}
+WRAPPERS = {
+    "nice": {"-n", "--adjustment"},
+    "taskset": set(),
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
+    "env": {"-u", "-C", "--unset", "--chdir"},
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-D"},
+    "stdbuf": {"-i", "-o", "-e"},
+    "ionice": {"-c", "-n", "-p", "-P", "-u"},
+    "chrt": {"-T", "-P", "-D"},
+}
+SHELL_SEPARATORS = re.compile(r"[;&|()`\n]")
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+NUMERIC = re.compile(r"^[\d.,:\-]+[smhd]?$")
 
 
-DIRECT_DOCKER = re.compile(
-    r"""\b_docker\s*\(|[\[(]\s*["']docker["']\s*,|\b(?:subprocess\.\w+|os\.system|os\.popen|Popen)\s*\(\s*f?["']docker\s"""
-)
+def call_name(node: ast.AST) -> str:
+    func = node.func if isinstance(node, ast.Call) else node
+    if isinstance(func, ast.Attribute):
+        prefix = func.value.id if isinstance(func.value, ast.Name) else ""
+        return f"{prefix}.{func.attr}" if prefix else func.attr
+    return func.id if isinstance(func, ast.Name) else ""
 
 
-def check_docker_via_lab(path: Path) -> list[str]:
-    """Test bài tập chỉ được dùng Docker qua testkit.DockerLab (tên, nhãn, --rm, cpuset, giới hạn, dọn dẹp)."""
+def is_command_sink(node: ast.Call) -> bool:
+    name = call_name(node)
+    if name.split(".")[-1] in TESTKIT_HELPERS:
+        return False
+    if name.startswith(("subprocess.", "os.exec", "os.spawn", "asyncio.create_subprocess_")) or name in {"os.system", "os.popen"}:
+        return True
+    if isinstance(node.func, ast.Name):
+        lowered = node.func.id.lower()
+        return node.func.id == "Popen" or "run" in lowered or "exec" in lowered
+    return False
+
+
+def string_value(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(v.value if isinstance(v, ast.Constant) else "{}" for v in node.values)
+    return None
+
+
+def command_tool(words: list[str | None]) -> str | None:
+    """Công cụ bị cấm mà argv `words` thực sự chạy, sau khi bỏ `VAR=x`, wrapper (nice, taskset, timeout, env, sudo,
+    stdbuf, ionice, chrt) cùng tuỳ chọn của nó, và đi vào `sh/bash -<cờ>c "<script>"`. `None` trong `words` là giá trị
+    không biết lúc tĩnh."""
+    i = 0
+    while i < len(words) and words[i] is not None and ASSIGNMENT.match(words[i]):
+        i += 1
+    while i < len(words) and words[i] is not None:
+        name = Path(words[i]).name
+        if name in TOOLS:
+            return name
+        if name in SHELLS:
+            for j in range(i + 1, len(words)):
+                flag = words[j]
+                if flag is None or not flag.startswith("-"):
+                    return None
+                if not flag.startswith("--") and "c" in flag[1:]:
+                    script = words[j + 1] if j + 1 < len(words) else None
+                    return shell_tool(script) if script is not None else None
+            return None
+        if name not in WRAPPERS:
+            return None
+        options = WRAPPERS[name]
+        i += 1
+        while i < len(words) and words[i] is not None:
+            word = words[i]
+            if word.startswith("-"):
+                i += 2 if word in options else 1
+            elif ASSIGNMENT.match(word) or NUMERIC.match(word):
+                i += 1
+            else:
+                break
+    return None
+
+
+def shell_tool(script: str) -> str | None:
+    for segment in SHELL_SEPARATORS.split(script):
+        tool = command_tool([word.strip("'\"") for word in segment.split()])
+        if tool:
+            return tool
+    return None
+
+
+def which_aliases(tree: ast.AST) -> dict[str, str]:
+    names = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            tool = which_tool(node.value)
+            if tool:
+                names.update({t.id: tool for t in node.targets if isinstance(t, ast.Name)})
+    return names
+
+
+def which_tool(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Call) and call_name(node) == "shutil.which" and node.args:
+        return string_value(node.args[0])
+    return None
+
+
+def assigned_values(tree: ast.AST) -> dict[str, list[ast.AST]]:
+    values: dict[str, list[ast.AST]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    values.setdefault(target.id, []).append(node.value)
+    return values
+
+
+def command_candidates(node: ast.AST, values: dict[str, list[ast.AST]], depth: int = 0) -> list[ast.AST]:
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return command_candidates(node.left, values, depth)
+    if isinstance(node, ast.Name) and depth < 3:
+        return [c for value in values.get(node.id, []) for c in command_candidates(value, values, depth + 1)]
+    return [node]
+
+
+def element_word(node: ast.AST, aliases: dict[str, str]) -> str | None:
+    if isinstance(node, ast.Name):
+        return aliases.get(node.id)
+    return which_tool(node) or string_value(node)
+
+
+def candidate_tool(node: ast.AST, aliases: dict[str, str]) -> str | None:
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return command_tool([element_word(e, aliases) for e in node.elts])
+    if isinstance(node, ast.Name) and node.id in aliases:
+        return aliases[node.id]
+    text = which_tool(node) or string_value(node)
+    return shell_tool(text) if text is not None else None
+
+
+def sink_argument(node: ast.Call) -> ast.AST | None:
+    if node.args:
+        return node.args[0]
+    return next((kw.value for kw in node.keywords if kw.arg in {"args", "cmd"}), None)
+
+
+def is_literal(node: ast.AST, kind=str) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, kind)
+
+
+def node_call_problem(call: ast.Call, name: str) -> str | None:
+    """Đối số không phải hằng của `kind_node_exec`/`kind_node_cp`: node và lệnh (với cp: node và đường dẫn trong node) phải
+    là chuỗi viết sẵn, `input` là chuỗi viết sẵn, `to_node` là True/False viết sẵn, không `*args`/`**kwargs`."""
+    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(kw.arg is None for kw in call.keywords):
+        return "không nhận *args hay **kwargs"
+    keywords = {kw.arg: kw.value for kw in call.keywords}
+    allowed = {"timeout", "input"} if name == "kind_node_exec" else {"timeout", "to_node"}
+    if set(keywords) - allowed:
+        return f"không nhận {sorted(set(keywords) - allowed)}"
+    if "input" in keywords and not is_literal(keywords["input"]):
+        return "input phải là chuỗi viết sẵn"
+    if name == "kind_node_exec":
+        fixed = call.args
+    else:
+        if "to_node" in keywords and not is_literal(keywords["to_node"], bool):
+            return "to_node phải là True hay False viết sẵn"
+        inside = 2 if "to_node" in keywords and keywords["to_node"].value else 1
+        fixed = [call.args[0]] + ([call.args[inside]] if len(call.args) > inside else []) if call.args else []
+        if len(call.args) < 3:
+            return "cần node, nguồn, đích"
+    if not fixed or not all(is_literal(arg) for arg in fixed):
+        return "node và lệnh (đường dẫn trong node) phải là chuỗi viết sẵn, không lấy từ biến, f-string hay bài của người học"
+    return None
+
+
+def node_helper_problems(tree: ast.AST) -> set[tuple[int, str]]:
+    found: set[tuple[int, str]] = set()
+    called = {id(node.func): node for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    for node in ast.walk(tree):
+        name = node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else None
+        if isinstance(node, ast.alias) and node.name in NODE_HELPERS and node.asname not in (None, node.name):
+            found.add((node.lineno, f"{node.name} đổi tên khi import"))
+        if name not in NODE_HELPERS:
+            continue
+        call = called.get(id(node))
+        if call is None:
+            found.add((node.lineno, f"{name} chỉ được gọi trực tiếp, không gán hay truyền đi"))
+            continue
+        problem = node_call_problem(call, name)
+        if problem:
+            found.add((node.lineno, f"{name}: {problem}"))
+    return found
+
+
+def check_tool_calls(path: Path) -> list[str]:
+    """Test của module và capstone không gọi docker, kind, act, kubectl, helm, tofu trực tiếp; đi qua helper của testkit
+    (DockerLab, run_sandboxed, sandbox_command, act_run, TofuLab, AnsibleLab, KubeLab, kind_node_exec, kind_node_cp).
+
+    Chỉ xét lệnh thực sự được chạy: tham số đầu (hoặc `args=`/`cmd=`) của một "điểm chạy lệnh": `subprocess.*`,
+    `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `asyncio.create_subprocess_*`, `Popen`, hay hàm cục bộ gọi trần
+    có tên chứa `run`/`exec`. Tham số đó là list/tuple, chuỗi (kể cả f-string), `shutil.which(...)`, hoặc biến gán từ
+    các thứ đó (`["docker"] + extra` lấy vế trái). Lệnh bị bắt khi, sau khi bỏ `VAR=x` và wrapper (nice, taskset,
+    timeout, env, sudo, stdbuf, ionice, chrt) cùng tuỳ chọn, phần tử đầu có `Path(x).name` là công cụ bị cấm, hoặc là
+    `sh/bash -<cờ>c "<script>"` mà script có lệnh như vậy ở đầu một đoạn (tách theo `;`, `&`, `|`, `(`, `)`, backtick,
+    xuống dòng). Ngoài ra mọi chỗ nhắc tới `_docker` của testkit đều bị bắt.
+
+    Vì vậy tuple/list dữ liệu (`for t in ("docker", "kind")`, `parametrize("tool", ["kind"])`, `("kubectl", "1.34")`),
+    dict binary giả, chuỗi, chú thích, `require_tool`, `require_image`, `shutil.which` đứng riêng không bị bắt.
+    `run_sandboxed(`/`sandbox_command(` không phải điểm chạy lệnh: lệnh trong đó chạy trong bwrap, socket Docker và
+    thông tin đăng nhập bị che, nên `run_sandboxed(["tofu", "plan"], ...)` hợp lệ. `kind_node_exec(`/`kind_node_cp(` cũng không
+    phải: testkit chỉ nhận node `devops-lab-*` và argv không qua shell; thay vào đó node, lệnh (với cp: đường dẫn trong node),
+    `input`, `to_node` phải là hằng viết sẵn và hai hàm chỉ được gọi trực tiếp (`node_helper_problems`). Phương thức của lab (`lab.kubectl(...)`, `lab.helm(...)`)
+    là lời gọi thuộc tính nên không bao giờ bị xét.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError as error:
+        return [f"{path}:{error.lineno}: không parse được: {error.msg}"]
+    aliases = which_aliases(tree)
+    values = assigned_values(tree)
+    found: set[tuple[int, str]] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and is_command_sink(node):
+            argument = sink_argument(node)
+            for candidate in command_candidates(argument, values) if argument is not None else []:
+                tool = candidate_tool(candidate, aliases)
+                if tool:
+                    found.add((node.lineno, tool))
+        if isinstance(node, ast.Name) and node.id == "_docker" or isinstance(node, ast.Attribute) and node.attr == "_docker":
+            found.add((node.lineno, "_docker"))
+        elif isinstance(node, ast.alias) and node.name == "_docker":
+            found.add((node.lineno, "_docker"))
     return [
-        f"{path}:{n}: gọi docker trực tiếp; dùng testkit.DockerLab"
-        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
-        if DIRECT_DOCKER.search(line)
+        f"{path}:{line}: gọi {tool} trực tiếp; dùng helper của testkit (DockerLab, run_sandboxed, ...)"
+        for line, tool in sorted(found)
+    ] + [
+        f"{path}:{line}: {problem} (lệnh chạy bằng root trong node privileged chỉ được là argv cố định của testkit)"
+        for line, problem in sorted(node_helper_problems(tree))
     ]
+
+
+def check_node_action_marker(path: Path) -> list[str]:
+    """Test gọi `.node_action(` (cordon, drain, taint worker dùng chung) phải đặt `pytestmark` cấp module có
+    `pytest.mark.kube_nodes`, để chọn hay loại cả tệp (`-m "not kube_nodes"`) khi chạy song song; testkit còn giữ khoá node."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError:
+        return []
+    calls = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "node_action"]
+    if not calls:
+        return []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets):
+            if "pytest.mark.kube_nodes" in ast.unparse(node.value):
+                return []
+    return [f"{path}:{calls[0]}: test dùng node_action phải có pytestmark = pytest.mark.kube_nodes ở cấp module"]
+
+
+def track_test_files() -> list[Path]:
+    roots = [MODULES_DIR, TRACK / "capstone"]
+    return sorted(p for root in roots if root.is_dir() for p in root.rglob("*.py") if "tests" in p.relative_to(root).parts)
 
 
 def check_no_curl_sudo(path: Path) -> list[str]:
@@ -326,14 +564,8 @@ def test_exercises():
     assert_clean([e for d in modules_on_disk() for ex in exercise_dirs(d) for e in check_exercise(ex)])
 
 
-def test_docker_run_tests_use_rm_and_cpuset():
-    files = [p for p in TRACK.rglob("*.py") if "tests" in p.relative_to(TRACK).parts]
-    assert_clean([e for p in files for e in check_docker_test(p)])
-
-
-def test_docker_only_through_docker_lab():
-    files = [p for p in TRACK.rglob("*.py") if "tests" in p.relative_to(TRACK).parts]
-    assert_clean([e for p in files for e in check_docker_via_lab(p)])
+def test_tools_only_through_helpers():
+    assert_clean([e for p in track_test_files() for e in check_tool_calls(p)])
 
 
 def test_no_curl_pipe_sudo_in_markdown():
@@ -534,37 +766,149 @@ def test_exercise_layout_basic_minimum_and_bad_level(tmp_path):
     assert check_exercise_layout(tmp_path / "nothing")
 
 
-def test_docker_test_detection(tmp_path):
-    ok = 'from testkit import docker_cpu_args\ncmd = ["docker", "run", "--rm", *docker_cpu_args(), "nginx"]\n'
-    assert check_docker_test(write(tmp_path / "a.py", ok)) == []
-    assert check_docker_test(write(tmp_path / "b.py", "x = 1\n")) == []
-    no_rm = 'from testkit import docker_cpu_args\ncmd = ["docker", "run", *docker_cpu_args(), "nginx"]\n'
-    assert any("--rm" in e for e in check_docker_test(write(tmp_path / "c.py", no_rm)))
-    no_cpu = "subprocess.run('docker run --rm nginx', shell=True)\n"
-    assert any("docker_cpu_args" in e for e in check_docker_test(write(tmp_path / "d.py", no_cpu)))
-    two = ok + 'cmd2 = ["docker", "container", "run", *docker_cpu_args(), "x"]\n'
-    assert any("--rm" in e for e in check_docker_test(write(tmp_path / "e.py", two)))
-    assert check_docker_test(write(tmp_path / "f.py", 'cmd = ["docker", "ps"]\n# dockerfile running\n')) == []
+TOOL_DENYLIST_BAD = {
+    "list-docker": 'subprocess.run(["docker", "run", "--rm", "nginx"])\n',
+    "tuple-docker": "subprocess.run(('docker', 'ps', '-a'))\n",
+    "list-kind": 'subprocess.run(["kind", "get", "clusters"], check=True)\n',
+    "list-act-via-variable": 'cmd = ["act", "-j", "test"]\nsubprocess.run(cmd)\n',
+    "list-act": 'subprocess.run(["act", "push", "-j", "build", "-P", "ubuntu-latest=node:24"])\n',
+    "local-run-act": 'def run_workflow(c):\n    return subprocess.run(c)\nrun_workflow(["act", "push"])\n',
+    "list-kubectl": 'subprocess.check_output(["kubectl", "get", "pods"])\n',
+    "list-helm": 'subprocess.call(["helm", "install", "x", "chart"])\n',
+    "list-tofu": 'subprocess.check_call(["tofu", "apply", "-auto-approve"])\n',
+    "list-docker-starred": 'subprocess.run(["docker", *args])\n',
+    "list-concat": 'subprocess.run(["docker"] + extra)\n',
+    "args-keyword": 'subprocess.run(args=["helm", "list"])\n',
+    "popen-list": 'Popen(["kubectl", "logs", "-f", "x"])\n',
+    "os-execvp": 'os.execvp("docker", ["docker", "ps"])\n',
+    "asyncio-exec": 'await asyncio.create_subprocess_exec("kubectl", "get", "pods")\n',
+    "local-run-wrapper": 'def run_cmd(c):\n    return subprocess.run(c)\nrun_cmd(["kind", "get", "clusters"])\n',
+    "local-exec-wrapper": 'exec_tool(("tofu", "plan"))\n',
+    "string-subprocess": 'subprocess.check_output("docker run --rm nginx", shell=True)\n',
+    "string-os-system": "os.system('docker rm -f x')\n",
+    "string-os-popen": "os.popen('kubectl get ns').read()\n",
+    "string-popen": 'Popen("helm list", shell=True)\n',
+    "fstring-subprocess": 'subprocess.run(f"kind delete cluster --name {name}", shell=True)\n',
+    "string-after-and": 'subprocess.run("cd x && docker compose up -d", shell=True)\n',
+    "string-newline": 'subprocess.run("echo hi\\ndocker ps", shell=True)\n',
+    "string-backtick": 'subprocess.run("echo `kubectl get ns`", shell=True)\n',
+    "string-variable": 'script = "set -e; helm upgrade x chart"\nsubprocess.run(script, shell=True)\n',
+    "shell-c-list": 'subprocess.run(["bash", "-c", "kubectl apply -f x.yaml"])\n',
+    "shell-lc-list": 'subprocess.run(["bash", "-lc", "helm list"])\n',
+    "shell-ec-list": 'subprocess.run(["/bin/sh", "-ec", "tofu init"])\n',
+    "shell-separate-flags": 'subprocess.run(["bash", "-e", "-c", "act -j build"])\n',
+    "wrapper-nice": 'subprocess.run(["nice", "-n", "15", "docker", "build", "."])\n',
+    "wrapper-taskset": 'subprocess.run(["taskset", "-c", "12-35", "kind", "create", "cluster"])\n',
+    "wrapper-chain": 'subprocess.run(["nice", "-n", "15", "taskset", "-c", "12-35", "docker", "run", "x"])\n',
+    "wrapper-timeout": 'subprocess.run(["timeout", "-s", "KILL", "30", "kubectl", "get", "pods"])\n',
+    "wrapper-env": 'subprocess.run(["env", "-i", "KUBECONFIG=/x", "kubectl", "get", "ns"])\n',
+    "wrapper-sudo": 'subprocess.run(["sudo", "-u", "root", "docker", "ps"])\n',
+    "wrapper-stdbuf": 'subprocess.run(["stdbuf", "-oL", "act", "-l"])\n',
+    "wrapper-ionice": 'subprocess.run(["ionice", "-c", "3", "tofu", "apply"])\n',
+    "wrapper-chrt": 'subprocess.run(["chrt", "-i", "0", "helm", "list"])\n',
+    "wrapper-in-shell-string": 'subprocess.run("nice -n 15 docker build .", shell=True)\n',
+    "assignment-in-shell-string": 'subprocess.run("KUBECONFIG=/x kubectl apply -f y", shell=True)\n',
+    "absolute-path-list": 'subprocess.run(["/usr/bin/docker", "ps"])\n',
+    "absolute-path-string": 'subprocess.run("/usr/local/bin/kubectl get pods", shell=True)\n',
+    "which-alias": 'KUBECTL = shutil.which("kubectl")\nsubprocess.run([KUBECTL, "get", "pods"])\n',
+    "which-inline": 'subprocess.run([shutil.which("docker"), "ps"])\n',
+    "private-docker-call": 'from testkit import _docker\nresult = _docker("run", "--rm", "nginx")\n',
+    "private-docker-attr": 'testkit._docker ("ps")\n',
+    "private-docker-alias": 'from testkit import _docker as d\n',
+    "kind-node-via-docker": 'subprocess.run(["docker", "exec", "devops-lab-control-plane", "etcdctl", "version"])\n',
+    "kind-kubeconfig-direct": 'subprocess.run(["kind", "get", "kubeconfig", "--name", "devops-lab"], capture_output=True)\n',
+    "kubectl-learner-kubeconfig": 'subprocess.run(["kubectl", "--kubeconfig", str(lab.kubeconfig), "get", "pods"])\n',
+    "helm-direct": 'run_helm = subprocess.run\nrun_helm(["helm", "upgrade", "--install", "api", "chart"])\n',
+    "node-exec-variable-node": 'kind_node_exec(node, "etcdctl", "version")\n',
+    "node-exec-variable-arg": 'kind_node_exec("devops-lab-control-plane", "cat", path)\n',
+    "node-exec-fstring": 'kind_node_exec("devops-lab-control-plane", "cat", f"/etc/{name}")\n',
+    "node-exec-learner-value": 'kind_node_exec("devops-lab-control-plane", "etcdctl", ex.read("cmd.txt"))\n',
+    "node-exec-starred": 'kind_node_exec("devops-lab-control-plane", *argv)\n',
+    "node-exec-kwargs": 'kind_node_exec("devops-lab-control-plane", "true", **options)\n',
+    "node-exec-input-variable": 'kind_node_exec("devops-lab-control-plane", "tee", "/root/x", input=text)\n',
+    "node-exec-alias-assign": 'run_in_node = kind_node_exec\n',
+    "node-exec-import-as": 'from testkit import kind_node_exec as k\n',
+    "node-exec-passed": 'retry(testkit.kind_node_exec, "devops-lab-worker", "true")\n',
+    "node-cp-variable-path": 'kind_node_cp("devops-lab-control-plane", snapshot, tmp_path / "snap.db")\n',
+    "node-cp-variable-node-dest": 'kind_node_cp("devops-lab-worker", tmp_path / "x", target, to_node=True)\n',
+    "node-cp-to-node-variable": 'kind_node_cp("devops-lab-worker", "/root/x", tmp_path / "x", to_node=flag)\n',
+}
+
+TOOL_DENYLIST_GOOD = {
+    "docker-lab": 'with DockerLab() as lab:\n    lab.start("web", "nginx:1.30.6-alpine", ports=[80])\n    lab.exec("web", "nginx", "-t")\n',
+    "require-tool": 'ex.require_tool("docker")\nex.require_tool("kind")\n',
+    "require-image": 'ex.require_image("nginx:1.30.6-alpine")\n',
+    "shutil-which": 'if shutil.which("kubectl") is None:\n    pytest.skip("x")\n',
+    "comment-and-string": '# docker run trong chú thích\nmessage = "chạy docker run --rm hoặc kubectl apply"\n',
+    "fake-binaries-dict": 'FAKES = {"docker": FAKE, "kubectl": FAKE}\n',
+    "subscript-key": 'assert result["kind"] == "nxdomain"\n',
+    "data-tuple-loop": 'for t in ("docker", "kind"):\n    ex.require_tool(t)\n',
+    "data-parametrize": '@pytest.mark.parametrize("tool", ["kind", "helm"])\ndef test_x(tool):\n    pass\n',
+    "data-version-pairs": 'PINS = (("kubectl", "1.34"), ("helm", "3.19"))\n',
+    "data-list-unused": 'TOOLS = ["docker", "kind"]\nexpected = ["kubectl", "apply", "-f", "x"]\nassert parse(line) == expected\n',
+    "run-sandboxed-tofu": 'run_sandboxed(["tofu", "plan"], writable=[t], cwd=t, env={})\n',
+    "run-sandboxed-keyword": 'testkit.run_sandboxed(cmd=["kubectl", "version"], writable=[t], cwd=t, env={})\n',
+    "run-sandboxed-variable": 'cmd = ["tofu", "plan"]\nrun_sandboxed(cmd, writable=[t], cwd=t, env={})\n',
+    "sandbox-command-docker": 'argv = sandbox_command(["docker", "version"], writable=[t], cwd=t, env={})\n',
+    "tofu-lab": 'with TofuLab(ex.path("infra")) as lab:\n    lab.init()\n    lab.apply()\n    assert lab.output("bucket")\n',
+    "act-run-helper": 'result = act_run(tmp_path / "project", job="build")\nassert act_job_results(result) == {"build": True}\n',
+    "testkit-act-run": 'testkit.act_run(project, event="push", secrets={"DEPLOY_TOKEN": "x"}, timeout=300)\n',
+    "run-sandboxed-shell-c": 'run_sandboxed(["bash", "-c", "tofu init && tofu plan"], writable=[t], cwd=t, env={})\n',
+    "other-argv": 'subprocess.run(["git", "status"])\nsubprocess.run(["bash", "-c", "echo docker"])\n',
+    "nice-python": 'subprocess.run(["nice", "-n", "15", "python3", "x.py"])\n',
+    "wrapper-learner-script": 'subprocess.run(["timeout", "30", "bash", "deploy.sh", "docker"])\n',
+    "learner-script-string": 'subprocess.run("./deploy.sh docker", shell=True)\n',
+    "echo-mentions-tool": 'subprocess.run("echo use kubectl here", shell=True)\n',
+    "kube-lab": 'with KubeLab() as lab:\n    lab.apply_learner(ex.path("k8s"))\n    lab.kubectl("get", "deploy", "api")\n    lab.helm("list")\n',
+    "kube-lab-run-script": 'with KubeLab() as lab:\n    lab.run(["bash", "deploy.sh"], readonly=[ex.target])\n',
+    "kind-node-exec": 'kind_node_exec("devops-lab-control-plane", "etcdctl", "version")\n',
+    "kind-node-exec-kubectl-argv": 'kind_node_exec("devops-lab-control-plane", "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "get", "nodes")\n',
+    "testkit-kind-node-exec": 'testkit.kind_node_exec("devops-lab-worker", "crictl", "ps")\n',
+    "kind-node-cp": 'kind_node_cp("devops-lab-control-plane", "/var/lib/etcd-backup/snap.db", tmp_path / "snap.db")\n',
+    "kind-node-cp-to-node": 'kind_node_cp("devops-lab-worker", tmp_path / "in.txt", "/root/in.txt", to_node=True, timeout=60)\n',
+    "kind-node-exec-input": 'kind_node_exec("devops-lab-worker", "tee", "/root/x", input="devops-ex\\n", timeout=30)\n',
+    "kind-node-import": 'from testkit import kind_node_exec, kind_node_cp\n',
+    "etcd-snapshot": ('kind_node_exec("devops-lab-control-plane", "crictl", "exec", "-q", "--name", "^etcd$", "--state", "running", '
+                      '"etcdctl", "--endpoints=https://127.0.0.1:2379", "--cacert=/etc/kubernetes/pki/etcd/ca.crt", '
+                      '"--cert=/etc/kubernetes/pki/etcd/server.crt", "--key=/etc/kubernetes/pki/etcd/server.key", '
+                      '"snapshot", "save", "/var/lib/etcd/devops-ex-snapshot.db", timeout=120)\n'),
+    "require-kind-images": 'ex.require_kind_images("devops-track/olist-shop:1.0", "postgres:16.15-alpine")\n',
+    "require-gateway": 'ex.require_gateway()\nwith KubeLab() as lab:\n    host = lab.hostname\n',
+    "require-cluster": 'ex.require_cluster()\nex.require_tool("kubectl", "1.33")\nex.require_tool("helm", "3.18")\n',
+}
 
 
-def test_direct_docker_detection(tmp_path):
-    bad = [
-        'from testkit import _docker\nresult = _docker("run", "--rm", "nginx")\n',
-        'subprocess.run(["docker", "run", "--rm", "nginx"])\n',
-        "subprocess.run(('docker', 'ps', '-a'))\n",
-        'subprocess.check_output("docker run --rm nginx", shell=True)\n',
-        "os.system('docker rm -f x')\n",
-        'testkit._docker ("ps")\n',
-    ]
-    for i, text in enumerate(bad):
-        assert check_docker_via_lab(write(tmp_path / f"bad{i}.py", text)), text
-    good = (
-        'ex.require_tool("docker")\n'
-        'with DockerLab() as lab:\n    lab.start("web", "nginx:1.30.6-alpine", ports=[80])\n'
-        'shutil.which("docker")\n'
-        '# docker run trong chú thích\n'
-    )
-    assert check_docker_via_lab(write(tmp_path / "good.py", good)) == []
+@pytest.mark.parametrize("name", TOOL_DENYLIST_BAD)
+def test_validator_tool_denylist(tmp_path, name):
+    errors = check_tool_calls(write(tmp_path / "test_x.py", TOOL_DENYLIST_BAD[name]))
+    assert errors, name
+    assert all("test_x.py:" in e for e in errors)
+
+
+@pytest.mark.parametrize("name", TOOL_DENYLIST_GOOD)
+def test_validator_tool_denylist_allows(tmp_path, name):
+    assert check_tool_calls(write(tmp_path / "test_x.py", TOOL_DENYLIST_GOOD[name])) == []
+
+
+def test_validator_allows_require_tool_with_version(tmp_path):
+    text = 'ex.require_tool("docker", "24")\nex.require_tool("kubectl", min_version="1.34")\nex.require_tool("tofu", "1.10")\n'
+    assert check_tool_calls(write(tmp_path / "test_x.py", text)) == []
+
+
+def test_validator_reports_line_numbers(tmp_path):
+    errors = check_tool_calls(write(tmp_path / "test_x.py", 'x = 1\n\nsubprocess.run(["helm", "list"])\n'))
+    assert len(errors) == 1 and "test_x.py:3:" in errors[0] and "helm" in errors[0]
+
+
+def test_validator_reports_syntax_error(tmp_path):
+    assert check_tool_calls(write(tmp_path / "test_x.py", "def broken(:\n"))
+
+
+def test_validator_scans_module_and_capstone_tests_only():
+    files = track_test_files()
+    assert files and all("tests" in p.relative_to(TRACK).parts for p in files)
+    assert {p.relative_to(TRACK).parts[0] for p in files} <= {"modules", "capstone"}
+    assert any(p.relative_to(TRACK).parts[0] == "capstone" for p in files)
 
 
 def test_curl_pipe_sudo_detection(tmp_path):
@@ -625,3 +969,20 @@ def test_track_json_check_catches_defects():
     data = valid_track()
     del data["modules"][0]["topics"]
     assert any("00-introduction" in e for e in check_track_json(data))
+
+
+def test_node_action_tests_carry_marker():
+    assert_clean([e for p in track_test_files() for e in check_node_action_marker(p)])
+
+
+@pytest.mark.parametrize("source,ok", [
+    ("import pytest\n\npytestmark = pytest.mark.kube_nodes\n\ndef test_x(lab):\n    lab.node_action({})\n", True),
+    ("import pytest\n\npytestmark = [pytest.mark.kube_nodes, pytest.mark.slow]\n\ndef test_x(lab):\n    lab.node_action({})\n", True),
+    ("import pytest\n\n@pytest.mark.kube_nodes\ndef test_x(lab):\n    lab.node_action({})\n", False),
+    ("def test_x(lab):\n    lab.node_action({})\n", False),
+    ("import pytest\n\npytestmark = pytest.mark.slow\n\ndef test_x(lab):\n    lab.node_action({})\n", False),
+    ("def test_x(lab):\n    lab.kubectl('get', 'pods')\n", True),
+])
+def test_node_action_marker_detection(tmp_path, source, ok):
+    path = write(tmp_path / "test_x.py", source)
+    assert (check_node_action_marker(path) == []) is ok

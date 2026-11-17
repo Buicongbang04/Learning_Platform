@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  labels:
+    app.kubernetes.io/name: loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loadgen
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loadgen
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: load
+          image: devops-track/olist-shop:1.0
+          command:
+            - python
+            - -c
+            - |
+              import threading, urllib.request
+              def hit():
+                  while True:
+                      try:
+                          urllib.request.urlopen("http://api:8000/healthz", timeout=2).read()
+                      except Exception:
+                          pass
+              for _ in range(8):
+                  threading.Thread(target=hit, daemon=True).start()
+              threading.Event().wait()
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 128Mi

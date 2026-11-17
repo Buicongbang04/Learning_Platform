@@ -1,0 +1,83 @@
+questions:
+  - id: prod-image-reference
+    kind: knowledge
+    type: single
+    prompt: "Manifest deploy production của Olist Shop nên tham chiếu image API theo cách nào để mọi node chạy đúng một bản đã được quét và duyệt?"
+    options:
+      - { id: a, text: "olist-api:latest, vì CI luôn đẩy bản mới nhất đã qua kiểm thử" }
+      - { id: b, text: "olist-api:1.8.2, vì tag phiên bản semver không bao giờ đổi" }
+      - { id: c, text: "olist-api:1.8.2@sha256:<digest>, tag để người đọc, digest để kéo" }
+      - { id: d, text: "olist-api:main, vì nhánh main luôn là bản đã được review" }
+  - id: tag-rebuilt
+    kind: knowledge
+    type: single
+    prompt: "Bạn pull python:3.12.16-slim-trixie hôm nay và so với bản pull 3 tháng trước trên CI. Digest khác nhau. Giải thích hợp lý nhất?"
+    options:
+      - { id: a, text: "Registry bị tấn công, phải chặn image này ngay lập tức" }
+      - { id: b, text: "Nhà phát hành build lại tag để vá gói Debian, tag giữ nguyên" }
+      - { id: c, text: "Docker tự nén lại layer khi pull nên digest luôn đổi mỗi lần" }
+      - { id: d, text: "Digest phụ thuộc thời điểm pull và máy pull, không có ý nghĩa" }
+  - id: ci-without-daemon
+    kind: knowledge
+    type: single
+    prompt: "Runner CI chạy dạng pod trên Kubernetes, chính sách cấm privileged và cấm mount /var/run/docker.sock. Bạn build image Dockerfile bằng gì?"
+    options:
+      - { id: a, text: "Mount docker.sock từ node vào pod, chỉ cho riêng job build" }
+      - { id: b, text: "Docker-in-Docker với --privileged trong một namespace riêng" }
+      - { id: c, text: "BuildKit chế độ rootless hoặc Buildah rootless trong pod" }
+      - { id: d, text: "Kaniko bản gốc của Google, vì đó là chuẩn được bảo trì" }
+  - id: dev-laptop-no-root-daemon
+    kind: knowledge
+    type: single
+    prompt: "Máy dev RHEL 9 của team cấm daemon chạy root. Dev cần lệnh tương thích docker run, chạy được vài container theo nhóm như pod, sinh được YAML cho Kubernetes. Chọn gì?"
+    options:
+      - { id: a, text: "Podman rootless: không daemon, có pod, podman kube generate" }
+      - { id: b, text: "containerd cộng ctr, vì ctr là CLI chính thức cho người dùng" }
+      - { id: c, text: "LXD, vì system container thay được mọi lệnh của docker run" }
+      - { id: d, text: "Buildah, vì nó chạy container dài hạn và quản lý pod tốt" }
+  - id: kubernetes-node-runtime
+    kind: knowledge
+    type: single
+    prompt: "Từ Kubernetes 1.24 (bỏ dockershim), kubelet trên node của cluster kind và đa số cluster managed nói chuyện với thành phần nào để chạy container?"
+    options:
+      - { id: a, text: "Docker Engine qua socket /var/run/docker.sock trên node" }
+      - { id: b, text: "Một CRI runtime như containerd hoặc CRI-O, dưới là runc" }
+      - { id: c, text: "nerdctl, vì kubelet gọi CLI này mỗi khi cần tạo Pod mới" }
+      - { id: d, text: "Podman, vì nó có khái niệm pod giống hệt Kubernetes" }
+  - id: system-container
+    kind: knowledge
+    type: single
+    prompt: "Team cần môi trường giống một máy Ubuntu đầy đủ (systemd, cron, sshd, nhiều service) để thử playbook Ansible, khởi động trong vài giây, nhẹ hơn VM. Chọn gì?"
+    options:
+      - { id: a, text: "Một container Docker chạy tiến trình sshd làm PID 1" }
+      - { id: b, text: "System container LXD hoặc Incus chạy systemd làm init" }
+      - { id: c, text: "Image distroless vì nó nhỏ và an toàn hơn Ubuntu thật" }
+      - { id: d, text: "Kaniko để dựng máy Ubuntu từ Dockerfile trong cluster" }
+  - id: debug-distroless
+    kind: knowledge
+    type: single
+    prompt: "API chạy image distroless (không shell, không curl) đang trả lỗi lạ trên production. Cách điều tra đúng là gì?"
+    options:
+      - { id: a, text: "Build lại image có bash và curl rồi deploy đè để xem lỗi" }
+      - { id: b, text: "Gắn container debug dùng chung namespace với container lỗi" }
+      - { id: c, text: "Bật --privileged cho container lỗi để exec vào bằng sh" }
+      - { id: d, text: "Chuyển image nền sang ubuntu:latest cho dễ thao tác về sau" }
+  - id: exit-137
+    kind: knowledge
+    type: single
+    prompt: "Worker thoát mã 137 sau vài phút, docker inspect cho State.OOMKilled là true, log không có traceback. Nguyên nhân và hướng xử lý?"
+    options:
+      - { id: a, text: "Worker không bắt SIGTERM: thêm handler tín hiệu cho worker" }
+      - { id: b, text: "Lỗi Python chưa bắt: bọc vòng lặp chính bằng try/except" }
+      - { id: c, text: "Vượt giới hạn RAM của cgroup: đo, sửa rò rỉ hoặc tăng limit" }
+      - { id: d, text: "Healthcheck fail quá số lần retries nên Docker đã kill nó" }
+  - id: reduce-attack-surface
+    kind: knowledge
+    type: multi
+    prompt: "Những thiết lập nào giảm bề mặt tấn công của container API? Chọn mọi đáp án đúng."
+    options:
+      - { id: a, text: "USER không phải root với UID cố định" }
+      - { id: b, text: "read_only: true cho rootfs, tmpfs cho /tmp" }
+      - { id: c, text: "cap_drop: [ALL] và no-new-privileges" }
+      - { id: d, text: "privileged: true để healthcheck đọc được /proc" }
+      - { id: e, text: "Dùng tag latest để luôn có bản vá mới nhất" }

@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pg-restore
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: pg-restore
+          image: postgres:16.15-alpine
+          command:
+            - sh
+            - -ec
+            - |
+              latest="$(ls -1 /backups/olist-*.dump | sort | tail -n 1)"
+              echo "restore từ $latest"
+              pg_restore -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --exit-on-error "$latest"
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: olist-db, key: POSTGRES_USER}
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: {name: olist-db, key: POSTGRES_DB}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: olist-db, key: POSTGRES_PASSWORD}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - name: backups
+              mountPath: /backups
+              readOnly: true
+      volumes:
+        - name: backups
+          persistentVolumeClaim:
+            claimName: pg-backups

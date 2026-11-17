@@ -1,0 +1,137 @@
+questions:
+  - id: lock-file-role
+    kind: knowledge
+    type: single
+    prompt: "Repo IaC của Olist Shop khai báo `version = \"~> 6.0\"` cho hashicorp/aws và commit `.terraform.lock.hcl` đang khoá 6.12.0. Hôm nay registry có 6.20.0. Một đồng nghiệp clone repo rồi chạy `tofu init` (không cờ). Provider nào được cài?"
+    options:
+      - { id: a, text: "6.20.0, vì `~> 6.0` cho phép mọi bản 6.x và `init` luôn chọn bản mới nhất thoả ràng buộc, bất kể lock file" }
+      - { id: b, text: "Lỗi, vì ràng buộc và lock file mâu thuẫn" }
+      - { id: c, text: "6.12.0: lock file giữ bản đã chọn; lên bản mới cần `init -upgrade`" }
+      - { id: d, text: "Bản mới nhất nhưng chỉ khi xoá thư mục `.terraform`" }
+  - id: count-vs-for-each
+    kind: knowledge
+    type: single
+    prompt: "Danh sách `[\"orders\", \"payments\", \"reviews\"]` tạo 3 bucket bằng `count`. Bỏ `payments` khỏi danh sách thì plan làm gì, và cách viết nào tránh được?"
+    options:
+      - { id: a, text: "Chỉ xoá bucket payments; count tự khớp theo giá trị" }
+      - { id: b, text: "Báo lỗi vì count không được giảm" }
+      - { id: c, text: "Không đổi gì, vì state lưu bucket theo tên chứ không theo chỉ số, nên chỉ cần chạy `tofu apply -refresh-only` để đồng bộ" }
+      - { id: d, text: "Thay thế bucket ở chỉ số 1 và xoá chỉ số 2; dùng `for_each` theo tên" }
+  - id: data-vs-resource
+    kind: knowledge
+    type: single
+    prompt: "Bạn cần ID của VPC dùng chung do team network quản bằng một state khác. Cách nào đúng?"
+    options:
+      - { id: a, text: "Đọc bằng `data \"aws_vpc\"` lọc theo tag (hay output được publish)" }
+      - { id: b, text: "Khai báo `resource \"aws_vpc\"` với cùng CIDR để OpenTofu nhận ra VPC cũ" }
+      - { id: c, text: "Chạy `tofu import` VPC đó vào state của bạn để có ID, rồi để hai state cùng quản VPC như nhau" }
+      - { id: d, text: "Chép ID vào `locals` vì data source làm plan chậm" }
+  - id: refresh-only
+    kind: knowledge
+    type: single
+    prompt: "Ai đó tắt versioning của bucket production bằng console. Bạn muốn xem OpenTofu nhận thấy gì khác giữa thực tế và state mà KHÔNG đề xuất sửa hạ tầng. Lệnh nào?"
+    options:
+      - { id: a, text: "`tofu plan -refresh=false`" }
+      - { id: b, text: "`tofu state rm` rồi `tofu import`" }
+      - { id: c, text: "`tofu plan -refresh-only`" }
+      - { id: d, text: "`tofu validate`" }
+  - id: rename-without-recreate
+    kind: knowledge
+    type: single
+    prompt: "Bạn đổi tên `aws_s3_bucket.assets` thành `module.storage.aws_s3_bucket.this[\"assets\"]`. Cách nào được review trong PR và chạy được ở mọi môi trường mà không tạo lại bucket?"
+    options:
+      - { id: a, text: "Thêm khối `moved` vào cấu hình" }
+      - { id: b, text: "Chạy `tofu state mv` bằng tay trên từng môi trường trước khi merge" }
+      - { id: c, text: "Thêm `lifecycle { prevent_destroy = true }` là đủ" }
+      - { id: d, text: "Xoá state rồi import lại toàn bộ" }
+  - id: sensitive-in-state
+    kind: knowledge
+    type: single
+    prompt: "Biến `db_password` có `sensitive = true` và được gán vào `value` của `aws_ssm_parameter`. Phát biểu nào đúng?"
+    options:
+      - { id: a, text: "Mật khẩu không bao giờ nằm trong state vì biến là sensitive" }
+      - { id: b, text: "State luôn được mã hoá phía client ở mọi backend, kể cả backend local, nên mật khẩu trong state không đọc được" }
+      - { id: c, text: "Chỉ cần thêm `.tfstate` vào `.gitignore`" }
+      - { id: d, text: "Mật khẩu vẫn nằm rõ trong state; `sensitive` chỉ che output CLI" }
+  - id: lock-stuck
+    kind: knowledge
+    type: single
+    prompt: "Job CI bị kill giữa `tofu apply`. Lần chạy sau báo `Error acquiring the state lock`, Who: `ci@runner-17`, Created 40 phút trước. Bước đúng trước khi gõ `tofu force-unlock <ID>`?"
+    options:
+      - { id: a, text: "Không cần kiểm gì, force-unlock luôn an toàn" }
+      - { id: b, text: "Chạy lại apply với `-lock=false` cho nhanh, vì khoá đã quá 30 phút thì OpenTofu coi như hết hạn" }
+      - { id: c, text: "Xác nhận không tiến trình nào còn giữ khoá, ghi lại ID, rồi plan sau khi mở" }
+      - { id: d, text: "Xoá bucket state rồi tạo lại" }
+  - id: s3-native-lock
+    kind: knowledge
+    type: single
+    prompt: "OpenTofu từ 1.10 khoá state trên backend s3 thế nào khi đặt `use_lockfile = true`?"
+    options:
+      - { id: a, text: "Tự tạo bảng DynamoDB có tên mặc định `terraform-locks` trong cùng region với bucket state" }
+      - { id: b, text: "Ghi `<key>.tflock` lên bucket bằng PUT có điều kiện" }
+      - { id: c, text: "Không khoá; `use_lockfile` chỉ dành cho backend local" }
+      - { id: d, text: "Dùng S3 Object Lock ở chế độ compliance" }
+  - id: tofu-only-features
+    kind: knowledge
+    type: multi
+    prompt: "Bạn chuẩn bị thi Terraform Associate 004 nhưng làm việc hằng ngày với OpenTofu 1.13. Những tính năng nào CHỈ có ở OpenTofu, không được dùng làm đáp án khi thi Terraform? (chọn mọi đáp án đúng)"
+    options:
+      - { id: a, text: "Khối `encryption` mã hoá state và plan phía client" }
+      - { id: b, text: "Biến và local trong khối `backend` và `source` của module (early evaluation)" }
+      - { id: c, text: "Khối `moved` để đổi địa chỉ tài nguyên" }
+      - { id: d, text: "Cờ `-exclude` và `for_each` trên khối `provider`" }
+      - { id: e, text: "Khối `import` để nhập tài nguyên có sẵn" }
+  - id: workspaces-vs-dirs
+    kind: knowledge
+    type: single
+    prompt: "Olist Shop có dev, staging, prod; prod ở tài khoản AWS riêng, người duyệt riêng, provider khác version tạm thời trong lúc nâng cấp. Chọn cách tổ chức nào?"
+    options:
+      - { id: a, text: "Một thư mục, ba CLI workspace, chọn bằng `tofu workspace select` trước mỗi lần chạy plan và apply" }
+      - { id: b, text: "Một thư mục, ba tệp tfvars, một state chung" }
+      - { id: c, text: "Ba nhánh git dài hạn dev/staging/prod" }
+      - { id: d, text: "Mỗi môi trường một thư mục root gọi chung module có version" }
+  - id: hcp-terraform
+    kind: knowledge
+    type: single
+    prompt: "Đề thi hỏi: tính năng nào của HCP Terraform giúp chặn apply khi plan vi phạm chính sách tổ chức (ví dụ bucket không mã hoá)?"
+    options:
+      - { id: a, text: "`terraform fmt -check`" }
+      - { id: b, text: "Private registry chỉ cho phép dùng các module đã được duyệt và ký bởi tổ chức" }
+      - { id: c, text: "Policy set (Sentinel hay OPA) chạy giữa plan và apply" }
+      - { id: d, text: "Variable set" }
+  - id: tool-choice
+    kind: knowledge
+    type: single
+    prompt: "Team 3 người, chỉ dùng AWS, mọi kỹ sư viết TypeScript, muốn construct cấp cao (một dòng ra bucket có mã hoá, chặn public, policy) và chấp nhận state do AWS giữ. Công cụ nào hợp nhất?"
+    options:
+      - { id: a, text: "OpenTofu với module tự viết, state trên S3 có khoá, cộng một pipeline plan và apply" }
+      - { id: b, text: "AWS CDK (sinh CloudFormation, stack do AWS quản)" }
+      - { id: c, text: "Ansible" }
+      - { id: d, text: "Pulumi với backend tự host" }
+  - id: plan-encryption-ci
+    kind: knowledge
+    type: single
+    prompt: "CI lưu `tfplan` làm artifact giữa job plan và job apply. Rủi ro chính là gì và OpenTofu giải quyết thế nào?"
+    options:
+      - { id: a, text: "Plan chứa giá trị nhạy cảm; mã hoá bằng khối `plan` của `encryption`" }
+      - { id: b, text: "Không có rủi ro, plan chỉ chứa diff" }
+      - { id: c, text: "Plan quá lớn nên artifact tốn dung lượng; nén bằng gzip rồi đặt hạn giữ 90 ngày là đủ" }
+      - { id: d, text: "Plan hết hạn sau 1 giờ nên không cần bảo vệ" }
+  - id: auto-approve
+    kind: knowledge
+    type: single
+    prompt: "Pipeline của Olist Shop có job plan (lưu `tfplan` đã được duyệt) và job apply. Cách dùng `-auto-approve` nào hợp lý?"
+    options:
+      - { id: a, text: "Job apply chạy `tofu apply -auto-approve` không truyền tệp plan, vì plan mới lúc apply luôn cập nhật hơn bản đã duyệt" }
+      - { id: b, text: "Không bao giờ dùng trong CI; luôn để một người gõ `yes` trên runner qua SSH" }
+      - { id: c, text: "Job apply chạy `tofu apply tfplan`: tệp plan đã duyệt không hỏi lại; `-auto-approve` chỉ hợp cho môi trường tạm" }
+      - { id: d, text: "Dùng `-auto-approve` cùng `-lock=false` để job không bị kẹt khi có người đang plan" }
+  - id: provider-inheritance
+    kind: knowledge
+    type: single
+    prompt: "Root có `provider \"aws\" { region = \"us-east-1\" }` và `provider \"aws\" { alias = \"eu\"; region = \"eu-west-1\" }`. Gọi `module \"storage\"` (không khai báo provider bên trong) không có `providers = {}`. Module dùng provider nào?"
+    options:
+      - { id: a, text: "Lỗi: mọi lời gọi module đều phải truyền `providers = { aws = aws }` tường minh, nếu không init sẽ dừng" }
+      - { id: b, text: "Kế thừa `aws` mặc định (us-east-1); muốn `aws.eu` thì truyền `providers`" }
+      - { id: c, text: "Dùng `aws.eu` vì cấu hình có alias được ưu tiên hơn cấu hình mặc định khi có nhiều cấu hình cùng loại" }
+      - { id: d, text: "Mỗi tài nguyên trong module được tạo ở cả hai region" }

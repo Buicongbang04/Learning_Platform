@@ -21,7 +21,7 @@ action từ xa. Cần Docker (đã có từ module 02).
 
 | Công cụ | Phiên bản đã kiểm | Tối thiểu | Ghi chú |
 | --- | --- | --- | --- |
-| `act` | 0.2.89 (phát hành 2026-06-01) | 0.2.80 | Bản cố ý chọn: các bản mới hơn phát hành chưa đủ 2 tuần lúc kiểm |
+| `act` | 0.2.94 | 0.2.80 | Cùng bản với track DevOps (module 07), hai track dùng chung `~/.local/bin/act` |
 | Docker Engine | 29.9 | 24.0 | Runner của `act` là container |
 | Image `mlops-act-runner:1` | `python:3.12.11-slim` + `uv` 0.11.33 + `git` | đúng tag này | Build từ `setup/mlops/act-runner/Dockerfile`, test tự build lần đầu |
 | `ruff` | 0.17.1 (phát hành 2026-10-15) | 0.8 | Test chuẩn bị bằng `uv pip install --target`, cache ở `~/.cache/mlops-ex/` |
@@ -31,15 +31,15 @@ Cài `act` vào `~/.local/bin` (không cần `sudo`), kiểm checksum từ tệp
 
 ```bash
 cd "$(mktemp -d)" &&
-curl -fsSLO https://github.com/nektos/act/releases/download/v0.2.89/act_Linux_x86_64.tar.gz &&
-curl -fsSLO https://github.com/nektos/act/releases/download/v0.2.89/checksums.txt &&
+curl -fsSLO https://github.com/nektos/act/releases/download/v0.2.94/act_Linux_x86_64.tar.gz &&
+curl -fsSLO https://github.com/nektos/act/releases/download/v0.2.94/checksums.txt &&
 sha256sum --check --ignore-missing checksums.txt &&
 mkdir -p ~/.local/bin && tar -xzf act_Linux_x86_64.tar.gz act && install -m 0755 act ~/.local/bin/act &&
 act --version
 ```
 
 Dòng `sha256sum` phải in `act_Linux_x86_64.tar.gz: OK` (hash kỳ vọng
-`0191d6f1f3b716b5c55820032605d05fc3c1cdbf581ebeff655019e5dd1524c0`); lỗi thì dừng, đừng cài. `act --version` phải in `act version 0.2.89`.
+`33e6748e3c07affb6855f19fb7a28bc6c344c1d0888fae0564e6d34d4a71915a`); lỗi thì dừng, đừng cài. `act --version` phải in `act version 0.2.94`.
 Máy ARM thay `x86_64` bằng `arm64` và dùng dòng tương ứng trong cùng tệp checksum.
 
 Build runner image (tuỳ chọn, test tự làm nếu chưa có) và thử một workflow:

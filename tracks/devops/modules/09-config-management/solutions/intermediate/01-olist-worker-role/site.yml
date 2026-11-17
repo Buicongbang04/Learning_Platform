@@ -1,0 +1,5 @@
+- name: Cài và cấu hình worker của Olist Shop
+  hosts: workers
+  become: true
+  roles:
+    - role: olist_worker

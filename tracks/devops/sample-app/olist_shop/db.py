@@ -37,6 +37,8 @@ revenue_by_state = Table(
 
 
 def make_engine(url: str) -> Engine:
+    if url.startswith("postgresql"):
+        return create_engine(url, pool_pre_ping=True, connect_args={"connect_timeout": 3})
     return create_engine(url, pool_pre_ping=True)
 
 

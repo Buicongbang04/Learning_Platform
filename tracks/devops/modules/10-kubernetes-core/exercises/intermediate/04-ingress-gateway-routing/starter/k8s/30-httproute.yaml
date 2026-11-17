@@ -1,0 +1,2 @@
+# TODO: HTTPRoute olist cho host lab.olist.test gắn vào Gateway devops-gateway/public:
+# request có header X-Canary: always luôn tới api-canary; còn lại 90% api-stable, 10% api-canary.

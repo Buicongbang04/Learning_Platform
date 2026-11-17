@@ -1,4 +1,5 @@
 import hashlib
+import os
 import shutil
 import subprocess
 import time
@@ -454,6 +455,44 @@ def test_act_run_skips_without_binary(tmp_path, monkeypatch):
     with pytest.raises(pytest.skip.Exception) as info:
         mlopskit.act_run(tmp_path)
     assert "08-cicd-for-ml" in str(info.value)
+
+
+def _fake_act(tmp_path, monkeypatch, body: str) -> Path:
+    fake = tmp_path / "bin" / "act"
+    fake.parent.mkdir()
+    fake.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setattr(mlopskit.shutil, "which", lambda name: str(fake))
+    monkeypatch.setattr(mlopskit.testkit.Exercise, "require_tool", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(mlopskit, "_ensure_image", lambda tag, context: tag)
+    monkeypatch.setattr(mlopskit, "_remove_labeled_containers", lambda label: None)
+    monkeypatch.setattr(mlopskit.testkit, "_act_docker_host", lambda: "unix:///var/run/docker.sock")
+    monkeypatch.setenv("GITHUB_TOKEN", "gho_realtoken0000")
+    monkeypatch.setenv("GH_TOKEN", "gho_realtoken1111")
+    return fake
+
+
+def test_act_run_never_passes_host_github_token(tmp_path, monkeypatch):
+    seen = tmp_path / "seen"
+    _fake_act(tmp_path, monkeypatch, f'printf "%s\\n" "$@" > {seen}.argv; env > {seen}.env; command -v gh > {seen}.gh')
+    result = mlopskit.act_run(tmp_path)
+    assert result.returncode == 0
+    argv = (tmp_path / "seen.argv").read_text().splitlines()
+    assert argv[argv.index("-s") + 1] == "GITHUB_TOKEN"
+    env = dict(line.split("=", 1) for line in (tmp_path / "seen.env").read_text().splitlines() if "=" in line)
+    assert env["GITHUB_TOKEN"] == testkit.ACT_DUMMY_GITHUB_TOKEN
+    assert "GH_TOKEN" not in env
+    assert env["HOME"] != os.environ["HOME"]
+    assert env["DOCKER_HOST"] == "unix:///var/run/docker.sock"
+    assert "gho_realtoken" not in (tmp_path / "seen.env").read_text()
+    assert (tmp_path / "seen.gh").read_text().strip().endswith("gh-shim/gh")
+
+
+def test_act_run_fails_when_act_calls_gh(tmp_path, monkeypatch):
+    _fake_act(tmp_path, monkeypatch, "gh auth token")
+    with pytest.raises(pytest.fail.Exception) as info:
+        mlopskit.act_run(tmp_path)
+    assert "gh" in str(info.value)
 
 
 def test_k6_run_smoke(tmp_path):

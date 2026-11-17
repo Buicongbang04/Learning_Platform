@@ -51,7 +51,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None,
         start = time.perf_counter()
         status = 500
         try:
-            response = await call_next(request)
+            try:
+                response = await call_next(request)
+            except Exception:
+                logger.exception("lỗi không xử lý được")
+                response = JSONResponse({"error": "internal server error"}, status_code=500)
             status = response.status_code
             response.headers["X-Request-ID"] = rid
             return response
@@ -114,7 +118,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None,
     @app.post("/jobs/recompute", status_code=202)
     def recompute():
         job_id = uuid.uuid4().hex
-        redis_client.rpush(QUEUE, json.dumps({"job_id": job_id, "type": RECOMPUTE_REVENUE}))
+        try:
+            redis_client.rpush(QUEUE, json.dumps({"job_id": job_id, "type": RECOMPUTE_REVENUE}))
+        except redis.RedisError:
+            logger.warning("không đẩy được job vào redis", exc_info=True)
+            return JSONResponse({"error": "redis unavailable"}, status_code=503)
         jobs_enqueued.inc()
         logger.info("job enqueued", extra={"job_id": job_id, "job_type": RECOMPUTE_REVENUE})
         return {"job_id": job_id}

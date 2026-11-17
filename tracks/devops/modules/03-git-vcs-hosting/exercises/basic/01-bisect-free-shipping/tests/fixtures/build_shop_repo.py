@@ -9,13 +9,18 @@ Không đọc cấu hình Git của bạn: HOME, GIT_CONFIG_GLOBAL, GIT_CONFIG_S
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[9]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from testkit import SAFE_GIT_CONFIG, git_env
 
 
 @dataclass(frozen=True)
@@ -43,7 +48,6 @@ MESSAGES = [
 ]
 STATES = ["SP", "RJ", "MG", "RS", "PR", "BA", "SC", "PE", "CE", "GO"]
 BASE_DATE = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
-SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 
 SHIPPING = """import json
 from pathlib import Path
@@ -59,30 +63,10 @@ def shipping_fee(subtotal, state){colon}
 """
 
 
-def git_env(home: Path, when: datetime | None = None) -> dict[str, str]:
-    stamp = (when or BASE_DATE).isoformat()
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(home),
-        "GIT_CONFIG_GLOBAL": "/dev/null",
-        "GIT_CONFIG_SYSTEM": "/dev/null",
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "Olist Dev",
-        "GIT_AUTHOR_EMAIL": "dev@olist-shop.example",
-        "GIT_COMMITTER_NAME": "Olist Dev",
-        "GIT_COMMITTER_EMAIL": "dev@olist-shop.example",
-        "GIT_AUTHOR_DATE": stamp,
-        "GIT_COMMITTER_DATE": stamp,
-        "GIT_TERMINAL_PROMPT": "0",
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-    }
-
-
 def git(repo: Path, home: Path, *args: str, when: datetime | None = None) -> str:
     result = subprocess.run(
-        ["git", *SAFE_CONFIG, "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args],
-        cwd=repo, env=git_env(home, when), capture_output=True, text=True, check=True,
+        ["git", *SAFE_GIT_CONFIG, "-c", "tag.gpgsign=false", *args],
+        cwd=repo, env=git_env(home, date=(when or BASE_DATE).isoformat()), capture_output=True, text=True, check=True,
     )
     return result.stdout.strip()
 
