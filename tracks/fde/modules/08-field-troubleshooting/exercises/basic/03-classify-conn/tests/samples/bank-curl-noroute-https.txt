@@ -1,0 +1,6 @@
+$ curl -v -m 8 https://151.101.0.223/ -o /dev/null
+*   Trying 151.101.0.223...
+* TCP_NODELAY set
+* Immediate connect fail for 151.101.0.223: Network is unreachable
+* Closing connection 0
+curl: (7) Couldn't connect to server

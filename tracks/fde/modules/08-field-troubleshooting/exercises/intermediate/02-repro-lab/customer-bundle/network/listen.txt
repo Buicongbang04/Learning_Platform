@@ -1,0 +1,6 @@
+State   Recv-Q   Send-Q     Local Address:Port      Peer Address:Port  Process  
+LISTEN  0        4096       127.0.0.53%lo:53             0.0.0.0:*              
+LISTEN  0        128              0.0.0.0:22             0.0.0.0:*              
+LISTEN  0        4096             0.0.0.0:18080          0.0.0.0:*              
+LISTEN  0        4096           127.0.0.1:41985          0.0.0.0:*              
+LISTEN  0        128                 [::]:22                [::]:*              

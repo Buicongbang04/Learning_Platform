@@ -59,7 +59,7 @@ blocker, 2048 → blocker `mem`).
 | Bước | Thay đổi máy | Lỗi thì |
 | --- | --- | --- |
 | 1 `sha256sum -c SHA256SUMS`, kiểm danh sách bắt buộc | không | dừng, nêu tên tệp `FAILED`; tệp lạ ngoài danh sách chỉ cảnh báo |
-| 2 preflight: lệnh, Docker, CPU/RAM (chừa 10%)/đĩa theo `REQUIREMENTS.yaml`, registry `/v2/`, cổng | không (đo `df` ở thư mục cha đang có) | dừng |
+| 2 preflight: lệnh, Docker, CPU/RAM (chừa 10%)/đĩa theo `REQUIREMENTS.yaml` (cộng 3 × bundle khi bản này chưa giải nén; cài lại cùng bản không đòi chỗ cho bundle lần nữa), registry `/v2/`, cổng | không (đo `df` ở thư mục cha đang có) | dừng |
 | 3 đọc luồng tar, sha từng tệp theo `manifest.json`, chặn đường dẫn lạ/symlink | không | dừng, nêu `sha256 sai <đường dẫn>` |
 | 4 giải nén vào `releases/.<bản>.partial`, kiểm lại cây, `mv -T`; bản đã có thì kiểm lại cây | `/opt/quillo/releases` | xoá `.partial` (trap), dừng |
 | 5 compose vào `/opt/quillo/bin/docker-compose` (chỉ khi khác) | `/opt/quillo/bin` | dừng |

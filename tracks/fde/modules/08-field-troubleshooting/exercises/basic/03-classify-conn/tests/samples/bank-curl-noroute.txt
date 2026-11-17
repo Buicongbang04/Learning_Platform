@@ -1,0 +1,6 @@
+$ curl -v --connect-timeout 8 http://93.184.215.14/
+*   Trying 93.184.215.14...
+* TCP_NODELAY set
+* Immediate connect fail for 93.184.215.14: Network is unreachable
+* Closing connection 0
+curl: (7) Couldn't connect to server

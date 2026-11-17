@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block nav %}
+<span class="muted">{{ user.name }}</span>
 <form method="post" action="/logout" class="inline"><button type="submit">Sign out</button></form>
 {% endblock %}
 {% block main %}
@@ -15,6 +16,7 @@
   <form hx-post="/ui/documents" hx-encoding="multipart/form-data" hx-target="#uploaded" hx-indicator="#uploading">
     <label for="file">Add a document (PDF, HTML, TXT)</label>
     <input id="file" name="file" type="file" accept=".pdf,.html,.htm,.txt,.md" required>
+    <input name="folder" placeholder="folder, e.g. legal/2024">
     {% if tags_enabled %}<input name="tags" placeholder="tags, comma separated">{% endif %}
     <button type="submit">Upload</button> <span id="uploading" class="htmx-indicator muted">Indexing…</span>
   </form>

@@ -1,0 +1,6 @@
+NAME              IMAGE                                      COMMAND                  SERVICE   CREATED          STATUS                    PORTS
+quillo-api-1      quillo-api:1.0.0                           "uvicorn quillo.app:…"   api       24 seconds ago   Up 22 seconds (healthy)   0.0.0.0:18080->8080/tcp
+quillo-db-1       pgvector/pgvector:0.8.6-pg16               "docker-entrypoint.s…"   db        2 hours ago      Up 34 seconds (healthy)   5432/tcp
+quillo-embed-1    ghcr.io/ggml-org/llama.cpp:server-b11718   "/app/llama-server -…"   embed     2 hours ago      Up 34 seconds (healthy)   
+quillo-llm-1      ghcr.io/ggml-org/llama.cpp:server-b11718   "/app/llama-server -…"   llm       2 hours ago      Up 34 seconds (healthy)   
+quillo-worker-1   quillo-api:1.0.0                           "python -m quillo.in…"   worker    2 hours ago      Up 34 seconds             8080/tcp

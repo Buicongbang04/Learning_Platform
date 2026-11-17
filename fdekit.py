@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import importlib.util
 import fcntl
 import hashlib
 import io
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
 import signal
@@ -24,7 +26,7 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, Literal, Mapping, Sequence
+from typing import Callable, Iterator, Literal, Mapping, Sequence
 
 import pytest
 import yaml
@@ -100,24 +102,47 @@ PROXY_ADDR = "10.0.2.100:3128"
 REGISTRY_ADDR = "10.0.2.101:5000"
 MITMPROXY_IMAGE = "mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f"
 REGISTRY_IMAGE = "registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373"
-SITE_IMAGES = {"proxy": MITMPROXY_IMAGE, "registry": REGISTRY_IMAGE}
+KEYCLOAK_ADDR = "10.0.2.102:8080"
+FILESHARE_ADDR = "10.0.2.103:445"
+KEYCLOAK_IMAGE = ("quay.io/keycloak/keycloak:26.8.1-1"
+                  "@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b")
+SAMBA_IMAGE = ("ghcr.io/servercontainers/samba:smbd-only-a3.24.3-s4.23.8-r0"
+               "@sha256:04fb3bd3da742ddb988f621e8c38b0dcbc26e7b4c438c9836abb43d937bc27e6")
+SITE_IMAGES = {"proxy": MITMPROXY_IMAGE, "registry": REGISTRY_IMAGE, "keycloak": KEYCLOAK_IMAGE,
+               "fileshare": SAMBA_IMAGE}
+EXTRA_SERVICES = ("registry", "keycloak", "fileshare")
+KEYCLOAK_REALM_FILE = SETUP / "keycloak" / "lawfirm-realm.json"
+KEYCLOAK_REALM = "lawfirm"
+KEYCLOAK_CLIENT_ID = "quillo"
+KEYCLOAK_MEMORY = "1024m"
+KEYCLOAK_WAIT = 150
+FILESHARE_USER = "svc-quillo"
+FILESHARE_SHARE = "contracts"
+FILESHARE_MEMORY = "256m"
 
 Egress = Literal["open", "proxy", "none"]
 SELinux = Literal["enforcing", "permissive", "disabled", "n/a"]
 Runtime = Literal["docker", "podman", "k3s", "none"]
-Service = Literal["proxy", "registry"]
+Service = Literal["proxy", "registry", "keycloak", "fileshare"]
 _CHOICES = {
     "egress": ("open", "proxy", "none"),
     "selinux": ("enforcing", "permissive", "disabled", "n/a"),
     "runtime": ("docker", "podman", "k3s", "none"),
 }
 _MEASURED_FACTS = ("kernel_major", "glibc", "disk_free_gb_max", "gpu")
+_NETEM = re.compile(r"[a-z0-9 .%]+")
+_K8S_NAME = re.compile(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?")
+_K8S_PATH = re.compile(r"/[A-Za-z0-9._/-]+")
 
 
 @dataclass(frozen=True)
 class Profile:
     """Hồ sơ khách (setup/fde/profiles/<name>.yaml). `facts` là sự thật để chấm báo cáo survey: kernel_major, glibc,
-    disk_free_gb_max, gpu đo trên golden; cpus/mem_mb là cấu hình `customer_site` mặc định boot; còn lại suy từ hồ sơ."""
+    disk_free_gb_max, gpu đo trên golden; cpus/mem_mb là cấu hình `customer_site` mặc định boot; còn lại suy từ hồ sơ.
+
+    `memory_mb` là RAM `customer_site()`/`vm(profile)` boot mặc định. `tmp_noexec`, `nofile`, `netem` là "tật" được
+    script dựng golden cài vào máy (tmpfs `/tmp` noexec, giới hạn nofile mềm/cứng, `tc netem` trên giao diện ra lúc
+    boot). `k8s` (`namespace`, `kubeconfig` trong VM) chỉ có ở hồ sơ runtime `k3s`."""
 
     name: str
     image: str
@@ -129,6 +154,11 @@ class Profile:
     runtime: Runtime
     services: list[Service] = field(default_factory=list)
     facts: dict = field(default_factory=dict)
+    memory_mb: int = SITE_MEMORY_MB
+    tmp_noexec: bool = False
+    nofile: int | None = None
+    netem: str | None = None
+    k8s: dict | None = None
 
 
 def _load_profile(path: Path) -> Profile:
@@ -139,7 +169,8 @@ def _load_profile(path: Path) -> Profile:
     if data["image"] not in IMAGES:
         raise ValueError(f"{path}: image {data['image']!r} không có trong IMAGES")
     services = list(data.get("services") or [])
-    if not set(services) <= {"proxy", "registry"} or ("proxy" in services) != (data["egress"] == "proxy"):
+    if (not set(services) <= set(SITE_IMAGES) or len(set(services)) != len(services)
+            or ("proxy" in services) != (data["egress"] == "proxy")):
         raise ValueError(f"{path}: services {services} không khớp egress {data['egress']}")
     if data.get("tls_inspection", False) and data["egress"] != "proxy":
         raise ValueError(f"{path}: tls_inspection chỉ dùng với egress proxy")
@@ -152,6 +183,23 @@ def _load_profile(path: Path) -> Profile:
             raise ValueError(f"{path}: facts.{key} phải là chuỗi có ngoặc kép (vd. \"5.10\"), nhận {measured[key]!r}")
     if not int(measured["disk_free_gb_max"]) < int(data["disk_gb"]):
         raise ValueError(f"{path}: facts.disk_free_gb_max phải nhỏ hơn disk_gb")
+    memory_mb = data.get("memory_mb", SITE_MEMORY_MB)
+    if not isinstance(memory_mb, int) or not 512 <= memory_mb <= 5120:
+        raise ValueError(f"{path}: memory_mb phải là số nguyên 512–5120, nhận {memory_mb!r}")
+    nofile = data.get("nofile")
+    if nofile is not None and (not isinstance(nofile, int) or nofile < 64):
+        raise ValueError(f"{path}: nofile phải là số nguyên ≥ 64, nhận {nofile!r}")
+    netem = data.get("netem")
+    if netem is not None and (not isinstance(netem, str) or not _NETEM.fullmatch(netem)):
+        raise ValueError(f"{path}: netem chỉ gồm chữ thường, số, khoảng trắng, '.', '%' (tham số tc netem), nhận {netem!r}")
+    k8s = data.get("k8s")
+    if (k8s is not None) != (data["runtime"] == "k3s"):
+        raise ValueError(f"{path}: k8s (namespace, kubeconfig) có khi và chỉ khi runtime k3s")
+    if k8s is not None:
+        if (not isinstance(k8s, dict) or set(k8s) != {"namespace", "kubeconfig"}
+                or not _K8S_NAME.fullmatch(str(k8s["namespace"])) or not _K8S_PATH.fullmatch(str(k8s["kubeconfig"]))):
+            raise ValueError(f"{path}: k8s phải có namespace (tên DNS-1123) và kubeconfig (đường dẫn tuyệt đối), nhận {k8s!r}")
+        k8s = {"namespace": k8s["namespace"], "kubeconfig": k8s["kubeconfig"]}
     image = IMAGES[data["image"]]
     facts = {
         "os_id": image.os_id,
@@ -159,7 +207,7 @@ def _load_profile(path: Path) -> Profile:
         "kernel_major": measured["kernel_major"],
         "glibc": measured["glibc"],
         "cpus": SITE_CPUS,
-        "mem_mb": SITE_MEMORY_MB,
+        "mem_mb": memory_mb,
         "disk_free_gb_max": int(measured["disk_free_gb_max"]),
         "gpu": measured["gpu"],
         "proxy_url": f"http://{PROXY_ADDR}" if data["egress"] == "proxy" else None,
@@ -170,10 +218,35 @@ def _load_profile(path: Path) -> Profile:
     }
     return Profile(name=path.stem, image=data["image"], disk_gb=int(data["disk_gb"]), sudo=bool(data["sudo"]),
                    egress=data["egress"], tls_inspection=bool(data.get("tls_inspection", False)),
-                   selinux=data["selinux"], runtime=data["runtime"], services=services, facts=facts)
+                   selinux=data["selinux"], runtime=data["runtime"], services=services, facts=facts,
+                   memory_mb=memory_mb, tmp_noexec=bool(data.get("tmp_noexec", False)), nofile=nofile, netem=netem,
+                   k8s=k8s)
+
+
+def _prepare_env(spec: Profile) -> dict[str, str]:
+    """Biến môi trường truyền cho script dựng golden để cài "tật" theo đúng YAML của hồ sơ."""
+    env = {}
+    if spec.tmp_noexec:
+        env["FDE_TMP_NOEXEC"] = "1"
+    if spec.nofile is not None:
+        env["FDE_NOFILE"] = str(spec.nofile)
+    if spec.netem is not None:
+        env["FDE_NETEM"] = spec.netem
+    if spec.k8s is not None:
+        env["FDE_K8S_NAMESPACE"] = spec.k8s["namespace"]
+        env["FDE_KUBECONFIG"] = spec.k8s["kubeconfig"]
+    return env
 
 
 PROFILES: dict[str, Profile] = {path.stem: _load_profile(path) for path in sorted(PROFILE_DIR.glob("*.yaml"))}
+
+
+def _realm_passwords() -> dict[str, str]:
+    realm = json.loads(KEYCLOAK_REALM_FILE.read_text(encoding="utf-8"))
+    return {user["username"]: user["credentials"][0]["value"] for user in realm["users"]}
+
+
+KEYCLOAK_PASSWORDS: dict[str, str] = _realm_passwords()
 
 
 def require_kvm() -> None:
@@ -368,7 +441,7 @@ def _build_golden(spec: Profile, *, force: bool) -> Path:
         raise FileNotFoundError(f"Thiếu script dựng golden {script}")
     require_kvm()
     _require_ssh_tools()
-    _require_memory(SITE_MEMORY_MB)
+    _require_memory(spec.memory_mb)
     golden.parent.mkdir(parents=True, exist_ok=True)
     with (golden.parent / f".{profile}.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -379,13 +452,14 @@ def _build_golden(spec: Profile, *, force: bool) -> Path:
         try:
             subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", _image_format(base), "-b", str(base),
                             str(staging), f"{spec.disk_gb}G"], check=True, capture_output=True, text=True)
-            with vm(None, base=staging, memory_mb=SITE_MEMORY_MB, cpus=SITE_CPUS, restrict=False, sudo=True) as m:
+            with vm(None, base=staging, memory_mb=spec.memory_mb, cpus=SITE_CPUS, restrict=False, sudo=True) as m:
                 status = m.ssh("cloud-init status --wait --long", timeout=600)
                 if status.returncode != 0 or "status: done" not in status.stdout:
                     raise RuntimeError(f"cloud-init của VM dựng golden '{profile}' không xong sạch "
                                        f"(mã {status.returncode}):\n{status.stdout}{status.stderr}")
                 m.put(SCRIPT_DIR, "/tmp/fde-prepare")
-                result = m.ssh(f"sudo bash /tmp/fde-prepare/{shlex.quote(profile)}.sh", timeout=1800)
+                env = " ".join(f"{key}={shlex.quote(value)}" for key, value in _prepare_env(spec).items())
+                result = m.ssh(f"sudo env {env} bash /tmp/fde-prepare/{shlex.quote(profile)}.sh", timeout=1800)
                 (golden.parent / f"{profile}.prepare.log").write_text(result.stdout + result.stderr)
                 if result.returncode != 0:
                     raise RuntimeError(f"Script dựng golden '{profile}' lỗi ({result.returncode}):\n"
@@ -875,10 +949,11 @@ def _new_run_dir(run_id: str) -> Path:
 
 
 @contextmanager
-def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: Sequence[int] = (),
+def vm(profile: str | None, *, memory_mb: int | None = None, cpus: int = 2, forwards: Sequence[int] = (),
        guestfwds: Mapping[str, int] | None = None, base: Path | None = None, restrict: bool | None = None,
        sudo: bool | None = None, cloud_config: Mapping | None = None, run_id: str | None = None) -> Iterator[VM]:
-    """Boot một VM từ overlay qcow2 trên golden của `profile` (hoặc trên `base`), chờ SSH rồi trả `VM`; luôn dọn khi ra.
+    """Boot một VM từ overlay qcow2 trên golden của `profile` (hoặc trên `base`, vd. snapshot dẫn xuất của `derived`),
+    chờ SSH rồi trả `VM`; luôn dọn khi ra. `memory_mb` mặc định theo hồ sơ (`Profile.memory_mb`), không hồ sơ thì 2048.
 
     `guestfwds` ánh xạ "ip:port" phía VM → cổng 127.0.0.1 phía host. `restrict`/`sudo` mặc định theo hồ sơ khách:
     egress `none`/`proxy` ⇒ `restrict=True` (không ra internet, không tới loopback host, trừ forward đã khai báo).
@@ -887,6 +962,8 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
     if run_id is not None and run_id not in _GUARDS:
         raise ValueError(f"run id {run_id!r} không có tiến trình canh; chỉ customer_site truyền run_id")
     restrict, sudo = _vm_defaults(profile, restrict=restrict, sudo=sudo)
+    if memory_mb is None:
+        memory_mb = _profile(profile).memory_mb if profile is not None else SITE_MEMORY_MB
     require_kvm()
     _require_ssh_tools()
     _require_memory(memory_mb)
@@ -944,13 +1021,23 @@ def vm(profile: str | None, *, memory_mb: int = 2048, cpus: int = 2, forwards: S
 
 @dataclass
 class Site:
-    """Một "khách hàng" đang chạy: VM theo hồ sơ cùng dịch vụ phía host (proxy, registry) của đúng run id này."""
+    """Một "khách hàng" đang chạy: VM theo hồ sơ cùng dịch vụ phía host (proxy, registry, keycloak, fileshare) của đúng
+    run id này. Địa chỉ không có hậu tố `_host` là địa chỉ nhìn từ VM; `_host` là cổng 127.0.0.1 phía host.
+    `keycloak_client` là (client id, client secret) của client `quillo`, secret sinh mới mỗi lần chạy."""
 
     vm: VM
     profile: Profile
     proxy_ca: Path | None = None
     registry: str | None = None
     registry_host: str | None = None
+    keycloak: str | None = None
+    keycloak_host: str | None = None
+    keycloak_admin: tuple[str, str] | None = None
+    keycloak_client: tuple[str, str] | None = None
+    fileshare: str | None = None
+    fileshare_host: tuple[str, int] | None = None
+    fileshare_creds: tuple[str, str] | None = None
+    fileshare_dir: Path | None = None
 
 
 class _SiteLab(testkit.DockerLab):
@@ -960,11 +1047,121 @@ class _SiteLab(testkit.DockerLab):
         self.network = f"{PREFIX}{run_id}"
 
 
-def _require_site_images(spec: Profile) -> None:
+def _require_site_images(services: Sequence[str]) -> None:
     if not testkit.docker_ready():
-        pytest.skip("Hồ sơ khách này cần Docker phía host (daemon đang chạy) cho proxy/registry (testkit.DockerLab)")
-    for service in spec.services:
+        pytest.skip(f"Cần Docker phía host (daemon đang chạy) cho {', '.join(services)} (testkit.DockerLab)")
+    for service in services:
         testkit.Exercise.require_image(SITE_IMAGES[service])
+
+
+def _site_services(spec: Profile, extra_services: Sequence[str]) -> list[str]:
+    if isinstance(extra_services, str):
+        raise ValueError(f"extra_services là dãy tên dịch vụ, vd. (\"keycloak\",), nhận chuỗi {extra_services!r}")
+    unknown = [name for name in extra_services if name not in EXTRA_SERVICES]
+    if unknown:
+        raise ValueError(f"extra_services {unknown} không hợp lệ; chọn trong {EXTRA_SERVICES} "
+                         "(proxy đi theo egress của hồ sơ)")
+    services = list(spec.services)
+    services += [name for name in dict.fromkeys(extra_services) if name not in services]
+    return services
+
+
+def _mount_dir(path: Path) -> Path:
+    path.mkdir(mode=0o755)
+    path.chmod(0o755)
+    return path
+
+
+def _start_keycloak(lab: _SiteLab, run_dir: Path) -> tuple[int, tuple[str, str], tuple[str, str]]:
+    """Chạy Keycloak `start-dev --import-realm` với realm `lawfirm`; chưa chờ sẵn sàng (xem `_wait_keycloak`). Mật khẩu
+    admin và client secret của `quillo` sinh mới, nằm trong tệp env ở thư mục lab (0700) được mount chỉ đọc, không qua
+    dòng lệnh `docker run` hay `docker inspect`."""
+    admin = ("admin", secrets.token_urlsafe(18))
+    client = (KEYCLOAK_CLIENT_ID, secrets.token_urlsafe(24))
+    root = _mount_dir(run_dir / "keycloak")
+    imports = _mount_dir(root / "import")
+    shutil.copyfile(KEYCLOAK_REALM_FILE, imports / KEYCLOAK_REALM_FILE.name)
+    (root / "env").write_text(
+        f"export KC_BOOTSTRAP_ADMIN_USERNAME={admin[0]}\n"
+        f"export KC_BOOTSTRAP_ADMIN_PASSWORD={admin[1]}\n"
+        f"export FDE_QUILLO_CLIENT_SECRET={client[1]}\n")
+    command = ". /etc/fde-keycloak/env && exec /opt/keycloak/bin/kc.sh start-dev --import-realm"
+    lab.start("keycloak", KEYCLOAK_IMAGE, "-c", command, entrypoint="/bin/sh", ports=(8080,),
+              mounts=((root / "env", "/etc/fde-keycloak/env"), (imports, "/opt/keycloak/data/import")),
+              env={"KC_HOSTNAME": f"http://{KEYCLOAK_ADDR}"}, memory=KEYCLOAK_MEMORY, pids_limit=1024)
+    return lab.port("keycloak", 8080), admin, client
+
+
+def _wait_keycloak(lab: _SiteLab, url: str, timeout: float = KEYCLOAK_WAIT) -> None:
+    import requests
+
+    discovery = f"{url}/realms/{KEYCLOAK_REALM}/.well-known/openid-configuration"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            response = requests.get(discovery, timeout=3)
+            if response.status_code == 200:
+                return
+        except requests.RequestException:
+            pass
+        if not lab.running("keycloak"):
+            pytest.fail(f"Container keycloak đã dừng. Log:\n{lab.logs('keycloak')[-3000:]}")
+        time.sleep(0.5)
+    pytest.fail(f"Keycloak chưa trả {discovery} sau {timeout:.0f} s. Log:\n{lab.logs('keycloak')[-3000:]}")
+
+
+_SMB_CONF = f"""[global]
+   server role = standalone server
+   security = user
+   passdb backend = smbpasswd
+   map to guest = never
+   restrict anonymous = 2
+   server min protocol = SMB2_10
+   disable netbios = yes
+   smb ports = 445
+   load printers = no
+   printcap name = /dev/null
+   log level = 1
+
+[{FILESHARE_SHARE}]
+   path = /shares/{FILESHARE_SHARE}
+   valid users = {FILESHARE_USER}
+   read only = yes
+   browseable = yes
+   guest ok = no
+"""
+
+_SMB_START = f"""set -eu
+pw=$(sed -n 's/^password = //p' /etc/fde-samba/auth)
+adduser -D -H -s /bin/false {FILESHARE_USER}
+mkdir -p /var/lib/samba/private /run/samba
+printf '%s\\n%s\\n' "$pw" "$pw" | smbpasswd -c /etc/fde-samba/smb.conf -s -a {FILESHARE_USER} >/dev/null
+exec smbd -s /etc/fde-samba/smb.conf -F --no-process-group --debug-stdout
+"""
+
+
+def _start_fileshare(lab: _SiteLab, run_dir: Path) -> tuple[int, tuple[str, str], Path]:
+    """Samba chỉ SMB2/3 trên 445, share `contracts` chỉ đọc cho `svc-quillo` (mật khẩu sinh mới mỗi lần chạy), nội dung
+    là thư mục `fileshare` trong thư mục lab, mount chỉ đọc vào container."""
+    creds = (FILESHARE_USER, secrets.token_urlsafe(18))
+    share = _mount_dir(run_dir / "fileshare")
+    conf = _mount_dir(run_dir / "samba")
+    (conf / "smb.conf").write_text(_SMB_CONF)
+    (conf / "start.sh").write_text(_SMB_START)
+    (conf / "auth").write_text(f"username = {creds[0]}\npassword = {creds[1]}\n")
+    lab.start("fileshare", SAMBA_IMAGE, "/etc/fde-samba/start.sh", entrypoint="/bin/sh", ports=(445,),
+              mounts=((conf, "/etc/fde-samba"), (share, f"/shares/{FILESHARE_SHARE}")), memory=FILESHARE_MEMORY)
+    deadline = time.monotonic() + 60
+    while True:
+        probe = lab.exec("fileshare", "smbclient", f"//127.0.0.1/{FILESHARE_SHARE}", "-s", "/etc/fde-samba/smb.conf",
+                         "-A", "/etc/fde-samba/auth", "-c", "ls")
+        if probe.returncode == 0:
+            break
+        if not lab.running("fileshare") or time.monotonic() > deadline:
+            pytest.fail(f"Samba chưa phục vụ share {FILESHARE_SHARE}: {probe.stdout}{probe.stderr}\n"
+                        f"{lab.logs('fileshare')[-2000:]}")
+        time.sleep(0.3)
+    return lab.port("fileshare", 445), creds, share
 
 
 def _start_proxy(lab: _SiteLab, run_dir: Path, *, tls_inspection: bool) -> Path:
@@ -993,38 +1190,82 @@ def _start_registry(lab: _SiteLab) -> int:
     return port
 
 
+K8S_WAIT = 180
+
+
+def _wait_k8s(machine: VM, spec: Profile, timeout: float = K8S_WAIT) -> None:
+    kubeconfig = shlex.quote(spec.k8s["kubeconfig"])
+    deadline = time.monotonic() + timeout
+    result = None
+    while time.monotonic() < deadline:
+        try:
+            result = machine.ssh(f"kubectl --kubeconfig {kubeconfig} --request-timeout=5s get --raw=/readyz", timeout=30)
+            if result.returncode == 0 and result.stdout.strip() == "ok":
+                return
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(2)
+    detail = f"{result.stdout}{result.stderr}" if result is not None else ""
+    raise RuntimeError(f"API server k3s của {machine.name} chưa sẵn sàng sau {timeout:.0f} s: {detail.strip()}")
+
+
 @contextmanager
-def customer_site(profile: str, *, memory_mb: int = SITE_MEMORY_MB, forwards: Sequence[int] = ()) -> Iterator[Site]:
-    """Dựng "khách hàng" theo hồ sơ: container proxy (mitmproxy, TLS inspection, CA riêng mỗi lần chạy) và/hoặc
-    registry nội bộ phía host (chỉ 127.0.0.1, tên `fde-ex-<run_id>-*`), rồi VM với egress theo hồ sơ. Trong VM:
+def customer_site(profile: str, *, memory_mb: int | None = None, forwards: Sequence[int] = (),
+                  base: Path | None = None, extra_services: Sequence[str] = ()) -> Iterator[Site]:
+    """Dựng "khách hàng" theo hồ sơ: container proxy (mitmproxy, CA riêng mỗi lần chạy; TLS inspection theo hồ sơ)
+    và/hoặc registry nội bộ phía host (chỉ 127.0.0.1, tên `fde-ex-<run_id>-*`), rồi VM với egress theo hồ sơ. Trong VM:
     proxy ở `10.0.2.100:3128`, registry ở `10.0.2.101:5000`. Một tiến trình canh cho cả run id: mọi thứ bị dọn khi ra,
-    kể cả khi pytest bị SIGKILL."""
+    kể cả khi pytest bị SIGKILL. `memory_mb` mặc định `Profile.memory_mb`; `base` (vd. snapshot từ `derived`) thay cho
+    golden, dịch vụ phía host vẫn dựng mới (registry rỗng). Hồ sơ k3s: chờ API server trả `/readyz` qua kubeconfig
+    của `fde` trước khi trả `Site`.
+
+    `extra_services` bật thêm dịch vụ phía host cho một bài mà không cần hồ sơ mới: `registry`, `keycloak` (IdP OIDC,
+    realm `lawfirm`, `10.0.2.102:8080` trong VM, issuer `http://10.0.2.102:8080/realms/lawfirm` dù gọi từ host hay VM),
+    `fileshare` (Samba, `//10.0.2.103/contracts` trong VM, nội dung là `Site.fileshare_dir` phía host). Keycloak được
+    chờ tới khi trả discovery của realm."""
     spec = _profile(profile)
+    services = _site_services(spec, extra_services)
+    if memory_mb is None:
+        memory_mb = spec.memory_mb
     require_golden(profile)
     _require_ssh_tools()
-    _require_memory(memory_mb)
-    if spec.services:
-        _require_site_images(spec)
+    _require_memory(memory_mb + (1024 if "keycloak" in services else 0))
+    if services:
+        _require_site_images(services)
     run_id = uuid.uuid4().hex[:8]
     _ACTIVE.add(run_id)
     try:
         run_dir = _new_run_dir(run_id)
         _GUARDS[run_id] = _spawn_guard(run_dir)
-        if spec.services:
+        if services:
             (run_dir / "containers").touch()
         with _SiteLab(run_id) as lab:
             guestfwds: dict[str, int] = {}
-            proxy_ca = registry = registry_host = None
-            if "proxy" in spec.services:
-                proxy_ca = _start_proxy(lab, run_dir, tls_inspection=spec.tls_inspection)
+            site: dict = {}
+            if "proxy" in services:
+                site["proxy_ca"] = _start_proxy(lab, run_dir, tls_inspection=spec.tls_inspection)
                 guestfwds[PROXY_ADDR] = lab.port("proxy", 8080)
-            if "registry" in spec.services:
+            if "registry" in services:
                 host_port = _start_registry(lab)
                 guestfwds[REGISTRY_ADDR] = host_port
-                registry, registry_host = REGISTRY_ADDR, f"127.0.0.1:{host_port}"
-            with vm(profile, memory_mb=memory_mb, cpus=SITE_CPUS, forwards=forwards, guestfwds=guestfwds,
+                site.update(registry=REGISTRY_ADDR, registry_host=f"127.0.0.1:{host_port}")
+            if "keycloak" in services:
+                host_port, admin, client = _start_keycloak(lab, run_dir)
+                guestfwds[KEYCLOAK_ADDR] = host_port
+                site.update(keycloak=f"http://{KEYCLOAK_ADDR}", keycloak_host=f"http://127.0.0.1:{host_port}",
+                            keycloak_admin=admin, keycloak_client=client)
+            if "fileshare" in services:
+                host_port, creds, share = _start_fileshare(lab, run_dir)
+                guestfwds[FILESHARE_ADDR] = host_port
+                site.update(fileshare=f"//{FILESHARE_ADDR.split(':')[0]}/{FILESHARE_SHARE}",
+                            fileshare_host=("127.0.0.1", host_port), fileshare_creds=creds, fileshare_dir=share)
+            with vm(profile, memory_mb=memory_mb, cpus=SITE_CPUS, forwards=forwards, guestfwds=guestfwds, base=base,
                     run_id=run_id) as machine:
-                yield Site(machine, spec, proxy_ca, registry, registry_host)
+                if spec.k8s is not None:
+                    _wait_k8s(machine, spec)
+                if "keycloak" in services:
+                    _wait_keycloak(lab, site["keycloak_host"])
+                yield Site(machine, spec, **site)
     finally:
         try:
             guard = _GUARDS.pop(run_id, None)
@@ -1033,6 +1274,23 @@ def customer_site(profile: str, *, memory_mb: int = SITE_MEMORY_MB, forwards: Se
             clean(run_id)
         finally:
             _ACTIVE.discard(run_id)
+
+
+def keycloak_token(site: Site, user: str, password: str) -> str:
+    """Access token của `user` trong realm `lawfirm` lấy bằng password grant của client `quillo` qua cổng phía host. Chỉ
+    dùng cho test (luồng thật của quillo là authorization code + PKCE); sai mật khẩu thì `requests.HTTPError`."""
+    import requests
+
+    if site.keycloak_host is None or site.keycloak_client is None:
+        raise ValueError("Site này không bật keycloak; dùng customer_site(..., extra_services=(\"keycloak\",))")
+    response = requests.post(
+        f"{site.keycloak_host}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token",
+        data={"grant_type": "password", "client_id": site.keycloak_client[0], "client_secret": site.keycloak_client[1],
+              "username": user, "password": password, "scope": "openid"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
 
 
 _RELAY_NAME = "guestfwd-relay.py"
@@ -1181,6 +1439,311 @@ def clean(run_id: str) -> None:
                 print(f"Không xoá được {names}: {error}", file=sys.stderr)
 
 
+DERIVED_DIR = SETUP / "derived"
+_DERIVED_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,47}")
+_TREE_SKIP = frozenset({"__pycache__", ".pytest_cache", ".git", ".venv", "node_modules", ".mypy_cache", ".ruff_cache"})
+
+
+def _derived_root() -> Path:
+    return CACHE / "derived"
+
+
+def _golden_sha(path: Path) -> str:
+    """sha256 của golden, nhớ trong tệp `<golden>.sha256` theo inode, kích thước, mtime, ctime (golden vài GB, chỉ được
+    thay bằng `os.replace` nên đổi golden là đổi inode)."""
+    marker = path.with_name(path.name + ".sha256")
+    info = path.stat()
+    stamp = f"{info.st_ino} {info.st_size} {info.st_mtime_ns} {info.st_ctime_ns}"
+    try:
+        sha, seen = marker.read_text().split(" ", 1)
+        if seen.strip() == stamp:
+            return sha
+    except (OSError, ValueError):
+        pass
+    sha = _sha256(path)
+    try:
+        marker.write_text(f"{sha} {stamp}")
+    except OSError:
+        pass
+    return sha
+
+
+def _tree_sha(root: Path) -> str:
+    digest = hashlib.sha256()
+    for current, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in _TREE_SKIP)
+        for name in sorted(files):
+            if name.endswith((".pyc", ".pyo")):
+                continue
+            path = Path(current) / name
+            digest.update(f"{path.relative_to(root).as_posix()}\0{_sha256(path)}\n".encode())
+    return digest.hexdigest()
+
+
+def _input_line(item: Path | str) -> str:
+    if isinstance(item, str):
+        return "str " + json.dumps(item, ensure_ascii=False)
+    path = Path(item)
+    if path.is_file():
+        return f"file {_sha256(path)}"
+    if path.is_dir():
+        return f"dir {_tree_sha(path)}"
+    raise FileNotFoundError(f"không có tệp/thư mục đầu vào {path}")
+
+
+def _resolve_input(item: Path | str) -> Path | str:
+    if isinstance(item, Path) and not item.is_absolute():
+        return ROOT / item
+    return item
+
+
+@dataclass(frozen=True)
+class DerivedSpec:
+    """Snapshot dẫn xuất: golden của `profile` sau khi `build(target)` chạy lời giải tham chiếu trên nó. `target` là
+    `VM` (hoặc `Site` khi `site`). Khoá cache gồm sha golden, tệp đăng ký `source` và từng phần tử `inputs` theo thứ tự
+    (`Path`: sha nội dung tệp/cây thư mục, `str`: chính chuỗi)."""
+
+    name: str
+    profile: str
+    build: Callable[[VM | Site], None] | None
+    inputs: tuple[Path | str, ...] = ()
+    memory_mb: int | None = None
+    site: bool = False
+    source: Path | None = None
+
+    @property
+    def key_inputs(self) -> tuple[Path | str, ...]:
+        return ((self.source,) if self.source is not None else ()) + self.inputs
+
+    def key(self) -> str:
+        golden = golden_path(self.profile)
+        if not golden.is_file():
+            raise FileNotFoundError(f"chưa có golden {golden}")
+        lines = [f"golden {_golden_sha(golden)}"] + [_input_line(item) for item in self.key_inputs]
+        return hashlib.sha256("\n".join(lines).encode()).hexdigest()[:12]
+
+    def path(self) -> Path:
+        return _derived_root() / f"{self.name}-{self.key()}.qcow2"
+
+    def cached(self) -> list[Path]:
+        pattern = re.compile(rf"{re.escape(self.name)}-[0-9a-f]{{12}}\.qcow2")
+        root = _derived_root()
+        return sorted(p for p in root.iterdir() if pattern.fullmatch(p.name)) if root.is_dir() else []
+
+
+def _load_derived(path: Path) -> DerivedSpec:
+    """Nạp `setup/fde/derived/<tên>.py`: hằng `PROFILE`, `INPUTS` (`Path` tương đối gốc repo hoặc tuyệt đối: băm nội
+    dung; `str`: băm chính chuỗi, vd. version hay digest image), `SITE`, `MEMORY_MB` và hàm `build(target)`."""
+    name = path.stem
+    if not _DERIVED_NAME.fullmatch(name):
+        raise ValueError(f"{path}: tên snapshot dẫn xuất chỉ gồm a-z, 0-9, '-'")
+    loader = importlib.util.spec_from_file_location(f"fdekit_derived_{name.replace('-', '_')}", path)
+    module = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(module)
+    profile = getattr(module, "PROFILE", None)
+    if profile not in PROFILES:
+        raise ValueError(f"{path}: PROFILE={profile!r} không phải hồ sơ khách ({', '.join(sorted(PROFILES))})")
+    build = getattr(module, "build", None)
+    if not callable(build):
+        raise ValueError(f"{path}: thiếu hàm build(target)")
+    raw = getattr(module, "INPUTS", [])
+    if isinstance(raw, (str, Path)) or not all(isinstance(item, (str, Path)) for item in raw):
+        raise ValueError(f"{path}: INPUTS phải là list đường dẫn/chuỗi, nhận {raw!r}")
+    inputs = tuple(_resolve_input(item) for item in raw)
+    site = getattr(module, "SITE", False)
+    memory_mb = getattr(module, "MEMORY_MB", None)
+    if not isinstance(site, bool) or not (memory_mb is None or isinstance(memory_mb, int) and 512 <= memory_mb <= 5120):
+        raise ValueError(f"{path}: SITE phải là bool, MEMORY_MB là None hoặc số nguyên 512–5120")
+    return DerivedSpec(name, profile, build, inputs, memory_mb, site, path)
+
+
+DERIVED: dict[str, DerivedSpec] = {path.stem: _load_derived(path) for path in sorted(DERIVED_DIR.glob("*.py"))}
+
+
+def _derive_command(name: str) -> str:
+    return f"uv run python -m fdekit derive {name}"
+
+
+def _derived_spec(name: str, profile: str | None, build: Callable[[VM | Site], None] | None,
+                  inputs: Sequence[Path | str] | None, memory_mb: int | None, site: bool) -> DerivedSpec:
+    if name in DERIVED:
+        spec = DERIVED[name]
+        given = {"profile": profile, "inputs": None if inputs is None else tuple(map(_resolve_input, inputs)),
+                 "memory_mb": memory_mb}
+        registered = {"profile": spec.profile, "inputs": spec.inputs, "memory_mb": spec.memory_mb}
+        clash = [key for key, value in given.items() if value is not None and value != registered[key]]
+        if clash or (site and not spec.site):
+            raise ValueError(f"derived('{name}') khác đăng ký trong {spec.source} ở {', '.join(clash or ['site'])}; "
+                             f"gọi fdekit.derived('{name}') không kèm tham số")
+        return spec
+    raise ValueError(f"Snapshot dẫn xuất '{name}' chưa đăng ký: tạo {DERIVED_DIR / (name + '.py')} (PROFILE, INPUTS, "
+                     f"SITE, MEMORY_MB, build) để `python -m fdekit derive {name}` dựng được")
+
+
+def derived(name: str, profile: str | None = None, build: Callable[[VM | Site], None] | None = None, *,
+            inputs: Sequence[Path | str] | None = None, memory_mb: int | None = None, site: bool = False) -> Path:
+    """Đường dẫn qcow2 của snapshot dẫn xuất `name` (`CACHE/derived/<name>-<key>.qcow2`) để boot bằng
+    `vm(profile, base=...)`/`customer_site(profile, base=...)`. Không bao giờ dựng: thiếu golden, thiếu đầu vào, chưa
+    dựng hay đã cũ (đầu vào đổi nên khoá đổi) thì skip kèm đúng lệnh cần chạy. Tên đã đăng ký trong
+    `setup/fde/derived/` thì chỉ cần `derived(name)`; truyền tham số khác đăng ký là lỗi. Tên chưa đăng ký là
+    `ValueError` (CLI chỉ dựng được tên đã đăng ký)."""
+    spec = _derived_spec(name, profile, build, inputs, memory_mb, site)
+    require_golden(spec.profile)
+    command = _derive_command(name)
+    try:
+        path = spec.path()
+    except FileNotFoundError as error:
+        pytest.skip(f"Thiếu đầu vào của snapshot dẫn xuất '{name}': {error}. Có đủ đầu vào rồi chạy: {command}")
+    if path.is_file():
+        return path
+    if spec.cached():
+        pytest.skip(f"Snapshot dẫn xuất '{name}' đã cũ (golden, lời giải tham chiếu hoặc đầu vào đã đổi). "
+                    f"Chạy lại: {command}")
+    pytest.skip(f"Chưa có snapshot dẫn xuất '{name}'. Chạy một lần: {command}")
+
+
+def _seal_derived(machine: VM, golden: Path, dest: Path) -> None:
+    machine.ssh(": > ~/.ssh/authorized_keys; rm -f ~/.bash_history", timeout=60)
+    machine.shutdown()
+    subprocess.run(["qemu-img", "convert", "-O", "qcow2", "-F", _image_format(golden), "-B", str(golden.resolve()),
+                    str(machine.overlay), str(dest)], check=True, capture_output=True, text=True)
+
+
+def _build_derived(spec: DerivedSpec, *, force: bool = False) -> Path:
+    """Dựng snapshot dẫn xuất (chỉ CLI `derive` và test tự kiểm gọi): dựng golden nếu thiếu, boot `vm`/`customer_site`
+    theo hồ sơ, chạy `spec.build`, xoá key SSH của lần dựng, tắt sạch rồi ghi qcow2 chỉ chứa phần khác golden
+    (backing file là golden). Bản cũ của cùng tên bị xoá. Dịch vụ phía host (registry…) không nằm trong snapshot."""
+    if spec.build is None:
+        raise ValueError(f"Snapshot dẫn xuất '{spec.name}' không có hàm build")
+    golden = prepare(spec.profile)
+    root = _derived_root()
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / f".{spec.name}.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        path = spec.path()
+        if path.is_file() and not force:
+            return path
+        memory_mb = spec.memory_mb or _profile(spec.profile).memory_mb
+        part = path.with_name(path.name + ".part")
+        try:
+            if spec.site:
+                with customer_site(spec.profile, memory_mb=memory_mb) as site:
+                    spec.build(site)
+                    _seal_derived(site.vm, golden, part)
+            else:
+                with vm(spec.profile, memory_mb=memory_mb) as machine:
+                    spec.build(machine)
+                    _seal_derived(machine, golden, part)
+            os.replace(part, path)
+        finally:
+            part.unlink(missing_ok=True)
+        for old in spec.cached():
+            if old != path:
+                old.unlink(missing_ok=True)
+    return path
+
+
+PC_SKIP = "Bài GPU tuỳ chọn: đặt FDE_PC_SSH=user@host trong setup/.env (xem setup/fde/README.md mục PC GPU)"
+_PC_TARGET = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9.-]*")
+_CUDA = re.compile(r"CUDA Version:\s*([0-9.]+)")
+
+
+@dataclass(frozen=True)
+class PC:
+    """PC có GPU của người học (`FDE_PC_SSH=user@host`), SSH bằng khoá người học tự cấu hình. fdekit chỉ ghi và dọn
+    trong `~/fde-ex-<run_id>` trên PC (`workdir`), không đụng gì khác."""
+
+    target: str
+    run_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+
+    def __post_init__(self) -> None:
+        if not _RUN_ID.fullmatch(self.run_id):
+            raise ValueError(f"run id phải là 8 ký tự hex, nhận {self.run_id!r}")
+        if not _PC_TARGET.fullmatch(self.target):
+            raise ValueError(f"PC target phải có dạng user@host, nhận {self.target!r}")
+
+    @property
+    def workdir(self) -> str:
+        return f"{PREFIX}{self.run_id}"
+
+    def ssh(self, cmd: str, *, timeout: float = 60, check: bool = False) -> subprocess.CompletedProcess:
+        """`cmd` là một chuỗi shell chạy trên PC; phần nào không tin cậy phải `shlex.quote` trước."""
+        result = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", self.target, cmd],
+                                capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+        if check and result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+        return result
+
+    def gpu(self) -> dict:
+        """GPU đầu tiên theo `nvidia-smi --query-gpu`: name, memory_mb, driver, cuda (bản CUDA driver hỗ trợ)."""
+        result = self.ssh("nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits"
+                          " && nvidia-smi", timeout=60)
+        if result.returncode != 0:
+            raise RuntimeError(f"nvidia-smi trên {self.target} lỗi ({result.returncode}): "
+                               f"{(result.stdout + result.stderr).strip()}")
+        return _parse_gpu(result.stdout)
+
+    def cleanup(self) -> None:
+        self.ssh(f"rm -rf -- ~/{self.workdir}", timeout=60)
+
+    def __enter__(self) -> PC:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.cleanup()
+
+
+def _parse_gpu(text: str) -> dict:
+    name, memory, driver = (part.strip() for part in text.splitlines()[0].split(","))
+    cuda = _CUDA.search(text)
+    return {"name": name, "memory_mb": int(float(memory)), "driver": driver, "cuda": cuda.group(1) if cuda else None}
+
+
+def require_pc() -> PC:
+    """PC GPU tuỳ chọn; `FDE_PC_SSH` chưa đặt (hoặc không có dạng user@host) thì skip. Không kết nối thử."""
+    value = os.environ.get("FDE_PC_SSH", "").strip()
+    if not value:
+        pytest.skip(PC_SKIP)
+    if not _PC_TARGET.fullmatch(value):
+        pytest.skip(f"FDE_PC_SSH={value!r} không có dạng user@host. {PC_SKIP}")
+    return PC(value)
+
+
+def _derived_status(spec: DerivedSpec) -> str:
+    if not golden_path(spec.profile).is_file():
+        return f"chưa có golden {spec.profile}"
+    try:
+        path = spec.path()
+    except FileNotFoundError as error:
+        return f"thiếu đầu vào: {error}"
+    if path.is_file():
+        return f"có {path}"
+    return "đã cũ" if spec.cached() else "chưa dựng"
+
+
+def _derive_cli(name: str | None, *, force: bool, listing: bool) -> int:
+    if listing:
+        for spec in DERIVED.values():
+            print(f"{spec.name}\t{spec.profile}\t{_derived_status(spec)}")
+        return 0
+    if name not in DERIVED:
+        print(f"Không có snapshot dẫn xuất '{name}'. Có: {', '.join(sorted(DERIVED)) or '(chưa có)'} "
+              f"(đăng ký ở {DERIVED_DIR}/<tên>.py)", file=sys.stderr)
+        return 2
+    started = time.monotonic()
+    try:
+        path = _build_derived(DERIVED[name], force=force)
+    except pytest.skip.Exception as error:
+        print(error.msg, file=sys.stderr)
+        return 2
+    except (RuntimeError, ValueError, subprocess.SubprocessError, OSError) as error:
+        print(error, file=sys.stderr)
+        return 1
+    size = path.stat().st_size / 1024 ** 3
+    print(f"{path} ({size:.2f} GiB, {time.monotonic() - started:.0f} s)")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m fdekit", description="VM khách hàng cho track FDE")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1191,7 +1754,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     cleaner = commands.add_parser("clean", help="dọn mọi thứ của một run id")
     cleaner.add_argument("run_id")
     commands.add_parser("clean-tmp", help="xoá /var/tmp/fde-capstone-* của bạn mà tiến trình tạo ra nó đã chết")
+    derive = commands.add_parser("derive", help="dựng snapshot dẫn xuất đã đăng ký trong setup/fde/derived/")
+    derive.add_argument("name", nargs="?")
+    derive.add_argument("--force", action="store_true")
+    derive.add_argument("--list", action="store_true", help="liệt kê snapshot đã đăng ký và trạng thái cache")
     args = parser.parse_args(argv)
+    if args.command == "derive":
+        return _derive_cli(args.name, force=args.force, listing=args.list)
     if args.command == "prepare":
         started = time.monotonic()
         try:

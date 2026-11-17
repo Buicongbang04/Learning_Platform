@@ -1,0 +1,3 @@
+$ openssl s_client -connect pypi.org:443 -brief </dev/null
+139768289212224:error:2008F002:BIO routines:BIO_lookup_ex:system lib:crypto/bio/b_addr.c:730:Name or service not known
+connect:errno=11

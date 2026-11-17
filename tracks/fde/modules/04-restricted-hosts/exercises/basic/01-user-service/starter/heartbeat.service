@@ -1,0 +1,8 @@
+[Unit]
+Description=Heartbeat agent
+
+[Service]
+ExecStart=/bin/false
+
+[Install]
+WantedBy=

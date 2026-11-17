@@ -1,0 +1,11 @@
+quillo {{ .Chart.AppVersion }} đã cài vào namespace {{ .Release.Namespace }}.
+
+Chờ mọi pod Ready (llm/embed chép model GGUF từ image quillo-models trước khi chạy):
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -w
+
+Kiểm tra:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-api 18080:{{ .Values.service.port }} &
+  curl -s http://127.0.0.1:18080/healthz
+
+Token admin:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "quillo.authSecret" . }} -o jsonpath='{.data.admin-token}' | base64 -d

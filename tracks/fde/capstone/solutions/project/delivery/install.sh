@@ -78,7 +78,10 @@ cpus=$(nproc)
 mem=$(awk '/^MemTotal:/ {printf "%d", $2 / 1024}' /proc/meminfo)
 [ "$cpus" -ge "$min_cpus" ] || die "máy có $cpus CPU, quillo cần tối thiểu $min_cpus"
 [ "$((mem * 10))" -ge "$((min_mem * 9))" ] || die "MemTotal $mem MB, quillo cần tối thiểu $min_mem MB"
-need_mb=$(( $(stat -c %s "$release_tar") / 1048576 * 3 + min_disk * 1024 ))
+need_mb=$(( min_disk * 1024 ))
+if [ ! -d "$prefix/releases/$version" ]; then
+    need_mb=$(( need_mb + $(stat -c %s "$release_tar") / 1048576 * 3 ))
+fi
 existing() { local p=$1; while [ ! -e "$p" ]; do p=$(dirname "$p"); done; printf '%s' "$p"; }
 free_opt=$(df -Pm "$(existing "$prefix")" | awk 'NR==2 {print $4}')
 free_docker=$(df -Pm "$(existing /var/lib/docker)" | awk 'NR==2 {print $4}')

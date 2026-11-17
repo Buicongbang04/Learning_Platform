@@ -1,0 +1,3 @@
+# Values của quillo cho cluster production của công ty luật (namespace quillo).
+image:
+  registry: ""

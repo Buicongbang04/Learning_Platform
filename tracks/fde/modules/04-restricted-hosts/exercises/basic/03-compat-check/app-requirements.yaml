@@ -1,0 +1,12 @@
+app: "ledger-agent 2.0 (wheel manylinux_2_31_x86_64, Python 3.10–3.12)"
+glibc_min: "2.31"
+python_min: "3.10"
+python_max: "3.12"
+os_supported:
+  ubuntu: ["22.04", "24.04"]
+  debian: ["12"]
+  rocky: ["8", "9"]
+as_of: "2026-11-11"
+os_eol:
+  ubuntu:
+    "20.04": "2025-05-31"

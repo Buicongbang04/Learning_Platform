@@ -1,18 +1,20 @@
 name: quillo
 
+x-env: &env
+  QUILLO_DATABASE_URL: postgresql://quillo:${QUILLO_DB_PASSWORD:?Set QUILLO_DB_PASSWORD in .env}@db:5432/quillo
+  QUILLO_ADMIN_TOKEN: ${QUILLO_ADMIN_TOKEN:?Set QUILLO_ADMIN_TOKEN in .env}
+  QUILLO_LLM_URL: http://llm:8080
+  QUILLO_EMBED_URL: http://embed:8080
+  QUILLO_MAX_UPLOAD_MB: ${QUILLO_MAX_UPLOAD_MB:-20}
+  QUILLO_LOG_LEVEL: ${QUILLO_LOG_LEVEL:-INFO}
+
 x-api: &api
   image: quillo-api:${QUILLO_VERSION:?Set QUILLO_VERSION in .env}
   restart: unless-stopped
   read_only: true
   tmpfs: [/tmp]
   security_opt: [no-new-privileges:true]
-  environment:
-    QUILLO_DATABASE_URL: postgresql://quillo:${QUILLO_DB_PASSWORD:?Set QUILLO_DB_PASSWORD in .env}@db:5432/quillo
-    QUILLO_ADMIN_TOKEN: ${QUILLO_ADMIN_TOKEN:?Set QUILLO_ADMIN_TOKEN in .env}
-    QUILLO_LLM_URL: http://llm:8080
-    QUILLO_EMBED_URL: http://embed:8080
-    QUILLO_MAX_UPLOAD_MB: ${QUILLO_MAX_UPLOAD_MB:-20}
-    QUILLO_LOG_LEVEL: ${QUILLO_LOG_LEVEL:-INFO}
+  environment: *env
 
 services:
   db:
@@ -60,6 +62,13 @@ services:
 
   api:
     <<: *api
+    environment:
+      <<: *env
+      QUILLO_ACL: ${QUILLO_ACL:-}
+      QUILLO_OIDC_ISSUER: ${QUILLO_OIDC_ISSUER:-}
+      QUILLO_OIDC_CLIENT_ID: ${QUILLO_OIDC_CLIENT_ID:-}
+      QUILLO_OIDC_GROUPS_CLAIM: ${QUILLO_OIDC_GROUPS_CLAIM:-groups}
+      QUILLO_EXTENSIONS: ${QUILLO_EXTENSIONS:-}
     ports:
       - "${QUILLO_BIND:-127.0.0.1}:${QUILLO_PORT:-18080}:8080"
     depends_on:

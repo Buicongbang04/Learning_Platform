@@ -1,0 +1,10 @@
+# Nạp extension của khách: docker compose -f compose.yaml -f compose.extensions.yaml up -d --wait
+# Mã extension đặt trong ./extensions (vd. ./extensions/acme/report.py), .env có QUILLO_EXTENSIONS=acme.report.
+# Extension lỗi thì api không lên; xem docker compose logs api (log nêu tên module).
+services:
+  api:
+    environment:
+      QUILLO_EXTENSIONS: ${QUILLO_EXTENSIONS:?Set QUILLO_EXTENSIONS in .env}
+      QUILLO_EXTENSIONS_PATH: /opt/quillo/extensions
+    volumes:
+      - ./extensions:/opt/quillo/extensions:ro

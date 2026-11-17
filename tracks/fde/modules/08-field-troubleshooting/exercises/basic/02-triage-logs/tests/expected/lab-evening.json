@@ -1,0 +1,89 @@
+{
+  "services": {
+    "api": {
+      "events": 38,
+      "unparsed": 12
+    },
+    "db": {
+      "events": 0,
+      "unparsed": 88
+    },
+    "embed": {
+      "events": 0,
+      "unparsed": 59
+    },
+    "llm": {
+      "events": 0,
+      "unparsed": 45
+    },
+    "worker": {
+      "events": 10,
+      "unparsed": 0
+    }
+  },
+  "window": {
+    "first": "2026-11-11T03:13:49+0000",
+    "last": "2026-11-11T05:53:08+0000"
+  },
+  "groups": [
+    {
+      "service": "api",
+      "level": "ERROR",
+      "msg": "database lỗi",
+      "count": 2,
+      "first": "2026-11-11T05:49:50+0000",
+      "last": "2026-11-11T05:49:50+0000"
+    },
+    {
+      "service": "worker",
+      "level": "WARNING",
+      "msg": "dịch vụ không với tới, để nguyên tệp và thử lại sau",
+      "count": 4,
+      "first": "2026-11-11T05:49:55+0000",
+      "last": "2026-11-11T05:50:30+0000"
+    },
+    {
+      "service": "api",
+      "level": "ERROR",
+      "msg": "model server lỗi",
+      "count": 2,
+      "first": "2026-11-11T05:51:21+0000",
+      "last": "2026-11-11T05:51:21+0000"
+    }
+  ],
+  "http_5xx": [
+    {
+      "path": "/api/ask",
+      "status": 503,
+      "count": 4,
+      "first": "2026-11-11T05:49:50+0000",
+      "last": "2026-11-11T05:51:21+0000"
+    },
+    {
+      "path": "/healthz",
+      "status": 503,
+      "count": 11,
+      "first": "2026-11-11T05:49:53+0000",
+      "last": "2026-11-11T05:52:27+0000"
+    }
+  ],
+  "incidents": [
+    {
+      "start": "2026-11-11T05:49:50+0000",
+      "end": "2026-11-11T05:50:30+0000",
+      "services": [
+        "api",
+        "worker"
+      ],
+      "events": 12
+    },
+    {
+      "start": "2026-11-11T05:51:21+0000",
+      "end": "2026-11-11T05:52:27+0000",
+      "services": [
+        "api"
+      ],
+      "events": 11
+    }
+  ]
+}

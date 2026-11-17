@@ -1,0 +1,40 @@
+# Ví dụ values cho một cluster siết chặt chung chung (registry riêng, securityContext, resources). Không ứng với cluster
+# cụ thể nào: con số và UID phải tính lại theo chính sách namespace và theo USER của từng image.
+
+image:
+  registry: registry.example.internal:5000
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+api:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+worker:
+  podSecurityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+
+resources:
+  api:
+    requests: {cpu: 200m, memory: 384Mi}
+    limits: {cpu: "1", memory: 768Mi}
+  worker:
+    requests: {cpu: 100m, memory: 192Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  db:
+    requests: {cpu: 200m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+  llm:
+    requests: {cpu: "1", memory: 2Gi}
+    limits: {cpu: "4", memory: 3Gi}
+  embed:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 768Mi}
+  models:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 128Mi}

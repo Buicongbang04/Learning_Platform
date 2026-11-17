@@ -1,4 +1,6 @@
+import base64
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -6,8 +8,11 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
 
@@ -345,7 +350,7 @@ def test_facts_cover_survey_keys():
         assert facts["os_version"] == fdekit.IMAGES[profile.image].os_version
         assert (facts["sudo"], facts["selinux"], facts["runtime"], facts["egress"]) == (
             profile.sudo, profile.selinux, profile.runtime, profile.egress)
-        assert (facts["cpus"], facts["mem_mb"]) == (fdekit.SITE_CPUS, fdekit.SITE_MEMORY_MB)
+        assert (facts["cpus"], facts["mem_mb"]) == (fdekit.SITE_CPUS, profile.memory_mb)
         assert facts["disk_free_gb_max"] < profile.disk_gb
         assert facts["proxy_url"] == ("http://10.0.2.100:3128" if profile.egress == "proxy" else None)
 
@@ -360,7 +365,10 @@ def test_profile_network_defaults():
 
 
 def test_site_images_pinned():
-    for image in (fdekit.MITMPROXY_IMAGE, fdekit.REGISTRY_IMAGE):
+    assert set(fdekit.SITE_IMAGES) == {"proxy", "registry", "keycloak", "fileshare"}
+    assert fdekit.SITE_IMAGES["keycloak"] == fdekit.KEYCLOAK_IMAGE
+    assert fdekit.SITE_IMAGES["fileshare"] == fdekit.SAMBA_IMAGE
+    for image in fdekit.SITE_IMAGES.values():
         name, digest = image.split("@sha256:")
         assert ":" in name and not name.endswith((":latest", ":2", ":12"))
         assert len(digest) == 64
@@ -685,12 +693,14 @@ echo "sudo=$(sudo -n true 2>/dev/null && echo yes || echo no)"
 echo "selinux=$(command -v getenforce >/dev/null && getenforce | tr A-Z a-z || echo n/a)"
 echo "docker=$(command -v docker >/dev/null && echo yes || echo no)"
 echo "podman=$(command -v podman >/dev/null && echo yes || echo no)"
+echo "k3s=$(command -v k3s >/dev/null && echo yes || echo no)"
 echo "gpu=$(ls /dev/nvidia0 2>/dev/null || echo none)"
 echo "proxy=$(grep -h '^https_proxy=' /etc/environment 2>/dev/null | cut -d= -f2 | tr -d '\"')"
 """
 
 
-@pytest.mark.parametrize("name", ["lab-open", "hospital", "bank", "lawfirm-staging"])
+@pytest.mark.parametrize("name", ["lab-open", "hospital", "bank", "lawfirm-staging", "factory", "lawfirm-hardened",
+                                  "lawfirm-prod"])
 def test_facts_match_vm(name):
     profile = fdekit.PROFILES[name]
     facts = profile.facts
@@ -778,3 +788,518 @@ def test_fetch_model_downloads_once_and_verifies(tmp_path, monkeypatch):
     path = fdekit.fetch_model("embed-small")
     assert fdekit.fetch_model("embed-small") == path and path.read_bytes() == payload
     assert urls == ["https://huggingface.co/o/r/resolve/" + "0" * 40 + "/m.gguf"]
+
+
+PHASE1_PROFILES = ("lab-open", "hospital", "bank", "lawfirm-staging")
+
+
+def test_profiles_phase2():
+    assert {"factory", "lawfirm-hardened", "lawfirm-prod"} <= set(fdekit.PROFILES)
+    factory = fdekit.PROFILES["factory"]
+    assert factory.memory_mb == 3072 and factory.facts["mem_mb"] == 3072
+    assert (factory.image, factory.disk_gb, factory.sudo, factory.egress, factory.tls_inspection, factory.runtime) == (
+        "debian-12", 12, True, "proxy", False, "docker")
+    assert (factory.tmp_noexec, factory.nofile, factory.netem) == (True, 1024, "delay 150ms 50ms loss 3%")
+    assert factory.services == ["proxy"] and factory.facts["gpu"] is None
+    hardened = fdekit.PROFILES["lawfirm-hardened"]
+    assert (hardened.image, hardened.disk_gb, hardened.sudo, hardened.egress, hardened.selinux, hardened.runtime) == (
+        "rocky-8", 20, False, "none", "enforcing", "podman")
+    assert hardened.services == ["registry"] and hardened.memory_mb == 5120
+    prod = fdekit.PROFILES["lawfirm-prod"]
+    assert (prod.image, prod.disk_gb, prod.sudo, prod.egress, prod.runtime) == ("ubuntu-22.04", 30, False, "none", "k3s")
+    assert prod.services == ["registry"] and prod.memory_mb == 5120
+    assert prod.k8s == {"namespace": "quillo", "kubeconfig": "/home/fde/.kube/config"}
+
+
+def test_old_profiles_unchanged():
+    assert fdekit.PROFILES["bank"].memory_mb == 2048 and fdekit.PROFILES["bank"].netem is None
+    for name in PHASE1_PROFILES:
+        profile = fdekit.PROFILES[name]
+        assert (profile.memory_mb, profile.tmp_noexec, profile.nofile, profile.netem, profile.k8s) == (
+            2048, False, None, None, None), name
+        assert profile.facts["mem_mb"] == fdekit.SITE_MEMORY_MB
+        assert fdekit._prepare_env(profile) == {}
+
+
+def test_profile_loader_validates_phase2_fields(tmp_path):
+    loaded = fdekit._load_profile(_profile_yaml(tmp_path, memory_mb=3072, tmp_noexec=True, nofile=1024,
+                                                netem="delay 150ms 50ms loss 3%"))
+    assert (loaded.memory_mb, loaded.facts["mem_mb"], loaded.nofile) == (3072, 3072, 1024)
+    assert fdekit._prepare_env(loaded) == {"FDE_TMP_NOEXEC": "1", "FDE_NOFILE": "1024",
+                                           "FDE_NETEM": "delay 150ms 50ms loss 3%"}
+    for overrides, message in (
+        ({"netem": "delay 1ms; reboot"}, "netem"),
+        ({"nofile": 0}, "nofile"),
+        ({"memory_mb": 256}, "memory_mb"),
+        ({"runtime": "k3s"}, "k8s"),
+        ({"k8s": {"namespace": "quillo", "kubeconfig": "/home/fde/.kube/config"}}, "k8s"),
+        ({"runtime": "k3s", "k8s": {"namespace": "Quillo!", "kubeconfig": "/home/fde/.kube/config"}}, "k8s"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            fdekit._load_profile(_profile_yaml(tmp_path, **overrides))
+
+
+def _fake_golden(tmp_path, monkeypatch, profile="lab-open"):
+    monkeypatch.setattr(fdekit, "CACHE", tmp_path / "cache")
+    monkeypatch.setattr(fdekit, "require_kvm", lambda: None)
+    golden = fdekit.golden_path(profile)
+    golden.parent.mkdir(parents=True)
+    golden.write_bytes(b"golden-v1")
+    return golden
+
+
+def _replace(path, data):
+    part = path.with_name(path.name + ".part")
+    part.write_bytes(data)
+    os.replace(part, path)
+
+
+def _never_boot(*args, **kwargs):
+    raise AssertionError("derived() không được dựng snapshot")
+
+
+def _register_demo(tmp_path, monkeypatch, *inputs):
+    """Đăng ký snapshot 'demo' qua đúng đường nạp của fdekit (tệp setup/fde/derived/demo.py giả trong tmp)."""
+    source = tmp_path / "derived" / "demo.py"
+    source.parent.mkdir(exist_ok=True)
+    source.write_text('PROFILE = "lab-open"\nINPUTS = []\nSITE = False\nMEMORY_MB = None\n'
+                      'def build(target):\n    target.ssh("true", check=True)\n')
+    spec = fdekit._load_derived(source)
+    spec = fdekit.DerivedSpec(spec.name, spec.profile, spec.build, tuple(inputs), spec.memory_mb, spec.site, source)
+    monkeypatch.setitem(fdekit.DERIVED, "demo", spec)
+    return spec
+
+
+def test_derived_key_changes_with_inputs(tmp_path, monkeypatch):
+    golden = _fake_golden(tmp_path, monkeypatch)
+    monkeypatch.setattr(fdekit, "vm", _never_boot)
+    monkeypatch.setattr(fdekit, "customer_site", _never_boot)
+    script = tmp_path / "install.sh"
+    script.write_text("echo v1\n")
+    tree = tmp_path / "bundle"
+    (tree / "sub").mkdir(parents=True)
+    (tree / "sub" / "a.txt").write_text("a")
+
+    def key(*inputs):
+        return _register_demo(tmp_path, monkeypatch, *inputs).key()
+
+    base = key(script, tree, "quillo 1.0.0")
+    assert re.fullmatch(r"[0-9a-f]{12}", base)
+    assert key(script, tree, "quillo 1.0.0") == base
+    script.write_text("echo v2\n")
+    changed = key(script, tree, "quillo 1.0.0")
+    assert changed != base
+    script.write_text("echo v1\n")
+    assert key(script, tree, "quillo 1.0.0") == base
+    assert key(tree, script, "quillo 1.0.0") != base
+    assert key(script, tree, "quillo 1.1.0") != base
+    (tree / "sub" / "a.txt").write_text("b")
+    assert key(script, tree, "quillo 1.0.0") != base
+    (tree / "sub" / "a.txt").write_text("a")
+    _replace(golden, b"golden-v2")
+    assert key(script, tree, "quillo 1.0.0") != base
+    _replace(golden, b"golden-v1")
+    assert key(script, tree, "quillo 1.0.0") == base
+    spec = _register_demo(tmp_path, monkeypatch, script, tree, "quillo 1.0.0")
+    spec.source.write_text(spec.source.read_text().replace('"true"', '"echo build-v2"'))
+    assert spec.key() != base
+    spec.source.write_text(spec.source.read_text().replace('"echo build-v2"', '"true"'))
+    assert spec.key() == base
+
+    snapshot = fdekit._derived_root() / f"demo-{base}.qcow2"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_bytes(b"qcow")
+    assert snapshot.is_relative_to(fdekit.CACHE / "derived")
+    assert fdekit.derived("demo") == snapshot
+    script.write_text("echo v3\n")
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo")
+    assert "đã cũ" in str(info.value) and "uv run python -m fdekit derive demo" in str(info.value)
+
+
+def test_stale_derived_skips_with_command(tmp_path, monkeypatch, capsys):
+    _fake_golden(tmp_path, monkeypatch)
+    monkeypatch.setattr(fdekit, "vm", _never_boot)
+    monkeypatch.setattr(fdekit, "customer_site", _never_boot)
+    monkeypatch.setattr(fdekit, "_build_derived", _never_boot)
+    _register_demo(tmp_path, monkeypatch, "x")
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo")
+    assert "Chưa có" in str(info.value) and "uv run python -m fdekit derive demo" in str(info.value)
+    assert fdekit.main(["derive", "--list"]) == 0
+    assert "demo\tlab-open\tchưa dựng" in capsys.readouterr().out
+    _register_demo(tmp_path, monkeypatch, tmp_path / "missing.sh")
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo")
+    assert "missing.sh" in str(info.value) and "fdekit derive demo" in str(info.value)
+
+
+def test_derived_requires_registration(tmp_path, monkeypatch):
+    _fake_golden(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match=r"setup/fde/derived/not-registered\.py"):
+        fdekit.derived("not-registered", "lab-open", lambda target: None, inputs=[])
+    assert fdekit.main(["derive", "not-registered"]) == 2
+
+
+def test_derived_without_golden_skips_with_prepare(tmp_path, monkeypatch):
+    monkeypatch.setattr(fdekit, "CACHE", tmp_path)
+    monkeypatch.setattr(fdekit, "require_kvm", lambda: None)
+    _register_demo(tmp_path, monkeypatch)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("demo")
+    assert "uv run python -m fdekit prepare lab-open" in str(info.value)
+
+
+def test_derived_registry():
+    spec = fdekit.DERIVED["selftest"]
+    assert spec.profile in fdekit.PROFILES and callable(spec.build)
+    assert spec.source == fdekit.DERIVED_DIR / "selftest.py"
+    assert spec.key_inputs[0] == spec.source
+    for name, item in fdekit.DERIVED.items():
+        assert item.name == name and item.profile in fdekit.PROFILES
+        assert (fdekit.DERIVED_DIR / f"{name}.py").is_file()
+
+
+def test_derived_registered_uses_registry(tmp_path, monkeypatch):
+    _fake_golden(tmp_path, monkeypatch, fdekit.DERIVED["selftest"].profile)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.derived("selftest")
+    assert "uv run python -m fdekit derive selftest" in str(info.value)
+    with pytest.raises(ValueError, match="selftest"):
+        fdekit.derived("selftest", "bank", lambda target: None, inputs=[])
+
+
+def test_derived_loader_validates(tmp_path):
+    good = tmp_path / "demo.py"
+    good.write_text('from pathlib import Path\nPROFILE = "lab-open"\nINPUTS = [Path("tracks/fde/product"), "a/b:1"]\n'
+                    'SITE = True\nMEMORY_MB = 3072\n'
+                    'def build(target):\n    pass\n')
+    spec = fdekit._load_derived(good)
+    assert (spec.name, spec.profile, spec.site, spec.memory_mb) == ("demo", "lab-open", True, 3072)
+    assert spec.inputs == (fdekit.ROOT / "tracks/fde/product", "a/b:1")
+    for body, message in (
+        ('PROFILE = "nope"\nINPUTS = []\nSITE = False\nMEMORY_MB = None\ndef build(t):\n    pass\n', "PROFILE"),
+        ('PROFILE = "lab-open"\nINPUTS = []\nSITE = False\nMEMORY_MB = None\n', "build"),
+        ('PROFILE = "lab-open"\nINPUTS = "x"\nSITE = False\nMEMORY_MB = None\ndef build(t):\n    pass\n', "INPUTS"),
+    ):
+        bad = tmp_path / "bad.py"
+        bad.write_text(body)
+        with pytest.raises(ValueError, match=message):
+            fdekit._load_derived(bad)
+
+
+def test_cli_derive_unknown_and_list(capsys):
+    assert fdekit.main(["derive", "no-such-snapshot"]) == 2
+    assert "selftest" in capsys.readouterr().err
+    assert fdekit.main(["derive", "--list"]) == 0
+    assert "selftest" in capsys.readouterr().out
+
+
+PC_SKIP = "Bài GPU tuỳ chọn: đặt FDE_PC_SSH=user@host trong setup/.env (xem setup/fde/README.md mục PC GPU)"
+
+
+def test_require_pc_skips_when_unset(monkeypatch):
+    monkeypatch.delenv("FDE_PC_SSH", raising=False)
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.require_pc()
+    assert str(info.value.msg) == PC_SKIP
+    monkeypatch.setenv("FDE_PC_SSH", "  ")
+    with pytest.raises(pytest.skip.Exception):
+        fdekit.require_pc()
+    monkeypatch.setenv("FDE_PC_SSH", "-oProxyCommand=evil")
+    with pytest.raises(pytest.skip.Exception) as info:
+        fdekit.require_pc()
+    assert "FDE_PC_SSH" in str(info.value)
+
+
+def test_pc_ssh_and_gpu_without_network(monkeypatch):
+    monkeypatch.setenv("FDE_PC_SSH", "fde-lab@pc-3060.lan")
+    pc = fdekit.require_pc()
+    assert pc.target == "fde-lab@pc-3060.lan" and pc.workdir == f"fde-ex-{pc.run_id}"
+    calls = []
+    smi = ("NVIDIA GeForce RTX 3060, 12288, 580.95.05\n"
+           "| NVIDIA-SMI 580.95.05    Driver Version: 580.95.05    CUDA Version: 13.0     |\n")
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, smi if "nvidia-smi" in argv[-1] else "", "")
+
+    monkeypatch.setattr(fdekit.subprocess, "run", fake_run)
+    assert pc.gpu() == {"name": "NVIDIA GeForce RTX 3060", "memory_mb": 12288, "driver": "580.95.05", "cuda": "13.0"}
+    argv = calls[-1]
+    assert argv[0] == "ssh" and "BatchMode=yes" in argv and argv[-2] == "fde-lab@pc-3060.lan"
+    assert "--query-gpu=name,memory.total,driver_version" in argv[-1]
+    pc.cleanup()
+    assert calls[-1][-1] == f"rm -rf -- ~/fde-ex-{pc.run_id}"
+    for bad in ("../x", "deadbeef\n", "DEADBEEF"):
+        with pytest.raises(ValueError, match="run id"):
+            fdekit.PC("fde-lab@pc", bad)
+
+
+def test_factory_quirks():
+    facts = fdekit.PROFILES["factory"].facts
+    with fdekit.customer_site("factory") as s:
+        assert "noexec" in s.vm.ssh("findmnt -no OPTIONS /tmp").stdout
+        assert s.vm.ssh("ulimit -n").stdout.strip() == "1024"
+        assert s.vm.ssh("ulimit -Hn").stdout.strip() == "1024"
+        qdisc = s.vm.ssh("/usr/sbin/tc qdisc show")
+        assert "netem" in qdisc.stdout and "delay 150ms" in qdisc.stdout, qdisc.stdout
+        assert int(s.vm.ssh("nproc").stdout) == facts["cpus"]
+        mem_kb = int(s.vm.ssh("awk '/^MemTotal/ {print $2}' /proc/meminfo").stdout)
+        assert 0.8 * facts["mem_mb"] <= mem_kb / 1024 <= facts["mem_mb"]
+        assert s.vm.ssh("docker compose version", timeout=90).returncode == 0
+        _fails(s.vm, "cp /bin/true /tmp/t && /tmp/t")
+        assert s.proxy_ca is not None
+        plain = s.vm.ssh("curl -sS --max-time 60 -o /dev/null -w '%{http_code}' https://pypi.org/simple/pip/", timeout=120)
+        assert plain.stdout.strip() == "200", "proxy của factory không TLS inspection: CA hệ thống phải đủ"
+
+
+def test_lawfirm_hardened_quirks():
+    with fdekit.customer_site("lawfirm-hardened") as s:
+        _fails(s.vm, "sudo -n true")
+        assert s.vm.ssh("getenforce").stdout.strip() == "Enforcing"
+        assert s.vm.ssh("loginctl show-user fde -p Linger").stdout.strip() == "Linger=yes"
+        assert s.vm.ssh("systemctl --user is-active podman.socket").stdout.strip() != "active"
+        info = s.vm.ssh("podman info --format '{{.Host.Security.Rootless}}'", timeout=120)
+        assert info.stdout.strip() == "true", info.stderr
+        out = s.vm.ssh("curl -sS --max-time 10 -o /dev/null -w '%{http_code}' http://10.0.2.101:5000/v2/")
+        assert out.stdout.strip() == "200", out.stderr
+        _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+
+
+ALLOW_POLICY = """apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quillo-allow-web
+spec:
+  podSelector:
+    matchLabels:
+      app: quillo
+  policyTypes: [Ingress]
+  ingress:
+  - ports:
+    - port: 8080
+"""
+
+
+@contextmanager
+def _host_http_server():
+    hits = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append(self.client_address)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"host-only")
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address[1], hits
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+PSA_POD = """apiVersion: v1
+kind: Pod
+metadata:
+  name: psa-probe
+spec:
+  containers:
+  - name: busybox
+    image: docker.io/rancher/mirrored-library-busybox:1.37.0
+    command: ["sleep", "3600"]
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}
+"""
+
+
+def test_lawfirm_prod_rbac():
+    prod = fdekit.PROFILES["lawfirm-prod"]
+    with fdekit.customer_site("lawfirm-prod") as s:
+        def kubectl(args, **kwargs):
+            return s.vm.ssh(f"kubectl {args}", timeout=60, **kwargs)
+
+        _fails(s.vm, "sudo -n true")
+        assert s.vm.ssh("helm version --short").returncode == 0
+        assert s.vm.ssh(f"test -f {prod.k8s['kubeconfig']} && stat -c %a {prod.k8s['kubeconfig']}").stdout.strip() == "600"
+        assert kubectl("auth can-i create deployments -n quillo").stdout.strip() == "yes"
+        assert kubectl("auth can-i create clusterrole").stdout.strip() == "no"
+        assert kubectl("auth can-i create deployments -n kube-system").stdout.strip() == "no"
+        assert kubectl("auth can-i get nodes").stdout.strip() == "no"
+        assert kubectl("auth can-i delete resourcequota -n quillo").stdout.strip() == "no"
+        labels = kubectl("get ns quillo -o jsonpath={.metadata.labels}")
+        assert "restricted" in labels.stdout, labels.stderr
+        quota = kubectl("get resourcequota -n quillo -o jsonpath='{.items[0].spec.hard}'").stdout
+        for item in ('"requests.cpu":"3"', '"requests.memory":"4Gi"', '"limits.memory":"5Gi"', '"pods":"12"'):
+            assert item in quota, quota
+        assert "default" not in kubectl("get limitrange -n quillo -o json").stdout.replace('"namespace": "default"', "")
+        policy = kubectl("get networkpolicy default-deny -n quillo -o jsonpath='{.spec.policyTypes}'").stdout
+        assert "Ingress" in policy and "Egress" in policy
+        rejected = s.vm.ssh(f"printf %s {shlex.quote(PSA_POD)} | kubectl apply -n quillo -f -", timeout=60)
+        assert rejected.returncode != 0 and "PodSecurity" in rejected.stderr and "restricted" in rejected.stderr, (
+            rejected.stdout + rejected.stderr)
+        _fails(s.vm, "curl -sS --max-time 10 https://example.com")
+        assert s.vm.ssh("ip route show default").stdout.startswith("default via 10.0.2.2")
+        with _host_http_server() as (port, hits):
+            assert requests.get(f"http://127.0.0.1:{port}/", timeout=5).status_code == 200
+            hits.clear()
+            _fails(s.vm, f"curl -sS --max-time 5 http://10.0.2.2:{port}/")
+            assert hits == [], "VM lawfirm-prod với tới dịch vụ 127.0.0.1 của host"
+        assert s.vm.ssh("test -r /etc/rancher/k3s/k3s.yaml").returncode != 0
+        deny = kubectl("delete networkpolicy default-deny -n quillo")
+        assert deny.returncode != 0 and "default-deny do IT khách quản" in deny.stderr, deny.stdout + deny.stderr
+        patch = kubectl("""patch networkpolicy default-deny -n quillo --type=json -p '[{"op":"replace","path":"/spec/policyTypes","value":["Ingress"]}]'""")
+        assert patch.returncode != 0 and "default-deny do IT khách quản" in patch.stderr, patch.stdout + patch.stderr
+        assert kubectl("auth can-i deletecollection networkpolicies -n quillo").stdout.strip() == "no"
+        assert kubectl("auth can-i create networkpolicies -n quillo").stdout.strip() == "yes"
+        created = s.vm.ssh(f"printf %s {shlex.quote(ALLOW_POLICY)} | kubectl apply -n quillo -f -", timeout=60)
+        assert created.returncode == 0, created.stderr
+        assert kubectl("label networkpolicy quillo-allow-web -n quillo tier=web").returncode == 0
+        assert kubectl("delete networkpolicy quillo-allow-web -n quillo").returncode == 0
+        policy = kubectl("get networkpolicy default-deny -n quillo -o jsonpath='{.spec.policyTypes}'").stdout
+        assert "Ingress" in policy and "Egress" in policy
+
+
+def test_derived_boot_roundtrip(capsys):
+    spec = fdekit.DERIVED["selftest"]
+    fdekit.require_golden(spec.profile)
+    assert fdekit.main(["derive", "selftest", "--force"]) == 0, capsys.readouterr().err
+    path = fdekit.derived("selftest")
+    assert path.name == f"selftest-{spec.key()}.qcow2"
+    assert [p.name for p in fdekit._derived_root().glob("selftest-*.qcow2")] == [path.name]
+    with fdekit.vm(spec.profile, base=path, memory_mb=1024) as m:
+        assert m.ssh("cat /home/fde/marker").stdout.strip() == "selftest"
+        assert m.ssh("id -un").stdout.strip() == "fde"
+        run_id = m.run_id
+    assert fdekit.leftovers(run_id) == []
+
+
+def test_keycloak_realm_has_no_groups_mapper():
+    realm = json.loads(fdekit.KEYCLOAK_REALM_FILE.read_text(encoding="utf-8"))
+    assert realm["realm"] == "lawfirm"
+    assert {g["name"] for g in realm["groups"]} == {"legal", "finance", "it"}
+    members = {u["username"]: set(u["groups"]) for u in realm["users"]}
+    assert members == {"an": {"/legal"}, "binh": {"/finance"}, "chi": {"/legal", "/finance"}}
+    [client] = realm["clients"]
+    assert client["clientId"] == "quillo" and client["publicClient"] is False
+    assert client["secret"] == "${FDE_QUILLO_CLIENT_SECRET}"
+    text = json.dumps(realm)
+    assert "group-membership" not in text and '"groups"' not in json.dumps(client)
+    assert set(fdekit.KEYCLOAK_PASSWORDS) == {"an", "binh", "chi"}
+    assert fdekit.KEYCLOAK_ADDR == "10.0.2.102:8080" and fdekit.FILESHARE_ADDR == "10.0.2.103:445"
+
+
+def test_profile_loader_accepts_site_services(tmp_path):
+    data = yaml.safe_load((fdekit.PROFILE_DIR / "lawfirm-staging.yaml").read_text())
+    data["services"] = ["registry", "keycloak", "fileshare"]
+    path = tmp_path / "lawfirm-sso.yaml"
+    path.write_text(yaml.safe_dump(data))
+    assert fdekit._load_profile(path).services == ["registry", "keycloak", "fileshare"]
+    data["services"] = ["ldap"]
+    path.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValueError):
+        fdekit._load_profile(path)
+
+
+@pytest.mark.parametrize("extra", [("ldap",), ("proxy",)])
+def test_customer_site_rejects_bad_extra_services(extra, monkeypatch):
+    monkeypatch.setattr(fdekit, "require_golden", lambda profile: pytest.fail("phải từ chối trước khi tìm golden"))
+    with pytest.raises(ValueError):
+        with fdekit.customer_site("lawfirm-staging", extra_services=extra):
+            pass
+
+
+def _claims(token):
+    payload = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+
+
+def test_keycloak_issuer_same_from_host_and_vm():
+    with fdekit.customer_site("lawfirm-staging", extra_services=("keycloak",)) as s:
+        assert s.keycloak == "http://10.0.2.102:8080"
+        assert s.keycloak_host.startswith("http://127.0.0.1:")
+        assert s.keycloak_admin[0] == "admin" and len(s.keycloak_admin[1]) >= 16
+        assert s.fileshare is None and s.fileshare_dir is None
+        token = fdekit.keycloak_token(s, "an", fdekit.KEYCLOAK_PASSWORDS["an"])
+        out = s.vm.ssh("curl -sS --max-time 10 http://10.0.2.102:8080/realms/lawfirm/.well-known/openid-configuration")
+        assert out.returncode == 0, out.stderr
+        discovery = json.loads(out.stdout)
+        assert _claims(token)["iss"] == discovery["issuer"] == "http://10.0.2.102:8080/realms/lawfirm"
+        jwks = s.vm.ssh(f"curl -sS --max-time 10 {shlex.quote(discovery['jwks_uri'])}")
+        assert '"keys"' in jwks.stdout, jwks.stderr
+
+
+def test_token_has_no_groups_claim_by_default():
+    with fdekit.customer_site("lawfirm-staging", extra_services=("keycloak",)) as s:
+        for user in ("an", "binh", "chi"):
+            claims = _claims(fdekit.keycloak_token(s, user, fdekit.KEYCLOAK_PASSWORDS[user]))
+            assert claims["preferred_username"] == user
+            assert claims["azp"] == "quillo"
+            assert "groups" not in claims
+        with pytest.raises(requests.HTTPError):
+            fdekit.keycloak_token(s, "an", "sai-mat-khau")
+
+
+def test_fileshare_listing_from_vm():
+    with fdekit.customer_site("lawfirm-staging", extra_services=("fileshare",)) as s:
+        assert s.fileshare == "//10.0.2.103/contracts"
+        assert s.fileshare_host[0] == "127.0.0.1"
+        user, password = s.fileshare_creds
+        assert user == "svc-quillo" and len(password) >= 16
+        assert s.keycloak is None
+        (s.fileshare_dir / "legal").mkdir()
+        (s.fileshare_dir / "legal" / "nda.txt").write_text("bảo mật\n", encoding="utf-8")
+        opts = shlex.quote(f"ro,ip=10.0.2.103,username={user},password={password},vers=3.0")
+        mounted = s.vm.ssh(f"sudo -n mkdir -p /mnt/c && sudo -n mount -t cifs //10.0.2.103/contracts /mnt/c -o {opts}",
+                           timeout=60)
+        assert mounted.returncode == 0, mounted.stderr
+        assert s.vm.ssh("cat /mnt/c/legal/nda.txt").stdout == "bảo mật\n"
+        (s.fileshare_dir / "finance").mkdir()
+        (s.fileshare_dir / "finance" / "q3.csv").write_text("a;b\n")
+        assert s.vm.ssh("ls /mnt/c/finance").stdout.split() == ["q3.csv"]
+        _fails(s.vm, "sudo -n touch /mnt/c/legal/x.txt")
+        s.vm.ssh("sudo -n umount /mnt/c")
+        bad = shlex.quote("ro,ip=10.0.2.103,username=svc-quillo,password=sai,vers=3.0")
+        _fails(s.vm, f"sudo -n mount -t cifs //10.0.2.103/contracts /mnt/c -o {bad}")
+
+
+SERVICES_CHILD = """
+import time
+import fdekit
+with fdekit.customer_site("lawfirm-staging", extra_services=("keycloak", "fileshare")) as s:
+    print(s.vm.run_id, flush=True)
+    time.sleep(600)
+"""
+
+
+def test_site_services_cleaned_after_sigkill():
+    fdekit.require_golden("lawfirm-staging")
+    run_id = ""
+    child = subprocess.Popen(
+        [sys.executable, "-c", SERVICES_CHILD], cwd=fdekit.ROOT, stdout=subprocess.PIPE, text=True,
+        env={**os.environ, "PYTHONPATH": str(fdekit.ROOT)},
+    )
+    try:
+        run_id = child.stdout.readline().strip()
+        assert len(run_id) == 8, "tiến trình con không mở được customer_site"
+        names = set(fdekit._containers(f"fde-ex-{run_id}"))
+        assert {f"fde-ex-{run_id}-{svc}" for svc in ("registry", "keycloak", "fileshare")} <= names
+        os.kill(child.pid, signal.SIGKILL)
+        child.wait(timeout=10)
+        deadline = time.monotonic() + 20
+        while fdekit.leftovers(run_id) and time.monotonic() < deadline:
+            time.sleep(0.5)
+        assert fdekit.leftovers(run_id) == []
+    finally:
+        if child.poll() is None:
+            child.kill()
+        if len(run_id) == 8:
+            fdekit.clean(run_id)

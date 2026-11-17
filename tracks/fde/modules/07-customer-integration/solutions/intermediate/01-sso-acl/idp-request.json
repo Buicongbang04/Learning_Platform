@@ -1,0 +1,22 @@
+{
+  "client": "quillo",
+  "changes": [
+    {
+      "type": "add-protocol-mapper",
+      "why": "Quillo phân quyền tài liệu theo nhóm của người dùng, đọc từ claim 'groups' của access token. Token client quillo hiện chỉ có danh tính (sub, preferred_username, email), không có nhóm, nên mọi người đăng nhập được nhưng không thuộc nhóm nào. Mapper chỉ thêm tên nhóm Keycloak (legal, finance, it) của chính người đăng nhập vào token của client quillo; không đổi user, nhóm, realm hay client khác.",
+      "mapper": {
+        "name": "groups",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-group-membership-mapper",
+        "config": {
+          "claim.name": "groups",
+          "full.path": "false",
+          "access.token.claim": "true",
+          "id.token.claim": "true",
+          "userinfo.token.claim": "true",
+          "introspection.token.claim": "true"
+        }
+      }
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +39,8 @@ CLOUD_LAB = "cloud-lab"
 MILESTONE_AFTER = {f"m{i:02d}": MODULE_IDS[i] for i in range(15)} | {"m15": "18-system-design-fde", "m16": "20-fde-interview"}
 PHASE1_MODULES = MODULE_IDS[:4]
 PHASE1_MILESTONES = ["m00", "m01", "m02", "m03"]
+PHASE2_MODULES = MODULE_IDS[4:11]
+PHASE2_MILESTONES = ["m04", "m05", "m06", "m07", "m08", "m09", "m10"]
 NO_BASIC_MINIMUM = {"00-introduction"}
 LARGE_MODULES = {"15-dsa-core", "16-dsa-advanced"}
 MAX_EXERCISES = 9
@@ -366,6 +369,17 @@ def test_phase1_present():
     docs = {m["id"]: TRACK / m["doc"] for m in load_track()["capstone"]["milestones"]}
     missing += [docs[m].relative_to(ROOT).as_posix() for m in PHASE1_MILESTONES if not docs[m].is_file()]
     assert not missing, f"Phase 1 còn thiếu: {missing}"
+
+
+@pytest.mark.xfail(
+    reason="Phase 2 đang làm: module 10 và milestone m04–m10 chưa có. Bỏ xfail khi Phase 2 xong.",
+    strict=False,
+)
+def test_phase2_present():
+    missing = [m for m in PHASE2_MODULES if not (MODULES_DIR / m).is_dir()]
+    docs = {m["id"]: TRACK / m["doc"] for m in load_track()["capstone"]["milestones"]}
+    missing += [docs[m].relative_to(ROOT).as_posix() for m in PHASE2_MILESTONES if not docs[m].is_file()]
+    assert not missing, f"Phase 2 còn thiếu: {missing}"
 
 
 README_OK = (

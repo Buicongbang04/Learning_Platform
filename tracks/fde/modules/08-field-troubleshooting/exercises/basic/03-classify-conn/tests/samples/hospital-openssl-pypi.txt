@@ -1,0 +1,15 @@
+$ openssl s_client -connect pypi.org:443 -proxy 10.0.2.100:3128 -servername pypi.org -brief </dev/null
+depth=0 CN = pypi.org
+verify error:num=20:unable to get local issuer certificate
+depth=0 CN = pypi.org
+verify error:num=21:unable to verify the first certificate
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.3
+Ciphersuite: TLS_AES_256_GCM_SHA384
+Peer certificate: CN = pypi.org
+Hash used: SHA256
+Signature type: RSA-PSS
+Verification error: unable to verify the first certificate
+Server Temp Key: X25519, 253 bits
+
+DONE

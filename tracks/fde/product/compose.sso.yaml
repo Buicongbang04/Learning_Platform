@@ -1,0 +1,13 @@
+# Bật SSO (OIDC) cho api: docker compose -f compose.yaml -f compose.sso.yaml up -d --wait
+# Cần trong .env: QUILLO_OIDC_ISSUER, QUILLO_OIDC_CLIENT_ID (và QUILLO_ACL). Client secret nằm trong tệp
+# ./oidc/client-secret (không để trong .env): sudo install -d -o 10001 -g 10001 -m 0700 oidc, rồi ghi tệp với
+# sudo install -o 10001 -g 10001 -m 0400. IdP dùng CA nội bộ: đặt CA vào ./oidc/ca.pem và QUILLO_OIDC_CA_FILE=/etc/quillo/oidc/ca.pem.
+services:
+  api:
+    environment:
+      QUILLO_OIDC_ISSUER: ${QUILLO_OIDC_ISSUER:?Set QUILLO_OIDC_ISSUER in .env}
+      QUILLO_OIDC_CLIENT_ID: ${QUILLO_OIDC_CLIENT_ID:?Set QUILLO_OIDC_CLIENT_ID in .env}
+      QUILLO_OIDC_CLIENT_SECRET_FILE: /etc/quillo/oidc/client-secret
+      QUILLO_OIDC_CA_FILE: ${QUILLO_OIDC_CA_FILE:-}
+    volumes:
+      - ./oidc:/etc/quillo/oidc:ro

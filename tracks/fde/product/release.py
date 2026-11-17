@@ -5,12 +5,16 @@
 
 Bundle `quillo-<version>.tar` (không nén: layer image và GGUF vốn đã nén) chứa thư mục `quillo-<version>/` với
 `manifest.json` ({"version", "files": {đường dẫn: sha256}, "images": [ref]}), `images/*.tar` (`docker save`),
-`models/*.gguf`, `compose.yaml`, `.env.example`, `REQUIREMENTS.yaml`, `LICENSE`, `migrations/`.
+`models/*.gguf`, `compose.yaml` (+ `compose.sso.yaml`, `compose.extensions.yaml`), `.env.example`, `REQUIREMENTS.yaml`,
+`LICENSE`, `migrations/`, `chart/quillo-<version>.tgz` (Helm chart, version = bản), `ops/backup.sh`, `ops/restore.sh`,
+`ops/models_image.py` (dựng image `quillo-models` cho chart từ chính bundle; sha256 của kết quả ghi ở
+`manifest.json` → `derived`).
 Lệnh build cần Docker và mạng (pull image, tải model lần đầu); bundle tạo ra thì cài được không cần mạng.
 """
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -33,7 +37,9 @@ IMAGES = {
 }
 IMAGE_FILES = {"db": "images/pgvector.tar", "llm": "images/llama-cpp-server.tar", "api": "images/quillo-api.tar"}
 EMBED_MODEL = "embed-small"
-STATIC_FILES = ("compose.yaml", "REQUIREMENTS.yaml", "LICENSE")
+STATIC_FILES = ("compose.yaml", "compose.sso.yaml", "compose.extensions.yaml", "REQUIREMENTS.yaml", "LICENSE")
+OPS_FILES = ("ops/backup.sh", "ops/restore.sh", "ops/models_image.py")
+EXECUTABLE = ("ops/backup.sh", "ops/restore.sh")
 BUILD_CONTEXT = ("Dockerfile", "requirements.lock", "LICENSE", "src")
 PLATFORM = "linux/amd64"
 
@@ -78,7 +84,51 @@ def build_api_image(version: str, work: Path) -> str:
     return tag
 
 
+def package_chart(version: str, llm: str, work: Path) -> Path:
+    """`chart/quillo-<version>.tgz` như `helm package`: Chart.yaml mang version = appVersion = bản phát hành, values trỏ
+    đúng model chat có trong bundle."""
+    import fdekit
+
+    source = PRODUCT / "chart" / "quillo"
+    target = work / "chart" / f"quillo-{version}.tgz"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    replace = {"Chart.yaml": {"version": version, "appVersion": f'"{version}"'},
+               "values.yaml": {"  llmFile": fdekit.MODELS[llm].filename, "  llmAlias": llm}}
+    with tarfile.open(target, "w:gz", format=tarfile.PAX_FORMAT) as tar:
+        for path in sorted(p for p in source.rglob("*") if p.is_file() and "__pycache__" not in p.parts):
+            data = path.read_bytes()
+            for key, value in replace.get(str(path.relative_to(source)), {}).items():
+                text, count = re.subn(rf"(?m)^{key}: .*$", f"{key}: {value}", data.decode())
+                if count != 1:
+                    raise ValueError(f"chart/quillo/{path.name} phải có đúng một dòng '{key}:'")
+                data = text.encode()
+            info = tarfile.TarInfo(f"quillo/{path.relative_to(source)}")
+            info.size, info.mode, info.mtime = len(data), 0o644, int(path.stat().st_mtime)
+            tar.addfile(info, io.BytesIO(data))
+    return target
+
+
+def derived_images(version: str, sources: dict[str, Path], work: Path) -> dict:
+    """Chạy `ops/models_image.py` trên đúng các tệp sẽ vào bundle để ghi trước sha256 của image `quillo-models`."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("models_image", PRODUCT / "ops" / "models_image.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    staging = work / "derived"
+    for name in (module.BASE, *(n for n in sources if n.startswith("models/"))):
+        (staging / name).parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(sources[name].resolve(), staging / name)
+    (staging / "manifest.json").write_text(json.dumps({"version": version}))
+    out = staging / "out" / "quillo-models.tar"
+    sha = module.build(staging, out)
+    shutil.rmtree(staging)
+    return {module.OUTPUT: {"sha256": sha, "image": f"quillo-models:{version}",
+                            "from": [module.BASE, "models/*.gguf"], "tool": "ops/models_image.py"}}
+
+
 def save_images(api_tag: str, work: Path) -> dict[str, Path]:
+    """`docker save` từng image: IMAGES (pull theo digest nếu chưa có) và `quillo-api` vừa dựng."""
     saved = {}
     for key, ref in IMAGES.items():
         if not _has_image(ref):
@@ -118,15 +168,16 @@ def build(version: str, out: Path, llm: str = "llm-small") -> Path:
         sources: dict[str, Path] = save_images(api_tag, work)
         (work / ".env.example").write_text(env_example(version, llm))
         sources[".env.example"] = work / ".env.example"
-        for name in STATIC_FILES:
+        for name in (*STATIC_FILES, *OPS_FILES):
             sources[name] = PRODUCT / name
         for path in migrations_for(version):
             sources[f"migrations/{path.name}"] = path
         for name in (llm, EMBED_MODEL):
             model = fdekit.fetch_model(name)
             sources[f"models/{model.name}"] = model
+        sources[f"chart/quillo-{version}.tgz"] = package_chart(version, llm, work)
         manifest = {"version": version, "files": {name: sha256(path) for name, path in sorted(sources.items())},
-                    "images": [*IMAGES.values(), api_tag]}
+                    "images": [*IMAGES.values(), api_tag], "derived": derived_images(version, sources, work)}
         (work / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         part = bundle.with_name(bundle.name + ".part")
         prefix = f"quillo-{version}"
@@ -137,7 +188,7 @@ def build(version: str, out: Path, llm: str = "llm-small") -> Path:
                     info = tar.gettarinfo(path, f"{prefix}/{name}")
                     info.uid = info.gid = 0
                     info.uname = info.gname = ""
-                    info.mode = 0o644
+                    info.mode = 0o755 if name in EXECUTABLE else 0o644
                     with open(path, "rb") as handle:
                         tar.addfile(info, handle)
             os.replace(part, bundle)

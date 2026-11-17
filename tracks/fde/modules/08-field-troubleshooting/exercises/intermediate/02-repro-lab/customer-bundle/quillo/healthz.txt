@@ -1,0 +1,2 @@
+{"status":"ok","version":"1.0.0","checks":{"db":true,"llm":true,"embed":true}}
+HTTP 200

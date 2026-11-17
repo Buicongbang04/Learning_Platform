@@ -1,0 +1,125 @@
+{{- if and .Values.oidc.issuer (not .Values.oidc.existingSecret) }}
+{{- fail "oidc.issuer đã đặt: cần oidc.existingSecret (Secret chứa client secret, khoá oidc.secretKey)" }}
+{{- end }}
+{{- $component := dict "root" $ "component" "api" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "quillo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "quillo.selector" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "quillo.selector" $component | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "quillo.pullSecrets" . | nindent 6 }}
+      {{- include "quillo.podSecurityContext" $component | nindent 6 }}
+      containers:
+        - name: api
+          image: {{ include "quillo.image" (list $ .Values.image.api.repository .Values.image.api.tag) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- include "quillo.appEnv" . | nindent 12 }}
+            {{- with .Values.acl }}
+            - name: QUILLO_ACL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.oidc.issuer }}
+            - name: QUILLO_OIDC_ISSUER
+              value: {{ .Values.oidc.issuer | quote }}
+            - name: QUILLO_OIDC_CLIENT_ID
+              value: {{ .Values.oidc.clientId | quote }}
+            - name: QUILLO_OIDC_CLIENT_SECRET_FILE
+              value: "/etc/quillo/oidc/{{ .Values.oidc.secretKey }}"
+            - name: QUILLO_OIDC_GROUPS_CLAIM
+              value: {{ .Values.oidc.groupsClaim | quote }}
+            {{- if .Values.oidc.caConfigMap }}
+            - name: QUILLO_OIDC_CA_FILE
+              value: "/etc/quillo/oidc-ca/{{ .Values.oidc.caKey }}"
+            {{- end }}
+            {{- end }}
+            {{- if .Values.extensions.modules }}
+            - name: QUILLO_EXTENSIONS
+              value: {{ join "," .Values.extensions.modules | quote }}
+            - name: QUILLO_EXTENSIONS_PATH
+              value: /opt/quillo/extensions
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- include "quillo.containerExtras" $component | nindent 10 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.oidc.issuer }}
+            - name: oidc
+              mountPath: /etc/quillo/oidc
+              readOnly: true
+            {{- if .Values.oidc.caConfigMap }}
+            - name: oidc-ca
+              mountPath: /etc/quillo/oidc-ca
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            {{- if .Values.extensions.configMap }}
+            - name: extensions
+              mountPath: /opt/quillo/extensions
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.oidc.issuer }}
+        - name: oidc
+          secret:
+            secretName: {{ .Values.oidc.existingSecret }}
+            items:
+              - key: {{ .Values.oidc.secretKey }}
+                path: {{ .Values.oidc.secretKey }}
+        {{- if .Values.oidc.caConfigMap }}
+        - name: oidc-ca
+          configMap:
+            name: {{ .Values.oidc.caConfigMap }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.extensions.configMap }}
+        - name: extensions
+          configMap:
+            name: {{ .Values.extensions.configMap }}
+            {{- with .Values.extensions.items }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "quillo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    {{- include "quillo.selector" $component | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http

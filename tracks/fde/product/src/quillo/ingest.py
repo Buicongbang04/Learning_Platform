@@ -26,6 +26,8 @@ log = logging.getLogger("quillo.ingest")
 SUPPORTED = {".txt", ".md", ".html", ".htm", ".pdf"}
 UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9._ -]+")
 MAX_FILENAME = 200
+MAX_FOLDER_DEPTH = 8
+RESERVED_FOLDERS = {"done", "failed"}
 MAX_BACKOFF_S = 60.0
 MAX_FILE_RETRIES = 5
 DATA_ERROR_CLASSES = ("22", "23", "54")
@@ -59,6 +61,18 @@ def safe_filename(raw: str) -> str:
         suffix = Path(name).suffix[:16]
         name = name[:MAX_FILENAME - len(suffix)] + suffix
     return name
+
+
+def safe_folder(raw: str) -> str:
+    """Thư mục con tương đối đã làm sạch (vd. `legal/2024`): bỏ phần rỗng, `.`, `..`, làm sạch từng phần như tên tệp."""
+    parts = [p for p in raw.replace("\\", "/").split("/") if p.strip(" .")]
+    return "/".join(safe_filename(p) for p in parts[:MAX_FOLDER_DEPTH])
+
+
+def document_path(folder: str, filename: str) -> str:
+    """Đường dẫn tương đối lưu trong cột `filename` (vd. `legal/nda-01.pdf`); ACL so tiền tố trên chuỗi này."""
+    folder = safe_folder(folder)
+    return f"{folder}/{safe_filename(filename)}" if folder else safe_filename(filename)
 
 
 def document_id(data: bytes) -> str:
@@ -156,9 +170,9 @@ def read_regular(path: Path, max_bytes: int) -> bytes:
     return data
 
 
-def _move(path: Path, folder: str) -> Path:
-    target_dir = path.parent / folder
-    target_dir.mkdir(exist_ok=True)
+def _move(inbox: Path, path: Path, folder: str) -> Path:
+    target_dir = inbox / folder / path.parent.relative_to(inbox)
+    target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / path.name
     n = 1
     while target.exists() or target.is_symlink():
@@ -203,18 +217,30 @@ def classify(error: Exception) -> str:
     return "fail"
 
 
-def _key(path: Path) -> tuple | None:
-    """Nhận diện một lần "thả tệp": cùng tên nhưng inode/mtime khác là tệp mới."""
+def _key(inbox: Path, path: Path) -> tuple | None:
+    """Nhận diện một lần "thả tệp": cùng đường dẫn nhưng inode/mtime khác là tệp mới."""
     try:
         info = path.lstat()
     except OSError:
         return None
-    return (path.name, info.st_ino, info.st_mtime_ns)
+    return (str(path.relative_to(inbox)), info.st_ino, info.st_mtime_ns)
 
 
-def _try_move(path: Path, folder: str) -> bool:
+def scan(inbox: Path) -> list[Path]:
+    """Tệp trong inbox kể cả thư mục con (giữ đường dẫn con, vd. `legal/nda-01.pdf`), trừ `done/`, `failed/`, tên bắt
+    đầu bằng `.`; không đi theo symlink tới thư mục; sâu tối đa MAX_FOLDER_DEPTH."""
+    found = []
+    for folder, dirs, files in os.walk(inbox):
+        depth = len(Path(folder).relative_to(inbox).parts)
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and depth < MAX_FOLDER_DEPTH
+                         and not (depth == 0 and d in RESERVED_FOLDERS))
+        found += [Path(folder) / name for name in sorted(files) if not name.startswith(".")]
+    return found
+
+
+def _try_move(inbox: Path, path: Path, folder: str) -> bool:
     try:
-        _move(path, folder)
+        _move(inbox, path, folder)
         return True
     except OSError as error:
         log.error("không chuyển được tệp", extra={"fields": {"file": path.name, "to": folder, "error": str(error)}})
@@ -222,7 +248,8 @@ def _try_move(path: Path, folder: str) -> bool:
 
 
 def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threading.Event | None = None) -> None:
-    """Quét `inbox` định kỳ: nạp xong chuyển vào `done/`, lỗi của chính tệp chuyển vào `failed/`.
+    """Quét `inbox` (kể cả thư mục con) định kỳ: nạp xong chuyển vào `done/<đường dẫn con>`, lỗi của chính tệp chuyển vào
+    `failed/<đường dẫn con>`. Tài liệu lưu với đường dẫn tương đối (vd. `legal/nda-01.pdf`) để ACL theo thư mục áp được.
 
     Bỏ qua tệp sửa đổi chưa quá 2 chu kỳ quét (có thể đang được chép vào). Không với tới model server/database thì để
     nguyên tệp, dừng lượt quét và chờ lùi dần tới MAX_BACKOFF_S. Server trả 5xx cho một tệp thì thử lại tệp đó ở các
@@ -240,7 +267,7 @@ def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threadin
     log.info("worker bắt đầu theo dõi", extra={"fields": {"inbox": str(inbox), "version": settings.version}})
     while not stop.is_set():
         try:
-            present = {_key(p): p for p in inbox.iterdir() if not p.name.startswith(".") and not p.is_dir()}
+            present = {_key(inbox, p): p for p in scan(inbox)}
         except OSError as error:
             log.error("không đọc được inbox", extra={"fields": {"inbox": str(inbox), "error": str(error)}})
             present = {}
@@ -253,7 +280,8 @@ def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threadin
             try:
                 data = read_regular(path, max_bytes)
                 with db.connect(settings.database_url) as conn:
-                    ingest_bytes(conn, embedder, safe_filename(path.name), data, max_bytes=max_bytes)
+                    ingest_bytes(conn, embedder, document_path(str(path.parent.relative_to(inbox)), path.name), data,
+                                 max_bytes=max_bytes)
             except Exception as error:
                 kind = classify(error)
                 fields = {"file": path.name, "error": repr(error)}
@@ -266,12 +294,12 @@ def watch(settings: Settings, inbox: Path, interval: float = 5.0, stop: threadin
                     log.warning("server lỗi khi nạp tệp, thử lại lượt sau", extra={"fields": {**fields, "attempt": retries[key]}})
                     continue
                 log.error("nạp tài liệu lỗi", extra={"fields": {**fields, "attempts": retries.pop(key)}})
-                if not _try_move(path, "failed"):
+                if not _try_move(inbox, path, "failed"):
                     stuck.add(key)
                 continue
             retries.pop(key, None)
             backoff = interval
-            if not _try_move(path, "done"):
+            if not _try_move(inbox, path, "done"):
                 stuck.add(key)
             if stop.is_set():
                 break

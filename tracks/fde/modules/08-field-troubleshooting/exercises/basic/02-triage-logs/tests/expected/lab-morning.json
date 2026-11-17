@@ -1,0 +1,97 @@
+{
+  "services": {
+    "api": {
+      "events": 34,
+      "unparsed": 12
+    },
+    "db": {
+      "events": 0,
+      "unparsed": 72
+    },
+    "embed": {
+      "events": 0,
+      "unparsed": 77
+    },
+    "llm": {
+      "events": 0,
+      "unparsed": 53
+    },
+    "worker": {
+      "events": 13,
+      "unparsed": 0
+    }
+  },
+  "window": {
+    "first": "2026-11-11T03:13:49+0000",
+    "last": "2026-11-11T05:49:06+0000"
+  },
+  "groups": [
+    {
+      "service": "api",
+      "level": "ERROR",
+      "msg": "model server lỗi",
+      "count": 3,
+      "first": "2026-11-11T05:46:53+0000",
+      "last": "2026-11-11T05:47:38+0000"
+    },
+    {
+      "service": "worker",
+      "level": "WARNING",
+      "msg": "dịch vụ không với tới, để nguyên tệp và thử lại sau",
+      "count": 4,
+      "first": "2026-11-11T05:46:53+0000",
+      "last": "2026-11-11T05:47:28+0000"
+    },
+    {
+      "service": "worker",
+      "level": "ERROR",
+      "msg": "nạp tài liệu lỗi",
+      "count": 1,
+      "first": "2026-11-11T05:48:30+0000",
+      "last": "2026-11-11T05:48:30+0000"
+    },
+    {
+      "service": "worker",
+      "level": "WARNING",
+      "msg": "EOF marker not found",
+      "count": 1,
+      "first": "2026-11-11T05:48:30+0000",
+      "last": "2026-11-11T05:48:30+0000"
+    }
+  ],
+  "http_5xx": [
+    {
+      "path": "/api/ask",
+      "status": 503,
+      "count": 3,
+      "first": "2026-11-11T05:46:53+0000",
+      "last": "2026-11-11T05:47:38+0000"
+    },
+    {
+      "path": "/healthz",
+      "status": 503,
+      "count": 4,
+      "first": "2026-11-11T05:47:01+0000",
+      "last": "2026-11-11T05:47:31+0000"
+    }
+  ],
+  "incidents": [
+    {
+      "start": "2026-11-11T05:46:53+0000",
+      "end": "2026-11-11T05:47:38+0000",
+      "services": [
+        "api",
+        "worker"
+      ],
+      "events": 14
+    },
+    {
+      "start": "2026-11-11T05:48:30+0000",
+      "end": "2026-11-11T05:48:30+0000",
+      "services": [
+        "worker"
+      ],
+      "events": 2
+    }
+  ]
+}

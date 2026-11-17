@@ -727,9 +727,13 @@ seed cloud-init, SSH bằng key sinh riêng mỗi lần chạy), không phải c
 | Golden image của một hồ sơ | `fdekit.require_golden("bank")` | Skip kèm đúng lệnh `uv run python -m fdekit prepare bank`; trả đường dẫn golden |
 | Dựng golden (một lần, ngoài bài) | `fdekit.prepare(profile, force=False)` hoặc `python -m fdekit prepare <hồ sơ> [--force]` | Boot cloud image có mạng, chạy `setup/fde/cloud-init/<hồ sơ>.sh`, xoá sudo tạm và key, ghi qcow2 độc lập; pull image proxy/registry phía host mà hồ sơ cần |
 | Cloud image đã ghim | `fdekit.fetch_image("rocky-8")` (khoá trong `fdekit.IMAGES`) | Tải một lần vào `data/raw/fde-images/`, kiểm sha256, tệp sai thì tải lại |
-| Một VM theo hồ sơ | `with fdekit.vm("lab-open", memory_mb=..., forwards=(18080,)) as m:` | Overlay riêng (golden không bao giờ bị ghi), chờ SSH; `restrict`/`sudo` mặc định theo hồ sơ; skip khi thiếu KVM, golden, OpenSSH hay RAM trống < RAM của VM + 512 MB; luôn dọn khi ra |
+| Một VM theo hồ sơ | `with fdekit.vm("lab-open", memory_mb=..., forwards=(18080,), base=path) as m:` | Overlay riêng (golden không bao giờ bị ghi; `base` thay golden bằng snapshot dẫn xuất của `derived`), chờ SSH; `restrict`/`sudo` mặc định theo hồ sơ, `memory_mb` mặc định `Profile.memory_mb`; skip khi thiếu KVM, golden, OpenSSH hay RAM trống < RAM của VM + 512 MB; luôn dọn khi ra |
 | Thao tác trên VM | `m.ssh(cmd, user="fde", timeout=60, check=False)`, `m.put(local, remote)`, `m.get(remote, local)`, `m.port(18080)`, `m.ssh_command()`, `m.snapshot(path)` | `ssh` trả `CompletedProcess` (phần không tin cậy trong `cmd` phải `shlex.quote`); `port` trả cổng `127.0.0.1` phía host của cổng đã khai trong `forwards` (chưa khai thì `KeyError`); `ssh_command` trả argv để dùng với `Popen`; `snapshot` tắt sạch VM rồi ghi qcow2 độc lập |
-| Trọn một "khách hàng" | `with fdekit.customer_site("hospital", memory_mb=..., forwards=(...)) as s:` | `Site` gồm `s.vm`, `s.profile`, `s.proxy_ca` (PEM CA của mitmproxy, sinh mới mỗi lần, **không** được trust sẵn trong VM), `s.registry` (`10.0.2.101:5000`, nhìn từ VM), `s.registry_host` (`127.0.0.1:<cổng>`, nhìn từ host để đẩy image). Proxy/registry chạy bằng `testkit.DockerLab`, tên `fde-ex-<run_id>-proxy`/`-registry` |
+| Trọn một "khách hàng" | `with fdekit.customer_site("hospital", memory_mb=..., forwards=(...), base=None, extra_services=()) as s:` | `Site` gồm `s.vm`, `s.profile`, `s.proxy_ca` (PEM CA của mitmproxy, sinh mới mỗi lần, **không** được trust sẵn trong VM), `s.registry` (`10.0.2.101:5000`, nhìn từ VM), `s.registry_host` (`127.0.0.1:<cổng>`, nhìn từ host để đẩy image). `extra_services` nhận `registry`, `keycloak`, `fileshare` (`proxy` đi theo egress của hồ sơ); `base` boot từ snapshot dẫn xuất. Dịch vụ phía host chạy bằng `testkit.DockerLab`, tên `fde-ex-<run_id>-proxy`/`-registry`/`-keycloak`/`-fileshare` |
+| Keycloak của khách | `s.keycloak` (`http://10.0.2.102:8080`, nhìn từ VM), `s.keycloak_host` (`http://127.0.0.1:<cổng>`), `s.keycloak_admin`, `s.keycloak_client` (`("quillo", secret)`), `fdekit.keycloak_token(s, user, password)`, `fdekit.KEYCLOAK_ADDR`, `fdekit.KEYCLOAK_PASSWORDS` | Realm `lawfirm` (nhóm `legal`/`finance`/`it`, user `an`, `binh`, `chi`), issuer luôn `http://10.0.2.102:8080/realms/lawfirm`; secret và mật khẩu admin sinh mới mỗi lần chạy; client `quillo` giữ cấu hình của IT khách (tệp realm `setup/fde/keycloak/lawfirm-realm.json`); `keycloak_token` chỉ dùng cho test |
+| File share của khách | `s.fileshare` (`//10.0.2.103/contracts`, nhìn từ VM), `s.fileshare_host` (`("127.0.0.1", cổng)`), `s.fileshare_creds`, `s.fileshare_dir`, `fdekit.FILESHARE_ADDR` | Samba chỉ SMB2/SMB3, share `contracts` chỉ đọc cho `svc-quillo` (mật khẩu sinh mới mỗi lần chạy), nội dung là thư mục phía host `s.fileshare_dir` |
+| Snapshot dẫn xuất | `fdekit.derived("<tên>")` (khoá trong `fdekit.DERIVED`, đăng ký ở `setup/fde/derived/<tên>.py`); dựng bằng CLI `python -m fdekit derive <tên> [--force]`, xem `derive --list` | Trả đường dẫn qcow2 để `vm(profile, base=path)`/`customer_site(profile, base=path)`; **không bao giờ dựng trong test**: thiếu golden thì skip kèm lệnh `prepare`, chưa có snapshot hay snapshot cũ (khoá gồm sha golden, tệp đăng ký và mọi `INPUTS`) thì skip kèm đúng lệnh `derive`; tên chưa đăng ký là `ValueError`. Chỉ đĩa VM nằm trong snapshot, dịch vụ phía host luôn mới và rỗng; không tính vào 300 s |
+| PC GPU tuỳ chọn | `with fdekit.require_pc() as pc:` (`pc.ssh(cmd)`, `pc.gpu()`, `pc.workdir`, `pc.cleanup()`) | Skip kèm hướng dẫn khi `FDE_PC_SSH` chưa đặt; không bao giờ dò hay kết nối PC khi chưa đặt; chỉ ghi/xoá `~/fde-ex-<run_id>` trên PC |
 | "Sự thật" để chấm báo cáo survey | `fdekit.PROFILES["bank"].facts` | 13 khoá: `os_id`, `os_version`, `kernel_major`, `glibc`, `cpus`, `mem_mb`, `disk_free_gb_max`, `gpu`, `proxy_url`, `sudo`, `selinux`, `runtime`, `egress`; `cpus`/`mem_mb` là cấu hình `customer_site()` boot mặc định (2 CPU, 2048 MB) |
 | Model GGUF đã ghim | `fdekit.fetch_model("llm-small")` (khoá trong `fdekit.MODELS`: `llm-small`, `llm-medium`, `embed-small`) | Tải một lần vào `data/raw/fde-models/`, kiểm sha256 trước khi đặt tên chính thức |
 | Repo capstone của người học | `fdekit.capstone_dir()` | `SOLUTION=1` ⇒ `tracks/fde/capstone/solutions/project/`; ngược lại đọc `FDE_CAPSTONE_DIR`, chưa đặt hay không phải thư mục thì skip |
@@ -743,8 +747,8 @@ seed cloud-init, SSH bằng key sinh riêng mỗi lần chạy), không phải c
   `subprocess.run(["docker", ...])`, `_docker(` và mọi chuỗi `"qemu-system...`. Lệnh `docker` chạy **trong VM** qua
   `m.ssh("docker ...")` thì được, đó là công cụ thật của khách.
 - Script người học chạy trên host qua `testkit.run_sandboxed` như track DevOps; chạy trên máy khách qua SSH của `fdekit`.
-- Helper chưa có (gate PC GPU qua `FDE_PC_SSH`, k3s của khách, Keycloak, file share…) được thêm vào `fdekit.py` kèm test ở
-  task dùng chúng, không trước.
+- Helper chưa có được thêm vào `fdekit.py` kèm test ở task dùng chúng, không trước (Phase 2 đã thêm `derived`,
+  `require_pc`, Keycloak, file share, k3s của khách).
 
 ### Hồ sơ khách
 
@@ -756,10 +760,21 @@ Mỗi hồ sơ là `setup/fde/profiles/<hồ sơ>.yaml`, nạp vào `fdekit.PROF
 | `hospital` | Ubuntu 20.04, 8 GB | có | `proxy` (TLS inspection) | Docker, không plugin compose | mitmproxy | Proxy chỉ đặt trong `/etc/environment`, CA chưa trust, đĩa nhỏ |
 | `bank` | Rocky Linux 8.10, 20 GB | **không** | `none` | Podman rootless | — | Air-gapped hoàn toàn, SELinux enforcing |
 | `lawfirm-staging` | Ubuntu 22.04, 30 GB | có | `none` | Docker, không plugin compose | registry nội bộ HTTP | Air-gapped, registry chưa khai `insecure-registries` |
+| `factory` | Debian 12, 12 GB, 3072 MB RAM | có | `proxy` (không TLS inspection) | Docker CE + plugin compose | mitmproxy | Đường truyền xấu (`netem`), `/tmp` noexec, `nofile` 1024 |
+| `lawfirm-hardened` | Rocky Linux 8.10, 20 GB, 5120 MB RAM | **không** | `none` | Podman rootless (linger bật, chưa bật `podman.socket`) | registry nội bộ HTTP | SELinux enforcing, Podman chưa khai registry là insecure |
+| `lawfirm-prod` | Ubuntu 22.04, 30 GB, 5120 MB RAM | **không** | `none` | k3s air-gapped (namespace `quillo`) | registry nội bộ HTTP | `fde` chỉ có kubeconfig ServiceAccount trong namespace; PSA `restricted`, ResourceQuota, LimitRange, NetworkPolicy `default-deny` |
+
+Trường tuỳ chọn của YAML (Phase 2, bỏ trống thì giữ hành vi Phase 1): `memory_mb` (RAM boot mặc định, cũng là
+`facts.mem_mb`), `tmp_noexec`, `nofile`, `netem`, `k8s` (`namespace`, `kubeconfig`; bắt buộc khi và chỉ khi runtime
+`k3s`). Mạng của `lawfirm-prod` do IT cấu hình cho k3s; egress vẫn bị QEMU chặn. Quyền `fde`,
+quota và chính sách của `lawfirm-prod` ghi ở `setup/fde/README.md`.
 
 Egress `none`/`proxy` ⇒ VM không route ra internet, không DNS, không tới loopback host qua `10.0.2.2`; chỉ còn SSH, các
 cổng `forwards` và `guestfwd` tới proxy (`10.0.2.100:3128`) hoặc registry (`10.0.2.101:5000`). Golden không mang theo
 mạng hay sudo lúc dựng: lúc chạy bài, `vm(profile)`/`customer_site()` áp lại theo hồ sơ.
+
+Hồ sơ nào có `services` khai `registry` hay `proxy` thì `customer_site` dựng sẵn; Keycloak và file share bật theo bài bằng
+`extra_services`, không cần hồ sơ riêng.
 
 Thêm hồ sơ mới: thêm YAML + `setup/fde/cloud-init/<hồ sơ>.sh`, đo `facts` trên golden, cập nhật bảng trong
 `setup/fde/README.md` và ở đây; `test_facts_match_vm` trong `tests/test_fdekit.py` phải pass.
@@ -783,6 +798,12 @@ Thêm hồ sơ mới: thêm YAML + `setup/fde/cloud-init/<hồ sơ>.sh`, đo `fa
 - Test kiểm **kết quả cuối trên VM** bằng công cụ thật (dịch vụ trả lời qua cổng forward, installer chạy lại idempotent,
   báo cáo survey khớp `Profile.facts`), không mô phỏng bằng Python và không chỉ grep chuỗi. Mọi quy tắc test chấm phải
   được nói trong README bài hoặc milestone.
+- Bài **sự cố nhiều kịch bản** (chẩn đoán, không phải cài đặt): định nghĩa kịch bản (cách test dựng sự cố, ticket, tập
+  nguyên nhân chấp nhận, mẫu bằng chứng trực tiếp) nằm trong `solutions/…/scenarios.py`, test nạp từ đó để mọi tệp trong
+  `exercises/` không lộ nguyên nhân. Người học đi hai bước: chạy thẳng tệp test để dựng cảnh theo seed (in seed, ticket,
+  bundle, kênh hỏi khách), rồi chấm bằng `pytest` với biến seed của bài (vd. `FDE_08_INCIDENT_SEED`), test dựng lại đúng
+  kịch bản của seed; chưa đặt biến thì skip. `SOLUTION=1` chạy **mọi** kịch bản, mỗi kịch bản với báo cáo tham chiếu
+  riêng (`solutions/…/incidents/<kịch bản>.yaml`), không cần bước tương tác.
 
 ### Module và trường `section`
 
@@ -809,6 +830,24 @@ cụt, tệp sai sha, thiếu, thừa hay đường dẫn lạ. `REQUIREMENTS.ya
 `QUILLO_PORT` (mặc định 18080) trên `QUILLO_BIND` (mặc định `127.0.0.1`); hai biến này đặt trong `.env` cạnh
 `compose.yaml` của bản cài quillo (installer ghi), không phải `setup/.env` của repo học. Sản phẩm là công cụ của bài, không phải chủ
 đề dạy; test riêng ở `tracks/fde/product/tests/`.
+
+Phase 2 thêm các khả năng sau, **không đổi schema** (có ở cả `1.0.0` lẫn `1.1.0`, nên m09 vẫn là nâng cấp
+`1.0.0` → `1.1.0`):
+
+- **SSO (OIDC):** bật bằng `QUILLO_OIDC_ISSUER`, `QUILLO_OIDC_CLIENT_ID`, `QUILLO_OIDC_CLIENT_SECRET_FILE` (thiếu một
+  trong ba thì api không khởi động); kiểm chữ ký (chỉ RS*/PS*/ES*), `iss`, `aud`/`azp`, `exp`; nhóm lấy từ claim
+  `QUILLO_OIDC_GROUPS_CLAIM`. Token tĩnh `QUILLO_ADMIN_TOKEN` vẫn là admin.
+- **ACL theo thư mục:** `QUILLO_ACL="legal:legal/,finance:finance/"`, áp ngay trong câu truy vấn vector (không lọc
+  sau `top_k`); tài liệu không khớp thư mục nào chỉ admin thấy.
+- **`/metrics`:** không cần auth, chỉ có số đếm (`quillo_requests_total`, `quillo_ask_seconds`, `quillo_documents`,
+  `quillo_chunks`, `quillo_model_up`).
+- **Extension:** `QUILLO_EXTENSIONS` + `QUILLO_EXTENSIONS_PATH`, hàm `register(app, ctx)` với `ExtensionContext`
+  (`settings`, `ask`, `db_query`, `templates`, `require_user`); là mã tin cậy, `db_query` chỉ đọc không phải ranh giới
+  bảo mật và không áp ACL.
+- **Helm chart** `chart/quillo-<version>.tgz` trong bundle, values mặc định tối thiểu (bảng values ở README sản phẩm);
+  values dùng cho test của chart ở `chart/examples/`, ngoài bundle.
+- **Ops:** `ops/backup.sh`, `ops/restore.sh` (Compose, Podman, `--kubectl`) và `ops/models_image.py` (dựng image
+  `quillo-models` từ bundle lúc cài, không cần Docker). Chi tiết ở `tracks/fde/product/README.md`.
 
 ### Bài tài liệu (dùng từ Phase 3)
 
@@ -855,4 +894,4 @@ nhận, cách gỡ. Không bao giờ `... | sudo bash` hay `... | sudo sh` (vali
 | Biến | Dùng cho |
 | --- | --- |
 | `FDE_CAPSTONE_DIR` | Đường dẫn repo capstone của người học; chưa đặt thì test capstone skip |
-| `FDE_PC_SSH` | (Phase 2) SSH tới PC có GPU cho bài GPU tuỳ chọn; chưa đặt thì bài đó skip |
+| `FDE_PC_SSH` | SSH tới PC có GPU cho bài GPU tuỳ chọn; chưa đặt thì bài đó skip |
